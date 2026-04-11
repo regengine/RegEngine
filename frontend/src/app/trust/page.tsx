@@ -19,7 +19,7 @@ export const metadata: Metadata = {
     openGraph: {
         title: 'Trust Center | RegEngine',
         description: 'Customer diligence surface for RegEngine FSMA 204 deployments and support posture.',
-        url: 'https://www.regengine.co/trust',
+        url: 'https://regengine.co/trust',
         type: 'website',
     },
 };

@@ -16,8 +16,8 @@ export default function AuthenticationDocsPage() {
 
                 <div className="mb-12">
                     <div className="flex items-center gap-3 mb-4">
-                        <div className="p-3 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
-                            <Lock className="h-8 w-8 text-blue-600 dark:text-blue-400" />
+                        <div className="p-3 bg-re-info-muted dark:bg-re-info/30 rounded-lg">
+                            <Lock className="h-8 w-8 text-re-info dark:text-re-info" />
                         </div>
                         <h1 className="text-4xl font-bold">Authentication</h1>
                     </div>
@@ -38,8 +38,8 @@ export default function AuthenticationDocsPage() {
                             </CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-4">
-                            <div className="bg-amber-50 dark:bg-amber-900/10 border-l-4 border-amber-500 p-4">
-                                <p className="text-sm text-amber-800 dark:text-amber-200">
+                            <div className="bg-re-warning-muted dark:bg-re-warning/10 border-l-4 border-amber-500 p-4">
+                                <p className="text-sm text-re-warning dark:text-re-warning">
                                     <strong>Security Warning:</strong> Your API keys carry many privileges, so be sure to keep them secure! Do not share your secret API keys in publicly accessible areas such as GitHub, client-side code, and so forth.
                                 </p>
                             </div>
@@ -108,15 +108,15 @@ export default function AuthenticationDocsPage() {
                                 <div className="flex items-center justify-between border-b border-slate-800 pb-2 mb-4">
                                     <span className="text-slate-400">HTTP Header</span>
                                 </div>
-                                X-RegEngine-API-Key: <span className="text-blue-400">rge_live_...</span>
+                                X-RegEngine-API-Key: <span className="text-re-info">rge_live_...</span>
                             </div>
 
                             <div>
                                 <h3 className="font-semibold mb-2">Example Request</h3>
                                 <div className="bg-slate-950 rounded-lg p-6 font-mono text-sm text-slate-50 overflow-x-auto">
-                                    <span className="text-purple-400">curl</span> https://www.regengine.co/api/v1/fda/export?tlc=00012345678901-LOT-2026-001&amp;tenant_id=YOUR_TENANT_UUID \<br />
-                                    &nbsp;&nbsp;<span className="text-slate-400">-H</span> <span className="text-green-400">"X-RegEngine-API-Key: rge_live_12345"</span> \<br />
-                                    &nbsp;&nbsp;<span className="text-slate-400">-H</span> <span className="text-green-400">"Content-Type: application/json"</span>
+                                    <span className="text-purple-400">curl</span> https://regengine.co/api/v1/fda/export?tlc=00012345678901-LOT-2026-001&amp;tenant_id=YOUR_TENANT_UUID \<br />
+                                    &nbsp;&nbsp;<span className="text-slate-400">-H</span> <span className="text-re-success">"X-RegEngine-API-Key: rge_live_12345"</span> \<br />
+                                    &nbsp;&nbsp;<span className="text-slate-400">-H</span> <span className="text-re-success">"Content-Type: application/json"</span>
                                 </div>
                             </div>
                         </CardContent>
@@ -131,11 +131,11 @@ export default function AuthenticationDocsPage() {
                         </CardHeader>
                         <CardContent>
                             <div className="grid gap-4">
-                                <div className="flex items-start gap-4 p-4 rounded-lg bg-red-50 dark:bg-red-900/10">
-                                    <div className="font-mono font-bold text-red-600">401</div>
+                                <div className="flex items-start gap-4 p-4 rounded-lg bg-re-danger-muted dark:bg-re-danger/10">
+                                    <div className="font-mono font-bold text-re-danger">401</div>
                                     <div>
-                                        <div className="font-semibold text-red-900 dark:text-red-100">Unauthorized</div>
-                                        <div className="text-sm text-red-800 dark:text-red-200">The API key is missing or invalid. Check that you are sending the correct header.</div>
+                                        <div className="font-semibold text-re-danger dark:text-red-100">Unauthorized</div>
+                                        <div className="text-sm text-re-danger dark:text-red-200">The API key is missing or invalid. Check that you are sending the correct header.</div>
                                     </div>
                                 </div>
                                 <div className="flex items-start gap-4 p-4 rounded-lg bg-orange-50 dark:bg-orange-900/10">

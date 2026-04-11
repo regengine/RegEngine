@@ -284,10 +284,10 @@ export default function ReceivingDockPage() {
                                 </div>
                                 {stats && (
                                     <div className="flex items-center gap-4 text-xs">
-                                        <span className="text-emerald-600 font-medium">{stats.scanned} scanned</span>
+                                        <span className="text-re-brand-dark font-medium">{stats.scanned} scanned</span>
                                         <span className="text-muted-foreground">{stats.pending} pending</span>
                                         {stats.unexpected > 0 && (
-                                            <span className="text-amber-600 font-medium">{stats.unexpected} unexpected</span>
+                                            <span className="text-re-warning font-medium">{stats.unexpected} unexpected</span>
                                         )}
                                     </div>
                                 )}
@@ -379,12 +379,12 @@ export default function ReceivingDockPage() {
                                             key={item.id}
                                             className={`flex items-center gap-3 p-3 rounded-lg border transition-colors ${
                                                 item.status === 'scanned'
-                                                    ? 'bg-emerald-50 border-emerald-200 dark:bg-emerald-900/20 dark:border-emerald-800'
+                                                    ? 'bg-emerald-50 border-emerald-200 dark:bg-re-brand/20 dark:border-re-brand'
                                                     : 'bg-background border-border'
                                             }`}
                                         >
                                             {item.status === 'scanned' ? (
-                                                <CheckCircle2 className="h-5 w-5 text-emerald-500 flex-shrink-0" />
+                                                <CheckCircle2 className="h-5 w-5 text-re-brand flex-shrink-0" />
                                             ) : (
                                                 <Package className="h-5 w-5 text-muted-foreground flex-shrink-0" />
                                             )}
@@ -410,15 +410,15 @@ export default function ReceivingDockPage() {
                     {session.unexpectedScans.length > 0 && (
                         <Card className="border-amber-200 dark:border-amber-800">
                             <CardHeader className="pb-2">
-                                <CardTitle className="text-base text-amber-600">
+                                <CardTitle className="text-base text-re-warning">
                                     Unexpected Items ({session.unexpectedScans.length})
                                 </CardTitle>
                             </CardHeader>
                             <CardContent>
                                 <div className="space-y-2">
                                     {session.unexpectedScans.map(item => (
-                                        <div key={item.id} className="flex items-center gap-3 p-3 rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-800">
-                                            <X className="h-5 w-5 text-amber-500 flex-shrink-0" />
+                                        <div key={item.id} className="flex items-center gap-3 p-3 rounded-lg border border-amber-200 bg-re-warning-muted dark:bg-re-warning/20 dark:border-amber-800">
+                                            <X className="h-5 w-5 text-re-warning flex-shrink-0" />
                                             <div className="flex-1 min-w-0">
                                                 <div className="text-sm font-medium truncate">{item.productName}</div>
                                                 <div className="text-xs text-muted-foreground font-mono">
@@ -426,7 +426,7 @@ export default function ReceivingDockPage() {
                                                     {item.expiryDate && ` · Exp: ${item.expiryDate}`}
                                                 </div>
                                             </div>
-                                            <Badge variant="outline" className="text-amber-600 border-amber-300">
+                                            <Badge variant="outline" className="text-re-warning border-amber-300">
                                                 Not Expected
                                             </Badge>
                                         </div>
@@ -462,11 +462,11 @@ export default function ReceivingDockPage() {
                 ];
                 const ts = new Date().toLocaleString();
                 return (
-                    <Card className="border-emerald-200 dark:border-emerald-800 print:border print:shadow-none" id="receipt">
+                    <Card className="border-emerald-200 dark:border-re-brand print:border print:shadow-none" id="receipt">
                         <CardContent className="pt-6 space-y-5">
                             {/* Header */}
                             <div className="text-center space-y-2">
-                                <CheckCircle2 className="h-12 w-12 text-emerald-500 mx-auto" />
+                                <CheckCircle2 className="h-12 w-12 text-re-brand mx-auto" />
                                 <h2 className="text-xl font-bold">Receiving Complete</h2>
                                 <p className="text-sm text-muted-foreground">
                                     {session.supplier} — PO {session.poNumber}
@@ -476,8 +476,8 @@ export default function ReceivingDockPage() {
 
                             {/* Summary stats */}
                             <div className="grid grid-cols-3 gap-3 text-center">
-                                <div className="p-3 rounded-xl bg-emerald-500/5 border border-emerald-500/20">
-                                    <div className="text-2xl font-bold text-emerald-600">{allItems.length}</div>
+                                <div className="p-3 rounded-xl bg-re-brand/5 border border-re-brand/20">
+                                    <div className="text-2xl font-bold text-re-brand-dark">{allItems.length}</div>
                                     <div className="text-[11px] text-muted-foreground">Items Ingested</div>
                                 </div>
                                 <div className="p-3 rounded-xl bg-[var(--re-surface-elevated)] border border-[var(--re-border-default)]">

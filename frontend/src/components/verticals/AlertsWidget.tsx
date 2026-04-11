@@ -59,12 +59,12 @@ export function AlertsWidget({
           </CardTitle>
           <div className="flex items-center gap-2">
             {criticalCount > 0 && (
-              <Badge className="bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400">
+              <Badge className="bg-re-danger-muted text-re-danger dark:bg-re-danger/30 dark:text-re-danger">
                 {criticalCount} Critical
               </Badge>
             )}
             {warningCount > 0 && (
-              <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
+              <Badge className="bg-re-warning-muted text-re-warning dark:bg-re-warning/30 dark:text-re-warning">
                 {warningCount} Warning
               </Badge>
             )}
@@ -75,7 +75,7 @@ export function AlertsWidget({
       <CardContent>
         {displayAlerts.length === 0 ? (
           <div className="text-center py-8 text-muted-foreground">
-            <CheckCircle className="w-12 h-12 mx-auto mb-4 text-green-500 opacity-50" />
+            <CheckCircle className="w-12 h-12 mx-auto mb-4 text-re-success opacity-50" />
             <p className="font-medium">All clear!</p>
             <p className="text-sm">No active alerts</p>
           </div>
@@ -185,22 +185,22 @@ function getSeverityConfig(severity: AlertSeverity) {
     case 'CRITICAL':
       return {
         icon: XCircle,
-        iconColor: 'text-red-600 dark:text-red-400',
-        bgColor: 'bg-red-50 dark:bg-red-950/20',
-        borderColor: 'border-red-200 dark:border-red-900',
+        iconColor: 'text-re-danger dark:text-re-danger',
+        bgColor: 'bg-re-danger-muted dark:bg-re-danger/20',
+        borderColor: 'border-re-danger dark:border-red-900',
       };
     case 'WARNING':
       return {
         icon: AlertTriangle,
-        iconColor: 'text-amber-600 dark:text-amber-400',
-        bgColor: 'bg-amber-50 dark:bg-amber-950/20',
+        iconColor: 'text-re-warning dark:text-re-warning',
+        bgColor: 'bg-re-warning-muted dark:bg-re-warning/20',
         borderColor: 'border-amber-200 dark:border-amber-900',
       };
     default:
       return {
         icon: Info,
-        iconColor: 'text-blue-600 dark:text-blue-400',
-        bgColor: 'bg-blue-50 dark:bg-blue-950/20',
+        iconColor: 'text-re-info dark:text-re-info',
+        bgColor: 'bg-re-info-muted dark:bg-re-info/20',
         borderColor: 'border-blue-200 dark:border-blue-900',
       };
   }

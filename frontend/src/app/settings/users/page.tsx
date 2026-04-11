@@ -260,7 +260,7 @@ export default function UserSettingsPage() {
                                             <TableCell>
                                                 {u.id !== user?.id && (
                                                     <Button variant="ghost" size="sm" onClick={() => handleDeactivate(u.id)}>
-                                                        <Ban className="h-4 w-4 text-red-500" />
+                                                        <Ban className="h-4 w-4 text-re-danger" />
                                                     </Button>
                                                 )}
                                             </TableCell>

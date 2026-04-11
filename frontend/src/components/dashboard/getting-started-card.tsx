@@ -163,7 +163,7 @@ export function GettingStartedCard() {
                       }`}
                     >
                       {done ? (
-                        <CheckCircle2 className="h-4 w-4 text-emerald-500 flex-shrink-0" />
+                        <CheckCircle2 className="h-4 w-4 text-re-brand flex-shrink-0" />
                       ) : (
                         <Circle className="h-4 w-4 text-[var(--re-surface-border)] flex-shrink-0" />
                       )}

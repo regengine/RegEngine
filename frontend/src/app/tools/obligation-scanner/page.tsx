@@ -82,7 +82,7 @@ export default function ObligationScannerPage() {
 
                 <div className="mt-10 rounded-2xl border border-[rgba(245,158,11,0.24)] bg-[rgba(245,158,11,0.08)] p-6">
                     <div className="flex items-start gap-3">
-                        <AlertTriangle className="h-5 w-5 text-amber-500 mt-0.5" />
+                        <AlertTriangle className="h-5 w-5 text-re-warning mt-0.5" />
                         <div>
                             <p className="font-semibold text-[var(--re-text-primary)]">Next step</p>
                             <p className="mt-1 text-sm text-[var(--re-text-muted)]">

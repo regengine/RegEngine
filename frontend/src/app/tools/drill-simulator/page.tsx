@@ -9,13 +9,13 @@ export const metadata: Metadata = {
     title: "24-Hour Drill Simulator | Practice FSMA 204 FDA Outbreak Response | RegEngine",
     description: "Run a scenario-based FDA outbreak drill to test if your manual processes can meet the 24-hour records retrieval mandate. Free FSMA 204 compliance simulation.",
     alternates: {
-        canonical: "https://www.regengine.co/tools/drill-simulator",
+        canonical: "https://regengine.co/tools/drill-simulator",
     },
     openGraph: {
         title: "24-Hour Drill Simulator — RegEngine",
         description: "Simulate an FDA outbreak investigation to test your FSMA 204 record retrieval speed and compliance accuracy. Free.",
         type: "website",
-        url: "https://www.regengine.co/tools/drill-simulator",
+        url: "https://regengine.co/tools/drill-simulator",
     },
 };
 

@@ -32,6 +32,6 @@ export default function robots(): MetadataRoute.Robots {
                 ],
             },
         ],
-        sitemap: 'https://www.regengine.co/sitemap.xml',
+        sitemap: 'https://regengine.co/sitemap.xml',
     };
 }

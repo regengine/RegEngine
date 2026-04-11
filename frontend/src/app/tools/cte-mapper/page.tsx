@@ -10,13 +10,13 @@ export const metadata: Metadata = {
     title: "CTE Mapper | FSMA 204 Critical Tracking Event Supply Chain Tool | RegEngine",
     description: "Visualize your supply chain nodes and see exactly who owes whom data under FSMA 204. Map all 7 Critical Tracking Events across your supply chain. Free tool.",
     alternates: {
-        canonical: "https://www.regengine.co/tools/cte-mapper",
+        canonical: "https://regengine.co/tools/cte-mapper",
     },
     openGraph: {
         title: "CTE Mapper — RegEngine",
         description: "Visualize your supply chain nodes and map all 7 FSMA 204 Critical Tracking Events. Free tool.",
         type: "website",
-        url: "https://www.regengine.co/tools/cte-mapper",
+        url: "https://regengine.co/tools/cte-mapper",
     },
 };
 
@@ -42,8 +42,8 @@ function CTEMapperFallback() {
     return (
         <div className="px-6 py-16">
             <div className="max-w-2xl mx-auto text-center mb-12">
-                <div className="w-16 h-16 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center mx-auto mb-6">
-                    <svg className="w-8 h-8 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><rect x="3" y="3" width="7" height="7" rx="1" strokeWidth="1.5"/><rect x="14" y="3" width="7" height="7" rx="1" strokeWidth="1.5"/><rect x="3" y="14" width="7" height="7" rx="1" strokeWidth="1.5"/><path d="M17.5 17.5h.01M14 17.5h3.5m0 0V14" strokeWidth="1.5" strokeLinecap="round"/></svg>
+                <div className="w-16 h-16 rounded-2xl bg-re-brand-muted border border-re-brand/20 flex items-center justify-center mx-auto mb-6">
+                    <svg className="w-8 h-8 text-re-brand" fill="none" viewBox="0 0 24 24" stroke="currentColor"><rect x="3" y="3" width="7" height="7" rx="1" strokeWidth="1.5"/><rect x="14" y="3" width="7" height="7" rx="1" strokeWidth="1.5"/><rect x="3" y="14" width="7" height="7" rx="1" strokeWidth="1.5"/><path d="M17.5 17.5h.01M14 17.5h3.5m0 0V14" strokeWidth="1.5" strokeLinecap="round"/></svg>
                 </div>
                 <h1 className="text-2xl font-bold text-[var(--re-text-primary)] mb-3">CTE Coverage Mapper</h1>
                 <p className="text-sm text-[var(--re-text-muted)] max-w-lg mx-auto leading-relaxed">Visualize your supply chain nodes and see exactly which Critical Tracking Events and Key Data Elements each link in your chain is responsible for under FSMA 204. Add facilities, define relationships, and identify coverage gaps.</p>
@@ -61,7 +61,7 @@ function CTEMapperFallback() {
                         { cte: "Transformation", desc: "Any manufacturing, processing, or significant alteration of the food." },
                     ].map((item) => (
                         <div key={item.cte} className="rounded-lg border border-[rgba(255,255,255,0.06)] bg-[rgba(255,255,255,0.02)] p-3">
-                            <span className="text-sm font-semibold text-emerald-400">{item.cte}</span>
+                            <span className="text-sm font-semibold text-re-brand">{item.cte}</span>
                             <p className="text-xs text-[var(--re-text-muted)] mt-1">{item.desc}</p>
                         </div>
                     ))}

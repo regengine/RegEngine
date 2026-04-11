@@ -55,12 +55,12 @@ interface ChecklistLevel {
 }
 
 const LEVEL_CONFIG: Record<number, { icon: LucideIcon; color: string; bgColor: string }> = {
-  0: { icon: Circle, color: 'text-gray-400', bgColor: 'bg-gray-100' },
-  1: { icon: Rocket, color: 'text-blue-500', bgColor: 'bg-blue-50' },
-  2: { icon: Shield, color: 'text-amber-500', bgColor: 'bg-amber-50' },
+  0: { icon: Circle, color: 'text-re-text-tertiary', bgColor: 'bg-re-surface-elevated' },
+  1: { icon: Rocket, color: 'text-re-info', bgColor: 'bg-re-info-muted' },
+  2: { icon: Shield, color: 'text-re-warning', bgColor: 'bg-re-warning-muted' },
   3: { icon: Target, color: 'text-purple-500', bgColor: 'bg-purple-50' },
   4: { icon: TrendingUp, color: 'text-indigo-500', bgColor: 'bg-indigo-50' },
-  5: { icon: Flag, color: 'text-green-600', bgColor: 'bg-green-50' },
+  5: { icon: Flag, color: 'text-re-success', bgColor: 'bg-re-success-muted' },
 };
 
 // Demo drill data
@@ -209,8 +209,8 @@ export default function ReadinessWizardPage() {
           <Card className="mb-8">
             <CardContent className="pt-6 pb-6">
               <div className="flex flex-col md:flex-row items-center gap-6">
-                <div className={`w-24 h-24 rounded-full flex items-center justify-center ${LEVEL_CONFIG[a.maturity_level]?.bgColor || 'bg-gray-100'}`}>
-                  <span className={`text-4xl font-bold ${LEVEL_CONFIG[a.maturity_level]?.color || 'text-gray-400'}`}>
+                <div className={`w-24 h-24 rounded-full flex items-center justify-center ${LEVEL_CONFIG[a.maturity_level]?.bgColor || 'bg-re-surface-elevated'}`}>
+                  <span className={`text-4xl font-bold ${LEVEL_CONFIG[a.maturity_level]?.color || 'text-re-text-tertiary'}`}>
                     {a.maturity_level}
                   </span>
                 </div>
@@ -240,10 +240,10 @@ export default function ReadinessWizardPage() {
                   key={level}
                   className={`flex flex-col items-center gap-1 px-3 py-2 rounded-lg ${
                     isCurrent ? `${config.bgColor} border-2 border-current ${config.color}` :
-                    isComplete ? 'bg-green-50' : 'bg-muted/30'
+                    isComplete ? 'bg-re-success-muted' : 'bg-muted/30'
                   }`}
                 >
-                  <Icon className={`h-5 w-5 ${isComplete ? 'text-green-500' : 'text-muted-foreground'}`} />
+                  <Icon className={`h-5 w-5 ${isComplete ? 'text-re-success' : 'text-muted-foreground'}`} />
                   <span className="text-xs font-medium">{level}</span>
                 </div>
               );
@@ -255,10 +255,10 @@ export default function ReadinessWizardPage() {
             <CardHeader>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <Zap className="h-5 w-5 text-blue-600" />
+                  <Zap className="h-5 w-5 text-re-info" />
                   <CardTitle className="text-lg">Monthly Drill</CardTitle>
                 </div>
-                <Badge variant="outline" className="bg-blue-100 text-blue-800 border-blue-300">Active</Badge>
+                <Badge variant="outline" className="bg-re-info-muted text-re-info border-blue-300">Active</Badge>
               </div>
               <CardDescription>Keep your team audit-ready year-round with 15-minute monthly drills</CardDescription>
             </CardHeader>
@@ -272,7 +272,7 @@ export default function ReadinessWizardPage() {
                   </div>
                   <div className="rounded-lg bg-white dark:bg-slate-900 p-3 border">
                     <p className="text-xs text-muted-foreground">Score</p>
-                    <p className="text-sm font-semibold mt-1 text-green-600">{DEMO_DRILL_HISTORY[0].score}%</p>
+                    <p className="text-sm font-semibold mt-1 text-re-success">{DEMO_DRILL_HISTORY[0].score}%</p>
                   </div>
                   <div className="rounded-lg bg-white dark:bg-slate-900 p-3 border">
                     <p className="text-xs text-muted-foreground">Next Due</p>
@@ -283,7 +283,7 @@ export default function ReadinessWizardPage() {
                 {/* Quick Launch Button */}
                 <Button
                   onClick={handleStartDrill}
-                  className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+                  className="w-full bg-re-info hover:bg-re-info text-white"
                   size="lg"
                 >
                   <Play className="h-4 w-4 mr-2" />
@@ -297,11 +297,11 @@ export default function ReadinessWizardPage() {
                     {DEMO_DRILL_HISTORY.map((drill) => (
                       <div key={drill.id} className="flex items-center justify-between p-2 rounded bg-white dark:bg-slate-900 text-sm">
                         <div className="flex items-center gap-2">
-                          <CheckCircle className="h-4 w-4 text-green-500" />
+                          <CheckCircle className="h-4 w-4 text-re-success" />
                           <span className="text-muted-foreground">{drill.date}</span>
                         </div>
                         <div className="flex items-center gap-3">
-                          <span className="font-semibold text-green-600">{drill.score}%</span>
+                          <span className="font-semibold text-re-success">{drill.score}%</span>
                           <span className="text-xs text-muted-foreground">{drill.duration} min</span>
                         </div>
                       </div>
@@ -317,10 +317,10 @@ export default function ReadinessWizardPage() {
             <CardHeader>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <LineChart className="h-5 w-5 text-green-600" />
+                  <LineChart className="h-5 w-5 text-re-success" />
                   <CardTitle className="text-lg">Continuous Compliance</CardTitle>
                 </div>
-                <Badge className="bg-green-100 text-green-800 border-green-300">Ongoing</Badge>
+                <Badge className="bg-re-success-muted text-re-success border-green-300">Ongoing</Badge>
               </div>
               <CardDescription>RegEngine keeps you audit-ready between formal assessments</CardDescription>
             </CardHeader>
@@ -328,7 +328,7 @@ export default function ReadinessWizardPage() {
               <div className="space-y-4">
                 {/* Key Message */}
                 <div className="p-3 rounded-lg bg-white dark:bg-slate-900 border-l-4 border-green-500">
-                  <p className="text-sm font-medium text-green-900 dark:text-green-100">
+                  <p className="text-sm font-medium text-re-success dark:text-green-100">
                     <Zap className="h-4 w-4 inline mr-2" />
                     15-minute monthly drills keep your team audit-ready year-round
                   </p>
@@ -337,7 +337,7 @@ export default function ReadinessWizardPage() {
                 {/* Readiness Trend */}
                 <div>
                   <h4 className="text-sm font-semibold mb-3 flex items-center gap-2">
-                    <TrendingUp className="h-4 w-4 text-green-600" />
+                    <TrendingUp className="h-4 w-4 text-re-success" />
                     Readiness Score Trend
                   </h4>
                   <div className="bg-white dark:bg-slate-900 rounded-lg p-4 border">
@@ -348,7 +348,7 @@ export default function ReadinessWizardPage() {
                           <span className="text-xs text-muted-foreground w-16">{point.date}</span>
                           <div className="flex-1 bg-muted rounded-full h-6 overflow-hidden">
                             <div
-                              className="bg-gradient-to-r from-green-500 to-green-400 h-full flex items-center justify-end pr-2"
+                              className="bg-gradient-to-r from-re-brand to-green-400 h-full flex items-center justify-end pr-2"
                               style={{ width: `${point.score}%` }}
                             >
                               <span className="text-xs font-semibold text-white">{point.score}%</span>
@@ -363,27 +363,27 @@ export default function ReadinessWizardPage() {
                 {/* Compliance Monitoring */}
                 <div>
                   <h4 className="text-sm font-semibold mb-3 flex items-center gap-2">
-                    <AlertCircle className="h-4 w-4 text-green-600" />
+                    <AlertCircle className="h-4 w-4 text-re-success" />
                     Compliance Monitoring
                   </h4>
                   <div className="space-y-2">
                     <div className="flex items-center justify-between p-3 rounded-lg bg-white dark:bg-slate-900 border">
                       <div className="flex items-center gap-2">
-                        <CheckCircle className="h-4 w-4 text-green-500" />
+                        <CheckCircle className="h-4 w-4 text-re-success" />
                         <span className="text-sm">Current readiness score</span>
                       </div>
-                      <span className="font-semibold text-green-600">{a.overall_score}%</span>
+                      <span className="font-semibold text-re-success">{a.overall_score}%</span>
                     </div>
                     <div className="flex items-center justify-between p-3 rounded-lg bg-white dark:bg-slate-900 border">
                       <div className="flex items-center gap-2">
-                        <CheckCircle className="h-4 w-4 text-green-500" />
+                        <CheckCircle className="h-4 w-4 text-re-success" />
                         <span className="text-sm">Alert threshold</span>
                       </div>
                       <span className="font-semibold">70%</span>
                     </div>
                     <div className="flex items-center justify-between p-3 rounded-lg bg-white dark:bg-slate-900 border">
                       <div className="flex items-center gap-2">
-                        <Clock className="h-4 w-4 text-blue-500" />
+                        <Clock className="h-4 w-4 text-re-info" />
                         <span className="text-sm">Check frequency</span>
                       </div>
                       <span className="font-semibold">Monthly</span>
@@ -392,9 +392,9 @@ export default function ReadinessWizardPage() {
                 </div>
 
                 {/* Why It Matters */}
-                <div className="p-4 rounded-lg bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800">
-                  <h5 className="text-sm font-semibold text-green-900 dark:text-green-100 mb-2">Between Audits</h5>
-                  <p className="text-sm text-green-800 dark:text-green-200 leading-relaxed">
+                <div className="p-4 rounded-lg bg-re-success-muted dark:bg-re-success/20 border border-green-200 dark:border-green-800">
+                  <h5 className="text-sm font-semibold text-re-success dark:text-green-100 mb-2">Between Audits</h5>
+                  <p className="text-sm text-re-success dark:text-green-200 leading-relaxed">
                     Compliance isn't a once-a-year event. RegEngine runs automated checks and monthly drills to catch issues early, ensuring your team is always ready for an FDA request—without the stress of last-minute scrambling.
                   </p>
                 </div>
@@ -412,7 +412,7 @@ export default function ReadinessWizardPage() {
                 <div className="space-y-2">
                   {a.next_steps.map((step: ReadinessNextStep) => (
                     <div key={step.id} className="flex items-start gap-3 p-2 rounded border">
-                      <XCircle className="h-5 w-5 text-red-400 mt-0.5 shrink-0" />
+                      <XCircle className="h-5 w-5 text-re-danger mt-0.5 shrink-0" />
                       <div>
                         <p className="font-medium text-sm">{step.title}</p>
                         <p className="text-xs text-muted-foreground">{step.description}</p>
@@ -438,7 +438,7 @@ export default function ReadinessWizardPage() {
                   <Card key={level} className={allComplete ? 'border-green-200' : ''}>
                     <CardHeader className="pb-2">
                       <CardTitle className="text-base flex items-center gap-2">
-                        <Icon className={`h-5 w-5 ${config?.color || 'text-gray-400'}`} />
+                        <Icon className={`h-5 w-5 ${config?.color || 'text-re-text-tertiary'}`} />
                         Level {level}: {levelData.level_info.name}
                         <Badge variant={allComplete ? 'default' : 'outline'} className="ml-auto text-xs">
                           {levelData.completed}/{levelData.total}
@@ -450,7 +450,7 @@ export default function ReadinessWizardPage() {
                         {levelData.items.map((item: ChecklistItem) => (
                           <div key={item.id} className="flex items-center gap-2 py-1 text-sm">
                             {item.passed ? (
-                              <CheckCircle className="h-4 w-4 text-green-500 shrink-0" />
+                              <CheckCircle className="h-4 w-4 text-re-success shrink-0" />
                             ) : (
                               <Circle className="h-4 w-4 text-muted-foreground shrink-0" />
                             )}

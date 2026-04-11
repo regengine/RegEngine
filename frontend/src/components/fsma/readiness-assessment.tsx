@@ -167,10 +167,10 @@ export function FSMA204Assessment() {
     };
 
     const getReadinessLevel = (score: number) => {
-        if (score >= 80) return { level: 'Ready', color: 'text-green-600', bg: 'bg-green-100', icon: CheckCircle2 };
-        if (score >= 60) return { level: 'Partially Ready', color: 'text-amber-600', bg: 'bg-amber-100', icon: AlertTriangle };
+        if (score >= 80) return { level: 'Ready', color: 'text-re-success', bg: 'bg-re-success-muted', icon: CheckCircle2 };
+        if (score >= 60) return { level: 'Partially Ready', color: 'text-re-warning', bg: 'bg-re-warning-muted', icon: AlertTriangle };
         if (score >= 40) return { level: 'Needs Improvement', color: 'text-orange-600', bg: 'bg-orange-100', icon: AlertTriangle };
-        return { level: 'Not Ready', color: 'text-red-600', bg: 'bg-red-100', icon: XCircle };
+        return { level: 'Not Ready', color: 'text-re-danger', bg: 'bg-re-danger-muted', icon: XCircle };
     };
 
     const canProceed = () => {
@@ -403,31 +403,31 @@ export function FSMA204Assessment() {
                             <CardContent className="space-y-2">
                                 {selectedCTEs.length < CTES.length && (
                                     <div className="flex items-start gap-2 text-sm">
-                                        <AlertTriangle className="h-4 w-4 text-amber-500 mt-0.5" />
+                                        <AlertTriangle className="h-4 w-4 text-re-warning mt-0.5" />
                                         <span>Implement tracking for missing CTEs: {CTES.filter(c => !selectedCTEs.includes(c.id)).map(c => c.name).join(', ')}</span>
                                     </div>
                                 )}
                                 {selectedKDEs.length < KDES.length && (
                                     <div className="flex items-start gap-2 text-sm">
-                                        <AlertTriangle className="h-4 w-4 text-amber-500 mt-0.5" />
+                                        <AlertTriangle className="h-4 w-4 text-re-warning mt-0.5" />
                                         <span>Capture missing KDEs: {KDES.filter(k => !selectedKDEs.includes(k.id)).map(k => k.name).join(', ')}</span>
                                     </div>
                                 )}
                                 {!systemAnswers['electronic'] && (
                                     <div className="flex items-start gap-2 text-sm">
-                                        <AlertTriangle className="h-4 w-4 text-amber-500 mt-0.5" />
+                                        <AlertTriangle className="h-4 w-4 text-re-warning mt-0.5" />
                                         <span>Transition to electronic record-keeping for faster FDA response</span>
                                     </div>
                                 )}
                                 {!systemAnswers['24hr'] && (
                                     <div className="flex items-start gap-2 text-sm">
-                                        <XCircle className="h-4 w-4 text-red-500 mt-0.5" />
+                                        <XCircle className="h-4 w-4 text-re-danger mt-0.5" />
                                         <span className="font-medium">Critical: Develop capability to produce records within 24 hours</span>
                                     </div>
                                 )}
                                 {!systemAnswers['testing'] && (
                                     <div className="flex items-start gap-2 text-sm">
-                                        <AlertTriangle className="h-4 w-4 text-amber-500 mt-0.5" />
+                                        <AlertTriangle className="h-4 w-4 text-re-warning mt-0.5" />
                                         <span>Conduct mock recall drills to test your traceability system</span>
                                     </div>
                                 )}
@@ -464,8 +464,8 @@ export function FSMA204Assessment() {
             <CardHeader>
                 <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-3">
-                        <div className="p-2 rounded-lg bg-emerald-100 dark:bg-emerald-900">
-                            <StepIcon className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />
+                        <div className="p-2 rounded-lg bg-re-brand-muted dark:bg-re-brand">
+                            <StepIcon className="h-6 w-6 text-re-brand-dark dark:text-re-brand" />
                         </div>
                         <div>
                             <CardTitle>{step.title}</CardTitle>

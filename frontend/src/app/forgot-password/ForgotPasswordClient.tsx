@@ -89,14 +89,14 @@ export default function ForgotPasswordClient() {
 
                     <CardContent>
                         {linkExpired && !submitted && (
-                            <div className="mb-4 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-700 dark:border-amber-800 dark:bg-amber-900/10 dark:text-amber-400">
+                            <div className="mb-4 rounded-md border border-amber-200 bg-re-warning-muted p-3 text-sm text-re-warning dark:border-amber-800 dark:bg-re-warning/10 dark:text-re-warning">
                                 Your reset link has expired. Enter your email to receive a new one.
                             </div>
                         )}
                         {submitted ? (
                             <div className="space-y-5 text-center">
-                                <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-emerald-500/10">
-                                    <ShieldCheck className="h-7 w-7 text-emerald-500" />
+                                <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-re-brand-muted">
+                                    <ShieldCheck className="h-7 w-7 text-re-brand" />
                                 </div>
                                 <div className="space-y-1">
                                     <p className="font-medium text-[var(--re-text-primary)]">Check your inbox</p>
@@ -122,7 +122,7 @@ export default function ForgotPasswordClient() {
                                     <div
                                         role="alert"
                                         aria-live="polite"
-                                        className="animate-in fade-in slide-in-from-top-2 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-500 dark:border-red-800 dark:bg-red-900/10"
+                                        className="animate-in fade-in slide-in-from-top-2 rounded-md border border-re-danger bg-re-danger-muted p-3 text-sm text-re-danger dark:border-re-danger dark:bg-re-danger/10"
                                     >
                                         {error}
                                     </div>

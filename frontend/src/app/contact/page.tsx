@@ -65,8 +65,8 @@ export default function ContactPage() {
             <p className="text-sm font-semibold text-[var(--re-text-primary)]">Send us a message</p>
 
             {status === 'success' ? (
-              <div className="mt-4 flex items-start gap-3 rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-4">
-                <CheckCircle className="h-5 w-5 text-emerald-400 shrink-0 mt-0.5" />
+              <div className="mt-4 flex items-start gap-3 rounded-lg border border-re-brand/20 bg-re-brand/5 p-4">
+                <CheckCircle className="h-5 w-5 text-re-brand shrink-0 mt-0.5" />
                 <div>
                   <p className="text-sm font-medium text-[var(--re-text-primary)]">Message sent</p>
                   <p className="text-sm text-[var(--re-text-muted)] mt-1">
@@ -111,7 +111,7 @@ export default function ContactPage() {
                 />
 
                 {status === 'error' && (
-                  <div className="flex items-center gap-2 text-sm text-red-400">
+                  <div className="flex items-center gap-2 text-sm text-re-danger">
                     <AlertCircle className="h-4 w-4" />
                     Something went wrong. Please try again or email us directly.
                   </div>

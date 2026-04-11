@@ -221,7 +221,7 @@ export default function CurationDashboard() {
                                         <Button
                                             size="sm"
                                             variant="ghost"
-                                            className="text-red-500 hover:text-red-600 hover:bg-red-50"
+                                            className="text-re-danger hover:text-re-danger hover:bg-re-danger-muted"
                                             onClick={handleBulkReject}
                                         >
                                             <Trash2 className="h-4 w-4 mr-2" />
@@ -254,8 +254,8 @@ export default function CurationDashboard() {
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                         <Card className="bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm border-slate-200 dark:border-slate-800">
                             <CardContent className="pt-6 flex items-center gap-4">
-                                <div className="p-2 rounded-lg bg-blue-500/10">
-                                    <Clock className="h-5 w-5 text-blue-500" />
+                                <div className="p-2 rounded-lg bg-re-info-muted0/10">
+                                    <Clock className="h-5 w-5 text-re-info" />
                                 </div>
                                 <div>
                                     <p className="text-sm font-medium text-slate-500">Pending Review</p>
@@ -265,8 +265,8 @@ export default function CurationDashboard() {
                         </Card>
                         <Card className="bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm border-slate-200 dark:border-slate-800">
                             <CardContent className="pt-6 flex items-center gap-4">
-                                <div className="p-2 rounded-lg bg-amber-500/10">
-                                    <AlertTriangle className="h-5 w-5 text-amber-500" />
+                                <div className="p-2 rounded-lg bg-re-warning-muted0/10">
+                                    <AlertTriangle className="h-5 w-5 text-re-warning" />
                                 </div>
                                 <div>
                                     <p className="text-sm font-medium text-slate-500">High Risk Domains</p>
@@ -281,8 +281,8 @@ export default function CurationDashboard() {
                         </Card>
                         <Card className="bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm border-slate-200 dark:border-slate-800">
                             <CardContent className="pt-6 flex items-center gap-4">
-                                <div className="p-2 rounded-lg bg-emerald-500/10">
-                                    <Globe className="h-5 w-5 text-emerald-500" />
+                                <div className="p-2 rounded-lg bg-re-brand-muted">
+                                    <Globe className="h-5 w-5 text-re-brand" />
                                 </div>
                                 <div>
                                     <p className="text-sm font-medium text-slate-500">FDA Sources</p>
@@ -375,7 +375,7 @@ export default function CurationDashboard() {
                                                                 <Button
                                                                     size="sm"
                                                                     variant="outline"
-                                                                    className="text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/20 border-slate-200 dark:border-slate-800 h-9 px-3"
+                                                                    className="text-re-danger hover:text-re-danger hover:bg-re-danger-muted dark:hover:bg-red-950/20 border-slate-200 dark:border-slate-800 h-9 px-3"
                                                                     onClick={() => handleReject(item.index)}
                                                                     disabled={processing !== null}
                                                                 >
@@ -412,7 +412,7 @@ export default function CurationDashboard() {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pb-12">
                         <div className="space-y-4">
                             <h3 className="text-lg font-semibold flex items-center gap-2">
-                                <AlertTriangle className="h-5 w-5 text-amber-500" />
+                                <AlertTriangle className="h-5 w-5 text-re-warning" />
                                 Curation Guidelines
                             </h3>
                             <ul className="text-sm text-slate-600 dark:text-slate-400 space-y-3">

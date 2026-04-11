@@ -95,11 +95,11 @@ const DEMO_AFFECTED_LOTS = [
 ];
 
 const DEMO_TIMELINE = [
-    { time: '08:30', label: 'FDA Request Received', desc: 'FSMA 204 records request for romaine lettuce lots from Salinas Valley region', icon: AlertTriangle, color: 'text-red-400', done: true },
+    { time: '08:30', label: 'FDA Request Received', desc: 'FSMA 204 records request for romaine lettuce lots from Salinas Valley region', icon: AlertTriangle, color: 'text-re-danger', done: true },
     { time: '08:35', label: 'Automated Trace Initiated', desc: 'RegEngine backward trace from retail to harvest across 8 facilities', icon: Zap, color: 'text-[var(--re-brand)]', done: true },
-    { time: '08:42', label: '12 Lots Identified', desc: 'Forward trace mapped all downstream distribution — 3 supplier origins confirmed', icon: Package, color: 'text-blue-400', done: true },
-    { time: '09:15', label: 'Supplier Notifications Sent', desc: '3 suppliers contacted: Salinas Valley Farms, Pacific Coast Growers, FreshCut Processing', icon: Users, color: 'text-amber-400', done: true },
-    { time: '10:00', label: 'FDA CSV Export Generated', desc: '24-hour response package with all CTEs, KDEs, and chain hashes', icon: Download, color: 'text-emerald-400', done: true },
+    { time: '08:42', label: '12 Lots Identified', desc: 'Forward trace mapped all downstream distribution — 3 supplier origins confirmed', icon: Package, color: 'text-re-info', done: true },
+    { time: '09:15', label: 'Supplier Notifications Sent', desc: '3 suppliers contacted: Salinas Valley Farms, Pacific Coast Growers, FreshCut Processing', icon: Users, color: 'text-re-warning', done: true },
+    { time: '10:00', label: 'FDA CSV Export Generated', desc: '24-hour response package with all CTEs, KDEs, and chain hashes', icon: Download, color: 'text-re-brand', done: true },
     { time: '—', label: 'Retailer EPCIS Notification', desc: 'GS1 EPCIS 2.0 export for Walmart, Kroger, and Albertsons portals', icon: ShoppingCart, color: 'text-muted-foreground', done: false },
     { time: '—', label: 'Investigation Closed', desc: 'All affected lots accounted for, remediation verified', icon: CheckCircle2, color: 'text-muted-foreground', done: false },
 ];
@@ -115,9 +115,9 @@ function gradeColor(grade: string) {
 }
 
 function riskBadge(risk: string) {
-    if (risk === 'high') return 'bg-red-500/10 text-red-400 border-red-500/20';
-    if (risk === 'medium') return 'bg-amber-500/10 text-amber-400 border-amber-500/20';
-    return 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20';
+    if (risk === 'high') return 'bg-re-danger-muted0/10 text-re-danger border-re-danger/20';
+    if (risk === 'medium') return 'bg-re-warning-muted0/10 text-re-warning border-re-warning/20';
+    return 'bg-re-brand-muted text-re-brand border-re-brand/20';
 }
 
 /* ── Page Component ── */
@@ -158,7 +158,7 @@ export default function RecallReportPage() {
                 <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
                     <div>
                         <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight flex items-center gap-2">
-                            <AlertTriangle className="h-6 w-6 sm:h-7 sm:w-7 text-red-400" />
+                            <AlertTriangle className="h-6 w-6 sm:h-7 sm:w-7 text-re-danger" />
                             Recall Investigation
                         </h1>
                         <p className="mt-1 text-sm text-muted-foreground">
@@ -183,7 +183,7 @@ export default function RecallReportPage() {
                         </Link>
                         <Button
                             size="sm"
-                            className="rounded-xl min-h-[44px] bg-red-600 hover:bg-red-700 text-white active:scale-[0.97]"
+                            className="rounded-xl min-h-[44px] bg-re-danger hover:bg-red-700 text-white active:scale-[0.97]"
                             disabled={exporting}
                             onClick={async () => {
                                 if (!tenantId) return;
@@ -224,7 +224,7 @@ export default function RecallReportPage() {
 
                 {/* Export error */}
                 {exportError && (
-                    <div className="flex items-center gap-2 p-3 rounded-xl bg-red-500/[0.06] border border-red-500/20 text-red-400 text-xs">
+                    <div className="flex items-center gap-2 p-3 rounded-xl bg-re-danger-muted0/[0.06] border border-re-danger/20 text-re-danger text-xs">
                         <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0" />
                         <span>Export failed: {exportError}</span>
                     </div>
@@ -240,7 +240,7 @@ export default function RecallReportPage() {
 
                 {/* Demo notice */}
                 {isDemo && !isLoading && (
-                    <div className="flex items-center gap-2 p-3 rounded-xl bg-blue-500/[0.06] border border-blue-500/20 text-blue-300 text-xs">
+                    <div className="flex items-center gap-2 p-3 rounded-xl bg-re-info-muted0/[0.06] border border-re-info/20 text-blue-300 text-xs">
                         <Info className="h-3.5 w-3.5 flex-shrink-0" />
                         <span>
                             {report?.demo_disclaimer ??
@@ -265,24 +265,24 @@ export default function RecallReportPage() {
                                 initial={{ opacity: 0, y: 10 }}
                                 animate={{ opacity: 1, y: 0 }}
                             >
-                                <div className="p-3 sm:p-4 rounded-xl bg-red-500/[0.06] border border-red-500/20 text-center">
-                                    <div className="text-2xl sm:text-3xl font-bold text-red-400 tabular-nums">{DEMO_INVESTIGATION.lots_at_risk}</div>
+                                <div className="p-3 sm:p-4 rounded-xl bg-re-danger-muted0/[0.06] border border-re-danger/20 text-center">
+                                    <div className="text-2xl sm:text-3xl font-bold text-re-danger tabular-nums">{DEMO_INVESTIGATION.lots_at_risk}</div>
                                     <div className="text-[11px] text-muted-foreground mt-0.5">Lots at Risk</div>
                                 </div>
-                                <div className="p-3 sm:p-4 rounded-xl bg-amber-500/[0.06] border border-amber-500/20 text-center">
-                                    <div className="text-2xl sm:text-3xl font-bold text-amber-400 tabular-nums">{DEMO_INVESTIGATION.suppliers_impacted}</div>
+                                <div className="p-3 sm:p-4 rounded-xl bg-re-warning-muted0/[0.06] border border-re-warning/20 text-center">
+                                    <div className="text-2xl sm:text-3xl font-bold text-re-warning tabular-nums">{DEMO_INVESTIGATION.suppliers_impacted}</div>
                                     <div className="text-[11px] text-muted-foreground mt-0.5">Suppliers Impacted</div>
                                 </div>
-                                <div className="p-3 sm:p-4 rounded-xl bg-blue-500/[0.06] border border-blue-500/20 text-center">
-                                    <div className="text-2xl sm:text-3xl font-bold text-blue-400 tabular-nums">{DEMO_INVESTIGATION.facilities_in_chain}</div>
+                                <div className="p-3 sm:p-4 rounded-xl bg-re-info-muted0/[0.06] border border-re-info/20 text-center">
+                                    <div className="text-2xl sm:text-3xl font-bold text-re-info tabular-nums">{DEMO_INVESTIGATION.facilities_in_chain}</div>
                                     <div className="text-[11px] text-muted-foreground mt-0.5">Facilities in Chain</div>
                                 </div>
                                 <div className="p-3 sm:p-4 rounded-xl bg-[var(--re-surface-elevated)] border border-[var(--re-border-default)] text-center">
                                     <div className="text-2xl sm:text-3xl font-bold tabular-nums">{DEMO_INVESTIGATION.consumers_potentially_affected}</div>
                                     <div className="text-[11px] text-muted-foreground mt-0.5">Consumers at Risk</div>
                                 </div>
-                                <div className="p-3 sm:p-4 rounded-xl bg-emerald-500/[0.06] border border-emerald-500/20 text-center">
-                                    <div className="text-2xl sm:text-3xl font-bold text-emerald-400 tabular-nums">{DEMO_INVESTIGATION.response_time_hours}h</div>
+                                <div className="p-3 sm:p-4 rounded-xl bg-re-brand/[0.06] border border-re-brand/20 text-center">
+                                    <div className="text-2xl sm:text-3xl font-bold text-re-brand tabular-nums">{DEMO_INVESTIGATION.response_time_hours}h</div>
                                     <div className="text-[11px] text-muted-foreground mt-0.5">Response Time</div>
                                 </div>
                             </motion.div>
@@ -314,13 +314,13 @@ export default function RecallReportPage() {
                                                 />
                                             </svg>
                                             <div className="absolute inset-0 flex flex-col items-center justify-center">
-                                                <div className="text-3xl sm:text-4xl font-bold text-emerald-400 tabular-nums">{DEMO_INVESTIGATION.response_time_hours}h</div>
+                                                <div className="text-3xl sm:text-4xl font-bold text-re-brand tabular-nums">{DEMO_INVESTIGATION.response_time_hours}h</div>
                                                 <div className="text-[10px] text-muted-foreground mt-0.5">of 24h SLA</div>
                                             </div>
                                         </div>
                                         <div className="mt-3 flex items-center gap-1.5">
-                                            <CheckCircle2 className="h-4 w-4 text-emerald-400" />
-                                            <span className="text-xs font-medium text-emerald-400">SLA Met — {(24 - DEMO_INVESTIGATION.response_time_hours).toFixed(1)}h to spare</span>
+                                            <CheckCircle2 className="h-4 w-4 text-re-brand" />
+                                            <span className="text-xs font-medium text-re-brand">SLA Met — {(24 - DEMO_INVESTIGATION.response_time_hours).toFixed(1)}h to spare</span>
                                         </div>
                                     </CardContent>
                                 </Card>
@@ -360,7 +360,7 @@ export default function RecallReportPage() {
                                                             <div className="flex items-center gap-2">
                                                                 <span className={`text-xs sm:text-sm font-medium ${evt.done ? '' : 'text-muted-foreground'}`}>{evt.label}</span>
                                                                 {evt.done && (
-                                                                    <Badge variant="secondary" className="text-[9px] bg-emerald-500/10 text-emerald-400 border-emerald-500/20">Done</Badge>
+                                                                    <Badge variant="secondary" className="text-[9px] bg-re-brand-muted text-re-brand border-re-brand/20">Done</Badge>
                                                                 )}
                                                             </div>
                                                             <p className="text-[11px] text-muted-foreground mt-0.5 leading-relaxed">{evt.desc}</p>
@@ -413,9 +413,9 @@ export default function RecallReportPage() {
                                                         {lot.risk}
                                                     </Badge>
                                                     {lot.status === 'traced' ? (
-                                                        <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400 flex-shrink-0" />
+                                                        <CheckCircle2 className="h-3.5 w-3.5 text-re-brand flex-shrink-0" />
                                                     ) : (
-                                                        <Clock className="h-3.5 w-3.5 text-amber-400 flex-shrink-0" />
+                                                        <Clock className="h-3.5 w-3.5 text-re-warning flex-shrink-0" />
                                                     )}
                                                 </div>
                                             </motion.div>
@@ -432,7 +432,7 @@ export default function RecallReportPage() {
                                 initial={{ opacity: 0 }}
                                 animate={{ opacity: 1 }}
                             >
-                                <ShieldCheck className="h-12 w-12 text-emerald-400/40 mb-4" />
+                                <ShieldCheck className="h-12 w-12 text-re-brand/40 mb-4" />
                                 <h2 className="text-lg font-semibold">No Active Recall Investigation</h2>
                                 <p className="text-sm text-muted-foreground mt-1 max-w-md">
                                     Your system is ready to respond to a 24-hour FDA records request. Run a mock drill to validate your team&apos;s response speed.
@@ -576,9 +576,9 @@ export default function RecallReportPage() {
                                                 transition={{ delay: 0.05 * i }}
                                             >
                                                 <Badge variant="secondary" className={`text-[9px] px-2 flex-shrink-0 uppercase tracking-widest ${
-                                                    item.priority === 'HIGH' ? 'bg-red-500/10 text-red-400 border-red-500/20' :
-                                                    item.priority === 'MEDIUM' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' :
-                                                    'bg-blue-500/10 text-blue-400 border-blue-500/20'
+                                                    item.priority === 'HIGH' ? 'bg-re-danger-muted0/10 text-re-danger border-re-danger/20' :
+                                                    item.priority === 'MEDIUM' ? 'bg-re-warning-muted0/10 text-re-warning border-re-warning/20' :
+                                                    'bg-re-info-muted0/10 text-re-info border-re-info/20'
                                                 }`}>
                                                     {item.priority}
                                                 </Badge>

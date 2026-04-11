@@ -6,13 +6,13 @@ export const metadata: Metadata = {
     title: 'Traceability Query Engine | Natural Language FSMA 204 Search | RegEngine',
     description: 'Ask plain English questions about your food supply chain. Get FSMA 204-traced answers with cryptographic evidence and confidence scores. Free query tool.',
     alternates: {
-        canonical: 'https://www.regengine.co/tools/ask',
+        canonical: 'https://regengine.co/tools/ask',
     },
     openGraph: {
         title: 'Traceability Query Engine — RegEngine',
         description: 'Ask natural language questions about your supply chain and get FSMA 204-traced answers with cryptographic evidence. Free.',
         type: 'website',
-        url: 'https://www.regengine.co/tools/ask',
+        url: 'https://regengine.co/tools/ask',
     },
 };
 

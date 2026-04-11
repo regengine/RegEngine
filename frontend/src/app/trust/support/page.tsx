@@ -25,7 +25,7 @@ export const metadata: Metadata = {
     openGraph: {
         title: 'Support & Escalation Model | RegEngine',
         description: 'Support and escalation model for RegEngine FSMA 204 compliance platform.',
-        url: 'https://www.regengine.co/trust/support',        type: 'website',
+        url: 'https://regengine.co/trust/support',        type: 'website',
     },
 };
 
@@ -38,7 +38,7 @@ const ESCALATION_PATH = [
         title: 'Self-serve documentation',
         description: 'FSMA 204 Guide, API docs, FTL Checker, and compliance dashboard. Most operational questions are answered here without waiting for a human.',
         icon: LifeBuoy,
-        color: 'bg-blue-500/15 text-blue-400',
+        color: 'bg-re-info-muted0/15 text-re-info',
         availability: 'Always available',
     },
     {
@@ -46,14 +46,14 @@ const ESCALATION_PATH = [
         title: 'Email support',
         description: 'Standard support channel for configuration questions, export issues, data mapping help, and non-urgent compliance questions.',
         icon: Mail,
-        color: 'bg-emerald-500/15 text-emerald-400',
+        color: 'bg-re-brand/15 text-re-brand',
         availability: 'Business hours · All plans',
     },
     {
         step: '3',
         title: 'Priority queue',
         description: 'Faster response for production issues affecting compliance workflows — ingestion failures, scoring errors, export failures, or integration breakages.',        icon: Zap,
-        color: 'bg-amber-500/15 text-amber-400',
+        color: 'bg-re-warning-muted0/15 text-re-warning',
         availability: 'Business hours · Standard and Premium',
     },
     {
@@ -61,7 +61,7 @@ const ESCALATION_PATH = [
         title: 'Emergency recall escalation',
         description: 'Dedicated path for active FDA investigations or live recall events. Direct founder access for coordination on data exports, regulatory response packaging, and timeline management.',
         icon: Siren,
-        color: 'bg-red-500/15 text-red-400',
+        color: 'bg-re-danger-muted0/15 text-re-danger',
         availability: 'Extended hours · Premium (contractual)',
     },
 ];
@@ -167,10 +167,10 @@ export default function SupportPage() {
             <section className={`relative z-[2] ${sectionAlt}`}>
                 <div className="max-w-[980px] mx-auto py-10 sm:py-14 px-4 sm:px-6">
                     <h2 className="font-display text-2xl font-bold text-[var(--re-text-primary)] mb-4">During a live recall</h2>
-                    <div className={`${card} p-6 border-red-500/20 bg-red-500/[0.02]`}>
+                    <div className={`${card} p-6 border-re-danger/20 bg-re-danger-muted0/[0.02]`}>
                         <div className="flex items-start gap-4">
-                            <div className="w-10 h-10 rounded-xl bg-red-500/15 flex items-center justify-center flex-shrink-0">
-                                <ShieldAlert className="h-5 w-5 text-red-400" />
+                            <div className="w-10 h-10 rounded-xl bg-re-danger-muted0/15 flex items-center justify-center flex-shrink-0">
+                                <ShieldAlert className="h-5 w-5 text-re-danger" />
                             </div>
                             <div>
                                 <h3 className="text-base font-semibold text-[var(--re-text-primary)] mb-2">What RegEngine does during a recall</h3>
@@ -185,8 +185,8 @@ export default function SupportPage() {
                     </div>
                     <div className={`${card} p-6 mt-3`}>
                         <div className="flex items-start gap-4">
-                            <div className="w-10 h-10 rounded-xl bg-amber-500/15 flex items-center justify-center flex-shrink-0">
-                                <AlertTriangle className="h-5 w-5 text-amber-400" />
+                            <div className="w-10 h-10 rounded-xl bg-re-warning-muted0/15 flex items-center justify-center flex-shrink-0">
+                                <AlertTriangle className="h-5 w-5 text-re-warning" />
                             </div>
                             <div>
                                 <h3 className="text-base font-semibold text-[var(--re-text-primary)] mb-2">What RegEngine does not do during a recall</h3>
@@ -212,7 +212,7 @@ export default function SupportPage() {
                                 {group.items.map((item, i) => (
                                     <li key={i} className="flex items-start gap-2 text-sm text-[var(--re-text-muted)]">
                                         <span className={`w-1.5 h-1.5 rounded-full mt-1.5 flex-shrink-0 ${
-                                            group.title.includes('not') ? 'bg-red-500/50' : 'bg-emerald-500/50'
+                                            group.title.includes('not') ? 'bg-re-danger-muted0/50' : 'bg-re-brand/50'
                                         }`} />
                                         {item}
                                     </li>

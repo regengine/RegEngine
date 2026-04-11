@@ -71,11 +71,11 @@ interface Alert {
 // ── Helpers ──
 
 function gradeColor(grade: string): string {
-    if (grade === 'A' || grade === 'A+') return 'text-emerald-400';
-    if (grade === 'B' || grade === 'B+') return 'text-green-400';
-    if (grade === 'C' || grade === 'C+') return 'text-yellow-400';
+    if (grade === 'A' || grade === 'A+') return 'text-re-brand';
+    if (grade === 'B' || grade === 'B+') return 'text-re-success';
+    if (grade === 'C' || grade === 'C+') return 'text-re-warning';
     if (grade === 'D') return 'text-orange-400';
-    return 'text-red-400';
+    return 'text-re-danger';
 }
 
 function gradeGlow(grade: string): string {
@@ -103,10 +103,10 @@ function scoreRingTrack(score: number): string {
 function severityConfig(severity: string) {
     const map: Record<string, { bg: string; border: string; text: string; dot: string }> = {
         critical: {
-            bg: 'bg-red-500/10',
+            bg: 'bg-re-danger-muted0/10',
             border: 'border-l-red-500',
-            text: 'text-red-400',
-            dot: 'bg-red-500',
+            text: 'text-re-danger',
+            dot: 'bg-re-danger-muted0',
         },
         high: {
             bg: 'bg-orange-500/10',
@@ -115,16 +115,16 @@ function severityConfig(severity: string) {
             dot: 'bg-orange-500',
         },
         medium: {
-            bg: 'bg-yellow-500/10',
+            bg: 'bg-re-warning/10',
             border: 'border-l-yellow-500',
-            text: 'text-yellow-400',
-            dot: 'bg-yellow-500',
+            text: 'text-re-warning',
+            dot: 'bg-re-warning',
         },
         low: {
-            bg: 'bg-blue-500/10',
+            bg: 'bg-re-info-muted0/10',
             border: 'border-l-blue-500',
-            text: 'text-blue-400',
-            dot: 'bg-blue-500',
+            text: 'text-re-info',
+            dot: 'bg-re-info-muted0',
         },
     };
     return map[severity] || map.low;
@@ -215,7 +215,7 @@ function BreakdownBar({ label, value, detail, delay = 0 }: { label: string; valu
                     : 'from-red-500 to-red-400';
 
     const dotColor =
-        value >= 80 ? 'bg-emerald-500' : value >= 60 ? 'bg-yellow-500' : value >= 40 ? 'bg-orange-500' : 'bg-red-500';
+        value >= 80 ? 'bg-re-brand' : value >= 60 ? 'bg-re-warning' : value >= 40 ? 'bg-orange-500' : 'bg-re-danger-muted0';
 
     return (
         <motion.div
@@ -257,13 +257,13 @@ function StatusRow({ icon: Icon, label, value, status }: {
     status: 'good' | 'warn' | 'neutral';
 }) {
     const statusColors = {
-        good: 'bg-emerald-500/10 border-emerald-500/20',
-        warn: 'bg-amber-500/10 border-amber-500/20',
+        good: 'bg-re-brand-muted border-re-brand/20',
+        warn: 'bg-re-warning-muted0/10 border-re-warning/20',
         neutral: 'bg-muted/30 border-transparent',
     };
     const iconColors = {
-        good: 'text-emerald-500',
-        warn: 'text-amber-500',
+        good: 'text-re-brand',
+        warn: 'text-re-warning',
         neutral: 'text-muted-foreground',
     };
 
@@ -423,7 +423,7 @@ export default function HeartbeatPage() {
                                         <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Daily Heartbeat</h1>
                                         <span className="relative flex h-2.5 w-2.5">
                                             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-                                            <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500" />
+                                            <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-re-brand" />
                                         </span>
                                     </div>
                                     <p className="text-sm text-muted-foreground">
@@ -458,9 +458,9 @@ export default function HeartbeatPage() {
                                         animate={{ opacity: 1, height: 'auto' }}
                                         exit={{ opacity: 0, height: 0 }}
                                     >
-                                        <Card className="border-red-500/30 bg-red-500/5">
+                                        <Card className="border-re-danger/30 bg-re-danger-muted0/5">
                                             <CardContent className="py-3">
-                                                <div className="flex items-center gap-2 text-red-400">
+                                                <div className="flex items-center gap-2 text-re-danger">
                                                     <XCircle className="h-4 w-4 flex-shrink-0" />
                                                     <p className="text-sm">{error} — showing cached data if available.</p>
                                 </div>
@@ -516,7 +516,7 @@ export default function HeartbeatPage() {
                                 <Card className="overflow-hidden border-[var(--re-border-default)] hover:border-[var(--re-border-subtle)] transition-colors">
                                     <CardHeader className="pb-2">
                                         <CardTitle className="text-sm font-semibold flex items-center gap-2 text-muted-foreground">
-                                            <BarChart3 className="h-4 w-4 text-blue-500" />
+                                            <BarChart3 className="h-4 w-4 text-re-info" />
                                             Score Breakdown
                                         </CardTitle>
                                     </CardHeader>
@@ -623,10 +623,10 @@ export default function HeartbeatPage() {
                                     <CardHeader className="pb-2">
                                         <div className="flex items-center justify-between">
                                             <CardTitle className="text-sm font-semibold flex items-center gap-2 text-muted-foreground">
-                                                <AlertTriangle className="h-4 w-4 text-amber-500" />
+                                                <AlertTriangle className="h-4 w-4 text-re-warning" />
                                                 Recent Alerts
                                                 {criticalAlerts.length > 0 && (
-                                                    <Badge className="text-[10px] px-1.5 py-0 bg-red-500/15 text-red-400 border-red-500/20 ml-1">
+                                                    <Badge className="text-[10px] px-1.5 py-0 bg-re-danger-muted0/15 text-re-danger border-re-danger/20 ml-1">
                                                         {criticalAlerts.length} urgent
                                                     </Badge>
                                                 )}
@@ -665,8 +665,8 @@ export default function HeartbeatPage() {
                                             </div>
                                         ) : (
                                             <div className="flex flex-col items-center py-10 text-muted-foreground">
-                                                <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 flex items-center justify-center mb-3">
-                                                    <CheckCircle2 className="h-6 w-6 text-emerald-400" />
+                                                <div className="w-12 h-12 rounded-2xl bg-re-brand-muted flex items-center justify-center mb-3">
+                                                    <CheckCircle2 className="h-6 w-6 text-re-brand" />
                                                 </div>
                                                 <p className="text-sm font-medium">All clear</p>
                                                 <p className="text-xs text-muted-foreground/60 mt-0.5">No open alerts right now</p>
@@ -696,10 +696,10 @@ export default function HeartbeatPage() {
                                                     >
                                                         <span className={`inline-flex items-center justify-center w-5 h-5 rounded-md text-[10px] font-bold flex-shrink-0 mt-0.5 ${
                                                             action.priority === 'HIGH'
-                                                                ? 'bg-red-500/15 text-red-400'
+                                                                ? 'bg-re-danger-muted0/15 text-re-danger'
                                                                 : action.priority === 'MEDIUM'
-                                                                    ? 'bg-yellow-500/15 text-yellow-400'
-                                                                    : 'bg-blue-500/15 text-blue-400'
+                                                                    ? 'bg-re-warning/15 text-re-warning'
+                                                                    : 'bg-re-info-muted0/15 text-re-info'
                                                         }`}>
                                                             {i + 1}
                                                         </span>
@@ -712,8 +712,8 @@ export default function HeartbeatPage() {
                                             </div>
                                         ) : (
                                             <div className="flex flex-col items-center py-10 text-muted-foreground">
-                                                <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 flex items-center justify-center mb-3">
-                                                    <ShieldCheck className="h-6 w-6 text-emerald-400" />
+                                                <div className="w-12 h-12 rounded-2xl bg-re-brand-muted flex items-center justify-center mb-3">
+                                                    <ShieldCheck className="h-6 w-6 text-re-brand" />
                                                 </div>
                                                 <p className="text-sm font-medium">On track</p>
                                                 <p className="text-xs text-muted-foreground/60 mt-0.5">No pending compliance actions</p>

@@ -12,7 +12,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: '24-Hour FDA Response Walkthrough | RegEngine',
     description: 'See exactly what happens when the FDA requests your traceability records.',
-    url: 'https://www.regengine.co/walkthrough',
+    url: 'https://regengine.co/walkthrough',
     type: 'website',
   },
 };
@@ -143,10 +143,10 @@ export default function WalkthroughPage() {
             {TIMELINE.map((step, i) => {
               const StepIcon = step.icon;
               const colorMap: Record<string, string> = {
-                red: 'border-red-500/30 bg-red-500/10 text-red-400',
-                amber: 'border-amber-500/30 bg-amber-500/10 text-amber-400',
-                blue: 'border-blue-500/30 bg-blue-500/10 text-blue-400',
-                emerald: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400',
+                red: 'border-re-danger/30 bg-re-danger-muted0/10 text-re-danger',
+                amber: 'border-re-warning/30 bg-re-warning-muted0/10 text-re-warning',
+                blue: 'border-re-info/30 bg-re-info-muted0/10 text-re-info',
+                emerald: 'border-re-brand/30 bg-re-brand-muted text-re-brand',
                 brand: 'border-[var(--re-brand)]/30 bg-[var(--re-brand)]/10 text-[var(--re-brand)]',
               };
               const iconColor = colorMap[step.color] || colorMap.brand;
@@ -181,17 +181,17 @@ export default function WalkthroughPage() {
 
                     {/* Blocking defects list */}
                     {step.defects && (
-                      <div className="rounded-xl border-2 border-red-500/20 bg-red-500/5 p-4 space-y-2">
+                      <div className="rounded-xl border-2 border-re-danger/20 bg-re-danger-muted0/5 p-4 space-y-2">
                         {step.defects.map((d, j) => (
                           <div key={j} className="flex items-start gap-2">
-                            <XCircle className="w-4 h-4 text-red-400 mt-0.5 flex-shrink-0" />
+                            <XCircle className="w-4 h-4 text-re-danger mt-0.5 flex-shrink-0" />
                             <div>
-                              <span className="font-mono text-[0.75rem] font-medium text-red-400">{d.lot}</span>
+                              <span className="font-mono text-[0.75rem] font-medium text-re-danger">{d.lot}</span>
                               <span className="text-[0.8rem] text-re-text-muted ml-2">{d.issue}</span>
                             </div>
                           </div>
                         ))}
-                        <p className="text-[0.75rem] text-red-400 font-semibold mt-3 pt-2 border-t border-red-500/20">
+                        <p className="text-[0.75rem] text-re-danger font-semibold mt-3 pt-2 border-t border-re-danger/20">
                           SUBMISSION BLOCKED until all defects resolved or waived
                         </p>
                       </div>
@@ -232,18 +232,18 @@ export default function WalkthroughPage() {
               { rule: 'Evaluations are stale', example: 'Event amended after last rule evaluation' },
               { rule: 'Deadline has been breached', example: 'Response window expired (24 hours from request)' },
             ].map((item) => (
-              <div key={item.rule} className="rounded-xl border border-red-500/20 bg-red-500/5 p-4">
+              <div key={item.rule} className="rounded-xl border border-re-danger/20 bg-re-danger-muted0/5 p-4">
                 <div className="flex items-start gap-2 mb-1">
-                  <ShieldAlert className="w-4 h-4 text-red-400 mt-0.5 flex-shrink-0" />
+                  <ShieldAlert className="w-4 h-4 text-re-danger mt-0.5 flex-shrink-0" />
                   <span className="text-[0.85rem] font-medium text-re-text-primary">{item.rule}</span>
                 </div>
                 <p className="text-[0.75rem] text-re-text-disabled ml-6">{item.example}</p>
               </div>
             ))}
           </div>
-          <div className="mt-6 rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4">
+          <div className="mt-6 rounded-xl border border-re-brand/20 bg-re-brand/5 p-4">
             <div className="flex items-start gap-2">
-              <CheckCircle2 className="w-4 h-4 text-emerald-400 mt-0.5 flex-shrink-0" />
+              <CheckCircle2 className="w-4 h-4 text-re-brand mt-0.5 flex-shrink-0" />
               <div>
                 <span className="text-[0.85rem] font-medium text-re-text-primary">You can proceed if:</span>
                 <p className="text-[0.8rem] text-re-text-muted mt-1">

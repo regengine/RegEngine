@@ -42,12 +42,12 @@ interface ComplianceGap {
 
 // Intent color mapping
 const intentColors: Record<string, { bg: string; text: string; badge: string }> = {
-  trace_forward: { bg: 'bg-blue-50', text: 'text-blue-700', badge: 'bg-blue-200 text-blue-800' },
+  trace_forward: { bg: 'bg-re-info-muted', text: 'text-re-info', badge: 'bg-blue-200 text-re-info' },
   trace_backward: { bg: 'bg-purple-50', text: 'text-purple-700', badge: 'bg-purple-200 text-purple-800' },
-  lot_timeline: { bg: 'bg-green-50', text: 'text-green-700', badge: 'bg-green-200 text-green-800' },
-  events_search: { bg: 'bg-gray-50', text: 'text-gray-700', badge: 'bg-gray-200 text-gray-800' },
+  lot_timeline: { bg: 'bg-re-success-muted', text: 'text-re-success', badge: 'bg-green-200 text-re-success' },
+  events_search: { bg: 'bg-re-surface-card', text: 'text-re-text-disabled', badge: 'bg-re-surface-elevated text-re-text-primary' },
   compliance_gaps: { bg: 'bg-orange-50', text: 'text-orange-700', badge: 'bg-orange-200 text-orange-800' },
-  orphan_lots: { bg: 'bg-red-50', text: 'text-red-700', badge: 'bg-red-200 text-red-800' },
+  orphan_lots: { bg: 'bg-re-danger-muted', text: 'text-re-danger', badge: 'bg-red-200 text-re-danger' },
 };
 
 // Query parser logic
@@ -402,7 +402,7 @@ export default function AskPage() {
               key={item.step}
               className="bg-gradient-to-br from-slate-50 to-slate-100 rounded-lg p-4 text-center border border-slate-200"
             >
-              <div className="flex items-center justify-center w-10 h-10 bg-blue-600 text-white rounded-full font-semibold mx-auto mb-2">
+              <div className="flex items-center justify-center w-10 h-10 bg-re-info text-white rounded-full font-semibold mx-auto mb-2">
                 {item.step}
               </div>
               <h4 className="font-semibold text-slate-900 mb-1">{item.label}</h4>
@@ -433,7 +433,7 @@ export default function AskPage() {
             <button
               onClick={() => { void handleQuery(); }}
               disabled={!query.trim() || isLoading}
-              className="absolute bottom-4 right-4 inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-slate-400 disabled:cursor-not-allowed transition-colors font-medium"
+              className="absolute bottom-4 right-4 inline-flex items-center gap-2 px-4 py-2 bg-re-info text-white rounded-lg hover:bg-re-info disabled:bg-slate-400 disabled:cursor-not-allowed transition-colors font-medium"
             >
               <Zap size={18} />
               Ask
@@ -477,8 +477,8 @@ export default function AskPage() {
                 </div>
               )}
               {isLiveResult && (
-                <div className="flex items-center gap-2 rounded-lg border border-green-300 bg-green-50 px-4 py-3 text-sm text-green-800">
-                  <Check size={16} className="shrink-0 text-green-600" />
+                <div className="flex items-center gap-2 rounded-lg border border-green-300 bg-re-success-muted px-4 py-3 text-sm text-re-success">
+                  <Check size={16} className="shrink-0 text-re-success" />
                   <span>Live results from your connected supply chain data.</span>
                 </div>
               )}
@@ -500,13 +500,13 @@ export default function AskPage() {
                         <div
                           className={`h-2 rounded-full transition-all ${
                             result.intent === 'trace_forward' || result.intent === 'trace_backward'
-                              ? 'bg-blue-600'
+                              ? 'bg-re-info'
                               : result.intent === 'lot_timeline'
-                              ? 'bg-green-600'
+                              ? 'bg-re-success'
                               : result.intent === 'compliance_gaps'
                               ? 'bg-orange-600'
                               : result.intent === 'orphan_lots'
-                              ? 'bg-red-600'
+                              ? 'bg-re-danger'
                               : 'bg-gray-600'
                           }`}
                           style={{ width: `${result.confidence * 100}%` }}
@@ -561,7 +561,7 @@ export default function AskPage() {
                     {(result.results as Event[]).map((event, idx) => (
                       <div key={event.id} className="flex gap-4">
                         <div className="flex flex-col items-center">
-                          <div className="w-4 h-4 bg-blue-600 rounded-full mt-1" />
+                          <div className="w-4 h-4 bg-re-info rounded-full mt-1" />
                           {idx < (result.results as Event[]).length - 1 && (
                             <div className="w-1 h-12 bg-slate-200 my-2" />
                           )}
@@ -613,10 +613,10 @@ export default function AskPage() {
                           <span
                             className={`px-2 py-1 rounded text-xs font-semibold ${
                               gap.severity === 'high'
-                                ? 'bg-red-100 text-red-800'
+                                ? 'bg-re-danger-muted text-re-danger'
                                 : gap.severity === 'medium'
                                 ? 'bg-orange-100 text-orange-800'
-                                : 'bg-yellow-100 text-yellow-800'
+                                : 'bg-re-warning-muted text-yellow-800'
                             }`}
                           >
                             {gap.severity.toUpperCase()}
@@ -633,14 +633,14 @@ export default function AskPage() {
                 ) : result.intent === 'orphan_lots' ? (
                   <div className="space-y-3">
                     {(result.results as OrphanLot[]).map((orphan, idx) => (
-                      <div key={idx} className="bg-red-50 border border-red-300 rounded-lg p-4">
+                      <div key={idx} className="bg-re-danger-muted border border-re-danger rounded-lg p-4">
                         <div className="flex items-start justify-between mb-2">
-                          <p className="font-mono font-semibold text-red-900">{orphan.lot}</p>
-                          <AlertTriangle size={20} className="text-red-600" />
+                          <p className="font-mono font-semibold text-re-danger">{orphan.lot}</p>
+                          <AlertTriangle size={20} className="text-re-danger" />
                         </div>
-                        <p className="text-sm text-red-800 mb-1">{orphan.product}</p>
-                        <p className="text-sm text-red-700">Origin: {orphan.origin}</p>
-                        <p className="text-xs text-red-600 mt-2">First seen: {orphan.firstSeen}</p>
+                        <p className="text-sm text-re-danger mb-1">{orphan.product}</p>
+                        <p className="text-sm text-re-danger">Origin: {orphan.origin}</p>
+                        <p className="text-xs text-re-danger mt-2">First seen: {orphan.firstSeen}</p>
                       </div>
                     ))}
                   </div>
@@ -653,7 +653,7 @@ export default function AskPage() {
                 <div className="space-y-3">
                   {result.apiEndpoints.map((endpoint, idx) => (
                     <div key={idx} className="bg-slate-50 border border-slate-300 rounded-lg p-4 font-mono text-sm">
-                      <p className="text-blue-600 font-semibold mb-2">{endpoint.path}</p>
+                      <p className="text-re-info font-semibold mb-2">{endpoint.path}</p>
                       <p className="text-slate-700 text-xs mb-2">
                         <span className="text-slate-600">Parameters:</span>{' '}
                         {JSON.stringify(endpoint.params)}
@@ -676,7 +676,7 @@ export default function AskPage() {
                 </p>
                 <a
                   href="/onboarding"
-                  className="inline-flex items-center gap-2 px-6 py-2 bg-white text-blue-600 rounded-lg font-semibold hover:bg-blue-50 transition-colors"
+                  className="inline-flex items-center gap-2 px-6 py-2 bg-white text-re-info rounded-lg font-semibold hover:bg-re-info-muted transition-colors"
                 >
                   Get Started
                   <ArrowRight size={18} />

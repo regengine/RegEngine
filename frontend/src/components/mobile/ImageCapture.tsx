@@ -119,7 +119,7 @@ export function ImageCapture({ onCapture }: ImageCaptureProps) {
                     <div className="flex gap-4 w-full">
                         <Button
                             onClick={confirm}
-                            className="flex-1 bg-green-600 hover:bg-green-700"
+                            className="flex-1 bg-re-success hover:bg-re-success"
                         >
                             <Check className="mr-2 h-4 w-4" />
                             Use Photo

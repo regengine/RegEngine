@@ -138,9 +138,9 @@ export function AddEventModal({ open, onClose, onConfirm, cteType, prefill }: Ad
               <div key={field} className="space-y-1">
                 <label className="text-[0.65rem] font-medium text-[var(--re-text-secondary)] flex items-center gap-1">
                   {fieldLabel(field)}
-                  {isRequired && <span className="text-red-400">*</span>}
+                  {isRequired && <span className="text-re-danger">*</span>}
                   {hasPrefill && (
-                    <span className="text-[0.55rem] text-emerald-400 font-normal ml-1">
+                    <span className="text-[0.55rem] text-re-brand font-normal ml-1">
                       (suggested)
                     </span>
                   )}
@@ -157,7 +157,7 @@ export function AddEventModal({ open, onClose, onConfirm, cteType, prefill }: Ad
                     placeholder={`Enter ${fieldLabel(field).toLowerCase()}`}
                     className={`w-full bg-[var(--re-surface-base)] border rounded-lg px-3 py-2 text-[0.75rem] font-mono text-[var(--re-text-primary)] placeholder:text-[var(--re-text-disabled)] focus:outline-none focus:ring-2 focus:ring-[var(--re-brand)]/30 ${
                       hasPrefill
-                        ? 'border-emerald-500/30'
+                        ? 'border-re-brand/30'
                         : 'border-[var(--re-surface-border)]'
                     }`}
                   />
@@ -178,7 +178,7 @@ export function AddEventModal({ open, onClose, onConfirm, cteType, prefill }: Ad
             />
             <div className="space-y-0.5">
               <div className="flex items-center gap-1.5">
-                <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+                <ShieldCheck className="w-3.5 h-3.5 text-re-brand" />
                 <span className="text-[0.7rem] font-semibold text-[var(--re-text-primary)]">
                   Physical Supply Chain Confirmation
                 </span>

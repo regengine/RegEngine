@@ -238,7 +238,7 @@ export default function ApiKeysPage() {
                                         variant="ghost"
                                         size="sm"
                                         onClick={() => revokeKey(key.id)}
-                                        className="text-red-400 hover:text-red-300 hover:bg-red-500/10"
+                                        className="text-re-danger hover:text-re-danger hover:bg-re-danger-muted0/10"
                                     >
                                         <Trash2 className="w-4 h-4" />
                                     </Button>

@@ -141,13 +141,13 @@ function getConfidenceDescriptor(confidence: number) {
     if (confidence >= 0.85) {
         return {
             label: "high",
-            className: "bg-emerald-500/20 text-emerald-300 border-emerald-500/30",
+            className: "bg-re-brand/20 text-re-brand-light border-re-brand/30",
         };
     }
     if (confidence >= 0.7) {
         return {
             label: "medium",
-            className: "bg-amber-500/20 text-amber-300 border-amber-500/30",
+            className: "bg-re-warning-muted0/20 text-re-warning border-re-warning/30",
         };
     }
     return {
@@ -465,7 +465,7 @@ export function SupplyChainKnowledgeGraphBuilder() {
                                 </div>
 
                                 {showWarningBanner && (
-                                    <div className="rounded-2xl border border-amber-500/40 bg-amber-500/10 p-3 text-amber-200">
+                                    <div className="rounded-2xl border border-re-warning/40 bg-re-warning-muted0/10 p-3 text-re-warning">
                                         <div className="mb-1 inline-flex items-center gap-2 text-sm font-medium">
                                             <AlertTriangle className="h-4 w-4" />
                                             Query warnings

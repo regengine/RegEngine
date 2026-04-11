@@ -82,10 +82,10 @@ const BLOCKER_CONFIG: Record<string, { icon: React.ElementType; color: string; l
 };
 
 const URGENCY_CONFIG: Record<string, { color: string; bg: string; label: string }> = {
-    overdue: { color: '#ef4444', bg: 'bg-red-500/10', label: 'OVERDUE' },
-    critical: { color: '#f59e0b', bg: 'bg-amber-500/10', label: 'CRITICAL' },
-    urgent: { color: '#3b82f6', bg: 'bg-blue-500/10', label: 'URGENT' },
-    normal: { color: '#10b981', bg: 'bg-emerald-500/10', label: 'ON TRACK' },
+    overdue: { color: '#ef4444', bg: 'bg-re-danger-muted0/10', label: 'OVERDUE' },
+    critical: { color: '#f59e0b', bg: 'bg-re-warning-muted0/10', label: 'CRITICAL' },
+    urgent: { color: '#3b82f6', bg: 'bg-re-info-muted0/10', label: 'URGENT' },
+    normal: { color: '#10b981', bg: 'bg-re-brand-muted', label: 'ON TRACK' },
 };
 
 /* ── Page ── */
@@ -162,7 +162,7 @@ export default function IssuesPage() {
                 <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
                     <div>
                         <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight flex items-center gap-2">
-                            <AlertTriangle className="h-6 w-6 sm:h-7 sm:w-7 text-amber-400" />
+                            <AlertTriangle className="h-6 w-6 sm:h-7 sm:w-7 text-re-warning" />
                             Issues & Blockers
                         </h1>
                         <p className="mt-1 text-sm text-muted-foreground">
@@ -176,16 +176,16 @@ export default function IssuesPage() {
 
                 {/* Summary Stats */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-3">
-                    <div className="p-3 sm:p-4 rounded-xl bg-red-500/[0.06] border border-red-500/20 text-center">
-                        <div className="text-2xl sm:text-3xl font-bold text-red-400 tabular-nums">{blockers.length}</div>
+                    <div className="p-3 sm:p-4 rounded-xl bg-re-danger-muted0/[0.06] border border-re-danger/20 text-center">
+                        <div className="text-2xl sm:text-3xl font-bold text-re-danger tabular-nums">{blockers.length}</div>
                         <div className="text-[11px] text-muted-foreground mt-0.5">Blocking Defects</div>
                     </div>
-                    <div className="p-3 sm:p-4 rounded-xl bg-amber-500/[0.06] border border-amber-500/20 text-center">
-                        <div className="text-2xl sm:text-3xl font-bold text-amber-400 tabular-nums">{overdueCount + criticalCount}</div>
+                    <div className="p-3 sm:p-4 rounded-xl bg-re-warning-muted0/[0.06] border border-re-warning/20 text-center">
+                        <div className="text-2xl sm:text-3xl font-bold text-re-warning tabular-nums">{overdueCount + criticalCount}</div>
                         <div className="text-[11px] text-muted-foreground mt-0.5">Urgent Deadlines</div>
                     </div>
-                    <div className="p-3 sm:p-4 rounded-xl bg-blue-500/[0.06] border border-blue-500/20 text-center">
-                        <div className="text-2xl sm:text-3xl font-bold text-blue-400 tabular-nums">{warnings.length}</div>
+                    <div className="p-3 sm:p-4 rounded-xl bg-re-info-muted0/[0.06] border border-re-info/20 text-center">
+                        <div className="text-2xl sm:text-3xl font-bold text-re-info tabular-nums">{warnings.length}</div>
                         <div className="text-[11px] text-muted-foreground mt-0.5">Warnings</div>
                     </div>
                     <div className="p-3 sm:p-4 rounded-xl bg-[var(--re-surface-elevated)] border border-[var(--re-border-default)] text-center">
@@ -201,9 +201,9 @@ export default function IssuesPage() {
                 )}
 
                 {error && (
-                    <Card className="border-red-500/30">
+                    <Card className="border-re-danger/30">
                         <CardContent className="py-4">
-                            <div className="flex items-center gap-3 text-red-400">
+                            <div className="flex items-center gap-3 text-re-danger">
                                 <AlertTriangle className="h-5 w-5" />
                                 <p className="text-sm">{error}</p>
                             </div>
@@ -216,7 +216,7 @@ export default function IssuesPage() {
                     <Card className="border-[var(--re-border-default)]">
                         <CardHeader>
                             <CardTitle className="text-base flex items-center gap-2">
-                                <Timer className="h-4 w-4 text-amber-400" />
+                                <Timer className="h-4 w-4 text-re-warning" />
                                 Active Deadlines
                             </CardTitle>
                         </CardHeader>
@@ -254,9 +254,9 @@ export default function IssuesPage() {
 
                 {/* Blocking Defects */}
                 {blockers.length > 0 && (
-                    <Card className="border-red-500/20">
+                    <Card className="border-re-danger/20">
                         <CardHeader>
-                            <CardTitle className="text-base flex items-center gap-2 text-red-400">
+                            <CardTitle className="text-base flex items-center gap-2 text-re-danger">
                                 <XCircle className="h-4 w-4" />
                                 Blocking Defects — Must Fix Before Submission
                             </CardTitle>
@@ -271,7 +271,7 @@ export default function IssuesPage() {
                                         initial={{ opacity: 0, y: 6 }}
                                         animate={{ opacity: 1, y: 0 }}
                                         transition={{ delay: i * 0.03 }}
-                                        className="p-3 rounded-xl border border-[var(--re-border-default)] hover:border-red-500/30 transition-all"
+                                        className="p-3 rounded-xl border border-[var(--re-border-default)] hover:border-re-danger/30 transition-all"
                                     >
                                         <div className="flex items-start gap-2.5">
                                             <div
@@ -310,9 +310,9 @@ export default function IssuesPage() {
 
                 {/* Warnings */}
                 {warnings.length > 0 && (
-                    <Card className="border-amber-500/20">
+                    <Card className="border-re-warning/20">
                         <CardHeader>
-                            <CardTitle className="text-base flex items-center gap-2 text-amber-400">
+                            <CardTitle className="text-base flex items-center gap-2 text-re-warning">
                                 <AlertTriangle className="h-4 w-4" />
                                 Warnings — Non-Blocking
                             </CardTitle>
@@ -358,7 +358,7 @@ export default function IssuesPage() {
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                     >
-                        <CheckCircle2 className="h-12 w-12 text-emerald-400 mb-4" />
+                        <CheckCircle2 className="h-12 w-12 text-re-brand mb-4" />
                         <h2 className="text-lg font-semibold">No Issues Found</h2>
                         <p className="text-sm text-muted-foreground mt-1 max-w-md">
                             All systems clear. No blocking defects, no overdue deadlines, no pending reviews.

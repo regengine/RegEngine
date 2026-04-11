@@ -23,7 +23,7 @@ export const metadata: Metadata = {
     openGraph: {
         title: 'Retention & Export Guidance | RegEngine',
         description: 'Retention and export posture for RegEngine FSMA 204 compliance platform.',
-        url: 'https://www.regengine.co/trust/retention',
+        url: 'https://regengine.co/trust/retention',
         type: 'website',
     },
 };
@@ -35,21 +35,21 @@ const RETENTION_TIMELINE = [
         phase: 'Active subscription',
         duration: 'Ongoing',
         icon: ShieldCheck,
-        color: 'bg-emerald-500/15 text-emerald-400',
+        color: 'bg-re-brand/15 text-re-brand',
         detail: 'Full access to all CTE events, KDE records, compliance scores, audit logs, and export functions. Data is continuously backed up with point-in-time recovery.',
     },
     {
         phase: 'Post-cancellation window',
         duration: '90 days',
         icon: Clock,
-        color: 'bg-amber-500/15 text-amber-400',
+        color: 'bg-re-warning-muted0/15 text-re-warning',
         detail: 'Read-only access to your workspace. All export functions remain available. This is your window to extract everything you need before deletion.',
     },
     {
         phase: 'Deletion',
         duration: 'After 90 days',
         icon: Trash2,
-        color: 'bg-red-500/15 text-red-400',
+        color: 'bg-re-danger-muted0/15 text-re-danger',
         detail: 'All tenant data is permanently deleted from production databases and backups. Deletion is irreversible. RegEngine cannot recover data after this point.',
     },
 ];

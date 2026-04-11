@@ -72,8 +72,8 @@ export function ErrorFallback({ error, onReset, showDetails = false }: ErrorFall
     <div className="min-h-[400px] flex items-center justify-center p-6">
       <Card className="max-w-lg w-full">
         <CardHeader className="text-center">
-          <div className="mx-auto mb-4 p-4 rounded-full bg-red-100 dark:bg-red-900/30">
-            <AlertTriangle className="h-8 w-8 text-red-600 dark:text-red-400" />
+          <div className="mx-auto mb-4 p-4 rounded-full bg-re-danger-muted dark:bg-re-danger/30">
+            <AlertTriangle className="h-8 w-8 text-re-danger dark:text-re-danger" />
           </div>
           <CardTitle className="text-2xl">Something went wrong</CardTitle>
           <CardDescription>

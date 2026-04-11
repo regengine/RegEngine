@@ -173,7 +173,7 @@ export default function SettingsPage() {
                     </Button>
                 </div>
                 {saveError && (
-                    <div className="p-3 rounded-lg bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800 flex items-center gap-2 text-red-800 dark:text-red-200 text-sm">
+                    <div className="p-3 rounded-lg bg-re-danger-muted dark:bg-re-danger/20 border border-re-danger dark:border-re-danger flex items-center gap-2 text-re-danger dark:text-red-200 text-sm">
                         <AlertTriangle className="h-4 w-4 shrink-0" />
                         <span>{saveError}</span>
                     </div>
@@ -290,7 +290,7 @@ export default function SettingsPage() {
                                             <div className="min-w-0">
                                                 <div className="text-xs sm:text-sm font-medium flex items-center gap-2">
                                                     {key.name}
-                                                    <Badge className="text-[9px] bg-emerald-500/10 text-emerald-500">{key.status}</Badge>
+                                                    <Badge className="text-[9px] bg-re-brand-muted text-re-brand">{key.status}</Badge>
                                                 </div>
                                                 <div className="font-mono text-[11px] sm:text-xs text-muted-foreground flex items-center gap-2 mt-1">
                                                     <span className="truncate">{showKey ? key.full : `${key.prefix}${'*'.repeat(16)}`}</span>
@@ -374,7 +374,7 @@ export default function SettingsPage() {
                                         </div>
                                         <div className="flex items-center gap-2 flex-shrink-0">
                                             <span className="text-xs sm:text-sm font-medium text-[var(--re-brand)]">{item.value}</span>
-                                            <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
+                                            <CheckCircle2 className="h-3.5 w-3.5 text-re-brand" />
                                         </div>
                                     </div>
                                 ))}
@@ -449,10 +449,10 @@ export default function SettingsPage() {
                                                     </Button>
                                                 )}
                                                 {int.status === 'pending' && (
-                                                    <Badge className="text-[9px] bg-amber-500/10 text-amber-500">Setup in progress</Badge>
+                                                    <Badge className="text-[9px] bg-re-warning-muted0/10 text-re-warning">Setup in progress</Badge>
                                                 )}
                                                 {int.status === 'coming_soon' && (
-                                                    <Badge className="text-[9px] bg-gray-500/10 text-gray-400">Coming Soon</Badge>
+                                                    <Badge className="text-[9px] bg-re-surface-card0/10 text-re-text-tertiary">Coming Soon</Badge>
                                                 )}
                                             </div>
                                         </div>

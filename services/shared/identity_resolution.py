@@ -16,10 +16,10 @@ Usage:
     from shared.identity_resolution import IdentityResolutionService
 
     svc = IdentityResolutionService(db_session)
-    entity = svc.register_entity(tenant_id, "facility", "Acme Cold Storage", gln="0012345000015")
-    svc.add_alias(tenant_id, entity["entity_id"], "name", "ACME Cold Storage LLC", "csv_upload")
-    matches = svc.find_entity_by_alias(tenant_id, "name", "Acme Cold Storage")
-    fuzzy = svc.find_potential_matches(tenant_id, "Acme Cold Storag", entity_type="facility")
+    entity = svc.register_entity(tenant_id, "facility", "Example Cold Storage", gln="0012345000015")
+    svc.add_alias(tenant_id, entity["entity_id"], "name", "EXAMPLE Cold Storage LLC", "csv_upload")
+    matches = svc.find_entity_by_alias(tenant_id, "name", "Example Cold Storage")
+    fuzzy = svc.find_potential_matches(tenant_id, "Example Cold Stora", entity_type="facility")
 """
 
 from __future__ import annotations

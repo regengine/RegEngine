@@ -71,7 +71,7 @@ export default function IntegrationHubPage() {
 
                                 <div className="rounded-lg bg-black/40 border border-white/5 p-4 mb-6 relative overflow-hidden">
                                     <div className="text-[10px] font-mono text-muted-foreground mb-2 uppercase tracking-wider">POST /events/ingest</div>
-                                    <pre className="text-xs font-mono text-emerald-400">
+                                    <pre className="text-xs font-mono text-re-brand">
                                         {`{
   "tlc": "GTIN-1002-4A",
   "cte_type": "RECEIVING",
@@ -144,9 +144,9 @@ export default function IntegrationHubPage() {
                             {/* Fake Browser header */}
                             <div className="flex items-center gap-2 px-4 py-3 border-b bg-background">
                                 <div className="flex gap-1.5">
-                                    <div className="w-2.5 h-2.5 rounded-full bg-red-500/80"></div>
-                                    <div className="w-2.5 h-2.5 rounded-full bg-amber-500/80"></div>
-                                    <div className="w-2.5 h-2.5 rounded-full bg-green-500/80"></div>
+                                    <div className="w-2.5 h-2.5 rounded-full bg-re-danger-muted0/80"></div>
+                                    <div className="w-2.5 h-2.5 rounded-full bg-re-warning-muted0/80"></div>
+                                    <div className="w-2.5 h-2.5 rounded-full bg-re-success-muted0/80"></div>
                                 </div>
                                 <div className="ml-4 text-xs font-mono text-muted-foreground">RegEngine Mapping Tool</div>
                             </div>

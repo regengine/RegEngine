@@ -25,7 +25,7 @@ export const metadata: Metadata = {
     title: 'Data Processing Agreement | RegEngine',
     description:
       'RegEngine DPA — GDPR-compliant data processor obligations for food safety traceability data.',
-    url: 'https://www.regengine.co/dpa',
+    url: 'https://regengine.co/dpa',
     type: 'website',
   },
 };
@@ -428,9 +428,9 @@ export default function DpaPage() {
               <h2 className="text-xl font-bold text-[var(--re-text-primary)] mb-4">
                 7. Personal Data Breach Notification
               </h2>
-              <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-5 space-y-3 text-[13px] text-[var(--re-text-muted)] leading-relaxed">
+              <div className="rounded-xl border border-re-warning/30 bg-re-warning-muted0/5 p-5 space-y-3 text-[13px] text-[var(--re-text-muted)] leading-relaxed">
                 <div className="flex items-center gap-2 mb-1">
-                  <Bell className="h-4 w-4 text-amber-500 shrink-0" />
+                  <Bell className="h-4 w-4 text-re-warning shrink-0" />
                   <h3 className="text-[14px] font-semibold text-[var(--re-text-primary)]">72-Hour Notification Commitment</h3>
                 </div>
                 <p>

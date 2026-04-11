@@ -41,11 +41,11 @@ const SEVERITY_BADGE: Record<string, { variant: 'destructive' | 'warning' | 'sec
 };
 
 const STATUS_BADGE: Record<string, { className: string; label: string }> = {
-  open: { className: 'bg-red-100 text-red-800 border-red-200', label: 'Open' },
-  in_review: { className: 'bg-blue-100 text-blue-800 border-blue-200', label: 'In Review' },
-  awaiting_supplier: { className: 'bg-amber-100 text-amber-800 border-amber-200', label: 'Awaiting Supplier' },
-  resolved: { className: 'bg-green-100 text-green-800 border-green-200', label: 'Resolved' },
-  waived: { className: 'bg-gray-100 text-gray-600 border-gray-200', label: 'Waived' },
+  open: { className: 'bg-re-danger-muted text-re-danger border-re-danger', label: 'Open' },
+  in_review: { className: 'bg-re-info-muted text-re-info border-blue-200', label: 'In Review' },
+  awaiting_supplier: { className: 'bg-re-warning-muted text-re-warning border-amber-200', label: 'Awaiting Supplier' },
+  resolved: { className: 'bg-re-success-muted text-re-success border-green-200', label: 'Resolved' },
+  waived: { className: 'bg-re-surface-elevated text-re-text-disabled border-re-border', label: 'Waived' },
 };
 
 export default function ExceptionQueuePage() {
@@ -89,7 +89,7 @@ export default function ExceptionQueuePage() {
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between mb-8">
         <div>
           <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-            <Shield className="h-6 w-6 text-red-500" />
+            <Shield className="h-6 w-6 text-re-danger" />
             Exception Queue
           </h1>
           <p className="text-muted-foreground mt-1">
@@ -104,7 +104,7 @@ export default function ExceptionQueuePage() {
             </Badge>
           )}
           {blockingCount === 0 && (
-            <Badge className="bg-green-100 text-green-800 border-green-200 text-sm px-3 py-1">
+            <Badge className="bg-re-success-muted text-re-success border-green-200 text-sm px-3 py-1">
               <CheckCircle className="h-3.5 w-3.5 mr-1" />
               No Blockers
             </Badge>
@@ -117,10 +117,10 @@ export default function ExceptionQueuePage() {
       {/* Stats Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
         {[
-          { label: 'Open', count: cases.filter(c => c.status === 'open').length, color: 'text-red-600' },
-          { label: 'In Review', count: cases.filter(c => c.status === 'in_review').length, color: 'text-blue-600' },
-          { label: 'Awaiting Supplier', count: cases.filter(c => c.status === 'awaiting_supplier').length, color: 'text-amber-600' },
-          { label: 'Resolved', count: cases.filter(c => c.status === 'resolved' || c.status === 'waived').length, color: 'text-green-600' },
+          { label: 'Open', count: cases.filter(c => c.status === 'open').length, color: 'text-re-danger' },
+          { label: 'In Review', count: cases.filter(c => c.status === 'in_review').length, color: 'text-re-info' },
+          { label: 'Awaiting Supplier', count: cases.filter(c => c.status === 'awaiting_supplier').length, color: 'text-re-warning' },
+          { label: 'Resolved', count: cases.filter(c => c.status === 'resolved' || c.status === 'waived').length, color: 'text-re-success' },
         ].map(stat => (
           <Card key={stat.label}>
             <CardContent className="pt-4 pb-3">
@@ -183,7 +183,7 @@ export default function ExceptionQueuePage() {
             </div>
           ) : cases.length === 0 ? (
             <div className="text-center py-12 text-muted-foreground">
-              <CheckCircle className="h-12 w-12 mx-auto mb-3 text-green-400" />
+              <CheckCircle className="h-12 w-12 mx-auto mb-3 text-re-success" />
               <p className="font-medium">No exceptions found</p>
               <p className="text-sm">All records are compliant with current filters</p>
             </div>
@@ -236,7 +236,7 @@ export default function ExceptionQueuePage() {
                       </TableCell>
                       <TableCell className="text-sm">
                         {exc.due_date ? (
-                          <span className={isOverdue ? 'text-red-600 font-medium' : ''}>
+                          <span className={isOverdue ? 'text-re-danger font-medium' : ''}>
                             {isOverdue && <Clock className="h-3 w-3 inline mr-1" />}
                             {new Date(exc.due_date).toLocaleDateString()}
                           </span>

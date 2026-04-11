@@ -364,7 +364,7 @@ STATUS: ${
             </div>
 
             <div className="flex flex-col sm:flex-row gap-4 justify-center mb-8">
-                <Button size="lg" className="bg-blue-600 hover:bg-blue-700 text-white">
+                <Button size="lg" className="bg-re-info hover:bg-re-info text-white">
                     <Play size={18} className="mr-2" />
                     Start Drill — Upload Your Records
                 </Button>
@@ -417,8 +417,8 @@ STATUS: ${
             <div
                 className={`border-2 border-dashed rounded-lg p-12 text-center cursor-pointer transition-all ${
                     dragActive
-                        ? 'border-blue-500 bg-blue-50'
-                        : 'border-gray-300 hover:border-gray-400'
+                        ? 'border-blue-500 bg-re-info-muted'
+                        : 'border-re-border hover:border-gray-400'
                 }`}
                 style={{
                     borderColor: dragActive ? 'var(--re-brand)' : 'var(--re-border-default)',
@@ -463,7 +463,7 @@ STATUS: ${
                     <ChevronRight size={16} />
                     What should my file contain?
                 </button>
-                <div className="mt-3 p-4 bg-gray-50 rounded-lg text-sm" style={{ borderLeft: '4px solid var(--re-brand)' }}>
+                <div className="mt-3 p-4 bg-re-surface-card rounded-lg text-sm" style={{ borderLeft: '4px solid var(--re-brand)' }}>
                     <p className="font-mono text-xs mb-2" style={{ color: 'var(--re-text-muted)' }}>
                         Required columns:
                     </p>
@@ -483,7 +483,7 @@ STATUS: ${
                     size="lg"
                     onClick={handleAnalyze}
                     disabled={!state.uploadedFile}
-                    className="flex-1 bg-blue-600 hover:bg-blue-700 text-white"
+                    className="flex-1 bg-re-info hover:bg-re-info text-white"
                 >
                     <Zap size={18} className="mr-2" />
                     Analyze My Records
@@ -588,7 +588,7 @@ STATUS: ${
                             </p>
                             <Badge
                                 className={`text-white ${
-                                    result.scores.overallScore >= 70 ? 'bg-green-600' : 'bg-red-600'
+                                    result.scores.overallScore >= 70 ? 'bg-re-success' : 'bg-re-danger'
                                 }`}
                             >
                                 {result.scores.overallScore >= 70 ? 'PASSED' : 'FAILED'}
@@ -633,7 +633,7 @@ STATUS: ${
                                 <p className="text-xs font-medium mb-2" style={{ color: 'var(--re-text-secondary)' }}>
                                     {item.label}
                                 </p>
-                                <div className="h-2 bg-gray-300 rounded-full mb-1 opacity-40" />
+                                <div className="h-2 bg-re-surface-elevated rounded-full mb-1 opacity-40" />
                                 <p className="text-sm font-bold" style={{ color: getScoreColor(item.score) }}>
                                     {item.score.toFixed(0)}%
                                 </p>
@@ -646,7 +646,7 @@ STATUS: ${
                     <p className="text-sm mb-4" style={{ color: 'var(--re-text-secondary)' }}>
                         Ready to see full analysis and recommendations?
                     </p>
-                    <Button size="lg" className="bg-blue-600 hover:bg-blue-700 text-white">
+                    <Button size="lg" className="bg-re-info hover:bg-re-info text-white">
                         Unlock Full Results <ArrowRight size={18} className="ml-2" />
                     </Button>
                 </div>
@@ -674,7 +674,7 @@ STATUS: ${
                                 </p>
                                 <Badge
                                     className={`mt-2 text-white ${
-                                        result.scores.overallScore >= 70 ? 'bg-green-600' : 'bg-red-600'
+                                        result.scores.overallScore >= 70 ? 'bg-re-success' : 'bg-re-danger'
                                     }`}
                                 >
                                     {result.scores.overallScore >= 70 ? 'PASSED' : 'FAILED'}
@@ -703,7 +703,7 @@ STATUS: ${
                                                 {item.score.toFixed(1)}%
                                             </span>
                                         </div>
-                                        <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+                                        <div className="h-2 bg-re-surface-elevated rounded-full overflow-hidden">
                                             <motion.div
                                                 initial={{ width: 0 }}
                                                 animate={{ width: `${item.score}%` }}
@@ -716,7 +716,7 @@ STATUS: ${
                                 ))}
                             </div>
                         </div>
-                        <div className="mt-6 p-4 bg-blue-50 rounded-lg flex items-start gap-3">
+                        <div className="mt-6 p-4 bg-re-info-muted rounded-lg flex items-start gap-3">
                             <Clock size={18} style={{ color: 'var(--re-brand)' }} />
                             <div>
                                 <p className="text-sm font-medium" style={{ color: 'var(--re-text-primary)' }}>
@@ -765,7 +765,7 @@ STATUS: ${
                                             {findings.map((finding, idx) => (
                                                 <div
                                                     key={idx}
-                                                    className="p-3 bg-gray-50 rounded border-l-4"
+                                                    className="p-3 bg-re-surface-card rounded border-l-4"
                                                     style={{
                                                         borderLeftColor:
                                                             severity === 'critical'
@@ -931,7 +931,7 @@ STATUS: ${
                 <div className="flex flex-col sm:flex-row gap-4">
                     <Button
                         size="lg"
-                        className="flex-1 bg-blue-600 hover:bg-blue-700 text-white"
+                        className="flex-1 bg-re-info hover:bg-re-info text-white"
                         onClick={handleDownloadReport}
                     >
                         <Download size={18} className="mr-2" />

@@ -98,13 +98,13 @@ function SignupForm() {
       <div className="mx-auto max-w-md">
         {/* Checkout success banner */}
         {checkoutSuccess && (
-          <div className="mb-6 flex items-start gap-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4">
-            <CheckCircle2 className="mt-0.5 h-5 w-5 flex-shrink-0 text-emerald-400" />
+          <div className="mb-6 flex items-start gap-3 rounded-xl border border-re-brand/30 bg-re-brand-muted p-4">
+            <CheckCircle2 className="mt-0.5 h-5 w-5 flex-shrink-0 text-re-brand" />
             <div>
-              <p className="text-sm font-semibold text-emerald-300">
+              <p className="text-sm font-semibold text-re-brand-light">
                 Payment confirmed
               </p>
-              <p className="text-xs text-emerald-300/80">
+              <p className="text-xs text-re-brand-light/80">
                 {planLabel
                   ? `Create your account to get started on the ${planLabel} plan.`
                   : 'Create your account to get started.'}
@@ -134,7 +134,7 @@ function SignupForm() {
             <form className="space-y-4" onSubmit={handleSubmit}>
               {error && (
                 <div
-                  className="rounded-md border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-200"
+                  className="rounded-md border border-re-danger/40 bg-re-danger-muted0/10 px-3 py-2 text-sm text-red-200"
                   role="alert"
                 >
                   {error}

@@ -10,13 +10,13 @@ export const metadata: Metadata = {
     title: "KDE Checker | FSMA 204 Key Data Element Completeness Tool | RegEngine",
     description: "Generate a customized Key Data Element (KDE) checklist based on your FTL product and trading role. Ensure full FDA Subpart S compliance. Free FSMA 204 tool.",
     alternates: {
-        canonical: "https://www.regengine.co/tools/kde-checker",
+        canonical: "https://regengine.co/tools/kde-checker",
     },
     openGraph: {
         title: "KDE Checker — RegEngine",
         description: "Generate a customized FSMA 204 Key Data Element checklist for your product and trading role. Free.",
         type: "website",
-        url: "https://www.regengine.co/tools/kde-checker",
+        url: "https://regengine.co/tools/kde-checker",
     },
 };
 

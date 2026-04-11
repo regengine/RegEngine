@@ -233,7 +233,7 @@ export default function AuditLogPage() {
 
                 {/* Auth gate */}
                 {!isLoggedIn && (
-                    <Card className="border-amber-500/30 bg-amber-500/[0.03]">
+                    <Card className="border-re-warning/30 bg-re-warning-muted0/[0.03]">
                         <CardContent className="py-6 text-center text-sm text-muted-foreground">
                             Sign in to view the audit log.
                         </CardContent>
@@ -255,8 +255,8 @@ export default function AuditLogPage() {
                             <div className="text-2xl sm:text-3xl font-bold tabular-nums text-[var(--re-brand)]">{stats.today}</div>
                             <div className="text-[11px] text-muted-foreground mt-0.5">Today</div>
                         </div>
-                        <div className="p-3 sm:p-4 rounded-xl bg-emerald-500/[0.06] border border-emerald-500/20 text-center">
-                            <div className="text-2xl sm:text-3xl font-bold text-emerald-400 flex items-center justify-center gap-1">
+                        <div className="p-3 sm:p-4 rounded-xl bg-re-brand/[0.06] border border-re-brand/20 text-center">
+                            <div className="text-2xl sm:text-3xl font-bold text-re-brand flex items-center justify-center gap-1">
                                 <ShieldCheck className="h-5 w-5" />
                             </div>
                             <div className="text-[11px] text-muted-foreground mt-0.5">Chain Verified</div>
@@ -278,9 +278,9 @@ export default function AuditLogPage() {
 
                 {/* Error */}
                 {error && (
-                    <Card className="border-red-500/30 bg-red-500/[0.03]">
+                    <Card className="border-re-danger/30 bg-re-danger-muted0/[0.03]">
                         <CardContent className="py-4">
-                            <div className="flex items-center gap-3 text-red-400">
+                            <div className="flex items-center gap-3 text-re-danger">
                                 <AlertTriangle className="h-5 w-5 flex-shrink-0" />
                                 <div>
                                     <p className="text-sm font-medium">Failed to load audit log</p>
@@ -473,7 +473,7 @@ export default function AuditLogPage() {
                         <p className="text-sm text-muted-foreground mt-1 max-w-md">
                             Events will appear here as your team scans labels, imports data, and generates reports. Every action is cryptographically signed and immutable.
                         </p>
-                        <div className="flex items-center gap-1.5 mt-4 text-xs text-emerald-400">
+                        <div className="flex items-center gap-1.5 mt-4 text-xs text-re-brand">
                             <ShieldCheck className="h-3.5 w-3.5" />
                             <span>SHA-256 hash chain ready</span>
                         </div>

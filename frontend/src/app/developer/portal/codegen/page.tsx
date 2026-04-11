@@ -211,7 +211,7 @@ console.log('Template saved');`,
   -H "X-RegEngine-API-Key: ${key}" \\
   -H "Content-Type: application/json" \\
   -d '{
-    "supplier_name": "Acme Farms",
+    "supplier_name": "Example Farms",
     "cte_types": ["receiving", "shipping"],
     "expires_in_days": 30
   }'`,
@@ -224,7 +224,7 @@ response = requests.post(
         "Content-Type": "application/json",
     },
     json={
-        "supplier_name": "Acme Farms",
+        "supplier_name": "Example Farms",
         "cte_types": ["receiving", "shipping"],
         "expires_in_days": 30,
     },
@@ -238,7 +238,7 @@ print(f"Portal link: {link.get('url')}")`,
     'Content-Type': 'application/json',
   },
   body: JSON.stringify({
-    supplier_name: 'Acme Farms',
+    supplier_name: 'Example Farms',
     cte_types: ['receiving', 'shipping'],
     expires_in_days: 30,
   }),

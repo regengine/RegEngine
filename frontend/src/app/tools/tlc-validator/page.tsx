@@ -10,13 +10,13 @@ export const metadata: Metadata = {
     title: "TLC Validator | Test Your GS1 Traceability Lot Code Format | RegEngine",
     description: "Stress-test your Traceability Lot Code (TLC) format against GS1 standards and FDA uniqueness requirements. Free data integrity checker for FSMA 204 compliance.",
     alternates: {
-        canonical: "https://www.regengine.co/tools/tlc-validator",
+        canonical: "https://regengine.co/tools/tlc-validator",
     },
     openGraph: {
         title: "TLC Validator — RegEngine",
         description: "Validate your Traceability Lot Code format against GS1 standards and FDA FSMA 204 requirements. Free.",
         type: "website",
-        url: "https://www.regengine.co/tools/tlc-validator",
+        url: "https://regengine.co/tools/tlc-validator",
     },
 };
 

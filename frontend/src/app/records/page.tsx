@@ -142,7 +142,7 @@ export default function CanonicalRecordsPage() {
                 </div>
               ) : records.length === 0 ? (
                 <div className="text-center py-12 text-muted-foreground">
-                  <FileSearch className="h-12 w-12 mx-auto mb-3 text-gray-300" />
+                  <FileSearch className="h-12 w-12 mx-auto mb-3 text-re-text-secondary" />
                   <p className="font-medium">No records found</p>
                   <p className="text-sm">Adjust filters or ingest traceability events</p>
                 </div>
@@ -260,7 +260,7 @@ export default function CanonicalRecordsPage() {
                   <Card>
                     <CardHeader className="pb-3">
                       <CardTitle className="text-lg flex items-center gap-2">
-                        <Shield className="h-5 w-5 text-blue-500" />
+                        <Shield className="h-5 w-5 text-re-info" />
                         Rule Evaluations ({detail.rule_evaluations?.length || 0})
                       </CardTitle>
                     </CardHeader>
@@ -273,16 +273,16 @@ export default function CanonicalRecordsPage() {
                             <div
                               key={i}
                               className={`rounded-md border p-3 text-sm ${
-                                ev.result === 'fail' ? 'border-red-200 bg-red-50/50' :
-                                ev.result === 'warn' ? 'border-amber-200 bg-amber-50/50' :
-                                'border-green-200 bg-green-50/50'
+                                ev.result === 'fail' ? 'border-re-danger bg-re-danger-muted/50' :
+                                ev.result === 'warn' ? 'border-amber-200 bg-re-warning-muted/50' :
+                                'border-green-200 bg-re-success-muted/50'
                               }`}
                             >
                               <div className="flex items-start justify-between gap-2">
                                 <div className="flex items-center gap-2">
-                                  {ev.result === 'fail' ? <XCircle className="h-4 w-4 text-red-500 shrink-0" /> :
-                                   ev.result === 'warn' ? <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0" /> :
-                                   <CheckCircle className="h-4 w-4 text-green-500 shrink-0" />}
+                                  {ev.result === 'fail' ? <XCircle className="h-4 w-4 text-re-danger shrink-0" /> :
+                                   ev.result === 'warn' ? <AlertTriangle className="h-4 w-4 text-re-warning shrink-0" /> :
+                                   <CheckCircle className="h-4 w-4 text-re-success shrink-0" />}
                                   <span className="font-medium">{ev.rule_title}</span>
                                 </div>
                                 {ev.citation_reference && (
@@ -292,7 +292,7 @@ export default function CanonicalRecordsPage() {
                                 )}
                               </div>
                               {ev.why_failed && (
-                                <p className="mt-1 text-red-700 ml-6">{ev.why_failed}</p>
+                                <p className="mt-1 text-re-danger ml-6">{ev.why_failed}</p>
                               )}
                               {ev.remediation_suggestion && ev.result !== 'pass' && (
                                 <p className="mt-1 text-muted-foreground ml-6 italic">
@@ -325,7 +325,7 @@ export default function CanonicalRecordsPage() {
                     <Card>
                       <CardHeader className="pb-3">
                         <CardTitle className="text-lg flex items-center gap-2">
-                          <AlertTriangle className="h-5 w-5 text-amber-500" />
+                          <AlertTriangle className="h-5 w-5 text-re-warning" />
                           Linked Exceptions ({detail.exception_cases.length})
                         </CardTitle>
                       </CardHeader>

@@ -133,7 +133,7 @@ const DEMO_RESPONSES: Record<string, { status: number; statusText: string; body:
     body: {
       link_id: 'lnk_demo_x1y2z3',
       url: 'https://app.regengine.com/portal/lnk_demo_x1y2z3',
-      supplier_name: 'Acme Farms',
+      supplier_name: 'Example Farms',
       cte_types: ['receiving', 'shipping'],
       expires_at: '2026-04-27T00:00:00Z',
     },
@@ -246,7 +246,7 @@ const ENDPOINTS: Endpoint[] = [
     description: 'Create a supplier portal link',
     proxyPath: '/api/ingestion/api/v1/portal/links',
     sampleBody: {
-      supplier_name: 'Acme Farms',
+      supplier_name: 'Example Farms',
       cte_types: ['receiving', 'shipping'],
       expires_in_days: 30,
     },

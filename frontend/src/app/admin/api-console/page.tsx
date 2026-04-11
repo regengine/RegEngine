@@ -93,7 +93,7 @@ const categoryIcons: Record<string, React.ComponentType<{ className?: string }>>
 };
 
 const categoryColors: Record<string, string> = {
-    'Health & Metrics': 'from-green-500 to-emerald-600',
+    'Health & Metrics': 'from-re-brand to-re-brand-dark',
     'Authentication': 'from-purple-500 to-indigo-600',
     'API Keys': 'from-orange-500 to-amber-600',
     'Tenants': 'from-blue-500 to-cyan-600',
@@ -103,10 +103,10 @@ const categoryColors: Record<string, string> = {
 };
 
 const methodColors = {
-    GET: 'bg-blue-500/10 text-blue-600 border-blue-500/30',
-    POST: 'bg-green-500/10 text-green-600 border-green-500/30',
+    GET: 'bg-re-info-muted0/10 text-re-info border-re-info/30',
+    POST: 'bg-re-success-muted0/10 text-re-success border-green-500/30',
     PUT: 'bg-orange-500/10 text-orange-600 border-orange-500/30',
-    DELETE: 'bg-red-500/10 text-red-600 border-red-500/30',
+    DELETE: 'bg-re-danger-muted0/10 text-re-danger border-re-danger/30',
     PATCH: 'bg-purple-500/10 text-purple-600 border-purple-500/30',
 };
 
@@ -138,7 +138,7 @@ export default function AdminAPIConsolePage() {
             {/* Animated background */}
             <div className="fixed inset-0 overflow-hidden pointer-events-none">
                 <div className="absolute top-1/4 -left-48 w-96 h-96 bg-purple-500/20 rounded-full blur-3xl animate-pulse" />
-                <div className="absolute bottom-1/4 -right-48 w-96 h-96 bg-blue-500/20 rounded-full blur-3xl animate-pulse delay-1000" />
+                <div className="absolute bottom-1/4 -right-48 w-96 h-96 bg-re-info-muted0/20 rounded-full blur-3xl animate-pulse delay-1000" />
                 <div className="absolute top-3/4 left-1/3 w-96 h-96 bg-pink-500/10 rounded-full blur-3xl animate-pulse delay-500" />
             </div>
 
@@ -162,7 +162,7 @@ export default function AdminAPIConsolePage() {
                         <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold mb-4 bg-gradient-to-r from-purple-400 via-pink-400 to-blue-400 bg-clip-text text-transparent">
                             Admin API Console
                         </h1>
-                        <p className="text-xl text-gray-300 max-w-3xl mx-auto">
+                        <p className="text-xl text-re-text-secondary max-w-3xl mx-auto">
                             Explore, test, and integrate with RegEngine&apos;s powerful regulatory intelligence platform
                         </p>
 
@@ -170,16 +170,16 @@ export default function AdminAPIConsolePage() {
                         <div className="flex items-center justify-center gap-6 mt-8">
                             <div className="px-6 py-3 rounded-xl bg-white/5 backdrop-blur-sm border border-white/10">
                                 <div className="text-3xl font-bold text-white">{endpoints.length}</div>
-                                <div className="text-sm text-gray-400">Endpoints</div>
+                                <div className="text-sm text-re-text-tertiary">Endpoints</div>
                             </div>
                             <div className="px-6 py-3 rounded-xl bg-white/5 backdrop-blur-sm border border-white/10">
                                 <div className="text-3xl font-bold text-white">{categories.length}</div>
-                                <div className="text-sm text-gray-400">Categories</div>
+                                <div className="text-sm text-re-text-tertiary">Categories</div>
                             </div>
                             <div className="px-6 py-3 rounded-xl bg-white/5 backdrop-blur-sm border border-white/10">
                                 <div className="flex items-center gap-2">
-                                    <CheckCircle className="w-5 h-5 text-green-400" />
-                                    <span className="text-sm text-gray-400">Live</span>
+                                    <CheckCircle className="w-5 h-5 text-re-success" />
+                                    <span className="text-sm text-re-text-tertiary">Live</span>
                                 </div>
                             </div>
                         </div>
@@ -190,12 +190,12 @@ export default function AdminAPIConsolePage() {
                         <Card className="lg:col-span-2 bg-white/5 backdrop-blur-sm border-white/10">
                             <CardContent className="pt-6">
                                 <div className="relative">
-                                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-re-text-tertiary" />
                                     <Input
                                         placeholder="Search endpoints by path or description..."
                                         value={searchQuery}
                                         onChange={(e) => setSearchQuery(e.target.value)}
-                                        className="pl-10 bg-white/5 border-white/10 text-white placeholder:text-gray-500"
+                                        className="pl-10 bg-white/5 border-white/10 text-white placeholder:text-re-text-muted"
                                     />
                                 </div>
                             </CardContent>
@@ -210,7 +210,7 @@ export default function AdminAPIConsolePage() {
                                         placeholder="API Key (optional)"
                                         value={apiKey}
                                         onChange={(e) => setApiKey(e.target.value)}
-                                        className="bg-white/5 border-white/10 text-white placeholder:text-gray-500"
+                                        className="bg-white/5 border-white/10 text-white placeholder:text-re-text-muted"
                                     />
                                 </div>
                             </CardContent>
@@ -296,17 +296,17 @@ export default function AdminAPIConsolePage() {
                                                                         <Badge className={`${methodColors[endpoint.method]} border font-mono text-xs px-2 py-0.5`}>
                                                                             {endpoint.method}
                                                                         </Badge>
-                                                                        <code className="text-sm text-gray-300 font-mono truncate">
+                                                                        <code className="text-sm text-re-text-secondary font-mono truncate">
                                                                             {endpoint.path}
                                                                         </code>
                                                                     </div>
-                                                                    <p className="text-sm text-gray-400">{endpoint.description}</p>
+                                                                    <p className="text-sm text-re-text-tertiary">{endpoint.description}</p>
                                                                 </div>
                                                                 <div className="flex items-center gap-2 flex-shrink-0">
                                                                     {endpoint.requiresAuth && (
-                                                                        <Lock className="w-4 h-4 text-amber-400" />
+                                                                        <Lock className="w-4 h-4 text-re-warning" />
                                                                     )}
-                                                                    <ChevronRight className="w-4 h-4 text-gray-500" />
+                                                                    <ChevronRight className="w-4 h-4 text-re-text-muted" />
                                                                 </div>
                                                             </div>
                                                         </motion.div>
@@ -321,9 +321,9 @@ export default function AdminAPIConsolePage() {
                             {filteredEndpoints.length === 0 && (
                                 <Card className="bg-white/5 backdrop-blur-sm border-white/10">
                                     <CardContent className="py-12 text-center">
-                                        <Search className="w-12 h-12 text-gray-500 mx-auto mb-4" />
+                                        <Search className="w-12 h-12 text-re-text-muted mx-auto mb-4" />
                                         <h3 className="text-lg font-semibold text-white mb-2">No endpoints found</h3>
-                                        <p className="text-gray-400">Try adjusting your search or filter</p>
+                                        <p className="text-re-text-tertiary">Try adjusting your search or filter</p>
                                     </CardContent>
                                 </Card>
                             )}
@@ -346,7 +346,7 @@ export default function AdminAPIConsolePage() {
                                                         {selectedEndpoint.method}
                                                     </Badge>
                                                     {selectedEndpoint.requiresAuth && (
-                                                        <Badge className="bg-amber-500/10 text-amber-400 border-amber-500/30">
+                                                        <Badge className="bg-re-warning-muted0/10 text-re-warning border-re-warning/30">
                                                             <Lock className="w-3 h-3 mr-1" />
                                                             Auth Required
                                                         </Badge>
@@ -355,7 +355,7 @@ export default function AdminAPIConsolePage() {
                                                 <CardTitle className="text-white font-mono text-lg break-all">
                                                     {selectedEndpoint.path}
                                                 </CardTitle>
-                                                <CardDescription className="text-gray-400">
+                                                <CardDescription className="text-re-text-tertiary">
                                                     {selectedEndpoint.description}
                                                 </CardDescription>
                                             </CardHeader>
@@ -363,7 +363,7 @@ export default function AdminAPIConsolePage() {
                                             <CardContent className="space-y-4 pt-6">
                                                 <div>
                                                     <h4 className="text-sm font-semibold text-white mb-2">Request Example</h4>
-                                                    <pre className="bg-black/50 p-4 rounded-lg text-xs text-gray-300 overflow-x-auto border border-white/10">
+                                                    <pre className="bg-black/50 p-4 rounded-lg text-xs text-re-text-secondary overflow-x-auto border border-white/10">
                                                         <code>{`curl -X ${selectedEndpoint.method} \\
   ${getServiceURL('admin')}${selectedEndpoint.path} \\${selectedEndpoint.requiresAuth ? '\n  -H "X-RegEngine-API-Key: YOUR_API_KEY" \\' : ''}
   -H "Content-Type: application/json"`}</code>
@@ -403,9 +403,9 @@ export default function AdminAPIConsolePage() {
                                     >
                                         <Card className="bg-white/5 backdrop-blur-sm border-white/10">
                                             <CardContent className="py-12 text-center">
-                                                <Code className="w-12 h-12 text-gray-500 mx-auto mb-4" />
+                                                <Code className="w-12 h-12 text-re-text-muted mx-auto mb-4" />
                                                 <h3 className="text-lg font-semibold text-white mb-2">Select an endpoint</h3>
-                                                <p className="text-gray-400">Click on any endpoint to view details and test it</p>
+                                                <p className="text-re-text-tertiary">Click on any endpoint to view details and test it</p>
                                             </CardContent>
                                         </Card>
                                     </motion.div>
@@ -413,10 +413,10 @@ export default function AdminAPIConsolePage() {
                             </AnimatePresence>
 
                             {/* Quick Links */}
-                            <Card className="mt-6 bg-gradient-to-br from-blue-500/10 to-purple-500/10 border-blue-500/20 backdrop-blur-sm">
+                            <Card className="mt-6 bg-gradient-to-br from-blue-500/10 to-purple-500/10 border-re-info/20 backdrop-blur-sm">
                                 <CardHeader>
                                     <CardTitle className="text-white flex items-center gap-2">
-                                        <Zap className="w-5 h-5 text-yellow-400" />
+                                        <Zap className="w-5 h-5 text-re-warning" />
                                         Quick Links
                                     </CardTitle>
                                 </CardHeader>
@@ -428,7 +428,7 @@ export default function AdminAPIConsolePage() {
                                         className="flex items-center justify-between p-3 rounded-lg bg-white/5 hover:bg-white/10 transition-colors border border-white/10 group"
                                     >
                                         <span className="text-sm text-white">Swagger UI</span>
-                                        <ExternalLink className="w-4 h-4 text-gray-400 group-hover:text-white transition-colors" />
+                                        <ExternalLink className="w-4 h-4 text-re-text-tertiary group-hover:text-white transition-colors" />
                                     </a>
                                     <a
                                         href={`${getServiceURL('admin')}/redoc`}
@@ -437,14 +437,14 @@ export default function AdminAPIConsolePage() {
                                         className="flex items-center justify-between p-3 rounded-lg bg-white/5 hover:bg-white/10 transition-colors border border-white/10 group"
                                     >
                                         <span className="text-sm text-white">ReDoc</span>
-                                        <ExternalLink className="w-4 h-4 text-gray-400 group-hover:text-white transition-colors" />
+                                        <ExternalLink className="w-4 h-4 text-re-text-tertiary group-hover:text-white transition-colors" />
                                     </a>
                                     <a
                                         href="/admin"
                                         className="flex items-center justify-between p-3 rounded-lg bg-white/5 hover:bg-white/10 transition-colors border border-white/10 group"
                                     >
                                         <span className="text-sm text-white">API Key Management</span>
-                                        <ChevronRight className="w-4 h-4 text-gray-400 group-hover:text-white transition-colors" />
+                                        <ChevronRight className="w-4 h-4 text-re-text-tertiary group-hover:text-white transition-colors" />
                                     </a>
                                 </CardContent>
                             </Card>

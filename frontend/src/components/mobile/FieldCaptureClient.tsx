@@ -369,17 +369,17 @@ export function FieldCaptureClient() {
 
                     <div className="flex items-center gap-2">
                         {isSyncing ? (
-                            <div className="flex items-center text-xs text-blue-500 animate-pulse">
+                            <div className="flex items-center text-xs text-re-info animate-pulse">
                                 <Loader2 className="h-3 w-3 mr-1 animate-spin" />
                                 Syncing
                             </div>
                         ) : isOnline ? (
-                            <div className="flex items-center text-xs text-green-600 bg-green-100 dark:bg-green-900/30 px-2 py-1 rounded-full">
+                            <div className="flex items-center text-xs text-re-success bg-re-success-muted dark:bg-re-success/30 px-2 py-1 rounded-full">
                                 <Wifi className="h-3 w-3 mr-1" />
                                 Online
                             </div>
                         ) : (
-                            <div className="flex items-center text-xs text-amber-600 bg-amber-100 dark:bg-amber-900/30 px-2 py-1 rounded-full">
+                            <div className="flex items-center text-xs text-re-warning bg-re-warning-muted dark:bg-re-warning/30 px-2 py-1 rounded-full">
                                 <WifiOff className="h-3 w-3 mr-1" />
                                 Offline
                             </div>

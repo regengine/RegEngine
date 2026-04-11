@@ -48,24 +48,24 @@ interface ComplianceStatusWidgetProps {
 
 const STATUS_CONFIG = {
     COMPLIANT: {
-        bgClass: "bg-green-50 dark:bg-green-950/20",
+        bgClass: "bg-re-success-muted dark:bg-re-success/20",
         borderClass: "border-green-200 dark:border-green-800",
-        textClass: "text-green-700 dark:text-green-400",
-        iconClass: "text-green-500",
+        textClass: "text-re-success dark:text-re-success",
+        iconClass: "text-re-success",
         Icon: CheckCircle,
     },
     AT_RISK: {
-        bgClass: "bg-amber-50 dark:bg-amber-950/20",
+        bgClass: "bg-re-warning-muted dark:bg-re-warning/20",
         borderClass: "border-amber-200 dark:border-amber-800",
-        textClass: "text-amber-700 dark:text-amber-400",
-        iconClass: "text-amber-500",
+        textClass: "text-re-warning dark:text-re-warning",
+        iconClass: "text-re-warning",
         Icon: AlertTriangle,
     },
     NON_COMPLIANT: {
-        bgClass: "bg-red-50 dark:bg-red-950/20",
-        borderClass: "border-red-200 dark:border-red-800",
-        textClass: "text-red-700 dark:text-red-400",
-        iconClass: "text-red-500",
+        bgClass: "bg-re-danger-muted dark:bg-re-danger/20",
+        borderClass: "border-re-danger dark:border-re-danger",
+        textClass: "text-re-danger dark:text-re-danger",
+        iconClass: "text-re-danger",
         Icon: XCircle,
     },
 };
@@ -88,10 +88,10 @@ function CountdownTimer({ seconds, display }: { seconds: number; display: string
     const secs = timeLeft % 60;
 
     const urgencyClass = hours < 4
-        ? "text-red-600 animate-pulse"
+        ? "text-re-danger animate-pulse"
         : hours < 12
-            ? "text-amber-600"
-            : "text-gray-600";
+            ? "text-re-warning"
+            : "text-re-text-disabled";
 
     return (
         <div className={`font-mono text-2xl font-bold ${urgencyClass}`}>
@@ -102,10 +102,10 @@ function CountdownTimer({ seconds, display }: { seconds: number; display: string
 
 function AlertCard({ alert, onClick }: { alert: ComplianceAlert; onClick?: () => void }) {
     const severityColors: Record<string, string> = {
-        CRITICAL: "bg-red-100 text-red-800 border-red-200",
-        HIGH: "bg-amber-100 text-amber-800 border-amber-200",
-        MEDIUM: "bg-blue-100 text-blue-800 border-blue-200",
-        LOW: "bg-gray-100 text-gray-800 border-gray-200",
+        CRITICAL: "bg-re-danger-muted text-re-danger border-re-danger",
+        HIGH: "bg-re-warning-muted text-re-warning border-amber-200",
+        MEDIUM: "bg-re-info-muted text-re-info border-blue-200",
+        LOW: "bg-re-surface-elevated text-re-text-primary border-re-border",
     };
 
     const completedActions = alert.required_actions.filter(a => a.completed).length;
@@ -114,7 +114,7 @@ function AlertCard({ alert, onClick }: { alert: ComplianceAlert; onClick?: () =>
 
     return (
         <div
-            className="p-4 border rounded-lg bg-white dark:bg-gray-900 hover:shadow-md transition-shadow cursor-pointer"
+            className="p-4 border rounded-lg bg-white dark:bg-re-surface-base hover:shadow-md transition-shadow cursor-pointer"
             onClick={onClick}
         >
             <div className="flex items-start justify-between">
@@ -127,15 +127,15 @@ function AlertCard({ alert, onClick }: { alert: ComplianceAlert; onClick?: () =>
                             <Badge variant="destructive">EXPIRED</Badge>
                         )}
                     </div>
-                    <h4 className="font-semibold text-gray-900 dark:text-gray-100">{alert.title}</h4>
+                    <h4 className="font-semibold text-re-text-primary dark:text-re-text-primary">{alert.title}</h4>
                     {alert.summary && (
-                        <p className="text-sm text-gray-600 dark:text-gray-400 mt-1 line-clamp-2">
+                        <p className="text-sm text-re-text-disabled dark:text-re-text-tertiary mt-1 line-clamp-2">
                             {alert.summary}
                         </p>
                     )}
                 </div>
                 <div className="text-right ml-4">
-                    <div className="flex items-center gap-1 text-gray-500">
+                    <div className="flex items-center gap-1 text-re-text-muted">
                         <Clock className="h-4 w-4" />
                         <span className="text-sm font-medium">{alert.countdown_display}</span>
                     </div>
@@ -144,7 +144,7 @@ function AlertCard({ alert, onClick }: { alert: ComplianceAlert; onClick?: () =>
 
             {totalActions > 0 && (
                 <div className="mt-3">
-                    <div className="flex justify-between text-xs text-gray-500 mb-1">
+                    <div className="flex justify-between text-xs text-re-text-muted mb-1">
                         <span>Required Actions</span>
                         <span>{completedActions}/{totalActions}</span>
                     </div>
@@ -188,7 +188,7 @@ export function ComplianceStatusWidget({ tenantId, onAlertClick }: ComplianceSta
         return (
             <Card className="animate-pulse">
                 <CardContent className="h-32 flex items-center justify-center">
-                    <div className="h-8 w-48 bg-gray-200 rounded" />
+                    <div className="h-8 w-48 bg-re-surface-elevated rounded" />
                 </CardContent>
             </Card>
         );
@@ -196,9 +196,9 @@ export function ComplianceStatusWidget({ tenantId, onAlertClick }: ComplianceSta
 
     if (error) {
         return (
-            <Card className="border-red-200 bg-red-50">
+            <Card className="border-re-danger bg-re-danger-muted">
                 <CardContent className="p-4">
-                    <p className="text-red-600">Error loading compliance status: {error}</p>
+                    <p className="text-re-danger">Error loading compliance status: {error}</p>
                 </CardContent>
             </Card>
         );
@@ -221,13 +221,13 @@ export function ComplianceStatusWidget({ tenantId, onAlertClick }: ComplianceSta
                                 <h2 className={`text-3xl font-bold ${config.textClass}`}>
                                     {status.status_emoji} {status.status_label}
                                 </h2>
-                                <p className="text-sm text-gray-600 dark:text-gray-400">
+                                <p className="text-sm text-re-text-disabled dark:text-re-text-tertiary">
                                     {status.active_alert_count > 0
                                         ? `${status.active_alert_count} active alert${status.active_alert_count > 1 ? 's' : ''}`
                                         : 'No active alerts'
                                     }
                                     {status.critical_alert_count > 0 && (
-                                        <span className="text-red-600 font-semibold ml-2">
+                                        <span className="text-re-danger font-semibold ml-2">
                                             ({status.critical_alert_count} critical)
                                         </span>
                                     )}
@@ -238,14 +238,14 @@ export function ComplianceStatusWidget({ tenantId, onAlertClick }: ComplianceSta
                         {/* Countdown Timer */}
                         {status.countdown_seconds && status.countdown_seconds > 0 && (
                             <div className="text-right">
-                                <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">
+                                <p className="text-xs text-re-text-muted uppercase tracking-wide mb-1">
                                     Action Required In
                                 </p>
                                 <CountdownTimer
                                     seconds={status.countdown_seconds}
                                     display={status.countdown_display || ""}
                                 />
-                                <p className="text-xs text-gray-500 mt-1 max-w-48 truncate">
+                                <p className="text-xs text-re-text-muted mt-1 max-w-48 truncate">
                                     {status.next_deadline_description}
                                 </p>
                             </div>
@@ -278,8 +278,8 @@ export function ComplianceStatusWidget({ tenantId, onAlertClick }: ComplianceSta
             {/* Compliant State - Show last check */}
             {status.status === "COMPLIANT" && status.active_alerts.length === 0 && (
                 <Card className="border-dashed">
-                    <CardContent className="p-6 text-center text-gray-500">
-                        <CheckCircle className="h-8 w-8 mx-auto mb-2 text-green-500" />
+                    <CardContent className="p-6 text-center text-re-text-muted">
+                        <CheckCircle className="h-8 w-8 mx-auto mb-2 text-re-success" />
                         <p>All compliance requirements met</p>
                         <p className="text-xs mt-1">Last checked: just now</p>
                     </CardContent>

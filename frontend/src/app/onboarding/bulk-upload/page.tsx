@@ -773,15 +773,15 @@ export default function BulkUploadPage() {
                   <div className="h-2 w-24 rounded-full bg-[var(--re-surface-border)] overflow-hidden">
                     <div
                       className={`h-full rounded-full transition-all ${
-                        clientValidation.completenessScore >= 80 ? 'bg-emerald-500' :
-                        clientValidation.completenessScore >= 50 ? 'bg-amber-500' : 'bg-red-500'
+                        clientValidation.completenessScore >= 80 ? 'bg-re-brand' :
+                        clientValidation.completenessScore >= 50 ? 'bg-re-warning-muted0' : 'bg-re-danger-muted0'
                       }`}
                       style={{ width: `${clientValidation.completenessScore}%` }}
                     />
                   </div>
                   <span className={`text-sm font-bold ${
-                    clientValidation.completenessScore >= 80 ? 'text-emerald-500' :
-                    clientValidation.completenessScore >= 50 ? 'text-amber-500' : 'text-red-500'
+                    clientValidation.completenessScore >= 80 ? 'text-re-brand' :
+                    clientValidation.completenessScore >= 50 ? 'text-re-warning' : 'text-re-danger'
                   }`}>
                     {clientValidation.completenessScore}%
                   </span>
@@ -847,16 +847,16 @@ export default function BulkUploadPage() {
                   {/* Required columns */}
                   {clientValidation.requiredColumnsPresent.map(col => (
                     <div key={col} className="flex items-center gap-2 text-xs">
-                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                      <CheckCircle2 className="w-3.5 h-3.5 text-re-brand shrink-0" />
                       <span className="text-[var(--re-text-secondary)]">{col}</span>
-                      <span className="text-[10px] text-emerald-500 font-medium">required</span>
+                      <span className="text-[10px] text-re-brand font-medium">required</span>
                     </div>
                   ))}
                   {clientValidation.requiredColumnsMissing.map(col => (
                     <div key={col} className="flex items-center gap-2 text-xs">
-                      <span className="w-3.5 h-3.5 rounded-full bg-red-500/10 text-red-500 text-[10px] font-bold flex items-center justify-center shrink-0">!</span>
-                      <span className="text-red-400">{col}</span>
-                      <span className="text-[10px] text-red-400 font-medium">missing</span>
+                      <span className="w-3.5 h-3.5 rounded-full bg-re-danger-muted0/10 text-re-danger text-[10px] font-bold flex items-center justify-center shrink-0">!</span>
+                      <span className="text-re-danger">{col}</span>
+                      <span className="text-[10px] text-re-danger font-medium">missing</span>
                     </div>
                   ))}
                   {clientValidation.recommendedColumnsPresent.map(col => (
@@ -867,9 +867,9 @@ export default function BulkUploadPage() {
                   ))}
                   {clientValidation.recommendedColumnsMissing.map(col => (
                     <div key={col} className="flex items-center gap-2 text-xs">
-                      <span className="w-3.5 h-3.5 rounded-full bg-amber-500/10 text-amber-500 text-[10px] font-bold flex items-center justify-center shrink-0">~</span>
-                      <span className="text-amber-400">{col}</span>
-                      <span className="text-[10px] text-amber-400 font-medium">recommended</span>
+                      <span className="w-3.5 h-3.5 rounded-full bg-re-warning-muted0/10 text-re-warning text-[10px] font-bold flex items-center justify-center shrink-0">~</span>
+                      <span className="text-re-warning">{col}</span>
+                      <span className="text-[10px] text-re-warning font-medium">recommended</span>
                     </div>
                   ))}
                 </div>
@@ -884,7 +884,7 @@ export default function BulkUploadPage() {
                   <div className="max-h-48 overflow-y-auto space-y-1 rounded-lg border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] p-2">
                     {clientValidation.issues.slice(0, 25).map((issue, idx) => (
                       <div key={idx} className={`flex items-start gap-2 text-[11px] sm:text-xs px-2 py-1 rounded ${
-                        issue.severity === 'error' ? 'text-red-400' : 'text-amber-400'
+                        issue.severity === 'error' ? 'text-re-danger' : 'text-re-warning'
                       }`}>
                         <span className="shrink-0 mt-0.5">{issue.severity === 'error' ? '✗' : '⚠'}</span>
                         <span>
@@ -906,8 +906,8 @@ export default function BulkUploadPage() {
               {/* Overall status */}
               <div className={`rounded-lg p-3 text-sm font-semibold flex items-center gap-2 ${
                 clientValidation.canProceed
-                  ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20'
-                  : 'bg-red-500/10 text-red-500 border border-red-500/20'
+                  ? 'bg-re-brand-muted text-re-brand border border-re-brand/20'
+                  : 'bg-re-danger-muted0/10 text-re-danger border border-re-danger/20'
               }`}>
                 {clientValidation.canProceed ? <CheckCircle2 className="w-4 h-4" /> : <span>!</span>}
                 {clientValidation.canProceed
@@ -949,8 +949,8 @@ export default function BulkUploadPage() {
 
           {/* Error */}
           {error && (
-            <div className="mt-4 rounded-lg border border-red-500/20 bg-red-500/5 p-3 text-sm text-red-500 flex items-start gap-2">
-              <span className="text-red-400 mt-0.5">!</span>
+            <div className="mt-4 rounded-lg border border-re-danger/20 bg-re-danger-muted0/5 p-3 text-sm text-re-danger flex items-start gap-2">
+              <span className="text-re-danger mt-0.5">!</span>
               <span>{error}</span>
             </div>
           )}
@@ -975,7 +975,7 @@ export default function BulkUploadPage() {
                 ))}
               </div>
               {parseResult.warnings?.length > 0 && (
-                <ul className="mt-3 list-disc pl-5 text-xs text-amber-500">
+                <ul className="mt-3 list-disc pl-5 text-xs text-re-warning">
                   {parseResult.warnings.map((warning) => (
                     <li key={warning}>{warning}</li>
                   ))}
@@ -1006,14 +1006,14 @@ export default function BulkUploadPage() {
               </div>
               <div className={`mt-3 rounded-lg p-3 text-sm font-semibold flex items-center gap-2 ${
                 validateResult.preview.can_commit
-                  ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20'
-                  : 'bg-red-500/10 text-red-500 border border-red-500/20'
+                  ? 'bg-re-brand-muted text-re-brand border border-re-brand/20'
+                  : 'bg-re-danger-muted0/10 text-re-danger border border-re-danger/20'
               }`}>
                 {validateResult.preview.can_commit ? <CheckCircle2 className="w-4 h-4" /> : <span>!</span>}
                 {validateResult.preview.can_commit ? 'Ready to commit.' : 'Resolve validation errors before commit.'}
               </div>
               {validateResult.preview.errors?.length > 0 && (
-                <ul className="mt-3 list-disc pl-5 text-xs text-red-500">
+                <ul className="mt-3 list-disc pl-5 text-xs text-re-danger">
                   {validateResult.preview.errors.map((item, index) => (
                     <li key={`${item.section}-${item.row}-${index}`}>
                       {item.section} row {item.row}: {item.message}
@@ -1026,11 +1026,11 @@ export default function BulkUploadPage() {
 
           {/* Commit result */}
           {commitResult && (
-            <div className="mt-4 rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4"
+            <div className="mt-4 rounded-xl border border-re-brand/20 bg-re-brand/5 p-4"
               style={{ boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}
             >
               <p className="font-semibold text-sm text-[var(--re-text-primary)] mb-2 flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                <CheckCircle2 className="w-4 h-4 text-re-brand" />
                 Commit Complete
               </p>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs text-[var(--re-text-secondary)]">
@@ -1048,7 +1048,7 @@ export default function BulkUploadPage() {
                 </div>
               </div>
               {commitResult.summary.sync_warning_count > 0 && (
-                <div className="mt-3 rounded-lg border border-amber-500/20 bg-amber-500/5 p-3 text-xs text-amber-500">
+                <div className="mt-3 rounded-lg border border-re-warning/20 bg-re-warning-muted0/5 p-3 text-xs text-re-warning">
                   <p className="font-semibold mb-1">Graph sync warnings ({commitResult.summary.sync_warning_count})</p>
                   <ul className="list-disc pl-5">
                     {commitResult.summary.sync_warnings.map((warning) => (
@@ -1072,9 +1072,9 @@ export default function BulkUploadPage() {
               style={{ boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}
             >
               <p className="font-semibold text-sm text-[var(--re-text-primary)]">Latest Status: {statusResult.status}</p>
-              {statusResult.error && <p className="mt-1 text-sm text-red-500">{statusResult.error}</p>}
+              {statusResult.error && <p className="mt-1 text-sm text-re-danger">{statusResult.error}</p>}
               {statusResult.summary && statusResult.summary.sync_warning_count > 0 && (
-                <p className="mt-1 text-xs text-amber-500">
+                <p className="mt-1 text-xs text-re-warning">
                   Graph sync warnings: {statusResult.summary.sync_warning_count}. See commit summary details above.
                 </p>
               )}

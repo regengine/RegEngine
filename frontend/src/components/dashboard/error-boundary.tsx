@@ -31,14 +31,14 @@ export class DashboardErrorBoundary extends React.Component<
         if (this.state.hasError) {
             return (
                 <div className="flex flex-col items-center justify-center min-h-[60vh] p-8 text-center">
-                    <div className="w-14 h-14 rounded-2xl bg-red-500/10 flex items-center justify-center mb-4">
-                        <AlertTriangle className="h-7 w-7 text-red-500" />
+                    <div className="w-14 h-14 rounded-2xl bg-re-danger-muted0/10 flex items-center justify-center mb-4">
+                        <AlertTriangle className="h-7 w-7 text-re-danger" />
                     </div>
                     <h2 className="text-lg font-semibold mb-2">Something went wrong</h2>
                     <p className="text-sm text-muted-foreground max-w-md mb-6">
                         An unexpected error occurred while rendering this page.
                         {this.state.error?.message && (
-                            <span className="block mt-2 font-mono text-xs text-red-400/80">
+                            <span className="block mt-2 font-mono text-xs text-re-danger/80">
                                 {this.state.error.message}
                             </span>
                         )}

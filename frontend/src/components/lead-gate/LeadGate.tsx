@@ -195,7 +195,7 @@ export function LeadGate({
                         </div>
 
                         {error && (
-                            <p className="text-sm text-red-400 text-center">{error}</p>
+                            <p className="text-sm text-re-danger text-center">{error}</p>
                         )}
                         <button
                             type="submit"
@@ -215,7 +215,7 @@ export function LeadGate({
             {step === 'enrich' && (
                 <div className="p-6 rounded-2xl border border-[var(--re-surface-border)] bg-[var(--re-surface-card)]">
                     <div className="text-center mb-5">
-                        <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-400 text-xs font-bold mb-3">
+                        <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-re-brand-muted text-re-brand text-xs font-bold mb-3">
                             <Check className="h-3 w-3" /> Results Unlocked
                         </div>
                         <h3 className="text-lg font-bold text-[var(--re-text-primary)]">Help us personalize your report</h3>

@@ -81,8 +81,8 @@ export default function AnalysisResultClient() {
             {/* Print Header (Only visible when printing) */}
             <div className="hidden print:block mb-8 border-b pb-4">
                 <h1 className="text-2xl font-bold">RegEngine Compliance Audit Report</h1>
-                <p className="text-sm text-gray-500">Generated: {new Date().toLocaleString()}</p>
-                <p className="text-sm text-gray-500">Document ID: {data.document_id}</p>
+                <p className="text-sm text-re-text-muted">Generated: {new Date().toLocaleString()}</p>
+                <p className="text-sm text-re-text-muted">Document ID: {data.document_id}</p>
                 <p className="text-sm font-bold mt-2">Integrity Status: VERIFIED</p>
             </div>
 
@@ -90,7 +90,7 @@ export default function AnalysisResultClient() {
                 <Card className="print:shadow-none print:border-green-500 print:border-2">
                     <CardHeader>
                         <CardTitle className="flex items-center gap-2">
-                            <Shield className="h-5 w-5 text-blue-500" />
+                            <Shield className="h-5 w-5 text-re-info" />
                             Cryptographic Timeline
                         </CardTitle>
                     </CardHeader>
@@ -98,7 +98,7 @@ export default function AnalysisResultClient() {
                         <div className="relative border-l-2 border-muted ml-3 space-y-8 py-2">
                             {steps.map((step, i) => (
                                 <div key={i} className="pl-8 relative">
-                                    <div className={`absolute -left-[9px] top-1 h-4 w-4 rounded-full ${step.status === 'complete' ? 'bg-green-500' : 'bg-gray-300'}`} />
+                                    <div className={`absolute -left-[9px] top-1 h-4 w-4 rounded-full ${step.status === 'complete' ? 'bg-re-success-muted0' : 'bg-re-surface-elevated'}`} />
                                     <div className="flex items-center justify-between mb-1">
                                         <h3 className="font-semibold">{step.title}</h3>
                                         <span className="text-xs text-muted-foreground font-mono">{step.time}</span>
@@ -118,13 +118,13 @@ export default function AnalysisResultClient() {
                         <CardHeader><CardTitle>Risk Details</CardTitle></CardHeader>
                         <CardContent className="space-y-4">
                             {data.critical_risks.map(risk => (
-                                <div key={risk.id} className="p-4 border rounded-lg bg-red-50 text-red-900 border-red-100">
+                                <div key={risk.id} className="p-4 border rounded-lg bg-re-danger-muted text-re-danger border-red-100">
                                     <div className="font-bold text-sm mb-1">{risk.severity} • {risk.id}</div>
                                     <div>{risk.description}</div>
                                 </div>
                             ))}
                             {data.critical_risks.length === 0 && (
-                                <div className="text-green-600 flex items-center gap-2">
+                                <div className="text-re-success flex items-center gap-2">
                                     <CheckCircle className="h-4 w-4" /> No Critical Risks Detected
                                 </div>
                             )}

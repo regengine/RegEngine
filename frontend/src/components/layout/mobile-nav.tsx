@@ -29,10 +29,10 @@ export function MobileNav() {
         {
             title: "Operations",
             items: [
-                { href: "/exceptions", label: "Exceptions", icon: AlertTriangle, iconClass: "text-red-500" },
-                { href: "/requests", label: "Requests", icon: Timer, iconClass: "text-blue-500" },
+                { href: "/exceptions", label: "Exceptions", icon: AlertTriangle, iconClass: "text-re-danger" },
+                { href: "/requests", label: "Requests", icon: Timer, iconClass: "text-re-info" },
                 { href: "/records", label: "Records", icon: FileSearch, iconClass: "text-indigo-500" },
-                { href: "/rules", label: "Rules", icon: Shield, iconClass: "text-blue-500" },
+                { href: "/rules", label: "Rules", icon: Shield, iconClass: "text-re-info" },
                 { href: "/identity", label: "Identity", icon: Database, iconClass: "text-cyan-500" },
                 { href: "/audit", label: "Auditor Review", icon: Shield, iconClass: "text-slate-500" },
             ]
@@ -40,24 +40,24 @@ export function MobileNav() {
         {
             title: "Free Tools",
             items: [
-                { href: "/tools/fsma-unified", label: "FSMA Dashboard", icon: Shield, iconClass: "text-green-500" },
-                { href: "/tools/fsma-unified?tab=anomaly", label: "Anomaly Simulator", icon: Activity, iconClass: "text-red-400" },
-                { href: "/tools/fsma-unified?tab=graph", label: "Knowledge Graph", icon: Database, iconClass: "text-blue-400" },
-                { href: "/tools/ftl-checker", label: "FTL Checker", icon: Leaf, iconClass: "text-emerald-500" },
-                { href: "/tools/roi-calculator", label: "ROI Calculator", icon: TrendingUp, iconClass: "text-amber-500" },
-                { href: "/tools", label: "View All Tools →", icon: Scan, iconClass: "text-emerald-400" },
+                { href: "/tools/fsma-unified", label: "FSMA Dashboard", icon: Shield, iconClass: "text-re-success" },
+                { href: "/tools/fsma-unified?tab=anomaly", label: "Anomaly Simulator", icon: Activity, iconClass: "text-re-danger" },
+                { href: "/tools/fsma-unified?tab=graph", label: "Knowledge Graph", icon: Database, iconClass: "text-re-info" },
+                { href: "/tools/ftl-checker", label: "FTL Checker", icon: Leaf, iconClass: "text-re-brand" },
+                { href: "/tools/roi-calculator", label: "ROI Calculator", icon: TrendingUp, iconClass: "text-re-warning" },
+                { href: "/tools", label: "View All Tools →", icon: Scan, iconClass: "text-re-brand" },
             ]
         },
         {
             title: "Field Operations",
             items: [
-                { href: "/mobile/capture", label: "Field Capture", icon: Scan, iconClass: "text-red-500" },
+                { href: "/mobile/capture", label: "Field Capture", icon: Scan, iconClass: "text-re-danger" },
             ]
         },
         {
             title: "System",
             items: [
-                { href: "/compliance/status", label: "Status", icon: Shield, iconClass: "text-amber-500" },
+                { href: "/compliance/status", label: "Status", icon: Shield, iconClass: "text-re-warning" },
                 { href: "/compliance/snapshots", label: "Snapshots", icon: Camera, iconClass: "text-purple-400" },
                 { href: "/controls", label: "Controls", icon: Shield },
             ]
@@ -85,7 +85,7 @@ export function MobileNav() {
                     <Link href="/" className="flex items-center space-x-2" onClick={() => setOpen(false)}>
                         <Activity className="h-6 w-6 text-primary" />
                         <span className="font-bold text-xl">RegEngine</span>
-                        <span className="text-[9px] font-bold uppercase tracking-widest text-emerald-500 bg-emerald-500/10 border border-emerald-500/20 px-1.5 py-0.5 rounded-full ml-1">FOUNDING COHORT</span>
+                        <span className="text-[9px] font-bold uppercase tracking-widest text-re-brand bg-re-brand-muted border border-re-brand/20 px-1.5 py-0.5 rounded-full ml-1">FOUNDING COHORT</span>
                     </Link>
                     <div className="mt-4">
                         <TenantSwitcher />

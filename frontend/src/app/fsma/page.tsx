@@ -120,13 +120,13 @@ export default function FSMADashboardPage() {
           {/* Page Header */}
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
-              <div className="p-3 rounded-lg bg-emerald-100 dark:bg-emerald-900">
-                <Shield className="h-8 w-8 text-emerald-600 dark:text-emerald-400" />
+              <div className="p-3 rounded-lg bg-re-brand-muted dark:bg-re-brand">
+                <Shield className="h-8 w-8 text-re-brand-dark dark:text-re-brand" />
               </div>
               <div>
                 <div className="flex items-center gap-3">
                   <h1 className="text-4xl font-bold">FSMA 204 Dashboard</h1>
-                  <Badge className="bg-emerald-500/10 text-emerald-600 border border-emerald-500/20 text-xs">GA</Badge>
+                  <Badge className="bg-re-brand-muted text-re-brand-dark border border-re-brand/20 text-xs">GA</Badge>
                 </div>
                 <p className="text-muted-foreground mt-1">
                   Food Safety Traceability & Recall Management
@@ -138,12 +138,12 @@ export default function FSMADashboardPage() {
             {/* System Status */}
             <div className="flex items-center gap-2">
               {dashboard.data?.system_health === 'HEALTHY' ? (
-                <Badge className="bg-green-100 text-green-700">
+                <Badge className="bg-re-success-muted text-re-success">
                   <Activity className="w-3 h-3 mr-1" />
                   All Systems Operational
                 </Badge>
               ) : dashboard.data?.system_health === 'DEGRADED' ? (
-                <Badge className="bg-amber-100 text-amber-700">
+                <Badge className="bg-re-warning-muted text-re-warning">
                   <AlertTriangle className="w-3 h-3 mr-1" />
                   Degraded Performance
                 </Badge>
@@ -158,15 +158,15 @@ export default function FSMADashboardPage() {
 
           {/* No API Key Warning */}
           {!apiKey && (
-            <Card className="border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20">
+            <Card className="border-amber-200 dark:border-amber-800 bg-re-warning-muted dark:bg-re-warning/20">
               <CardContent className="pt-6">
                 <div className="flex items-start gap-3">
-                  <Key className="h-5 w-5 text-amber-600 dark:text-amber-400 mt-0.5" />
+                  <Key className="h-5 w-5 text-re-warning dark:text-re-warning mt-0.5" />
                   <div className="flex-1">
-                    <p className="font-medium text-amber-900 dark:text-amber-100">
+                    <p className="font-medium text-re-warning dark:text-amber-100">
                       API Key Required for Full Functionality
                     </p>
-                    <p className="text-sm text-amber-700 dark:text-amber-300 mt-1">
+                    <p className="text-sm text-re-warning dark:text-re-warning mt-1">
                       Connect to the FSMA backend to access real traceability data and recall drills.
                       Demo visualization is shown below.
                     </p>
@@ -187,7 +187,7 @@ export default function FSMADashboardPage() {
             <Card>
               <CardContent className="pt-6">
                 <div className="flex items-center gap-3">
-                  <Package className="h-8 w-8 text-blue-500" />
+                  <Package className="h-8 w-8 text-re-info" />
                   <div>
                     <p className="text-2xl font-bold">
                       {dashboard.data?.total_lots?.toLocaleString() || '—'}
@@ -215,7 +215,7 @@ export default function FSMADashboardPage() {
             <Card>
               <CardContent className="pt-6">
                 <div className="flex items-center gap-3">
-                  <TrendingUp className="h-8 w-8 text-green-500" />
+                  <TrendingUp className="h-8 w-8 text-re-success" />
                   <div>
                     <p className="text-2xl font-bold">
                       {dashboard.data?.kde_completeness_percent
@@ -231,7 +231,7 @@ export default function FSMADashboardPage() {
             <Card>
               <CardContent className="pt-6">
                 <div className="flex items-center gap-3">
-                  <Bell className={`h-8 w-8 ${dashboard.data?.active_recalls ? 'text-red-500' : 'text-muted-foreground'}`} />
+                  <Bell className={`h-8 w-8 ${dashboard.data?.active_recalls ? 'text-re-danger' : 'text-muted-foreground'}`} />
                   <div>
                     <p className="text-2xl font-bold">
                       {dashboard.data?.active_recalls ?? '0'}
@@ -391,8 +391,8 @@ export default function FSMADashboardPage() {
                               <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
                                 <div
                                   className={`h-full rounded-full transition-all ${
-                                    (supplier.completeness_rate || 0) >= 90 ? 'bg-green-500' :
-                                    (supplier.completeness_rate || 0) >= 70 ? 'bg-amber-500' : 'bg-red-500'
+                                    (supplier.completeness_rate || 0) >= 90 ? 'bg-re-success-muted0' :
+                                    (supplier.completeness_rate || 0) >= 70 ? 'bg-re-warning-muted0' : 'bg-re-danger-muted0'
                                   } ${
                                     (supplier.completeness_rate || 0) >= 95 ? 'w-[95%]' :
                                     (supplier.completeness_rate || 0) >= 90 ? 'w-[90%]' :
@@ -428,7 +428,7 @@ export default function FSMADashboardPage() {
                 <Card>
                   <CardHeader className="pb-2">
                     <CardTitle className="text-lg flex items-center gap-2">
-                      <AlertTriangle className="w-4 h-4 text-amber-500" />
+                      <AlertTriangle className="w-4 h-4 text-re-warning" />
                       Recent Alerts
                     </CardTitle>
                   </CardHeader>
@@ -440,11 +440,11 @@ export default function FSMADashboardPage() {
                           className="flex items-start gap-2 p-2 rounded bg-muted/50 text-sm"
                         >
                           {alert.severity === 'CRITICAL' ? (
-                            <XCircle className="w-4 h-4 text-red-500 mt-0.5" />
+                            <XCircle className="w-4 h-4 text-re-danger mt-0.5" />
                           ) : alert.severity === 'WARNING' ? (
-                            <AlertTriangle className="w-4 h-4 text-amber-500 mt-0.5" />
+                            <AlertTriangle className="w-4 h-4 text-re-warning mt-0.5" />
                           ) : (
-                            <CheckCircle className="w-4 h-4 text-blue-500 mt-0.5" />
+                            <CheckCircle className="w-4 h-4 text-re-info mt-0.5" />
                           )}
                           <div className="flex-1 min-w-0">
                             <p className="truncate">{alert.message}</p>
@@ -464,7 +464,7 @@ export default function FSMADashboardPage() {
                 </CardHeader>
                 <CardContent className="space-y-2">
                   <Link href="/fsma/assessment">
-                    <Button variant="default" className="w-full justify-start bg-emerald-600 hover:bg-emerald-700">
+                    <Button variant="default" className="w-full justify-start bg-re-brand hover:bg-emerald-700">
                       <CheckCircle className="w-4 h-4 mr-2" />
                       Readiness Assessment
                     </Button>

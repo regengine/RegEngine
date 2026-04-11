@@ -31,7 +31,7 @@ from app.security import utc_now
 
 logger = logging.getLogger("compliance-api")
 
-DEFAULT_TENANT_ID = "00000000-0000-0000-0000-000000000000"
+DEFAULT_TENANT_ID = None  # No fallback — all operations must supply a valid tenant_id
 
 
 @dataclass

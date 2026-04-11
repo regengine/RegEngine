@@ -16,10 +16,10 @@ function getPasswordStrength(password: string): { score: number; label: string; 
     if (/[0-9]/.test(password)) score++;
     if (/[^A-Za-z0-9]/.test(password)) score++;
 
-    if (score <= 1) return { score, label: 'Weak', color: 'bg-red-500' };
-    if (score <= 2) return { score, label: 'Fair', color: 'bg-amber-500' };
+    if (score <= 1) return { score, label: 'Weak', color: 'bg-re-danger-muted0' };
+    if (score <= 2) return { score, label: 'Fair', color: 'bg-re-warning-muted0' };
     if (score <= 3) return { score, label: 'Good', color: 'bg-yellow-400' };
-    return { score, label: 'Strong', color: 'bg-emerald-500' };
+    return { score, label: 'Strong', color: 'bg-re-brand' };
 }
 
 export default function ResetPasswordClient() {
@@ -128,8 +128,8 @@ export default function ResetPasswordClient() {
                     <Card className="w-full border-[var(--re-surface-border)] bg-[var(--re-surface-card)] shadow-[0_16px_70px_rgba(0,0,0,0.25)]">
                         <CardContent className="pt-8">
                             <div className="space-y-4 text-center">
-                                <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-red-500/10">
-                                    <Lock className="h-7 w-7 text-red-500" />
+                                <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-re-danger-muted0/10">
+                                    <Lock className="h-7 w-7 text-re-danger" />
                                 </div>
                                 <div className="space-y-1">
                                     <p className="font-medium text-[var(--re-text-primary)]">Reset link expired</p>
@@ -158,8 +158,8 @@ export default function ResetPasswordClient() {
                     <Card className="w-full border-[var(--re-surface-border)] bg-[var(--re-surface-card)] shadow-[0_16px_70px_rgba(0,0,0,0.25)]">
                         <CardContent className="pt-8">
                             <div className="space-y-4 text-center">
-                                <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-emerald-500/10">
-                                    <ShieldCheck className="h-7 w-7 text-emerald-500" />
+                                <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-re-brand-muted">
+                                    <ShieldCheck className="h-7 w-7 text-re-brand" />
                                 </div>
                                 <div className="space-y-1">
                                     <p className="font-medium text-[var(--re-text-primary)]">Password updated</p>
@@ -212,7 +212,7 @@ export default function ResetPasswordClient() {
                                     <div
                                         role="alert"
                                         aria-live="polite"
-                                        className="animate-in fade-in slide-in-from-top-2 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-500 dark:border-red-800 dark:bg-red-900/10"
+                                        className="animate-in fade-in slide-in-from-top-2 rounded-md border border-re-danger bg-re-danger-muted p-3 text-sm text-re-danger dark:border-re-danger dark:bg-re-danger/10"
                                     >
                                         {error}
                                     </div>
@@ -285,7 +285,7 @@ export default function ResetPasswordClient() {
                                         placeholder="Repeat your password"
                                     />
                                     {confirmPassword.length > 0 && password !== confirmPassword && (
-                                        <p className="text-xs text-red-500">Passwords do not match</p>
+                                        <p className="text-xs text-re-danger">Passwords do not match</p>
                                     )}
                                 </div>
 

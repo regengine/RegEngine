@@ -222,7 +222,7 @@ export default function TeamPage() {
                                                             <RoleIcon className="h-2.5 w-2.5 mr-0.5" /> {roleConfig.label}
                                                         </Badge>
                                                         {member.status === 'invited' && (
-                                                            <Badge variant="outline" className="text-[9px] py-0 text-amber-500 border-amber-500/20">Pending</Badge>
+                                                            <Badge variant="outline" className="text-[9px] py-0 text-re-warning border-re-warning/20">Pending</Badge>
                                                         )}
                                                     </div>
                                                     <div className="text-[11px] sm:text-xs text-muted-foreground truncate">{member.email}</div>

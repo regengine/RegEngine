@@ -91,21 +91,21 @@ export function Header() {
   };
 
   return (
-    <header className="sticky top-0 z-50 w-full border-b bg-white/80 backdrop-blur-lg dark:bg-gray-900/80">
+    <header className="sticky top-0 z-50 w-full border-b bg-white/80 backdrop-blur-lg dark:bg-re-surface-base/80">
       <div className="container flex h-16 items-center justify-between px-6">
         <div className="flex items-center gap-2 md:hidden">
           <MobileNav />
           <Link href="/" className="flex items-center space-x-2">
             <Activity className="h-6 w-6 text-primary" />
             <span className="text-xl font-bold">RegEngine</span>
-            <Badge variant="outline" className="text-[9px] font-bold uppercase tracking-widest text-emerald-500 bg-emerald-500/10 border-emerald-500/20 px-1.5 py-0 h-4 rounded-full">FOUNDING COHORT</Badge>
+            <Badge variant="outline" className="text-[9px] font-bold uppercase tracking-widest text-re-brand bg-re-brand-muted border-re-brand/20 px-1.5 py-0 h-4 rounded-full">FOUNDING COHORT</Badge>
           </Link>
         </div>
 
         <Link href="/" className="hidden md:flex items-center space-x-2 smooth-transition hover:scale-105">
           <Activity className="h-6 w-6 text-primary" />
           <span className="text-xl font-bold">RegEngine</span>
-          <Badge variant="outline" className="text-[9px] font-bold uppercase tracking-widest text-emerald-500 bg-emerald-500/10 border-emerald-500/20 px-1.5 py-0 h-4 rounded-full">FOUNDING COHORT</Badge>
+          <Badge variant="outline" className="text-[9px] font-bold uppercase tracking-widest text-re-brand bg-re-brand-muted border-re-brand/20 px-1.5 py-0 h-4 rounded-full">FOUNDING COHORT</Badge>
         </Link>
 
         <nav className="items-center space-x-1 hidden md:flex">
@@ -121,7 +121,7 @@ export function Header() {
                 onMouseEnter={() => handleMouseEnter('data')}
                 onMouseLeave={handleMouseLeave}
               >
-                <Database className="h-4 w-4 text-blue-500" />
+                <Database className="h-4 w-4 text-re-info" />
                 <span>Data</span>
                 <ChevronDown className="h-3 w-3 opacity-50" />
               </button>
@@ -135,7 +135,7 @@ export function Header() {
               <DropdownMenuLabel className="text-xs uppercase text-muted-foreground tracking-wider">Data Management</DropdownMenuLabel>
               <DropdownMenuItem asChild>
                 <Link href="/ingest" className="cursor-pointer w-full flex items-center gap-3 py-2">
-                  <Database className="h-4 w-4 text-blue-500" />
+                  <Database className="h-4 w-4 text-re-info" />
                   <div>
                     <div className="font-medium">Ingest</div>
                     <div className="text-xs text-muted-foreground">Upload & process documents</div>
@@ -144,7 +144,7 @@ export function Header() {
               </DropdownMenuItem>
               <DropdownMenuItem asChild>
                 <Link href="/review" className="cursor-pointer w-full flex items-center gap-3 py-2">
-                  <ClipboardCheck className="h-4 w-4 text-emerald-500" />
+                  <ClipboardCheck className="h-4 w-4 text-re-brand" />
                   <div>
                     <div className="font-medium">Review Queue</div>
                     <div className="text-xs text-muted-foreground">Human-in-the-loop validation</div>
@@ -166,7 +166,7 @@ export function Header() {
                 onMouseEnter={() => handleMouseEnter('compliance')}
                 onMouseLeave={handleMouseLeave}
               >
-                <CheckCircle className="h-4 w-4 text-emerald-500" />
+                <CheckCircle className="h-4 w-4 text-re-brand" />
                 <span>Compliance</span>
                 <ChevronDown className="h-3 w-3 opacity-50" />
               </button>
@@ -180,7 +180,7 @@ export function Header() {
               <DropdownMenuLabel className="text-xs uppercase text-muted-foreground tracking-wider">Compliance Suite</DropdownMenuLabel>
               <DropdownMenuItem asChild>
                 <Link href="/compliance" className="cursor-pointer w-full flex items-center gap-3 py-2">
-                  <CheckCircle className="h-4 w-4 text-emerald-500" />
+                  <CheckCircle className="h-4 w-4 text-re-brand" />
                   <div>
                     <div className="font-medium">Dashboard</div>
                     <div className="text-xs text-muted-foreground">Overall compliance view</div>
@@ -189,7 +189,7 @@ export function Header() {
               </DropdownMenuItem>
               <DropdownMenuItem asChild>
                 <Link href="/compliance/status" className="cursor-pointer w-full flex items-center gap-3 py-2">
-                  <Shield className="h-4 w-4 text-amber-500" />
+                  <Shield className="h-4 w-4 text-re-warning" />
                   <div>
                     <div className="font-medium">Status</div>
                     <div className="text-xs text-muted-foreground">Real-time compliance status</div>
@@ -244,7 +244,7 @@ export function Header() {
               <DropdownMenuLabel className="text-xs uppercase text-muted-foreground tracking-wider">Control Plane</DropdownMenuLabel>
               <DropdownMenuItem asChild>
                 <Link href="/exceptions" className="cursor-pointer w-full flex items-center gap-3 py-2">
-                  <AlertTriangle className="h-4 w-4 text-red-500" />
+                  <AlertTriangle className="h-4 w-4 text-re-danger" />
                   <div>
                     <div className="font-medium">Exceptions</div>
                     <div className="text-xs text-muted-foreground">Remediation queue</div>
@@ -253,7 +253,7 @@ export function Header() {
               </DropdownMenuItem>
               <DropdownMenuItem asChild>
                 <Link href="/requests" className="cursor-pointer w-full flex items-center gap-3 py-2">
-                  <Timer className="h-4 w-4 text-blue-500" />
+                  <Timer className="h-4 w-4 text-re-info" />
                   <div>
                     <div className="font-medium">Requests</div>
                     <div className="text-xs text-muted-foreground">24-hour response workflow</div>
@@ -271,7 +271,7 @@ export function Header() {
               </DropdownMenuItem>
               <DropdownMenuItem asChild>
                 <Link href="/rules" className="cursor-pointer w-full flex items-center gap-3 py-2">
-                  <Shield className="h-4 w-4 text-blue-500" />
+                  <Shield className="h-4 w-4 text-re-info" />
                   <div>
                     <div className="font-medium">Rules</div>
                     <div className="text-xs text-muted-foreground">Compliance rule catalog</div>
@@ -290,7 +290,7 @@ export function Header() {
               <DropdownMenuSeparator />
               <DropdownMenuItem asChild>
                 <Link href="/fsma" className="cursor-pointer w-full flex items-center gap-3 py-2">
-                  <Activity className="h-4 w-4 text-emerald-500" />
+                  <Activity className="h-4 w-4 text-re-brand" />
                   <div>
                     <div className="font-medium">FSMA Dashboard</div>
                     <div className="text-xs text-muted-foreground">Traceability & recall drills</div>
@@ -299,7 +299,7 @@ export function Header() {
               </DropdownMenuItem>
               <DropdownMenuItem asChild>
                 <Link href="/dashboard/recall-response" className="cursor-pointer w-full flex items-center gap-3 py-2">
-                  <Bell className="h-4 w-4 text-red-500" />
+                  <Bell className="h-4 w-4 text-re-danger" />
                   <div>
                     <div className="font-medium">Recall Response</div>
                     <div className="text-xs text-muted-foreground">24-hour FDA SLA tracking</div>
@@ -344,7 +344,7 @@ export function Header() {
               <DropdownMenuLabel className="text-xs uppercase text-muted-foreground tracking-wider">FSMA 204 Compliance Tools</DropdownMenuLabel>
               <DropdownMenuItem asChild>
                 <Link href="/ftl-checker" className="cursor-pointer w-full flex items-center gap-3 py-2">
-                  <Leaf className="h-4 w-4 text-green-500" />
+                  <Leaf className="h-4 w-4 text-re-success" />
                   <div>
                     <div className="font-medium">FTL Checker</div>
                     <div className="text-xs text-muted-foreground">FSMA 204 Food Traceability</div>
@@ -363,7 +363,7 @@ export function Header() {
               <DropdownMenuSeparator />
               <DropdownMenuItem asChild>
                 <Link href="/tools" className="cursor-pointer w-full flex items-center gap-3 py-2">
-                  <Scan className="h-4 w-4 text-emerald-400" />
+                  <Scan className="h-4 w-4 text-re-brand" />
                   <div>
                     <div className="font-medium text-primary">View All Tools →</div>
                     <div className="text-xs text-muted-foreground">Full FSMA compliance toolkit</div>
@@ -409,7 +409,7 @@ export function Header() {
               <DropdownMenuLabel className="text-xs uppercase text-muted-foreground tracking-wider">Administration</DropdownMenuLabel>
               <DropdownMenuItem asChild>
                 <Link href="/admin" className="cursor-pointer w-full flex items-center gap-3 py-2">
-                  <Key className="h-4 w-4 text-amber-500" />
+                  <Key className="h-4 w-4 text-re-warning" />
                   <div>
                     <div className="font-medium">API Keys</div>
                     <div className="text-xs text-muted-foreground">Manage authentication</div>
@@ -428,7 +428,7 @@ export function Header() {
               <DropdownMenuSeparator />
               <DropdownMenuItem asChild>
                 <Link href="/docs" className="cursor-pointer w-full flex items-center gap-3 py-2">
-                  <Book className="h-4 w-4 text-blue-400" />
+                  <Book className="h-4 w-4 text-re-info" />
                   <div>
                     <div className="font-medium">Documentation</div>
                     <div className="text-xs text-muted-foreground">API reference & guides</div>

@@ -104,13 +104,13 @@ export function SandboxResultsCTA({
   // ── Mode B: All Clear ──
   if (mode === 'all_clear') {
     return (
-      <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-4">
+      <div className="rounded-lg border border-re-brand/30 bg-re-brand/5 p-4">
         <div className="flex items-start gap-3">
-          <div className="p-2 rounded-lg bg-emerald-500/10 flex-shrink-0">
-            <Shield className="w-5 h-5 text-emerald-400" />
+          <div className="p-2 rounded-lg bg-re-brand-muted flex-shrink-0">
+            <Shield className="w-5 h-5 text-re-brand" />
           </div>
           <div className="flex-1 min-w-0">
-            <h4 className="text-[0.8rem] font-semibold text-emerald-300">
+            <h4 className="text-[0.8rem] font-semibold text-re-brand-light">
               Your data is 100% compliant. Now automate it.
             </h4>
             <p className="text-[0.7rem] text-[var(--re-text-secondary)] mt-1">
@@ -119,19 +119,19 @@ export function SandboxResultsCTA({
             <div className="flex flex-wrap items-center gap-2 mt-3">
               <button
                 onClick={() => openCalendly('automate')}
-                className="inline-flex items-center gap-1.5 bg-emerald-500 text-white px-4 py-2 rounded-lg text-[0.7rem] font-semibold transition-all hover:bg-emerald-600 cursor-pointer"
+                className="inline-flex items-center gap-1.5 bg-re-brand text-white px-4 py-2 rounded-lg text-[0.7rem] font-semibold transition-all hover:bg-re-brand cursor-pointer"
               >
                 <Zap className="w-3.5 h-3.5" />
                 Automate My Compliance
               </button>
               <button
                 onClick={() => handleSecondary('founding_cohort', '/pricing')}
-                className="inline-flex items-center gap-1 text-[0.7rem] text-emerald-400 hover:underline cursor-pointer"
+                className="inline-flex items-center gap-1 text-[0.7rem] text-re-brand hover:underline cursor-pointer"
               >
                 Join Founding Cohort — 50% Off for Life <ArrowRight className="w-3 h-3" />
               </button>
             </div>
-            <div className="flex items-center gap-4 mt-3 pt-3 border-t border-emerald-500/15">
+            <div className="flex items-center gap-4 mt-3 pt-3 border-t border-re-brand/15">
               {[
                 { icon: Lock, label: 'No data stored' },
                 { icon: Shield, label: 'SOC 2 Type II' },

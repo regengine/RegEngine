@@ -290,22 +290,22 @@ export default function LoginPage() {
                         </CardHeader>
                         <CardContent>
                             {searchParams.get('error') === 'auth_config' && (
-                                <div className="mb-4 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-700 dark:border-amber-800 dark:bg-amber-900/10 dark:text-amber-400">
+                                <div className="mb-4 rounded-md border border-amber-200 bg-re-warning-muted p-3 text-sm text-re-warning dark:border-amber-800 dark:bg-re-warning/10 dark:text-re-warning">
                                     Authentication is misconfigured (AUTH_SECRET_KEY not set). Contact your administrator.
                                 </div>
                             )}
                             {searchParams.get('error') === 'token_invalid' && (
-                                <div className="mb-4 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-700 dark:border-amber-800 dark:bg-amber-900/10 dark:text-amber-400">
+                                <div className="mb-4 rounded-md border border-amber-200 bg-re-warning-muted p-3 text-sm text-re-warning dark:border-amber-800 dark:bg-re-warning/10 dark:text-re-warning">
                                     Your session could not be verified. Please sign in again.
                                 </div>
                             )}
                             {searchParams.get('error') === 'session_expired' && (
-                                <div className="mb-4 rounded-md border border-blue-200 bg-blue-50 p-3 text-sm text-blue-700 dark:border-blue-800 dark:bg-blue-900/10 dark:text-blue-400">
+                                <div className="mb-4 rounded-md border border-blue-200 bg-re-info-muted p-3 text-sm text-re-info dark:border-blue-800 dark:bg-re-info/10 dark:text-re-info">
                                     Your session has expired. Please sign in again.
                                 </div>
                             )}
                             {searchParams.get('error') === 'auth_failed' && (
-                                <div className="mb-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-800 dark:bg-red-900/10 dark:text-red-400">
+                                <div className="mb-4 rounded-md border border-re-danger bg-re-danger-muted p-3 text-sm text-re-danger dark:border-re-danger dark:bg-re-danger/10 dark:text-re-danger">
                                     Password reset link has expired or is invalid.{' '}
                                     <Link href="/forgot-password" className="font-medium underline underline-offset-2">
                                         Request a new one →
@@ -318,7 +318,7 @@ export default function LoginPage() {
                                         id="login-error"
                                         role="alert"
                                         aria-live="polite"
-                                        className="animate-in fade-in slide-in-from-top-2 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-500 dark:border-red-800 dark:bg-red-900/10"
+                                        className="animate-in fade-in slide-in-from-top-2 rounded-md border border-re-danger bg-re-danger-muted p-3 text-sm text-re-danger dark:border-re-danger dark:bg-re-danger/10"
                                     >
                                         {error}
                                     </div>

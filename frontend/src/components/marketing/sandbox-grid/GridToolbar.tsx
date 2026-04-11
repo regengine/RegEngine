@@ -54,18 +54,18 @@ export function GridToolbar({
         {/* Defect counter */}
         <div className="flex items-center gap-2">
           {allClear ? (
-            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/15">
-              <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-              <span className="text-[0.7rem] font-bold text-emerald-400">All Clear</span>
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-re-brand/15">
+              <ShieldCheck className="w-3.5 h-3.5 text-re-brand" />
+              <span className="text-[0.7rem] font-bold text-re-brand">All Clear</span>
             </div>
           ) : (
-            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-red-500/15">
-              <ShieldAlert className="w-3.5 h-3.5 text-red-400" />
-              <span className="text-[0.7rem] font-bold text-red-400">
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-re-danger-muted0/15">
+              <ShieldAlert className="w-3.5 h-3.5 text-re-danger" />
+              <span className="text-[0.7rem] font-bold text-re-danger">
                 {criticalDefects} critical
               </span>
               {totalDefects > criticalDefects && (
-                <span className="text-[0.6rem] text-amber-400">
+                <span className="text-[0.6rem] text-re-warning">
                   + {totalDefects - criticalDefects} warning{totalDefects - criticalDefects !== 1 ? 's' : ''}
                 </span>
               )}
@@ -126,7 +126,7 @@ export function GridToolbar({
           disabled={criticalDefects > 0}
           className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[0.65rem] font-semibold transition-all ${
             criticalDefects === 0
-              ? 'bg-emerald-500 text-white hover:bg-emerald-600'
+              ? 'bg-re-brand text-white hover:bg-re-brand'
               : 'bg-[var(--re-surface-base)] text-[var(--re-text-disabled)] cursor-not-allowed'
           }`}
           title={criticalDefects > 0 ? 'Fix all critical defects to enable export' : 'Download corrected CSV'}

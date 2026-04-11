@@ -65,8 +65,8 @@ export default function ComplianceStatusPage() {
                 >
                     {/* Page Header */}
                     <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 mb-8">
-                        <div className="p-3 rounded-lg bg-blue-100 dark:bg-blue-900">
-                            <Shield className="h-8 w-8 text-blue-600 dark:text-blue-400" />
+                        <div className="p-3 rounded-lg bg-re-info-muted dark:bg-blue-900">
+                            <Shield className="h-8 w-8 text-re-info dark:text-re-info" />
                         </div>
                         <div className="flex-1">
                             <h1 className="text-3xl sm:text-4xl font-bold">Compliance Status</h1>
@@ -95,7 +95,7 @@ export default function ComplianceStatusPage() {
                         <Card>
                             <CardHeader className="pb-3">
                                 <CardTitle className="text-lg flex items-center gap-2">
-                                    <Clock className="h-5 w-5 text-amber-500" />
+                                    <Clock className="h-5 w-5 text-re-warning" />
                                     24-Hour Response
                                 </CardTitle>
                             </CardHeader>
@@ -110,7 +110,7 @@ export default function ComplianceStatusPage() {
                         <Card>
                             <CardHeader className="pb-3">
                                 <CardTitle className="text-lg flex items-center gap-2">
-                                    <AlertCircle className="h-5 w-5 text-red-500" />
+                                    <AlertCircle className="h-5 w-5 text-re-danger" />
                                     FDA Recall Monitoring
                                 </CardTitle>
                             </CardHeader>
@@ -125,7 +125,7 @@ export default function ComplianceStatusPage() {
                         <Card>
                             <CardHeader className="pb-3">
                                 <CardTitle className="text-lg flex items-center gap-2">
-                                    <Shield className="h-5 w-5 text-green-500" />
+                                    <Shield className="h-5 w-5 text-re-success" />
                                     Audit Trail
                                 </CardTitle>
                             </CardHeader>

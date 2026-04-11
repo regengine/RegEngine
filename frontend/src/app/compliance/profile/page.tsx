@@ -170,8 +170,8 @@ export default function ProductProfilePage() {
             <div className="min-h-screen bg-gradient-to-b from-background to-muted/20">
                 <PageContainer>
                     <div className="animate-pulse space-y-4">
-                        <div className="h-8 w-64 bg-gray-200 rounded" />
-                        <div className="h-64 bg-gray-200 rounded" />
+                        <div className="h-8 w-64 bg-re-surface-elevated rounded" />
+                        <div className="h-64 bg-re-surface-elevated rounded" />
                     </div>
                 </PageContainer>
             </div>
@@ -212,8 +212,8 @@ export default function ProductProfilePage() {
                     {/* Save Message */}
                     {saveMessage && (
                         <div className={`mb-6 p-4 rounded-lg flex items-center gap-2 ${saveMessage.type === 'success'
-                            ? 'bg-green-50 border border-green-200 text-green-800'
-                            : 'bg-red-50 border border-red-200 text-red-800'
+                            ? 'bg-re-success-muted border border-green-200 text-re-success'
+                            : 'bg-re-danger-muted border border-re-danger text-re-danger'
                             }`}>
                             {saveMessage.type === 'success' ? (
                                 <CheckCircle className="h-5 w-5" />
@@ -225,15 +225,15 @@ export default function ProductProfilePage() {
                     )}
 
                     {/* Info Banner */}
-                    <Card className="mb-8 border-blue-200 bg-blue-50 dark:bg-blue-950/20">
+                    <Card className="mb-8 border-blue-200 bg-re-info-muted dark:bg-re-info/20">
                         <CardContent className="pt-6">
                             <div className="flex items-start gap-3">
-                                <AlertCircle className="h-5 w-5 text-blue-600 mt-0.5" />
+                                <AlertCircle className="h-5 w-5 text-re-info mt-0.5" />
                                 <div>
-                                    <p className="font-medium text-blue-900 dark:text-blue-100">
+                                    <p className="font-medium text-re-info dark:text-blue-100">
                                         Why configure your product profile?
                                     </p>
-                                    <p className="text-sm text-blue-700 dark:text-blue-300 mt-1">
+                                    <p className="text-sm text-re-info dark:text-blue-300 mt-1">
                                         RegEngine monitors FDA recalls and alerts. By setting your product categories and supply regions,
                                         we can automatically alert you when a recall might affect your business — before it becomes a crisis.
                                     </p>
@@ -260,7 +260,7 @@ export default function ProductProfilePage() {
                                         <div
                                             key={category.id}
                                             className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${profile.product_categories.includes(category.id)
-                                                ? "bg-green-50 border-green-200 dark:bg-green-950/20"
+                                                ? "bg-re-success-muted border-green-200 dark:bg-re-success/20"
                                                 : "hover:bg-muted"
                                                 }`}
                                             onClick={() => toggleCategory(category.id)}
@@ -360,7 +360,7 @@ export default function ProductProfilePage() {
                                         <div
                                             key={retailer}
                                             className={`flex items-center gap-2 p-2 rounded border cursor-pointer ${profile.retailer_relationships.includes(retailer)
-                                                ? "bg-blue-50 border-blue-200"
+                                                ? "bg-re-info-muted border-blue-200"
                                                 : "hover:bg-muted"
                                                 }`}
                                             onClick={() => toggleRetailer(retailer)}
@@ -385,13 +385,13 @@ export default function ProductProfilePage() {
                         <CardContent>
                             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
                                 <div>
-                                    <div className="text-3xl font-bold text-green-600">
+                                    <div className="text-3xl font-bold text-re-success">
                                         {profile.product_categories.length}
                                     </div>
                                     <div className="text-sm text-muted-foreground">Product Categories</div>
                                 </div>
                                 <div>
-                                    <div className="text-3xl font-bold text-blue-600">
+                                    <div className="text-3xl font-bold text-re-info">
                                         {profile.supply_regions.length}
                                     </div>
                                     <div className="text-sm text-muted-foreground">Supply Regions</div>
@@ -403,7 +403,7 @@ export default function ProductProfilePage() {
                                     <div className="text-sm text-muted-foreground">Suppliers</div>
                                 </div>
                                 <div>
-                                    <div className="text-3xl font-bold text-amber-600">
+                                    <div className="text-3xl font-bold text-re-warning">
                                         {profile.retailer_relationships.length}
                                     </div>
                                     <div className="text-sm text-muted-foreground">Retailers</div>

@@ -425,19 +425,19 @@ export default function SnapshotsPage() {
 
     const getStatusColor = (status: string) => {
         switch (status) {
-            case 'COMPLIANT': return 'bg-green-500/10 text-green-400 border-green-500/30';
-            case 'AT_RISK': return 'bg-yellow-500/10 text-yellow-400 border-yellow-500/30';
-            case 'NON_COMPLIANT': return 'bg-red-500/10 text-red-400 border-red-500/30';
-            default: return 'bg-gray-500/10 text-gray-400 border-gray-500/30';
+            case 'COMPLIANT': return 'bg-re-success-muted0/10 text-re-success border-green-500/30';
+            case 'AT_RISK': return 'bg-re-warning/10 text-re-warning border-yellow-500/30';
+            case 'NON_COMPLIANT': return 'bg-re-danger-muted0/10 text-re-danger border-re-danger/30';
+            default: return 'bg-re-surface-card0/10 text-re-text-tertiary border-gray-500/30';
         }
     };
 
     const getCountdownColor = (seconds?: number) => {
-        if (!seconds) return 'text-gray-400';
-        if (seconds <= 0) return 'text-red-500 animate-pulse';
-        if (seconds < 3600) return 'text-red-400';  // < 1 hour
+        if (!seconds) return 'text-re-text-tertiary';
+        if (seconds <= 0) return 'text-re-danger animate-pulse';
+        if (seconds < 3600) return 'text-re-danger';  // < 1 hour
         if (seconds < 14400) return 'text-orange-400';  // < 4 hours
-        return 'text-yellow-400';
+        return 'text-re-warning';
     };
 
     return (
@@ -450,7 +450,7 @@ export default function SnapshotsPage() {
                             <Camera className="h-8 w-8 text-purple-400" />
                             Compliance Snapshots
                         </h1>
-                        <p className="text-gray-400 mt-2">
+                        <p className="text-re-text-tertiary mt-2">
                             Point-in-time compliance state capture for audit defense
                         </p>
                     </div>
@@ -459,13 +459,13 @@ export default function SnapshotsPage() {
                         {selectedForDiff.length === 2 && (
                             <button
                                 onClick={compareSnapshots}
-                                className="flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-500 rounded-xl font-medium transition-all"
+                                className="flex items-center gap-2 px-6 py-3 bg-re-info hover:bg-re-info-muted0 rounded-xl font-medium transition-all"
                             >
                                 Compare Selected
                             </button>
                         )}
                         {selectedForDiff.length > 0 && selectedForDiff.length < 2 && (
-                            <span className="text-gray-400 text-sm">Select 1 more to compare</span>
+                            <span className="text-re-text-tertiary text-sm">Select 1 more to compare</span>
                         )}
                         <button
                             onClick={() => setShowCreateModal(true)}
@@ -483,7 +483,7 @@ export default function SnapshotsPage() {
                         <Shield className="h-6 w-6 text-purple-400 mt-0.5" />
                         <div>
                             <h3 className="font-semibold text-purple-300">Living Compliance Artifacts</h3>
-                            <p className="text-sm text-gray-400 mt-1">
+                            <p className="text-sm text-re-text-tertiary mt-1">
                                 Snapshots are automatically created when CRITICAL or HIGH alerts trigger.
                                 Each requires <strong>owner attestation</strong> before the alert can be resolved.
                             </p>
@@ -493,7 +493,7 @@ export default function SnapshotsPage() {
 
                 {/* Error State */}
                 {fetchError && (
-                    <div className="flex items-center gap-3 p-4 rounded-xl bg-red-500/[0.06] border border-red-500/20 text-red-400 text-sm mb-4">
+                    <div className="flex items-center gap-3 p-4 rounded-xl bg-re-danger-muted0/[0.06] border border-re-danger/20 text-re-danger text-sm mb-4">
                         <AlertTriangle className="h-4 w-4 flex-shrink-0" />
                         <span>{fetchError}</span>
                     </div>
@@ -501,15 +501,15 @@ export default function SnapshotsPage() {
 
                 {/* Snapshots List */}
                 {loading ? (
-                    <div className="text-center py-12 text-gray-400">Loading snapshots...</div>
+                    <div className="text-center py-12 text-re-text-tertiary">Loading snapshots...</div>
                 ) : snapshots.length === 0 && !fetchError ? (
                     <div className="text-center py-16 bg-white/5 rounded-xl border border-white/10">
-                        <Camera className="h-16 w-16 text-gray-600 mx-auto mb-4" />
-                        <h3 className="text-xl font-semibold text-gray-300 mb-2">No Snapshots Yet</h3>
-                        <p className="text-gray-500 mb-2">
+                        <Camera className="h-16 w-16 text-re-text-disabled mx-auto mb-4" />
+                        <h3 className="text-xl font-semibold text-re-text-secondary mb-2">No Snapshots Yet</h3>
+                        <p className="text-re-text-muted mb-2">
                             Snapshots auto-create when CRITICAL/HIGH alerts trigger.
                         </p>
-                        <p className="text-gray-600 text-sm">
+                        <p className="text-re-text-disabled text-sm">
                             Or create a manual snapshot for proactive audit prep.
                         </p>
                     </div>
@@ -531,10 +531,10 @@ export default function SnapshotsPage() {
                                             {/* Degradation State Badge */}
                                             <span
                                                 className={`px-2 py-1 rounded-full text-sm border cursor-help ${snapshot.snapshot_state === 'VALID'
-                                                    ? 'bg-green-500/10 text-green-400 border-green-500/30'
+                                                    ? 'bg-re-success-muted0/10 text-re-success border-green-500/30'
                                                     : snapshot.snapshot_state === 'STALE'
                                                         ? 'bg-orange-500/10 text-orange-400 border-orange-500/30'
-                                                        : 'bg-red-500/10 text-red-400 border-red-500/30'
+                                                        : 'bg-re-danger-muted0/10 text-re-danger border-re-danger/30'
                                                     }`}
                                                 title={snapshot.degradation_reason || `${snapshot.age_hours}h old`}
                                             >
@@ -549,13 +549,13 @@ export default function SnapshotsPage() {
                                                 </span>
                                             )}
                                             {snapshot.integrity_verified && (
-                                                <span className="flex items-center gap-1.5 px-3 py-1 bg-green-500/10 text-green-400 text-xs font-bold rounded-full border border-green-500/30 shadow-sm shadow-green-500/20">
+                                                <span className="flex items-center gap-1.5 px-3 py-1 bg-re-success-muted0/10 text-re-success text-xs font-bold rounded-full border border-green-500/30 shadow-sm shadow-green-500/20">
                                                     <ShieldCheck className="h-3.5 w-3.5" />
                                                     INTEGRITY VERIFIED
                                                 </span>
                                             )}
                                             {snapshot.is_attested ? (
-                                                <span className="flex items-center gap-1 text-green-400 text-sm">
+                                                <span className="flex items-center gap-1 text-re-success text-sm">
                                                     <CheckCircle2 className="h-4 w-4" />
                                                     Attested by {snapshot.attested_by}
                                                 </span>
@@ -576,7 +576,7 @@ export default function SnapshotsPage() {
                                                     {snapshot.countdown_display || 'EXPIRED'}
                                                 </span>
                                                 {snapshot.regulatory_citation && (
-                                                    <span className="flex items-center gap-1 text-blue-400 text-sm">
+                                                    <span className="flex items-center gap-1 text-re-info text-sm">
                                                         <BookOpen className="h-4 w-4" />
                                                         {snapshot.regulatory_citation}
                                                     </span>
@@ -585,7 +585,7 @@ export default function SnapshotsPage() {
                                         )}
 
                                         {/* Metadata Row */}
-                                        <div className="flex flex-wrap items-center gap-4 text-sm text-gray-400 mt-3">
+                                        <div className="flex flex-wrap items-center gap-4 text-sm text-re-text-tertiary mt-3">
                                             <span className="flex items-center gap-1">
                                                 <Calendar className="h-4 w-4" />
                                                 {formatDate(snapshot.captured_at)}
@@ -601,11 +601,11 @@ export default function SnapshotsPage() {
                                         </div>
 
                                         <div className="flex items-center gap-4 mt-4 text-sm">
-                                            <span className="text-gray-400">
+                                            <span className="text-re-text-tertiary">
                                                 {snapshot.active_alert_count} active alerts
                                             </span>
                                             {snapshot.critical_alert_count > 0 && (
-                                                <span className="text-red-400">
+                                                <span className="text-re-danger">
                                                     {snapshot.critical_alert_count} critical
                                                 </span>
                                             )}
@@ -631,7 +631,7 @@ export default function SnapshotsPage() {
                                         {(snapshot.snapshot_state === 'STALE' || snapshot.snapshot_state === 'INVALID') && (
                                             <button
                                                 onClick={() => refreezeSnapshot(snapshot.id)}
-                                                className="flex items-center gap-2 px-4 py-2 bg-yellow-600 hover:bg-yellow-500 text-white rounded-lg transition-all font-medium"
+                                                className="flex items-center gap-2 px-4 py-2 bg-yellow-600 hover:bg-re-warning text-white rounded-lg transition-all font-medium"
                                             >
                                                 <Camera className="h-4 w-4" />
                                                 Re-freeze
@@ -643,8 +643,8 @@ export default function SnapshotsPage() {
                                             <button
                                                 onClick={() => toggleDiffSelection(snapshot.id)}
                                                 className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all ${selectedForDiff.includes(snapshot.id)
-                                                    ? 'bg-blue-600 text-white'
-                                                    : 'bg-gray-600/20 hover:bg-gray-600/30 text-gray-400'
+                                                    ? 'bg-re-info text-white'
+                                                    : 'bg-gray-600/20 hover:bg-gray-600/30 text-re-text-tertiary'
                                                     }`}
                                             >
                                                 {selectedForDiff.includes(snapshot.id) ? '✓' : '○'}
@@ -658,7 +658,7 @@ export default function SnapshotsPage() {
                                             </button>
                                             <button
                                                 onClick={() => verifySnapshot(snapshot.id)}
-                                                className="flex items-center gap-2 px-4 py-2 bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 rounded-lg transition-all"
+                                                className="flex items-center gap-2 px-4 py-2 bg-re-info/20 hover:bg-re-info/30 text-re-info rounded-lg transition-all"
                                             >
                                                 <FileCheck className="h-4 w-4" />
                                                 Verify
@@ -673,7 +673,7 @@ export default function SnapshotsPage() {
                                             </button>
                                             <button
                                                 onClick={() => exportSnapshot(snapshot.id, snapshot.snapshot_name)}
-                                                className="flex items-center gap-2 px-4 py-2 bg-green-600/20 hover:bg-green-600/30 text-green-400 rounded-lg transition-all"
+                                                className="flex items-center gap-2 px-4 py-2 bg-re-success/20 hover:bg-re-success/30 text-re-success rounded-lg transition-all"
                                             >
                                                 <Download className="h-4 w-4" />
                                                 PDF
@@ -689,19 +689,19 @@ export default function SnapshotsPage() {
                 {/* Create Modal */}
                 {showCreateModal && (
                     <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
-                        <div className="bg-gray-900 rounded-2xl border border-white/10 p-8 max-w-lg w-full mx-4">
+                        <div className="bg-re-surface-base rounded-2xl border border-white/10 p-8 max-w-lg w-full mx-4">
                             <h2 className="text-2xl font-bold mb-2 flex items-center gap-3">
                                 <Camera className="h-6 w-6 text-purple-400" />
                                 Manual Compliance Freeze
                             </h2>
-                            <p className="text-gray-400 mb-6">
+                            <p className="text-re-text-tertiary mb-6">
                                 Create a manual snapshot for proactive audit preparation.
                                 Note: CRITICAL/HIGH alerts auto-create bound snapshots.
                             </p>
 
                             <div className="space-y-4">
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                                    <label className="block text-sm font-medium text-re-text-secondary mb-2">
                                         Snapshot Name *
                                     </label>
                                     <input
@@ -714,7 +714,7 @@ export default function SnapshotsPage() {
                                 </div>
 
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                                    <label className="block text-sm font-medium text-re-text-secondary mb-2">
                                         Reason (optional)
                                     </label>
                                     <textarea
@@ -730,7 +730,7 @@ export default function SnapshotsPage() {
                             <div className="flex items-center justify-end gap-3 mt-8">
                                 <button
                                     onClick={() => setShowCreateModal(false)}
-                                    className="px-6 py-2 text-gray-400 hover:text-white transition-all"
+                                    className="px-6 py-2 text-re-text-tertiary hover:text-white transition-all"
                                 >
                                     Cancel
                                 </button>
@@ -759,21 +759,21 @@ export default function SnapshotsPage() {
                 {/* Attest Modal */}
                 {showAttestModal && (
                     <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
-                        <div className="bg-gray-900 rounded-2xl border border-orange-500/30 p-8 max-w-lg w-full mx-4">
+                        <div className="bg-re-surface-base rounded-2xl border border-orange-500/30 p-8 max-w-lg w-full mx-4">
                             <h2 className="text-2xl font-bold mb-2 flex items-center gap-3 text-orange-400">
                                 <PenLine className="h-6 w-6" />
                                 Owner Attestation Required
                             </h2>
-                            <p className="text-gray-400 mb-2">
+                            <p className="text-re-text-tertiary mb-2">
                                 By attesting, you take <strong>personal accountability</strong> for this compliance state.
                             </p>
-                            <p className="text-gray-500 text-sm mb-6">
+                            <p className="text-re-text-muted text-sm mb-6">
                                 Your name will be permanently attached to this snapshot for regulatory review.
                             </p>
 
                             <div className="space-y-4">
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                                    <label className="block text-sm font-medium text-re-text-secondary mb-2">
                                         Your Full Name *
                                     </label>
                                     <input
@@ -786,7 +786,7 @@ export default function SnapshotsPage() {
                                 </div>
 
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                                    <label className="block text-sm font-medium text-re-text-secondary mb-2">
                                         Your Title/Role *
                                     </label>
                                     <input
@@ -799,8 +799,8 @@ export default function SnapshotsPage() {
                                 </div>
                             </div>
 
-                            <div className="bg-red-900/20 border border-red-500/30 rounded-xl p-4 mt-6">
-                                <p className="text-red-400 text-sm">
+                            <div className="bg-red-900/20 border border-re-danger/30 rounded-xl p-4 mt-6">
+                                <p className="text-re-danger text-sm">
                                     ⚠️ This action cannot be undone. Once attested, your name is permanently on record.
                                 </p>
                             </div>
@@ -813,7 +813,7 @@ export default function SnapshotsPage() {
                                         setAttestName('');
                                         setAttestTitle('');
                                     }}
-                                    className="px-6 py-2 text-gray-400 hover:text-white transition-all"
+                                    className="px-6 py-2 text-re-text-tertiary hover:text-white transition-all"
                                 >
                                     Cancel
                                 </button>
@@ -833,25 +833,25 @@ export default function SnapshotsPage() {
                 {/* Verify Result Modal */}
                 {showVerifyModal && verifyResult && (
                     <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
-                        <div className="bg-gray-900 rounded-2xl border border-white/10 p-8 max-w-lg w-full mx-4">
+                        <div className="bg-re-surface-base rounded-2xl border border-white/10 p-8 max-w-lg w-full mx-4">
                             <div className="text-center">
                                 {verifyResult.is_valid ? (
                                     <>
-                                        <CheckCircle2 className="h-16 w-16 text-green-400 mx-auto mb-4" />
-                                        <h2 className="text-2xl font-bold text-green-400 mb-2">
+                                        <CheckCircle2 className="h-16 w-16 text-re-success mx-auto mb-4" />
+                                        <h2 className="text-2xl font-bold text-re-success mb-2">
                                             Integrity Verified ✅
                                         </h2>
-                                        <p className="text-gray-400 mb-6">
+                                        <p className="text-re-text-tertiary mb-6">
                                             The snapshot data has not been modified. Hash matches.
                                         </p>
                                     </>
                                 ) : (
                                     <>
-                                        <XCircle className="h-16 w-16 text-red-400 mx-auto mb-4" />
-                                        <h2 className="text-2xl font-bold text-red-400 mb-2">
+                                        <XCircle className="h-16 w-16 text-re-danger mx-auto mb-4" />
+                                        <h2 className="text-2xl font-bold text-re-danger mb-2">
                                             Integrity Check Failed ❌
                                         </h2>
-                                        <p className="text-gray-400 mb-6">
+                                        <p className="text-re-text-tertiary mb-6">
                                             Warning: The snapshot data may have been modified.
                                         </p>
                                     </>
@@ -859,20 +859,20 @@ export default function SnapshotsPage() {
 
                                 <div className="bg-white/5 rounded-xl p-4 text-left space-y-3 mb-6">
                                     <div>
-                                        <span className="text-gray-500 text-sm">Stored Hash:</span>
-                                        <p className="font-mono text-xs text-gray-300 break-all">
+                                        <span className="text-re-text-muted text-sm">Stored Hash:</span>
+                                        <p className="font-mono text-xs text-re-text-secondary break-all">
                                             {verifyResult.stored_hash}
                                         </p>
                                     </div>
                                     <div>
-                                        <span className="text-gray-500 text-sm">Computed Hash:</span>
-                                        <p className="font-mono text-xs text-gray-300 break-all">
+                                        <span className="text-re-text-muted text-sm">Computed Hash:</span>
+                                        <p className="font-mono text-xs text-re-text-secondary break-all">
                                             {verifyResult.computed_hash}
                                         </p>
                                     </div>
                                     <div className="flex items-center justify-between text-sm">
-                                        <span className="text-gray-500">Verified by:</span>
-                                        <span className="text-gray-300">{verifyResult.verified_by}</span>
+                                        <span className="text-re-text-muted">Verified by:</span>
+                                        <span className="text-re-text-secondary">{verifyResult.verified_by}</span>
                                     </div>
                                 </div>
 
@@ -890,22 +890,22 @@ export default function SnapshotsPage() {
                 {/* FDA Response Modal */}
                 {showFdaModal && (
                     <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
-                        <div className="bg-gray-900 rounded-2xl border border-purple-500/30 p-8 max-w-3xl w-full mx-4 max-h-[80vh] overflow-y-auto">
+                        <div className="bg-re-surface-base rounded-2xl border border-purple-500/30 p-8 max-w-3xl w-full mx-4 max-h-[80vh] overflow-y-auto">
                             <h2 className="text-2xl font-bold mb-4 flex items-center gap-3 text-purple-400">
                                 📋 FDA Response Template
                             </h2>
-                            <p className="text-gray-400 mb-4">
+                            <p className="text-re-text-tertiary mb-4">
                                 Copy this pre-formatted text directly into your FDA response.
                             </p>
 
-                            <pre className="bg-black/50 p-4 rounded-xl font-mono text-xs text-gray-300 whitespace-pre-wrap break-all mb-4 max-h-96 overflow-y-auto">
+                            <pre className="bg-black/50 p-4 rounded-xl font-mono text-xs text-re-text-secondary whitespace-pre-wrap break-all mb-4 max-h-96 overflow-y-auto">
                                 {fdaResponse}
                             </pre>
 
                             <div className="flex items-center justify-end gap-3">
                                 <button
                                     onClick={() => setShowFdaModal(false)}
-                                    className="px-6 py-2 text-gray-400 hover:text-white transition-all"
+                                    className="px-6 py-2 text-re-text-tertiary hover:text-white transition-all"
                                 >
                                     Close
                                 </button>
@@ -923,23 +923,23 @@ export default function SnapshotsPage() {
                 {/* Diff Modal */}
                 {showDiffModal && diffResult && (
                     <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
-                        <div className="bg-gray-900 rounded-2xl border border-blue-500/30 p-8 max-w-2xl w-full mx-4">
-                            <h2 className="text-2xl font-bold mb-4 flex items-center gap-3 text-blue-400">
+                        <div className="bg-re-surface-base rounded-2xl border border-re-info/30 p-8 max-w-2xl w-full mx-4">
+                            <h2 className="text-2xl font-bold mb-4 flex items-center gap-3 text-re-info">
                                 📊 Snapshot Comparison
                             </h2>
 
                             <div className="flex items-center justify-between mb-6 text-sm">
-                                <div className="text-gray-400">
-                                    <span className="text-gray-500">From:</span> {diffResult.snapshot_a?.name}
+                                <div className="text-re-text-tertiary">
+                                    <span className="text-re-text-muted">From:</span> {diffResult.snapshot_a?.name}
                                 </div>
-                                <span className="text-gray-600">→</span>
-                                <div className="text-gray-400">
-                                    <span className="text-gray-500">To:</span> {diffResult.snapshot_b?.name}
+                                <span className="text-re-text-disabled">→</span>
+                                <div className="text-re-text-tertiary">
+                                    <span className="text-re-text-muted">To:</span> {diffResult.snapshot_b?.name}
                                 </div>
                             </div>
 
                             {diffResult.changes?.length === 0 ? (
-                                <div className="text-center py-8 text-gray-400">
+                                <div className="text-center py-8 text-re-text-tertiary">
                                     No changes detected between snapshots.
                                 </div>
                             ) : (
@@ -947,19 +947,19 @@ export default function SnapshotsPage() {
                                     {diffResult.changes?.map((change: DiffChange, index: number) => (
                                         <div
                                             key={index}
-                                            className={`p-4 rounded-xl border ${change.severity === 'critical' ? 'border-red-500/50 bg-red-500/10' :
+                                            className={`p-4 rounded-xl border ${change.severity === 'critical' ? 'border-re-danger/50 bg-re-danger-muted0/10' :
                                                 change.severity === 'high' ? 'border-orange-500/50 bg-orange-500/10' :
-                                                    change.severity === 'positive' ? 'border-green-500/50 bg-green-500/10' :
+                                                    change.severity === 'positive' ? 'border-re-success/50 bg-re-success-muted0/10' :
                                                         'border-white/10 bg-white/5'
                                                 }`}
                                         >
                                             <div className="font-medium mb-2">{change.label}</div>
                                             <div className="flex items-center gap-4 text-sm">
-                                                <span className="text-red-400 line-through">{change.before}</span>
-                                                <span className="text-gray-500">→</span>
-                                                <span className="text-green-400">{change.after}</span>
+                                                <span className="text-re-danger line-through">{change.before}</span>
+                                                <span className="text-re-text-muted">→</span>
+                                                <span className="text-re-success">{change.after}</span>
                                                 {change.diff && (
-                                                    <span className={`font-mono ${change.diff.startsWith('+') ? 'text-red-400' : 'text-green-400'
+                                                    <span className={`font-mono ${change.diff.startsWith('+') ? 'text-re-danger' : 'text-re-success'
                                                         }`}>
                                                         ({change.diff})
                                                     </span>

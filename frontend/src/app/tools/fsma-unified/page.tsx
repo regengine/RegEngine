@@ -9,13 +9,13 @@ export const metadata: Metadata = {
     title: "FSMA 204 Unified Dashboard | Anomaly Detection & Knowledge Graph | RegEngine",
     description: "Unified command center for FSMA 204 compliance. Monitor supply chain anomalies, explore knowledge graphs, and benchmark readiness — all in one free dashboard.",
     alternates: {
-        canonical: "https://www.regengine.co/tools/fsma-unified",
+        canonical: "https://regengine.co/tools/fsma-unified",
     },
     openGraph: {
         title: "FSMA 204 Unified Dashboard — RegEngine",
         description: "Monitor FSMA 204 supply chain anomalies and explore knowledge graphs from one free compliance dashboard.",
         type: "website",
-        url: "https://www.regengine.co/tools/fsma-unified",
+        url: "https://regengine.co/tools/fsma-unified",
     },
 };
 

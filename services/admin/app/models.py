@@ -23,8 +23,8 @@ class Tenant(BaseModel):
     class Config:
         schema_extra = {
             "example": {
-                "name": "Acme Corp",
-                "slug": "acme-corp",
+                "name": "Example Corp",
+                "slug": "example-corp",
                 "status": "active",
                 "settings": {"mfa_required": True},
             }
@@ -44,7 +44,7 @@ class User(BaseModel):
     class Config:
         schema_extra = {
             "example": {
-                "email": "jane@acme.com",
+                "email": "user@example.com",
                 "is_sysadmin": False,
                 "status": "active",
             }
@@ -195,7 +195,7 @@ class TenantOverride(BaseModel):
                 "provision_hash": "abc123def456",
                 "override_type": "custom_threshold",
                 "override_data": {"threshold_value": 10.0, "unit": "percent"},
-                "approved_by": "compliance-officer@acme.com",
+                "approved_by": "compliance@example.com",
                 "notes": "Approved exemption for pilot program",
             }
         }

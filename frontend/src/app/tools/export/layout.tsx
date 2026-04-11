@@ -6,13 +6,13 @@ export const metadata: Metadata = {
     title: 'FDA Export Package Generator | FSMA 204 21 CFR 1.1455 Compliance | RegEngine',
     description: 'Generate a cryptographically verifiable FDA compliance package for FSMA 204 records. SHA-256 chain verification meets 21 CFR 1.1455 requirements. Try free.',
     alternates: {
-        canonical: 'https://www.regengine.co/tools/export',
+        canonical: 'https://regengine.co/tools/export',
     },
     openGraph: {
         title: 'FDA Export Package Generator — RegEngine',
         description: 'Generate verifiable FSMA 204 compliance packages with SHA-256 chain verification meeting 21 CFR 1.1455 requirements. Free.',
         type: 'website',
-        url: 'https://www.regengine.co/tools/export',
+        url: 'https://regengine.co/tools/export',
     },
 };
 

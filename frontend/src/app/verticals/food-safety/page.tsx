@@ -10,7 +10,7 @@ export default function FoodSafetyVerticalPage() {
     return (
         <div className="min-h-screen bg-gradient-to-b from-background to-muted/20">
             {/* Hero Section */}
-            <section className="relative overflow-hidden bg-gradient-to-r from-green-600 to-emerald-600 text-white">
+            <section className="relative overflow-hidden bg-gradient-to-r from-green-600 to-re-brand-dark text-white">
                 <div className="max-w-6xl mx-auto px-4 py-20">
                     <div className="text-center">
                         <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/20 mb-6">
@@ -31,7 +31,7 @@ export default function FoodSafetyVerticalPage() {
 
                         <div className="flex justify-center gap-4 mb-8">
                             <Link href="/verticals/food-safety/dashboard">
-                                <Button size="lg" variant="secondary" className="bg-white text-green-600 hover:bg-green-50">
+                                <Button size="lg" variant="secondary" className="bg-white text-re-success hover:bg-re-success-muted">
                                     <PlayCircle className="mr-2 h-5 w-5" />
                                     Explore FSMA Module
                                 </Button>
@@ -83,7 +83,7 @@ export default function FoodSafetyVerticalPage() {
                     <div className="grid md:grid-cols-3 gap-6">
                         <Card>
                             <CardHeader>
-                                <FileText className="h-10 w-10 text-green-600 mb-2" />
+                                <FileText className="h-10 w-10 text-re-success mb-2" />
                                 <CardTitle>Lot-Level Tracking</CardTitle>
                                 <CardDescription>
                                     Track every lot from supplier to customer with complete chain of custody
@@ -92,15 +92,15 @@ export default function FoodSafetyVerticalPage() {
                             <CardContent>
                                 <ul className="space-y-2 text-sm">
                                     <li className="flex items-start gap-2">
-                                        <CheckCircle className="h-4 w-4 text-green-600 mt-0.5" />
+                                        <CheckCircle className="h-4 w-4 text-re-success mt-0.5" />
                                         <span>Automated lot number generation</span>
                                     </li>
                                     <li className="flex items-start gap-2">
-                                        <CheckCircle className="h-4 w-4 text-green-600 mt-0.5" />
+                                        <CheckCircle className="h-4 w-4 text-re-success mt-0.5" />
                                         <span>Critical tracking events (CTEs)</span>
                                     </li>
                                     <li className="flex items-start gap-2">
-                                        <CheckCircle className="h-4 w-4 text-green-600 mt-0.5" />
+                                        <CheckCircle className="h-4 w-4 text-re-success mt-0.5" />
                                         <span>Key data elements (KDEs) collection</span>
                                     </li>
                                 </ul>
@@ -109,7 +109,7 @@ export default function FoodSafetyVerticalPage() {
 
                         <Card>
                             <CardHeader>
-                                <AlertCircle className="h-10 w-10 text-amber-600 mb-2" />
+                                <AlertCircle className="h-10 w-10 text-re-warning mb-2" />
                                 <CardTitle>Recall Readiness</CardTitle>
                                 <CardDescription>
                                     2-hour recall response with complete traceability records
@@ -118,15 +118,15 @@ export default function FoodSafetyVerticalPage() {
                             <CardContent>
                                 <ul className="space-y-2 text-sm">
                                     <li className="flex items-start gap-2">
-                                        <CheckCircle className="h-4 w-4 text-green-600 mt-0.5" />
+                                        <CheckCircle className="h-4 w-4 text-re-success mt-0.5" />
                                         <span>Instant upstream/downstream tracing</span>
                                     </li>
                                     <li className="flex items-start gap-2">
-                                        <CheckCircle className="h-4 w-4 text-green-600 mt-0.5" />
+                                        <CheckCircle className="h-4 w-4 text-re-success mt-0.5" />
                                         <span>Sortable spreadsheet format</span>
                                     </li>
                                     <li className="flex items-start gap-2">
-                                        <CheckCircle className="h-4 w-4 text-green-600 mt-0.5" />
+                                        <CheckCircle className="h-4 w-4 text-re-success mt-0.5" />
                                         <span>FDA-ready documentation</span>
                                     </li>
                                 </ul>
@@ -135,7 +135,7 @@ export default function FoodSafetyVerticalPage() {
 
                         <Card>
                             <CardHeader>
-                                <TrendingUp className="h-10 w-10 text-blue-600 mb-2" />
+                                <TrendingUp className="h-10 w-10 text-re-info mb-2" />
                                 <CardTitle>Supply Chain Visibility</CardTitle>
                                 <CardDescription>
                                     Complete transparency from farm to fork
@@ -144,15 +144,15 @@ export default function FoodSafetyVerticalPage() {
                             <CardContent>
                                 <ul className="space-y-2 text-sm">
                                     <li className="flex items-start gap-2">
-                                        <CheckCircle className="h-4 w-4 text-green-600 mt-0.5" />
+                                        <CheckCircle className="h-4 w-4 text-re-success mt-0.5" />
                                         <span>Supplier/customer mapping</span>
                                     </li>
                                     <li className="flex items-start gap-2">
-                                        <CheckCircle className="h-4 w-4 text-green-600 mt-0.5" />
+                                        <CheckCircle className="h-4 w-4 text-re-success mt-0.5" />
                                         <span>Geographic traceability</span>
                                     </li>
                                     <li className="flex items-start gap-2">
-                                        <CheckCircle className="h-4 w-4 text-green-600 mt-0.5" />
+                                        <CheckCircle className="h-4 w-4 text-re-success mt-0.5" />
                                         <span>Transformation tracking</span>
                                     </li>
                                 </ul>
@@ -190,7 +190,7 @@ export default function FoodSafetyVerticalPage() {
                             'Tropical Tree Fruits'
                         ].map((food) => (
                             <div key={food} className="flex items-center gap-2 p-3 rounded-lg bg-background border">
-                                <Leaf className="h-4 w-4 text-green-600" />
+                                <Leaf className="h-4 w-4 text-re-success" />
                                 <span className="text-sm font-medium">{food}</span>
                             </div>
                         ))}
@@ -201,7 +201,7 @@ export default function FoodSafetyVerticalPage() {
             {/* Quick Links */}
             <section className="py-16 px-4">
                 <div className="max-w-4xl mx-auto">
-                    <Card className="bg-gradient-to-r from-green-600 to-emerald-600 text-white border-0">
+                    <Card className="bg-gradient-to-r from-green-600 to-re-brand-dark text-white border-0">
                         <CardContent className="pt-6">
                             <div className="text-center space-y-4">
                                 <h2 className="font-display text-3xl font-bold">Explore FSMA Tools</h2>

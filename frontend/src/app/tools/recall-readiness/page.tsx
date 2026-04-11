@@ -10,13 +10,13 @@ export const metadata: Metadata = {
     title: "Recall Readiness Score | FSMA 204 24-Hour Records Retrieval Test | RegEngine",
     description: "Get an A–F grade on your readiness to meet the FDA 24-hour records retrieval mandate for FSMA 204. Identify compliance gaps before an outbreak investigation.",
     alternates: {
-        canonical: "https://www.regengine.co/tools/recall-readiness",
+        canonical: "https://regengine.co/tools/recall-readiness",
     },
     openGraph: {
         title: "Recall Readiness Score — RegEngine",
         description: "Grade your readiness to meet the FDA 24-hour records retrieval mandate. Identify FSMA 204 gaps. Free.",
         type: "website",
-        url: "https://www.regengine.co/tools/recall-readiness",
+        url: "https://regengine.co/tools/recall-readiness",
     },
 };
 

@@ -37,8 +37,8 @@ export default function CompliancePage() {
         >
           {/* Page Header */}
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 mb-8">
-            <div className="p-3 rounded-lg bg-green-100 dark:bg-green-900">
-              <CheckCircle className="h-8 w-8 text-green-600 dark:text-green-400" />
+            <div className="p-3 rounded-lg bg-re-success-muted dark:bg-green-900">
+              <CheckCircle className="h-8 w-8 text-re-success dark:text-re-success" />
             </div>
             <div>
               <h1 className="text-3xl sm:text-4xl font-bold">Compliance Checklists</h1>
@@ -56,15 +56,15 @@ export default function CompliancePage() {
               animate={{ opacity: 1, y: 0 }}
               className="mb-6"
             >
-              <Card className="border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20">
+              <Card className="border-blue-200 dark:border-blue-800 bg-re-info-muted dark:bg-re-info/20">
                 <CardContent className="pt-6">
                   <div className="flex items-start gap-3">
-                    <Lightbulb className="h-5 w-5 text-blue-600 dark:text-blue-400 mt-0.5" />
+                    <Lightbulb className="h-5 w-5 text-re-info dark:text-re-info mt-0.5" />
                     <div className="flex-1">
-                      <p className="font-medium text-blue-900 dark:text-blue-100">
+                      <p className="font-medium text-re-info dark:text-blue-100">
                         Tip: Set up your API key
                       </p>
-                      <p className="text-sm text-blue-700 dark:text-blue-300 mt-1">
+                      <p className="text-sm text-re-info dark:text-blue-300 mt-1">
                         To validate your configuration against these checklists programmatically, you&apos;ll need an API key.
                       </p>
                       <Link href="/onboarding">

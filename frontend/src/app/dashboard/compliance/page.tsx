@@ -86,22 +86,22 @@ const STATUS_CONFIG = {
         icon: Shield,
         label: 'FSMA 204 Compliant',
         desc: 'Your traceability program meets current FDA requirements.',
-        bg: 'bg-emerald-500/10 border-emerald-500/30',
-        text: 'text-emerald-400',
+        bg: 'bg-re-brand-muted border-re-brand/30',
+        text: 'text-re-brand',
     },
     'at-risk': {
         icon: ShieldAlert,
         label: 'At Risk — Action Needed',
         desc: 'Gaps in your traceability data could cause issues during an FDA inspection.',
-        bg: 'bg-amber-500/10 border-amber-500/30',
-        text: 'text-amber-400',
+        bg: 'bg-re-warning-muted0/10 border-re-warning/30',
+        text: 'text-re-warning',
     },
     'critical': {
         icon: ShieldX,
         label: 'Critical — Not Compliant',
         desc: 'Significant gaps exist. Prioritize the actions below before your next audit.',
-        bg: 'bg-red-500/10 border-red-500/30',
-        text: 'text-red-400',
+        bg: 'bg-re-danger-muted0/10 border-re-danger/30',
+        text: 'text-re-danger',
     },
 };
 
@@ -170,7 +170,7 @@ function DimensionRow({ dimKey, item }: { dimKey: string; item: ScoreBreakdownIt
 
     return (
         <motion.div
-            className={`p-3 sm:p-4 rounded-xl border transition-colors ${isLow ? 'border-red-500/30 bg-red-500/[0.03]' : 'border-[var(--re-border-default)] bg-[var(--re-surface-elevated)]'}`}
+            className={`p-3 sm:p-4 rounded-xl border transition-colors ${isLow ? 'border-re-danger/30 bg-re-danger-muted0/[0.03]' : 'border-[var(--re-border-default)] bg-[var(--re-surface-elevated)]'}`}
             initial={{ opacity: 0, x: -10 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.4 }}
@@ -182,7 +182,7 @@ function DimensionRow({ dimKey, item }: { dimKey: string; item: ScoreBreakdownIt
                     <span className="text-[10px] text-muted-foreground bg-[var(--re-surface-card)] px-1.5 py-0.5 rounded-full">{meta.weight}%</span>
                 </div>
                 <div className="flex items-center gap-1.5">
-                    {isLow && <AlertTriangle className="h-3.5 w-3.5 text-red-400" />}
+                    {isLow && <AlertTriangle className="h-3.5 w-3.5 text-re-danger" />}
                     <span className="text-sm font-bold tabular-nums" style={{ color }}>{item.score}</span>
                 </div>
             </div>
@@ -307,9 +307,9 @@ export default function ComplianceDashboardPage() {
 
                 {/* Error */}
                 {error && (
-                    <Card className="border-red-500/30 bg-red-500/[0.03]">
+                    <Card className="border-re-danger/30 bg-re-danger-muted0/[0.03]">
                         <CardContent className="py-4">
-                            <div className="flex items-center gap-3 text-red-400">
+                            <div className="flex items-center gap-3 text-re-danger">
                                 <AlertTriangle className="h-5 w-5 flex-shrink-0" />
                                 <div>
                                     <p className="text-sm font-medium">Failed to load compliance data</p>
@@ -338,7 +338,7 @@ export default function ComplianceDashboardPage() {
                                     <div className="text-xs text-muted-foreground mt-0.5">{statusCfg.desc}</div>
                                 </div>
                                 {criticalDims > 0 && (
-                                    <Badge variant="secondary" className="text-[10px] bg-red-500/10 text-red-400 border-red-500/20">
+                                    <Badge variant="secondary" className="text-[10px] bg-re-danger-muted0/10 text-re-danger border-re-danger/20">
                                         {criticalDims} gap{criticalDims !== 1 ? 's' : ''}
                                     </Badge>
                                 )}
@@ -444,9 +444,9 @@ export default function ComplianceDashboardPage() {
                                                 const inner = (
                                                     <>
                                                         {action.priority === 'HIGH' ? (
-                                                            <AlertTriangle className="h-4 w-4 text-red-400 mt-0.5 flex-shrink-0" />
+                                                            <AlertTriangle className="h-4 w-4 text-re-danger mt-0.5 flex-shrink-0" />
                                                         ) : action.priority === 'MEDIUM' ? (
-                                                            <Info className="h-4 w-4 text-amber-400 mt-0.5 flex-shrink-0" />
+                                                            <Info className="h-4 w-4 text-re-warning mt-0.5 flex-shrink-0" />
                                                         ) : (
                                                             <CheckCircle2 className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
                                                         )}
@@ -457,8 +457,8 @@ export default function ComplianceDashboardPage() {
                                                         <Badge
                                                             variant="secondary"
                                                             className={`text-[9px] uppercase tracking-widest rounded-full flex-shrink-0 ${
-                                                                action.priority === 'HIGH' ? 'bg-red-500/10 text-red-400' :
-                                                                action.priority === 'MEDIUM' ? 'bg-amber-500/10 text-amber-400' :
+                                                                action.priority === 'HIGH' ? 'bg-re-danger-muted0/10 text-re-danger' :
+                                                                action.priority === 'MEDIUM' ? 'bg-re-warning-muted0/10 text-re-warning' :
                                                                 'bg-muted text-muted-foreground'
                                                             }`}
                                                         >
@@ -549,13 +549,13 @@ export default function ComplianceDashboardPage() {
                         {/* Low-score CTA */}
                         {score.overall_score < 70 && lowestDim && (
                             <motion.div
-                                className="flex items-center gap-4 p-4 sm:p-5 rounded-xl border border-amber-500/30 bg-amber-500/[0.05]"
+                                className="flex items-center gap-4 p-4 sm:p-5 rounded-xl border border-re-warning/30 bg-re-warning-muted0/[0.05]"
                                 initial={{ opacity: 0, y: 10 }}
                                 animate={{ opacity: 1, y: 0 }}
                                 transition={{ delay: 0.6 }}
                             >
                                 <div className="flex-1">
-                                    <p className="text-sm font-medium">Your biggest gap is <span className="text-amber-400">{lowestDim.label}</span>.</p>
+                                    <p className="text-sm font-medium">Your biggest gap is <span className="text-re-warning">{lowestDim.label}</span>.</p>
                                     <p className="text-xs text-muted-foreground mt-0.5">Scan labels or import data to improve this dimension.</p>
                                 </div>
                                 <Link href="/dashboard/scan">

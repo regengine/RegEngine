@@ -9,13 +9,13 @@ export const metadata: Metadata = {
     title: "FTL Checker | Is Your Food on the FDA Traceability List? | RegEngine",
     description: "Free tool to check if your food products are covered by FDA FSMA 204. Search the Food Traceability List by product name or category. No signup needed.",
     alternates: {
-        canonical: "https://www.regengine.co/tools/ftl-checker",
+        canonical: "https://regengine.co/tools/ftl-checker",
     },
     openGraph: {
         title: "FTL Checker — RegEngine",
         description: "Free tool to check if your food products are covered by FDA FSMA 204. Search the Food Traceability List by product name or category.",
         type: "website",
-        url: "https://www.regengine.co/tools/ftl-checker",
+        url: "https://regengine.co/tools/ftl-checker",
     },
 };
 

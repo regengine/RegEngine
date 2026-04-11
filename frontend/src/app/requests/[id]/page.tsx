@@ -95,7 +95,7 @@ export default function RequestCaseDetailPage() {
         <Card>
           <CardContent className="py-12 text-center text-muted-foreground">
             <p className="font-medium">Request case not found</p>
-            <Link href="/requests" className="text-sm text-blue-500 hover:underline mt-2 inline-block">
+            <Link href="/requests" className="text-sm text-re-info hover:underline mt-2 inline-block">
               Back to Request Workflow
             </Link>
           </CardContent>
@@ -120,14 +120,14 @@ export default function RequestCaseDetailPage() {
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-              <Timer className="h-6 w-6 text-blue-500" />
+              <Timer className="h-6 w-6 text-re-info" />
               Request Case
             </h1>
             <p className="text-muted-foreground mt-1">
               {requestCase.requesting_party} — {requestCase.scope_type?.replace(/_/g, ' ')}
             </p>
           </div>
-          <div className={`text-right ${isOverdue ? 'text-red-600' : ''}`}>
+          <div className={`text-right ${isOverdue ? 'text-re-danger' : ''}`}>
             <div className="flex items-center gap-2 text-lg font-bold">
               <Clock className="h-5 w-5" />
               {requestCase.countdown_display || `${Math.max(0, hoursLeft).toFixed(1)}h remaining`}
@@ -152,8 +152,8 @@ export default function RequestCaseDetailPage() {
                 <div
                   key={stage}
                   className={`flex items-center gap-1 px-2 py-1 rounded text-xs ${
-                    isCurrent ? 'bg-blue-100 text-blue-800 font-bold border border-blue-300' :
-                    isPast ? 'bg-green-50 text-green-700' :
+                    isCurrent ? 'bg-re-info-muted text-re-info font-bold border border-blue-300' :
+                    isPast ? 'bg-re-success-muted text-re-success' :
                     'text-muted-foreground'
                   }`}
                 >
@@ -190,7 +190,7 @@ export default function RequestCaseDetailPage() {
                 </div>
                 <div>
                   <dt className="text-muted-foreground">Due</dt>
-                  <dd className={isOverdue ? 'text-red-600 font-bold' : ''}>
+                  <dd className={isOverdue ? 'text-re-danger font-bold' : ''}>
                     {new Date(requestCase.response_due_at).toLocaleString()}
                   </dd>
                 </div>
@@ -289,13 +289,13 @@ export default function RequestCaseDetailPage() {
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Gaps Found</span>
-                <span className={`font-bold ${requestCase.gap_count > 0 ? 'text-amber-600' : 'text-green-600'}`}>
+                <span className={`font-bold ${requestCase.gap_count > 0 ? 'text-re-warning' : 'text-re-success'}`}>
                   {requestCase.gap_count}
                 </span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Active Exceptions</span>
-                <span className={`font-bold ${requestCase.active_exception_count > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                <span className={`font-bold ${requestCase.active_exception_count > 0 ? 'text-re-danger' : 'text-re-success'}`}>
                   {requestCase.active_exception_count}
                 </span>
               </div>
@@ -342,8 +342,8 @@ export default function RequestCaseDetailPage() {
               )}
               {requestCase.package_status === 'submitted' && (
                 <div className="text-center py-3">
-                  <CheckCircle className="h-8 w-8 text-green-500 mx-auto mb-2" />
-                  <p className="text-sm font-medium text-green-700">Package Submitted</p>
+                  <CheckCircle className="h-8 w-8 text-re-success mx-auto mb-2" />
+                  <p className="text-sm font-medium text-re-success">Package Submitted</p>
                 </div>
               )}
             </CardContent>

@@ -175,10 +175,10 @@ export default function AdminPage() {
                 </form>
 
                 {authError && (
-                  <div className="p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
+                  <div className="p-3 rounded-lg bg-re-danger-muted dark:bg-re-danger/20 border border-re-danger dark:border-re-danger">
                     <div className="flex items-start gap-2">
-                      <AlertCircle className="h-4 w-4 text-red-600 dark:text-red-400 mt-0.5" />
-                      <p className="text-sm text-red-700 dark:text-red-300">
+                      <AlertCircle className="h-4 w-4 text-re-danger dark:text-re-danger mt-0.5" />
+                      <p className="text-sm text-re-danger dark:text-re-danger">
                         Invalid admin key. Please check your key and try again.
                       </p>
                     </div>
@@ -194,13 +194,13 @@ export default function AdminPage() {
                   <p className="text-sm text-muted-foreground mb-3">
                     The Admin Master Key is set in your environment configuration. You can find it in your <code className="bg-muted px-1 rounded">.env</code> file:
                   </p>
-                  <pre className="bg-gray-900 text-gray-100 p-3 rounded text-sm overflow-x-auto">
+                  <pre className="bg-re-surface-base text-re-text-primary p-3 rounded text-sm overflow-x-auto">
                     <code>ADMIN_MASTER_KEY=your_key_here</code>
                   </pre>
                   <p className="text-sm text-muted-foreground mt-3">
                     If you haven&apos;t set one up yet, generate a secure key:
                   </p>
-                  <pre className="bg-gray-900 text-gray-100 p-3 rounded text-sm overflow-x-auto mt-2">
+                  <pre className="bg-re-surface-base text-re-text-primary p-3 rounded text-sm overflow-x-auto mt-2">
                     <code>openssl rand -hex 32</code>
                   </pre>
                 </div>
@@ -256,7 +256,7 @@ export default function AdminPage() {
                       )}
                     </Button>
                   </div>
-                  <p className="text-sm text-amber-700 dark:text-amber-300 flex items-center gap-2">
+                  <p className="text-sm text-re-warning dark:text-re-warning flex items-center gap-2">
                     <AlertCircle className="h-4 w-4" />
                     This will not be shown again. Copy and store the key securely.
                   </p>
@@ -355,19 +355,19 @@ export default function AdminPage() {
                       <motion.div
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
-                        className="mt-4 p-4 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800"
+                        className="mt-4 p-4 rounded-lg bg-re-success-muted dark:bg-re-success/20 border border-green-200 dark:border-green-800"
                       >
                         <div className="flex items-start gap-3">
-                          <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400 mt-0.5" />
+                          <CheckCircle className="h-5 w-5 text-re-success dark:text-re-success mt-0.5" />
                           <div className="flex-1">
-                            <h4 className="font-semibold text-green-900 dark:text-green-100 mb-2">
+                            <h4 className="font-semibold text-re-success dark:text-green-100 mb-2">
                               API Key Created Successfully
                             </h4>
-                            <p className="text-sm text-green-700 dark:text-green-300 mb-2">
+                            <p className="text-sm text-re-success dark:text-re-success mb-2">
                               Save this key now - it won&apos;t be shown again!
                             </p>
                             <div className="flex items-center gap-2">
-                              <code className="flex-1 text-sm bg-white dark:bg-gray-800 p-2 rounded font-mono break-all">
+                              <code className="flex-1 text-sm bg-white dark:bg-re-surface-card p-2 rounded font-mono break-all">
                                 {copiedKey}
                               </code>
                               <Button
@@ -389,7 +389,7 @@ export default function AdminPage() {
                               <CheckCircle className="h-4 w-4 mr-2" />
                               Use as my API Key
                             </Button>
-                            <p className="text-xs text-green-600 dark:text-green-400 mt-2">
+                            <p className="text-xs text-re-success dark:text-re-success mt-2">
                               This will save the key in your browser for easy access across pages.
                             </p>
                           </div>

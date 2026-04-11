@@ -59,7 +59,7 @@ export function HeroNewsletterSignup() {
         )}
       </button>
       {status === 'error' && (
-        <p className="text-[0.75rem] text-red-400 mt-1 sm:col-span-2">
+        <p className="text-[0.75rem] text-re-danger mt-1 sm:col-span-2">
           Something went wrong — email us at <a href="mailto:hello@regengine.co" className="underline">hello@regengine.co</a>
         </p>
       )}

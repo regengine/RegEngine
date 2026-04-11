@@ -62,11 +62,11 @@ export function FixItTooltip({ errors, rowIndex, children, onAddRow, onEditCell,
           role="tooltip"
         >
           {/* Header */}
-          <div className={`px-3 py-2 flex items-center gap-2 ${hasCritical ? 'bg-red-500/15' : 'bg-amber-500/15'}`}>
+          <div className={`px-3 py-2 flex items-center gap-2 ${hasCritical ? 'bg-re-danger-muted0/15' : 'bg-re-warning-muted0/15'}`}>
             {hasCritical
-              ? <ShieldAlert className="w-3.5 h-3.5 text-red-400" />
-              : <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />}
-            <span className={`text-[0.7rem] font-semibold ${hasCritical ? 'text-red-400' : 'text-amber-400'}`}>
+              ? <ShieldAlert className="w-3.5 h-3.5 text-re-danger" />
+              : <AlertTriangle className="w-3.5 h-3.5 text-re-warning" />}
+            <span className={`text-[0.7rem] font-semibold ${hasCritical ? 'text-re-danger' : 'text-re-warning'}`}>
               {errors.length} issue{errors.length !== 1 ? 's' : ''} found
             </span>
           </div>
@@ -93,7 +93,7 @@ export function FixItTooltip({ errors, rowIndex, children, onAddRow, onEditCell,
                 )}
 
                 {err.remediation && (
-                  <div className="text-[0.6rem] text-emerald-400 italic leading-relaxed">
+                  <div className="text-[0.6rem] text-re-brand italic leading-relaxed">
                     Fix: {err.remediation}
                   </div>
                 )}

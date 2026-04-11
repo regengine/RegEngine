@@ -32,15 +32,15 @@ import {
 } from 'lucide-react';
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; progress: number }> = {
-  intake: { label: 'Intake', color: 'bg-gray-500', progress: 5 },
+  intake: { label: 'Intake', color: 'bg-re-surface-card0', progress: 5 },
   scoping: { label: 'Scoping', color: 'bg-blue-400', progress: 15 },
-  collecting: { label: 'Collecting', color: 'bg-blue-500', progress: 30 },
-  gap_analysis: { label: 'Gap Analysis', color: 'bg-amber-500', progress: 45 },
+  collecting: { label: 'Collecting', color: 'bg-re-info-muted0', progress: 30 },
+  gap_analysis: { label: 'Gap Analysis', color: 'bg-re-warning-muted0', progress: 45 },
   exception_triage: { label: 'Exception Triage', color: 'bg-orange-500', progress: 55 },
   assembling: { label: 'Assembling', color: 'bg-purple-500', progress: 70 },
   internal_review: { label: 'Internal Review', color: 'bg-indigo-500', progress: 80 },
-  ready: { label: 'Ready', color: 'bg-green-500', progress: 90 },
-  submitted: { label: 'Submitted', color: 'bg-green-600', progress: 100 },
+  ready: { label: 'Ready', color: 'bg-re-success-muted0', progress: 90 },
+  submitted: { label: 'Submitted', color: 'bg-re-success', progress: 100 },
   amended: { label: 'Amended', color: 'bg-teal-500', progress: 100 },
 };
 
@@ -93,7 +93,7 @@ export default function RequestWorkflowPage() {
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between mb-8">
         <div>
           <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-            <Timer className="h-6 w-6 text-blue-500" />
+            <Timer className="h-6 w-6 text-re-info" />
             Request-Response Workflow
           </h1>
           <p className="text-muted-foreground mt-1">
@@ -154,7 +154,7 @@ export default function RequestWorkflowPage() {
       {/* Active Cases */}
       <div className="space-y-4 mb-8">
         <h2 className="text-lg font-semibold flex items-center gap-2">
-          <Clock className="h-5 w-5 text-amber-500" />
+          <Clock className="h-5 w-5 text-re-warning" />
           Active Cases ({activeCases.length})
         </h2>
 
@@ -165,7 +165,7 @@ export default function RequestWorkflowPage() {
         ) : activeCases.length === 0 ? (
           <Card>
             <CardContent className="py-12 text-center text-muted-foreground">
-              <CheckCircle className="h-12 w-12 mx-auto mb-3 text-green-400" />
+              <CheckCircle className="h-12 w-12 mx-auto mb-3 text-re-success" />
               <p className="font-medium">No active request cases</p>
               <p className="text-sm">Create a new case to start a response workflow</p>
             </CardContent>
@@ -178,7 +178,7 @@ export default function RequestWorkflowPage() {
 
             return (
               <motion.div key={rc.request_case_id} initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-                <Card className={isOverdue ? 'border-red-300 bg-red-50/30' : ''}>
+                <Card className={isOverdue ? 'border-re-danger bg-re-danger-muted/30' : ''}>
                   <CardContent className="pt-5 pb-4">
                     <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
                       {/* Left: case info */}
@@ -219,13 +219,13 @@ export default function RequestWorkflowPage() {
 
                       {/* Right: countdown + actions */}
                       <div className="flex flex-col items-end gap-2 min-w-[180px]">
-                        <div className={`text-right ${isOverdue ? 'text-red-600' : 'text-muted-foreground'}`}>
+                        <div className={`text-right ${isOverdue ? 'text-re-danger' : 'text-muted-foreground'}`}>
                           <div className="flex items-center gap-1 text-sm font-medium">
                             <Timer className="h-4 w-4" />
                             {rc.countdown_display || `${Math.max(0, hoursLeft).toFixed(1)}h remaining`}
                           </div>
                           {isOverdue && (
-                            <span className="text-xs font-bold text-red-600">OVERDUE</span>
+                            <span className="text-xs font-bold text-re-danger">OVERDUE</span>
                           )}
                         </div>
 
@@ -271,7 +271,7 @@ export default function RequestWorkflowPage() {
       {completedCases.length > 0 && (
         <div className="space-y-4">
           <h2 className="text-lg font-semibold flex items-center gap-2">
-            <FileText className="h-5 w-5 text-green-500" />
+            <FileText className="h-5 w-5 text-re-success" />
             Completed ({completedCases.length})
           </h2>
           {completedCases.map(rc => (
@@ -279,7 +279,7 @@ export default function RequestWorkflowPage() {
               <CardContent className="pt-4 pb-3">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <Badge className="bg-green-600 text-white">{rc.package_status === 'amended' ? 'Amended' : 'Submitted'}</Badge>
+                    <Badge className="bg-re-success text-white">{rc.package_status === 'amended' ? 'Amended' : 'Submitted'}</Badge>
                     <span className="text-sm">{rc.requesting_party}</span>
                     <span className="text-xs text-muted-foreground">{rc.total_records} records</span>
                   </div>

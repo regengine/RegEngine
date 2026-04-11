@@ -54,10 +54,10 @@ interface IdentityReview {
 }
 
 const ENTITY_TYPE_CONFIG: Record<string, { icon: LucideIcon; label: string; color: string }> = {
-  firm: { icon: Users, label: 'Firm', color: 'text-blue-500' },
-  facility: { icon: Building2, label: 'Facility', color: 'text-green-500' },
+  firm: { icon: Users, label: 'Firm', color: 'text-re-info' },
+  facility: { icon: Building2, label: 'Facility', color: 'text-re-success' },
   product: { icon: Package, label: 'Product', color: 'text-purple-500' },
-  lot: { icon: Link2, label: 'Lot', color: 'text-amber-500' },
+  lot: { icon: Link2, label: 'Lot', color: 'text-re-warning' },
   trading_relationship: { icon: GitMerge, label: 'Trading', color: 'text-cyan-500' },
 };
 
@@ -200,7 +200,7 @@ export default function IdentityResolutionPage() {
                 </div>
               ) : entityList.length === 0 ? (
                 <div className="text-center py-12 text-muted-foreground">
-                  <Building2 className="h-12 w-12 mx-auto mb-3 text-gray-300" />
+                  <Building2 className="h-12 w-12 mx-auto mb-3 text-re-text-secondary" />
                   <p className="font-medium">No entities registered</p>
                   <p className="text-sm">Entities are auto-registered from ingested traceability events</p>
                 </div>
@@ -245,7 +245,7 @@ export default function IdentityResolutionPage() {
                               </Badge>
                             </TableCell>
                             <TableCell>
-                              <span className={`text-sm ${entity.confidence_score >= 0.9 ? 'text-green-600' : entity.confidence_score >= 0.7 ? 'text-amber-600' : 'text-red-600'}`}>
+                              <span className={`text-sm ${entity.confidence_score >= 0.9 ? 'text-re-success' : entity.confidence_score >= 0.7 ? 'text-re-warning' : 'text-re-danger'}`}>
                                 {(entity.confidence_score * 100).toFixed(0)}%
                               </span>
                             </TableCell>
@@ -264,7 +264,7 @@ export default function IdentityResolutionPage() {
           <Card>
             <CardHeader>
               <CardTitle className="text-lg flex items-center gap-2">
-                <HelpCircle className="h-5 w-5 text-amber-500" />
+                <HelpCircle className="h-5 w-5 text-re-warning" />
                 Ambiguous Match Review Queue
               </CardTitle>
               <CardDescription>
@@ -278,7 +278,7 @@ export default function IdentityResolutionPage() {
                 </div>
               ) : reviewList.length === 0 ? (
                 <div className="text-center py-12 text-muted-foreground">
-                  <CheckCircle className="h-12 w-12 mx-auto mb-3 text-green-400" />
+                  <CheckCircle className="h-12 w-12 mx-auto mb-3 text-re-success" />
                   <p className="font-medium">No pending reviews</p>
                   <p className="text-sm">All identity matches have been resolved</p>
                 </div>
@@ -314,11 +314,11 @@ export default function IdentityResolutionPage() {
                           {isPending && (
                             <div className="flex flex-col gap-1">
                               <Button size="sm" variant="outline" className="text-xs h-7">
-                                <CheckCircle className="h-3 w-3 mr-1 text-green-500" />
+                                <CheckCircle className="h-3 w-3 mr-1 text-re-success" />
                                 Match
                               </Button>
                               <Button size="sm" variant="outline" className="text-xs h-7">
-                                <XCircle className="h-3 w-3 mr-1 text-red-500" />
+                                <XCircle className="h-3 w-3 mr-1 text-re-danger" />
                                 Distinct
                               </Button>
                             </div>

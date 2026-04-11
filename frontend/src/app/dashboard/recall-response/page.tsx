@@ -39,10 +39,10 @@ import type { RecallDrill } from '@/types/fsma';
 // ---------------------------------------------------------------------------
 
 const STATUS_DISPLAY: Record<RequestStatus, { label: string; color: string; bg: string }> = {
-  open: { label: 'Open', color: 'text-blue-600', bg: 'bg-blue-100' },
-  in_progress: { label: 'In Progress', color: 'text-amber-600', bg: 'bg-amber-100' },
-  completed: { label: 'Completed', color: 'text-green-600', bg: 'bg-green-100' },
-  overdue: { label: 'Overdue', color: 'text-red-600', bg: 'bg-red-100' },
+  open: { label: 'Open', color: 'text-re-info', bg: 'bg-re-info-muted' },
+  in_progress: { label: 'In Progress', color: 'text-re-warning', bg: 'bg-re-warning-muted' },
+  completed: { label: 'Completed', color: 'text-re-success', bg: 'bg-re-success-muted' },
+  overdue: { label: 'Overdue', color: 'text-re-danger', bg: 'bg-re-danger-muted' },
 };
 
 /** Map an SLA request to the RecallDrill shape the RecallTimer component expects. */
@@ -130,7 +130,7 @@ export default function RecallResponsePage() {
                 <p className="text-sm text-muted-foreground">Active Requests</p>
                 <p className="text-3xl font-bold">{dashboard?.open_requests ?? 0}</p>
               </div>
-              <Clock className="w-8 h-8 text-blue-500" />
+              <Clock className="w-8 h-8 text-re-info" />
             </div>
           </CardContent>
         </Card>
@@ -139,9 +139,9 @@ export default function RecallResponsePage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">Overdue</p>
-                <p className="text-3xl font-bold text-red-600">{dashboard?.overdue_requests ?? 0}</p>
+                <p className="text-3xl font-bold text-re-danger">{dashboard?.overdue_requests ?? 0}</p>
               </div>
-              <AlertTriangle className="w-8 h-8 text-red-500" />
+              <AlertTriangle className="w-8 h-8 text-re-danger" />
             </div>
           </CardContent>
         </Card>
@@ -156,7 +156,7 @@ export default function RecallResponsePage() {
                     : '--'}
                 </p>
               </div>
-              <FileText className="w-8 h-8 text-amber-500" />
+              <FileText className="w-8 h-8 text-re-warning" />
             </div>
           </CardContent>
         </Card>
@@ -237,7 +237,7 @@ export default function RecallResponsePage() {
               <Card>
                 <CardHeader>
                   <CardTitle className="text-lg flex items-center gap-2">
-                    <Bell className="w-5 h-5 text-amber-500" />
+                    <Bell className="w-5 h-5 text-re-warning" />
                     Active Alerts
                   </CardTitle>
                 </CardHeader>
@@ -246,13 +246,13 @@ export default function RecallResponsePage() {
                     <div
                       key={alert.id}
                       className={`flex items-start gap-3 p-3 rounded-lg ${
-                        alert.alert_type === 'overdue' ? 'bg-red-50' : 'bg-amber-50'
+                        alert.alert_type === 'overdue' ? 'bg-re-danger-muted' : 'bg-re-warning-muted'
                       }`}
                     >
                       {alert.alert_type === 'overdue' ? (
-                        <XCircle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
+                        <XCircle className="w-5 h-5 text-re-danger shrink-0 mt-0.5" />
                       ) : (
-                        <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
+                        <AlertTriangle className="w-5 h-5 text-re-warning shrink-0 mt-0.5" />
                       )}
                       <div>
                         <p className="text-sm font-medium">{alert.message}</p>
@@ -366,12 +366,12 @@ function RequestRow({
       <div className="text-right">
         {request.status === 'completed' && request.response_hours != null ? (
           <p className="text-sm font-mono">
-            <CheckCircle className="w-3 h-3 inline mr-1 text-green-500" />
+            <CheckCircle className="w-3 h-3 inline mr-1 text-re-success" />
             {request.response_hours.toFixed(1)}h
           </p>
         ) : request.time_remaining_seconds != null ? (
           <p className={`text-sm font-mono ${
-            request.time_remaining_seconds <= 3600 ? 'text-red-600' : 'text-muted-foreground'
+            request.time_remaining_seconds <= 3600 ? 'text-re-danger' : 'text-muted-foreground'
           }`}>
             {formatHoursRemaining(request.time_remaining_seconds)}
           </p>
@@ -397,7 +397,7 @@ function ExportAndCompleteButton({ request }: { request: FDARequestData }) {
     <Button
       onClick={handleExportAndComplete}
       disabled={complete.isPending}
-      className="bg-green-600 hover:bg-green-700 text-white"
+      className="bg-re-success hover:bg-re-success text-white"
     >
       <Download className="w-4 h-4 mr-2" />
       {complete.isPending ? 'Submitting...' : 'Export & Complete'}

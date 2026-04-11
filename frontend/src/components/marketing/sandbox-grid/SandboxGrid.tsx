@@ -498,7 +498,7 @@ export function SandboxGrid({ initialCsv, initialResult, onBack }: SandboxGridPr
                       }
                     }
                   }}
-                  className="w-full bg-white text-gray-900 px-1.5 py-0.5 text-[0.65rem] font-mono rounded border-2 border-[var(--re-brand)] outline-none"
+                  className="w-full bg-white text-re-text-primary px-1.5 py-0.5 text-[0.65rem] font-mono rounded border-2 border-[var(--re-brand)] outline-none"
                 />
               );
             }
@@ -509,9 +509,9 @@ export function SandboxGrid({ initialCsv, initialResult, onBack }: SandboxGridPr
                 className={`
                   px-1.5 py-1 text-[0.65rem] font-mono cursor-text truncate rounded-sm transition-colors
                   ${hasError
-                    ? 'bg-red-500/15 text-red-300 border border-red-500/30'
+                    ? 'bg-re-danger-muted0/15 text-re-danger border border-re-danger/30'
                     : isFixed
-                    ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
+                    ? 'bg-re-brand/15 text-re-brand-light border border-re-brand/30'
                     : 'text-[var(--re-text-primary)] hover:bg-[var(--re-surface-base)]'
                   }
                   ${!value ? 'italic text-[var(--re-text-disabled)]' : ''}
@@ -606,7 +606,7 @@ export function SandboxGrid({ initialCsv, initialResult, onBack }: SandboxGridPr
                   key={row.id}
                   data-row-index={row.index}
                   className={`border-b border-[var(--re-surface-border)]/50 transition-all ${
-                    rowHasIssues ? 'bg-red-500/[0.03]' : ''
+                    rowHasIssues ? 'bg-re-danger-muted0/[0.03]' : ''
                   } hover:bg-[var(--re-surface-elevated)]/30`}
                 >
                   {row.getVisibleCells().map((cell) => (

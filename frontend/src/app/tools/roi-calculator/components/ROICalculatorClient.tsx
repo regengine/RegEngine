@@ -69,28 +69,28 @@ export function ROICalculatorClient() {
                         value={`$${(results.laborSavings / 1000).toFixed(1)}k`}
                         description="Savings from automated data entry and 24hr record retrieval."
                         icon={Clock}
-                        color="text-blue-400 bg-blue-400"
+                        color="text-re-info bg-blue-400"
                     />
                     <ResultCard
                         title="Risk Mitigation"
                         value={`$${(results.riskReduction / 1000).toFixed(1)}k`}
                         description="Reduction in potential violation fines and recall impacts."
                         icon={ShieldAlert}
-                        color="text-red-400 bg-red-400"
+                        color="text-re-danger bg-red-400"
                     />
                     <ResultCard
                         title="Operational Gains"
                         value={`$${(results.operationalEfficiency / 1000).toFixed(1)}k`}
                         description="Efficiency impact of real-time supply chain visibility."
                         icon={Zap}
-                        color="text-yellow-400 bg-yellow-400"
+                        color="text-re-warning bg-yellow-400"
                     />
                     <ResultCard
                         title="Net Platform Benefit"
                         value={`$${(results.netBenefit / 1000).toFixed(1)}k`}
                         description="Total benefit minus estimated platform investment."
                         icon={TrendingUp}
-                        color="text-emerald-400 bg-emerald-400"
+                        color="text-re-brand bg-emerald-400"
                     />
                 </div>
 

@@ -186,8 +186,8 @@ export default function TraceabilityPlanPage() {
           <div className="max-w-4xl mx-auto py-12 space-y-6">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-4">
-                <div className="p-3 rounded-lg bg-green-100 dark:bg-green-900">
-                  <CheckCircle className="h-8 w-8 text-green-600 dark:text-green-400" />
+                <div className="p-3 rounded-lg bg-re-success-muted dark:bg-green-900">
+                  <CheckCircle className="h-8 w-8 text-re-success dark:text-re-success" />
                 </div>
                 <div>
                   <h1 className="text-3xl font-bold">Traceability Plan Generated</h1>
@@ -226,8 +226,8 @@ export default function TraceabilityPlanPage() {
       <PageContainer>
         <div className="max-w-3xl mx-auto py-12">
           <div className="flex items-center gap-4 mb-8">
-            <div className="p-3 rounded-lg bg-blue-100 dark:bg-blue-900">
-              <FileText className="h-8 w-8 text-blue-600 dark:text-blue-400" />
+            <div className="p-3 rounded-lg bg-re-info-muted dark:bg-blue-900">
+              <FileText className="h-8 w-8 text-re-info dark:text-re-info" />
             </div>
             <div>
               <h1 className="text-4xl font-bold">Traceability Plan</h1>
@@ -263,13 +263,13 @@ export default function TraceabilityPlanPage() {
                   {step === 0 && (
                     <div className="space-y-4">
                       <InputField label="Firm Name" required value={firmData.firm_name}
-                        onChange={v => handleFieldChange('firm_name', v)} icon={Building2} placeholder="Acme Foods Inc." />
+                        onChange={v => handleFieldChange('firm_name', v)} icon={Building2} placeholder="Your company name" />
                       <InputField label="Address" required value={firmData.firm_address}
                         onChange={v => handleFieldChange('firm_address', v)} icon={MapPin} placeholder="123 Main St, Anytown, CA 90210" />
                       <InputField label="Contact Name" value={firmData.contact_name}
                         onChange={v => handleFieldChange('contact_name', v)} icon={Building2} placeholder="Jane Smith" />
                       <InputField label="Contact Email" value={firmData.contact_email}
-                        onChange={v => handleFieldChange('contact_email', v)} icon={Mail} placeholder="jane@acmefoods.com" />
+                        onChange={v => handleFieldChange('contact_email', v)} icon={Mail} placeholder="contact@yourcompany.com" />
                       <InputField label="Contact Phone" value={firmData.contact_phone}
                         onChange={v => handleFieldChange('contact_phone', v)} icon={Phone} placeholder="(555) 123-4567" />
                       <InputField label="GLN (optional)" value={firmData.gln}
@@ -424,7 +424,7 @@ export default function TraceabilityPlanPage() {
                       </Button>
 
                       {generatePlan.isError && (
-                        <p className="text-sm text-red-600 text-center">
+                        <p className="text-sm text-re-danger text-center">
                           Failed to generate plan. Please try again.
                         </p>
                       )}
@@ -478,7 +478,7 @@ function InputField({
   return (
     <div>
       <label className="text-sm font-medium mb-1.5 block">
-        {label}{required && <span className="text-red-500 ml-1">*</span>}
+        {label}{required && <span className="text-re-danger ml-1">*</span>}
       </label>
       <div className="relative">
         <Icon className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />

@@ -57,9 +57,9 @@ export function ComplianceReadiness({ readiness, isLoading, onStartDrill, onExpo
 
   // Determine overall status
   const getOverallStatus = (score: number) => {
-    if (score >= 90) return { label: 'Ready', color: 'text-green-600', bg: 'bg-green-100', icon: CheckCircle };
-    if (score >= 70) return { label: 'At Risk', color: 'text-amber-600', bg: 'bg-amber-100', icon: AlertTriangle };
-    return { label: 'Not Ready', color: 'text-red-600', bg: 'bg-red-100', icon: XCircle };
+    if (score >= 90) return { label: 'Ready', color: 'text-re-success', bg: 'bg-re-success-muted', icon: CheckCircle };
+    if (score >= 70) return { label: 'At Risk', color: 'text-re-warning', bg: 'bg-re-warning-muted', icon: AlertTriangle };
+    return { label: 'Not Ready', color: 'text-re-danger', bg: 'bg-re-danger-muted', icon: XCircle };
   };
 
   const status = getOverallStatus(readiness.overall_score ?? 0);
@@ -172,7 +172,7 @@ export function ComplianceReadiness({ readiness, isLoading, onStartDrill, onExpo
                   </div>
                   <span className={cn(
                     'font-medium',
-                    score >= 80 ? 'text-green-600' : score >= 60 ? 'text-amber-600' : 'text-red-600'
+                    score >= 80 ? 'text-re-success' : score >= 60 ? 'text-re-warning' : 'text-re-danger'
                   )}>
                     {score}%
                   </span>
@@ -181,7 +181,7 @@ export function ComplianceReadiness({ readiness, isLoading, onStartDrill, onExpo
                   <motion.div
                     className={cn(
                       'h-full rounded-full',
-                      score >= 80 ? 'bg-green-500' : score >= 60 ? 'bg-amber-500' : 'bg-red-500'
+                      score >= 80 ? 'bg-re-success-muted0' : score >= 60 ? 'bg-re-warning-muted0' : 'bg-re-danger-muted0'
                     )}
                     initial={{ width: 0 }}
                     animate={{ width: `${score}%` }}
@@ -197,7 +197,7 @@ export function ComplianceReadiness({ readiness, isLoading, onStartDrill, onExpo
         {readiness.recommendations && readiness.recommendations.length > 0 && (
           <div className="space-y-2 pt-4 border-t">
             <h4 className="font-medium text-sm flex items-center gap-2">
-              <AlertTriangle className="w-4 h-4 text-amber-500" />
+              <AlertTriangle className="w-4 h-4 text-re-warning" />
               Recommendations
             </h4>
             <ul className="space-y-1">
@@ -243,8 +243,8 @@ function ReadinessGauge({ score, size = 'md' }: ReadinessGaugeProps) {
   const circumference = 2 * Math.PI * radius;
   const strokeDashoffset = circumference - (normalizedScore / 100) * circumference;
 
-  const color = normalizedScore >= 90 ? 'stroke-green-500' : normalizedScore >= 70 ? 'stroke-amber-500' : 'stroke-red-500';
-  const textColor = normalizedScore >= 90 ? 'text-green-600' : normalizedScore >= 70 ? 'text-amber-600' : 'text-red-600';
+  const color = normalizedScore >= 90 ? 'stroke-re-brand' : normalizedScore >= 70 ? 'stroke-amber-500' : 'stroke-re-danger';
+  const textColor = normalizedScore >= 90 ? 'text-re-success' : normalizedScore >= 70 ? 'text-re-warning' : 'text-re-danger';
 
   return (
     <div className="relative" style={{ width: config.outer, height: config.outer }}>
@@ -295,10 +295,10 @@ interface ReadinessBadgeProps {
 
 export function ReadinessBadge({ score, className }: ReadinessBadgeProps) {
   const status = score >= 90
-    ? { label: 'Ready', color: 'bg-green-100 text-green-700', icon: CheckCircle }
+    ? { label: 'Ready', color: 'bg-re-success-muted text-re-success', icon: CheckCircle }
     : score >= 70
-      ? { label: 'At Risk', color: 'bg-amber-100 text-amber-700', icon: AlertTriangle }
-      : { label: 'Not Ready', color: 'bg-red-100 text-red-700', icon: XCircle };
+      ? { label: 'At Risk', color: 'bg-re-warning-muted text-re-warning', icon: AlertTriangle }
+      : { label: 'Not Ready', color: 'bg-re-danger-muted text-re-danger', icon: XCircle };
 
   const Icon = status.icon;
 

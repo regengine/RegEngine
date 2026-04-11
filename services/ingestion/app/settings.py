@@ -35,13 +35,13 @@ router = APIRouter(prefix="/api/v1/settings", tags=["Settings"])
 
 class CompanyProfile(BaseModel):
     """Company profile settings."""
-    company_name: str = "Acme Food Distribution"
+    company_name: str = ""
     company_type: str = "distributor"
-    primary_contact: str = "Jordan Smith"
-    contact_email: str = "jsmith@example.com"
-    phone: str = "+1 (555) 012-3456"
-    address: str = "123 Commerce Way, Salinas, CA 93901"
-    website: str = "https://acmefood.example.com"
+    primary_contact: str = ""
+    contact_email: str = ""
+    phone: str = ""
+    address: str = ""
+    website: str = ""
     fei_number: str = ""  # FDA Establishment Identifier
 
 

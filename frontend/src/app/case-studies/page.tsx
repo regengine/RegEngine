@@ -71,7 +71,7 @@ export default function CaseStudy() {
             <section className="min-h-[80vh] flex items-center px-4 sm:px-6 lg:px-8 pt-20 pb-10 bg-gradient-to-b from-slate-950 via-black to-slate-900">
                 <div className="max-w-5xl mx-auto w-full">
                     <div className="mb-6 flex items-center gap-3">
-                        <span className="inline-block px-3 py-1 text-sm font-medium bg-emerald-900/30 border border-emerald-700/50 rounded-full text-emerald-300">
+                        <span className="inline-block px-3 py-1 text-sm font-medium bg-emerald-900/30 border border-emerald-700/50 rounded-full text-re-brand-light">
                             Product Validation
                         </span>
                         <span className="inline-block px-3 py-1 text-sm font-medium bg-blue-900/30 border border-blue-700/50 rounded-full text-blue-300">
@@ -80,7 +80,7 @@ export default function CaseStudy() {
                     </div>
                     <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold mb-6 leading-tight">
                         1,200 CTE Events.
-                        <span className="block text-emerald-400">5 Hard Metrics.</span>
+                        <span className="block text-re-brand">5 Hard Metrics.</span>
                     </h1>
                     <p className="text-xl text-slate-300 mb-10 max-w-3xl">
                         We ran a representative leafy greens supply chain through RegEngine — from Salinas Valley
@@ -92,7 +92,7 @@ export default function CaseStudy() {
                     <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-10">
                         {HERO_METRICS.map((m) => (
                             <div key={m.label} className="bg-white/[0.03] border border-white/10 rounded-lg p-4">
-                                <p className="text-2xl sm:text-3xl font-bold text-emerald-400 mb-1">{m.value}</p>
+                                <p className="text-2xl sm:text-3xl font-bold text-re-brand mb-1">{m.value}</p>
                                 <p className="text-sm font-medium text-white mb-1">{m.label}</p>
                                 <p className="text-xs text-slate-500">{m.detail}</p>
                             </div>
@@ -102,7 +102,7 @@ export default function CaseStudy() {
                     <div className="flex flex-col sm:flex-row gap-4">
                         <Link
                             href="/signup"
-                            className="inline-flex items-center justify-center px-6 py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded-lg transition-colors"
+                            className="inline-flex items-center justify-center px-6 py-3 bg-re-brand hover:bg-re-brand text-white font-semibold rounded-lg transition-colors"
                         >
                             Run Your Own Validation <ArrowRight className="w-5 h-5 ml-2" />
                         </Link>
@@ -143,7 +143,7 @@ export default function CaseStudy() {
                                         <td className="py-3 px-4 text-slate-300">{row.step}</td>
                                         <td className="py-3 px-4 text-slate-300">{row.entity}</td>
                                         <td className="py-3 px-4">
-                                            <code className="text-emerald-400 text-xs bg-emerald-900/20 px-2 py-0.5 rounded">
+                                            <code className="text-re-brand text-xs bg-emerald-900/20 px-2 py-0.5 rounded">
                                                 {row.cte}
                                             </code>
                                         </td>
@@ -152,7 +152,7 @@ export default function CaseStudy() {
                                 ))}
                                 <tr className="border-t border-white/20">
                                     <td colSpan={3} className="py-3 px-4 font-semibold text-white">Total</td>
-                                    <td className="py-3 px-4 text-right font-semibold text-emerald-400">1,200</td>
+                                    <td className="py-3 px-4 text-right font-semibold text-re-brand">1,200</td>
                                 </tr>
                             </tbody>
                         </table>
@@ -171,7 +171,7 @@ export default function CaseStudy() {
                     <div className="grid md:grid-cols-2 gap-12 items-start">
                         <div>
                             <div className="flex items-center gap-3 mb-4">
-                                <Timer className="w-6 h-6 text-emerald-400" />
+                                <Timer className="w-6 h-6 text-re-brand" />
                                 <h2 className="text-2xl font-bold">Metric 1: Time to First Ingest</h2>
                             </div>
                             <p className="text-slate-300 mb-6">
@@ -201,7 +201,7 @@ export default function CaseStudy() {
                                 </div>
                                 <div className="flex justify-between items-center pt-2">
                                     <span className="text-white font-semibold">Total</span>
-                                    <span className="text-emerald-400 font-bold text-xl">8.4 min</span>
+                                    <span className="text-re-brand font-bold text-xl">8.4 min</span>
                                 </div>
                             </div>
                         </div>
@@ -224,8 +224,8 @@ export default function CaseStudy() {
                                         <span className="text-slate-500">1-4 weeks</span>
                                     </div>
                                     <div className="flex justify-between text-sm">
-                                        <span className="text-emerald-400 font-medium">RegEngine</span>
-                                        <span className="text-emerald-400 font-medium">8.4 minutes</span>
+                                        <span className="text-re-brand font-medium">RegEngine</span>
+                                        <span className="text-re-brand font-medium">8.4 minutes</span>
                                     </div>
                                 </div>
                             </div>
@@ -238,7 +238,7 @@ export default function CaseStudy() {
             <section className="px-4 sm:px-6 lg:px-8 py-16 bg-slate-950/50">
                 <div className="max-w-5xl mx-auto">
                     <div className="flex items-center gap-3 mb-4">
-                        <Gauge className="w-6 h-6 text-emerald-400" />
+                        <Gauge className="w-6 h-6 text-re-brand" />
                         <h2 className="text-2xl font-bold">Metric 2: Auto-Normalization Rate</h2>
                     </div>
                     <p className="text-slate-300 mb-8 max-w-3xl">
@@ -264,18 +264,18 @@ export default function CaseStudy() {
                                         <td className="py-3 px-4">
                                             <div className="flex flex-wrap gap-1">
                                                 {ex.raw.map((r) => (
-                                                    <code key={r} className="text-xs text-red-300 bg-red-900/20 px-1.5 py-0.5 rounded">
+                                                    <code key={r} className="text-xs text-re-danger bg-red-900/20 px-1.5 py-0.5 rounded">
                                                         {r}
                                                     </code>
                                                 ))}
                                             </div>
                                         </td>
                                         <td className="py-3 px-4">
-                                            <code className="text-xs text-emerald-300 bg-emerald-900/20 px-1.5 py-0.5 rounded">
+                                            <code className="text-xs text-re-brand-light bg-emerald-900/20 px-1.5 py-0.5 rounded">
                                                 {ex.normalized}
                                             </code>
                                         </td>
-                                        <td className="py-3 px-4 text-right font-mono text-emerald-400">{ex.rate}</td>
+                                        <td className="py-3 px-4 text-right font-mono text-re-brand">{ex.rate}</td>
                                     </tr>
                                 ))}
                             </tbody>
@@ -283,8 +283,8 @@ export default function CaseStudy() {
                     </div>
 
                     <div className="mt-8 grid sm:grid-cols-3 gap-6">
-                        <div className="bg-emerald-600/10 border border-emerald-600/30 rounded-lg p-5 text-center">
-                            <p className="text-3xl font-bold text-emerald-400">94.2%</p>
+                        <div className="bg-re-brand/10 border border-re-brand/30 rounded-lg p-5 text-center">
+                            <p className="text-3xl font-bold text-re-brand">94.2%</p>
                             <p className="text-sm text-slate-400 mt-1">Overall auto-normalization rate</p>
                         </div>
                         <div className="bg-white/[0.03] border border-white/10 rounded-lg p-5 text-center">
@@ -312,7 +312,7 @@ export default function CaseStudy() {
                     <div className="grid md:grid-cols-2 gap-12 items-start">
                         <div>
                             <div className="flex items-center gap-3 mb-4">
-                                <HandMetal className="w-6 h-6 text-emerald-400" />
+                                <HandMetal className="w-6 h-6 text-re-brand" />
                                 <h2 className="text-2xl font-bold">Metric 3: Manual Touches per 1,000 Rows</h2>
                             </div>
                             <p className="text-slate-300 mb-6">
@@ -323,7 +323,7 @@ export default function CaseStudy() {
                                 <div className="bg-black/50 border border-white/10 rounded-lg p-4">
                                     <div className="flex justify-between items-center mb-2">
                                         <span className="text-white font-medium">Lot code integrity warnings</span>
-                                        <span className="text-amber-400 font-mono">0.6 / 1,000</span>
+                                        <span className="text-re-warning font-mono">0.6 / 1,000</span>
                                     </div>
                                     <p className="text-xs text-slate-500">
                                         OCR artifacts where O/0 or I/1 swap could change lot identity.
@@ -333,7 +333,7 @@ export default function CaseStudy() {
                                 <div className="bg-black/50 border border-white/10 rounded-lg p-4">
                                     <div className="flex justify-between items-center mb-2">
                                         <span className="text-white font-medium">Missing required KDEs</span>
-                                        <span className="text-amber-400 font-mono">0.2 / 1,000</span>
+                                        <span className="text-re-warning font-mono">0.2 / 1,000</span>
                                     </div>
                                     <p className="text-xs text-slate-500">
                                         Records where a required field (e.g., origin location) was blank.
@@ -342,7 +342,7 @@ export default function CaseStudy() {
                                 </div>
                                 <div className="flex justify-between items-center pt-4 border-t border-white/20">
                                     <span className="text-white font-semibold">Total manual touches</span>
-                                    <span className="text-emerald-400 font-bold text-xl">0.8 / 1,000 rows</span>
+                                    <span className="text-re-brand font-bold text-xl">0.8 / 1,000 rows</span>
                                 </div>
                             </div>
                         </div>
@@ -360,8 +360,8 @@ export default function CaseStudy() {
                             </p>
                             <div className="bg-amber-900/20 border border-amber-700/30 rounded p-4">
                                 <div className="flex items-start gap-2">
-                                    <AlertTriangle className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" />
-                                    <p className="text-xs text-amber-300">
+                                    <AlertTriangle className="w-4 h-4 text-re-warning flex-shrink-0 mt-0.5" />
+                                    <p className="text-xs text-re-warning">
                                         We intentionally don't auto-correct lot codes. A wrong lot code
                                         in an FDA trace means tracing the wrong product — the cost of
                                         a false positive exceeds the cost of a human review.
@@ -377,7 +377,7 @@ export default function CaseStudy() {
             <section className="px-4 sm:px-6 lg:px-8 py-16 bg-slate-950/50">
                 <div className="max-w-5xl mx-auto">
                     <div className="flex items-center gap-3 mb-4">
-                        <Workflow className="w-6 h-6 text-emerald-400" />
+                        <Workflow className="w-6 h-6 text-re-brand" />
                         <h2 className="text-2xl font-bold">Metric 4: Trace Latency</h2>
                     </div>
                     <p className="text-slate-300 mb-8 max-w-3xl">
@@ -393,37 +393,37 @@ export default function CaseStudy() {
                                 <div>
                                     <div className="flex justify-between mb-1">
                                         <span className="text-sm text-slate-400">Forward trace (farm → retail, 5 hops)</span>
-                                        <span className="text-emerald-400 font-mono text-sm">340 ms</span>
+                                        <span className="text-re-brand font-mono text-sm">340 ms</span>
                                     </div>
                                     <div className="w-full bg-slate-800 rounded-full h-1.5">
-                                        <div className="bg-emerald-500 h-1.5 rounded-full" style={{ width: '34%' }}></div>
+                                        <div className="bg-re-brand h-1.5 rounded-full" style={{ width: '34%' }}></div>
                                     </div>
                                 </div>
                                 <div>
                                     <div className="flex justify-between mb-1">
                                         <span className="text-sm text-slate-400">Backward trace (retail → farm, 5 hops)</span>
-                                        <span className="text-emerald-400 font-mono text-sm">380 ms</span>
+                                        <span className="text-re-brand font-mono text-sm">380 ms</span>
                                     </div>
                                     <div className="w-full bg-slate-800 rounded-full h-1.5">
-                                        <div className="bg-emerald-500 h-1.5 rounded-full" style={{ width: '38%' }}></div>
+                                        <div className="bg-re-brand h-1.5 rounded-full" style={{ width: '38%' }}></div>
                                     </div>
                                 </div>
                                 <div>
                                     <div className="flex justify-between mb-1">
                                         <span className="text-sm text-slate-400">Full bidirectional trace</span>
-                                        <span className="text-emerald-400 font-mono text-sm">720 ms</span>
+                                        <span className="text-re-brand font-mono text-sm">720 ms</span>
                                     </div>
                                     <div className="w-full bg-slate-800 rounded-full h-1.5">
-                                        <div className="bg-emerald-500 h-1.5 rounded-full" style={{ width: '72%' }}></div>
+                                        <div className="bg-re-brand h-1.5 rounded-full" style={{ width: '72%' }}></div>
                                     </div>
                                 </div>
                                 <div>
                                     <div className="flex justify-between mb-1">
                                         <span className="text-sm text-slate-400">Transformation trace (salad mix → ingredients)</span>
-                                        <span className="text-emerald-400 font-mono text-sm">280 ms</span>
+                                        <span className="text-re-brand font-mono text-sm">280 ms</span>
                                     </div>
                                     <div className="w-full bg-slate-800 rounded-full h-1.5">
-                                        <div className="bg-emerald-500 h-1.5 rounded-full" style={{ width: '28%' }}></div>
+                                        <div className="bg-re-brand h-1.5 rounded-full" style={{ width: '28%' }}></div>
                                     </div>
                                 </div>
                             </div>
@@ -437,7 +437,7 @@ export default function CaseStudy() {
                                 before it's shipped).
                             </p>
                             <div className="font-mono text-xs bg-black/50 rounded p-3 text-slate-400 overflow-x-auto">
-                                <p className="text-emerald-400">-- Trace romaine lot RM-0314-A</p>
+                                <p className="text-re-brand">-- Trace romaine lot RM-0314-A</p>
                                 <p>GET /api/v1/trace/RM-0314-A</p>
                                 <p>&nbsp;&nbsp;?direction=both</p>
                                 <p>&nbsp;&nbsp;&depth=20</p>
@@ -460,7 +460,7 @@ export default function CaseStudy() {
                     <div className="grid md:grid-cols-2 gap-12 items-start">
                         <div>
                             <div className="flex items-center gap-3 mb-4">
-                                <FileSpreadsheet className="w-6 h-6 text-emerald-400" />
+                                <FileSpreadsheet className="w-6 h-6 text-re-brand" />
                                 <h2 className="text-2xl font-bold">Metric 5: Time to FDA-Ready Export</h2>
                             </div>
                             <p className="text-slate-300 mb-6">
@@ -491,7 +491,7 @@ export default function CaseStudy() {
                                 </div>
                                 <div className="flex justify-between items-center pt-2">
                                     <span className="text-white font-semibold">Total</span>
-                                    <span className="text-emerald-400 font-bold text-xl">11.6 min</span>
+                                    <span className="text-re-brand font-bold text-xl">11.6 min</span>
                                 </div>
                             </div>
                         </div>
@@ -507,13 +507,13 @@ export default function CaseStudy() {
                                     'Package manifest with file checksums',
                                 ].map((item) => (
                                     <div key={item} className="flex items-start gap-2">
-                                        <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5" />
+                                        <CheckCircle2 className="w-4 h-4 text-re-brand flex-shrink-0 mt-0.5" />
                                         <span className="text-sm text-slate-300">{item}</span>
                                     </div>
                                 ))}
                             </div>
                             <div className="mt-6 bg-emerald-900/20 border border-emerald-700/30 rounded p-4">
-                                <p className="text-sm text-emerald-300">
+                                <p className="text-sm text-re-brand-light">
                                     The FDA requires records within 24 hours.
                                     RegEngine delivers in under 12 minutes.
                                 </p>
@@ -570,7 +570,7 @@ export default function CaseStudy() {
                             <div key={item.title} className="bg-black/50 border border-white/10 rounded-lg p-5">
                                 <h3 className="font-semibold text-white mb-2">{item.title}</h3>
                                 <p className="text-sm text-slate-400 mb-3">{item.description}</p>
-                                <p className="text-xs text-emerald-400 font-medium">{item.metric}</p>
+                                <p className="text-xs text-re-brand font-medium">{item.metric}</p>
                             </div>
                         ))}
                     </div>
@@ -583,8 +583,8 @@ export default function CaseStudy() {
                     <h2 className="text-3xl font-bold mb-8">Results Summary</h2>
                     <div className="grid sm:grid-cols-2 lg:grid-cols-5 gap-4">
                         {HERO_METRICS.map((m) => (
-                            <div key={m.label} className="bg-emerald-600/10 border border-emerald-600/30 rounded-lg p-5 text-center">
-                                <p className="text-2xl font-bold text-emerald-400 mb-1">{m.value}</p>
+                            <div key={m.label} className="bg-re-brand/10 border border-re-brand/30 rounded-lg p-5 text-center">
+                                <p className="text-2xl font-bold text-re-brand mb-1">{m.value}</p>
                                 <p className="text-sm text-white font-medium">{m.label}</p>
                             </div>
                         ))}
@@ -603,7 +603,7 @@ export default function CaseStudy() {
                     <div className="flex flex-col sm:flex-row gap-4 justify-center">
                         <Link
                             href="/signup"
-                            className="inline-flex items-center justify-center px-8 py-4 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded-lg transition-colors text-lg"
+                            className="inline-flex items-center justify-center px-8 py-4 bg-re-brand hover:bg-re-brand text-white font-semibold rounded-lg transition-colors text-lg"
                         >
                             Start Free Trial <ArrowRight className="w-5 h-5 ml-2" />
                         </Link>
