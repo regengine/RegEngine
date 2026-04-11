@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 
 import { PageContainer } from '@/components/layout/page-container';
@@ -179,22 +179,18 @@ export default function DashboardPage() {
     const effectiveTenantId = tenantId;
 
     // Fetch real service health status
-    const [healthStatus, setHealthStatus] = useState<'loading' | 'operational' | 'degraded' | 'disruption'>('loading');
-    useEffect(() => {
-        fetch('/api/health')
-            .then((res) => {
-                if (!res.ok) { setHealthStatus('disruption'); return; }
-                return res.json();
-            })
-            .then((data: { status?: string; overall_status?: string } | undefined) => {
-                if (!data) return;
-                const s = data.overall_status ?? data.status ?? 'unknown';
-                if (s === 'healthy' || s === 'ok' || s === 'up') setHealthStatus('operational');
-                else if (s === 'degraded') setHealthStatus('degraded');
-                else setHealthStatus('disruption');
-            })
-            .catch(() => setHealthStatus('disruption'));
-    }, []);
+    // Derive health badge from the same useSystemStatus() data the widget uses
+    // — single source of truth so badge and widget never contradict.
+    const { data: systemStatus, isLoading: statusLoading } = useSystemStatus();
+
+    const healthStatus = useMemo((): 'loading' | 'operational' | 'degraded' | 'disruption' => {
+        if (statusLoading && !systemStatus) return 'loading';
+        if (!systemStatus) return 'disruption';
+        const s = systemStatus.overall_status;
+        if (s === 'healthy') return 'operational';
+        if (s === 'degraded') return 'degraded';
+        return 'disruption';
+    }, [systemStatus, statusLoading]);
 
     useEffect(() => {
         if (isHydrated && !effectiveUser) {
@@ -254,7 +250,6 @@ export default function DashboardPage() {
             pendingReviews,
         };
     }, [systemMetrics, pendingReviews]);
-    const isDemo = !!(systemMetrics as unknown as Record<string, unknown>)?._demo;
 
     if (!isHydrated || !effectiveUser) {
         return null;
@@ -302,15 +297,10 @@ export default function DashboardPage() {
                                     <AlertTriangle className="w-3 h-3 mr-1" />
                                     Degraded Performance
                                 </Badge>
-                            ) : isDemo ? (
-                                <Badge variant="outline" className="bg-re-warning-muted text-re-warning dark:bg-re-warning/30 dark:text-re-warning">
-                                    <Activity className="w-3 h-3 mr-1" />
-                                    Demo Mode
-                                </Badge>
                             ) : (
                                 <Badge variant="outline" className="bg-re-danger-muted text-re-danger dark:bg-re-danger/30 dark:text-re-danger">
                                     <WifiOff className="w-3 h-3 mr-1" />
-                                    Service Disruption
+                                    Services Unreachable
                                 </Badge>
                             )}
                         </div>

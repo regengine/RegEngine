@@ -5,28 +5,29 @@ import type { LabelBatchInitRequest } from '@/types/labels';
 import type { SystemStatusResponse, SystemMetricsResponse } from '@/lib/api-client';
 import { POLL_HEALTH_MS as POLL_HEALTH, POLL_METRICS_MS as POLL_METRICS } from '@/lib/polling-config';
 
-// Demo fallback data shown when backend services are unreachable.
-// Lets the dashboard render a realistic preview instead of all "—".
+// Fallback data shown when backend services are unreachable.
+// Uses zeros — no fabricated metrics. The _demo flag lets the UI
+// distinguish "backend unavailable" from "tenant has no data."
 const DEMO_METRICS: SystemMetricsResponse & { _demo: true } = {
   _demo: true,
-  total_tenants: 1,
-  total_documents: 347,
+  total_tenants: 0,
+  total_documents: 0,
   active_jobs: 0,
-  compliance_score: 72,
-  compliance_grade: 'C',
-  events_ingested: 1_284,
-  chain_length: 856,
-  chain_valid: true,
-  open_alerts: 3,
+  compliance_score: 0,
+  compliance_grade: '—',
+  events_ingested: 0,
+  chain_length: 0,
+  chain_valid: false,
+  open_alerts: 0,
 };
 
 const DEMO_STATUS: SystemStatusResponse & { _demo: true } = {
   _demo: true,
   overall_status: 'degraded',
   services: [
-    { name: 'admin', status: 'unhealthy', details: { error: 'Backend not running — showing demo data' } },
-    { name: 'ingestion', status: 'unhealthy', details: { error: 'Backend not running — showing demo data' } },
-    { name: 'compliance', status: 'unhealthy', details: { error: 'Backend not running — showing demo data' } },
+    { name: 'admin', status: 'unhealthy', details: { error: 'Service unreachable' } },
+    { name: 'ingestion', status: 'unhealthy', details: { error: 'Service unreachable' } },
+    { name: 'compliance', status: 'unhealthy', details: { error: 'Service unreachable' } },
   ],
 };
 
