@@ -15,6 +15,7 @@ import structlog
 from fastapi import APIRouter, Depends, Header, HTTPException, status, Request, Query
 from shared.pagination import PaginationParams, PaginatedResponse
 from shared.metrics_auth import require_metrics_key
+from shared.rate_limit import limiter
 from fastapi.responses import PlainTextResponse
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from pydantic import BaseModel, Field
@@ -314,8 +315,10 @@ def metrics():
 
 
 @v1_router.post("/admin/keys", response_model=CreateKeyResponse)
+@limiter.limit("5/minute")
 async def create_api_key(
-    request: CreateKeyRequest,
+    request: Request,
+    body: CreateKeyRequest,
     _: bool = Depends(verify_admin_key),
 ):
     """Create a new API key (requires admin authentication)."""
@@ -326,19 +329,19 @@ async def create_api_key(
         # only the hash is persisted. raw_key is returned once here and is
         # never stored or logged (#548).
         new_key = await key_store.create_key(
-            name=request.name,
-            tenant_id=request.tenant_id,
-            rate_limit_per_minute=request.rate_limit_per_minute,
-            expires_at=request.expires_at,
-            scopes=request.scopes,
+            name=body.name,
+            tenant_id=body.tenant_id,
+            rate_limit_per_minute=body.rate_limit_per_minute,
+            expires_at=body.expires_at,
+            scopes=body.scopes,
         )
 
         logger.info(
             "api_key_created_via_admin",
             key_id=new_key.key_id,
             key_prefix=new_key.key_prefix,  # first 12 chars for identification; raw key never logged
-            name=request.name,
-            tenant_id=request.tenant_id,
+            name=body.name,
+            tenant_id=body.tenant_id,
         )
 
         return CreateKeyResponse(
@@ -355,11 +358,11 @@ async def create_api_key(
         # Sync in-memory store — create_key() hashes and stores only the hash;
         # raw_key is returned here once and never re-exposed (#548).
         raw_key, api_key = key_store.create_key(
-            name=request.name,
-            tenant_id=request.tenant_id,
-            rate_limit_per_minute=request.rate_limit_per_minute,
-            expires_at=request.expires_at,
-            scopes=request.scopes,
+            name=body.name,
+            tenant_id=body.tenant_id,
+            rate_limit_per_minute=body.rate_limit_per_minute,
+            expires_at=body.expires_at,
+            scopes=body.scopes,
         )
         key_prefix = raw_key[:12]  # first 12 chars for identification; raw key never logged
 
@@ -367,8 +370,8 @@ async def create_api_key(
             "api_key_created_via_admin",
             key_id=api_key.key_id,
             key_prefix=key_prefix,
-            name=request.name,
-            tenant_id=request.tenant_id,
+            name=body.name,
+            tenant_id=body.tenant_id,
         )
 
         return CreateKeyResponse(
