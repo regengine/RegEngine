@@ -43,9 +43,9 @@ export function FreeToolPageShell({
                 {/* Title Block */}
                 <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
                     <div>
-                        <div className="text-3xl font-semibold tracking-tight">
+                        <h1 className="text-3xl font-semibold tracking-tight">
                             RegEngine • {title}
-                        </div>
+                        </h1>
                         <div className="mt-1 text-sm text-muted-foreground">
                             {subtitle}
                         </div>

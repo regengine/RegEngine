@@ -44,7 +44,7 @@ function ROICalculatorFallback() {
                 <div className="w-16 h-16 rounded-2xl bg-re-brand-muted border border-re-brand/20 flex items-center justify-center mx-auto mb-6">
                     <svg className="w-8 h-8 text-re-brand" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
                 </div>
-                <h1 className="text-2xl font-bold text-[var(--re-text-primary)] mb-3">FSMA 204 ROI Calculator</h1>
+                <h2 className="text-2xl font-bold text-[var(--re-text-primary)] mb-3">FSMA 204 ROI Calculator</h2>
                 <p className="text-sm text-[var(--re-text-muted)] max-w-lg mx-auto leading-relaxed">Estimate your labor savings, recall cost reduction, and compliance efficiency gains from automating FSMA 204 traceability with RegEngine. Enter your facility count, product volume, and current compliance spend to see personalized results.</p>
             </div>
             <div className="max-w-2xl mx-auto">

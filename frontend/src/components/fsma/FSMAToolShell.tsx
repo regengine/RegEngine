@@ -136,7 +136,7 @@ export function FSMAToolShell({ config, onLeadCapture, renderResults }: FSMATool
                                 <Shield className="h-8 w-8 text-[var(--re-brand)]" />
                             </div>
                             <div>
-                                <CardTitle className="text-3xl font-bold">{config.title}</CardTitle>
+                                <h1 className="text-3xl font-bold">{config.title}</h1>
                                 <p className="text-[var(--re-text-tertiary)] mt-1">{config.description}</p>
                             </div>
                         </div>
