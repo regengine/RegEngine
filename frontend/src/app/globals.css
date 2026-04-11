@@ -6,7 +6,10 @@
 @layer base {
 
     /*
-   * RegEngine Theme System
+   * RegEngine Design System — single source of truth for all color tokens.
+   * Consumed via Tailwind (tailwind.config.ts) and inline styles (var(--re-*)).
+   * Do not redefine these tokens in component-level CSS files.
+   *
    * Maps the brand palette to shadcn/ui CSS variable tokens.
    * Dark (default): Background #06090f  Foreground #c8d1dc  Accent #10b981
    * Light: Background #ffffff  Foreground #1a1a2e  Accent #059669
