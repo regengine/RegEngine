@@ -100,9 +100,9 @@ export default function OnboardingPage() {
         </p>
 
         {status === 'error' && (
-          <div className="flex items-start gap-3 p-4 rounded-xl bg-red-50 border border-red-200 mb-5">
-            <AlertCircle className="h-5 w-5 text-red-500 mt-0.5 shrink-0" />
-            <p className="text-[0.875rem] text-red-700">{errorMsg}</p>
+          <div className="flex items-start gap-3 p-4 rounded-xl bg-re-danger-muted border border-re-danger mb-5">
+            <AlertCircle className="h-5 w-5 text-re-danger mt-0.5 shrink-0" />
+            <p className="text-[0.875rem] text-re-danger">{errorMsg}</p>
           </div>
         )}
 
@@ -134,7 +134,7 @@ export default function OnboardingPage() {
               required
               value={company}
               onChange={(e) => setCompany(e.target.value)}
-              placeholder="Acme Foods Inc."
+              placeholder="Your company name"
               className="w-full px-4 py-3 rounded-xl bg-[var(--re-surface-card)] border border-[var(--re-surface-border)] text-[var(--re-text-primary)] text-[0.925rem] placeholder:text-[var(--re-text-muted)] outline-none transition-all duration-200 focus:border-[var(--re-brand)] focus:shadow-[0_0_0_3px_rgba(16,185,129,0.12)]"
             />
           </div>

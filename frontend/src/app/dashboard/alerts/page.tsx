@@ -441,7 +441,7 @@ export default function AlertsDashboardPage() {
 
                 {isLoggedIn && !loading && filtered.length === 0 && alerts.length > 0 && (
                     <div className="text-center py-12 text-muted-foreground">
-                        <CheckCircle2 className="h-10 w-10 mx-auto mb-3 text-emerald-500" />
+                        <CheckCircle2 className="h-10 w-10 mx-auto mb-3 text-re-brand" />
                         <div className="font-medium">All clear</div>
                         <div className="text-sm">No {filter === 'all' ? '' : filter} alerts to show</div>
                     </div>
@@ -449,7 +449,7 @@ export default function AlertsDashboardPage() {
 
                 {isLoggedIn && !loading && alerts.length === 0 && !error && (
                     <div className="text-center py-12 text-muted-foreground">
-                        <CheckCircle2 className="h-10 w-10 mx-auto mb-3 text-emerald-500" />
+                        <CheckCircle2 className="h-10 w-10 mx-auto mb-3 text-re-brand" />
                         <div className="font-medium">No alerts</div>
                         <div className="text-sm">Everything looks good — no active alerts</div>
                     </div>

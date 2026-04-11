@@ -7,7 +7,7 @@ export const metadata: Metadata = {
     openGraph: {
         title: 'Terms of Service | RegEngine',
         description: 'Terms of service for RegEngine FSMA 204 compliance platform.',
-        url: 'https://www.regengine.co/terms',
+        url: 'https://regengine.co/terms',
         type: 'website',
     },
 };

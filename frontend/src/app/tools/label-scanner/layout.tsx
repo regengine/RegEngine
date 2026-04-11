@@ -6,13 +6,13 @@ export const metadata: Metadata = {
     title: 'AI Food Label Scanner | Extract FSMA 204 KDEs from Product Labels | RegEngine',
     description: 'Upload a food product label and AI extracts lot code, GTIN, expiry date, and FSMA 204 Key Data Elements automatically using computer vision. Free tool.',
     alternates: {
-        canonical: 'https://www.regengine.co/tools/label-scanner',
+        canonical: 'https://regengine.co/tools/label-scanner',
     },
     openGraph: {
         title: 'AI Food Label Scanner — RegEngine',
         description: 'Upload a food label and AI extracts lot code, GTIN, expiry date, and FSMA 204 KDEs automatically. Free.',
         type: 'website',
-        url: 'https://www.regengine.co/tools/label-scanner',
+        url: 'https://regengine.co/tools/label-scanner',
     },
 };
 

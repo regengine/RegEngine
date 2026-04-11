@@ -263,10 +263,10 @@ ${nonCompliantEvents.length > 0 ? `<h2 style="font-size:16px;margin-bottom:12px;
 
         {/* Error */}
         {error && (
-          <div className="mx-4 mb-4 rounded-lg border border-red-500/20 bg-red-500/5 p-3">
+          <div className="mx-4 mb-4 rounded-lg border border-re-danger/20 bg-re-danger-muted0/5 p-3">
             <div className="flex items-center gap-2">
-              <XCircle className="w-4 h-4 text-red-400" />
-              <span className="text-[0.75rem] text-red-400">{error}</span>
+              <XCircle className="w-4 h-4 text-re-danger" />
+              <span className="text-[0.75rem] text-re-danger">{error}</span>
             </div>
           </div>
         )}
@@ -289,9 +289,9 @@ ${nonCompliantEvents.length > 0 ? `<h2 style="font-size:16px;margin-bottom:12px;
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               {[
                 { label: 'Events', value: result.total_events, color: 'text-[var(--re-text-primary)]' },
-                { label: 'Compliant', value: result.compliant_events, color: 'text-emerald-400' },
-                { label: 'Non-compliant', value: result.non_compliant_events, color: result.non_compliant_events > 0 ? 'text-red-400' : 'text-[var(--re-text-primary)]' },
-                { label: 'Rule Failures', value: result.total_rule_failures, color: result.total_rule_failures > 0 ? 'text-amber-400' : 'text-[var(--re-text-primary)]' },
+                { label: 'Compliant', value: result.compliant_events, color: 'text-re-brand' },
+                { label: 'Non-compliant', value: result.non_compliant_events, color: result.non_compliant_events > 0 ? 'text-re-danger' : 'text-[var(--re-text-primary)]' },
+                { label: 'Rule Failures', value: result.total_rule_failures, color: result.total_rule_failures > 0 ? 'text-re-warning' : 'text-[var(--re-text-primary)]' },
               ].map((stat) => (
                 <div key={stat.label} className="bg-[var(--re-surface-elevated)] rounded-lg p-3 text-center">
                   <div className={`text-xl font-bold font-mono ${stat.color}`}>{stat.value}</div>
@@ -314,7 +314,7 @@ ${nonCompliantEvents.length > 0 ? `<h2 style="font-size:16px;margin-bottom:12px;
               <div className="ml-auto">
                 <button
                   onClick={() => { trackSandbox('REPORT_DL'); handleDownloadReport(); }}
-                  className="inline-flex items-center gap-2 bg-white border border-gray-700 text-gray-700 px-4 py-2 rounded-lg text-[0.75rem] font-medium transition-all hover:bg-gray-50 cursor-pointer"
+                  className="inline-flex items-center gap-2 bg-white border border-re-border text-re-text-disabled px-4 py-2 rounded-lg text-[0.75rem] font-medium transition-all hover:bg-re-surface-card cursor-pointer"
                 >
                   <Download className="w-4 h-4" />
                   Download Compliance Report
@@ -324,16 +324,16 @@ ${nonCompliantEvents.length > 0 ? `<h2 style="font-size:16px;margin-bottom:12px;
 
             {/* Blocking Banner */}
             {result.submission_blocked && (
-              <div className="rounded-lg border-2 border-red-500/30 bg-red-500/10 p-4">
+              <div className="rounded-lg border-2 border-re-danger/30 bg-re-danger-muted0/10 p-4">
                 <div className="flex items-center gap-2 mb-2">
-                  <ShieldAlert className="w-5 h-5 text-red-400" />
-                  <span className="text-[0.8rem] font-semibold text-red-400">
+                  <ShieldAlert className="w-5 h-5 text-re-danger" />
+                  <span className="text-[0.8rem] font-semibold text-re-danger">
                     FDA SUBMISSION BLOCKED — {result.blocking_reasons.length} critical defect{result.blocking_reasons.length !== 1 ? 's' : ''}
                   </span>
                 </div>
                 <ul className="space-y-1">
                   {result.blocking_reasons.slice(0, 10).map((reason, i) => (
-                    <li key={i} className="text-[0.65rem] text-red-400 flex items-start gap-1.5">
+                    <li key={i} className="text-[0.65rem] text-re-danger flex items-start gap-1.5">
                       <XCircle className="w-3 h-3 mt-0.5 flex-shrink-0" />
                       {reason}
                     </li>
@@ -343,10 +343,10 @@ ${nonCompliantEvents.length > 0 ? `<h2 style="font-size:16px;margin-bottom:12px;
             )}
 
             {!result.submission_blocked && result.non_compliant_events === 0 && (
-              <div className="rounded-lg border-2 border-emerald-500/30 bg-emerald-500/10 p-4">
+              <div className="rounded-lg border-2 border-re-brand/30 bg-re-brand-muted p-4">
                 <div className="flex items-center gap-2">
-                  <CheckCircle2 className="w-5 h-5 text-emerald-400" />
-                  <span className="text-[0.8rem] font-semibold text-emerald-400">
+                  <CheckCircle2 className="w-5 h-5 text-re-brand" />
+                  <span className="text-[0.8rem] font-semibold text-re-brand">
                     ALL EVENTS COMPLIANT — Ready for FDA submission
                   </span>
                 </div>
@@ -354,10 +354,10 @@ ${nonCompliantEvents.length > 0 ? `<h2 style="font-size:16px;margin-bottom:12px;
             )}
 
             {!result.submission_blocked && result.non_compliant_events > 0 && (
-              <div className="rounded-lg border-2 border-amber-500/30 bg-amber-500/10 p-4">
+              <div className="rounded-lg border-2 border-re-warning/30 bg-re-warning-muted0/10 p-4">
                 <div className="flex items-center gap-2">
-                  <AlertTriangle className="w-5 h-5 text-amber-400" />
-                  <span className="text-[0.8rem] font-semibold text-amber-400">
+                  <AlertTriangle className="w-5 h-5 text-re-warning" />
+                  <span className="text-[0.8rem] font-semibold text-re-warning">
                     {result.non_compliant_events} event{result.non_compliant_events !== 1 ? 's' : ''} need{result.non_compliant_events === 1 ? 's' : ''} attention — review issues below
                   </span>
                 </div>
@@ -370,7 +370,7 @@ ${nonCompliantEvents.length > 0 ? `<h2 style="font-size:16px;margin-bottom:12px;
                 <div
                   key={ev.event_index}
                   className={`rounded-lg border ${
-                    ev.compliant ? 'border-emerald-500/20' : 'border-red-500/20'
+                    ev.compliant ? 'border-re-brand/20' : 'border-re-danger/20'
                   }`}
                 >
                   <button
@@ -379,8 +379,8 @@ ${nonCompliantEvents.length > 0 ? `<h2 style="font-size:16px;margin-bottom:12px;
                   >
                     <div className="flex items-center gap-2">
                       {ev.compliant
-                        ? <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                        : <XCircle className="w-4 h-4 text-red-400" />}
+                        ? <CheckCircle2 className="w-4 h-4 text-re-brand" />
+                        : <XCircle className="w-4 h-4 text-re-danger" />}
                       <span className="font-mono text-[0.75rem] font-medium text-[var(--re-text-primary)]">
                         {ev.traceability_lot_code}
                       </span>
@@ -406,9 +406,9 @@ ${nonCompliantEvents.length > 0 ? `<h2 style="font-size:16px;margin-bottom:12px;
                       {/* KDE Errors */}
                       {ev.kde_errors.length > 0 && (
                         <div className="space-y-1">
-                          <span className="text-[0.65rem] font-medium text-amber-400">KDE Validation Errors:</span>
+                          <span className="text-[0.65rem] font-medium text-re-warning">KDE Validation Errors:</span>
                           {ev.kde_errors.map((err, j) => (
-                            <div key={j} className="text-[0.65rem] text-amber-400 flex items-start gap-1.5 ml-2">
+                            <div key={j} className="text-[0.65rem] text-re-warning flex items-start gap-1.5 ml-2">
                               <AlertTriangle className="w-3 h-3 mt-0.5 flex-shrink-0" />
                               {err}
                             </div>
@@ -436,9 +436,9 @@ ${nonCompliantEvents.length > 0 ? `<h2 style="font-size:16px;margin-bottom:12px;
                           <div
                             key={j}
                             className={`flex items-start gap-2 text-[0.65rem] ${
-                              rule.result === 'pass' ? 'text-emerald-400' :
-                              rule.result === 'fail' ? 'text-red-400' :
-                              rule.result === 'warn' ? 'text-amber-400' :
+                              rule.result === 'pass' ? 'text-re-brand' :
+                              rule.result === 'fail' ? 'text-re-danger' :
+                              rule.result === 'warn' ? 'text-re-warning' :
                               'text-[var(--re-text-disabled)]'
                             }`}
                           >
@@ -467,7 +467,7 @@ ${nonCompliantEvents.length > 0 ? `<h2 style="font-size:16px;margin-bottom:12px;
                             {/* Relational integrity failures (cross-event logic) */}
                             {(relationalFailed.length > 0 || relationalWarned.length > 0) && (
                               <div className="space-y-1">
-                                <span className="text-[0.65rem] font-medium text-red-400 flex items-center gap-1">
+                                <span className="text-[0.65rem] font-medium text-re-danger flex items-center gap-1">
                                   <ShieldAlert className="w-3 h-3" />
                                   Supply Chain Integrity ({relationalFailed.length + relationalWarned.length}):
                                 </span>
@@ -478,7 +478,7 @@ ${nonCompliantEvents.length > 0 ? `<h2 style="font-size:16px;margin-bottom:12px;
                             {/* Structural failures (missing/malformed data) */}
                             {(structuralFailed.length > 0 || structuralWarned.length > 0) && (
                               <div className="space-y-1">
-                                <span className="text-[0.65rem] font-medium text-amber-400 flex items-center gap-1">
+                                <span className="text-[0.65rem] font-medium text-re-warning flex items-center gap-1">
                                   <AlertTriangle className="w-3 h-3" />
                                   Missing Data ({structuralFailed.length + structuralWarned.length}):
                                 </span>
@@ -489,7 +489,7 @@ ${nonCompliantEvents.length > 0 ? `<h2 style="font-size:16px;margin-bottom:12px;
                             {/* Passed rules */}
                             {passed.length > 0 && (
                               <div className="space-y-1">
-                                <span className="text-[0.65rem] font-medium text-emerald-400 flex items-center gap-1">
+                                <span className="text-[0.65rem] font-medium text-re-brand flex items-center gap-1">
                                   <CheckCircle2 className="w-3 h-3" />
                                   Passed ({passed.length}):
                                 </span>
@@ -513,14 +513,14 @@ ${nonCompliantEvents.length > 0 ? `<h2 style="font-size:16px;margin-bottom:12px;
 
             {/* Duplicate Warnings */}
             {result.duplicate_warnings && result.duplicate_warnings.length > 0 && (
-              <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-4">
+              <div className="rounded-lg border border-re-warning/30 bg-re-warning-muted0/10 p-4">
                 <div className="flex items-center gap-2 mb-2">
-                  <AlertTriangle className="w-4 h-4 text-amber-400" />
-                  <span className="text-[0.75rem] font-semibold text-amber-400">Duplicate Warnings</span>
+                  <AlertTriangle className="w-4 h-4 text-re-warning" />
+                  <span className="text-[0.75rem] font-semibold text-re-warning">Duplicate Warnings</span>
                 </div>
                 <ul className="space-y-1">
                   {result.duplicate_warnings.map((w, i) => (
-                    <li key={i} className="text-[0.65rem] text-amber-400 flex items-start gap-1.5">
+                    <li key={i} className="text-[0.65rem] text-re-warning flex items-start gap-1.5">
                       <AlertTriangle className="w-3 h-3 mt-0.5 flex-shrink-0" />
                       {w}
                     </li>
@@ -531,14 +531,14 @@ ${nonCompliantEvents.length > 0 ? `<h2 style="font-size:16px;margin-bottom:12px;
 
             {/* Entity Warnings */}
             {result.entity_warnings && result.entity_warnings.length > 0 && (
-              <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-4">
+              <div className="rounded-lg border border-re-warning/30 bg-re-warning-muted0/10 p-4">
                 <div className="flex items-center gap-2 mb-2">
-                  <AlertTriangle className="w-4 h-4 text-amber-400" />
-                  <span className="text-[0.75rem] font-semibold text-amber-400">Entity Warnings</span>
+                  <AlertTriangle className="w-4 h-4 text-re-warning" />
+                  <span className="text-[0.75rem] font-semibold text-re-warning">Entity Warnings</span>
                 </div>
                 <ul className="space-y-1">
                   {result.entity_warnings.map((w, i) => (
-                    <li key={i} className="text-[0.65rem] text-amber-400 flex items-start gap-1.5">
+                    <li key={i} className="text-[0.65rem] text-re-warning flex items-start gap-1.5">
                       <AlertTriangle className="w-3 h-3 mt-0.5 flex-shrink-0" />
                       {w}
                     </li>

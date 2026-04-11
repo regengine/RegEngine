@@ -57,15 +57,15 @@ interface TracePanelProps {
 // ---------------------------------------------------------------------------
 
 const CTE_COLORS: Record<string, { bg: string; border: string; text: string; icon: string }> = {
-  harvesting:     { bg: 'bg-green-500/15',   border: 'border-green-500/40',   text: 'text-green-400',   icon: '🌱' },
+  harvesting:     { bg: 'bg-re-success-muted0/15',   border: 'border-green-500/40',   text: 'text-re-success',   icon: '🌱' },
   cooling:        { bg: 'bg-cyan-500/15',     border: 'border-cyan-500/40',    text: 'text-cyan-400',    icon: '❄️' },
-  shipping:       { bg: 'bg-blue-500/15',     border: 'border-blue-500/40',    text: 'text-blue-400',    icon: '🚛' },
+  shipping:       { bg: 'bg-re-info-muted0/15',     border: 'border-blue-500/40',    text: 'text-re-info',    icon: '🚛' },
   receiving:      { bg: 'bg-purple-500/15',   border: 'border-purple-500/40',  text: 'text-purple-400',  icon: '📦' },
-  transformation: { bg: 'bg-amber-500/15',    border: 'border-amber-500/40',   text: 'text-amber-400',   icon: '🔄' },
+  transformation: { bg: 'bg-re-warning-muted0/15',    border: 'border-re-warning/40',   text: 'text-re-warning',   icon: '🔄' },
   packing:        { bg: 'bg-orange-500/15',   border: 'border-orange-500/40',  text: 'text-orange-400',  icon: '📋' },
 };
 
-const DEFAULT_CTE_COLOR = { bg: 'bg-gray-500/15', border: 'border-gray-500/40', text: 'text-gray-400', icon: '📄' };
+const DEFAULT_CTE_COLOR = { bg: 'bg-re-surface-card0/15', border: 'border-gray-500/40', text: 'text-re-text-tertiary', icon: '📄' };
 
 function getCteVisual(cteType: string) {
   return CTE_COLORS[cteType.toLowerCase()] || DEFAULT_CTE_COLOR;
@@ -320,8 +320,8 @@ export function TracePanel({ csv, availableTlcs, onHighlightEvent }: TracePanelP
 
       {/* Error */}
       {error && (
-        <div className="px-4 py-2 bg-red-500/10 border-b border-red-500/20">
-          <p className="text-[0.65rem] text-red-400">{error}</p>
+        <div className="px-4 py-2 bg-re-danger-muted0/10 border-b border-re-danger/20">
+          <p className="text-[0.65rem] text-re-danger">{error}</p>
         </div>
       )}
 
@@ -460,7 +460,7 @@ export function TracePanel({ csv, availableTlcs, onHighlightEvent }: TracePanelP
                               <span className="text-[0.55rem] text-[var(--re-text-muted)]">
                                 {edge.link_type === 'transformation_input' ? 'feeds into' : 'produces'}
                               </span>
-                              <span className="text-[0.6rem] font-mono text-amber-400">
+                              <span className="text-[0.6rem] font-mono text-re-warning">
                                 {targetNode.traceability_lot_code}
                               </span>
                             </div>

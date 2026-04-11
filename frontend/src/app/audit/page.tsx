@@ -130,7 +130,7 @@ export default function AuditReviewPage() {
             <Card>
               <CardContent className="pt-5 pb-4">
                 <div className="flex items-center gap-2 mb-2">
-                  <Shield className="h-4 w-4 text-green-500" />
+                  <Shield className="h-4 w-4 text-re-success" />
                   <span className="text-xs text-muted-foreground uppercase tracking-wider">Compliance</span>
                 </div>
                 <p className="text-3xl font-bold">{s.compliance.pass_rate_percent}%</p>
@@ -143,7 +143,7 @@ export default function AuditReviewPage() {
             <Card>
               <CardContent className="pt-5 pb-4">
                 <div className="flex items-center gap-2 mb-2">
-                  <AlertTriangle className="h-4 w-4 text-amber-500" />
+                  <AlertTriangle className="h-4 w-4 text-re-warning" />
                   <span className="text-xs text-muted-foreground uppercase tracking-wider">Exceptions</span>
                 </div>
                 <p className="text-3xl font-bold">{s.exceptions.open}</p>
@@ -156,12 +156,12 @@ export default function AuditReviewPage() {
             <Card>
               <CardContent className="pt-5 pb-4">
                 <div className="flex items-center gap-2 mb-2">
-                  <Hash className="h-4 w-4 text-blue-500" />
+                  <Hash className="h-4 w-4 text-re-info" />
                   <span className="text-xs text-muted-foreground uppercase tracking-wider">Chain Integrity</span>
                 </div>
                 <p className="text-3xl font-bold">
                   {s.chain_integrity.status === 'VERIFIED' ? (
-                    <span className="text-green-600 flex items-center gap-1">
+                    <span className="text-re-success flex items-center gap-1">
                       <CheckCircle className="h-6 w-6" /> OK
                     </span>
                   ) : (
@@ -189,9 +189,9 @@ export default function AuditReviewPage() {
                 className="h-4 mb-2"
               />
               <div className="flex justify-between text-sm">
-                <span className="text-green-600">{s.compliance.passed} passed</span>
-                <span className="text-red-600">{s.compliance.failed} failed</span>
-                <span className="text-amber-600">{s.compliance.warned} warned</span>
+                <span className="text-re-success">{s.compliance.passed} passed</span>
+                <span className="text-re-danger">{s.compliance.failed} failed</span>
+                <span className="text-re-warning">{s.compliance.warned} warned</span>
               </div>
             </CardContent>
           </Card>
@@ -230,11 +230,11 @@ export default function AuditReviewPage() {
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Submitted</span>
-                    <span className="font-bold text-green-600">{s.requests.submitted}</span>
+                    <span className="font-bold text-re-success">{s.requests.submitted}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Active</span>
-                    <span className="font-bold text-blue-600">{s.requests.active}</span>
+                    <span className="font-bold text-re-info">{s.requests.active}</span>
                   </div>
                 </div>
               </CardContent>
@@ -245,7 +245,7 @@ export default function AuditReviewPage() {
           <Card>
             <CardHeader>
               <CardTitle className="text-lg flex items-center gap-2">
-                <Shield className="h-5 w-5 text-blue-500" />
+                <Shield className="h-5 w-5 text-re-info" />
                 Rule Catalog
               </CardTitle>
               <CardDescription>
@@ -276,7 +276,7 @@ export default function AuditReviewPage() {
                         <div className="text-right text-xs">
                           {rule.evaluation_stats.total > 0 ? (
                             <>
-                              <span className={rule.evaluation_stats.pass_rate_percent >= 90 ? 'text-green-600' : rule.evaluation_stats.pass_rate_percent >= 70 ? 'text-amber-600' : 'text-red-600'}>
+                              <span className={rule.evaluation_stats.pass_rate_percent >= 90 ? 'text-re-success' : rule.evaluation_stats.pass_rate_percent >= 70 ? 'text-re-warning' : 'text-re-danger'}>
                                 {rule.evaluation_stats.pass_rate_percent}% pass
                               </span>
                               <p className="text-muted-foreground">

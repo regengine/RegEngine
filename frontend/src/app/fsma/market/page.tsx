@@ -28,8 +28,8 @@ export default function TargetMarketPage() {
 
                     {/* Page Header */}
                     <div className="flex items-center gap-4 mb-8">
-                        <div className="p-3 rounded-lg bg-blue-100 dark:bg-blue-900">
-                            <Building2 className="h-8 w-8 text-blue-600 dark:text-blue-400" />
+                        <div className="p-3 rounded-lg bg-re-info-muted dark:bg-blue-900">
+                            <Building2 className="h-8 w-8 text-re-info dark:text-re-info" />
                         </div>
                         <div>
                             <h1 className="text-3xl font-bold">FSMA 204 Target Market</h1>
@@ -44,8 +44,8 @@ export default function TargetMarketPage() {
                         <CardContent className="py-4">
                             <div className="flex flex-col md:flex-row gap-6">
                                 <div className="flex items-center gap-3">
-                                    <div className="p-2 rounded-full bg-white dark:bg-gray-800">
-                                        <Target className="h-5 w-5 text-blue-600" />
+                                    <div className="p-2 rounded-full bg-white dark:bg-re-surface-card">
+                                        <Target className="h-5 w-5 text-re-info" />
                                     </div>
                                     <div>
                                         <p className="font-medium">Compliance Deadline</p>
@@ -53,7 +53,7 @@ export default function TargetMarketPage() {
                                     </div>
                                 </div>
                                 <div className="flex items-center gap-3">
-                                    <div className="p-2 rounded-full bg-white dark:bg-gray-800">
+                                    <div className="p-2 rounded-full bg-white dark:bg-re-surface-card">
                                         <Users className="h-5 w-5 text-purple-600" />
                                     </div>
                                     <div>

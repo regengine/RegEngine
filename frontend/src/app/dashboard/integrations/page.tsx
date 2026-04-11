@@ -76,7 +76,7 @@ export default function DashboardIntegrationsPage() {
                     </Button>
                 </div>
 
-                <div className="rounded-xl border border-blue-500/20 bg-blue-500/[0.04] p-4 text-sm text-muted-foreground">
+                <div className="rounded-xl border border-re-info/20 bg-re-info-muted0/[0.04] p-4 text-sm text-muted-foreground">
                     Alpha release — Browse available integrations and queue connection requests. Live data sync activates during onboarding.
                 </div>
 
@@ -121,7 +121,7 @@ export default function DashboardIntegrationsPage() {
                             <p>2. Map source fields to FSMA CTE and KDE targets.</p>
                             <p>3. Resolve missing KDEs, identity conflicts, and ambiguous facility matches.</p>
                             <p>4. Publish only after exceptions are reviewed.</p>
-                            <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-3 text-amber-200">
+                            <div className="rounded-xl border border-re-warning/20 bg-re-warning-muted0/10 p-3 text-re-warning">
                                 Cryptographic hashing verifies the exported record after normalization. It does not prove the upstream source data was correct.
                             </div>
                         </CardContent>
@@ -156,12 +156,12 @@ export default function DashboardIntegrationsPage() {
                             </div>
                         )}
                         {status === 'error' && (
-                            <div className="rounded-xl border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-200">
+                            <div className="rounded-xl border border-re-danger/20 bg-re-danger-muted0/10 p-4 text-sm text-red-200">
                                 The mapping review contract route did not respond. Public status copy still renders from the shared registry above.
                             </div>
                         )}
                         <div className="rounded-xl border border-[var(--re-border-default)] bg-[var(--re-surface-elevated)] p-4 text-sm text-muted-foreground">
-                            <AlertTriangle className="h-4 w-4 inline mr-2 text-amber-500" />
+                            <AlertTriangle className="h-4 w-4 inline mr-2 text-re-warning" />
                             Required KDE gaps block automated publication into recall-ready exports until they are resolved.
                         </div>
                     </CardContent>

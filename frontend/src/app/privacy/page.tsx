@@ -33,7 +33,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: 'Privacy Policy | RegEngine',
     description: 'Plain language privacy policy for FSMA 204 compliance.',
-    url: 'https://www.regengine.co/privacy',
+    url: 'https://regengine.co/privacy',
     type: 'website',
   },
 };
@@ -271,11 +271,11 @@ export default function PrivacyPage() {
             {/* ── What We Don't Do — highlighted callout ──── */}
             <div id="dont" className="scroll-mt-24 pb-10 border-t border-[var(--re-surface-border)] pt-8">
               <div
-                className="rounded-2xl border-2 border-red-500/20 p-4 sm:p-6"
+                className="rounded-2xl border-2 border-re-danger/20 p-4 sm:p-6"
                 style={{ background: 'rgba(239,68,68,0.04)', boxShadow: '0 4px 24px rgba(0,0,0,0.06)' }}
               >
                 <div className="flex items-center gap-2.5 mb-4">
-                  <Ban className="h-5 w-5 text-red-500" />
+                  <Ban className="h-5 w-5 text-re-danger" />
                   <h2 className="font-display text-lg font-bold text-[var(--re-text-primary)]">
                     What We Don&apos;t Do
                   </h2>
@@ -283,7 +283,7 @@ export default function PrivacyPage() {
                 <ul className="flex flex-col gap-2.5">
                   {dontItems.map((item, i) => (
                     <li key={i} className="flex items-start gap-2.5">
-                      <ShieldCheck className="h-4 w-4 text-emerald-500 mt-0.5 shrink-0" />
+                      <ShieldCheck className="h-4 w-4 text-re-brand mt-0.5 shrink-0" />
                       <p className="text-[13px] text-[var(--re-text-muted)] leading-relaxed">
                         {item}
                       </p>

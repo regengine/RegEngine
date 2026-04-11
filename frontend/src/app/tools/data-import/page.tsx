@@ -9,13 +9,13 @@ export const metadata: Metadata = {
     title: "FSMA 204 Data Import Hub | Upload CSV, IoT & Webhook Traceability Data | RegEngine",
     description: "Import FSMA 204 traceability data via CSV upload, IoT temperature logs, or webhook API. Supports Sensitech TempTale and all CTE types with auto-validation.",
     alternates: {
-        canonical: "https://www.regengine.co/tools/data-import",
+        canonical: "https://regengine.co/tools/data-import",
     },
     openGraph: {
         title: "FSMA 204 Data Import Hub — RegEngine",
         description: "Import traceability data via CSV, IoT logs, or webhook API with FSMA 204 auto-validation. Free tool.",
         type: "website",
-        url: "https://www.regengine.co/tools/data-import",
+        url: "https://regengine.co/tools/data-import",
     },
 };
 

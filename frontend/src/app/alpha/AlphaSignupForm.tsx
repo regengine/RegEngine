@@ -197,7 +197,7 @@ export default function AlphaSignupForm() {
             </div>
 
             {error && (
-                <p className="text-[13px] text-red-500">{error}</p>
+                <p className="text-[13px] text-re-danger">{error}</p>
             )}
             <button
                 type="submit"

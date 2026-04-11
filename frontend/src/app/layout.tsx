@@ -19,7 +19,7 @@ export const viewport: Viewport = {
 }
 
 export const metadata: Metadata = {
-  metadataBase: new URL('https://www.regengine.co'),
+  metadataBase: new URL('https://regengine.co'),
   title: 'RegEngine — FSMA 204 Food Traceability Compliance',
   description: 'Meet FDA and retailer traceability deadlines. Ingest supplier data, verify chain of custody, and export audit-ready records in minutes.',
   icons: {
@@ -33,7 +33,7 @@ export const metadata: Metadata = {
     title: 'RegEngine — FSMA 204 Food Traceability Compliance',
     description: 'Meet FDA and retailer traceability deadlines. Ingest supplier data, verify chain of custody, and export audit-ready records in minutes.',
     siteName: 'RegEngine',
-    url: 'https://www.regengine.co',
+    url: 'https://regengine.co',
     type: 'website',
   },
 }
@@ -71,8 +71,8 @@ export default async function RootLayout({
               '@context': 'https://schema.org',
               '@type': 'Organization',
               name: 'RegEngine',
-              url: 'https://www.regengine.co',
-              logo: 'https://www.regengine.co/icon.png',
+              url: 'https://regengine.co',
+              logo: 'https://regengine.co/icon.png',
               description: 'FSMA 204 food traceability compliance platform. Ingest supplier data, verify chain of custody, and export audit-ready records.',
               sameAs: [],
             }),
@@ -88,7 +88,7 @@ export default async function RootLayout({
               '@context': 'https://schema.org',
               '@type': 'WebSite',
               name: 'RegEngine',
-              url: 'https://www.regengine.co',
+              url: 'https://regengine.co',
             }),
           }}
         />
@@ -102,13 +102,13 @@ export default async function RootLayout({
               '@context': 'https://schema.org',
               '@type': 'BreadcrumbList',
               itemListElement: [
-                { '@type': 'ListItem', position: 1, name: 'Home', item: 'https://www.regengine.co' },
-                { '@type': 'ListItem', position: 2, name: 'Pricing', item: 'https://www.regengine.co/pricing' },
-                { '@type': 'ListItem', position: 3, name: 'Product', item: 'https://www.regengine.co/product' },
-                { '@type': 'ListItem', position: 4, name: 'Docs', item: 'https://www.regengine.co/docs' },
-                { '@type': 'ListItem', position: 5, name: 'FSMA 204 Guide', item: 'https://www.regengine.co/fsma-204' },
-                { '@type': 'ListItem', position: 6, name: 'About', item: 'https://www.regengine.co/about' },
-                { '@type': 'ListItem', position: 7, name: 'Free Tools', item: 'https://www.regengine.co/tools' },
+                { '@type': 'ListItem', position: 1, name: 'Home', item: 'https://regengine.co' },
+                { '@type': 'ListItem', position: 2, name: 'Pricing', item: 'https://regengine.co/pricing' },
+                { '@type': 'ListItem', position: 3, name: 'Product', item: 'https://regengine.co/product' },
+                { '@type': 'ListItem', position: 4, name: 'Docs', item: 'https://regengine.co/docs' },
+                { '@type': 'ListItem', position: 5, name: 'FSMA 204 Guide', item: 'https://regengine.co/fsma-204' },
+                { '@type': 'ListItem', position: 6, name: 'About', item: 'https://regengine.co/about' },
+                { '@type': 'ListItem', position: 7, name: 'Free Tools', item: 'https://regengine.co/tools' },
               ],
             }),
           }}
@@ -124,7 +124,7 @@ export default async function RootLayout({
               '@type': 'Product',
               name: 'RegEngine FSMA 204 Compliance Platform',
               description: 'FSMA 204 food traceability compliance software. Ingest supplier data, verify chain of custody, and produce FDA-ready audit exports in under 48 hours.',
-              url: 'https://www.regengine.co',
+              url: 'https://regengine.co',
               brand: {
                 '@type': 'Brand',
                 name: 'RegEngine',

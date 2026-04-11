@@ -117,9 +117,9 @@ export default function NoticeValidatorPage() {
     }, [hasAnalyzed, noticeText]);
 
     const gradeColor = (grade?: string) => {
-        if (grade === 'A') return 'text-emerald-500 border-emerald-500/40 bg-emerald-500/10';
+        if (grade === 'A') return 'text-re-brand border-re-brand/40 bg-re-brand-muted';
         if (grade === 'B') return 'text-sky-500 border-sky-500/40 bg-sky-500/10';
-        if (grade === 'C') return 'text-amber-500 border-amber-500/40 bg-amber-500/10';
+        if (grade === 'C') return 'text-re-warning border-re-warning/40 bg-re-warning-muted0/10';
         return 'text-rose-500 border-rose-500/40 bg-rose-500/10';
     };
 
@@ -215,7 +215,7 @@ export default function NoticeValidatorPage() {
                                     <article key={check.id} className="rounded-2xl border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] p-5">
                                         <div className="flex items-start gap-3">
                                             {check.found ? (
-                                                <CheckCircle2 className="h-5 w-5 text-emerald-500 mt-0.5" />
+                                                <CheckCircle2 className="h-5 w-5 text-re-brand mt-0.5" />
                                             ) : (
                                                 <XCircle className="h-5 w-5 text-rose-500 mt-0.5" />
                                             )}
@@ -243,7 +243,7 @@ export default function NoticeValidatorPage() {
                                 </div>
                                 <div className="rounded-2xl border border-[rgba(245,158,11,0.24)] bg-[rgba(245,158,11,0.08)] p-6">
                                     <div className="flex items-start gap-3">
-                                        <AlertTriangle className="h-5 w-5 text-amber-500 mt-0.5" />
+                                        <AlertTriangle className="h-5 w-5 text-re-warning mt-0.5" />
                                         <div>
                                             <p className="font-semibold text-[var(--re-text-primary)]">Scope note</p>
                                             <p className="mt-2 text-sm text-[var(--re-text-muted)]">

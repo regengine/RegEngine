@@ -115,7 +115,7 @@ export default function MyControlsPage() {
         <h1 className="text-3xl font-bold">My Controls</h1>
         <button
           onClick={() => setShowCreateForm(!showCreateForm)}
-          className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg transition"
+          className="bg-re-info hover:bg-re-info text-white px-6 py-2 rounded-lg transition"
         >
           {showCreateForm ? 'Cancel' : 'Create Control'}
         </button>
@@ -132,7 +132,7 @@ export default function MyControlsPage() {
                 required
                 value={formData.control_id}
                 onChange={(e) => setFormData({ ...formData, control_id: e.target.value })}
-                className="w-full border border-gray-300 rounded-lg px-4 py-2"
+                className="w-full border border-re-border rounded-lg px-4 py-2"
                 placeholder="e.g., CSF-AC-1"
               />
             </div>
@@ -143,7 +143,7 @@ export default function MyControlsPage() {
                 required
                 value={formData.title}
                 onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                className="w-full border border-gray-300 rounded-lg px-4 py-2"
+                className="w-full border border-re-border rounded-lg px-4 py-2"
                 placeholder="e.g., Access Control Policy"
               />
             </div>
@@ -153,7 +153,7 @@ export default function MyControlsPage() {
                 required
                 value={formData.description}
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                className="w-full border border-gray-300 rounded-lg px-4 py-2 h-24"
+                className="w-full border border-re-border rounded-lg px-4 py-2 h-24"
                 placeholder="Detailed description of the control..."
               />
             </div>
@@ -162,7 +162,7 @@ export default function MyControlsPage() {
               <select
                 value={formData.framework}
                 onChange={(e) => setFormData({ ...formData, framework: e.target.value })}
-                className="w-full border border-gray-300 rounded-lg px-4 py-2"
+                className="w-full border border-re-border rounded-lg px-4 py-2"
               >
                 <option value="FSMA 204">FSMA 204</option>
                 <option value="FDA CTE">FDA CTE</option>
@@ -173,14 +173,14 @@ export default function MyControlsPage() {
             <div className="flex gap-4">
               <button
                 type="submit"
-                className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg transition"
+                className="bg-re-info hover:bg-re-info text-white px-6 py-2 rounded-lg transition"
               >
                 Create Control
               </button>
               <button
                 type="button"
                 onClick={() => setShowCreateForm(false)}
-                className="bg-gray-300 hover:bg-gray-400 text-gray-800 px-6 py-2 rounded-lg transition"
+                className="bg-re-surface-elevated hover:bg-re-surface-elevated text-re-text-primary px-6 py-2 rounded-lg transition"
               >
                 Cancel
               </button>
@@ -191,21 +191,21 @@ export default function MyControlsPage() {
 
       <div className="bg-white shadow-lg rounded-lg overflow-hidden">
         <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
+          <thead className="bg-re-surface-card">
             <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-6 py-3 text-left text-xs font-medium text-re-text-muted uppercase tracking-wider">
                 Control ID
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-6 py-3 text-left text-xs font-medium text-re-text-muted uppercase tracking-wider">
                 Title
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-6 py-3 text-left text-xs font-medium text-re-text-muted uppercase tracking-wider">
                 Framework
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-6 py-3 text-left text-xs font-medium text-re-text-muted uppercase tracking-wider">
                 Created
               </th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-6 py-3 text-right text-xs font-medium text-re-text-muted uppercase tracking-wider">
                 Actions
               </th>
             </tr>
@@ -213,35 +213,35 @@ export default function MyControlsPage() {
           <tbody className="bg-white divide-y divide-gray-200">
             {controls.length === 0 ? (
               <tr>
-                <td colSpan={5} className="px-6 py-12 text-center text-gray-500">
+                <td colSpan={5} className="px-6 py-12 text-center text-re-text-muted">
                   No controls found. Create your first control to get started.
                 </td>
               </tr>
             ) : (
               controls.map((control) => (
-                <tr key={control.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                <tr key={control.id} className="hover:bg-re-surface-card">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-re-text-primary">
                     {control.control_id}
                   </td>
-                  <td className="px-6 py-4 text-sm text-gray-900">
+                  <td className="px-6 py-4 text-sm text-re-text-primary">
                     {control.title}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-re-text-muted">
                     {control.framework}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-re-text-muted">
                     {new Date(control.created_at).toLocaleDateString()}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                     <button
                       onClick={() => router.push(`/controls/${control.id}`)}
-                      className="text-blue-600 hover:text-blue-900 mr-4"
+                      className="text-re-info hover:text-re-info mr-4"
                     >
                       View
                     </button>
                     <button
                       onClick={() => handleDelete(control.id)}
-                      className="text-red-600 hover:text-red-900"
+                      className="text-re-danger hover:text-re-danger"
                     >
                       Delete
                     </button>

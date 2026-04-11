@@ -74,30 +74,30 @@ export function MassBalanceWidget({ result, isLoading, notImplemented, className
   const statusConfig = {
     BALANCED: {
       icon: CheckCircle,
-      color: 'text-green-600',
-      bgColor: 'bg-green-100 dark:bg-green-900/30',
+      color: 'text-re-success',
+      bgColor: 'bg-re-success-muted dark:bg-re-success/30',
       borderColor: 'border-green-500',
       label: 'Balanced',
     },
     WITHIN_TOLERANCE: {
       icon: AlertTriangle,
-      color: 'text-amber-600',
-      bgColor: 'bg-amber-100 dark:bg-amber-900/30',
+      color: 'text-re-warning',
+      bgColor: 'bg-re-warning-muted dark:bg-re-warning/30',
       borderColor: 'border-amber-500',
       label: 'Within Tolerance',
     },
     MASS_IMBALANCE: {
       icon: XCircle,
-      color: 'text-red-600',
-      bgColor: 'bg-red-100 dark:bg-red-900/30',
-      borderColor: 'border-red-500',
+      color: 'text-re-danger',
+      bgColor: 'bg-re-danger-muted dark:bg-re-danger/30',
+      borderColor: 'border-re-danger',
       label: 'Mass Imbalance',
     },
     // Default fallback for unknown status
     UNKNOWN: {
       icon: Scale,
-      color: 'text-gray-600',
-      bgColor: 'bg-gray-100 dark:bg-gray-900/30',
+      color: 'text-re-text-disabled',
+      bgColor: 'bg-re-surface-elevated dark:bg-re-surface-base/30',
       borderColor: 'border-gray-500',
       label: 'Checking...',
     },
@@ -136,14 +136,14 @@ export function MassBalanceWidget({ result, isLoading, notImplemented, className
           <div className="space-y-1">
             <div className="flex items-center justify-between text-sm">
               <span className="flex items-center gap-1">
-                <ArrowDownCircle className="w-4 h-4 text-blue-500" />
+                <ArrowDownCircle className="w-4 h-4 text-re-info" />
                 Input Quantity
               </span>
               <span className="font-mono">{result.input_quantity.toLocaleString()}</span>
             </div>
             <div className="h-4 bg-muted rounded-full overflow-hidden">
               <motion.div
-                className="h-full bg-blue-500 rounded-full"
+                className="h-full bg-re-info-muted0 rounded-full"
                 initial={{ width: 0 }}
                 animate={{ width: `${inputPercent}%` }}
                 transition={{ duration: 0.5 }}
@@ -180,7 +180,7 @@ export function MassBalanceWidget({ result, isLoading, notImplemented, className
           <div className="text-center">
             <p className={cn(
               'text-2xl font-bold',
-              Math.abs(result.variance_percent) > result.tolerance_percent ? 'text-red-600' : ''
+              Math.abs(result.variance_percent) > result.tolerance_percent ? 'text-re-danger' : ''
             )}>
               {result.variance_percent.toFixed(1)}%
             </p>
@@ -195,12 +195,12 @@ export function MassBalanceWidget({ result, isLoading, notImplemented, className
         {/* Time Violations */}
         {result.time_violations && result.time_violations.length > 0 && (
           <div className="space-y-2">
-            <h4 className="font-medium flex items-center gap-2 text-red-600">
+            <h4 className="font-medium flex items-center gap-2 text-re-danger">
               <Clock className="w-4 h-4" />
               Time Violations Detected
             </h4>
             {result.time_violations.map((violation, i) => (
-              <div key={i} className="p-2 rounded bg-red-50 dark:bg-red-900/20 text-sm">
+              <div key={i} className="p-2 rounded bg-re-danger-muted dark:bg-re-danger/20 text-sm">
                 <p className="font-medium">{violation.violation_type.replace('_', ' ')}</p>
                 <p className="text-muted-foreground text-xs">
                   {violation.source_time} → {violation.target_time}
@@ -236,7 +236,7 @@ function MassBalanceEventRow({ event }: MassBalanceEventRowProps) {
   return (
     <div className="flex items-center gap-2 p-2 rounded bg-muted/50 text-sm">
       {isInbound ? (
-        <ArrowDownCircle className="w-4 h-4 text-blue-500 flex-shrink-0" />
+        <ArrowDownCircle className="w-4 h-4 text-re-info flex-shrink-0" />
       ) : (
         <ArrowUpCircle className="w-4 h-4 text-purple-500 flex-shrink-0" />
       )}
@@ -261,9 +261,9 @@ interface MassBalanceIndicatorProps {
 
 export function MassBalanceIndicator({ status, variancePercent, className }: MassBalanceIndicatorProps) {
   const config = {
-    BALANCED: { icon: CheckCircle, color: 'text-green-600' },
-    WITHIN_TOLERANCE: { icon: AlertTriangle, color: 'text-amber-600' },
-    MASS_IMBALANCE: { icon: XCircle, color: 'text-red-600' },
+    BALANCED: { icon: CheckCircle, color: 'text-re-success' },
+    WITHIN_TOLERANCE: { icon: AlertTriangle, color: 'text-re-warning' },
+    MASS_IMBALANCE: { icon: XCircle, color: 'text-re-danger' },
   }[status];
 
   const Icon = config.icon;

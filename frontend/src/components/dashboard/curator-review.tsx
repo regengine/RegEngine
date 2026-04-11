@@ -70,7 +70,7 @@ export function CuratorReview() {
 
   if (error) {
     return (
-      <div className="p-6 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg">
+      <div className="p-6 text-sm text-re-danger bg-re-danger-muted border border-re-danger rounded-lg">
         Unable to load review queue. Please verify service connectivity.
       </div>
     );
@@ -110,7 +110,7 @@ export function CuratorReview() {
             </div>
             <div className="space-y-3">
               <div className="font-semibold text-xs text-muted-foreground mb-1 uppercase">Extraction</div>
-              <pre className="bg-blue-50 p-3 rounded text-xs overflow-auto max-h-48 dark:bg-blue-950/30 border">
+              <pre className="bg-re-info-muted p-3 rounded text-xs overflow-auto max-h-48 dark:bg-re-info/30 border">
                 {JSON.stringify(item.extracted_data, null, 2)}
               </pre>
               <div className="flex gap-2 justify-end">
@@ -123,7 +123,7 @@ export function CuratorReview() {
                   {processing === item.id && rejectMutation.isPending ? 'Rejecting...' : 'Reject'}
                 </Button>
                 <Button
-                  className="bg-green-600 hover:bg-green-700"
+                  className="bg-re-success hover:bg-re-success"
                   size="sm"
                   onClick={() => handleDecision(item.id, 'approve')}
                   disabled={!!processing || approveMutation.isPending}

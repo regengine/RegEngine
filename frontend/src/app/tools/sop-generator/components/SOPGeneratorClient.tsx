@@ -259,7 +259,7 @@ ${retailers.length > 0 ? `## Retailer Requirements\n${retailers.map(r => `- ${r}
                 {phase === 'preview' && (
                     <motion.div key="preview" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
                         <div className="flex items-center gap-3">
-                            <CheckCircle2 className="h-6 w-6 text-emerald-500" />
+                            <CheckCircle2 className="h-6 w-6 text-re-brand" />
                             <h2 className="text-lg font-bold">Plan Generated</h2>
                         </div>
 

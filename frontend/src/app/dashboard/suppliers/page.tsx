@@ -314,7 +314,7 @@ export default function SupplierDashboardPage() {
 
                 {/* Error Banner */}
                 {error && (
-                    <div className="p-3 bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 rounded-xl text-sm text-red-700 dark:text-red-300">
+                    <div className="p-3 bg-re-danger-muted dark:bg-re-danger border border-re-danger dark:border-re-danger rounded-xl text-sm text-re-danger dark:text-re-danger">
                         {error}
                     </div>
                 )}
@@ -468,7 +468,7 @@ export default function SupplierDashboardPage() {
                                                         <Button
                                                             variant="ghost"
                                                             size="sm"
-                                                            className="h-7 w-7 p-0 text-red-500 hover:text-red-600"
+                                                            className="h-7 w-7 p-0 text-re-danger hover:text-re-danger"
                                                             onClick={() => handleRevokeLink(link.portal_id)}
                                                             title="Revoke link"
                                                         >

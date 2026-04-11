@@ -158,7 +158,7 @@ export default function PortalSubmissionPage() {
         return (
             <div className="min-h-screen bg-[var(--re-surface-base)] flex items-center justify-center px-4">
                 <div className="max-w-md text-center">
-                    <AlertTriangle className="h-12 w-12 text-amber-500 mx-auto mb-4" />
+                    <AlertTriangle className="h-12 w-12 text-re-warning mx-auto mb-4" />
                     <h1 className="text-xl font-bold text-[var(--re-text-primary)] mb-2">
                         Portal Link Unavailable
                     </h1>
@@ -482,7 +482,7 @@ export default function PortalSubmissionPage() {
                         {/* Submit */}
                         <div className="p-6 border-t border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)]">
                             {submitError && (
-                                <div className="p-3 bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 rounded-xl text-sm text-red-700 dark:text-red-300 mb-4">
+                                <div className="p-3 bg-re-danger-muted dark:bg-re-danger border border-re-danger dark:border-re-danger rounded-xl text-sm text-re-danger dark:text-re-danger mb-4">
                                     {submitError}
                                 </div>
                             )}

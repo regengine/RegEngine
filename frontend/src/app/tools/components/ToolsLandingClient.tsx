@@ -200,8 +200,8 @@ const JOURNEY_STEPS = TOOLS
 
 function badgeClasses(maturity: 'ga' | 'pilot', featured?: boolean): string {
     if (featured) return 'bg-[var(--re-brand)] text-white';
-    if (maturity === 'ga') return 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20';
-    return 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20';
+    if (maturity === 'ga') return 'bg-re-brand-muted text-re-brand-dark dark:text-re-brand border border-re-brand/20';
+    return 'bg-re-warning-muted0/10 text-re-warning dark:text-re-warning border border-re-warning/20';
 }
 
 function badgeLabel(maturity: 'ga' | 'pilot', featured?: boolean): string {
@@ -340,7 +340,7 @@ export function ToolsLandingClient() {
                                                 Launch Tool <ArrowRight className="h-4 w-4" />
                                             </span>
                                         ) : (
-                                            <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-amber-500">
+                                            <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-re-warning">
                                                 Coming Soon
                                             </span>
                                         )}

@@ -22,7 +22,7 @@ export const metadata: Metadata = {
     openGraph: {
         title: 'Why RegEngine | FSMA 204 Compliance Built Different',
         description: 'API-first, transparent pricing, 48-hour speed to compliance. See how RegEngine outpaces FoodLogiQ, SafetyChain, and legacy competitors.',
-        url: 'https://www.regengine.co/why-regengine',
+        url: 'https://regengine.co/why-regengine',
         type: 'website',
     },
 };
@@ -184,11 +184,11 @@ export default function WhyRegEnginePage() {
                             Built for You
                         </span>
                     </h1>
-                    <p className="text-lg sm:text-xl text-gray-300 mb-8 max-w-3xl leading-relaxed">
+                    <p className="text-lg sm:text-xl text-re-text-secondary mb-8 max-w-3xl leading-relaxed">
                         RegEngine is the only FSMA 204 platform with an API-first architecture, transparent pricing, and a 48-hour path to FDA-ready compliance. No 6-month implementations. No hidden costs. No vendor lock-in.
                     </p>
                     <div className="flex flex-col sm:flex-row gap-4">
-                        <Button asChild size="lg" className="bg-blue-600 hover:bg-blue-700 text-white">
+                        <Button asChild size="lg" className="bg-re-info hover:bg-re-info text-white">
                             <Link href="/signup">
                                 Start Free Trial
                                 <ArrowRight className="ml-2 h-4 w-4" />
@@ -210,7 +210,7 @@ export default function WhyRegEnginePage() {
                         <h2 className="font-display text-3xl sm:text-4xl font-bold text-white mb-4">
                             Six Reasons Teams Choose RegEngine
                         </h2>
-                        <p className="text-gray-400 text-lg max-w-2xl mx-auto">
+                        <p className="text-re-text-tertiary text-lg max-w-2xl mx-auto">
                             We built RegEngine for technical teams, ops managers, and founders who need compliance fast without compromise.
                         </p>
                     </div>
@@ -224,17 +224,17 @@ export default function WhyRegEnginePage() {
                                     className="group rounded-lg border border-white/10 bg-white/[0.02] p-6 hover:border-white/20 hover:bg-white/[0.05] transition-all"
                                 >
                                     <div className="flex items-start gap-4">
-                                        <div className="rounded-lg bg-blue-600/20 p-3 text-blue-400 group-hover:bg-blue-600/30 transition-colors">
+                                        <div className="rounded-lg bg-re-info/20 p-3 text-re-info group-hover:bg-re-info/30 transition-colors">
                                             <Icon className="h-5 w-5" />
                                         </div>
                                         <div className="flex-1">
                                             <h3 className="text-lg font-semibold text-white mb-2">
                                                 {item.title}
                                             </h3>
-                                            <p className="text-sm text-gray-400 mb-3">
+                                            <p className="text-sm text-re-text-tertiary mb-3">
                                                 {item.description}
                                             </p>
-                                            <p className="text-xs text-gray-500">
+                                            <p className="text-xs text-re-text-muted">
                                                 {item.detail}
                                             </p>
                                         </div>
@@ -253,7 +253,7 @@ export default function WhyRegEnginePage() {
                         <h2 className="font-display text-3xl sm:text-4xl font-bold text-white mb-4">
                             Feature-by-Feature Comparison
                         </h2>
-                        <p className="text-gray-400 text-lg max-w-2xl mx-auto">
+                        <p className="text-re-text-tertiary text-lg max-w-2xl mx-auto">
                             See how RegEngine stacks up against the industry standard and legacy competitors.
                         </p>
                     </div>
@@ -265,16 +265,16 @@ export default function WhyRegEnginePage() {
                                     <th className="text-left py-4 px-4 font-semibold text-white">
                                         Feature
                                     </th>
-                                    <th className="text-center py-4 px-4 font-semibold text-blue-400">
+                                    <th className="text-center py-4 px-4 font-semibold text-re-info">
                                         RegEngine
                                     </th>
-                                    <th className="text-center py-4 px-4 font-semibold text-gray-400">
+                                    <th className="text-center py-4 px-4 font-semibold text-re-text-tertiary">
                                         FoodLogiQ
                                     </th>
-                                    <th className="text-center py-4 px-4 font-semibold text-gray-400">
+                                    <th className="text-center py-4 px-4 font-semibold text-re-text-tertiary">
                                         SafetyChain
                                     </th>
-                                    <th className="text-center py-4 px-4 font-semibold text-gray-400">
+                                    <th className="text-center py-4 px-4 font-semibold text-re-text-tertiary">
                                         ReposiTrak
                                     </th>
                                 </tr>
@@ -291,12 +291,12 @@ export default function WhyRegEnginePage() {
                                         <td className="text-center py-4 px-4">
                                             {typeof row.regengine === 'boolean' ? (
                                                 row.regengine ? (
-                                                    <Check className="h-5 w-5 text-green-400 mx-auto" />
+                                                    <Check className="h-5 w-5 text-re-success mx-auto" />
                                                 ) : (
-                                                    <X className="h-5 w-5 text-red-400 mx-auto" />
+                                                    <X className="h-5 w-5 text-re-danger mx-auto" />
                                                 )
                                             ) : (
-                                                <span className="text-xs text-gray-300 font-medium">
+                                                <span className="text-xs text-re-text-secondary font-medium">
                                                     {row.regengine}
                                                 </span>
                                             )}
@@ -304,12 +304,12 @@ export default function WhyRegEnginePage() {
                                         <td className="text-center py-4 px-4">
                                             {typeof row.foodlogiq === 'boolean' ? (
                                                 row.foodlogiq ? (
-                                                    <Check className="h-5 w-5 text-green-400 mx-auto" />
+                                                    <Check className="h-5 w-5 text-re-success mx-auto" />
                                                 ) : (
-                                                    <X className="h-5 w-5 text-red-400 mx-auto" />
+                                                    <X className="h-5 w-5 text-re-danger mx-auto" />
                                                 )
                                             ) : (
-                                                <span className="text-xs text-gray-400">
+                                                <span className="text-xs text-re-text-tertiary">
                                                     {row.foodlogiq}
                                                 </span>
                                             )}
@@ -317,12 +317,12 @@ export default function WhyRegEnginePage() {
                                         <td className="text-center py-4 px-4">
                                             {typeof row.safetychain === 'boolean' ? (
                                                 row.safetychain ? (
-                                                    <Check className="h-5 w-5 text-green-400 mx-auto" />
+                                                    <Check className="h-5 w-5 text-re-success mx-auto" />
                                                 ) : (
-                                                    <X className="h-5 w-5 text-red-400 mx-auto" />
+                                                    <X className="h-5 w-5 text-re-danger mx-auto" />
                                                 )
                                             ) : (
-                                                <span className="text-xs text-gray-400">
+                                                <span className="text-xs text-re-text-tertiary">
                                                     {row.safetychain}
                                                 </span>
                                             )}
@@ -330,12 +330,12 @@ export default function WhyRegEnginePage() {
                                         <td className="text-center py-4 px-4">
                                             {typeof row.reositrak === 'boolean' ? (
                                                 row.reositrak ? (
-                                                    <Check className="h-5 w-5 text-green-400 mx-auto" />
+                                                    <Check className="h-5 w-5 text-re-success mx-auto" />
                                                 ) : (
-                                                    <X className="h-5 w-5 text-red-400 mx-auto" />
+                                                    <X className="h-5 w-5 text-re-danger mx-auto" />
                                                 )
                                             ) : (
-                                                <span className="text-xs text-gray-400">
+                                                <span className="text-xs text-re-text-tertiary">
                                                     {row.reositrak}
                                                 </span>
                                             )}
@@ -346,13 +346,13 @@ export default function WhyRegEnginePage() {
                         </table>
                     </div>
 
-                    <div className="mt-8 p-4 rounded-lg border border-blue-500/20 bg-blue-500/10 flex gap-3">
-                        <AlertCircle className="h-5 w-5 text-blue-400 flex-shrink-0 mt-0.5" />
+                    <div className="mt-8 p-4 rounded-lg border border-re-info/20 bg-re-info-muted0/10 flex gap-3">
+                        <AlertCircle className="h-5 w-5 text-re-info flex-shrink-0 mt-0.5" />
                         <p className="text-sm text-blue-200">
                             <strong>Note:</strong> Comparison data is current as of April 2026 and based on public pricing, documentation, and customer interviews. Competitor features change; if you spot an error, email{' '}
                             <a
                                 href="mailto:support@regengine.co"
-                                className="underline hover:text-blue-100"
+                                className="underline hover:text-re-info"
                             >
                                 support@regengine.co
                             </a>
@@ -371,10 +371,10 @@ export default function WhyRegEnginePage() {
                             <h3 className="text-2xl sm:text-3xl font-bold text-white mb-4">
                                 API-First, Not UI-Only
                             </h3>
-                            <p className="text-gray-300 mb-4 leading-relaxed">
+                            <p className="text-re-text-secondary mb-4 leading-relaxed">
                                 Every feature in RegEngine has an API. REST endpoints. Webhooks for real-time events. CSV templates for ops teams. Your developers can integrate in hours, not months.
                             </p>
-                            <p className="text-gray-400 text-sm mb-6">
+                            <p className="text-re-text-tertiary text-sm mb-6">
                                 Competitors built UI-first, then bolted APIs on as an afterthought. We started with APIs. Your systems stay in control.
                             </p>
                             <ul className="space-y-2">
@@ -384,15 +384,15 @@ export default function WhyRegEnginePage() {
                                     'CSV import with smart field mapping',
                                     'Native integrations with Shopify, WooCommerce (coming soon)',
                                 ].map((item, idx) => (
-                                    <li key={idx} className="flex gap-3 text-sm text-gray-300">
-                                        <Check className="h-5 w-5 text-green-400 flex-shrink-0" />
+                                    <li key={idx} className="flex gap-3 text-sm text-re-text-secondary">
+                                        <Check className="h-5 w-5 text-re-success flex-shrink-0" />
                                         <span>{item}</span>
                                     </li>
                                 ))}
                             </ul>
                         </div>
                         <div className="hidden md:block rounded-lg border border-white/10 bg-white/[0.02] p-6">
-                            <code className="text-xs text-gray-300 font-mono leading-relaxed block">
+                            <code className="text-xs text-re-text-secondary font-mono leading-relaxed block">
                                 {`POST /api/ctes
 Content-Type: application/json
 
@@ -418,20 +418,20 @@ HTTP 201
                     <div className="grid md:grid-cols-2 gap-8 items-center">
                         <div className="order-2 md:order-1 hidden md:block rounded-lg border border-white/10 bg-white/[0.02] p-8">
                             <div className="space-y-4">
-                                <div className="rounded-lg bg-blue-600/20 p-4 border border-blue-500/30">
-                                    <p className="text-sm text-gray-400 mb-1">Base Plan</p>
+                                <div className="rounded-lg bg-re-info/20 p-4 border border-re-info/30">
+                                    <p className="text-sm text-re-text-tertiary mb-1">Base Plan</p>
                                     <p className="text-3xl font-bold text-white">$425/mo</p>
-                                    <p className="text-xs text-gray-400 mt-2">Billed annually ($499/mo monthly) • 1 facility • 500 CTEs/mo</p>
+                                    <p className="text-xs text-re-text-tertiary mt-2">Billed annually ($499/mo monthly) • 1 facility • 500 CTEs/mo</p>
                                 </div>
                                 <div className="rounded-lg bg-white/5 p-4 border border-white/10">
-                                    <p className="text-sm text-gray-400 mb-1">Standard Plan</p>
+                                    <p className="text-sm text-re-text-tertiary mb-1">Standard Plan</p>
                                     <p className="text-3xl font-bold text-white">$549/mo</p>
-                                    <p className="text-xs text-gray-400 mt-2">Billed annually ($649/mo monthly) • 2–3 facilities • Unlimited CTEs</p>
+                                    <p className="text-xs text-re-text-tertiary mt-2">Billed annually ($649/mo monthly) • 2–3 facilities • Unlimited CTEs</p>
                                 </div>
                                 <div className="rounded-lg bg-white/5 p-4 border border-white/10">
-                                    <p className="text-sm text-gray-400 mb-1">Premium Plan</p>
+                                    <p className="text-sm text-re-text-tertiary mb-1">Premium Plan</p>
                                     <p className="text-3xl font-bold text-white">$639/mo</p>
-                                    <p className="text-xs text-gray-400 mt-2">Billed annually ($749/mo monthly) • 4+ facilities • Dedicated support</p>
+                                    <p className="text-xs text-re-text-tertiary mt-2">Billed annually ($749/mo monthly) • 4+ facilities • Dedicated support</p>
                                 </div>
                             </div>
                         </div>
@@ -439,10 +439,10 @@ HTTP 201
                             <h3 className="text-2xl sm:text-3xl font-bold text-white mb-4">
                                 Pricing You Can See Before You Sign
                             </h3>
-                            <p className="text-gray-300 mb-4 leading-relaxed">
+                            <p className="text-re-text-secondary mb-4 leading-relaxed">
                                 Open pricing builds trust. We list prices on our website. No "contact sales" gatekeeping. No surprise enterprise minimums.
                             </p>
-                            <p className="text-gray-400 text-sm mb-6">
+                            <p className="text-re-text-tertiary text-sm mb-6">
                                 Founding Design Partners get preferred pricing for the life of their account. Plans start at $425/mo (billed annually) or $499/mo monthly. Honest pricing for honest work.
                             </p>
                             <ul className="space-y-2">
@@ -452,8 +452,8 @@ HTTP 201
                                     'Volume discounts for 10+ facilities',
                                     'Founding Design Partner rate never increases',
                                 ].map((item, idx) => (
-                                    <li key={idx} className="flex gap-3 text-sm text-gray-300">
-                                        <Check className="h-5 w-5 text-green-400 flex-shrink-0" />
+                                    <li key={idx} className="flex gap-3 text-sm text-re-text-secondary">
+                                        <Check className="h-5 w-5 text-re-success flex-shrink-0" />
                                         <span>{item}</span>
                                     </li>
                                 ))}
@@ -467,10 +467,10 @@ HTTP 201
                             <h3 className="text-2xl sm:text-3xl font-bold text-white mb-4">
                                 48 Hours to FDA-Ready Compliance
                             </h3>
-                            <p className="text-gray-300 mb-4 leading-relaxed">
+                            <p className="text-re-text-secondary mb-4 leading-relaxed">
                                 When a recall hits, every hour matters. RegEngine gets you from zero to first CTE export in 48 hours. No integration services. No custom dev. Just upload, validate, export.
                             </p>
-                            <p className="text-gray-400 text-sm mb-6">
+                            <p className="text-re-text-tertiary text-sm mb-6">
                                 Competitors average 3–6 months to first export. Your supply chain can't wait that long.
                             </p>
                             <div className="space-y-3">
@@ -481,30 +481,30 @@ HTTP 201
                                     { step: '4', label: 'Export FDA-ready trace data' },
                                 ].map((item) => (
                                     <div key={item.step} className="flex gap-4 items-start">
-                                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-600/30 border border-blue-500/50 text-sm font-semibold text-blue-300">
+                                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-re-info/30 border border-blue-500/50 text-sm font-semibold text-blue-300">
                                             {item.step}
                                         </div>
-                                        <p className="text-gray-300 pt-1">{item.label}</p>
+                                        <p className="text-re-text-secondary pt-1">{item.label}</p>
                                     </div>
                                 ))}
                             </div>
                         </div>
                         <div className="rounded-lg border border-white/10 bg-gradient-to-br from-blue-600/10 to-transparent p-8">
                             <div className="text-center">
-                                <p className="text-sm text-gray-400 mb-2">Typical Implementation Time</p>
+                                <p className="text-sm text-re-text-tertiary mb-2">Typical Implementation Time</p>
                                 <div className="space-y-4">
                                     <div>
-                                        <p className="text-2xl font-bold text-green-400 mb-1">48 hours</p>
-                                        <p className="text-xs text-gray-400">RegEngine</p>
+                                        <p className="text-2xl font-bold text-re-success mb-1">48 hours</p>
+                                        <p className="text-xs text-re-text-tertiary">RegEngine</p>
                                     </div>
                                     <div className="h-px bg-white/10" />
                                     <div>
-                                        <p className="text-2xl font-bold text-gray-400 mb-1">4–6 months</p>
-                                        <p className="text-xs text-gray-500">FoodLogiQ, SafetyChain</p>
+                                        <p className="text-2xl font-bold text-re-text-tertiary mb-1">4–6 months</p>
+                                        <p className="text-xs text-re-text-muted">FoodLogiQ, SafetyChain</p>
                                     </div>
                                     <div>
-                                        <p className="text-2xl font-bold text-gray-400 mb-1">3–6 months</p>
-                                        <p className="text-xs text-gray-500">ReposiTrak, Legacy systems</p>
+                                        <p className="text-2xl font-bold text-re-text-tertiary mb-1">3–6 months</p>
+                                        <p className="text-xs text-re-text-muted">ReposiTrak, Legacy systems</p>
                                     </div>
                                 </div>
                             </div>
@@ -514,7 +514,7 @@ HTTP 201
                     {/* CTE Coverage */}
                     <div className="grid md:grid-cols-2 gap-8 items-center">
                         <div className="order-2 md:order-1 rounded-lg border border-white/10 bg-white/[0.02] p-8">
-                            <h4 className="text-sm font-semibold text-gray-300 mb-6">All 7 FSMA 204 CTE Types</h4>
+                            <h4 className="text-sm font-semibold text-re-text-secondary mb-6">All 7 FSMA 204 CTE Types</h4>
                             <div className="space-y-3">
                                 {[
                                     'Harvesting',
@@ -526,8 +526,8 @@ HTTP 201
                                     'Transformation',
                                 ].map((item, idx) => (
                                     <div key={idx} className="flex gap-2">
-                                        <Check className="h-4 w-4 text-green-400 flex-shrink-0 mt-0.5" />
-                                        <span className="text-xs text-gray-300">{item}</span>
+                                        <Check className="h-4 w-4 text-re-success flex-shrink-0 mt-0.5" />
+                                        <span className="text-xs text-re-text-secondary">{item}</span>
                                     </div>
                                 ))}
                             </div>
@@ -536,10 +536,10 @@ HTTP 201
                             <h3 className="text-2xl sm:text-3xl font-bold text-white mb-4">
                                 Complete CTE/KDE Coverage
                             </h3>
-                            <p className="text-gray-300 mb-4 leading-relaxed">
+                            <p className="text-re-text-secondary mb-4 leading-relaxed">
                                 All 7 FSMA 204 CTE types, fully implemented. Every field validated individually (not batch). Missing CTEs are the #1 reason FDA compliance fails.
                             </p>
-                            <p className="text-gray-400 text-sm mb-6">
+                            <p className="text-re-text-tertiary text-sm mb-6">
                                 Most competitors cover a subset of CTEs or validate in batch. RegEngine covers all 7, with per-CTE KDE validation that catches errors before FDA submission.
                             </p>
                             <ul className="space-y-2">
@@ -549,8 +549,8 @@ HTTP 201
                                     'Location traceability from source to receiver',
                                     'FDA 204 naming conventions built in',
                                 ].map((item, idx) => (
-                                    <li key={idx} className="flex gap-3 text-sm text-gray-300">
-                                        <Check className="h-5 w-5 text-green-400 flex-shrink-0" />
+                                    <li key={idx} className="flex gap-3 text-sm text-re-text-secondary">
+                                        <Check className="h-5 w-5 text-re-success flex-shrink-0" />
                                         <span>{item}</span>
                                     </li>
                                 ))}
@@ -564,10 +564,10 @@ HTTP 201
                             <h3 className="text-2xl sm:text-3xl font-bold text-white mb-4">
                                 EPCIS 2.0 Native
                             </h3>
-                            <p className="text-gray-300 mb-4 leading-relaxed">
+                            <p className="text-re-text-secondary mb-4 leading-relaxed">
                                 FDA's preferred format. We built EPCIS 2.0 first, then added everything else. No conversion layer. No data loss. Clean exports every time.
                             </p>
-                            <p className="text-gray-400 text-sm mb-6">
+                            <p className="text-re-text-tertiary text-sm mb-6">
                                 Competitors grafted EPCIS onto legacy schemas. We started fresh. Your compliance data is pristine from day one.
                             </p>
                             <ul className="space-y-2">
@@ -577,15 +577,15 @@ HTTP 201
                                     'No third-party conversion needed',
                                     'Future-proof for FDA infrastructure upgrades',
                                 ].map((item, idx) => (
-                                    <li key={idx} className="flex gap-3 text-sm text-gray-300">
-                                        <Check className="h-5 w-5 text-green-400 flex-shrink-0" />
+                                    <li key={idx} className="flex gap-3 text-sm text-re-text-secondary">
+                                        <Check className="h-5 w-5 text-re-success flex-shrink-0" />
                                         <span>{item}</span>
                                     </li>
                                 ))}
                             </ul>
                         </div>
                         <div className="hidden md:block rounded-lg border border-white/10 bg-white/[0.02] p-6">
-                            <code className="text-xs text-gray-300 font-mono leading-relaxed block overflow-auto">
+                            <code className="text-xs text-re-text-secondary font-mono leading-relaxed block overflow-auto">
                                 {`<events>
   <EPCISEvent>
     <eventTime>2026-04-05T...</eventTime>
@@ -610,7 +610,7 @@ HTTP 201
                     {/* SMB Focus */}
                     <div className="grid md:grid-cols-2 gap-8 items-center">
                         <div className="order-2 md:order-1 rounded-lg border border-white/10 bg-white/[0.02] p-8">
-                            <p className="text-sm text-gray-400 mb-4">RegEngine is built for companies like:</p>
+                            <p className="text-sm text-re-text-tertiary mb-4">RegEngine is built for companies like:</p>
                             <ul className="space-y-2">
                                 {[
                                     'Regional produce distributors ($5M–$50M ARR)',
@@ -619,8 +619,8 @@ HTTP 201
                                     'Small farms and grower cooperatives',
                                     'Emerging CPG brands reaching FDA compliance',
                                 ].map((item, idx) => (
-                                    <li key={idx} className="flex gap-2 text-xs text-gray-300">
-                                        <Check className="h-4 w-4 text-green-400 flex-shrink-0 mt-0.5" />
+                                    <li key={idx} className="flex gap-2 text-xs text-re-text-secondary">
+                                        <Check className="h-4 w-4 text-re-success flex-shrink-0 mt-0.5" />
                                         <span>{item}</span>
                                     </li>
                                 ))}
@@ -630,10 +630,10 @@ HTTP 201
                             <h3 className="text-2xl sm:text-3xl font-bold text-white mb-4">
                                 Built for SMBs, Not Enterprises Only
                             </h3>
-                            <p className="text-gray-300 mb-4 leading-relaxed">
+                            <p className="text-re-text-secondary mb-4 leading-relaxed">
                                 Compliance shouldn't require a 50-person implementation team. You need FSMA 204 compliance, fast and cheap. Self-serve signup, no minimums, no sales calls.
                             </p>
-                            <p className="text-gray-400 text-sm mb-6">
+                            <p className="text-re-text-tertiary text-sm mb-6">
                                 Legacy platforms built for 100+ facility enterprises. RegEngine scales from 1 facility to 1000. You start small; you grow without ripping out the platform.
                             </p>
                             <ul className="space-y-2">
@@ -643,8 +643,8 @@ HTTP 201
                                     'Scales from 1 to 10,000 facilities',
                                     'Email + Slack support for all plans',
                                 ].map((item, idx) => (
-                                    <li key={idx} className="flex gap-3 text-sm text-gray-300">
-                                        <Check className="h-5 w-5 text-green-400 flex-shrink-0" />
+                                    <li key={idx} className="flex gap-3 text-sm text-re-text-secondary">
+                                        <Check className="h-5 w-5 text-re-success flex-shrink-0" />
                                         <span>{item}</span>
                                     </li>
                                 ))}
@@ -661,7 +661,7 @@ HTTP 201
                         <h2 className="font-display text-3xl font-bold text-white mb-4">
                             What RegEngine Is NOT
                         </h2>
-                        <p className="text-gray-300 mb-8">
+                        <p className="text-re-text-secondary mb-8">
                             RegEngine is a compliance layer, not a replacement for your ERP or WMS. We work alongside your existing systems, filling the traceability gaps that packaged software doesn't solve.
                         </p>
                         <div className="space-y-4">
@@ -685,11 +685,11 @@ HTTP 201
                             ].map((item, idx) => (
                                 <div key={idx} className="flex gap-4">
                                     <div className="flex h-6 w-6 items-center justify-center rounded-full bg-amber-600/30 border border-amber-500/50 flex-shrink-0 mt-0.5">
-                                        <AlertCircle className="h-3 w-3 text-amber-300" />
+                                        <AlertCircle className="h-3 w-3 text-re-warning" />
                                     </div>
                                     <div>
                                         <p className="font-semibold text-white">{item.title}</p>
-                                        <p className="text-sm text-gray-400">{item.detail}</p>
+                                        <p className="text-sm text-re-text-tertiary">{item.detail}</p>
                                     </div>
                                 </div>
                             ))}
@@ -704,7 +704,7 @@ HTTP 201
                     <h2 className="font-display text-3xl sm:text-4xl font-bold text-white mb-4">
                         Who's RegEngine For?
                     </h2>
-                    <p className="text-gray-300 text-lg mb-12 max-w-2xl mx-auto">
+                    <p className="text-re-text-secondary text-lg mb-12 max-w-2xl mx-auto">
                         If you fit any of these categories, RegEngine is built for you.
                     </p>
                     <div className="grid sm:grid-cols-2 gap-6">
@@ -738,7 +738,7 @@ HTTP 201
                                 <h3 className="text-lg font-semibold text-white mb-2">
                                     {item.title}
                                 </h3>
-                                <p className="text-sm text-gray-400">{item.detail}</p>
+                                <p className="text-sm text-re-text-tertiary">{item.detail}</p>
                             </div>
                         ))}
                     </div>
@@ -751,11 +751,11 @@ HTTP 201
                     <h2 className="font-display text-3xl sm:text-4xl font-bold text-white mb-4">
                         Ready to Get Compliant?
                     </h2>
-                    <p className="text-gray-300 text-lg mb-8 max-w-2xl mx-auto">
+                    <p className="text-re-text-secondary text-lg mb-8 max-w-2xl mx-auto">
                         Sign up in minutes. First 30 days are free. No credit card required. No long-term contracts.
                     </p>
                     <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                        <Button asChild size="lg" className="bg-blue-600 hover:bg-blue-700 text-white">
+                        <Button asChild size="lg" className="bg-re-info hover:bg-re-info text-white">
                             <Link href="/signup">
                                 Start Free Trial
                                 <ArrowRight className="ml-2 h-4 w-4" />
@@ -772,13 +772,13 @@ HTTP 201
                             </Link>
                         </Button>
                     </div>
-                    <p className="text-sm text-gray-500 mt-8">
+                    <p className="text-sm text-re-text-muted mt-8">
                         Questions? Email{' '}
-                        <a href="mailto:support@regengine.co" className="text-gray-400 hover:text-white underline">
+                        <a href="mailto:support@regengine.co" className="text-re-text-tertiary hover:text-white underline">
                             support@regengine.co
                         </a>
                         {' '}or join our{' '}
-                        <a href="https://slack.regengine.co" className="text-gray-400 hover:text-white underline" target="_blank" rel="noopener noreferrer">
+                        <a href="https://slack.regengine.co" className="text-re-text-tertiary hover:text-white underline" target="_blank" rel="noopener noreferrer">
                             community Slack
                         </a>
                         .

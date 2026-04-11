@@ -14,7 +14,7 @@ export const metadata: Metadata = {
     openGraph: {
         title: 'FSMA 204 Pricing | RegEngine',
         description: 'FSMA 204 compliance from $425/mo. Transparent pricing, self-serve signup, no enterprise contract required.',
-        url: 'https://www.regengine.co/pricing',
+        url: 'https://regengine.co/pricing',
         type: 'website',
     },
 };

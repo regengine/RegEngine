@@ -401,7 +401,7 @@ export const ARCHIVE_EXPORT_JOBS: ArchiveExportJob[] = [
         lastRun: '2026-03-11 06:00 UTC',
         nextRun: '2026-03-12 06:00 UTC',
         manifestHash: 'sha256:2d6f3d0ab2d5c2e1a31ab9814d392a1f',
-        tenantId: 'tenant_acme_001',
+        tenantId: 'tenant_demo_001',
     },
     {
         id: 'job_epcis_weekly',
@@ -413,7 +413,7 @@ export const ARCHIVE_EXPORT_JOBS: ArchiveExportJob[] = [
         lastRun: '2026-03-08 08:30 UTC',
         nextRun: '2026-03-15 08:30 UTC',
         manifestHash: 'sha256:e8f6fd0cb8f4ff73c9d79b4123f0e2aa',
-        tenantId: 'tenant_acme_001',
+        tenantId: 'tenant_demo_001',
     },
     {
         id: 'job_audit_monthly',
@@ -425,7 +425,7 @@ export const ARCHIVE_EXPORT_JOBS: ArchiveExportJob[] = [
         lastRun: '2026-03-01 02:00 UTC',
         nextRun: '2026-04-01 02:00 UTC',
         manifestHash: 'sha256:8f4a2b1c7e9d3f50a6b8c2e1d4f7a0b3',
-        tenantId: 'tenant_acme_001',
+        tenantId: 'tenant_demo_001',
     },
 ];
 

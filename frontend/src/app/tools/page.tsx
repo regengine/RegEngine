@@ -9,7 +9,7 @@ export const metadata: Metadata = {
         title: "FSMA 204 Free Tools — RegEngine",
         description: "Free FSMA 204 compliance tools for traceability readiness.",
         type: "website",
-        url: "https://www.regengine.co/tools",
+        url: "https://regengine.co/tools",
     },
 };
 
@@ -25,12 +25,12 @@ const jsonLd = {
     "mainEntity": {
         "@type": "ItemList",
         "itemListElement": [
-            { "@type": "ListItem", "position": 1, "url": "https://www.regengine.co/tools/ftl-checker", "name": "FTL Coverage Checker" },
-            { "@type": "ListItem", "position": 2, "url": "https://www.regengine.co/tools/fsma-unified", "name": "Unified FSMA Dashboard" },
-            { "@type": "ListItem", "position": 3, "url": "https://www.regengine.co/tools/kde-checker", "name": "KDE Completeness Checker" },
-            { "@type": "ListItem", "position": 4, "url": "https://www.regengine.co/tools/cte-mapper", "name": "CTE Coverage Mapper" },
-            { "@type": "ListItem", "position": 5, "url": "https://www.regengine.co/tools/recall-readiness", "name": "Recall Readiness Score" },
-            { "@type": "ListItem", "position": 6, "url": "https://www.regengine.co/tools/roi-calculator", "name": "Regulatory ROI Calculator" },
+            { "@type": "ListItem", "position": 1, "url": "https://regengine.co/tools/ftl-checker", "name": "FTL Coverage Checker" },
+            { "@type": "ListItem", "position": 2, "url": "https://regengine.co/tools/fsma-unified", "name": "Unified FSMA Dashboard" },
+            { "@type": "ListItem", "position": 3, "url": "https://regengine.co/tools/kde-checker", "name": "KDE Completeness Checker" },
+            { "@type": "ListItem", "position": 4, "url": "https://regengine.co/tools/cte-mapper", "name": "CTE Coverage Mapper" },
+            { "@type": "ListItem", "position": 5, "url": "https://regengine.co/tools/recall-readiness", "name": "Recall Readiness Score" },
+            { "@type": "ListItem", "position": 6, "url": "https://regengine.co/tools/roi-calculator", "name": "Regulatory ROI Calculator" },
         ]
     }
 };

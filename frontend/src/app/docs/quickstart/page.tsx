@@ -101,7 +101,7 @@ export REGENGINE_TENANT_ID="11111111-1111-1111-1111-111111111111"`}
 
                             <div className="mb-4">
                                 <CodeBlock
-                                    code={`curl -X POST https://www.regengine.co/api/v1/webhooks/ingest \\
+                                    code={`curl -X POST https://regengine.co/api/v1/webhooks/ingest \\
   -H "X-RegEngine-API-Key: $REGENGINE_API_KEY" \\
   -H "X-Tenant-ID: $REGENGINE_TENANT_ID" \\
   -H "Content-Type: application/json" \\

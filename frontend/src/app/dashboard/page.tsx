@@ -44,24 +44,24 @@ const getQuickActions = (tenantType: 'retailer' | 'supplier' | 'system') => {
             description: 'View your compliance grade',
             icon: Shield,
             href: '/dashboard/compliance',
-            color: 'text-emerald-500',
-            bg: 'bg-emerald-100 dark:bg-emerald-900/30',
+            color: 'text-re-brand',
+            bg: 'bg-re-brand-muted dark:bg-re-brand/30',
         },
         {
             title: 'Alerts',
             description: 'Review compliance alerts',
             icon: AlertTriangle,
             href: '/dashboard/alerts',
-            color: 'text-amber-500',
-            bg: 'bg-amber-100 dark:bg-amber-900/30',
+            color: 'text-re-warning',
+            bg: 'bg-re-warning-muted dark:bg-re-warning/30',
         },
         {
             title: 'Import Data',
             description: 'CSV, IoT, or API ingestion',
             icon: Upload,
             href: '/tools/data-import',
-            color: 'text-blue-500',
-            bg: 'bg-blue-100 dark:bg-blue-900/30',
+            color: 'text-re-info',
+            bg: 'bg-re-info-muted dark:bg-re-info/30',
         },
     ];
 
@@ -73,8 +73,8 @@ const getQuickActions = (tenantType: 'retailer' | 'supplier' | 'system') => {
                 description: 'Manage supplier compliance',
                 icon: Building2,
                 href: '/dashboard/suppliers',
-                color: 'text-amber-500',
-                bg: 'bg-amber-100 dark:bg-amber-900/30',
+                color: 'text-re-warning',
+                bg: 'bg-re-warning-muted dark:bg-re-warning/30',
             },
             {
                 title: 'Product Catalog',
@@ -103,16 +103,16 @@ const getQuickActions = (tenantType: 'retailer' | 'supplier' | 'system') => {
                 description: 'Preparedness assessment',
                 icon: TrendingUp,
                 href: '/dashboard/recall-report',
-                color: 'text-amber-500',
-                bg: 'bg-amber-100 dark:bg-amber-900/30',
+                color: 'text-re-warning',
+                bg: 'bg-re-warning-muted dark:bg-re-warning/30',
             },
             {
                 title: 'Archive Jobs',
                 description: 'Recurring export retention',
                 icon: Upload,
                 href: '/dashboard/export-jobs',
-                color: 'text-emerald-500',
-                bg: 'bg-emerald-100 dark:bg-emerald-900/30',
+                color: 'text-re-brand',
+                bg: 'bg-re-brand-muted dark:bg-re-brand/30',
             },
             {
                 title: 'Audit Log',
@@ -140,16 +140,16 @@ const getQuickActions = (tenantType: 'retailer' | 'supplier' | 'system') => {
             description: 'Manage account & integrations',
             icon: Settings,
             href: '/dashboard/settings',
-            color: 'text-blue-500',
-            bg: 'bg-blue-100 dark:bg-blue-900/30',
+            color: 'text-re-info',
+            bg: 'bg-re-info-muted dark:bg-re-info/30',
         },
         {
             title: 'Team',
             description: 'Manage team members & roles',
             icon: Building2,
             href: '/dashboard/team',
-            color: 'text-emerald-500',
-            bg: 'bg-emerald-100 dark:bg-emerald-900/30',
+            color: 'text-re-brand',
+            bg: 'bg-re-brand-muted dark:bg-re-brand/30',
         },
         {
             title: 'Audit Log',
@@ -164,8 +164,8 @@ const getQuickActions = (tenantType: 'retailer' | 'supplier' | 'system') => {
             description: 'Retention & export scheduling',
             icon: Upload,
             href: '/dashboard/export-jobs',
-            color: 'text-amber-500',
-            bg: 'bg-amber-100 dark:bg-amber-900/30',
+            color: 'text-re-warning',
+            bg: 'bg-re-warning-muted dark:bg-re-warning/30',
         },
     ];
 };
@@ -283,32 +283,32 @@ export default function DashboardPage() {
                         </div>
                         <div className="flex items-center gap-2">
                             {currentOrg?.plan && currentOrg.plan !== 'free' && (
-                                <Badge variant="secondary" className="bg-gradient-to-r from-amber-100 to-orange-100 text-amber-700 dark:from-amber-900/30 dark:to-orange-900/30 dark:text-amber-400">
+                                <Badge variant="secondary" className="bg-gradient-to-r from-amber-100 to-orange-100 text-re-warning dark:from-amber-900/30 dark:to-orange-900/30 dark:text-re-warning">
                                     {currentOrg.plan.charAt(0).toUpperCase() + currentOrg.plan.slice(1)}
                                 </Badge>
                             )}
                             {healthStatus === 'loading' ? (
-                                <Badge variant="outline" className="bg-gray-100 text-gray-500 dark:bg-gray-900/30 dark:text-gray-400">
+                                <Badge variant="outline" className="bg-re-surface-elevated text-re-text-muted dark:bg-re-surface-base/30 dark:text-re-text-tertiary">
                                     <Activity className="w-3 h-3 mr-1 animate-pulse" />
                                     Checking...
                                 </Badge>
                             ) : healthStatus === 'operational' ? (
-                                <Badge variant="outline" className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
+                                <Badge variant="outline" className="bg-re-success-muted text-re-success dark:bg-re-success/30 dark:text-re-success">
                                     <CheckCircle2 className="w-3 h-3 mr-1" />
                                     All Systems Operational
                                 </Badge>
                             ) : healthStatus === 'degraded' ? (
-                                <Badge variant="outline" className="bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
+                                <Badge variant="outline" className="bg-re-warning-muted text-re-warning dark:bg-re-warning/30 dark:text-re-warning">
                                     <AlertTriangle className="w-3 h-3 mr-1" />
                                     Degraded Performance
                                 </Badge>
                             ) : isDemo ? (
-                                <Badge variant="outline" className="bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
+                                <Badge variant="outline" className="bg-re-warning-muted text-re-warning dark:bg-re-warning/30 dark:text-re-warning">
                                     <Activity className="w-3 h-3 mr-1" />
                                     Demo Mode
                                 </Badge>
                             ) : (
-                                <Badge variant="outline" className="bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400">
+                                <Badge variant="outline" className="bg-re-danger-muted text-re-danger dark:bg-re-danger/30 dark:text-re-danger">
                                     <WifiOff className="w-3 h-3 mr-1" />
                                     Service Disruption
                                 </Badge>
@@ -335,8 +335,8 @@ export default function DashboardPage() {
                         <Card>
                             <CardContent className="pt-4 sm:pt-6 pb-4">
                                 <div className="flex items-center gap-2 sm:gap-3">
-                                    <div className="p-1.5 sm:p-2 rounded-lg bg-blue-100 dark:bg-blue-900/30 flex-shrink-0">
-                                        <FileCheck className="h-4 w-4 sm:h-5 sm:w-5 text-blue-500" />
+                                    <div className="p-1.5 sm:p-2 rounded-lg bg-re-info-muted dark:bg-re-info/30 flex-shrink-0">
+                                        <FileCheck className="h-4 w-4 sm:h-5 sm:w-5 text-re-info" />
                                     </div>
                                     <div className="min-w-0">
                                         <p className="text-xl sm:text-2xl font-bold truncate">
@@ -352,8 +352,8 @@ export default function DashboardPage() {
                         <Card>
                             <CardContent className="pt-4 sm:pt-6 pb-4">
                                 <div className="flex items-center gap-2 sm:gap-3">
-                                    <div className="p-1.5 sm:p-2 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 flex-shrink-0">
-                                        <Shield className="h-4 w-4 sm:h-5 sm:w-5 text-emerald-500" />
+                                    <div className="p-1.5 sm:p-2 rounded-lg bg-re-brand-muted dark:bg-re-brand/30 flex-shrink-0">
+                                        <Shield className="h-4 w-4 sm:h-5 sm:w-5 text-re-brand" />
                                     </div>
                                     <div className="min-w-0">
                                         <p className="text-xl sm:text-2xl font-bold truncate">
@@ -369,8 +369,8 @@ export default function DashboardPage() {
                         <Card>
                             <CardContent className="pt-4 sm:pt-6 pb-4">
                                 <div className="flex items-center gap-2 sm:gap-3">
-                                    <div className="p-1.5 sm:p-2 rounded-lg bg-amber-100 dark:bg-amber-900/30 flex-shrink-0">
-                                        <AlertTriangle className="h-4 w-4 sm:h-5 sm:w-5 text-amber-500" />
+                                    <div className="p-1.5 sm:p-2 rounded-lg bg-re-warning-muted dark:bg-re-warning/30 flex-shrink-0">
+                                        <AlertTriangle className="h-4 w-4 sm:h-5 sm:w-5 text-re-warning" />
                                     </div>
                                     <div className="min-w-0">
                                         <p className="text-xl sm:text-2xl font-bold">{metrics.openAlerts}</p>
@@ -442,29 +442,29 @@ export default function DashboardPage() {
                             <CardContent className="pt-6">
                                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
                                     <div className="flex items-center gap-3 sm:gap-4">
-                                        <div className="p-2.5 sm:p-3 rounded-lg bg-white dark:bg-gray-800 shadow-sm flex-shrink-0">
-                                            <Activity className="h-5 w-5 sm:h-6 sm:w-6 text-blue-600" />
+                                        <div className="p-2.5 sm:p-3 rounded-lg bg-white dark:bg-re-surface-card shadow-sm flex-shrink-0">
+                                            <Activity className="h-5 w-5 sm:h-6 sm:w-6 text-re-info" />
                                         </div>
                                         <div>
-                                            <h3 className="font-semibold text-sm sm:text-base group-hover:text-blue-600 transition-colors">Daily Compliance Heartbeat</h3>
+                                            <h3 className="font-semibold text-sm sm:text-base group-hover:text-re-info transition-colors">Daily Compliance Heartbeat</h3>
                                             <p className="text-xs sm:text-sm text-muted-foreground">
                                                 Score, alerts, chain status &amp; next actions — your morning check
                                             </p>
                                         </div>
                                     </div>
-                                    <ArrowRight className="h-5 w-5 text-muted-foreground group-hover:text-blue-600 group-hover:translate-x-1 transition-all" />
+                                    <ArrowRight className="h-5 w-5 text-muted-foreground group-hover:text-re-info group-hover:translate-x-1 transition-all" />
                                 </div>
                             </CardContent>
                         </Card>
                     </Link>
 
                     {/* FSMA 204 Deadline Banner */}
-                    <Card className="bg-gradient-to-r from-emerald-50 to-blue-50 dark:from-emerald-900/20 dark:to-blue-900/20 border-emerald-200 dark:border-emerald-800">
+                    <Card className="bg-gradient-to-r from-emerald-50 to-blue-50 dark:from-emerald-900/20 dark:to-blue-900/20 border-emerald-200 dark:border-re-brand">
                         <CardContent className="pt-6">
                             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
                                 <div className="flex items-center gap-3 sm:gap-4">
-                                    <div className="p-2.5 sm:p-3 rounded-lg bg-white dark:bg-gray-800 shadow-sm flex-shrink-0">
-                                        <BarChart3 className="h-5 w-5 sm:h-6 sm:w-6 text-emerald-600" />
+                                    <div className="p-2.5 sm:p-3 rounded-lg bg-white dark:bg-re-surface-card shadow-sm flex-shrink-0">
+                                        <BarChart3 className="h-5 w-5 sm:h-6 sm:w-6 text-re-brand-dark" />
                                     </div>
                                     <div>
                                         <h3 className="font-semibold text-sm sm:text-base">FSMA 204 Compliance</h3>

@@ -23,8 +23,8 @@ import {
 } from '@/components/ui/popover';
 
 const PLAN_BADGES: Record<string, { label: string; className: string } | undefined> = {
-    enterprise: { label: 'Enterprise', className: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' },
-    professional: { label: 'Pro', className: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' },
+    enterprise: { label: 'Enterprise', className: 'bg-re-warning-muted text-re-warning dark:bg-re-warning/30 dark:text-re-warning' },
+    professional: { label: 'Pro', className: 'bg-re-info-muted text-re-info dark:bg-re-info/30 dark:text-re-info' },
     starter: undefined,
     free: undefined,
 };

@@ -26,13 +26,13 @@ const statusConfig: Record<RecallStatus, {
   bgColor: string;
   icon: React.ElementType;
 }> = {
-  PENDING: { label: 'Pending', color: 'text-gray-600', bgColor: 'bg-gray-100', icon: Clock },
-  IN_PROGRESS: { label: 'In Progress', color: 'text-blue-600', bgColor: 'bg-blue-100', icon: RefreshCw },
-  MET: { label: 'SLA Met', color: 'text-green-600', bgColor: 'bg-green-100', icon: CheckCircle },
-  AT_RISK: { label: 'At Risk', color: 'text-amber-600', bgColor: 'bg-amber-100', icon: AlertTriangle },
-  BREACHED: { label: 'SLA Breached', color: 'text-red-600', bgColor: 'bg-red-100', icon: XCircle },
-  COMPLETED: { label: 'Completed', color: 'text-green-600', bgColor: 'bg-green-100', icon: CheckCircle },
-  CANCELLED: { label: 'Cancelled', color: 'text-gray-600', bgColor: 'bg-gray-100', icon: StopCircle },
+  PENDING: { label: 'Pending', color: 'text-re-text-disabled', bgColor: 'bg-re-surface-elevated', icon: Clock },
+  IN_PROGRESS: { label: 'In Progress', color: 'text-re-info', bgColor: 'bg-re-info-muted', icon: RefreshCw },
+  MET: { label: 'SLA Met', color: 'text-re-success', bgColor: 'bg-re-success-muted', icon: CheckCircle },
+  AT_RISK: { label: 'At Risk', color: 'text-re-warning', bgColor: 'bg-re-warning-muted', icon: AlertTriangle },
+  BREACHED: { label: 'SLA Breached', color: 'text-re-danger', bgColor: 'bg-re-danger-muted', icon: XCircle },
+  COMPLETED: { label: 'Completed', color: 'text-re-success', bgColor: 'bg-re-success-muted', icon: CheckCircle },
+  CANCELLED: { label: 'Cancelled', color: 'text-re-text-disabled', bgColor: 'bg-re-surface-elevated', icon: StopCircle },
 };
 
 // FDA 24-hour SLA in seconds
@@ -114,14 +114,14 @@ export function RecallTimer({ drill, onCancel, onComplete, onStartDrill, classNa
   return (
     <Card className={cn(
       'relative overflow-hidden',
-      timeData?.urgency === 'critical' && 'border-red-500',
+      timeData?.urgency === 'critical' && 'border-re-danger',
       timeData?.urgency === 'warning' && 'border-amber-500',
       className
     )}>
       {/* Urgency overlay animation */}
       {timeData?.urgency === 'critical' && drill.status === 'IN_PROGRESS' && (
         <motion.div
-          className="absolute inset-0 bg-red-500/10 pointer-events-none"
+          className="absolute inset-0 bg-re-danger-muted0/10 pointer-events-none"
           animate={{ opacity: [0.1, 0.3, 0.1] }}
           transition={{ duration: 2, repeat: Infinity }}
         />
@@ -130,7 +130,7 @@ export function RecallTimer({ drill, onCancel, onComplete, onStartDrill, classNa
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between">
           <CardTitle className="flex items-center gap-2">
-            <Bell className="w-5 h-5 text-red-500" />
+            <Bell className="w-5 h-5 text-re-danger" />
             FDA Recall Drill
           </CardTitle>
           <Badge className={cn(status.bgColor, status.color)}>
@@ -166,10 +166,10 @@ export function RecallTimer({ drill, onCancel, onComplete, onStartDrill, classNa
             <motion.div
               className={cn(
                 'h-full rounded-full',
-                timeData?.urgency === 'breached' && 'bg-red-500',
-                timeData?.urgency === 'critical' && 'bg-red-500',
-                timeData?.urgency === 'warning' && 'bg-amber-500',
-                timeData?.urgency === 'normal' && 'bg-green-500'
+                timeData?.urgency === 'breached' && 'bg-re-danger-muted0',
+                timeData?.urgency === 'critical' && 'bg-re-danger-muted0',
+                timeData?.urgency === 'warning' && 'bg-re-warning-muted0',
+                timeData?.urgency === 'normal' && 'bg-re-success-muted0'
               )}
               initial={{ width: 0 }}
               animate={{ width: `${Math.min(100, timeData?.progress || 0)}%` }}
@@ -240,9 +240,9 @@ function CountdownDisplay({ seconds, urgency, isActive }: CountdownDisplayProps)
 
   const colorClass = {
     normal: 'text-foreground',
-    warning: 'text-amber-600',
-    critical: 'text-red-600',
-    breached: 'text-red-600',
+    warning: 'text-re-warning',
+    critical: 'text-re-danger',
+    breached: 'text-re-danger',
   }[urgency];
 
   return (
@@ -314,7 +314,7 @@ export function RecallStatusBadge({ drill, showTimer = true, className }: Recall
       {showTimer && drill.status === 'IN_PROGRESS' && (
         <span className={cn(
           'font-mono text-sm',
-          remaining <= 3600 ? 'text-red-600' : 'text-muted-foreground'
+          remaining <= 3600 ? 'text-re-danger' : 'text-muted-foreground'
         )}>
           {formatDuration(remaining)}
         </span>
@@ -333,7 +333,7 @@ export function SLAGauge({ percentage, className }: SLAGaugeProps) {
   const circumference = 2 * Math.PI * 45; // radius = 45
   const strokeDashoffset = circumference - (percentage / 100) * circumference;
 
-  const color = percentage >= 90 ? 'stroke-green-500' : percentage >= 70 ? 'stroke-amber-500' : 'stroke-red-500';
+  const color = percentage >= 90 ? 'stroke-re-brand' : percentage >= 70 ? 'stroke-amber-500' : 'stroke-re-danger';
 
   return (
     <div className={cn('relative w-32 h-32', className)}>

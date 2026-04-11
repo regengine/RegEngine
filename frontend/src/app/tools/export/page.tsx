@@ -283,13 +283,13 @@ export default function ExportPage() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 }}
-            className="p-6 border border-gray-200 rounded-lg bg-gradient-to-br from-blue-50 to-transparent"
+            className="p-6 border border-re-border rounded-lg bg-gradient-to-br from-blue-50 to-transparent"
           >
             <div className="flex items-start gap-4">
-              <FileText className="w-6 h-6 text-blue-600 flex-shrink-0 mt-1" />
+              <FileText className="w-6 h-6 text-re-info flex-shrink-0 mt-1" />
               <div>
                 <h3 className="font-semibold mb-2">FDA Sortable Spreadsheet</h3>
-                <p className="text-sm text-gray-600">
+                <p className="text-sm text-re-text-disabled">
                   21 CFR 1.1455 compliant CSV with all required KDEs. Sortable by TLC, date, product, and location.
                 </p>
               </div>
@@ -300,13 +300,13 @@ export default function ExportPage() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2 }}
-            className="p-6 border border-gray-200 rounded-lg bg-gradient-to-br from-green-50 to-transparent"
+            className="p-6 border border-re-border rounded-lg bg-gradient-to-br from-green-50 to-transparent"
           >
             <div className="flex items-start gap-4">
-              <Shield className="w-6 h-6 text-green-600 flex-shrink-0 mt-1" />
+              <Shield className="w-6 h-6 text-re-success flex-shrink-0 mt-1" />
               <div>
                 <h3 className="font-semibold mb-2">Chain Verification</h3>
-                <p className="text-sm text-gray-600">
+                <p className="text-sm text-re-text-disabled">
                   SHA-256 hash chain proving record integrity. Each event cryptographically linked to its predecessor.
                 </p>
               </div>
@@ -317,13 +317,13 @@ export default function ExportPage() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.3 }}
-            className="p-6 border border-gray-200 rounded-lg bg-gradient-to-br from-purple-50 to-transparent"
+            className="p-6 border border-re-border rounded-lg bg-gradient-to-br from-purple-50 to-transparent"
           >
             <div className="flex items-start gap-4">
               <FileCheck className="w-6 h-6 text-purple-600 flex-shrink-0 mt-1" />
               <div>
                 <h3 className="font-semibold mb-2">Package Manifest</h3>
-                <p className="text-sm text-gray-600">
+                <p className="text-sm text-re-text-disabled">
                   Cryptographic manifest with file checksums. Independent verification without RegEngine.
                 </p>
               </div>
@@ -344,12 +344,12 @@ export default function ExportPage() {
 
           <TabsContent value="sample" className="mt-6">
             <div className="text-center py-8">
-              <p className="text-gray-600 mb-6">Generate a demo package using realistic food traceability data</p>
+              <p className="text-re-text-disabled mb-6">Generate a demo package using realistic food traceability data</p>
               <Button
                 onClick={handleGenerateDemo}
                 disabled={isGenerating}
                 size="lg"
-                className="bg-blue-600 hover:bg-blue-700"
+                className="bg-re-info hover:bg-re-info"
               >
                 {isGenerating ? 'Generating...' : 'Generate Demo Package'}
               </Button>
@@ -357,9 +357,9 @@ export default function ExportPage() {
           </TabsContent>
 
           <TabsContent value="upload" className="mt-6">
-            <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
-              <Upload className="w-10 h-10 mx-auto text-gray-400 mb-3" />
-              <p className="text-gray-600 mb-4">
+            <div className="border-2 border-dashed border-re-border rounded-lg p-8 text-center">
+              <Upload className="w-10 h-10 mx-auto text-re-text-tertiary mb-3" />
+              <p className="text-re-text-disabled mb-4">
                 Upload a CSV with columns: tlc, product, quantity, uom, event_date, event_type, location
               </p>
               <input
@@ -387,7 +387,7 @@ export default function ExportPage() {
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
-              className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg"
+              className="mt-6 p-4 bg-re-info-muted border border-blue-200 rounded-lg"
             >
               <div className="flex items-center gap-3">
                 <motion.div
@@ -395,7 +395,7 @@ export default function ExportPage() {
                   transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}
                   className="w-5 h-5 border-2 border-blue-600 border-t-transparent rounded-full"
                 />
-                <span className="text-blue-900 font-medium">{generationStep}</span>
+                <span className="text-re-info font-medium">{generationStep}</span>
               </div>
             </motion.div>
           )}
@@ -415,9 +415,9 @@ export default function ExportPage() {
             </TabsList>
 
             <TabsContent value="csv" className="mt-6">
-              <div className="overflow-x-auto border border-gray-200 rounded-lg">
+              <div className="overflow-x-auto border border-re-border rounded-lg">
                 <table className="w-full text-sm">
-                  <thead className="bg-gray-50 border-b border-gray-200">
+                  <thead className="bg-re-surface-card border-b border-re-border">
                     <tr>
                       <th className="px-4 py-3 text-left font-semibold">TLC</th>
                       <th className="px-4 py-3 text-left font-semibold">Product</th>
@@ -430,38 +430,38 @@ export default function ExportPage() {
                   </thead>
                   <tbody>
                     {generatedPackage.csv.slice(0, 10).map((row, idx) => (
-                      <tr key={idx} className="border-b border-gray-200 hover:bg-gray-50">
+                      <tr key={idx} className="border-b border-re-border hover:bg-re-surface-card">
                         <td className="px-4 py-3 font-mono text-xs">{row.tlc}</td>
                         <td className="px-4 py-3">{row.product}</td>
                         <td className="px-4 py-3">{row.quantity} {row.uom}</td>
                         <td className="px-4 py-3">{row.event_type}</td>
                         <td className="px-4 py-3 text-xs">{row.event_date}</td>
-                        <td className="px-4 py-3 font-mono text-xs bg-blue-50">{row.sha256_hash}</td>
-                        <td className="px-4 py-3 font-mono text-xs bg-green-50">{row.chain_hash}</td>
+                        <td className="px-4 py-3 font-mono text-xs bg-re-info-muted">{row.sha256_hash}</td>
+                        <td className="px-4 py-3 font-mono text-xs bg-re-success-muted">{row.chain_hash}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
-              <p className="text-sm text-gray-600 mt-4">
+              <p className="text-sm text-re-text-disabled mt-4">
                 Showing first 10 of {generatedPackage.csv.length} records
               </p>
             </TabsContent>
 
             <TabsContent value="chain" className="mt-6">
               <div className="space-y-4">
-                <div className="flex items-center gap-4 p-4 bg-green-50 border border-green-200 rounded-lg">
-                  <CheckCircle2 className="w-5 h-5 text-green-600 flex-shrink-0" />
+                <div className="flex items-center gap-4 p-4 bg-re-success-muted border border-green-200 rounded-lg">
+                  <CheckCircle2 className="w-5 h-5 text-re-success flex-shrink-0" />
                   <div>
-                    <p className="font-semibold text-green-900">Chain Valid</p>
-                    <p className="text-sm text-green-800">
+                    <p className="font-semibold text-re-success">Chain Valid</p>
+                    <p className="text-sm text-re-success">
                       {generatedPackage.chainVerification.chain_length} records verified
                     </p>
                   </div>
                 </div>
 
-                <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-                  <p className="text-sm font-mono text-gray-800 whitespace-pre-wrap">
+                <div className="bg-re-surface-card border border-re-border rounded-lg p-4">
+                  <p className="text-sm font-mono text-re-text-primary whitespace-pre-wrap">
                     {JSON.stringify(
                       {
                         chain_verification: {
@@ -484,24 +484,24 @@ export default function ExportPage() {
                       initial={{ opacity: 0, x: -20 }}
                       animate={{ opacity: 1, x: 0 }}
                       transition={{ delay: idx * 0.1 }}
-                      className="flex items-start gap-4 p-4 border border-gray-200 rounded-lg"
+                      className="flex items-start gap-4 p-4 border border-re-border rounded-lg"
                     >
                       <div className="flex flex-col items-center">
-                        <div className="w-8 h-8 bg-blue-600 text-white rounded-full flex items-center justify-center text-xs font-semibold">
+                        <div className="w-8 h-8 bg-re-info text-white rounded-full flex items-center justify-center text-xs font-semibold">
                           {idx + 1}
                         </div>
-                        {idx < 4 && <div className="h-6 w-0.5 bg-gray-300 my-1" />}
+                        {idx < 4 && <div className="h-6 w-0.5 bg-re-surface-elevated my-1" />}
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="font-semibold text-sm">{event.event_type}</p>
-                        <p className="text-xs text-gray-600 mt-1">TLC: {event.tlc}</p>
-                        <p className="text-xs text-gray-600">Date: {event.timestamp}</p>
-                        <div className="mt-2 p-2 bg-gray-100 rounded text-xs font-mono text-gray-700">
+                        <p className="text-xs text-re-text-disabled mt-1">TLC: {event.tlc}</p>
+                        <p className="text-xs text-re-text-disabled">Date: {event.timestamp}</p>
+                        <div className="mt-2 p-2 bg-re-surface-elevated rounded text-xs font-mono text-re-text-disabled">
                           <div>event_hash: {event.event_hash.substring(0, 32)}...</div>
                           <div className="mt-1">→ chain_hash: {event.chain_hash.substring(0, 32)}...</div>
                         </div>
                       </div>
-                      <CheckCircle2 className="w-5 h-5 text-green-600 flex-shrink-0 mt-1" />
+                      <CheckCircle2 className="w-5 h-5 text-re-success flex-shrink-0 mt-1" />
                     </motion.div>
                   ))}
                 </div>
@@ -510,27 +510,27 @@ export default function ExportPage() {
 
             <TabsContent value="manifest" className="mt-6">
               <div className="space-y-4">
-                <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 overflow-x-auto">
-                  <p className="text-sm font-mono text-gray-800 whitespace-pre-wrap">
+                <div className="bg-re-surface-card border border-re-border rounded-lg p-4 overflow-x-auto">
+                  <p className="text-sm font-mono text-re-text-primary whitespace-pre-wrap">
                     {JSON.stringify(generatedPackage.manifest, null, 2)}
                   </p>
                 </div>
 
                 <div className="grid grid-cols-1 gap-3">
                   {generatedPackage.manifest.files.map((file, idx) => (
-                    <div key={idx} className="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
+                    <div key={idx} className="flex items-center justify-between p-4 border border-re-border rounded-lg">
                       <div>
                         <p className="font-semibold text-sm">{file.filename}</p>
-                        <p className="text-xs text-gray-600 mt-1 font-mono">{file.sha256.substring(0, 32)}...</p>
+                        <p className="text-xs text-re-text-disabled mt-1 font-mono">{file.sha256.substring(0, 32)}...</p>
                       </div>
-                      <CheckCircle2 className="w-5 h-5 text-green-600" />
+                      <CheckCircle2 className="w-5 h-5 text-re-success" />
                     </div>
                   ))}
                 </div>
 
-                <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                  <p className="font-semibold text-sm text-blue-900 mb-2">How to Verify Independently</p>
-                  <ol className="text-xs text-blue-800 space-y-1 list-decimal list-inside">
+                <div className="p-4 bg-re-info-muted border border-blue-200 rounded-lg">
+                  <p className="font-semibold text-sm text-re-info mb-2">How to Verify Independently</p>
+                  <ol className="text-xs text-re-info space-y-1 list-decimal list-inside">
                     <li>Download all files from the package</li>
                     <li>Compute SHA-256 hash of each file</li>
                     <li>Compare hashes with manifest entries</li>
@@ -550,16 +550,16 @@ export default function ExportPage() {
                 <motion.div
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
-                  className="p-4 bg-gray-50 border border-gray-200 rounded-lg"
+                  className="p-4 bg-re-surface-card border border-re-border rounded-lg"
                 >
                   <p className="text-sm font-semibold mb-2">Preview Ready</p>
-                  <p className="text-xs text-gray-600">
+                  <p className="text-xs text-re-text-disabled">
                     Your {generatedPackage.csv.length}-record package is ready to download with full chain verification.
                   </p>
                 </motion.div>
               }
             >
-              <Button onClick={downloadPackage} size="lg" className="w-full bg-blue-600 hover:bg-blue-700">
+              <Button onClick={downloadPackage} size="lg" className="w-full bg-re-info hover:bg-re-info">
                 <Download className="w-4 h-4 mr-2" />
                 Download Package
               </Button>
@@ -569,7 +569,7 @@ export default function ExportPage() {
       )}
 
       {/* Section 4: How It Works */}
-      <div className="border-t border-gray-200 pt-12">
+      <div className="border-t border-re-border pt-12">
         <h2 className="text-2xl font-semibold mb-8">How SHA-256 Chain Verification Works</h2>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
@@ -579,14 +579,14 @@ export default function ExportPage() {
             transition={{ delay: 0.1 }}
             className="space-y-4"
           >
-            <div className="flex items-center justify-center w-12 h-12 bg-blue-100 rounded-full">
-              <span className="text-xl font-bold text-blue-600">1</span>
+            <div className="flex items-center justify-center w-12 h-12 bg-re-info-muted rounded-full">
+              <span className="text-xl font-bold text-re-info">1</span>
             </div>
             <h3 className="font-semibold">Hash Each Event</h3>
-            <p className="text-sm text-gray-600">
+            <p className="text-sm text-re-text-disabled">
               Each CTE event (harvest, pack, transport, etc.) is converted to a deterministic SHA-256 hash. Same data always produces same hash.
             </p>
-            <div className="bg-gray-50 p-3 rounded text-xs font-mono text-gray-700">
+            <div className="bg-re-surface-card p-3 rounded text-xs font-mono text-re-text-disabled">
               event_data → SHA-256 → hash
             </div>
           </motion.div>
@@ -597,14 +597,14 @@ export default function ExportPage() {
             transition={{ delay: 0.2 }}
             className="space-y-4"
           >
-            <div className="flex items-center justify-center w-12 h-12 bg-green-100 rounded-full">
-              <span className="text-xl font-bold text-green-600">2</span>
+            <div className="flex items-center justify-center w-12 h-12 bg-re-success-muted rounded-full">
+              <span className="text-xl font-bold text-re-success">2</span>
             </div>
             <h3 className="font-semibold">Form Chain Links</h3>
-            <p className="text-sm text-gray-600">
+            <p className="text-sm text-re-text-disabled">
               Each new event includes the previous hash. This creates an unbreakable chain where every event is cryptographically bound to its history.
             </p>
-            <div className="bg-gray-50 p-3 rounded text-xs font-mono text-gray-700">
+            <div className="bg-re-surface-card p-3 rounded text-xs font-mono text-re-text-disabled">
               prev_hash + event → SHA-256 → chain_hash
             </div>
           </motion.div>
@@ -615,14 +615,14 @@ export default function ExportPage() {
             transition={{ delay: 0.3 }}
             className="space-y-4"
           >
-            <div className="flex items-center justify-center w-12 h-12 bg-red-100 rounded-full">
-              <span className="text-xl font-bold text-red-600">3</span>
+            <div className="flex items-center justify-center w-12 h-12 bg-re-danger-muted rounded-full">
+              <span className="text-xl font-bold text-re-danger">3</span>
             </div>
             <h3 className="font-semibold">Detect Tampering</h3>
-            <p className="text-sm text-gray-600">
+            <p className="text-sm text-re-text-disabled">
               If one hash changes, all subsequent hashes become invalid. Any tampering is immediately detectable without needing a central authority.
             </p>
-            <div className="bg-red-50 p-3 rounded text-xs font-mono text-red-700">
+            <div className="bg-re-danger-muted p-3 rounded text-xs font-mono text-re-danger">
               tampering → invalid chain ✗
             </div>
           </motion.div>

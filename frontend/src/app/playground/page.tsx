@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 
 const ingestExample = `// Ingest a Critical Tracking Event (FSMA 204)
-const response = await fetch('https://www.regengine.co/api/v1/webhooks/ingest', {
+const response = await fetch('https://regengine.co/api/v1/webhooks/ingest', {
   method: 'POST',
   headers: {
     'X-RegEngine-API-Key': 'YOUR_API_KEY',
@@ -39,7 +39,7 @@ console.log('Chain hash:', result.events?.[0]?.chain_hash);
 
 const verifyExample = `// Verify event chain integrity
 const response = await fetch(
-  'https://www.regengine.co/api/v1/epcis/chain/verify?tenant_id=YOUR_TENANT_UUID',
+  'https://regengine.co/api/v1/epcis/chain/verify?tenant_id=YOUR_TENANT_UUID',
   {
     headers: { 'X-RegEngine-API-Key': 'YOUR_API_KEY' }
   }
@@ -87,20 +87,20 @@ export default function PlaygroundPage() {
                     </p>
                 </div>
 
-                <div className="mb-6 p-3 rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 flex items-center gap-2 text-amber-800 dark:text-amber-200 text-sm">
+                <div className="mb-6 p-3 rounded-lg bg-re-warning-muted dark:bg-re-warning/20 border border-amber-200 dark:border-amber-800 flex items-center gap-2 text-re-warning dark:text-re-warning text-sm">
                     <AlertTriangle className="h-4 w-4 shrink-0" />
                     <span>Demo Data — This page shows simulated output. Use your own API key and tenant data for production behavior.</span>
                 </div>
 
                 {/* Safety Notice */}
-                <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-6 mb-8">
+                <div className="bg-re-warning-muted dark:bg-re-warning/20 border border-amber-200 dark:border-amber-800 rounded-lg p-6 mb-8">
                     <div className="flex items-start gap-3">
-                        <Shield className="h-6 w-6 text-amber-600 flex-shrink-0 mt-1" />
+                        <Shield className="h-6 w-6 text-re-warning flex-shrink-0 mt-1" />
                         <div>
-                            <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-2">
+                            <h3 className="font-semibold text-re-text-primary dark:text-re-text-primary mb-2">
                                 Sandboxed Environment
                             </h3>
-                            <p className="text-gray-700 dark:text-gray-300 text-sm">
+                            <p className="text-re-text-disabled dark:text-re-text-secondary text-sm">
                                 Code runs in your browser in a sandboxed environment. For actual API calls, use your API key
                                 from the <Link href="/api-keys" className="text-primary hover:underline">API Keys page</Link>.
                             </p>
@@ -111,7 +111,7 @@ export default function PlaygroundPage() {
                 {/* Quick Demo */}
                 <div className="mb-12">
                     <h2 className="text-2xl font-bold mb-4 flex items-center gap-2">
-                        <Zap className="h-6 w-6 text-yellow-500" />
+                        <Zap className="h-6 w-6 text-re-warning" />
                         Quick Demo
                     </h2>
                     <CodePlayground

@@ -27,7 +27,7 @@ export const metadata: Metadata = {
     title: "Product | RegEngine — FSMA 204 Compliance Infrastructure",
     description:
       "From CSV upload to FDA-ready export: data ingestion, real-time FSMA 204 validation, EPCIS 2.0 normalization, and cryptographic audit trails.",
-    url: "https://www.regengine.co/product",
+    url: "https://regengine.co/product",
     type: "website",
   },
 };
@@ -402,7 +402,7 @@ export default function ProductPage() {
                   {item.title}
                 </h3>
                 {item.inProgress && (
-                  <span className="text-[10px] font-semibold uppercase tracking-wider px-2.5 py-1 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20 flex-shrink-0">
+                  <span className="text-[10px] font-semibold uppercase tracking-wider px-2.5 py-1 rounded-full bg-re-warning-muted0/10 text-re-warning border border-re-warning/20 flex-shrink-0">
                     In Progress
                   </span>
                 )}

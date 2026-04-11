@@ -67,7 +67,7 @@ export default function RegEngineVsSpreadsheets() {
             <div className="space-y-5 mb-8">
               <div className="p-6 rounded-lg bg-[var(--re-surface-secondary)] border border-[var(--re-surface-border)]">
                 <h4 className="font-semibold text-[var(--re-text-primary)] mb-3 flex items-center gap-2">
-                  <X className="w-5 h-5 text-red-500" />
+                  <X className="w-5 h-5 text-re-danger" />
                   Spreadsheet Problems
                 </h4>
                 <ul className="space-y-2 text-[var(--re-text-secondary)] text-sm">
@@ -109,7 +109,7 @@ export default function RegEngineVsSpreadsheets() {
             <div className="space-y-5 mb-8">
               <div className="p-6 rounded-lg bg-[var(--re-surface-secondary)] border border-[var(--re-surface-border)]">
                 <h4 className="font-semibold text-[var(--re-text-primary)] mb-3 flex items-center gap-2">
-                  <X className="w-5 h-5 text-red-500" />
+                  <X className="w-5 h-5 text-re-danger" />
                   Spreadsheet Problems
                 </h4>
                 <ul className="space-y-2 text-[var(--re-text-secondary)] text-sm">
@@ -151,7 +151,7 @@ export default function RegEngineVsSpreadsheets() {
             <div className="space-y-5 mb-8">
               <div className="p-6 rounded-lg bg-[var(--re-surface-secondary)] border border-[var(--re-surface-border)]">
                 <h4 className="font-semibold text-[var(--re-text-primary)] mb-3 flex items-center gap-2">
-                  <X className="w-5 h-5 text-red-500" />
+                  <X className="w-5 h-5 text-re-danger" />
                   Spreadsheet Problems
                 </h4>
                 <ul className="space-y-2 text-[var(--re-text-secondary)] text-sm">
@@ -195,7 +195,7 @@ export default function RegEngineVsSpreadsheets() {
             <div className="space-y-5 mb-8">
               <div className="p-6 rounded-lg bg-[var(--re-surface-secondary)] border border-[var(--re-surface-border)]">
                 <h4 className="font-semibold text-[var(--re-text-primary)] mb-3 flex items-center gap-2">
-                  <X className="w-5 h-5 text-red-500" />
+                  <X className="w-5 h-5 text-re-danger" />
                   Spreadsheet Problems
                 </h4>
                 <ul className="space-y-2 text-[var(--re-text-secondary)] text-sm">
@@ -234,7 +234,7 @@ export default function RegEngineVsSpreadsheets() {
             <div className="space-y-5 mb-8">
               <div className="p-6 rounded-lg bg-[var(--re-surface-secondary)] border border-[var(--re-surface-border)]">
                 <h4 className="font-semibold text-[var(--re-text-primary)] mb-3 flex items-center gap-2">
-                  <X className="w-5 h-5 text-red-500" />
+                  <X className="w-5 h-5 text-re-danger" />
                   Spreadsheet Problems
                 </h4>
                 <ul className="space-y-2 text-[var(--re-text-secondary)] text-sm">

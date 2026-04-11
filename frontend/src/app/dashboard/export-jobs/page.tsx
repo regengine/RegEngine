@@ -105,8 +105,8 @@ export default function ExportJobsPage() {
                 </div>
 
                 {notConnected ? (
-                    <div className="rounded-xl border border-amber-500/20 bg-amber-500/[0.06] p-4 text-sm text-amber-200 flex items-start gap-3">
-                        <Link2Off className="h-4 w-4 mt-0.5 flex-shrink-0 text-amber-400" />
+                    <div className="rounded-xl border border-re-warning/20 bg-re-warning-muted0/[0.06] p-4 text-sm text-re-warning flex items-start gap-3">
+                        <Link2Off className="h-4 w-4 mt-0.5 flex-shrink-0 text-re-warning" />
                         <span>
                             No export jobs have been configured yet. Export job scheduling activates once your supply chain data is connected.
                         </span>
@@ -192,7 +192,7 @@ export default function ExportJobsPage() {
 
                 <div className="space-y-4">
                     {status === 'error' && (
-                        <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-4 text-sm text-amber-200">
+                        <div className="rounded-xl border border-re-warning/20 bg-re-warning-muted0/10 p-4 text-sm text-re-warning">
                             {createJobMutation.error?.message ?? 'Could not create the export job. Please check your inputs and try again.'}
                         </div>
                     )}

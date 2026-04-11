@@ -110,7 +110,7 @@ export function CodePlayground({
                             size="sm"
                             onClick={handleRun}
                             disabled={isRunning}
-                            className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                            className="bg-re-brand hover:bg-emerald-700 text-white"
                         >
                             <Play className="h-4 w-4 mr-2" />
                             {isRunning ? 'Running...' : 'Run Code'}
@@ -145,7 +145,7 @@ export function CodePlayground({
                     </div>
                     <div className="p-4 overflow-auto" style={{ height: `calc(${height} - 40px)` }}>
                         {error ? (
-                            <div className="flex items-start gap-2 text-red-600 dark:text-red-400">
+                            <div className="flex items-start gap-2 text-re-danger dark:text-re-danger">
                                 <AlertCircle className="h-5 w-5 flex-shrink-0 mt-0.5" />
                                 <pre className="font-mono text-sm whitespace-pre-wrap">{error}</pre>
                             </div>

@@ -15,11 +15,11 @@ interface AlertCardProps {
 
 export function AlertCard({ alert, onAcknowledge }: AlertCardProps) {
     const severityConfig = {
-        CRITICAL: { icon: XCircle, color: 'text-red-600', bg: 'bg-red-50 dark:bg-red-900/20', border: 'border-red-200' },
-        ERROR: { icon: XCircle, color: 'text-red-500', bg: 'bg-red-50 dark:bg-red-900/20', border: 'border-red-200' },
-        WARNING: { icon: AlertTriangle, color: 'text-amber-600', bg: 'bg-amber-50 dark:bg-amber-900/20', border: 'border-amber-200' },
-        INFO: { icon: Info, color: 'text-blue-600', bg: 'bg-blue-50 dark:bg-blue-900/20', border: 'border-blue-200' },
-    }[alert.severity] || { icon: Info, color: 'text-gray-600', bg: 'bg-gray-50', border: 'border-gray-200' };
+        CRITICAL: { icon: XCircle, color: 'text-re-danger', bg: 'bg-re-danger-muted dark:bg-re-danger/20', border: 'border-re-danger' },
+        ERROR: { icon: XCircle, color: 'text-re-danger', bg: 'bg-re-danger-muted dark:bg-re-danger/20', border: 'border-re-danger' },
+        WARNING: { icon: AlertTriangle, color: 'text-re-warning', bg: 'bg-re-warning-muted dark:bg-re-warning/20', border: 'border-amber-200' },
+        INFO: { icon: Info, color: 'text-re-info', bg: 'bg-re-info-muted dark:bg-re-info/20', border: 'border-blue-200' },
+    }[alert.severity] || { icon: Info, color: 'text-re-text-disabled', bg: 'bg-re-surface-card', border: 'border-re-border' };
 
     const Icon = severityConfig.icon;
 

@@ -6,7 +6,7 @@ import type { MetadataRoute } from 'next';
  * Includes all public-facing pages: marketing, tools, content, docs, and resources.
  */
 export default function sitemap(): MetadataRoute.Sitemap {
-    const baseUrl = 'https://www.regengine.co';
+    const baseUrl = 'https://regengine.co';
     const now = new Date().toISOString();
 
     // Core marketing pages

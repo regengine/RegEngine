@@ -14,11 +14,11 @@ const ServiceStatus = ({ name, status, details }: ServiceStatusProps) => {
     const getIcon = () => {
         switch (status) {
             case 'healthy':
-                return <CheckCircle className="h-5 w-5 text-green-500" />;
+                return <CheckCircle className="h-5 w-5 text-re-success" />;
             case 'degraded':
-                return <AlertTriangle className="h-5 w-5 text-yellow-500" />;
+                return <AlertTriangle className="h-5 w-5 text-re-warning" />;
             case 'unhealthy':
-                return <XCircle className="h-5 w-5 text-red-500" />;
+                return <XCircle className="h-5 w-5 text-re-danger" />;
             default:
                 return <Activity className="h-5 w-5 text-muted-foreground" />;
         }
@@ -83,7 +83,7 @@ export function SystemHealthWidget() {
                     <CardTitle className="text-sm font-medium">System Health</CardTitle>
                 </CardHeader>
                 <CardContent>
-                    <div className="flex items-center gap-2 p-3 text-red-600 bg-red-50 dark:bg-red-900/10 rounded-lg">
+                    <div className="flex items-center gap-2 p-3 text-re-danger bg-re-danger-muted dark:bg-re-danger/10 rounded-lg">
                         <XCircle className="h-5 w-5" />
                         <span className="text-sm">Failed to load system status</span>
                     </div>
@@ -100,8 +100,8 @@ export function SystemHealthWidget() {
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">System Health</CardTitle>
                 <div className="flex items-center gap-2">
-                    <span className={`h-2 w-2 rounded-full ${overallStatus === 'healthy' ? 'bg-green-500' :
-                        overallStatus === 'degraded' ? 'bg-yellow-500' : 'bg-red-500'
+                    <span className={`h-2 w-2 rounded-full ${overallStatus === 'healthy' ? 'bg-re-success-muted0' :
+                        overallStatus === 'degraded' ? 'bg-re-warning' : 'bg-re-danger-muted0'
                         }`} />
                     <span className="text-xs text-muted-foreground capitalize">{overallStatus}</span>
                 </div>

@@ -64,9 +64,9 @@ export default function ProfileSettingsPage() {
                     </div>
 
                     {/* Not-yet-implemented notice */}
-                    <div className="mb-6 p-4 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 flex items-start gap-3">
-                        <Info className="h-4 w-4 text-amber-600 dark:text-amber-400 mt-0.5 flex-shrink-0" />
-                        <p className="text-sm text-amber-900 dark:text-amber-200">
+                    <div className="mb-6 p-4 rounded-lg border border-amber-200 dark:border-amber-800 bg-re-warning-muted dark:bg-re-warning/20 flex items-start gap-3">
+                        <Info className="h-4 w-4 text-re-warning dark:text-re-warning mt-0.5 flex-shrink-0" />
+                        <p className="text-sm text-re-warning dark:text-re-warning">
                             <strong>Profile editing is coming soon.</strong> Fields are editable but changes are not yet saved to the server.
                             To update your information now, email <a href="mailto:support@regengine.co" className="underline">support@regengine.co</a>.
                         </p>
@@ -188,7 +188,7 @@ export default function ProfileSettingsPage() {
 
                                 {/* Save feedback */}
                                 {saveMessage && (
-                                    <div className="p-3 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 text-sm text-amber-900 dark:text-amber-200">
+                                    <div className="p-3 rounded-lg border border-amber-200 dark:border-amber-800 bg-re-warning-muted dark:bg-re-warning/20 text-sm text-re-warning dark:text-re-warning">
                                         {saveMessage}
                                     </div>
                                 )}

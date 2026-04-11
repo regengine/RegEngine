@@ -58,7 +58,7 @@ export default function AdminAlertsPage() {
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                 <div>
                     <h1 className="text-2xl sm:text-3xl font-bold flex items-center gap-3">
-                        <Shield className="h-8 w-8 text-blue-600" />
+                        <Shield className="h-8 w-8 text-re-info" />
                         Compliance Alerts
                     </h1>
                     <p className="text-muted-foreground mt-1">
@@ -103,7 +103,7 @@ export default function AdminAlertsPage() {
             ) : filteredAlerts.length === 0 ? (
                 <Card className="border-dashed">
                     <CardContent className="py-12 text-center text-muted-foreground">
-                        <CheckCircle className="h-12 w-12 mx-auto mb-4 text-green-500 opacity-50" />
+                        <CheckCircle className="h-12 w-12 mx-auto mb-4 text-re-success opacity-50" />
                         <p className="text-lg font-medium">No alerts found</p>
                         <p>System is operating within compliance thresholds.</p>
                     </CardContent>

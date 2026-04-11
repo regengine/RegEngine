@@ -21,11 +21,11 @@ import { Button } from '@/components/ui/button';
 
 // Facility type icons and colors
 const facilityConfig: Record<FacilityType, { icon: React.ElementType; color: string; bgColor: string }> = {
-  FARM: { icon: Leaf, color: 'text-green-600', bgColor: 'bg-green-100 dark:bg-green-900' },
-  PROCESSOR: { icon: Factory, color: 'text-blue-600', bgColor: 'bg-blue-100 dark:bg-blue-900' },
+  FARM: { icon: Leaf, color: 'text-re-success', bgColor: 'bg-re-success-muted dark:bg-green-900' },
+  PROCESSOR: { icon: Factory, color: 'text-re-info', bgColor: 'bg-re-info-muted dark:bg-blue-900' },
   DISTRIBUTOR: { icon: Truck, color: 'text-purple-600', bgColor: 'bg-purple-100 dark:bg-purple-900' },
   RETAILER: { icon: Store, color: 'text-orange-600', bgColor: 'bg-orange-100 dark:bg-orange-900' },
-  RESTAURANT: { icon: ChefHat, color: 'text-red-600', bgColor: 'bg-red-100 dark:bg-red-900' },
+  RESTAURANT: { icon: ChefHat, color: 'text-re-danger', bgColor: 'bg-re-danger-muted dark:bg-red-900' },
 };
 
 interface SupplyChainGraphProps {
@@ -102,7 +102,7 @@ export function SupplyChainGraph({
               className={cn(
                 'relative flex flex-col items-center cursor-pointer transition-all',
                 isHighlighted && 'scale-110',
-                isAffected && 'ring-2 ring-red-500 ring-offset-2 rounded-xl'
+                isAffected && 'ring-2 ring-re-danger ring-offset-2 rounded-xl'
               )}
               onClick={() => onFacilityClick?.(facility)}
             >
@@ -126,7 +126,7 @@ export function SupplyChainGraph({
 
                 {/* Affected indicator */}
                 {isAffected && (
-                  <span className="absolute -bottom-1 -right-1 w-5 h-5 flex items-center justify-center bg-red-500 text-white rounded-full">
+                  <span className="absolute -bottom-1 -right-1 w-5 h-5 flex items-center justify-center bg-re-danger-muted0 text-white rounded-full">
                     <AlertTriangle className="w-3 h-3" />
                   </span>
                 )}
@@ -198,7 +198,7 @@ export function MiniSupplyChain({ facilities, affectedFacilities = [], className
               className={cn(
                 'w-8 h-8 rounded-md flex items-center justify-center',
                 config.bgColor,
-                isAffected && 'ring-2 ring-red-500'
+                isAffected && 'ring-2 ring-re-danger'
               )}
               title={`${facility.name} (${facility.type})`}
             >
@@ -242,7 +242,7 @@ export function FacilityCard({
       className={cn(
         'p-4 rounded-lg border cursor-pointer transition-all',
         isSelected && 'ring-2 ring-primary',
-        isAffected && 'border-red-500 bg-red-50 dark:bg-red-900/20',
+        isAffected && 'border-re-danger bg-re-danger-muted dark:bg-re-danger/20',
         !isAffected && !isSelected && 'hover:shadow-md',
         className
       )}
@@ -256,7 +256,7 @@ export function FacilityCard({
           <div className="flex items-center gap-2">
             <h4 className="font-medium truncate">{facility.name}</h4>
             {isAffected && (
-              <AlertTriangle className="w-4 h-4 text-red-500 flex-shrink-0" />
+              <AlertTriangle className="w-4 h-4 text-re-danger flex-shrink-0" />
             )}
           </div>
           <p className="text-sm text-muted-foreground">{facility.type}</p>
@@ -300,12 +300,12 @@ export function LotCard({ tlc, productDescription, quantity, unit, isAffected, c
     <div
       className={cn(
         'p-3 rounded-lg border',
-        isAffected && 'border-red-500 bg-red-50 dark:bg-red-900/20',
+        isAffected && 'border-re-danger bg-re-danger-muted dark:bg-re-danger/20',
         className
       )}
     >
       <div className="flex items-center gap-2">
-        <Package className={cn('w-5 h-5', isAffected ? 'text-red-500' : 'text-muted-foreground')} />
+        <Package className={cn('w-5 h-5', isAffected ? 'text-re-danger' : 'text-muted-foreground')} />
         <div className="flex-1 min-w-0">
           <p className="font-mono text-sm truncate">{tlc}</p>
           {productDescription && (
@@ -317,7 +317,7 @@ export function LotCard({ tlc, productDescription, quantity, unit, isAffected, c
             {quantity} {unit || 'units'}
           </span>
         )}
-        {isAffected && <AlertTriangle className="w-4 h-4 text-red-500" />}
+        {isAffected && <AlertTriangle className="w-4 h-4 text-re-danger" />}
       </div>
     </div>
   );

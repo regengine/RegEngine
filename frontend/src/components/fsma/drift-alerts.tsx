@@ -35,15 +35,15 @@ export function DriftAlertsWidget() {
             <CardHeader className="pb-2">
                 <div className="flex items-center justify-between">
                     <CardTitle className="flex items-center gap-2">
-                        <Activity className="w-5 h-5 text-blue-500" />
+                        <Activity className="w-5 h-5 text-re-info" />
                         Compliance Drift
                     </CardTitle>
                     {health.status === 'HEALTHY' ? (
-                        <Badge className="bg-green-100 text-green-700 hover:bg-green-100">Healthy</Badge>
+                        <Badge className="bg-re-success-muted text-re-success hover:bg-re-success-muted">Healthy</Badge>
                     ) : health.status === 'DEGRADED' ? (
-                        <Badge className="bg-amber-100 text-amber-700 hover:bg-amber-100">Degraded</Badge>
+                        <Badge className="bg-re-warning-muted text-re-warning hover:bg-re-warning-muted">Degraded</Badge>
                     ) : (
-                        <Badge className="bg-red-100 text-red-700 hover:bg-red-100">Critical</Badge>
+                        <Badge className="bg-re-danger-muted text-re-danger hover:bg-re-danger-muted">Critical</Badge>
                     )}
                 </div>
                 <CardDescription>Real-time FSMA 204 compliance metrics</CardDescription>
@@ -73,7 +73,7 @@ export function DriftAlertsWidget() {
                 <div className="space-y-2">
                     <h4 className="text-sm font-medium text-muted-foreground mb-2">Active Alerts</h4>
                     {health.alerts.length === 0 ? (
-                        <div className="text-sm text-green-600 flex items-center gap-2 bg-green-50 p-3 rounded-md border border-green-100 dark:bg-green-900/10 dark:border-green-800">
+                        <div className="text-sm text-re-success flex items-center gap-2 bg-re-success-muted p-3 rounded-md border border-green-100 dark:bg-re-success/10 dark:border-green-800">
                             <CheckCircle className="w-4 h-4" />
                             No active drift alerts
                         </div>
@@ -84,9 +84,9 @@ export function DriftAlertsWidget() {
                                     key={idx}
                                     initial={{ opacity: 0, x: -10 }}
                                     animate={{ opacity: 1, x: 0 }}
-                                    className={`flex items-start gap-2 p-2 rounded text-sm border ${alert.severity === 'CRITICAL' ? 'bg-red-50 border-red-100 text-red-800 dark:bg-red-900/20 dark:border-red-800 dark:text-red-300' :
-                                            alert.severity === 'WARNING' ? 'bg-amber-50 border-amber-100 text-amber-800 dark:bg-amber-900/20 dark:border-amber-800 dark:text-amber-300' :
-                                                'bg-blue-50 border-blue-100 text-blue-800 dark:bg-blue-900/20 dark:border-blue-800 dark:text-blue-300'
+                                    className={`flex items-start gap-2 p-2 rounded text-sm border ${alert.severity === 'CRITICAL' ? 'bg-re-danger-muted border-red-100 text-re-danger dark:bg-re-danger/20 dark:border-re-danger dark:text-re-danger' :
+                                            alert.severity === 'WARNING' ? 'bg-re-warning-muted border-amber-100 text-re-warning dark:bg-re-warning/20 dark:border-amber-800 dark:text-re-warning' :
+                                                'bg-re-info-muted border-blue-100 text-re-info dark:bg-re-info/20 dark:border-blue-800 dark:text-blue-300'
                                         }`}
                                 >
                                     <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />

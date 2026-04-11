@@ -87,7 +87,7 @@ export default function AcceptInvitePage() {
                 <Card className="w-full max-w-md text-center">
                     <CardHeader>
                         <div className="flex justify-center mb-4">
-                            <CheckCircle className="h-12 w-12 text-green-500" />
+                            <CheckCircle className="h-12 w-12 text-re-success" />
                         </div>
                         <CardTitle>Welcome Aboard!</CardTitle>
                         <CardDescription>Your account has been created successfully.</CardDescription>
@@ -118,7 +118,7 @@ export default function AcceptInvitePage() {
                     ) : (
                         <form onSubmit={handleSubmit} className="space-y-4">
                             {error && (
-                                <div className="text-sm text-red-500 bg-red-50 p-3 rounded-md border border-red-200">
+                                <div className="text-sm text-re-danger bg-re-danger-muted p-3 rounded-md border border-re-danger">
                                     {error}
                                 </div>
                             )}

@@ -5,8 +5,8 @@ export default function NotFound() {
     return (
         <div className="flex items-center justify-center min-h-[70vh] p-6">
             <div className="max-w-md w-full text-center space-y-6">
-                <div className="mx-auto w-16 h-16 rounded-2xl bg-blue-500/10 flex items-center justify-center">
-                    <FileQuestion className="h-8 w-8 text-blue-500" />
+                <div className="mx-auto w-16 h-16 rounded-2xl bg-re-info-muted0/10 flex items-center justify-center">
+                    <FileQuestion className="h-8 w-8 text-re-info" />
                 </div>
 
                 <div>
@@ -26,7 +26,7 @@ export default function NotFound() {
                     </Link>
                     <Link
                         href="/tools"
-                        className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700 text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                        className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-re-border dark:border-re-border text-sm font-medium hover:bg-re-surface-card dark:hover:bg-re-surface-card transition-colors"
                     >
                         <Wrench className="h-4 w-4" />
                         Free Tools

@@ -45,9 +45,9 @@ const ROLE_LABELS: Record<SupplyChainRole, string> = {
 
 const SCALE_BADGES: Record<TargetCompany['scale'], { label: string; className: string }> = {
     MAJOR_NATIONAL: { label: 'Major National', className: 'bg-purple-100 text-purple-700' },
-    REGIONAL_MAJOR: { label: 'Regional Major', className: 'bg-blue-100 text-blue-700' },
-    REGIONAL: { label: 'Regional', className: 'bg-gray-100 text-gray-700' },
-    EMERGING: { label: 'Emerging', className: 'bg-green-100 text-green-700' },
+    REGIONAL_MAJOR: { label: 'Regional Major', className: 'bg-re-info-muted text-re-info' },
+    REGIONAL: { label: 'Regional', className: 'bg-re-surface-elevated text-re-text-disabled' },
+    EMERGING: { label: 'Emerging', className: 'bg-re-success-muted text-re-success' },
 };
 
 const SEGMENT_BADGES: Record<ProductSegment, { label: string; icon: React.ComponentType<{ className?: string }> }> = {
@@ -181,13 +181,13 @@ export function TargetMarketBrowser() {
                 </Card>
                 <Card>
                     <CardContent className="pt-4 text-center">
-                        <p className="text-3xl font-bold text-green-600">{stats.produce}</p>
+                        <p className="text-3xl font-bold text-re-success">{stats.produce}</p>
                         <p className="text-sm text-muted-foreground">Produce Segment</p>
                     </CardContent>
                 </Card>
                 <Card>
                     <CardContent className="pt-4 text-center">
-                        <p className="text-3xl font-bold text-blue-600">{stats.seafood}</p>
+                        <p className="text-3xl font-bold text-re-info">{stats.seafood}</p>
                         <p className="text-sm text-muted-foreground">Seafood Segment</p>
                     </CardContent>
                 </Card>

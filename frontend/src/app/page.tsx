@@ -38,7 +38,7 @@ export const metadata: Metadata = {
     title: "RegEngine — Food Traceability That Protects Your Brand",
     description:
       "Respond to recall requests in minutes. Satisfy Walmart, Kroger, and Costco supplier requirements. Build supply chain visibility that protects your brand.",
-    url: "https://www.regengine.co",
+    url: "https://regengine.co",
     type: "website",
   },
   twitter: {
@@ -267,8 +267,8 @@ export default function RegEngineLanding() {
                         </span>
                         <span className={`text-[0.6rem] font-semibold px-1.5 py-0.5 rounded-full border ${
                           row.color === "blue"
-                            ? "bg-blue-500/10 text-blue-400 border-blue-500/20"
-                            : "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
+                            ? "bg-re-info-muted0/10 text-re-info border-re-info/20"
+                            : "bg-re-brand-muted text-re-brand border-re-brand/20"
                         }`}>
                           {row.badge}
                         </span>

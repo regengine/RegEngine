@@ -176,14 +176,14 @@ export function IngestionModal({ open, onOpenChange, vertical }: IngestionModalP
                                 </Tabs>
 
                                 {status === 'error' && (
-                                    <div className="flex items-center gap-2 text-sm text-red-600 bg-red-50 p-3 rounded-md">
+                                    <div className="flex items-center gap-2 text-sm text-re-danger bg-re-danger-muted p-3 rounded-md">
                                         <AlertCircle className="h-4 w-4" />
                                         {message}
                                     </div>
                                 )}
 
                                 {status === 'success' && (
-                                    <div className="flex items-center gap-2 text-sm text-green-600 bg-green-50 p-3 rounded-md">
+                                    <div className="flex items-center gap-2 text-sm text-re-success bg-re-success-muted p-3 rounded-md">
                                         <CheckCircle className="h-4 w-4" />
                                         {message}
                                     </div>

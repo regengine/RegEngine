@@ -15,7 +15,7 @@ export const metadata: Metadata = {
         title: 'Developers | RegEngine — FSMA 204 Compliance API',
         description:
             'Build on the RegEngine API: webhook ingestion, rules engine, identity resolution, FDA export, compliance scoring, and request workflow.',
-        url: 'https://www.regengine.co/developers',
+        url: 'https://regengine.co/developers',
         type: 'website',
     },
 };

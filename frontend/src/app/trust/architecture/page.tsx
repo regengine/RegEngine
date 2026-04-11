@@ -23,7 +23,7 @@ export const metadata: Metadata = {
     openGraph: {
         title: 'Architecture Summary | RegEngine',
         description: 'Technical architecture for RegEngine FSMA 204 compliance platform.',
-        url: 'https://www.regengine.co/trust/architecture',
+        url: 'https://regengine.co/trust/architecture',
         type: 'website',
     },
 };
@@ -65,7 +65,7 @@ const DATA_FLOW_STEPS = [
         step: '1',
         title: 'Ingest',
         description: 'CTE events arrive via CSV upload, webhook, or API call. Each event is validated against FSMA 204 KDE requirements for its CTE type.',
-        color: 'bg-blue-500/15 text-blue-400',
+        color: 'bg-re-info-muted0/15 text-re-info',
     },
     {
         step: '2',
@@ -77,18 +77,18 @@ const DATA_FLOW_STEPS = [
         step: '3',
         title: 'Hash & Chain',
         description: 'Each validated event is SHA-256 hashed and appended to a per-tenant hash chain. The chain is append-only — database triggers block updates and deletes on compliance tables.',
-        color: 'bg-emerald-500/15 text-emerald-400',
+        color: 'bg-re-brand/15 text-re-brand',
     },    {
         step: '4',
         title: 'Score',
         description: 'The compliance engine evaluates six dimensions: chain integrity, KDE completeness, CTE completeness, obligation coverage, product coverage, and export readiness.',
-        color: 'bg-amber-500/15 text-amber-400',
+        color: 'bg-re-warning-muted0/15 text-re-warning',
     },
     {
         step: '5',
         title: 'Export',
         description: 'Compliance records are exportable in EPCIS 2.0 JSON-LD, FDA sortable spreadsheet, or CSV. Each export includes a manifest hash for integrity verification.',
-        color: 'bg-red-500/15 text-red-400',
+        color: 'bg-re-danger-muted0/15 text-re-danger',
     },
 ];
 

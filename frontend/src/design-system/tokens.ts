@@ -137,7 +137,6 @@ export const verticalColors = {
     automotive: { primary: '#f59e0b', gradient: 'from-amber-500 to-orange-400' },
     construction: { primary: '#f97316', gradient: 'from-orange-500 to-amber-400' },
     energy: { primary: '#3b82f6', gradient: 'from-blue-600 to-cyan-400' },
-    entertainment: { primary: '#a855f7', gradient: 'from-purple-500 to-pink-400' },
     finance: { primary: '#10b981', gradient: 'from-emerald-500 to-teal-400' },
     foodSafety: { primary: '#22c55e', gradient: 'from-green-500 to-emerald-400' },
     gaming: { primary: '#ec4899', gradient: 'from-pink-500 to-rose-400' },

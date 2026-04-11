@@ -132,8 +132,8 @@ export default function FacilityPage() {
     <Card className="border-[var(--re-surface-border)] bg-[var(--re-surface-card)]/95">
       <CardHeader className="space-y-2 pb-2">
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-500/10">
-            <Factory className="h-5 w-5 text-emerald-500" />
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-re-brand-muted">
+            <Factory className="h-5 w-5 text-re-brand" />
           </div>
           <div>
             <div className="mb-1">
@@ -150,7 +150,7 @@ export default function FacilityPage() {
       </CardHeader>
       <CardContent className="space-y-5">
         {error && (
-          <div className="rounded-md border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-200" role="alert">
+          <div className="rounded-md border border-re-danger/40 bg-re-danger-muted0/10 px-3 py-2 text-sm text-red-200" role="alert">
             {error}
           </div>
         )}
@@ -158,7 +158,7 @@ export default function FacilityPage() {
         {/* Facility name */}
         <div className="space-y-2">
           <label className="text-sm font-medium text-[var(--re-text-secondary)]">
-            Facility name <span className="text-red-400">*</span>
+            Facility name <span className="text-re-danger">*</span>
           </label>
           <Input
             placeholder="e.g. Salinas Valley Packhouse"
@@ -170,7 +170,7 @@ export default function FacilityPage() {
         {/* Street address — #539: real field replaces hardcoded '--' */}
         <div className="space-y-2">
           <label className="text-sm font-medium text-[var(--re-text-secondary)]">
-            Street address <span className="text-red-400">*</span>
+            Street address <span className="text-re-danger">*</span>
           </label>
           <Input
             placeholder="e.g. 1234 Harvest Rd"
@@ -183,7 +183,7 @@ export default function FacilityPage() {
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-2">
             <label className="text-sm font-medium text-[var(--re-text-secondary)]">
-              City <span className="text-red-400">*</span>
+              City <span className="text-re-danger">*</span>
             </label>
             <Input
               placeholder="e.g. Salinas"
@@ -193,7 +193,7 @@ export default function FacilityPage() {
           </div>
           <div className="space-y-2">
             <label className="text-sm font-medium text-[var(--re-text-secondary)]">
-              State <span className="text-red-400">*</span>
+              State <span className="text-re-danger">*</span>
             </label>
             <Select value={state} onValueChange={setState}>
               <SelectTrigger>
@@ -214,7 +214,7 @@ export default function FacilityPage() {
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-2">
             <label className="text-sm font-medium text-[var(--re-text-secondary)]">
-              ZIP code <span className="text-red-400">*</span>
+              ZIP code <span className="text-re-danger">*</span>
             </label>
             <Input
               placeholder="e.g. 93901"
@@ -223,7 +223,7 @@ export default function FacilityPage() {
               aria-invalid={zipInvalid}
             />
             {zipInvalid && (
-              <p className="text-xs text-red-400">
+              <p className="text-xs text-re-danger">
                 Enter a valid 5-digit ZIP (or ZIP+4 e.g. 93901-1234).
               </p>
             )}

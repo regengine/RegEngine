@@ -116,14 +116,14 @@ export default function SecuritySettingsPage() {
                             {error && (
                                 <div
                                     role="alert"
-                                    className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-500 dark:border-red-800 dark:bg-red-900/10"
+                                    className="rounded-md border border-re-danger bg-re-danger-muted p-3 text-sm text-re-danger dark:border-re-danger dark:bg-re-danger/10"
                                 >
                                     {error}
                                 </div>
                             )}
 
                             {success && (
-                                <div className="flex items-center gap-2 rounded-md border border-green-200 bg-green-50 p-3 text-sm text-green-700 dark:border-green-800 dark:bg-green-900/10 dark:text-green-400">
+                                <div className="flex items-center gap-2 rounded-md border border-green-200 bg-re-success-muted p-3 text-sm text-re-success dark:border-green-800 dark:bg-re-success/10 dark:text-re-success">
                                     <CheckCircle className="h-4 w-4" />
                                     Password changed successfully.
                                 </div>

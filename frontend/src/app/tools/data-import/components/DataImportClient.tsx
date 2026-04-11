@@ -35,7 +35,7 @@ const CTE_TYPES = [
     { id: 'transformation', label: 'Transformation', description: 'Processing/mixing events' },
 ];
 
-const EXAMPLE_CURL = `curl -X POST https://www.regengine.co/api/v1/webhooks/ingest \\
+const EXAMPLE_CURL = `curl -X POST https://regengine.co/api/v1/webhooks/ingest \\
   -H "Content-Type: application/json" \\
   -H "X-RegEngine-API-Key: YOUR_API_KEY" \\
   -d '{
@@ -346,7 +346,7 @@ export function DataImportClient() {
                                         isDragging
                                             ? 'border-[var(--re-brand)] bg-[color-mix(in_srgb,var(--re-brand)_5%,transparent)]'
                                             : selectedFile
-                                            ? 'border-emerald-500/50 bg-emerald-500/5'
+                                            ? 'border-re-brand/50 bg-re-brand/5'
                                             : 'border-[var(--re-border-default)] hover:border-[var(--re-brand)]'
                                     }`}
                                     onClick={() => fileInputRef.current?.click()}
@@ -356,7 +356,7 @@ export function DataImportClient() {
                                 >
                                     {selectedFile ? (
                                         <>
-                                            <CheckCircle2 className="h-10 w-10 text-emerald-500 mx-auto mb-4" />
+                                            <CheckCircle2 className="h-10 w-10 text-re-brand mx-auto mb-4" />
                                             <div className="text-sm font-medium mb-1">{selectedFile.name}</div>
                                             <div className="text-xs text-muted-foreground">
                                                 {(selectedFile.size / 1024).toFixed(1)} KB — click to change
@@ -399,22 +399,22 @@ export function DataImportClient() {
                                             exit={{ opacity: 0 }}
                                             className={`p-4 rounded-xl border text-sm ${
                                                 uploadState === 'success'
-                                                    ? 'border-emerald-500/30 bg-emerald-500/5'
-                                                    : 'border-red-500/30 bg-red-500/5'
+                                                    ? 'border-re-brand/30 bg-re-brand/5'
+                                                    : 'border-re-danger/30 bg-re-danger-muted0/5'
                                             }`}
                                         >
                                             <div className="flex items-center gap-2 font-medium mb-1">
                                                 {uploadState === 'success' ? (
-                                                    <><CheckCircle2 className="h-4 w-4 text-emerald-500" /> Uploaded successfully</>
+                                                    <><CheckCircle2 className="h-4 w-4 text-re-brand" /> Uploaded successfully</>
                                                 ) : (
-                                                    <><XCircle className="h-4 w-4 text-red-500" /> Upload failed</>
+                                                    <><XCircle className="h-4 w-4 text-re-danger" /> Upload failed</>
                                                 )}
                                             </div>
                                             {uploadResult.jobId && (
                                                 <div className="text-xs text-muted-foreground font-mono">Job ID: {uploadResult.jobId}</div>
                                             )}
                                             {uploadResult.error && (
-                                                <div className="text-xs text-red-600">{uploadResult.error}</div>
+                                                <div className="text-xs text-re-danger">{uploadResult.error}</div>
                                             )}
                                         </motion.div>
                                     )}
@@ -462,14 +462,14 @@ export function DataImportClient() {
                                                 transition={{ delay: i * 0.05 }}
                                                 className={`flex items-start gap-3 p-3 rounded-xl border text-sm ${
                                                     step.ok
-                                                        ? 'border-emerald-500/20 bg-emerald-500/5'
-                                                        : 'border-red-500/20 bg-red-500/5'
+                                                        ? 'border-re-brand/20 bg-re-brand/5'
+                                                        : 'border-re-danger/20 bg-re-danger-muted0/5'
                                                 }`}
                                             >
                                                 {step.ok ? (
-                                                    <CheckCircle2 className="h-4 w-4 text-emerald-500 mt-0.5 shrink-0" />
+                                                    <CheckCircle2 className="h-4 w-4 text-re-brand mt-0.5 shrink-0" />
                                                 ) : (
-                                                    <AlertTriangle className="h-4 w-4 text-amber-500 mt-0.5 shrink-0" />
+                                                    <AlertTriangle className="h-4 w-4 text-re-warning mt-0.5 shrink-0" />
                                                 )}
                                                 <div className="flex-1 min-w-0">
                                                     <div className="font-medium truncate">{step.label}</div>
@@ -529,7 +529,7 @@ export function DataImportClient() {
                                     </div>
                                     <div className="p-4 rounded-xl bg-[var(--re-surface-elevated)] border border-[var(--re-border-default)]">
                                         <div className="flex items-center gap-2 text-sm font-medium mb-2">
-                                            <AlertTriangle className="h-4 w-4 text-amber-500" />
+                                            <AlertTriangle className="h-4 w-4 text-re-warning" />
                                             Excursion Detection
                                         </div>
                                         <div className="text-xs text-muted-foreground">
@@ -594,7 +594,7 @@ export function DataImportClient() {
                             </CardHeader>
                             <CardContent className="space-y-6">
                                 <div className="flex items-center gap-2 text-sm">
-                                    <Badge className="bg-emerald-600 text-white text-xs font-bold">POST</Badge>
+                                    <Badge className="bg-re-brand text-white text-xs font-bold">POST</Badge>
                                     <code className="text-sm font-mono text-[var(--re-brand)]">
                                         /api/v1/webhooks/ingest
                                     </code>

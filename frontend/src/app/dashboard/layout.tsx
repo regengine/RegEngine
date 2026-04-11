@@ -307,7 +307,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <div className="flex flex-col min-h-screen">
             {/* MEDIUM #11: Demo mode visual indicator */}
             {demoMode && (
-                <div className="bg-amber-500/90 text-black text-xs font-medium text-center py-1.5 px-4 flex items-center justify-center gap-2 z-50">
+                <div className="bg-re-warning-muted0/90 text-black text-xs font-medium text-center py-1.5 px-4 flex items-center justify-center gap-2 z-50">
                     <span>⚠️ Demo Mode — Data shown is sample data.</span>
                     <Link href="/dashboard/settings" className="underline hover:no-underline">
                         Disable in Settings

@@ -10,16 +10,16 @@ interface AnalysisResultsProps {
 
 export function AnalysisResults({ data, onClose }: AnalysisResultsProps) {
     const getRiskColor = (score: number) => {
-        if (score > 80) return 'text-red-600 bg-red-50 border-red-200';
+        if (score > 80) return 'text-re-danger bg-re-danger-muted border-re-danger';
         if (score > 50) return 'text-orange-600 bg-orange-50 border-orange-200';
-        return 'text-green-600 bg-green-50 border-green-200';
+        return 'text-re-success bg-re-success-muted border-green-200';
     };
 
     return (
         <div className="space-y-6 py-2">
             <div className="text-center space-y-2">
-                <div className="inline-flex items-center justify-center p-3 rounded-full bg-green-100 mb-2">
-                    <CheckCircle className="h-8 w-8 text-green-600" />
+                <div className="inline-flex items-center justify-center p-3 rounded-full bg-re-success-muted mb-2">
+                    <CheckCircle className="h-8 w-8 text-re-success" />
                 </div>
                 <h3 className="text-lg font-medium">Ingestion Complete</h3>
                 <p className="text-sm text-muted-foreground">
@@ -43,12 +43,12 @@ export function AnalysisResults({ data, onClose }: AnalysisResultsProps) {
             {data.critical_risks.length > 0 && (
                 <div className="space-y-2">
                     <h4 className="text-sm font-medium flex items-center gap-2">
-                        <AlertTriangle className="h-4 w-4 text-amber-500" />
+                        <AlertTriangle className="h-4 w-4 text-re-warning" />
                         Critical Attention Needed
                     </h4>
                     <div className="space-y-2">
                         {data.critical_risks.map((risk) => (
-                            <div key={risk.id} className="text-sm p-3 bg-amber-50 text-amber-900 rounded border border-amber-100">
+                            <div key={risk.id} className="text-sm p-3 bg-re-warning-muted text-re-warning rounded border border-amber-100">
                                 {risk.description}
                             </div>
                         ))}

@@ -158,26 +158,26 @@ function getEventConfig(type: TimelineEvent['type']) {
         case 'success':
             return {
                 icon: CheckCircle,
-                iconColor: 'text-green-600 dark:text-green-400',
-                bgColor: 'bg-green-100 dark:bg-green-900/30',
+                iconColor: 'text-re-success dark:text-re-success',
+                bgColor: 'bg-re-success-muted dark:bg-re-success/30',
             };
         case 'warning':
             return {
                 icon: AlertTriangle,
-                iconColor: 'text-amber-600 dark:text-amber-400',
-                bgColor: 'bg-amber-100 dark:bg-amber-900/30',
+                iconColor: 'text-re-warning dark:text-re-warning',
+                bgColor: 'bg-re-warning-muted dark:bg-re-warning/30',
             };
         case 'error':
             return {
                 icon: XCircle,
-                iconColor: 'text-red-600 dark:text-red-400',
-                bgColor: 'bg-red-100 dark:bg-red-900/30',
+                iconColor: 'text-re-danger dark:text-re-danger',
+                bgColor: 'bg-re-danger-muted dark:bg-re-danger/30',
             };
         default:
             return {
                 icon: Clock,
-                iconColor: 'text-blue-600 dark:text-blue-400',
-                bgColor: 'bg-blue-100 dark:bg-blue-900/30',
+                iconColor: 'text-re-info dark:text-re-info',
+                bgColor: 'bg-re-info-muted dark:bg-re-info/30',
             };
     }
 }

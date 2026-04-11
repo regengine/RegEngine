@@ -44,7 +44,7 @@ export default function AssessmentForm({
                                 Company Name
                             </label>
                             <input
-                                placeholder="Acme Produce Co."
+                                placeholder="Your company name"
                                 value={companyName}
                                 onChange={(e) => setCompanyName(e.target.value)}
                                 required

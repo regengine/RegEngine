@@ -166,14 +166,14 @@ export function DataTransformDemo() {
                   {row.problems && activeStep >= 1 && (
                     <span className="flex items-center gap-1 flex-shrink-0">
                       {row.problems.map((p, j) => (
-                        <span key={j} className="text-[0.55rem] bg-red-500/10 text-red-400 border border-red-500/20 px-1.5 py-0.5 rounded whitespace-nowrap">
+                        <span key={j} className="text-[0.55rem] bg-re-danger-muted0/10 text-re-danger border border-re-danger/20 px-1.5 py-0.5 rounded whitespace-nowrap">
                           {p}
                         </span>
                       ))}
                     </span>
                   )}
                   {!row.problems && !row.isHeader && activeStep >= 1 && (
-                    <span className="text-[0.55rem] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-1.5 py-0.5 rounded flex-shrink-0">
+                    <span className="text-[0.55rem] bg-re-brand-muted text-re-brand border border-re-brand/20 px-1.5 py-0.5 rounded flex-shrink-0">
                       Clean
                     </span>
                   )}
@@ -217,8 +217,8 @@ export function DataTransformDemo() {
                         <span className="font-mono text-[var(--re-text-secondary)]">{m.field}</span>
                         <span className={`text-[0.6rem] px-1.5 py-0.5 rounded ${
                           m.status === 'mapped'
-                            ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                            : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                            ? 'bg-re-brand-muted text-re-brand border border-re-brand/20'
+                            : 'bg-re-warning-muted0/10 text-re-warning border border-re-warning/20'
                         }`}>{m.status}</span>
                       </div>
                     ))}
@@ -233,20 +233,20 @@ export function DataTransformDemo() {
                 {VALIDATION_RESULTS.map((r) => (
                   <div key={r.lot} className={`rounded-lg border p-3 ${
                     r.status === 'pass'
-                      ? 'border-emerald-500/20 bg-emerald-500/5'
-                      : 'border-red-500/20 bg-red-500/5'
+                      ? 'border-re-brand/20 bg-re-brand/5'
+                      : 'border-re-danger/20 bg-re-danger-muted0/5'
                   }`}>
                     <div className="flex items-center gap-2 mb-1">
                       {r.status === 'pass'
-                        ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                        : <XCircle className="w-3.5 h-3.5 text-red-400" />}
+                        ? <CheckCircle2 className="w-3.5 h-3.5 text-re-brand" />
+                        : <XCircle className="w-3.5 h-3.5 text-re-danger" />}
                       <span className="font-mono text-[0.7rem] font-medium text-[var(--re-text-primary)]">{r.lot}</span>
                       <span className="text-[0.65rem] text-[var(--re-text-muted)]">{r.product}</span>
                     </div>
                     {r.issues.length > 0 && (
                       <ul className="ml-6 space-y-0.5">
                         {r.issues.map((issue, j) => (
-                          <li key={j} className="text-[0.65rem] text-red-400">{issue}</li>
+                          <li key={j} className="text-[0.65rem] text-re-danger">{issue}</li>
                         ))}
                       </ul>
                     )}
@@ -255,10 +255,10 @@ export function DataTransformDemo() {
 
                 {/* Blocking banner at step 4 */}
                 {isBlocked && (
-                  <div className="rounded-lg border-2 border-red-500/30 bg-red-500/10 p-4 mt-3">
+                  <div className="rounded-lg border-2 border-re-danger/30 bg-re-danger-muted0/10 p-4 mt-3">
                     <div className="flex items-center gap-2 mb-2">
-                      <ShieldAlert className="w-5 h-5 text-red-400" />
-                      <span className="text-[0.8rem] font-semibold text-red-400">
+                      <ShieldAlert className="w-5 h-5 text-re-danger" />
+                      <span className="text-[0.8rem] font-semibold text-re-danger">
                         SUBMISSION BLOCKED — {BLOCKING_DEFECTS.length} blocking defects
                       </span>
                     </div>
@@ -267,7 +267,7 @@ export function DataTransformDemo() {
                     </p>
                     <ul className="space-y-1">
                       {BLOCKING_DEFECTS.map((d, i) => (
-                        <li key={i} className="text-[0.65rem] text-red-400 flex items-start gap-1.5">
+                        <li key={i} className="text-[0.65rem] text-re-danger flex items-start gap-1.5">
                           <XCircle className="w-3 h-3 mt-0.5 flex-shrink-0" />
                           {d}
                         </li>
@@ -281,10 +281,10 @@ export function DataTransformDemo() {
             {/* Package output */}
             {showPackage && (
               <div className="space-y-3">
-                <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-4">
+                <div className="rounded-lg border border-re-warning/20 bg-re-warning-muted0/5 p-4">
                   <div className="flex items-center gap-2 mb-2">
-                    <AlertTriangle className="w-5 h-5 text-amber-400" />
-                    <span className="text-[0.8rem] font-semibold text-amber-400">
+                    <AlertTriangle className="w-5 h-5 text-re-warning" />
+                    <span className="text-[0.8rem] font-semibold text-re-warning">
                       PACKAGE ASSEMBLED — 3 of 4 records blocked
                     </span>
                   </div>
@@ -301,8 +301,8 @@ export function DataTransformDemo() {
                       <div key={row.label} className="flex items-center justify-between">
                         <span className="text-[var(--re-text-secondary)]">{row.label}</span>
                         <span className={`font-mono font-medium ${
-                          row.color === 'red' ? 'text-red-400' :
-                          row.color === 'amber' ? 'text-amber-400' :
+                          row.color === 'red' ? 'text-re-danger' :
+                          row.color === 'amber' ? 'text-re-warning' :
                           'text-[var(--re-brand)]'
                         }`}>{row.value}</span>
                       </div>

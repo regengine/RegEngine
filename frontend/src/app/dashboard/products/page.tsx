@@ -299,7 +299,7 @@ export default function ProductCatalogPage() {
                                                         <Leaf className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-[var(--re-brand)] flex-shrink-0" />
                                                         <span className="font-medium text-sm sm:text-base">{product.name}</span>
                                                         {product.ftl_covered && (
-                                                            <Badge className="text-[9px] px-1.5 py-0 bg-emerald-500/10 text-emerald-500">
+                                                            <Badge className="text-[9px] px-1.5 py-0 bg-re-brand-muted text-re-brand">
                                                                 <ShieldCheck className="h-2.5 w-2.5 mr-0.5" /> FTL
                                                             </Badge>
                                                         )}

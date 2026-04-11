@@ -178,11 +178,11 @@ export default function SysAdminDashboard() {
                                 <div className="font-semibold capitalize">{service.name}</div>
                                 <div className="flex items-center">
                                     {service.status === "healthy" ? (
-                                        <span className="flex items-center text-green-600">
+                                        <span className="flex items-center text-re-success">
                                             <CheckCircle className="mr-2 h-4 w-4" /> Healthy
                                         </span>
                                     ) : (
-                                        <span className="flex items-center text-red-600">
+                                        <span className="flex items-center text-re-danger">
                                             <AlertCircle className="mr-2 h-4 w-4" /> {service.status}
                                         </span>
                                     )}

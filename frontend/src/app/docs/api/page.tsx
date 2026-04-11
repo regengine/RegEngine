@@ -298,7 +298,7 @@ function CopyButton({ text }: { text: string }) {
 
     return (
         <Button size="sm" variant="ghost" onClick={handleCopy} className="h-6 w-6 p-0">
-            {copied ? <Check className="h-3 w-3 text-green-500" /> : <Copy className="h-3 w-3" />}
+            {copied ? <Check className="h-3 w-3 text-re-success" /> : <Copy className="h-3 w-3" />}
         </Button>
     );
 }
@@ -307,10 +307,10 @@ function EndpointCard({ endpoint }: { endpoint: Endpoint }) {
     const [expanded, setExpanded] = useState(false);
 
     const methodColors: Record<string, string> = {
-        GET: 'bg-blue-500',
-        POST: 'bg-green-500',
-        PUT: 'bg-yellow-500',
-        DELETE: 'bg-red-500',
+        GET: 'bg-re-info-muted0',
+        POST: 'bg-re-success-muted0',
+        PUT: 'bg-re-warning',
+        DELETE: 'bg-re-danger-muted0',
     };
 
     return (
@@ -381,7 +381,7 @@ function EndpointCard({ endpoint }: { endpoint: Endpoint }) {
                                     <tbody>
                                         {endpoint.params_table.map((p) => (
                                             <tr key={p.name} className="border-b last:border-b-0">
-                                                <td className="p-2 font-mono text-blue-600 dark:text-blue-400">{p.name}</td>
+                                                <td className="p-2 font-mono text-re-info dark:text-re-info">{p.name}</td>
                                                 <td className="p-2 font-mono text-muted-foreground">{p.type}</td>
                                                 <td className="p-2">{p.required ? <Badge variant="destructive" className="text-[10px] px-1.5 py-0">required</Badge> : <span className="text-muted-foreground">optional</span>}</td>
                                                 <td className="p-2 text-muted-foreground">{p.desc}</td>
@@ -441,10 +441,10 @@ export default function ApiReferencePage() {
                     </div>
 
                     {/* Authentication Info */}
-                    <Card className="border-amber-200 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-800">
+                    <Card className="border-amber-200 bg-re-warning-muted dark:bg-re-warning/20 dark:border-amber-800">
                         <CardHeader className="pb-2">
                             <CardTitle className="text-lg flex items-center gap-2">
-                                <Key className="h-5 w-5 text-amber-600" />
+                                <Key className="h-5 w-5 text-re-warning" />
                                 Authentication
                             </CardTitle>
                         </CardHeader>
@@ -453,8 +453,8 @@ export default function ApiReferencePage() {
                                 All authenticated endpoints require one of the following headers:
                             </p>
                             <div >
-                                <div className="bg-white dark:bg-gray-900 rounded p-3">
-                                    <code className="text-xs font-mono text-amber-700 dark:text-amber-400">
+                                <div className="bg-white dark:bg-re-surface-base rounded p-3">
+                                    <code className="text-xs font-mono text-re-warning dark:text-re-warning">
                                         X-RegEngine-API-Key: rge_your_api_key
                                     </code>
                                     <p className="text-xs text-muted-foreground mt-1">
@@ -463,7 +463,7 @@ export default function ApiReferencePage() {
                                 </div>
                             </div>
                             <p className="text-sm">
-                                For multi-tenant isolation, include: <code className="bg-white dark:bg-gray-900 px-1 rounded text-xs">X-Tenant-ID: tenant_uuid</code>
+                                For multi-tenant isolation, include: <code className="bg-white dark:bg-re-surface-base px-1 rounded text-xs">X-Tenant-ID: tenant_uuid</code>
                             </p>
                         </CardContent>
                     </Card>
@@ -527,7 +527,7 @@ export default function ApiReferencePage() {
                     </motion.div>
 
                     {/* Pagination Info */}
-                    <Card className="border-blue-200 bg-blue-50 dark:bg-blue-900/20 dark:border-blue-800">
+                    <Card className="border-blue-200 bg-re-info-muted dark:bg-re-info/20 dark:border-blue-800">
                         <CardHeader>
                             <CardTitle className="text-lg">Pagination</CardTitle>
                         </CardHeader>
@@ -539,14 +539,14 @@ export default function ApiReferencePage() {
                                 <div>
                                     <h4 className="text-xs font-semibold uppercase text-muted-foreground mb-2">Request Parameters</h4>
                                     <div className="grid md:grid-cols-2 gap-3">
-                                        <div className="bg-white dark:bg-gray-900 rounded p-3">
+                                        <div className="bg-white dark:bg-re-surface-base rounded p-3">
                                             <code className="text-xs font-mono">limit</code>
                                             <span className="text-xs text-muted-foreground ml-2">(default: 50, max: 500)</span>
                                             <p className="text-xs text-muted-foreground mt-1">
                                                 Number of items to return per page
                                             </p>
                                         </div>
-                                        <div className="bg-white dark:bg-gray-900 rounded p-3">
+                                        <div className="bg-white dark:bg-re-surface-base rounded p-3">
                                             <code className="text-xs font-mono">cursor</code>
                                             <span className="text-xs text-muted-foreground ml-2">(optional)</span>
                                             <p className="text-xs text-muted-foreground mt-1">
@@ -563,7 +563,7 @@ export default function ApiReferencePage() {
   "has_more": true       // Boolean indicating more pages exist
 }`} language="json" />
                                 </div>
-                                <div className="bg-white dark:bg-gray-900 rounded p-3">
+                                <div className="bg-white dark:bg-re-surface-base rounded p-3">
                                     <h4 className="text-xs font-semibold uppercase text-muted-foreground mb-1">Example: Paginating Compliance Checklists</h4>
                                     <CodeBlock code={`# First page
 GET /checklists?industry=food?limit=20
@@ -604,8 +604,8 @@ GET /checklists?industry=food?limit=20&cursor=eyJpZCI6IjEyMyJ9`} language="http"
                                     </p>
                                 </div>
                             </div>
-                            <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded p-3 mt-3">
-                                <p className="text-xs text-amber-800 dark:text-amber-200">
+                            <div className="bg-re-warning-muted dark:bg-re-warning/20 border border-amber-200 dark:border-amber-800 rounded p-3 mt-3">
+                                <p className="text-xs text-re-warning dark:text-re-warning">
                                     <strong>Tier Limits:</strong> Growth (500/min), Scale (1,000/min), Enterprise (custom)
                                 </p>
                             </div>

@@ -6,13 +6,13 @@ export const metadata: Metadata = {
     title: 'GS1 Barcode Scanner | Decode Food Traceability Barcodes | RegEngine',
     description: 'Scan or paste GS1 barcodes to decode GTIN, lot codes, and expiry dates into FSMA 204-compatible traceability records. Works with any food product barcode. Free.',
     alternates: {
-        canonical: 'https://www.regengine.co/tools/scan',
+        canonical: 'https://regengine.co/tools/scan',
     },
     openGraph: {
         title: 'GS1 Barcode Scanner — RegEngine',
         description: 'Decode GS1 barcodes into FSMA 204-compatible traceability records. Free barcode scanner tool.',
         type: 'website',
-        url: 'https://www.regengine.co/tools/scan',
+        url: 'https://regengine.co/tools/scan',
     },
 };
 

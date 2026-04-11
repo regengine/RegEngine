@@ -13,7 +13,7 @@ export const metadata: Metadata = {
     openGraph: {
         title: 'Security | RegEngine',
         description: 'Independently verifiable security for FSMA 204 compliance.',
-        url: 'https://www.regengine.co/security',
+        url: 'https://regengine.co/security',
         type: 'website',
     },
 };
@@ -132,7 +132,7 @@ export default function SecurityPage() {
                                     <feature.Icon className="w-5 h-5 text-[var(--re-brand)]" />
                                 </div>
                                 <h3 className="font-display text-base font-semibold text-re-text-primary flex-1">{feature.title}</h3>
-                                <span className="text-[10px] font-semibold uppercase tracking-wider px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 flex-shrink-0">
+                                <span className="text-[10px] font-semibold uppercase tracking-wider px-2.5 py-1 rounded-full bg-re-brand-muted text-re-brand border border-re-brand/20 flex-shrink-0">
                                     ✓ Verified
                                 </span>
                             </div>
@@ -171,8 +171,8 @@ export default function SecurityPage() {
                             >
                                 <p className="text-[var(--re-brand)]">$ python verify_chain.py --export dairy_recall_2024.json</p>
                                 <p className="mt-1">Verifying 430 record hashes...</p>
-                                <p className="text-emerald-500">✓ 430 verified, 0 failed</p>
-                                <p className="text-emerald-500">✓ Merkle root matches signed manifest</p>
+                                <p className="text-re-brand">✓ 430 verified, 0 failed</p>
+                                <p className="text-re-brand">✓ Merkle root matches signed manifest</p>
                                 <p className="mt-1 text-re-text-disabled">7 CTEs verified: Dairy, Imported Seafood, Produce (3 recall chains)</p>
                             </div>
                             <div className="flex gap-3 flex-wrap">
@@ -238,7 +238,7 @@ export default function SecurityPage() {
                                 <item.Icon className="w-4 h-4 text-[var(--re-brand)]" />
                             </div>
                             <span className="text-sm font-medium text-re-text-secondary flex-1">{item.item}</span>
-                            <span className="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 flex-shrink-0">
+                            <span className="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-re-brand-muted text-re-brand border border-re-brand/20 flex-shrink-0">
                                 ✓ Live
                             </span>
                         </div>
@@ -256,7 +256,7 @@ export default function SecurityPage() {
                     <div className="grid sm:grid-cols-2 gap-4">
                         <div className="rounded-xl border border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)] p-5" style={{ boxShadow: '0 2px 12px rgba(0,0,0,0.06)' }}>
                             <div className="flex items-center gap-3 mb-3">
-                                <span className="text-[10px] font-semibold uppercase tracking-wider px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">Today</span>
+                                <span className="text-[10px] font-semibold uppercase tracking-wider px-2.5 py-1 rounded-full bg-re-brand-muted text-re-brand border border-re-brand/20">Today</span>
                             </div>
                             <h3 className="font-display text-sm font-semibold text-re-text-primary mb-2">Implemented controls</h3>
                             <ul className="space-y-1.5 text-sm text-re-text-muted">
@@ -271,7 +271,7 @@ export default function SecurityPage() {
                         </div>
                         <div className="rounded-xl border border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)] p-5" style={{ boxShadow: '0 2px 12px rgba(0,0,0,0.06)' }}>
                             <div className="flex items-center gap-3 mb-3">
-                                <span className="text-[10px] font-semibold uppercase tracking-wider px-2.5 py-1 rounded-full bg-amber-500/10 text-amber-500 border border-amber-500/20">Roadmap</span>
+                                <span className="text-[10px] font-semibold uppercase tracking-wider px-2.5 py-1 rounded-full bg-re-warning-muted0/10 text-re-warning border border-re-warning/20">Roadmap</span>
                             </div>
                             <h3 className="font-display text-sm font-semibold text-re-text-primary mb-2">Planned certifications</h3>
                             <ul className="space-y-1.5 text-sm text-re-text-muted">

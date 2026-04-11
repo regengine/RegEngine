@@ -63,16 +63,16 @@ interface Incident {
 }
 
 const SEVERITY_CONFIG: Record<string, { color: string; bgColor: string }> = {
-  critical: { color: 'text-red-600', bgColor: 'bg-red-50' },
+  critical: { color: 'text-re-danger', bgColor: 'bg-re-danger-muted' },
   major: { color: 'text-orange-600', bgColor: 'bg-orange-50' },
-  minor: { color: 'text-amber-600', bgColor: 'bg-amber-50' },
+  minor: { color: 'text-re-warning', bgColor: 'bg-re-warning-muted' },
 };
 
 const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
-  active: { label: 'Active', color: 'bg-red-500 text-white' },
-  contained: { label: 'Contained', color: 'bg-amber-500 text-white' },
-  monitoring: { label: 'Monitoring', color: 'bg-blue-500 text-white' },
-  resolved: { label: 'Resolved', color: 'bg-green-500 text-white' },
+  active: { label: 'Active', color: 'bg-re-danger-muted0 text-white' },
+  contained: { label: 'Contained', color: 'bg-re-warning-muted0 text-white' },
+  monitoring: { label: 'Monitoring', color: 'bg-re-info-muted0 text-white' },
+  resolved: { label: 'Resolved', color: 'bg-re-success-muted0 text-white' },
   closed: { label: 'Closed', color: 'bg-gray-400 text-white' },
 };
 
@@ -160,7 +160,7 @@ export default function IncidentCommandPage() {
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between mb-8">
         <div>
           <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-            <Siren className="h-6 w-6 text-red-500" />
+            <Siren className="h-6 w-6 text-re-danger" />
             Incident Command
           </h1>
           <p className="text-muted-foreground mt-1">
@@ -210,7 +210,7 @@ export default function IncidentCommandPage() {
         {selected ? (
           <div className="lg:col-span-2 space-y-4">
             {/* Header */}
-            <Card className={selected.status === 'active' ? 'border-red-200' : ''}>
+            <Card className={selected.status === 'active' ? 'border-re-danger' : ''}>
               <CardContent className="pt-5 pb-4">
                 <div className="flex items-start justify-between">
                   <div>
@@ -231,16 +231,16 @@ export default function IncidentCommandPage() {
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-base flex items-center gap-2">
-                  <Zap className="h-4 w-4 text-amber-500" />
+                  <Zap className="h-4 w-4 text-re-warning" />
                   Action Items ({selected.actions?.length || 0})
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="space-y-2">
                   {(selected.actions || []).map((action: IncidentAction) => (
-                    <div key={action.id} className={`flex items-center gap-3 p-2 rounded border text-sm ${action.status === 'completed' ? 'bg-green-50/50 border-green-200' : action.status === 'in_progress' ? 'bg-blue-50/50 border-blue-200' : ''}`}>
-                      {action.status === 'completed' ? <CheckCircle className="h-4 w-4 text-green-500 shrink-0" /> :
-                       action.status === 'in_progress' ? <Radio className="h-4 w-4 text-blue-500 shrink-0 animate-pulse" /> :
+                    <div key={action.id} className={`flex items-center gap-3 p-2 rounded border text-sm ${action.status === 'completed' ? 'bg-re-success-muted/50 border-green-200' : action.status === 'in_progress' ? 'bg-re-info-muted/50 border-blue-200' : ''}`}>
+                      {action.status === 'completed' ? <CheckCircle className="h-4 w-4 text-re-success shrink-0" /> :
+                       action.status === 'in_progress' ? <Radio className="h-4 w-4 text-re-info shrink-0 animate-pulse" /> :
                        <Clock className="h-4 w-4 text-muted-foreground shrink-0" />}
                       <div className="flex-1 min-w-0">
                         <p className={`font-medium ${action.status === 'completed' ? 'line-through text-muted-foreground' : ''}`}>{action.title}</p>
@@ -257,7 +257,7 @@ export default function IncidentCommandPage() {
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-base flex items-center gap-2">
-                  <MessageSquare className="h-4 w-4 text-blue-500" />
+                  <MessageSquare className="h-4 w-4 text-re-info" />
                   Timeline ({selected.updates?.length || 0})
                 </CardTitle>
               </CardHeader>
@@ -285,7 +285,7 @@ export default function IncidentCommandPage() {
           <div className="lg:col-span-2">
             <Card>
               <CardContent className="py-16 text-center text-muted-foreground">
-                <Siren className="h-12 w-12 mx-auto mb-3 text-gray-300" />
+                <Siren className="h-12 w-12 mx-auto mb-3 text-re-text-secondary" />
                 <p className="font-medium">Select an incident to view details</p>
                 <p className="text-sm">Click on an incident card to see actions, timeline, and impact</p>
               </CardContent>

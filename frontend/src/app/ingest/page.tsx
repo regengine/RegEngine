@@ -179,8 +179,8 @@ export default function IngestPage() {
           {/* Page Header */}
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-8">
             <div className="flex items-center gap-4">
-              <div className="p-3 rounded-lg bg-blue-100 dark:bg-blue-900">
-                <Database className="h-7 w-7 sm:h-8 sm:w-8 text-blue-600 dark:text-blue-400" />
+              <div className="p-3 rounded-lg bg-re-info-muted dark:bg-blue-900">
+                <Database className="h-7 w-7 sm:h-8 sm:w-8 text-re-info dark:text-re-info" />
               </div>
               <div>
                 <h1 className="text-2xl sm:text-4xl font-bold">Document Ingestion</h1>
@@ -204,15 +204,15 @@ export default function IngestPage() {
               animate={{ opacity: 1, y: 0 }}
               className="mb-6"
             >
-              <Card className="border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20">
+              <Card className="border-amber-200 dark:border-amber-800 bg-re-warning-muted dark:bg-re-warning/20">
                 <CardContent className="pt-6">
                   <div className="flex items-start gap-3">
-                    <Key className="h-5 w-5 text-amber-600 dark:text-amber-400 mt-0.5" />
+                    <Key className="h-5 w-5 text-re-warning dark:text-re-warning mt-0.5" />
                     <div className="flex-1">
-                      <p className="font-medium text-amber-900 dark:text-amber-100">
+                      <p className="font-medium text-re-warning dark:text-amber-100">
                         API Key Required
                       </p>
-                      <p className="text-sm text-amber-700 dark:text-amber-300 mt-1">
+                      <p className="text-sm text-re-warning dark:text-re-warning mt-1">
                         You need an API key to ingest documents. Complete the setup wizard to get started.
                       </p>
                       <Link href="/onboarding">
@@ -245,11 +245,11 @@ export default function IngestPage() {
                       <Scale className="h-3 w-3" />
                       eCFR
                     </Badge>
-                    <Badge variant="outline" className="flex items-center gap-1.5 py-1 px-2.5 bg-amber-50 dark:bg-amber-900/10 text-amber-700 dark:text-amber-500 border-amber-200 dark:border-amber-900/50">
+                    <Badge variant="outline" className="flex items-center gap-1.5 py-1 px-2.5 bg-re-warning-muted dark:bg-re-warning/10 text-re-warning dark:text-re-warning border-amber-200 dark:border-amber-900/50">
                       <Landmark className="h-3 w-3" />
                       Federal Register
                     </Badge>
-                    <Badge variant="outline" className="flex items-center gap-1.5 py-1 px-2.5 bg-blue-50 dark:bg-blue-900/10 text-blue-700 dark:text-blue-500 border-blue-200 dark:border-blue-900/50">
+                    <Badge variant="outline" className="flex items-center gap-1.5 py-1 px-2.5 bg-re-info-muted dark:bg-re-info/10 text-re-info dark:text-re-info border-blue-200 dark:border-blue-900/50">
                       <Globe className="h-3 w-3" />
                       FDA.gov
                     </Badge>
@@ -375,7 +375,7 @@ export default function IngestPage() {
                   >
                     <div className="flex items-center justify-between mb-4">
                       <div className="flex items-center gap-2">
-                        <CheckCircle className="h-5 w-5 text-emerald-500" />
+                        <CheckCircle className="h-5 w-5 text-re-brand" />
                         <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100">
                           Document Successfully Normalized
                         </h3>
@@ -460,21 +460,21 @@ export default function IngestPage() {
                   <motion.div
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="mt-4 p-4 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800"
+                    className="mt-4 p-4 rounded-lg bg-re-danger-muted dark:bg-re-danger/20 border border-re-danger dark:border-re-danger"
                   >
                     <div className="flex items-start gap-3">
-                      <AlertCircle className="h-5 w-5 text-red-600 dark:text-red-400 mt-0.5" />
+                      <AlertCircle className="h-5 w-5 text-re-danger dark:text-re-danger mt-0.5" />
                       <div className="flex-1">
-                        <h4 className="font-semibold text-red-900 dark:text-red-100">
+                        <h4 className="font-semibold text-re-danger dark:text-red-100">
                           Ingestion Failed
                         </h4>
-                        <p className="text-sm text-red-700 dark:text-red-300 mt-1">
+                        <p className="text-sm text-re-danger dark:text-re-danger mt-1">
                           {(ingestMutation.error as any)?.message || (ingestFileMutation.error as any)?.message || 'An error occurred during ingestion'}
                         </p>
-                        <p className="text-sm text-red-700 dark:text-red-300 mt-2">
+                        <p className="text-sm text-re-danger dark:text-re-danger mt-2">
                           Common issues:
                         </p>
-                        <ul className="text-sm text-red-700 dark:text-red-300 list-disc list-inside">
+                        <ul className="text-sm text-re-danger dark:text-re-danger list-disc list-inside">
                           <li>Invalid or expired API key</li>
                           <li>URL is not publicly accessible</li>
                           <li>Document format not supported (use PDF, HTML, or JSON)</li>

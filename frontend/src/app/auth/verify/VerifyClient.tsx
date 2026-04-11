@@ -67,8 +67,8 @@ export default function VerifyClient({ tokenHash, type }: VerifyClientProps) {
                     <Card className="w-full border-[var(--re-surface-border)] bg-[var(--re-surface-card)] shadow-[0_16px_70px_rgba(0,0,0,0.25)]">
                         <CardHeader className="space-y-1 pb-4">
                             <div className="mb-3 flex justify-center">
-                                <div className="rounded-full border border-red-300/30 bg-red-500/10 p-3">
-                                    <AlertTriangle className="h-7 w-7 text-red-500" />
+                                <div className="rounded-full border border-re-danger/30 bg-re-danger-muted0/10 p-3">
+                                    <AlertTriangle className="h-7 w-7 text-re-danger" />
                                 </div>
                             </div>
                             <h2 className="text-center text-2xl font-semibold text-[var(--re-text-primary)]">
@@ -116,7 +116,7 @@ export default function VerifyClient({ tokenHash, type }: VerifyClientProps) {
                         {error && (
                             <div
                                 role="alert"
-                                className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-500 dark:border-red-800 dark:bg-red-900/10"
+                                className="rounded-md border border-re-danger bg-re-danger-muted p-3 text-sm text-re-danger dark:border-re-danger dark:bg-re-danger/10"
                             >
                                 {error}
                             </div>

@@ -27,10 +27,10 @@ interface AlertDetailDialogProps {
 }
 
 const SEVERITY_STYLES: Record<string, { bg: string; text: string; border: string }> = {
-    CRITICAL: { bg: "bg-red-100", text: "text-red-800", border: "border-red-200" },
-    HIGH: { bg: "bg-amber-100", text: "text-amber-800", border: "border-amber-200" },
-    MEDIUM: { bg: "bg-blue-100", text: "text-blue-800", border: "border-blue-200" },
-    LOW: { bg: "bg-gray-100", text: "text-gray-800", border: "border-gray-200" },
+    CRITICAL: { bg: "bg-re-danger-muted", text: "text-re-danger", border: "border-re-danger" },
+    HIGH: { bg: "bg-re-warning-muted", text: "text-re-warning", border: "border-amber-200" },
+    MEDIUM: { bg: "bg-re-info-muted", text: "text-re-info", border: "border-blue-200" },
+    LOW: { bg: "bg-re-surface-elevated", text: "text-re-text-primary", border: "border-re-border" },
 };
 
 export function AlertDetailDialog({
@@ -106,7 +106,7 @@ export function AlertDetailDialog({
                                     <Badge variant="outline">{alert.source_type}</Badge>
                                     {alert.is_expired && <Badge variant="destructive">EXPIRED</Badge>}
                                     {alert.status === "RESOLVED" && (
-                                        <Badge className="bg-green-100 text-green-800">RESOLVED</Badge>
+                                        <Badge className="bg-re-success-muted text-re-success">RESOLVED</Badge>
                                     )}
                                 </div>
                             </DialogDescription>
@@ -117,18 +117,18 @@ export function AlertDetailDialog({
                 <div className="space-y-4 py-4">
                     {/* Countdown */}
                     {!alert.is_expired && (isActive || isAcknowledged) && (
-                        <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                        <div className="bg-re-warning-muted border border-amber-200 rounded-lg p-4">
                             <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-2">
-                                    <Clock className="h-5 w-5 text-amber-600" />
-                                    <span className="font-medium text-amber-800">Time Remaining</span>
+                                    <Clock className="h-5 w-5 text-re-warning" />
+                                    <span className="font-medium text-re-warning">Time Remaining</span>
                                 </div>
-                                <div className="text-2xl font-mono font-bold text-amber-700">
+                                <div className="text-2xl font-mono font-bold text-re-warning">
                                     {alert.countdown_display}
                                 </div>
                             </div>
                             {alert.countdown_end && (
-                                <p className="text-sm text-amber-600 mt-1">
+                                <p className="text-sm text-re-warning mt-1">
                                     Deadline: {new Date(alert.countdown_end).toLocaleString()}
                                 </p>
                             )}
@@ -138,15 +138,15 @@ export function AlertDetailDialog({
                     {/* Summary */}
                     {alert.summary && (
                         <div>
-                            <h4 className="font-semibold text-gray-900 mb-1">Details</h4>
-                            <p className="text-gray-600">{alert.summary}</p>
+                            <h4 className="font-semibold text-re-text-primary mb-1">Details</h4>
+                            <p className="text-re-text-disabled">{alert.summary}</p>
                         </div>
                     )}
 
                     {/* Match Reason */}
                     {alert.match_reason?.matched_by && (
                         <div>
-                            <h4 className="font-semibold text-gray-900 mb-1">Why This Applies to You</h4>
+                            <h4 className="font-semibold text-re-text-primary mb-1">Why This Applies to You</h4>
                             <div className="flex flex-wrap gap-2">
                                 {alert.match_reason.matched_by.map((reason, i) => (
                                     <Badge key={i} variant="secondary">{reason}</Badge>
@@ -158,7 +158,7 @@ export function AlertDetailDialog({
                     {/* Required Actions */}
                     {alert.required_actions.length > 0 && (
                         <div>
-                            <h4 className="font-semibold text-gray-900 mb-2">Required Actions</h4>
+                            <h4 className="font-semibold text-re-text-primary mb-2">Required Actions</h4>
                             <div className="space-y-2">
                                 {alert.required_actions.map((action, i) => {
                                     const actionUrl = !action.completed ? getActionUrl(action.action) : null;
@@ -166,24 +166,24 @@ export function AlertDetailDialog({
                                         <div
                                             key={i}
                                             className={`flex items-center gap-3 p-3 rounded-lg border ${action.completed
-                                                ? "bg-green-50 border-green-200"
+                                                ? "bg-re-success-muted border-green-200"
                                                 : actionUrl
-                                                    ? "bg-blue-50 border-blue-200 cursor-pointer hover:bg-blue-100 transition-colors"
-                                                    : "bg-gray-50 border-gray-200"
+                                                    ? "bg-re-info-muted border-blue-200 cursor-pointer hover:bg-re-info-muted transition-colors"
+                                                    : "bg-re-surface-card border-re-border"
                                                 }`}
                                             onClick={actionUrl ? () => { router.push(actionUrl); onClose(); } : undefined}
                                             role={actionUrl ? "button" : undefined}
                                         >
                                             {action.completed ? (
-                                                <CheckCircle className="h-5 w-5 text-green-600 shrink-0" />
+                                                <CheckCircle className="h-5 w-5 text-re-success shrink-0" />
                                             ) : (
-                                                <div className="h-5 w-5 rounded-full border-2 border-gray-300 shrink-0" />
+                                                <div className="h-5 w-5 rounded-full border-2 border-re-border shrink-0" />
                                             )}
-                                            <span className={`flex-1 ${action.completed ? "text-green-800" : actionUrl ? "text-blue-700 font-medium" : "text-gray-700"}`}>
+                                            <span className={`flex-1 ${action.completed ? "text-re-success" : actionUrl ? "text-re-info font-medium" : "text-re-text-disabled"}`}>
                                                 {action.action}
                                             </span>
                                             {actionUrl && (
-                                                <ArrowRight className="h-4 w-4 text-blue-500 shrink-0" />
+                                                <ArrowRight className="h-4 w-4 text-re-info shrink-0" />
                                             )}
                                         </div>
                                     );
@@ -195,7 +195,7 @@ export function AlertDetailDialog({
                     {/* Resolution Notes */}
                     {(isActive || isAcknowledged) && (
                         <div>
-                            <h4 className="font-semibold text-gray-900 mb-2">Resolution Notes</h4>
+                            <h4 className="font-semibold text-re-text-primary mb-2">Resolution Notes</h4>
                             <Textarea
                                 placeholder="Describe what actions were taken to resolve this alert..."
                                 value={resolveNotes}
@@ -207,7 +207,7 @@ export function AlertDetailDialog({
 
                     {/* Acknowledgment Info */}
                     {alert.acknowledged_at && (
-                        <div className="text-sm text-gray-500">
+                        <div className="text-sm text-re-text-muted">
                             Acknowledged by {alert.acknowledged_by} on{" "}
                             {new Date(alert.acknowledged_at).toLocaleString()}
                         </div>

@@ -9,13 +9,13 @@ export const metadata: Metadata = {
     title: "FSMA 204 Readiness Assessment | Free Compliance Score Tool | RegEngine",
     description: "Score your facility's FSMA 204 compliance readiness in minutes. Covers FTL product coverage, Critical Tracking Events, Key Data Elements, and system capabilities.",
     alternates: {
-        canonical: "https://www.regengine.co/tools/readiness-assessment",
+        canonical: "https://regengine.co/tools/readiness-assessment",
     },
     openGraph: {
         title: "FSMA 204 Readiness Assessment — RegEngine",
         description: "Score your facility's FSMA 204 compliance readiness across FTL coverage, CTEs, KDEs, and system capabilities. Free.",
         type: "website",
-        url: "https://www.regengine.co/tools/readiness-assessment",
+        url: "https://regengine.co/tools/readiness-assessment",
     },
 };
 
@@ -52,19 +52,19 @@ export default function ReadinessAssessmentPage() {
                     <p className="text-sm text-[var(--re-text-muted)] max-w-lg mx-auto mb-8 leading-relaxed">Score your facility&apos;s FSMA 204 compliance readiness in minutes. This assessment covers product coverage on the Food Traceability List, Critical Tracking Event mapping, Key Data Element completeness, and system integration capabilities.</p>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-left mb-8">
                         <div className="rounded-xl border border-[rgba(255,255,255,0.06)] bg-[rgba(255,255,255,0.02)] p-4">
-                            <h3 className="text-sm font-semibold text-emerald-400 mb-1">Product Coverage</h3>
+                            <h3 className="text-sm font-semibold text-re-brand mb-1">Product Coverage</h3>
                             <p className="text-xs text-[var(--re-text-muted)]">Do your products appear on the FDA Food Traceability List? Which categories apply?</p>
                         </div>
                         <div className="rounded-xl border border-[rgba(255,255,255,0.06)] bg-[rgba(255,255,255,0.02)] p-4">
-                            <h3 className="text-sm font-semibold text-emerald-400 mb-1">CTE Readiness</h3>
+                            <h3 className="text-sm font-semibold text-re-brand mb-1">CTE Readiness</h3>
                             <p className="text-xs text-[var(--re-text-muted)]">Can you capture records for all 7 Critical Tracking Events in your supply chain?</p>
                         </div>
                         <div className="rounded-xl border border-[rgba(255,255,255,0.06)] bg-[rgba(255,255,255,0.02)] p-4">
-                            <h3 className="text-sm font-semibold text-emerald-400 mb-1">KDE Completeness</h3>
+                            <h3 className="text-sm font-semibold text-re-brand mb-1">KDE Completeness</h3>
                             <p className="text-xs text-[var(--re-text-muted)]">Are you collecting the required Key Data Elements for each event type?</p>
                         </div>
                         <div className="rounded-xl border border-[rgba(255,255,255,0.06)] bg-[rgba(255,255,255,0.02)] p-4">
-                            <h3 className="text-sm font-semibold text-emerald-400 mb-1">System Capabilities</h3>
+                            <h3 className="text-sm font-semibold text-re-brand mb-1">System Capabilities</h3>
                             <p className="text-xs text-[var(--re-text-muted)]">Can your current systems produce FDA-ready exports within 24 hours of a records request?</p>
                         </div>
                     </div>

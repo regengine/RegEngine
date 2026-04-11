@@ -12,7 +12,7 @@ export const metadata: Metadata = {
     openGraph: {
         title: 'Your Buyer Requires FSMA 204 Compliance | RegEngine',
         description: 'Major retailers are requiring FSMA 204 traceability from suppliers. Get compliant in minutes with RegEngine.',
-        url: 'https://www.regengine.co/supplier-compliance',
+        url: 'https://regengine.co/supplier-compliance',
         type: 'website',
     },
 };
@@ -81,7 +81,7 @@ export default function SupplierCompliancePage() {
 
             {/* Hero */}
             <section className="max-w-[900px] mx-auto px-4 sm:px-6 pt-14 sm:pt-20 pb-12 sm:pb-16 text-center">
-                <div className="inline-flex items-center gap-2 bg-amber-50 dark:bg-amber-950 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800 px-4 py-2 rounded-xl text-sm font-medium mb-6">
+                <div className="inline-flex items-center gap-2 bg-re-warning-muted dark:bg-re-warning text-re-warning dark:text-re-warning border border-amber-200 dark:border-amber-800 px-4 py-2 rounded-xl text-sm font-medium mb-6">
                     <AlertTriangle className="h-4 w-4" />
                     Your buyer requires FSMA 204 compliance
                 </div>

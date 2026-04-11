@@ -264,7 +264,6 @@ app.include_router(tenant_settings_router, prefix="/v1")
 from app.bulk_upload.routes import router as bulk_upload_router
 app.include_router(bulk_upload_router, prefix="/v1/supplier/bulk-upload", tags=["Supplier Onboarding Bulk"])
 
-# PCOS (film/TV) vertical removed — FSMA 204 only
 
 # Review Queue for curator workflow
 from app.review_routes import router as review_router

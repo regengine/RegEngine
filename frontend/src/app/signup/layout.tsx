@@ -7,7 +7,7 @@ export const metadata: Metadata = {
         title: 'Create Account — RegEngine',
         description: 'Create your RegEngine workspace to start FSMA 204 compliance tracking.',
         type: 'website',
-        url: 'https://www.regengine.co/signup',
+        url: 'https://regengine.co/signup',
     },
 };
 

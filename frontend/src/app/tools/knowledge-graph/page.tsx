@@ -9,13 +9,13 @@ export const metadata: Metadata = {
     title: "Supply Chain Knowledge Graph | FSMA 204 Network Mapper | RegEngine",
     description: "Build an interactive visual map of your FSMA 204 supply chain. Connect growers, coolers, packhouses, and distributors to identify CTE and KDE coverage gaps. Free.",
     alternates: {
-        canonical: "https://www.regengine.co/tools/knowledge-graph",
+        canonical: "https://regengine.co/tools/knowledge-graph",
     },
     openGraph: {
         title: "Supply Chain Knowledge Graph — RegEngine",
         description: "Interactively map your FSMA 204 supply chain nodes and identify CTE and KDE coverage gaps. Free tool.",
         type: "website",
-        url: "https://www.regengine.co/tools/knowledge-graph",
+        url: "https://regengine.co/tools/knowledge-graph",
     },
 };
 
@@ -41,8 +41,8 @@ function KnowledgeGraphFallback() {
     return (
         <div className="min-h-screen bg-[var(--re-surface-base)] px-6 py-16">
             <div className="max-w-2xl mx-auto text-center mb-12">
-                <div className="w-16 h-16 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center mx-auto mb-6">
-                    <svg className="w-8 h-8 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><circle cx="12" cy="5" r="2" strokeWidth="1.5"/><circle cx="5" cy="19" r="2" strokeWidth="1.5"/><circle cx="19" cy="19" r="2" strokeWidth="1.5"/><path d="M12 7v4M12 11l-5 6M12 11l5 6" strokeWidth="1.5" strokeLinecap="round"/></svg>
+                <div className="w-16 h-16 rounded-2xl bg-re-brand-muted border border-re-brand/20 flex items-center justify-center mx-auto mb-6">
+                    <svg className="w-8 h-8 text-re-brand" fill="none" viewBox="0 0 24 24" stroke="currentColor"><circle cx="12" cy="5" r="2" strokeWidth="1.5"/><circle cx="5" cy="19" r="2" strokeWidth="1.5"/><circle cx="19" cy="19" r="2" strokeWidth="1.5"/><path d="M12 7v4M12 11l-5 6M12 11l5 6" strokeWidth="1.5" strokeLinecap="round"/></svg>
                 </div>
                 <h1 className="text-2xl font-bold text-[var(--re-text-primary)] mb-3">Supply Chain Knowledge Graph</h1>
                 <p className="text-sm text-[var(--re-text-muted)] max-w-lg mx-auto leading-relaxed">Interactively map your FSMA 204 supply chain nodes — growers, coolers, packhouses, distributors, retailers — and visualize which Critical Tracking Events and Key Data Elements each link requires. Identify coverage gaps before they become compliance gaps.</p>
@@ -52,7 +52,7 @@ function KnowledgeGraphFallback() {
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-8">
                     {["Grower / Farm", "Cooler", "Packhouse", "Distributor / DC", "Processor", "Retailer"].map((node) => (
                         <div key={node} className="rounded-lg border border-[rgba(255,255,255,0.06)] bg-[rgba(255,255,255,0.02)] p-3 text-center">
-                            <span className="text-xs font-medium text-emerald-400">{node}</span>
+                            <span className="text-xs font-medium text-re-brand">{node}</span>
                         </div>
                     ))}
                 </div>

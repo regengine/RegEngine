@@ -7,7 +7,7 @@ export const metadata: Metadata = {
         title: 'Sign In — RegEngine',
         description: 'Sign in to your RegEngine workspace to manage FSMA 204 compliance, traceability records, and audit-ready exports.',
         type: 'website',
-        url: 'https://www.regengine.co/login',
+        url: 'https://regengine.co/login',
     },
 };
 

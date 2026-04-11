@@ -36,8 +36,8 @@ export default function FSMA204AssessmentPage() {
                     {/* Page Header */}
                     <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 mb-8">
                         <div className="flex items-center gap-4">
-                            <div className="p-3 rounded-lg bg-emerald-100 dark:bg-emerald-900">
-                                <Shield className="h-8 w-8 text-emerald-600 dark:text-emerald-400" />
+                            <div className="p-3 rounded-lg bg-re-brand-muted dark:bg-re-brand">
+                                <Shield className="h-8 w-8 text-re-brand-dark dark:text-re-brand" />
                             </div>
                             <div>
                                 <h1 className="text-3xl font-bold">FSMA 204 Readiness Assessment</h1>
@@ -65,12 +65,12 @@ export default function FSMA204AssessmentPage() {
                     </div>
 
                     {/* Assessment Info Banner */}
-                    <Card className="bg-gradient-to-r from-emerald-50 to-blue-50 dark:from-emerald-900/20 dark:to-blue-900/20 border-emerald-200 dark:border-emerald-800">
+                    <Card className="bg-gradient-to-r from-emerald-50 to-blue-50 dark:from-emerald-900/20 dark:to-blue-900/20 border-emerald-200 dark:border-re-brand">
                         <CardContent className="py-4">
                             <div className="flex flex-col md:flex-row gap-4 md:gap-8">
                                 <div className="flex items-center gap-3">
-                                    <div className="p-2 rounded-full bg-white dark:bg-gray-800">
-                                        <Clock className="h-5 w-5 text-emerald-600" />
+                                    <div className="p-2 rounded-full bg-white dark:bg-re-surface-card">
+                                        <Clock className="h-5 w-5 text-re-brand-dark" />
                                     </div>
                                     <div>
                                         <p className="font-medium">Quick Assessment</p>

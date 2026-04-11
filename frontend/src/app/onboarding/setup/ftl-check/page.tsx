@@ -69,7 +69,7 @@ function CategoryCard({
         {cat.examples}
       </span>
       {cat.covered ? (
-        <Badge variant="outline" className="mt-0.5 border-emerald-500/30 text-emerald-400 text-[10px] px-1.5 py-0">
+        <Badge variant="outline" className="mt-0.5 border-re-brand/30 text-re-brand text-[10px] px-1.5 py-0">
           On FTL
         </Badge>
       ) : (
@@ -140,8 +140,8 @@ export default function FTLCheckPage() {
       <Card className="border-[var(--re-surface-border)] bg-[var(--re-surface-card)]/95">
         <CardHeader className="space-y-2 pb-2">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-amber-500/10">
-              <ShieldCheck className="h-5 w-5 text-amber-500" />
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-re-warning-muted0/10">
+              <ShieldCheck className="h-5 w-5 text-re-warning" />
             </div>
             <div>
               <div className="mb-1">
@@ -206,10 +206,10 @@ export default function FTLCheckPage() {
 
                 {/* Risk callout */}
                 {results.highRisk.length > 0 && (
-                  <div className="flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/5 p-3">
-                    <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0 text-amber-500" />
+                  <div className="flex items-start gap-2 rounded-lg border border-re-warning/30 bg-re-warning-muted0/5 p-3">
+                    <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0 text-re-warning" />
                     <div className="text-sm">
-                      <span className="font-medium text-amber-400">
+                      <span className="font-medium text-re-warning">
                         {results.highRisk.length} high-risk
                       </span>
                       <span className="text-[var(--re-text-muted)]">
@@ -252,7 +252,7 @@ export default function FTLCheckPage() {
                 {saveError && (
                   <div
                     role="alert"
-                    className="rounded-md border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-200"
+                    className="rounded-md border border-re-danger/40 bg-re-danger-muted0/10 px-3 py-2 text-sm text-red-200"
                   >
                     {saveError}
                   </div>

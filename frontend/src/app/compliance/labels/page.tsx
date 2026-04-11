@@ -166,8 +166,8 @@ export default function LabelsPage() {
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
           {/* Page Header */}
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 mb-8">
-            <div className="p-3 rounded-lg bg-blue-100 dark:bg-blue-900">
-              <QrCode className="h-8 w-8 text-blue-600 dark:text-blue-400" />
+            <div className="p-3 rounded-lg bg-re-info-muted dark:bg-blue-900">
+              <QrCode className="h-8 w-8 text-re-info dark:text-re-info" />
             </div>
             <div>
               <h1 className="text-3xl sm:text-4xl font-bold">Traceability Label Generator</h1>
@@ -188,7 +188,7 @@ export default function LabelsPage() {
               </CardHeader>
               <CardContent className="space-y-6">
                 {error && (
-                  <div className="p-3 text-sm text-red-500 bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-800 rounded-md">
+                  <div className="p-3 text-sm text-re-danger bg-re-danger-muted dark:bg-re-danger/10 border border-re-danger dark:border-re-danger rounded-md">
                     {error}
                   </div>
                 )}
@@ -386,7 +386,7 @@ export default function LabelsPage() {
                   <div className="flex items-center justify-between">
                     <div>
                       <CardTitle className="flex items-center gap-2">
-                        <CheckCircle className="h-5 w-5 text-green-500" />
+                        <CheckCircle className="h-5 w-5 text-re-success" />
                         Labels Generated Successfully
                       </CardTitle>
                       <CardDescription>

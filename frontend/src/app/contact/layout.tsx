@@ -7,7 +7,7 @@ export const metadata: Metadata = {
         title: 'Contact Us — RegEngine',
         description: 'Get in touch with the RegEngine team. Ask about FSMA 204 compliance, request a demo, or discuss your traceability needs.',
         type: 'website',
-        url: 'https://www.regengine.co/contact',
+        url: 'https://regengine.co/contact',
     },
 };
 

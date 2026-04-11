@@ -26,12 +26,12 @@ import {
 } from 'lucide-react';
 
 const CATEGORY_CONFIG: Record<string, { label: string; color: string; icon: LucideIcon }> = {
-  kde_presence: { label: 'KDE Presence', color: 'text-red-500', icon: AlertTriangle },
-  temporal_ordering: { label: 'Temporal Ordering', color: 'text-blue-500', icon: Zap },
+  kde_presence: { label: 'KDE Presence', color: 'text-re-danger', icon: AlertTriangle },
+  temporal_ordering: { label: 'Temporal Ordering', color: 'text-re-info', icon: Zap },
   lot_linkage: { label: 'Lot Linkage', color: 'text-purple-500', icon: Scale },
-  source_reference: { label: 'Source Reference', color: 'text-amber-500', icon: BookOpen },
+  source_reference: { label: 'Source Reference', color: 'text-re-warning', icon: BookOpen },
   identifier_format: { label: 'Identifier Format', color: 'text-cyan-500', icon: Shield },
-  quantity_consistency: { label: 'Quantity', color: 'text-green-500', icon: CheckCircle },
+  quantity_consistency: { label: 'Quantity', color: 'text-re-success', icon: CheckCircle },
   entity_resolution: { label: 'Entity Resolution', color: 'text-indigo-500', icon: Shield },
   record_completeness: { label: 'Completeness', color: 'text-orange-500', icon: CheckCircle },
   chain_integrity: { label: 'Chain Integrity', color: 'text-slate-500', icon: Shield },
@@ -86,7 +86,7 @@ export default function RulesDashboardPage() {
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between mb-8">
         <div>
           <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-            <Scale className="h-6 w-6 text-blue-500" />
+            <Scale className="h-6 w-6 text-re-info" />
             Compliance Rules
           </h1>
           <p className="text-muted-foreground mt-1">
@@ -120,19 +120,19 @@ export default function RulesDashboardPage() {
         <Card>
           <CardContent className="pt-4 pb-3">
             <p className="text-xs text-muted-foreground uppercase tracking-wider">Critical</p>
-            <p className="text-3xl font-bold text-red-600">{criticalCount}</p>
+            <p className="text-3xl font-bold text-re-danger">{criticalCount}</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="pt-4 pb-3">
             <p className="text-xs text-muted-foreground uppercase tracking-wider">Warning</p>
-            <p className="text-3xl font-bold text-amber-600">{warningCount}</p>
+            <p className="text-3xl font-bold text-re-warning">{warningCount}</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="pt-4 pb-3">
             <p className="text-xs text-muted-foreground uppercase tracking-wider">Categories</p>
-            <p className="text-3xl font-bold text-blue-600">{categories.length}</p>
+            <p className="text-3xl font-bold text-re-info">{categories.length}</p>
           </CardContent>
         </Card>
       </div>
@@ -176,7 +176,7 @@ export default function RulesDashboardPage() {
         ) : filtered.length === 0 ? (
           <Card>
             <CardContent className="py-12 text-center text-muted-foreground">
-              <Scale className="h-12 w-12 mx-auto mb-3 text-gray-300" />
+              <Scale className="h-12 w-12 mx-auto mb-3 text-re-text-secondary" />
               <p className="font-medium">No rules found</p>
               <p className="text-sm">
                 {ruleList.length === 0
@@ -195,7 +195,7 @@ export default function RulesDashboardPage() {
                 <CardContent className="pt-4 pb-4">
                   <div className="flex items-start gap-3">
                     {/* Severity indicator */}
-                    <div className={`mt-0.5 ${rule.severity === 'critical' ? 'text-red-500' : rule.severity === 'warning' ? 'text-amber-500' : 'text-blue-400'}`}>
+                    <div className={`mt-0.5 ${rule.severity === 'critical' ? 'text-re-danger' : rule.severity === 'warning' ? 'text-re-warning' : 'text-re-info'}`}>
                       {rule.severity === 'critical' ? <XCircle className="h-5 w-5" /> :
                        rule.severity === 'warning' ? <AlertTriangle className="h-5 w-5" /> :
                        <CheckCircle className="h-5 w-5" />}
@@ -218,7 +218,7 @@ export default function RulesDashboardPage() {
                       </div>
 
                       {rule.citation_reference && (
-                        <p className="text-xs text-blue-600 mt-1 font-mono">
+                        <p className="text-xs text-re-info mt-1 font-mono">
                           {rule.citation_reference}
                         </p>
                       )}

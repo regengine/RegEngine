@@ -19,7 +19,7 @@ export const MOCK_TENANTS: Tenant[] = [
     { id: '1a61523d-9875-4896-ada6-747d4e58b5f5', name: "Premier Grocery Co" },
     { id: 'cf1637e1-feca-42da-b3b2-62a0fd87e9d3', name: "Fresh Market Group" },
     { id: '1801daa3-f52a-439c-a16f-08457f94679c', name: "ValueMart Corp" },
-    { id: '0e0c2d58-d024-487a-ad2a-7ce44706d86d', name: "Acme Fresh Produce" },
+    { id: '0e0c2d58-d024-487a-ad2a-7ce44706d86d', name: "Demo Tenant" },
     { id: '66eaef68-0ed0-4872-9519-edce84cdce46', name: "Greenfield Greens" },
     { id: 'ff196233-03b0-4442-84fa-40313069caaf', name: "Sunrise Vegetables LLC" },
     { id: '6ceb6566-0204-4e56-a39a-e9c360f20087', name: "Hillside Organics" },

@@ -8,13 +8,13 @@ export const metadata: Metadata = {
     title: "FSMA 204 SOP Generator | Auto-Generate Your Traceability Plan | RegEngine",
     description: "Auto-generate your FSMA 204 Traceability Plan and Standard Operating Procedures in minutes. Customized for your company, products, and supply chain role. Free.",
     alternates: {
-        canonical: "https://www.regengine.co/tools/sop-generator",
+        canonical: "https://regengine.co/tools/sop-generator",
     },
     openGraph: {
         title: "FSMA 204 SOP Generator — RegEngine",
         description: "Auto-generate a complete FSMA 204 Traceability Plan and SOPs for your company. Download free.",
         type: "website",
-        url: "https://www.regengine.co/tools/sop-generator",
+        url: "https://regengine.co/tools/sop-generator",
     },
 };
 
