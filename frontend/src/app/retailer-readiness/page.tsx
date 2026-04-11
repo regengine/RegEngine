@@ -154,7 +154,7 @@ export default function RetailerSuppliersPage() {
     const monthlyRisk = Math.round(atRisk / 12);
 
     return (
-        <div style={{ minHeight: '100vh', background: T.bg, color: T.text, fontFamily: "'Instrument Sans', -apple-system, sans-serif" }}>
+        <div style={{ minHeight: '100vh', background: T.bg, color: T.text, fontFamily: "var(--font-instrument-sans), -apple-system, sans-serif" }}>
             <ScrollProgressBar scrollProgress={scrollProgress} />
 
             <StickyCTA showSticky={showSticky} trackEvent={trackEvent} />

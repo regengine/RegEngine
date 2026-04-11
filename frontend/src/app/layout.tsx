@@ -7,6 +7,43 @@ import { AccessibilityWidget } from '@/components/accessibility/AccessibilityWid
 import { CookieBanner } from '@/components/cookie-consent/CookieBanner'
 import { GoogleAnalytics } from '@/components/analytics/GoogleAnalytics'
 import type { Metadata, Viewport } from 'next'
+import { Outfit, Inter, Fraunces, JetBrains_Mono, Instrument_Sans } from 'next/font/google'
+
+const outfit = Outfit({
+  subsets: ['latin'],
+  weight: ['400', '500', '600', '700'],
+  display: 'swap',
+  variable: '--font-outfit',
+})
+
+const inter = Inter({
+  subsets: ['latin'],
+  weight: ['400', '500', '600', '700'],
+  display: 'swap',
+  variable: '--font-inter',
+})
+
+const fraunces = Fraunces({
+  subsets: ['latin'],
+  weight: ['300', '400', '500', '700'],
+  style: ['normal', 'italic'],
+  display: 'swap',
+  variable: '--font-fraunces',
+})
+
+const jetbrainsMono = JetBrains_Mono({
+  subsets: ['latin'],
+  weight: ['400', '500'],
+  display: 'swap',
+  variable: '--font-jetbrains-mono',
+})
+
+const instrumentSans = Instrument_Sans({
+  subsets: ['latin'],
+  weight: ['400', '500', '600', '700'],
+  display: 'swap',
+  variable: '--font-instrument-sans',
+})
 
 // Analytics are mounted by CookieBanner only after the user accepts consent (#552).
 const enableVercelAnalytics = process.env.VERCEL === '1' || Boolean(process.env.NEXT_PUBLIC_VERCEL_ANALYTICS_ID)
@@ -51,12 +88,6 @@ export default async function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link
-          href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,500;0,9..144,700;1,9..144,400&family=JetBrains+Mono:wght@400;500&display=swap"
-          rel="stylesheet"
-        />
         {/* PWA manifest (#568) */}
         <link rel="manifest" href="/manifest.json" />
         {/* OpenDyslexic font is lazy-loaded by AccessibilityWidget when needed */}
@@ -146,7 +177,7 @@ export default async function RootLayout({
         />
       </head>
       <body
-        className="min-h-screen flex flex-col bg-background text-foreground"
+        className={`min-h-screen flex flex-col bg-background text-foreground ${outfit.variable} ${inter.variable} ${fraunces.variable} ${jetbrainsMono.variable} ${instrumentSans.variable}`}
         suppressHydrationWarning
       >
         <a

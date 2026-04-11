@@ -75,7 +75,7 @@ export const spacing = {
 
 export const typography = {
     fontFamily: {
-        sans: "'Instrument Sans', system-ui, -apple-system, sans-serif",
+        sans: "var(--font-instrument-sans), system-ui, -apple-system, sans-serif",
         mono: "'JetBrains Mono', 'Fira Code', monospace",
     },
     fontSize: {

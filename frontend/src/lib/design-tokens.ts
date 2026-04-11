@@ -37,8 +37,8 @@ export const tokens = {
     successBg: 'rgba(16,185,129,0.1)',          // Success background
 
     // ─── TYPOGRAPHY ───
-    fontSans: "'Instrument Sans', -apple-system, BlinkMacSystemFont, sans-serif",
-    fontMono: "'JetBrains Mono', monospace",
+    fontSans: "var(--font-instrument-sans), -apple-system, BlinkMacSystemFont, sans-serif",
+    fontMono: "var(--font-jetbrains-mono), monospace",
 
     // ─── SPACING ───
     maxWidth: '1120px',                         // Standard content max-width

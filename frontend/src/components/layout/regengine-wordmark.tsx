@@ -49,7 +49,7 @@ export function RegEngineWordmark({
             {showText ? (
                 <span
                     style={{
-                        fontFamily: "'Instrument Sans', -apple-system, BlinkMacSystemFont, sans-serif",
+                        fontFamily: "var(--font-instrument-sans), -apple-system, BlinkMacSystemFont, sans-serif",
                         fontSize: `${config.text}px`,
                         lineHeight: 1,
                         letterSpacing: '-0.02em',

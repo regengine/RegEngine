@@ -125,11 +125,11 @@
         --re-transition-normal: 200ms cubic-bezier(0.4, 0, 0.2, 1);
         --re-transition-slow: 300ms cubic-bezier(0.4, 0, 0.2, 1);
 
-        /* Typography */
-        --re-font-sans: 'Inter', system-ui, -apple-system, sans-serif;
-        --re-font-display: 'Outfit', system-ui, -apple-system, sans-serif;
-        --re-font-serif: 'Fraunces', Georgia, serif;
-        --re-font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+        /* Typography — var(--font-*) injected by next/font/google in layout.tsx */
+        --re-font-sans: var(--font-inter), system-ui, -apple-system, sans-serif;
+        --re-font-display: var(--font-outfit), system-ui, -apple-system, sans-serif;
+        --re-font-serif: var(--font-fraunces), Georgia, serif;
+        --re-font-mono: var(--font-jetbrains-mono), 'Fira Code', monospace;
 
         /* ─── Theme-Aware Nav/Layout Tokens ─────────────── */
         --re-nav-bg: rgba(6, 9, 15, 0.85);

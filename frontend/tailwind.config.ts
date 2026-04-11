@@ -19,10 +19,10 @@ const config = {
         },
         extend: {
             fontFamily: {
-                sans: ["'Inter'", "system-ui", "-apple-system", "sans-serif"],
-                display: ["'Outfit'", "system-ui", "-apple-system", "sans-serif"],
-                serif: ["'Fraunces'", "Georgia", "serif"],
-                mono: ["'JetBrains Mono'", "'Fira Code'", "monospace"],
+                sans: ["var(--font-inter)", "system-ui", "-apple-system", "sans-serif"],
+                display: ["var(--font-outfit)", "system-ui", "-apple-system", "sans-serif"],
+                serif: ["var(--font-fraunces)", "Georgia", "serif"],
+                mono: ["var(--font-jetbrains-mono)", "'Fira Code'", "monospace"],
             },
             colors: {
                 border: "hsl(var(--border))",
