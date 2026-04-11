@@ -19,6 +19,7 @@ from pydantic import BaseModel, Field
 
 from app.authz import require_permission
 from app.disclaimers import SIMULATION_DISCLAIMER
+from shared.tenant_settings import get_tenant_data, set_tenant_data, list_tenant_data
 
 logger = logging.getLogger("recall-simulations")
 
@@ -258,8 +259,18 @@ def _get_scenario_or_400(scenario_id: str) -> dict:
     raise HTTPException(status_code=400, detail=f"Unknown scenario_id '{scenario_id}'")
 
 
-def _get_simulation_or_404(simulation_id: str) -> dict:
+def _get_simulation_or_404(simulation_id: str, tenant_id: str | None = None) -> dict:
     simulation = _simulation_store.get(simulation_id)
+    if not simulation:
+        # Fall back to DB lookup
+        _lookup_tid = tenant_id or "default"
+        try:
+            simulation = get_tenant_data(_lookup_tid, "simulations", simulation_id)
+        except Exception as exc:
+            logger.warning("simulation_db_read_failed simulation_id=%s error=%s", simulation_id, str(exc))
+        if simulation:
+            # Re-populate in-memory cache
+            _simulation_store[simulation_id] = simulation
     if not simulation:
         raise HTTPException(status_code=404, detail=f"Simulation '{simulation_id}' not found")
     return simulation
@@ -433,6 +444,13 @@ async def run_recall_simulation(
         "demo_disclaimer": SIMULATION_DISCLAIMER if is_illustrative else None,
     }
     _simulation_store[simulation_id] = simulation_record
+
+    # Write-through to DB for persistence across restarts
+    _persist_tenant_id = tenant_id or "default"
+    try:
+        set_tenant_data(_persist_tenant_id, "simulations", simulation_id, simulation_record)
+    except Exception as exc:
+        logger.warning("simulation_db_write_failed simulation_id=%s error=%s", simulation_id, str(exc))
 
     logger.info(
         "recall_simulation_ran simulation_id=%s scenario_id=%s time_reduction_percent=%s is_illustrative=%s",

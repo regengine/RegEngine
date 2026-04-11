@@ -18,6 +18,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import text
 
 from app.webhook_compat import _verify_api_key
+from shared.tenant_settings import get_tenant_data, set_tenant_data
 
 logger = logging.getLogger("supplier-validation")
 
@@ -319,6 +320,13 @@ def _build_report(tenant_id: str, results: list[SupplierValidationResult]) -> Te
     with _reports_lock:
         _reports_store[tenant_id] = report
 
+    # Write-through to DB for persistence across restarts
+    try:
+        report_data = report.model_dump() if hasattr(report, 'model_dump') else report.__dict__
+        set_tenant_data(tenant_id, "supplier_reports", tenant_id, report_data)
+    except Exception as exc:
+        logger.warning("supplier_report_db_write_failed tenant=%s error=%s", tenant_id, str(exc))
+
     return report
 
 
@@ -410,6 +418,18 @@ async def get_validation_report(
     """Return the most recently generated validation report for a tenant."""
     with _reports_lock:
         report = _reports_store.get(tenant_id)
+
+    if not report:
+        # Fall back to DB lookup
+        try:
+            db_data = get_tenant_data(tenant_id, "supplier_reports", tenant_id)
+            if db_data:
+                report = TenantSupplierReport(**db_data)
+                # Re-populate in-memory cache
+                with _reports_lock:
+                    _reports_store[tenant_id] = report
+        except Exception as exc:
+            logger.warning("supplier_report_db_read_failed tenant=%s error=%s", tenant_id, str(exc))
 
     if report:
         return report
