@@ -74,10 +74,14 @@ class SecretsManager:
         Returns:
             Dict with username, password, host, port, database
         """
+        host = os.getenv("POSTGRES_HOST", "")
+        if not host:
+            logger.warning("POSTGRES_HOST not set, defaulting to localhost (dev only)")
+            host = "localhost"
         return {
             "username": os.getenv("POSTGRES_USER", "postgres"),
             "password": os.getenv("POSTGRES_PASSWORD", ""),
-            "host": os.getenv("POSTGRES_HOST", "localhost"),
+            "host": host,
             "port": os.getenv("POSTGRES_PORT", "5432"),
             "database": os.getenv("POSTGRES_DB", "regengine"),
         }
@@ -91,8 +95,12 @@ class SecretsManager:
         Returns:
             Dict with uri, username, password
         """
+        uri = os.getenv("NEO4J_URI", "")
+        if not uri:
+            logger.warning("NEO4J_URI not set, defaulting to localhost (dev only)")
+            uri = "bolt://localhost:7687"
         return {
-            "uri": os.getenv("NEO4J_URI", "bolt://localhost:7687"),
+            "uri": uri,
             "username": os.getenv("NEO4J_USER", "neo4j"),
             "password": os.getenv("NEO4J_PASSWORD", ""),
         }
@@ -106,8 +114,12 @@ class SecretsManager:
         Returns:
             Dict with bootstrap_servers, username, password, security_protocol
         """
+        servers = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "")
+        if not servers:
+            logger.warning("KAFKA_BOOTSTRAP_SERVERS not set, defaulting to localhost (dev only)")
+            servers = "localhost:9092"
         return {
-            "bootstrap_servers": os.getenv("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092"),
+            "bootstrap_servers": servers,
             "username": os.getenv("KAFKA_USERNAME", ""),
             "password": os.getenv("KAFKA_PASSWORD", ""),
             "security_protocol": os.getenv("KAFKA_SECURITY_PROTOCOL", "PLAINTEXT"),

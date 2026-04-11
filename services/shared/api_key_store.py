@@ -174,9 +174,12 @@ class DatabaseAPIKeyStore:
             pool_size: SQLAlchemy connection pool size
             max_overflow: Max additional connections beyond pool_size
         """
-        self._database_url = database_url or os.environ.get(
-            "DATABASE_URL", "postgresql+asyncpg://localhost/regengine"
-        )
+        self._database_url = database_url or os.environ.get("DATABASE_URL", "")
+        if not self._database_url:
+            raise ValueError(
+                "DATABASE_URL environment variable is required. "
+                "Set it to your PostgreSQL connection string."
+            )
         
         # Build engine kwargs (pool settings only for PostgreSQL, not SQLite)
         engine_kwargs = {

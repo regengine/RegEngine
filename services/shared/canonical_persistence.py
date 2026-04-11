@@ -1022,6 +1022,7 @@ class CanonicalEventStore:
                         },
                     )
                 except Exception:
+                    logger.debug("KDE insert failed, rolling back savepoint", exc_info=True)
                     nested.rollback()
 
             return legacy_id

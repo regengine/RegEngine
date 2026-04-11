@@ -17,18 +17,25 @@ def get_allowed_origins() -> List[str]:
         # In .env:
         # CORS_ALLOWED_ORIGINS=http://localhost:3000,https://app.regengine.co
     """
-    origins_str = os.getenv(
-        "CORS_ALLOWED_ORIGINS",
-        "http://localhost:3000,http://localhost:8000,http://localhost:8002,"
-        "http://localhost:8400,http://127.0.0.1:3000,"
-        "https://regengine.co,https://www.regengine.co,https://app.regengine.co"
-    )
+    env = os.getenv("REGENGINE_ENV", "development")
+
+    # Production: only allow regengine.co origins by default
+    if env == "production":
+        default_origins = "https://regengine.co,https://www.regengine.co,https://app.regengine.co"
+    else:
+        default_origins = (
+            "http://localhost:3000,http://localhost:8000,http://localhost:8002,"
+            "http://localhost:8400,http://127.0.0.1:3000,"
+            "https://regengine.co,https://www.regengine.co,https://app.regengine.co"
+        )
+
+    origins_str = os.getenv("CORS_ALLOWED_ORIGINS", default_origins)
     origins = [origin.strip() for origin in origins_str.split(",") if origin.strip()]
-    
+
     # Never allow wildcard in production
-    if os.getenv("REGENGINE_ENV") == "production" and "*" in origins:
+    if env == "production" and "*" in origins:
         raise ValueError("CORS wildcard (*) not allowed in production")
-    
+
     return origins
 
 

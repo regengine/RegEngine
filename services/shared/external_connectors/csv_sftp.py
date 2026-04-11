@@ -222,7 +222,7 @@ class CSVSFTPConnector(IntegrationConnector):
                                 f"{self._sftp_path}/processed/{filename}",
                             )
                         except Exception:
-                            pass  # best-effort move
+                            logger.debug("SFTP rename failed after processing", exc_info=True)
 
             return events[:limit], None
 

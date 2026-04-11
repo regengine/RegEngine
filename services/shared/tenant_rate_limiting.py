@@ -38,7 +38,8 @@ def _redact_connection_url(url: str) -> str:
             auth = f"{username}:***@"
 
         return urlunsplit((parsed.scheme, f"{auth}{host}{port}", parsed.path, "", ""))
-    except Exception:
+    except (ValueError, AttributeError):
+        logger.debug("URL sanitization failed", exc_info=True)
         return "<redacted>"
 
 

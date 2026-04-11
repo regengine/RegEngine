@@ -783,7 +783,7 @@ class CTEPersistence:
             try:
                 self.session.rollback()
             except Exception:
-                pass
+                logger.debug("Rollback failed in recovery handler", exc_info=True)
             return [seed_tlc]
 
     def query_events_by_tlc(
@@ -1106,6 +1106,7 @@ class CTEPersistence:
                         f"Merkle proof verification failed for event at index {i}"
                     )
             except Exception as e:
+                logger.warning(f"Merkle proof generation failed at index {i}", exc_info=True)
                 errors.append(
                     f"Merkle proof generation failed at index {i}: {e}"
                 )
