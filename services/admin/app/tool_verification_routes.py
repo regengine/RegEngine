@@ -43,6 +43,7 @@ TOOL_ACCESS_SECRET = os.environ.get(
 # ---------------------------------------------------------------------------
 _redis_client: aioredis.Redis | None = None
 _redis_available: bool | None = None
+# In-memory store — ephemeral data (email verification codes with TTL). Intentionally not persisted.
 _memory_store: dict[str, dict] = {}
 
 

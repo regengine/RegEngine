@@ -31,6 +31,7 @@ router = APIRouter(prefix="/api/v1/audit", tags=["Audit Trail"])
 # In-memory fallback store for verification results
 # ---------------------------------------------------------------------------
 
+# In-memory store — ephemeral data (export verification tokens with short TTL). Intentionally not persisted.
 _verification_store: dict[str, dict] = {}
 _verification_store_lock = threading.Lock()
 

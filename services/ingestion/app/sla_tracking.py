@@ -101,10 +101,14 @@ class SLAAlert(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# In-memory store (DB fallback pattern)
+# In-memory stores (write-through cache backed by fsma.fda_sla_requests)
 # ---------------------------------------------------------------------------
 
+# In-memory cache — authoritative data is persisted to DB via _try_persist_request().
+# Serves as fast lookup + fallback when DB is unavailable.
 _requests_store: Dict[str, FDARequest] = {}
+# Derived/ephemeral — completion alerts generated from request state changes.
+# Live deadline alerts are computed on-the-fly in list_alerts(); not persisted.
 _alerts_store: Dict[str, SLAAlert] = {}
 
 

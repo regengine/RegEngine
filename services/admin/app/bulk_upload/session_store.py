@@ -19,6 +19,7 @@ class BulkUploadSessionStore:
         self.ttl_seconds = ttl_seconds
         self._client: redis.Redis | None = None
         self._redis_available: bool | None = None
+        # In-memory fallback — ephemeral upload session data. Redis is primary store when available.
         self._memory_store: dict[str, tuple[float, dict[str, Any]]] = {}
 
     async def _get_client(self) -> redis.Redis | None:
