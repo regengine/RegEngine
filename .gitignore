@@ -111,3 +111,6 @@ RegEngine_UX_Walkthrough.pdf
 # Test artifacts
 stress_and_redteam.py
 test-write
+
+# Development sample data
+sample_data/

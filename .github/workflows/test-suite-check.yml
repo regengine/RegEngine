@@ -119,14 +119,12 @@ jobs:
       
       - name: Verify conftest.py Exists
         run: |
-          if [ "${{ matrix.service }}" != "energy" ]; then
             cd services/${{ matrix.service }}
             if [ ! -f "conftest.py" ]; then
               echo "ERROR: Missing conftest.py in ${{ matrix.service }}"
               exit 1
             fi
             echo "✓ conftest.py exists"
-          fi
       
       - name: Run Smoke Tests
         run: |
