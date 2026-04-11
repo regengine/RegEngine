@@ -26,7 +26,7 @@ const jsonLd = {
         "@type": "ItemList",
         "itemListElement": [
             { "@type": "ListItem", "position": 1, "url": "https://regengine.co/tools/ftl-checker", "name": "FTL Coverage Checker" },
-            { "@type": "ListItem", "position": 2, "url": "https://regengine.co/tools/fsma-unified", "name": "Unified FSMA Dashboard" },
+            { "@type": "ListItem", "position": 2, "url": "https://regengine.co/tools/fsma-unified", "name": "Cold Chain Anomaly Detector" },
             { "@type": "ListItem", "position": 3, "url": "https://regengine.co/tools/kde-checker", "name": "KDE Completeness Checker" },
             { "@type": "ListItem", "position": 4, "url": "https://regengine.co/tools/cte-mapper", "name": "CTE Coverage Mapper" },
             { "@type": "ListItem", "position": 5, "url": "https://regengine.co/tools/recall-readiness", "name": "Recall Readiness Score" },
