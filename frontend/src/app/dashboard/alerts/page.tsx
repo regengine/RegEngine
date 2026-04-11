@@ -209,7 +209,7 @@ export default function AlertsDashboardPage() {
                 {isLoggedIn && !loading && alerts.length > 0 && (
                     <>
                         {/* Summary Cards */}
-                        <div className="grid grid-cols-3 gap-2 sm:gap-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-4">
                             {[
                                 { label: 'Critical', count: criticalCount, color: '#ef4444', f: 'critical' as const },
                                 { label: 'Warnings', count: warningCount, color: '#f59e0b', f: 'warning' as const },

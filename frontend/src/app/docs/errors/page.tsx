@@ -76,7 +76,7 @@ export default function ErrorCodesPage() {
                             4xx Client Errors
                         </h3>
 
-                        <div className="rounded-lg overflow-hidden" style={{ background: T.surface, border: `1px solid ${T.border}` }}>
+                        <div className="rounded-lg overflow-x-auto" style={{ background: T.surface, border: `1px solid ${T.border}` }}>
                             <table className="w-full border-collapse">
                                 <thead>
                                     <tr style={{ borderBottom: `1px solid ${T.border}` }}>
@@ -109,7 +109,7 @@ export default function ErrorCodesPage() {
                             5xx Server Errors
                         </h3>
 
-                        <div className="rounded-lg overflow-hidden" style={{ background: T.surface, border: `1px solid ${T.border}` }}>
+                        <div className="rounded-lg overflow-x-auto" style={{ background: T.surface, border: `1px solid ${T.border}` }}>
                             <table className="w-full border-collapse">
                                 <thead>
                                     <tr style={{ borderBottom: `1px solid ${T.border}` }}>
@@ -163,7 +163,7 @@ export default function ErrorCodesPage() {
                     </div>
 
                     {/* Error Code Table */}
-                    <div className="rounded-lg overflow-hidden" style={{ background: T.surface, border: `1px solid ${T.border}` }}>
+                    <div className="rounded-lg overflow-x-auto" style={{ background: T.surface, border: `1px solid ${T.border}` }}>
                         <table className="w-full border-collapse">
                             <thead>
                                 <tr style={{ borderBottom: `1px solid ${T.border}` }}>

@@ -220,7 +220,7 @@ export default function FSMA204GuidePage() {
                             <div className="w-2 h-2 rounded-full bg-re-brand" />
                             <span className="text-xs text-re-brand">201 Created</span>
                         </div>
-                        <pre className="p-3 sm:p-[16px_20px] m-0 text-[12px] sm:text-[13px] leading-[1.5] text-[var(--re-text-tertiary)]">
+                        <pre className="overflow-x-auto p-3 sm:p-[16px_20px] m-0 text-[12px] sm:text-[13px] leading-[1.5] text-[var(--re-text-tertiary)]">
                             <code>{`{
   "accepted": 1,
   "rejected": 0,
@@ -376,7 +376,7 @@ export default function FSMA204GuidePage() {
                         }}>
                             <span className="text-xs text-re-text-muted">Forward Trace (where did this lot go?)</span>
                         </div>
-                        <pre className="p-3 sm:p-[16px_20px] m-0 text-[12px] sm:text-[13px] leading-[1.5] text-[var(--re-text-tertiary)]">
+                        <pre className="overflow-x-auto p-3 sm:p-[16px_20px] m-0 text-[12px] sm:text-[13px] leading-[1.5] text-[var(--re-text-tertiary)]">
                             <code>{`GET /v1/fsma/trace/forward/LOT-2026-001`}</code>
                         </pre>
                     </div>
@@ -395,7 +395,7 @@ export default function FSMA204GuidePage() {
                         }}>
                             <span className="text-xs text-re-text-muted">Backward Trace (where did this lot come from?)</span>
                         </div>
-                        <pre className="p-3 sm:p-[16px_20px] m-0 text-[12px] sm:text-[13px] leading-[1.5] text-[var(--re-text-tertiary)]">
+                        <pre className="overflow-x-auto p-3 sm:p-[16px_20px] m-0 text-[12px] sm:text-[13px] leading-[1.5] text-[var(--re-text-tertiary)]">
                             <code>{`GET /v1/fsma/trace/backward/LOT-2026-001`}</code>
                         </pre>
                     </div>
@@ -424,7 +424,7 @@ export default function FSMA204GuidePage() {
                         }}>
                             <span className="text-xs text-re-text-muted">Independent Verification</span>
                         </div>
-                        <pre className="p-3 sm:p-[16px_20px] m-0 text-[12px] sm:text-[13px] leading-[1.5] text-[var(--re-text-tertiary)]">
+                        <pre className="overflow-x-auto p-3 sm:p-[16px_20px] m-0 text-[12px] sm:text-[13px] leading-[1.5] text-[var(--re-text-tertiary)]">
                             <code>{`python verify_chain.py --audit
 # ✓ Chain integrity verified
 # ✓ 1847 records validated

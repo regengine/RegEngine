@@ -167,14 +167,14 @@ export default function SysAdminDashboard() {
                     </CardDescription>
                 </CardHeader>
                 <CardContent>
-                    <div className="rounded-md border">
-                        <div className="grid grid-cols-3 p-4 font-medium border-b bg-muted/50">
+                    <div className="rounded-md border overflow-x-auto">
+                        <div className="grid grid-cols-3 min-w-[500px] p-4 font-medium border-b bg-muted/50">
                             <div>Service Name</div>
                             <div>Status</div>
                             <div>Details</div>
                         </div>
                         {status?.services.map((service: ServiceInfo) => (
-                            <div key={service.name} className="grid grid-cols-3 p-4 border-b last:border-0 items-center">
+                            <div key={service.name} className="grid grid-cols-3 min-w-[500px] p-4 border-b last:border-0 items-center">
                                 <div className="font-semibold capitalize">{service.name}</div>
                                 <div className="flex items-center">
                                     {service.status === "healthy" ? (

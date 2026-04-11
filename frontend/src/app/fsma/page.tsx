@@ -311,7 +311,7 @@ export default function FSMADashboardPage() {
 
                   {/* Trace Statistics */}
                   {traceResult.data && (
-                    <div className="grid grid-cols-3 gap-4 mt-6 pt-4 border-t">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-6 pt-4 border-t">
                       <div className="text-center">
                         <p className="text-xl font-bold">{traceResult.data.total_facilities}</p>
                         <p className="text-xs text-muted-foreground">Facilities</p>

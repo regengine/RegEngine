@@ -71,7 +71,7 @@ export default function IntegrationHubPage() {
 
                                 <div className="rounded-lg bg-black/40 border border-white/5 p-4 mb-6 relative overflow-hidden">
                                     <div className="text-[10px] font-mono text-muted-foreground mb-2 uppercase tracking-wider">POST /events/ingest</div>
-                                    <pre className="text-xs font-mono text-re-brand">
+                                    <pre className="overflow-x-auto text-xs font-mono text-re-brand">
                                         {`{
   "tlc": "GTIN-1002-4A",
   "cte_type": "RECEIVING",

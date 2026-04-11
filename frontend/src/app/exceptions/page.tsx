@@ -188,6 +188,7 @@ export default function ExceptionQueuePage() {
               <p className="text-sm">All records are compliant with current filters</p>
             </div>
           ) : (
+            <div className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -280,6 +281,7 @@ export default function ExceptionQueuePage() {
                 })}
               </TableBody>
             </Table>
+            </div>
           )}
         </CardContent>
       </Card>

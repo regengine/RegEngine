@@ -205,6 +205,7 @@ export default function IdentityResolutionPage() {
                   <p className="text-sm">Entities are auto-registered from ingested traceability events</p>
                 </div>
               ) : (
+                <div className="overflow-x-auto">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -254,6 +255,7 @@ export default function IdentityResolutionPage() {
                       })}
                   </TableBody>
                 </Table>
+              </div>
               )}
             </CardContent>
           </Card>

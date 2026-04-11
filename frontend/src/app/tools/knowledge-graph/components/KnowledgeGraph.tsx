@@ -478,7 +478,7 @@ export function SupplyChainKnowledgeGraphBuilder() {
                                     </div>
                                 )}
 
-                                <div className="rounded-2xl border p-3">
+                                <div className="rounded-2xl border p-3 overflow-x-auto">
                                     <div className="mb-2 text-sm font-medium">Results ({queryRows.length})</div>
                                     {queryRows.length > 0 ? (
                                         <Table>

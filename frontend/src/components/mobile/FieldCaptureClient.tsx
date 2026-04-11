@@ -520,7 +520,7 @@ export function FieldCaptureClient() {
                                         <h3 className="text-sm font-medium text-muted-foreground mb-2">
                                             Captured Photos ({capturedImages.length})
                                         </h3>
-                                        <div className="grid grid-cols-3 gap-2">
+                                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                                             {capturedImages.map((src, index) => (
                                                 <div key={index} className="aspect-square rounded overflow-hidden border">
                                                     <img src={src} alt="Evidence" className="w-full h-full object-cover" />

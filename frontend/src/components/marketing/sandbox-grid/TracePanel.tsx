@@ -329,7 +329,7 @@ export function TracePanel({ csv, availableTlcs, onHighlightEvent }: TracePanelP
       {traceResult && (
         <div className="divide-y divide-[var(--re-surface-border)]">
           {/* Summary stats */}
-          <div className="px-4 py-3 grid grid-cols-4 gap-3">
+          <div className="px-4 py-3 grid grid-cols-2 sm:grid-cols-4 gap-3">
             <div className="text-center">
               <div className="text-lg font-bold text-[var(--re-text-primary)]">{traceResult.nodes.length}</div>
               <div className="text-[0.6rem] text-[var(--re-text-muted)]">Events</div>

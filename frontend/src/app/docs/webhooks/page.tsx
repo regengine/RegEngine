@@ -123,6 +123,7 @@ export default function WebhooksDocsPage() {
                             fontSize: '13px',
                             lineHeight: 1.5,
                             color: 'var(--re-text-muted)',
+                            overflowX: 'auto',
                         }}>
                             <code>{`{
   "id": "evt_3x7Kp9mN2vL",

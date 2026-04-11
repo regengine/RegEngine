@@ -409,7 +409,7 @@ export default function SettingsPage() {
                 {activeTab === 'integrations' && (
                     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4">
                         {/* Stats row */}
-                        <div className="grid grid-cols-3 gap-2 sm:gap-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3">
                             {[
                                 { label: 'Connected', value: integrations.filter(i => i.status === 'connected').length, color: '#10b981' },
                                 { label: 'Pending', value: integrations.filter(i => i.status === 'pending').length, color: '#f59e0b' },
