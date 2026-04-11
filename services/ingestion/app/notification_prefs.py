@@ -8,26 +8,16 @@ delivery channels, quiet hours, and escalation rules.
 from __future__ import annotations
 
 import logging
-import json
 from typing import Optional
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
-from sqlalchemy import text
 
 from app.webhook_compat import _verify_api_key
+from shared.tenant_settings import get_jsonb, set_jsonb
 
 logger = logging.getLogger("notification-prefs")
 
-
-def _get_db():
-    """Get database session. Returns None if unavailable."""
-    try:
-        from shared.database import SessionLocal
-        return SessionLocal()
-    except (ImportError, RuntimeError, OSError) as exc:
-        logger.warning("db_unavailable error=%s", str(exc))
-        return None
 
 router = APIRouter(prefix="/api/v1/notifications", tags=["Notification Preferences"])
 
@@ -109,51 +99,17 @@ _prefs_store: dict[str, NotificationPreferences] = {}
 
 
 def _db_get_preferences(tenant_id: str) -> Optional[NotificationPreferences]:
-    """Query notification preferences from database."""
-    db = _get_db()
-    if not db:
-        return None
-    try:
-        row = db.execute(
-            text("SELECT prefs FROM fsma.tenant_notification_prefs WHERE tenant_id = :tid"),
-            {"tid": tenant_id}
-        ).fetchone()
-        if not row:
-            return None
-        prefs_data = json.loads(row[0]) if row[0] else {}
-        prefs_data["tenant_id"] = tenant_id
-        return NotificationPreferences(**prefs_data)
-    except (ValueError, KeyError, TypeError, RuntimeError, OSError, AttributeError) as exc:
-        logger.warning("db_read_failed error=%s", str(exc))
-        return None
-    finally:
-        db.close()
+    """Query notification preferences from database via shared helper."""
+    data = get_jsonb(tenant_id, "tenant_notification_prefs", "prefs")
+    if data:
+        data["tenant_id"] = tenant_id
+        return NotificationPreferences(**data)
+    return None
 
 
 def _db_save_preferences(tenant_id: str, prefs: NotificationPreferences) -> bool:
-    """Insert or update notification preferences in database."""
-    db = _get_db()
-    if not db:
-        return False
-    try:
-        prefs_json = json.dumps(prefs.model_dump(exclude={"tenant_id"}))
-        db.execute(
-            text("""
-                INSERT INTO fsma.tenant_notification_prefs (tenant_id, prefs, created_at, updated_at)
-                VALUES (:tid, :json, now(), now())
-                ON CONFLICT (tenant_id) DO UPDATE SET prefs = :json, updated_at = now()
-            """),
-            {"tid": tenant_id, "json": prefs_json}
-        )
-        db.commit()
-        return True
-    except (ValueError, TypeError, RuntimeError, OSError, AttributeError) as exc:
-        logger.warning("db_write_failed error=%s", str(exc))
-        if db:
-            db.rollback()
-        return False
-    finally:
-        db.close()
+    """Insert or update notification preferences in database via shared helper."""
+    return set_jsonb(tenant_id, "tenant_notification_prefs", "prefs", prefs.model_dump(exclude={"tenant_id"}))
 
 
 @router.get(
@@ -169,8 +125,9 @@ async def get_preferences(
     # Try DB first
     prefs = _db_get_preferences(tenant_id)
     if prefs:
+        _prefs_store[tenant_id] = prefs  # cache for fallback
         return prefs
-    
+
     # Fall back to memory or return defaults
     if tenant_id not in _prefs_store:
         _prefs_store[tenant_id] = _default_preferences(tenant_id)
@@ -189,10 +146,13 @@ async def update_preferences(
 ) -> NotificationPreferences:
     """Update notification preferences for a tenant."""
     prefs.tenant_id = tenant_id
-    
+
     # Try DB first, fall back to memory
     db_success = _db_save_preferences(tenant_id, prefs)
-    if not db_success:
+    if db_success:
+        _prefs_store[tenant_id] = prefs  # keep cache in sync
+    else:
+        logger.error("db_write_failed_fallback_to_memory tenant_id=%s endpoint=update_preferences", tenant_id)
         _prefs_store[tenant_id] = prefs
 
     logger.info("preferences_updated", extra={"tenant_id": tenant_id})
@@ -224,9 +184,12 @@ async def toggle_channel(
             
             # Try DB first, fall back to memory
             db_success = _db_save_preferences(tenant_id, prefs)
-            if not db_success:
+            if db_success:
+                _prefs_store[tenant_id] = prefs  # keep cache in sync
+            else:
+                logger.error("db_write_failed_fallback_to_memory tenant_id=%s endpoint=toggle_channel", tenant_id)
                 _prefs_store[tenant_id] = prefs
-            
+
             return {"channel": channel, "enabled": enabled}
 
     return {"error": f"Channel '{channel}' not found"}
@@ -256,9 +219,12 @@ async def toggle_alert_rule(
             
             # Try DB first, fall back to memory
             db_success = _db_save_preferences(tenant_id, prefs)
-            if not db_success:
+            if db_success:
+                _prefs_store[tenant_id] = prefs  # keep cache in sync
+            else:
+                logger.error("db_write_failed_fallback_to_memory tenant_id=%s endpoint=toggle_alert_rule", tenant_id)
                 _prefs_store[tenant_id] = prefs
-            
+
             return {"rule_id": rule_id, "enabled": enabled}
 
     return {"error": f"Rule '{rule_id}' not found"}

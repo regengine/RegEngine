@@ -12,7 +12,6 @@ in under 5 minutes. Tracks progress through steps:
 
 from __future__ import annotations
 
-import json
 import logging
 import threading
 from datetime import datetime, timezone
@@ -23,18 +22,9 @@ from pydantic import BaseModel, Field
 from sqlalchemy import text
 
 from app.webhook_compat import _verify_api_key
+from shared.tenant_settings import get_jsonb, set_jsonb
 
 logger = logging.getLogger("onboarding")
-
-
-def _get_db():
-    """Get database session. Returns None if unavailable."""
-    try:
-        from shared.database import SessionLocal
-        return SessionLocal()
-    except Exception as exc:
-        logger.warning("db_unavailable error=%s", str(exc))
-        return None
 
 
 def _seed_obligations_if_needed(tenant_id: str):
@@ -59,50 +49,13 @@ _onboarding_lock = threading.Lock()
 
 
 def _db_get_onboarding(tenant_id: str) -> Optional[dict]:
-    """Query onboarding progress from database."""
-    db = _get_db()
-    if not db:
-        return None
-    try:
-        row = db.execute(
-            text("SELECT state FROM fsma.tenant_onboarding WHERE tenant_id = :tid"),
-            {"tid": tenant_id}
-        ).fetchone()
-        if not row:
-            return None
-        progress_data = json.loads(row[0]) if row[0] else {}
-        return progress_data
-    except Exception as exc:
-        logger.warning("db_read_failed error=%s", str(exc))
-        return None
-    finally:
-        db.close()
+    """Query onboarding progress from database via shared helper."""
+    return get_jsonb(tenant_id, "tenant_onboarding", "state")
 
 
 def _db_save_onboarding(tenant_id: str, progress: dict) -> bool:
-    """Insert or update onboarding progress in database."""
-    db = _get_db()
-    if not db:
-        return False
-    try:
-        progress_json = json.dumps(progress)
-        db.execute(
-            text("""
-                INSERT INTO fsma.tenant_onboarding (tenant_id, state, created_at, updated_at)
-                VALUES (:tid, :json, now(), now())
-                ON CONFLICT (tenant_id) DO UPDATE SET state = :json, updated_at = now()
-            """),
-            {"tid": tenant_id, "json": progress_json}
-        )
-        db.commit()
-        return True
-    except Exception as exc:
-        logger.warning("db_write_failed error=%s", str(exc))
-        if db:
-            db.rollback()
-        return False
-    finally:
-        db.close()
+    """Insert or update onboarding progress in database via shared helper."""
+    return set_jsonb(tenant_id, "tenant_onboarding", "state", progress)
 
 ONBOARDING_STEPS = [
     {
@@ -207,7 +160,10 @@ async def get_progress(
     """Get current onboarding progress for a tenant."""
     # Try DB first
     state = _db_get_onboarding(tenant_id)
-    if state is None:
+    if state is not None:
+        with _onboarding_lock:
+            _onboarding_store[tenant_id] = state  # cache for fallback
+    else:
         # Fall back to memory or default
         with _onboarding_lock:
             state = _onboarding_store.get(tenant_id, {
@@ -289,7 +245,11 @@ async def complete_step(
 
     # Try DB first, fall back to memory
     db_success = _db_save_onboarding(tenant_id, state)
-    if not db_success:
+    if db_success:
+        with _onboarding_lock:
+            _onboarding_store[tenant_id] = state  # keep cache in sync
+    else:
+        logger.error("db_write_failed_fallback_to_memory tenant_id=%s endpoint=complete_step", tenant_id)
         with _onboarding_lock:
             _onboarding_store[tenant_id] = state
 
