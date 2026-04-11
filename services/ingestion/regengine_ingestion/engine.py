@@ -1,9 +1,12 @@
 """Main ingestion engine."""
 
+import logging
 import uuid
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
+
+logger = logging.getLogger("ingestion-engine")
 
 from .audit import AuditLogger
 from .config import FrameworkConfig, IngestionConfig, SourceType
@@ -210,7 +213,8 @@ class IngestionEngine:
             return None
         try:
             return datetime.fromisoformat(date_str.replace("Z", "+00:00"))
-        except Exception:
+        except (ValueError, TypeError):
+            logger.debug("Date parse failed for input", exc_info=True)
             return None
     
     def ingest_federal_register(

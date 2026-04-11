@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hmac
+import logging
 import os
 from datetime import datetime, timezone
 from functools import lru_cache
@@ -13,6 +14,8 @@ from pydantic import BaseModel, Field
 from sqlalchemy import text
 
 from app.config import get_settings
+
+logger = logging.getLogger("authz")
 from shared.auth import APIKey, require_api_key
 
 
@@ -169,6 +172,7 @@ def _lookup_scoped_key_from_db(raw_api_key: str) -> Optional[IngestionPrincipal]
             auth_mode="scoped_key_db_fallback",
         )
     except Exception:
+        logger.warning("DB API key lookup failed", exc_info=True)
         return None
     finally:
         if db_session is not None:

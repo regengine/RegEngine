@@ -38,6 +38,7 @@ def _get_real_tlc(tenant_id: str) -> str | None:
         finally:
             db.close()
     except Exception:
+        logger.warning("Mock audit TLC lookup failed", exc_info=True)
         return None
 
 router = APIRouter(prefix="/api/v1/audit", tags=["Mock Audit"])

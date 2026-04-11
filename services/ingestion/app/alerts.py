@@ -500,6 +500,7 @@ async def acknowledge_alert(
                 db_session.commit()
                 return {"acknowledged": True, "alert_id": alert_id}
         except Exception:
+            logger.debug("Primary alerts table query failed, trying secondary", exc_info=True)
             db_session.rollback()
 
         # Fall back to fsma.compliance_alerts

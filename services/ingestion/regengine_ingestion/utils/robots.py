@@ -1,8 +1,11 @@
 """Robots.txt parsing and compliance utilities."""
 
+import logging
 import urllib.robotparser
 from typing import Optional
 from urllib.parse import urlparse
+
+logger = logging.getLogger("robots-checker")
 
 
 class RobotsChecker:
@@ -45,6 +48,7 @@ class RobotsChecker:
                 self._parsers[domain] = parser
             except Exception:
                 # If robots.txt can't be read, assume allowed
+                logger.debug("Robots.txt check failed, allowing crawl", exc_info=True)
                 return True
         
         parser = self._parsers[domain]

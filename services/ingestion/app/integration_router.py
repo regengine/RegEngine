@@ -110,6 +110,7 @@ async def configure_connector(
         )).get_connector_info()
         _category = _info.get("category", cls.__name__.lower())
     except Exception:
+        logger.debug("Connector info lookup failed", exc_info=True)
         _category = cls.__name__.lower()
 
     config = ConnectorConfig(

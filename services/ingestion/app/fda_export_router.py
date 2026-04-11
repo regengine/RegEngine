@@ -621,6 +621,7 @@ async def export_recall_filtered(
             )
             db_session.commit()
         except Exception:
+            logger.warning("FDA export audit log write failed", exc_info=True)
             db_session.rollback()  # Clean session state for subsequent operations
 
         timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")

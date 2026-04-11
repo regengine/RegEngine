@@ -146,11 +146,12 @@ def _query_scoring_data(db_session, tenant_id: str) -> dict:
         ).fetchone()
         result["active_cte_types"] = active_row[0] if active_row and active_row[0] else None
     except Exception:
+        logger.debug("CTE type query failed (tables may not exist yet)", exc_info=True)
         # Tables may not exist yet — fall back to "use all 7 CTE types"
         try:
             db_session.rollback()
         except Exception:
-            pass
+            logger.debug("Rollback failed", exc_info=True)
         result["active_cte_types"] = None
 
     # 2) KDE completeness — ratio of filled vs required KDE fields

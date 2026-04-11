@@ -1,7 +1,10 @@
 """Base parser interface for document text extraction."""
 
+import logging
 from abc import ABC, abstractmethod
 from typing import Optional, Dict, Any
+
+logger = logging.getLogger("parsers-base")
 
 
 class DocumentParser(ABC):
@@ -102,4 +105,5 @@ class ParserRegistry:
             text = content.decode("utf-8", errors="ignore")
             return text, "utf8_fallback"
         except Exception:
+            logger.warning("Content parse failed completely", exc_info=True)
             return "", "parse_failed"

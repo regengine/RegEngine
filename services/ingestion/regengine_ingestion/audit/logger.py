@@ -1,9 +1,12 @@
 """Audit logging for complete provenance tracking."""
 
 import json
+import logging
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
+
+logger = logging.getLogger("audit-logger")
 
 from ..models import AuditEntry
 
@@ -85,8 +88,8 @@ class AuditLogger:
             try:
                 self.db_connection.insert_audit_entry(entry)
             except Exception:
-                # Silently fail - JSONL is primary audit trail
-                pass
+                # JSONL is primary audit trail
+                logger.debug("Audit DB write failed (JSONL is primary)", exc_info=True)
     
     def log_fetch(self, url: str, status: str, http_status: Optional[int] = None, error: Optional[str] = None) -> None:
         """Log a URL fetch operation."""
