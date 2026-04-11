@@ -697,6 +697,10 @@ export function FTLCheckerClient() {
 
     return (
         <div className="ftl-root" style={{ minHeight: '100vh', background: T.bg, fontFamily: T.sans, color: T.textBody, padding: '24px' }}>
+            <style>{`
+                .ftl-results-layout { grid-template-columns: 1fr; }
+                @media (min-width: 768px) { .ftl-results-layout { grid-template-columns: 1fr 340px; } }
+            `}</style>
             <div style={{ maxWidth: '1000px', margin: '0 auto' }}>
                 <Breadcrumbs
                     items={[
@@ -932,7 +936,7 @@ export function FTLCheckerClient() {
                                     </div>
                                 }
                             >
-                            <div className="ftl-results-layout" style={{ display: 'grid', gap: '24px', gridTemplateColumns: '1fr 340px' }}>
+                            <div className="ftl-results-layout" style={{ display: 'grid', gap: '24px' }}>
                                 {/* Main Result Card */}
                                 <div className="ftl-section-card" style={{ padding: '32px', background: T.surface, border: `1px solid ${T.border}`, borderRadius: '16px' }}>
                                     <div className="ftl-results-header" style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '24px' }}>

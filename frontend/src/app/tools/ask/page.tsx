@@ -392,7 +392,7 @@ export default function AskPage() {
       >
       <div className="max-w-4xl mx-auto space-y-8">
         {/* How It Works Section */}
-        <div className="grid grid-cols-3 gap-4 mb-8">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
           {[
             { step: '1', label: 'Type', desc: 'Ask a natural language question' },
             { step: '2', label: 'Parse', desc: 'Engine detects intent & extracts filters' },

@@ -81,7 +81,7 @@ export default function AuthenticationDocsPage() {
                             {/* Scopes */}
                             <div className="mt-6">
                                 <h4 className="font-semibold mb-3">Scopes</h4>
-                                <div className="grid grid-cols-2 gap-2 text-sm">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
                                     <code className="bg-muted px-2 py-1 rounded">records:read</code>
                                     <code className="bg-muted px-2 py-1 rounded">records:write</code>
                                     <code className="bg-muted px-2 py-1 rounded">trace:read</code>
