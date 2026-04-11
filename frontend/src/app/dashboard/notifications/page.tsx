@@ -118,6 +118,7 @@ export default function NotificationPrefsPage() {
         queryKey: ['notification-prefs', tenantId],
         queryFn: () => apiFetchPrefs(tenantId, apiKey || ''),
         enabled: isLoggedIn && !!tenantId,
+        retry: 1,
     });
 
     const [localPrefs, setLocalPrefs] = useState<NotificationPreferences | null>(null);
@@ -125,7 +126,7 @@ export default function NotificationPrefsPage() {
 
     // Use local state for editing, initialize from query data
     const effectivePrefs = localPrefs ?? prefs;
-    const error = prefsError?.message ?? null;
+    const fetchFailed = !!prefsError;
 
     const toggleChannel = (channelName: string) => {
         if (!effectivePrefs) return;
@@ -153,9 +154,10 @@ export default function NotificationPrefsPage() {
     });
 
     const saving = savePrefsMutation.isPending;
+    const saveError = savePrefsMutation.error?.message ?? null;
 
     const handleSave = () => {
-        if (!effectivePrefs || !tenantId) return;
+        if (!effectivePrefs || !tenantId || fetchFailed) return;
         savePrefsMutation.mutate();
     };
 
@@ -173,9 +175,11 @@ export default function NotificationPrefsPage() {
                             Configure how and when you receive compliance alerts
                         </p>
                     </div>
-                    <Button onClick={handleSave} disabled={saving || !effectivePrefs} className="bg-[var(--re-brand)] hover:brightness-110 text-white rounded-xl min-h-[48px] w-full sm:w-auto active:scale-[0.97]">
-                        {saving ? <Spinner size="sm" /> : saved ? '✓ Saved' : 'Save Changes'}
-                    </Button>
+                    {!fetchFailed && (
+                        <Button onClick={handleSave} disabled={saving || !effectivePrefs} className="bg-[var(--re-brand)] hover:brightness-110 text-white rounded-xl min-h-[48px] w-full sm:w-auto active:scale-[0.97]">
+                            {saving ? <Spinner size="sm" /> : saved ? '✓ Saved' : 'Save Changes'}
+                        </Button>
+                    )}
                 </div>
 
                 {!isLoggedIn && (
@@ -190,18 +194,36 @@ export default function NotificationPrefsPage() {
                     <div className="flex justify-center py-16"><Spinner size="lg" /></div>
                 )}
 
-                {error && (
+                {fetchFailed && (
                     <Card className="border-orange-300 dark:border-orange-700">
-                        <CardContent className="py-4">
-                            <div className="flex items-center gap-3 text-orange-600 dark:text-orange-400">
-                                <AlertTriangle className="h-5 w-5 flex-shrink-0" />
-                                <p className="text-sm">{error}</p>
+                        <CardContent className="py-6">
+                            <div className="flex flex-col items-center gap-3 text-center">
+                                <AlertTriangle className="h-8 w-8 text-orange-500 flex-shrink-0" />
+                                <div>
+                                    <p className="text-sm font-medium text-foreground">
+                                        Notification preferences are currently unavailable.
+                                    </p>
+                                    <p className="text-xs text-muted-foreground mt-1">
+                                        Please try again later. If this persists, contact support.
+                                    </p>
+                                </div>
                             </div>
                         </CardContent>
                     </Card>
                 )}
 
-                {effectivePrefs && !loading && (
+                {saveError && (
+                    <Card className="border-red-300 dark:border-red-700">
+                        <CardContent className="py-4">
+                            <div className="flex items-center gap-3 text-red-600 dark:text-red-400">
+                                <AlertTriangle className="h-5 w-5 flex-shrink-0" />
+                                <p className="text-sm">Failed to save preferences. Please try again.</p>
+                            </div>
+                        </CardContent>
+                    </Card>
+                )}
+
+                {effectivePrefs && !loading && !fetchFailed && (
                     <>
                         {/* Channels */}
                         <Card className="border-[var(--re-border-default)]">
