@@ -301,7 +301,7 @@ export default function FSMAChecklist() {
                                     monitoring and get alerts when regulations change?
                                 </p>
                                 <Link
-                                    href="/ftl-checker"
+                                    href="/tools/ftl-checker"
                                     className="inline-block py-3 px-7 bg-[#059669] text-white rounded-lg text-sm font-semibold hover:brightness-105 transition-all"
                                 >
                                     Try the FTL Checker →

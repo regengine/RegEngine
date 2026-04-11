@@ -492,7 +492,7 @@ export default function VerifyPage() {
                             Download Script
                         </a>
                         <a
-                            href="/ftl-checker"
+                            href="/tools/ftl-checker"
                             className="inline-flex items-center gap-2 px-6 py-3 rounded-lg text-[15px] font-medium no-underline"
                             style={{ background: T.elevated, border: `1px solid ${T.border}`, color: T.text }}
                         >

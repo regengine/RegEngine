@@ -65,7 +65,7 @@ export default function HeroSection({ heroRef }: HeroSectionProps) {
                         Get Free Assessment →
                     </button>
                 </Link>
-                <Link href="/ftl-checker" className="w-full sm:w-auto">
+                <Link href="/tools/ftl-checker" className="w-full sm:w-auto">
                     <button className="re-cta-secondary" style={{
                         background: 'transparent', color: T.text,
                         border: `1px solid ${T.border}`, padding: '14px 28px', fontSize: 15,

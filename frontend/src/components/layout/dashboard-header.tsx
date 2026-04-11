@@ -343,7 +343,7 @@ export function Header() {
             >
               <DropdownMenuLabel className="text-xs uppercase text-muted-foreground tracking-wider">FSMA 204 Compliance Tools</DropdownMenuLabel>
               <DropdownMenuItem asChild>
-                <Link href="/ftl-checker" className="cursor-pointer w-full flex items-center gap-3 py-2">
+                <Link href="/tools/ftl-checker" className="cursor-pointer w-full flex items-center gap-3 py-2">
                   <Leaf className="h-4 w-4 text-re-success" />
                   <div>
                     <div className="font-medium">FTL Checker</div>

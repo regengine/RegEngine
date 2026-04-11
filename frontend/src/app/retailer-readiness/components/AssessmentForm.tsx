@@ -107,7 +107,7 @@ export default function AssessmentForm({
                         <p style={{ color: T.textMuted, fontSize: 14, marginBottom: 20 }}>
                             I&apos;ll send your retailer-readiness assessment to {email} within 24 hours.
                         </p>
-                        <Link href="/ftl-checker">
+                        <Link href="/tools/ftl-checker">
                             <button style={{
                                 background: 'transparent', color: T.text,
                                 border: `1px solid ${T.border}`, padding: '10px 20px',

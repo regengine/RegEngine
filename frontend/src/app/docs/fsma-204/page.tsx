@@ -511,7 +511,7 @@ export default function FSMA204GuidePage() {
                             Full API Reference →
                         </Link>
                         <Link
-                            href="/ftl-checker"
+                            href="/tools/ftl-checker"
                             style={{
                                 display: 'inline-flex',
                                 alignItems: 'center',
