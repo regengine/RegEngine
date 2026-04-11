@@ -76,7 +76,7 @@ export function ROICalculatorClient() {
                         value={`$${(results.riskReduction / 1000).toFixed(1)}k`}
                         description="Reduction in potential violation fines and recall impacts."
                         icon={ShieldAlert}
-                        color="text-re-danger bg-red-400"
+                        color="text-re-danger bg-re-danger"
                     />
                     <ResultCard
                         title="Operational Gains"
@@ -90,7 +90,7 @@ export function ROICalculatorClient() {
                         value={`$${(results.netBenefit / 1000).toFixed(1)}k`}
                         description="Total benefit minus estimated platform investment."
                         icon={TrendingUp}
-                        color="text-re-brand bg-emerald-400"
+                        color="text-re-brand bg-re-brand"
                     />
                 </div>
 

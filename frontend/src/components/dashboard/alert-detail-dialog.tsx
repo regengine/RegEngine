@@ -28,7 +28,7 @@ interface AlertDetailDialogProps {
 
 const SEVERITY_STYLES: Record<string, { bg: string; text: string; border: string }> = {
     CRITICAL: { bg: "bg-re-danger-muted", text: "text-re-danger", border: "border-re-danger" },
-    HIGH: { bg: "bg-re-warning-muted", text: "text-re-warning", border: "border-amber-200" },
+    HIGH: { bg: "bg-re-warning-muted", text: "text-re-warning", border: "border-re-warning" },
     MEDIUM: { bg: "bg-re-info-muted", text: "text-re-info", border: "border-blue-200" },
     LOW: { bg: "bg-re-surface-elevated", text: "text-re-text-primary", border: "border-re-border" },
 };
@@ -117,7 +117,7 @@ export function AlertDetailDialog({
                 <div className="space-y-4 py-4">
                     {/* Countdown */}
                     {!alert.is_expired && (isActive || isAcknowledged) && (
-                        <div className="bg-re-warning-muted border border-amber-200 rounded-lg p-4">
+                        <div className="bg-re-warning-muted border border-re-warning rounded-lg p-4">
                             <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-2">
                                     <Clock className="h-5 w-5 text-re-warning" />

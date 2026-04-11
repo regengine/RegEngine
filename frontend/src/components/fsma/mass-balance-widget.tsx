@@ -83,7 +83,7 @@ export function MassBalanceWidget({ result, isLoading, notImplemented, className
       icon: AlertTriangle,
       color: 'text-re-warning',
       bgColor: 'bg-re-warning-muted dark:bg-re-warning/30',
-      borderColor: 'border-amber-500',
+      borderColor: 'border-re-warning',
       label: 'Within Tolerance',
     },
     MASS_IMBALANCE: {
@@ -98,7 +98,7 @@ export function MassBalanceWidget({ result, isLoading, notImplemented, className
       icon: Scale,
       color: 'text-re-text-disabled',
       bgColor: 'bg-re-surface-elevated dark:bg-re-surface-base/30',
-      borderColor: 'border-gray-500',
+      borderColor: 'border-re-border',
       label: 'Checking...',
     },
   };

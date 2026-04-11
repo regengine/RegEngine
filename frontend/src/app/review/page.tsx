@@ -34,7 +34,7 @@ export default function ReviewPage() {
 
           {/* Page Header */}
           <div className="flex items-center gap-4 mb-6">
-            <div className="p-3 rounded-lg bg-re-warning-muted dark:bg-amber-900">
+            <div className="p-3 rounded-lg bg-re-warning-muted dark:bg-re-warning">
               <ClipboardCheck className="h-8 w-8 text-re-warning dark:text-re-warning" />
             </div>
             <div className="flex-1">
@@ -61,12 +61,12 @@ export default function ReviewPage() {
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
             >
-              <Card className="border-amber-200 dark:border-amber-800 bg-re-warning-muted dark:bg-re-warning/20">
+              <Card className="border-re-warning dark:border-re-warning bg-re-warning-muted dark:bg-re-warning/20">
                 <CardContent className="pt-6">
                   <div className="flex items-start gap-3">
                     <Key className="h-5 w-5 text-re-warning dark:text-re-warning mt-0.5" />
                     <div className="flex-1">
-                      <p className="font-medium text-re-warning dark:text-amber-100">
+                      <p className="font-medium text-re-warning dark:text-re-warning">
                         API Key Required
                       </p>
                       <p className="text-sm text-re-warning dark:text-re-warning mt-1">

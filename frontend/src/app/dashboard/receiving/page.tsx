@@ -379,7 +379,7 @@ export default function ReceivingDockPage() {
                                             key={item.id}
                                             className={`flex items-center gap-3 p-3 rounded-lg border transition-colors ${
                                                 item.status === 'scanned'
-                                                    ? 'bg-emerald-50 border-emerald-200 dark:bg-re-brand/20 dark:border-re-brand'
+                                                    ? 'bg-re-brand-muted border-re-brand dark:bg-re-brand/20 dark:border-re-brand'
                                                     : 'bg-background border-border'
                                             }`}
                                         >
@@ -408,7 +408,7 @@ export default function ReceivingDockPage() {
 
                     {/* Unexpected scans */}
                     {session.unexpectedScans.length > 0 && (
-                        <Card className="border-amber-200 dark:border-amber-800">
+                        <Card className="border-re-warning dark:border-re-warning">
                             <CardHeader className="pb-2">
                                 <CardTitle className="text-base text-re-warning">
                                     Unexpected Items ({session.unexpectedScans.length})
@@ -417,7 +417,7 @@ export default function ReceivingDockPage() {
                             <CardContent>
                                 <div className="space-y-2">
                                     {session.unexpectedScans.map(item => (
-                                        <div key={item.id} className="flex items-center gap-3 p-3 rounded-lg border border-amber-200 bg-re-warning-muted dark:bg-re-warning/20 dark:border-amber-800">
+                                        <div key={item.id} className="flex items-center gap-3 p-3 rounded-lg border border-re-warning bg-re-warning-muted dark:bg-re-warning/20 dark:border-re-warning">
                                             <X className="h-5 w-5 text-re-warning flex-shrink-0" />
                                             <div className="flex-1 min-w-0">
                                                 <div className="text-sm font-medium truncate">{item.productName}</div>
@@ -426,7 +426,7 @@ export default function ReceivingDockPage() {
                                                     {item.expiryDate && ` · Exp: ${item.expiryDate}`}
                                                 </div>
                                             </div>
-                                            <Badge variant="outline" className="text-re-warning border-amber-300">
+                                            <Badge variant="outline" className="text-re-warning border-re-warning">
                                                 Not Expected
                                             </Badge>
                                         </div>
@@ -462,7 +462,7 @@ export default function ReceivingDockPage() {
                 ];
                 const ts = new Date().toLocaleString();
                 return (
-                    <Card className="border-emerald-200 dark:border-re-brand print:border print:shadow-none" id="receipt">
+                    <Card className="border-re-brand dark:border-re-brand print:border print:shadow-none" id="receipt">
                         <CardContent className="pt-6 space-y-5">
                             {/* Header */}
                             <div className="text-center space-y-2">

@@ -81,7 +81,7 @@ export default function SupplierCompliancePage() {
 
             {/* Hero */}
             <section className="max-w-[900px] mx-auto px-4 sm:px-6 pt-14 sm:pt-20 pb-12 sm:pb-16 text-center">
-                <div className="inline-flex items-center gap-2 bg-re-warning-muted dark:bg-re-warning text-re-warning dark:text-re-warning border border-amber-200 dark:border-amber-800 px-4 py-2 rounded-xl text-sm font-medium mb-6">
+                <div className="inline-flex items-center gap-2 bg-re-warning-muted dark:bg-re-warning text-re-warning dark:text-re-warning border border-re-warning dark:border-re-warning px-4 py-2 rounded-xl text-sm font-medium mb-6">
                     <AlertTriangle className="h-4 w-4" />
                     Your buyer requires FSMA 204 compliance
                 </div>

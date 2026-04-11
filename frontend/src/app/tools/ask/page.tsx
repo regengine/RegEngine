@@ -47,7 +47,7 @@ const intentColors: Record<string, { bg: string; text: string; badge: string }> 
   lot_timeline: { bg: 'bg-re-success-muted', text: 'text-re-success', badge: 'bg-green-200 text-re-success' },
   events_search: { bg: 'bg-re-surface-card', text: 'text-re-text-disabled', badge: 'bg-re-surface-elevated text-re-text-primary' },
   compliance_gaps: { bg: 'bg-orange-50', text: 'text-orange-700', badge: 'bg-orange-200 text-orange-800' },
-  orphan_lots: { bg: 'bg-re-danger-muted', text: 'text-re-danger', badge: 'bg-red-200 text-re-danger' },
+  orphan_lots: { bg: 'bg-re-danger-muted', text: 'text-re-danger', badge: 'bg-re-danger-muted text-re-danger' },
 };
 
 // Query parser logic
@@ -507,7 +507,7 @@ export default function AskPage() {
                               ? 'bg-orange-600'
                               : result.intent === 'orphan_lots'
                               ? 'bg-re-danger'
-                              : 'bg-gray-600'
+                              : 'bg-re-surface-elevated'
                           }`}
                           style={{ width: `${result.confidence * 100}%` }}
                         />

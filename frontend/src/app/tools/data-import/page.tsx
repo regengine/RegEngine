@@ -43,7 +43,7 @@ export default function DataImportPage() {
                         <h1 className="text-2xl font-bold text-[var(--re-text-primary)] mb-3">Data Import Hub</h1>
                         <p className="text-sm text-[var(--re-text-muted)] max-w-lg mx-auto mb-4 leading-relaxed">Import your traceability data into RegEngine via CSV upload, XLSX spreadsheets, IoT temperature logs, or webhook API. Supports all FSMA 204 Critical Tracking Event types with automatic validation and auto-cleaning of common formatting issues.</p>
                         <div className="flex gap-2 items-center justify-center text-xs text-[var(--re-text-disabled)]">
-                            <div className="w-3 h-3 rounded-full border-2 border-emerald-400 border-t-transparent animate-spin" />
+                            <div className="w-3 h-3 rounded-full border-2 border-re-brand border-t-transparent animate-spin" />
                             Loading import tools…
                         </div>
                     </div>

@@ -17,7 +17,7 @@ export function AlertCard({ alert, onAcknowledge }: AlertCardProps) {
     const severityConfig = {
         CRITICAL: { icon: XCircle, color: 'text-re-danger', bg: 'bg-re-danger-muted dark:bg-re-danger/20', border: 'border-re-danger' },
         ERROR: { icon: XCircle, color: 'text-re-danger', bg: 'bg-re-danger-muted dark:bg-re-danger/20', border: 'border-re-danger' },
-        WARNING: { icon: AlertTriangle, color: 'text-re-warning', bg: 'bg-re-warning-muted dark:bg-re-warning/20', border: 'border-amber-200' },
+        WARNING: { icon: AlertTriangle, color: 'text-re-warning', bg: 'bg-re-warning-muted dark:bg-re-warning/20', border: 'border-re-warning' },
         INFO: { icon: Info, color: 'text-re-info', bg: 'bg-re-info-muted dark:bg-re-info/20', border: 'border-blue-200' },
     }[alert.severity] || { icon: Info, color: 'text-re-text-disabled', bg: 'bg-re-surface-card', border: 'border-re-border' };
 

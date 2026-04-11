@@ -118,7 +118,7 @@ export default function AnalysisResultClient() {
                         <CardHeader><CardTitle>Risk Details</CardTitle></CardHeader>
                         <CardContent className="space-y-4">
                             {data.critical_risks.map(risk => (
-                                <div key={risk.id} className="p-4 border rounded-lg bg-re-danger-muted text-re-danger border-red-100">
+                                <div key={risk.id} className="p-4 border rounded-lg bg-re-danger-muted text-re-danger border-re-danger">
                                     <div className="font-bold text-sm mb-1">{risk.severity} • {risk.id}</div>
                                     <div>{risk.description}</div>
                                 </div>

@@ -69,7 +69,7 @@ export default function ReadinessAssessmentPage() {
                         </div>
                     </div>
                     <div className="flex gap-2 items-center justify-center text-xs text-[var(--re-text-disabled)]">
-                        <div className="w-3 h-3 rounded-full border-2 border-emerald-400 border-t-transparent animate-spin" />
+                        <div className="w-3 h-3 rounded-full border-2 border-re-brand border-t-transparent animate-spin" />
                         Loading assessment…
                     </div>
                 </div>

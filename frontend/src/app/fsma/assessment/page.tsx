@@ -65,7 +65,7 @@ export default function FSMA204AssessmentPage() {
                     </div>
 
                     {/* Assessment Info Banner */}
-                    <Card className="bg-gradient-to-r from-emerald-50 to-blue-50 dark:from-emerald-900/20 dark:to-blue-900/20 border-emerald-200 dark:border-re-brand">
+                    <Card className="bg-gradient-to-r from-emerald-50 to-blue-50 dark:from-emerald-900/20 dark:to-blue-900/20 border-re-brand dark:border-re-brand">
                         <CardContent className="py-4">
                             <div className="flex flex-col md:flex-row gap-4 md:gap-8">
                                 <div className="flex items-center gap-3">

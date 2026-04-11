@@ -43,7 +43,7 @@ export function MetricsOverviewWidget() {
     return (
         <div className="space-y-3">
             {isDemo && (
-                <div className="flex items-center gap-2 px-3 py-2 text-xs rounded-lg bg-re-warning-muted text-re-warning dark:bg-re-warning/20 dark:text-re-warning border border-amber-200 dark:border-amber-800">
+                <div className="flex items-center gap-2 px-3 py-2 text-xs rounded-lg bg-re-warning-muted text-re-warning dark:bg-re-warning/20 dark:text-re-warning border border-re-warning dark:border-re-warning">
                     <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0" />
                     <span>Backend services unreachable — data will appear once services are connected.</span>
                 </div>

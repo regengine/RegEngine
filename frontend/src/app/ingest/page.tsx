@@ -204,12 +204,12 @@ export default function IngestPage() {
               animate={{ opacity: 1, y: 0 }}
               className="mb-6"
             >
-              <Card className="border-amber-200 dark:border-amber-800 bg-re-warning-muted dark:bg-re-warning/20">
+              <Card className="border-re-warning dark:border-re-warning bg-re-warning-muted dark:bg-re-warning/20">
                 <CardContent className="pt-6">
                   <div className="flex items-start gap-3">
                     <Key className="h-5 w-5 text-re-warning dark:text-re-warning mt-0.5" />
                     <div className="flex-1">
-                      <p className="font-medium text-re-warning dark:text-amber-100">
+                      <p className="font-medium text-re-warning dark:text-re-warning">
                         API Key Required
                       </p>
                       <p className="text-sm text-re-warning dark:text-re-warning mt-1">
@@ -245,7 +245,7 @@ export default function IngestPage() {
                       <Scale className="h-3 w-3" />
                       eCFR
                     </Badge>
-                    <Badge variant="outline" className="flex items-center gap-1.5 py-1 px-2.5 bg-re-warning-muted dark:bg-re-warning/10 text-re-warning dark:text-re-warning border-amber-200 dark:border-amber-900/50">
+                    <Badge variant="outline" className="flex items-center gap-1.5 py-1 px-2.5 bg-re-warning-muted dark:bg-re-warning/10 text-re-warning dark:text-re-warning border-re-warning dark:border-re-warning/50">
                       <Landmark className="h-3 w-3" />
                       Federal Register
                     </Badge>
@@ -465,7 +465,7 @@ export default function IngestPage() {
                     <div className="flex items-start gap-3">
                       <AlertCircle className="h-5 w-5 text-re-danger dark:text-re-danger mt-0.5" />
                       <div className="flex-1">
-                        <h4 className="font-semibold text-re-danger dark:text-red-100">
+                        <h4 className="font-semibold text-re-danger dark:text-re-danger">
                           Ingestion Failed
                         </h4>
                         <p className="text-sm text-re-danger dark:text-re-danger mt-1">

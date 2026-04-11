@@ -213,9 +213,9 @@ export default function NotificationPrefsPage() {
                 )}
 
                 {saveError && (
-                    <Card className="border-red-300 dark:border-red-700">
+                    <Card className="border-re-danger dark:border-re-danger">
                         <CardContent className="py-4">
-                            <div className="flex items-center gap-3 text-red-600 dark:text-red-400">
+                            <div className="flex items-center gap-3 text-re-danger dark:text-re-danger">
                                 <AlertTriangle className="h-5 w-5 flex-shrink-0" />
                                 <p className="text-sm">Failed to save preferences. Please try again.</p>
                             </div>

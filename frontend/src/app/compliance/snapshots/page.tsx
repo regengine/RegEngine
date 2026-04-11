@@ -428,7 +428,7 @@ export default function SnapshotsPage() {
             case 'COMPLIANT': return 'bg-re-success-muted0/10 text-re-success border-green-500/30';
             case 'AT_RISK': return 'bg-re-warning/10 text-re-warning border-yellow-500/30';
             case 'NON_COMPLIANT': return 'bg-re-danger-muted0/10 text-re-danger border-re-danger/30';
-            default: return 'bg-re-surface-card0/10 text-re-text-tertiary border-gray-500/30';
+            default: return 'bg-re-surface-card0/10 text-re-text-tertiary border-re-border/30';
         }
     };
 
@@ -644,7 +644,7 @@ export default function SnapshotsPage() {
                                                 onClick={() => toggleDiffSelection(snapshot.id)}
                                                 className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all ${selectedForDiff.includes(snapshot.id)
                                                     ? 'bg-re-info text-white'
-                                                    : 'bg-gray-600/20 hover:bg-gray-600/30 text-re-text-tertiary'
+                                                    : 'bg-re-surface-elevated/20 hover:bg-re-surface-elevated/30 text-re-text-tertiary'
                                                     }`}
                                             >
                                                 {selectedForDiff.includes(snapshot.id) ? '✓' : '○'}
@@ -799,7 +799,7 @@ export default function SnapshotsPage() {
                                 </div>
                             </div>
 
-                            <div className="bg-red-900/20 border border-re-danger/30 rounded-xl p-4 mt-6">
+                            <div className="bg-re-danger/20 border border-re-danger/30 rounded-xl p-4 mt-6">
                                 <p className="text-re-danger text-sm">
                                     ⚠️ This action cannot be undone. Once attested, your name is permanently on record.
                                 </p>

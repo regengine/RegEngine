@@ -150,7 +150,7 @@ export default function FacilityPage() {
       </CardHeader>
       <CardContent className="space-y-5">
         {error && (
-          <div className="rounded-md border border-re-danger/40 bg-re-danger-muted0/10 px-3 py-2 text-sm text-red-200" role="alert">
+          <div className="rounded-md border border-re-danger/40 bg-re-danger-muted0/10 px-3 py-2 text-sm text-re-danger" role="alert">
             {error}
           </div>
         )}

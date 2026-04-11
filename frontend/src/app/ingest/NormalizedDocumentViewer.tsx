@@ -96,7 +96,7 @@ export function NormalizedDocumentViewer({ documentId }: ViewerProps) {
                     key={i}
                     id={seg.id}
                     className={`whitespace-pre-wrap transition-colors duration-300 rounded px-1 -mx-1 ${isHighlighted
-                            ? 'bg-re-brand/30 text-emerald-900 border-b-2 border-re-brand dark:bg-re-brand/40 dark:text-emerald-50'
+                            ? 'bg-re-brand/30 text-re-brand-dark border-b-2 border-re-brand dark:bg-re-brand/40 dark:text-re-brand-light'
                             : 'hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer'
                         }`}
                     onClick={() => setActiveHighlight(seg.id)}
@@ -130,11 +130,11 @@ export function NormalizedDocumentViewer({ documentId }: ViewerProps) {
             </Card>
 
             {/* Right Pane: Extracted Facts */}
-            <Card className="flex flex-col overflow-hidden border-emerald-200/50 dark:border-emerald-900/30 bg-emerald-50/30 dark:bg-re-brand/10">
-                <div className="p-3 border-b border-emerald-100 dark:border-emerald-900/50 bg-re-brand-muted/50 dark:bg-re-brand/20 flex items-center justify-between">
+            <Card className="flex flex-col overflow-hidden border-re-brand/50 dark:border-re-brand/30 bg-re-brand-muted/30 dark:bg-re-brand/10">
+                <div className="p-3 border-b border-re-brand dark:border-re-brand/50 bg-re-brand-muted/50 dark:bg-re-brand/20 flex items-center justify-between">
                     <div className="flex items-center gap-2">
                         <BookOpen className="h-4 w-4 text-re-brand-dark dark:text-re-brand" />
-                        <span className="font-mono text-xs font-semibold text-emerald-800 dark:text-re-brand-light">
+                        <span className="font-mono text-xs font-semibold text-re-brand-dark dark:text-re-brand-light">
                             normalized_facts.json
                         </span>
                     </div>
@@ -152,8 +152,8 @@ export function NormalizedDocumentViewer({ documentId }: ViewerProps) {
                                 <div
                                     key={fact.id}
                                     className={`p-4 rounded-xl border transition-all cursor-pointer ${isActive
-                                            ? 'border-emerald-400 bg-white dark:bg-slate-900 shadow-md transform scale-[1.02]'
-                                            : 'border-slate-200 dark:border-slate-800 bg-white/50 dark:bg-slate-900/50 hover:border-emerald-300'
+                                            ? 'border-re-brand bg-white dark:bg-slate-900 shadow-md transform scale-[1.02]'
+                                            : 'border-slate-200 dark:border-slate-800 bg-white/50 dark:bg-slate-900/50 hover:border-re-brand'
                                         }`}
                                     onClick={() => {
                                         setActiveHighlight(fact.highlightId);
@@ -166,7 +166,7 @@ export function NormalizedDocumentViewer({ documentId }: ViewerProps) {
                                 >
                                     <div className="flex items-center justify-between mb-2">
                                         <Badge variant="outline" className={`text-[10px] ${fact.type === 'Obligation' ? 'text-re-info border-blue-200 bg-re-info-muted dark:bg-re-info dark:border-blue-900' :
-                                                fact.type === 'Exemption' ? 'text-re-warning border-amber-200 bg-re-warning-muted dark:bg-re-warning dark:border-amber-900' :
+                                                fact.type === 'Exemption' ? 'text-re-warning border-re-warning bg-re-warning-muted dark:bg-re-warning dark:border-re-warning' :
                                                     'text-purple-500 border-purple-200 bg-purple-50 dark:bg-purple-950 dark:border-purple-900'
                                             }`}>
                                             {fact.type}
@@ -184,7 +184,7 @@ export function NormalizedDocumentViewer({ documentId }: ViewerProps) {
                                     </p>
 
                                     <div className="flex items-center justify-between pt-3 border-t border-slate-100 dark:border-slate-800">
-                                        <div className="flex items-center gap-1.5 text-xs font-mono text-re-brand-dark dark:text-re-brand bg-emerald-50 dark:bg-re-brand/30 px-2 py-1 rounded">
+                                        <div className="flex items-center gap-1.5 text-xs font-mono text-re-brand-dark dark:text-re-brand bg-re-brand-muted dark:bg-re-brand/30 px-2 py-1 rounded">
                                             <Link2 className="h-3 w-3" />
                                             View Source Lineage
                                         </div>

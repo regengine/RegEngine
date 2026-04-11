@@ -48,7 +48,7 @@ export function AnalysisResults({ data, onClose }: AnalysisResultsProps) {
                     </h4>
                     <div className="space-y-2">
                         {data.critical_risks.map((risk) => (
-                            <div key={risk.id} className="text-sm p-3 bg-re-warning-muted text-re-warning rounded border border-amber-100">
+                            <div key={risk.id} className="text-sm p-3 bg-re-warning-muted text-re-warning rounded border border-re-warning">
                                 {risk.description}
                             </div>
                         ))}

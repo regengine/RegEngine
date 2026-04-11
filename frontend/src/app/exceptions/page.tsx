@@ -43,7 +43,7 @@ const SEVERITY_BADGE: Record<string, { variant: 'destructive' | 'warning' | 'sec
 const STATUS_BADGE: Record<string, { className: string; label: string }> = {
   open: { className: 'bg-re-danger-muted text-re-danger border-re-danger', label: 'Open' },
   in_review: { className: 'bg-re-info-muted text-re-info border-blue-200', label: 'In Review' },
-  awaiting_supplier: { className: 'bg-re-warning-muted text-re-warning border-amber-200', label: 'Awaiting Supplier' },
+  awaiting_supplier: { className: 'bg-re-warning-muted text-re-warning border-re-warning', label: 'Awaiting Supplier' },
   resolved: { className: 'bg-re-success-muted text-re-success border-green-200', label: 'Resolved' },
   waived: { className: 'bg-re-surface-elevated text-re-text-disabled border-re-border', label: 'Waived' },
 };

@@ -274,7 +274,7 @@ export default function CanonicalRecordsPage() {
                               key={i}
                               className={`rounded-md border p-3 text-sm ${
                                 ev.result === 'fail' ? 'border-re-danger bg-re-danger-muted/50' :
-                                ev.result === 'warn' ? 'border-amber-200 bg-re-warning-muted/50' :
+                                ev.result === 'warn' ? 'border-re-warning bg-re-warning-muted/50' :
                                 'border-green-200 bg-re-success-muted/50'
                               }`}
                             >

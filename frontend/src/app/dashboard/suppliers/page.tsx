@@ -454,7 +454,7 @@ export default function SupplierDashboardPage() {
                                         >
                                             <div className="flex items-center gap-2 min-w-0 flex-1">
                                                 <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
-                                                    isActive ? 'bg-[var(--re-brand)]' : 'bg-gray-400'
+                                                    isActive ? 'bg-[var(--re-brand)]' : 'bg-re-text-disabled'
                                                 }`} />
                                                 <span className="font-medium text-[var(--re-text-primary)] truncate">
                                                     {link.supplier_name}

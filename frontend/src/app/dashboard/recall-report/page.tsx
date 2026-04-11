@@ -183,7 +183,7 @@ export default function RecallReportPage() {
                         </Link>
                         <Button
                             size="sm"
-                            className="rounded-xl min-h-[44px] bg-re-danger hover:bg-red-700 text-white active:scale-[0.97]"
+                            className="rounded-xl min-h-[44px] bg-re-danger hover:bg-re-danger text-white active:scale-[0.97]"
                             disabled={exporting}
                             onClick={async () => {
                                 if (!tenantId) return;
@@ -398,7 +398,7 @@ export default function RecallReportPage() {
                                                 transition={{ delay: 0.05 * i }}
                                             >
                                                 <div className="flex items-center gap-2 flex-1 min-w-0">
-                                                    <div className={`w-2 h-2 rounded-full flex-shrink-0 ${lot.risk === 'high' ? 'bg-red-400' : lot.risk === 'medium' ? 'bg-amber-400' : 'bg-emerald-400'}`} />
+                                                    <div className={`w-2 h-2 rounded-full flex-shrink-0 ${lot.risk === 'high' ? 'bg-re-danger' : lot.risk === 'medium' ? 'bg-re-warning' : 'bg-re-brand'}`} />
                                                     <div className="min-w-0">
                                                         <div className="font-mono text-xs truncate">{lot.tlc}</div>
                                                         <div className="text-[11px] text-muted-foreground truncate">{lot.product}</div>

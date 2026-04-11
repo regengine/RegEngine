@@ -449,7 +449,7 @@ export default function DashboardPage() {
                     </Link>
 
                     {/* FSMA 204 Deadline Banner */}
-                    <Card className="bg-gradient-to-r from-emerald-50 to-blue-50 dark:from-emerald-900/20 dark:to-blue-900/20 border-emerald-200 dark:border-re-brand">
+                    <Card className="bg-gradient-to-r from-emerald-50 to-blue-50 dark:from-emerald-900/20 dark:to-blue-900/20 border-re-brand dark:border-re-brand">
                         <CardContent className="pt-6">
                             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
                                 <div className="flex items-center gap-3 sm:gap-4">

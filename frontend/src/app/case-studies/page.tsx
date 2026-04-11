@@ -71,7 +71,7 @@ export default function CaseStudy() {
             <section className="min-h-[80vh] flex items-center px-4 sm:px-6 lg:px-8 pt-20 pb-10 bg-gradient-to-b from-slate-950 via-black to-slate-900">
                 <div className="max-w-5xl mx-auto w-full">
                     <div className="mb-6 flex items-center gap-3">
-                        <span className="inline-block px-3 py-1 text-sm font-medium bg-emerald-900/30 border border-emerald-700/50 rounded-full text-re-brand-light">
+                        <span className="inline-block px-3 py-1 text-sm font-medium bg-re-brand/30 border border-re-brand/50 rounded-full text-re-brand-light">
                             Product Validation
                         </span>
                         <span className="inline-block px-3 py-1 text-sm font-medium bg-blue-900/30 border border-blue-700/50 rounded-full text-blue-300">
@@ -143,7 +143,7 @@ export default function CaseStudy() {
                                         <td className="py-3 px-4 text-slate-300">{row.step}</td>
                                         <td className="py-3 px-4 text-slate-300">{row.entity}</td>
                                         <td className="py-3 px-4">
-                                            <code className="text-re-brand text-xs bg-emerald-900/20 px-2 py-0.5 rounded">
+                                            <code className="text-re-brand text-xs bg-re-brand/20 px-2 py-0.5 rounded">
                                                 {row.cte}
                                             </code>
                                         </td>
@@ -264,14 +264,14 @@ export default function CaseStudy() {
                                         <td className="py-3 px-4">
                                             <div className="flex flex-wrap gap-1">
                                                 {ex.raw.map((r) => (
-                                                    <code key={r} className="text-xs text-re-danger bg-red-900/20 px-1.5 py-0.5 rounded">
+                                                    <code key={r} className="text-xs text-re-danger bg-re-danger/20 px-1.5 py-0.5 rounded">
                                                         {r}
                                                     </code>
                                                 ))}
                                             </div>
                                         </td>
                                         <td className="py-3 px-4">
-                                            <code className="text-xs text-re-brand-light bg-emerald-900/20 px-1.5 py-0.5 rounded">
+                                            <code className="text-xs text-re-brand-light bg-re-brand/20 px-1.5 py-0.5 rounded">
                                                 {ex.normalized}
                                             </code>
                                         </td>
@@ -358,7 +358,7 @@ export default function CaseStudy() {
                                 per month. The difference: one person spending 2 minutes vs. one person
                                 spending 2 weeks.
                             </p>
-                            <div className="bg-amber-900/20 border border-amber-700/30 rounded p-4">
+                            <div className="bg-re-warning/20 border border-re-warning/30 rounded p-4">
                                 <div className="flex items-start gap-2">
                                     <AlertTriangle className="w-4 h-4 text-re-warning flex-shrink-0 mt-0.5" />
                                     <p className="text-xs text-re-warning">
@@ -512,7 +512,7 @@ export default function CaseStudy() {
                                     </div>
                                 ))}
                             </div>
-                            <div className="mt-6 bg-emerald-900/20 border border-emerald-700/30 rounded p-4">
+                            <div className="mt-6 bg-re-brand/20 border border-re-brand/30 rounded p-4">
                                 <p className="text-sm text-re-brand-light">
                                     The FDA requires records within 24 hours.
                                     RegEngine delivers in under 12 minutes.

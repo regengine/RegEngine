@@ -176,7 +176,7 @@ export default function SettingsPage() {
                     </Button>
                 </div>
                 {saveError && (
-                    <div className="p-3 rounded-lg bg-re-danger-muted dark:bg-re-danger/20 border border-re-danger dark:border-re-danger flex items-center gap-2 text-re-danger dark:text-red-200 text-sm">
+                    <div className="p-3 rounded-lg bg-re-danger-muted dark:bg-re-danger/20 border border-re-danger dark:border-re-danger flex items-center gap-2 text-re-danger dark:text-re-danger text-sm">
                         <AlertTriangle className="h-4 w-4 shrink-0" />
                         <span>{saveError}</span>
                     </div>

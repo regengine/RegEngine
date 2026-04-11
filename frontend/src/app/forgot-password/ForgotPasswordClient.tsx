@@ -89,7 +89,7 @@ export default function ForgotPasswordClient() {
 
                     <CardContent>
                         {linkExpired && !submitted && (
-                            <div className="mb-4 rounded-md border border-amber-200 bg-re-warning-muted p-3 text-sm text-re-warning dark:border-amber-800 dark:bg-re-warning/10 dark:text-re-warning">
+                            <div className="mb-4 rounded-md border border-re-warning bg-re-warning-muted p-3 text-sm text-re-warning dark:border-re-warning dark:bg-re-warning/10 dark:text-re-warning">
                                 Your reset link has expired. Enter your email to receive a new one.
                             </div>
                         )}

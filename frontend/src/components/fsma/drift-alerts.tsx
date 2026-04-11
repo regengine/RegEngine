@@ -84,8 +84,8 @@ export function DriftAlertsWidget() {
                                     key={idx}
                                     initial={{ opacity: 0, x: -10 }}
                                     animate={{ opacity: 1, x: 0 }}
-                                    className={`flex items-start gap-2 p-2 rounded text-sm border ${alert.severity === 'CRITICAL' ? 'bg-re-danger-muted border-red-100 text-re-danger dark:bg-re-danger/20 dark:border-re-danger dark:text-re-danger' :
-                                            alert.severity === 'WARNING' ? 'bg-re-warning-muted border-amber-100 text-re-warning dark:bg-re-warning/20 dark:border-amber-800 dark:text-re-warning' :
+                                    className={`flex items-start gap-2 p-2 rounded text-sm border ${alert.severity === 'CRITICAL' ? 'bg-re-danger-muted border-re-danger text-re-danger dark:bg-re-danger/20 dark:border-re-danger dark:text-re-danger' :
+                                            alert.severity === 'WARNING' ? 'bg-re-warning-muted border-re-warning text-re-warning dark:bg-re-warning/20 dark:border-re-warning dark:text-re-warning' :
                                                 'bg-re-info-muted border-blue-100 text-re-info dark:bg-re-info/20 dark:border-blue-800 dark:text-blue-300'
                                         }`}
                                 >

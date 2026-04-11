@@ -25,7 +25,7 @@ const facilityConfig: Record<FacilityType, { icon: React.ElementType; color: str
   PROCESSOR: { icon: Factory, color: 'text-re-info', bgColor: 'bg-re-info-muted dark:bg-blue-900' },
   DISTRIBUTOR: { icon: Truck, color: 'text-purple-600', bgColor: 'bg-purple-100 dark:bg-purple-900' },
   RETAILER: { icon: Store, color: 'text-orange-600', bgColor: 'bg-orange-100 dark:bg-orange-900' },
-  RESTAURANT: { icon: ChefHat, color: 'text-re-danger', bgColor: 'bg-re-danger-muted dark:bg-red-900' },
+  RESTAURANT: { icon: ChefHat, color: 'text-re-danger', bgColor: 'bg-re-danger-muted dark:bg-re-danger' },
 };
 
 interface SupplyChainGraphProps {

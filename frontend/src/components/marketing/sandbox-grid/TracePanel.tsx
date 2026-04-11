@@ -65,7 +65,7 @@ const CTE_COLORS: Record<string, { bg: string; border: string; text: string; ico
   packing:        { bg: 'bg-orange-500/15',   border: 'border-orange-500/40',  text: 'text-orange-400',  icon: '📋' },
 };
 
-const DEFAULT_CTE_COLOR = { bg: 'bg-re-surface-card0/15', border: 'border-gray-500/40', text: 'text-re-text-tertiary', icon: '📄' };
+const DEFAULT_CTE_COLOR = { bg: 'bg-re-surface-card0/15', border: 'border-re-border/40', text: 'text-re-text-tertiary', icon: '📄' };
 
 function getCteVisual(cteType: string) {
   return CTE_COLORS[cteType.toLowerCase()] || DEFAULT_CTE_COLOR;

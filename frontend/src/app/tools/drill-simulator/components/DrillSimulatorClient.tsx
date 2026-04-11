@@ -418,7 +418,7 @@ STATUS: ${
                 className={`border-2 border-dashed rounded-lg p-12 text-center cursor-pointer transition-all ${
                     dragActive
                         ? 'border-blue-500 bg-re-info-muted'
-                        : 'border-re-border hover:border-gray-400'
+                        : 'border-re-border hover:border-re-border'
                 }`}
                 style={{
                     borderColor: dragActive ? 'var(--re-brand)' : 'var(--re-border-default)',

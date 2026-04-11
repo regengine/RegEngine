@@ -115,7 +115,7 @@ export function RecallTimer({ drill, onCancel, onComplete, onStartDrill, classNa
     <Card className={cn(
       'relative overflow-hidden',
       timeData?.urgency === 'critical' && 'border-re-danger',
-      timeData?.urgency === 'warning' && 'border-amber-500',
+      timeData?.urgency === 'warning' && 'border-re-warning',
       className
     )}>
       {/* Urgency overlay animation */}

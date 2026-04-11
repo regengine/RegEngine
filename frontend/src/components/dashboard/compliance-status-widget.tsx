@@ -56,7 +56,7 @@ const STATUS_CONFIG = {
     },
     AT_RISK: {
         bgClass: "bg-re-warning-muted dark:bg-re-warning/20",
-        borderClass: "border-amber-200 dark:border-amber-800",
+        borderClass: "border-re-warning dark:border-re-warning",
         textClass: "text-re-warning dark:text-re-warning",
         iconClass: "text-re-warning",
         Icon: AlertTriangle,
@@ -103,7 +103,7 @@ function CountdownTimer({ seconds, display }: { seconds: number; display: string
 function AlertCard({ alert, onClick }: { alert: ComplianceAlert; onClick?: () => void }) {
     const severityColors: Record<string, string> = {
         CRITICAL: "bg-re-danger-muted text-re-danger border-re-danger",
-        HIGH: "bg-re-warning-muted text-re-warning border-amber-200",
+        HIGH: "bg-re-warning-muted text-re-warning border-re-warning",
         MEDIUM: "bg-re-info-muted text-re-info border-blue-200",
         LOW: "bg-re-surface-elevated text-re-text-primary border-re-border",
     };

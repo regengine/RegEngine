@@ -64,7 +64,7 @@ export default function ProfileSettingsPage() {
                     </div>
 
                     {/* Not-yet-implemented notice */}
-                    <div className="mb-6 p-4 rounded-lg border border-amber-200 dark:border-amber-800 bg-re-warning-muted dark:bg-re-warning/20 flex items-start gap-3">
+                    <div className="mb-6 p-4 rounded-lg border border-re-warning dark:border-re-warning bg-re-warning-muted dark:bg-re-warning/20 flex items-start gap-3">
                         <Info className="h-4 w-4 text-re-warning dark:text-re-warning mt-0.5 flex-shrink-0" />
                         <p className="text-sm text-re-warning dark:text-re-warning">
                             <strong>Profile editing is coming soon.</strong> Fields are editable but changes are not yet saved to the server.
@@ -188,7 +188,7 @@ export default function ProfileSettingsPage() {
 
                                 {/* Save feedback */}
                                 {saveMessage && (
-                                    <div className="p-3 rounded-lg border border-amber-200 dark:border-amber-800 bg-re-warning-muted dark:bg-re-warning/20 text-sm text-re-warning dark:text-re-warning">
+                                    <div className="p-3 rounded-lg border border-re-warning dark:border-re-warning bg-re-warning-muted dark:bg-re-warning/20 text-sm text-re-warning dark:text-re-warning">
                                         {saveMessage}
                                     </div>
                                 )}

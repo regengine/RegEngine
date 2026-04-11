@@ -79,7 +79,7 @@ export default function APIKeysPage() {
             </div>
 
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-                <div className="mb-6 p-3 rounded-lg bg-re-warning-muted dark:bg-re-warning/20 border border-amber-200 dark:border-amber-800 flex items-center gap-2 text-re-warning dark:text-re-warning text-sm">
+                <div className="mb-6 p-3 rounded-lg bg-re-warning-muted dark:bg-re-warning/20 border border-re-warning dark:border-re-warning flex items-center gap-2 text-re-warning dark:text-re-warning text-sm">
                     <AlertTriangle className="h-4 w-4 shrink-0" />
                     <span>Simulated keys — connect your backend to manage real API keys.</span>
                 </div>

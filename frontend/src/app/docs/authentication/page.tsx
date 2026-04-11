@@ -38,7 +38,7 @@ export default function AuthenticationDocsPage() {
                             </CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-4">
-                            <div className="bg-re-warning-muted dark:bg-re-warning/10 border-l-4 border-amber-500 p-4">
+                            <div className="bg-re-warning-muted dark:bg-re-warning/10 border-l-4 border-re-warning p-4">
                                 <p className="text-sm text-re-warning dark:text-re-warning">
                                     <strong>Security Warning:</strong> Your API keys carry many privileges, so be sure to keep them secure! Do not share your secret API keys in publicly accessible areas such as GitHub, client-side code, and so forth.
                                 </p>
@@ -134,8 +134,8 @@ export default function AuthenticationDocsPage() {
                                 <div className="flex items-start gap-4 p-4 rounded-lg bg-re-danger-muted dark:bg-re-danger/10">
                                     <div className="font-mono font-bold text-re-danger">401</div>
                                     <div>
-                                        <div className="font-semibold text-re-danger dark:text-red-100">Unauthorized</div>
-                                        <div className="text-sm text-re-danger dark:text-red-200">The API key is missing or invalid. Check that you are sending the correct header.</div>
+                                        <div className="font-semibold text-re-danger dark:text-re-danger">Unauthorized</div>
+                                        <div className="text-sm text-re-danger dark:text-re-danger">The API key is missing or invalid. Check that you are sending the correct header.</div>
                                     </div>
                                 </div>
                                 <div className="flex items-start gap-4 p-4 rounded-lg bg-orange-50 dark:bg-orange-900/10">

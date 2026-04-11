@@ -156,7 +156,7 @@ export default function DashboardIntegrationsPage() {
                             </div>
                         )}
                         {status === 'error' && (
-                            <div className="rounded-xl border border-re-danger/20 bg-re-danger-muted0/10 p-4 text-sm text-red-200">
+                            <div className="rounded-xl border border-re-danger/20 bg-re-danger-muted0/10 p-4 text-sm text-re-danger">
                                 The mapping review contract route did not respond. Public status copy still renders from the shared registry above.
                             </div>
                         )}

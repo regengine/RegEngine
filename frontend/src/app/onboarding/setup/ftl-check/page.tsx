@@ -252,7 +252,7 @@ export default function FTLCheckPage() {
                 {saveError && (
                   <div
                     role="alert"
-                    className="rounded-md border border-re-danger/40 bg-re-danger-muted0/10 px-3 py-2 text-sm text-red-200"
+                    className="rounded-md border border-re-danger/40 bg-re-danger-muted0/10 px-3 py-2 text-sm text-re-danger"
                   >
                     {saveError}
                   </div>

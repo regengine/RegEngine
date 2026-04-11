@@ -441,7 +441,7 @@ export default function ApiReferencePage() {
                     </div>
 
                     {/* Authentication Info */}
-                    <Card className="border-amber-200 bg-re-warning-muted dark:bg-re-warning/20 dark:border-amber-800">
+                    <Card className="border-re-warning bg-re-warning-muted dark:bg-re-warning/20 dark:border-re-warning">
                         <CardHeader className="pb-2">
                             <CardTitle className="text-lg flex items-center gap-2">
                                 <Key className="h-5 w-5 text-re-warning" />
@@ -604,7 +604,7 @@ GET /checklists?industry=food?limit=20&cursor=eyJpZCI6IjEyMyJ9`} language="http"
                                     </p>
                                 </div>
                             </div>
-                            <div className="bg-re-warning-muted dark:bg-re-warning/20 border border-amber-200 dark:border-amber-800 rounded p-3 mt-3">
+                            <div className="bg-re-warning-muted dark:bg-re-warning/20 border border-re-warning dark:border-re-warning rounded p-3 mt-3">
                                 <p className="text-xs text-re-warning dark:text-re-warning">
                                     <strong>Tier Limits:</strong> Growth (500/min), Scale (1,000/min), Enterprise (custom)
                                 </p>

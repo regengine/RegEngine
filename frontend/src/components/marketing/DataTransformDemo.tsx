@@ -144,7 +144,7 @@ export function DataTransformDemo() {
         <div className="bg-[var(--re-surface-card)] border border-[var(--re-surface-border)] rounded-xl overflow-hidden">
           <div className="px-4 py-2.5 border-b border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)] flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-red-400" />
+              <span className="w-2 h-2 rounded-full bg-re-danger" />
               <span className="font-mono text-[0.65rem] font-medium text-[var(--re-text-muted)] tracking-wide">
                 INCOMING: supplier_upload.csv
               </span>
@@ -188,7 +188,7 @@ export function DataTransformDemo() {
           <div className="px-4 py-2.5 border-b border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)] flex items-center justify-between">
             <div className="flex items-center gap-2">
               <span className={`w-2 h-2 rounded-full ${
-                showPackage ? 'bg-amber-400' : showValidation ? 'bg-amber-400' : 'bg-blue-400'
+                showPackage ? 'bg-re-warning' : showValidation ? 'bg-re-warning' : 'bg-blue-400'
               }`} />
               <span className="font-mono text-[0.65rem] font-medium text-[var(--re-text-muted)] tracking-wide">
                 {showPackage ? 'FDA RESPONSE PACKAGE' : showValidation ? 'VALIDATION RESULTS' : 'REGENGINE OUTPUT'}

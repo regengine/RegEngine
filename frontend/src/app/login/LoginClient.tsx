@@ -290,12 +290,12 @@ export default function LoginPage() {
                         </CardHeader>
                         <CardContent>
                             {searchParams.get('error') === 'auth_config' && (
-                                <div className="mb-4 rounded-md border border-amber-200 bg-re-warning-muted p-3 text-sm text-re-warning dark:border-amber-800 dark:bg-re-warning/10 dark:text-re-warning">
+                                <div className="mb-4 rounded-md border border-re-warning bg-re-warning-muted p-3 text-sm text-re-warning dark:border-re-warning dark:bg-re-warning/10 dark:text-re-warning">
                                     Authentication is misconfigured (AUTH_SECRET_KEY not set). Contact your administrator.
                                 </div>
                             )}
                             {searchParams.get('error') === 'token_invalid' && (
-                                <div className="mb-4 rounded-md border border-amber-200 bg-re-warning-muted p-3 text-sm text-re-warning dark:border-amber-800 dark:bg-re-warning/10 dark:text-re-warning">
+                                <div className="mb-4 rounded-md border border-re-warning bg-re-warning-muted p-3 text-sm text-re-warning dark:border-re-warning dark:bg-re-warning/10 dark:text-re-warning">
                                     Your session could not be verified. Please sign in again.
                                 </div>
                             )}

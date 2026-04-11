@@ -110,7 +110,7 @@ export function CodePlayground({
                             size="sm"
                             onClick={handleRun}
                             disabled={isRunning}
-                            className="bg-re-brand hover:bg-emerald-700 text-white"
+                            className="bg-re-brand hover:bg-re-brand-dark text-white"
                         >
                             <Play className="h-4 w-4 mr-2" />
                             {isRunning ? 'Running...' : 'Run Code'}

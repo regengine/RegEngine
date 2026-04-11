@@ -185,17 +185,17 @@ export default function AlertsDashboardPage() {
 
                 {/* Error */}
                 {fetchFailed && (
-                    <Card className="border-red-400 dark:border-red-700">
+                    <Card className="border-re-danger dark:border-re-danger">
                         <CardContent className="py-4">
                             <div className="flex items-center justify-between gap-3">
-                                <div className="flex items-center gap-3 text-red-600 dark:text-red-400">
+                                <div className="flex items-center gap-3 text-re-danger dark:text-re-danger">
                                     <AlertTriangle className="h-5 w-5 flex-shrink-0" />
                                     <p className="text-sm font-medium">Unable to load alerts. Your compliance status may have changed.</p>
                                 </div>
                                 <Button
                                     variant="outline"
                                     size="sm"
-                                    className="rounded-xl text-xs flex-shrink-0 min-h-[44px] border-red-300 dark:border-red-700 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950"
+                                    className="rounded-xl text-xs flex-shrink-0 min-h-[44px] border-re-danger dark:border-re-danger text-re-danger dark:text-re-danger hover:bg-re-danger-muted dark:hover:bg-re-danger"
                                     onClick={() => loadAlerts()}
                                     disabled={loading}
                                 >

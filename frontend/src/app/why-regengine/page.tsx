@@ -684,7 +684,7 @@ HTTP 201
                                 },
                             ].map((item, idx) => (
                                 <div key={idx} className="flex gap-4">
-                                    <div className="flex h-6 w-6 items-center justify-center rounded-full bg-amber-600/30 border border-amber-500/50 flex-shrink-0 mt-0.5">
+                                    <div className="flex h-6 w-6 items-center justify-center rounded-full bg-re-warning/30 border border-re-warning/50 flex-shrink-0 mt-0.5">
                                         <AlertCircle className="h-3 w-3 text-re-warning" />
                                     </div>
                                     <div>

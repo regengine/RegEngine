@@ -158,12 +158,12 @@ export default function FSMADashboardPage() {
 
           {/* No API Key Warning */}
           {!apiKey && (
-            <Card className="border-amber-200 dark:border-amber-800 bg-re-warning-muted dark:bg-re-warning/20">
+            <Card className="border-re-warning dark:border-re-warning bg-re-warning-muted dark:bg-re-warning/20">
               <CardContent className="pt-6">
                 <div className="flex items-start gap-3">
                   <Key className="h-5 w-5 text-re-warning dark:text-re-warning mt-0.5" />
                   <div className="flex-1">
-                    <p className="font-medium text-re-warning dark:text-amber-100">
+                    <p className="font-medium text-re-warning dark:text-re-warning">
                       API Key Required for Full Functionality
                     </p>
                     <p className="text-sm text-re-warning dark:text-re-warning mt-1">
@@ -464,7 +464,7 @@ export default function FSMADashboardPage() {
                 </CardHeader>
                 <CardContent className="space-y-2">
                   <Link href="/fsma/assessment">
-                    <Button variant="default" className="w-full justify-start bg-re-brand hover:bg-emerald-700">
+                    <Button variant="default" className="w-full justify-start bg-re-brand hover:bg-re-brand-dark">
                       <CheckCircle className="w-4 h-4 mr-2" />
                       Readiness Assessment
                     </Button>

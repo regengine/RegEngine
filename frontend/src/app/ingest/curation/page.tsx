@@ -375,7 +375,7 @@ export default function CurationDashboard() {
                                                                 <Button
                                                                     size="sm"
                                                                     variant="outline"
-                                                                    className="text-re-danger hover:text-re-danger hover:bg-re-danger-muted dark:hover:bg-red-950/20 border-slate-200 dark:border-slate-800 h-9 px-3"
+                                                                    className="text-re-danger hover:text-re-danger hover:bg-re-danger-muted dark:hover:bg-re-danger/20 border-slate-200 dark:border-slate-800 h-9 px-3"
                                                                     onClick={() => handleReject(item.index)}
                                                                     disabled={processing !== null}
                                                                 >
