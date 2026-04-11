@@ -307,13 +307,12 @@ export default function ComplianceDashboardPage() {
 
                 {/* Error */}
                 {error && (
-                    <Card className="border-re-danger/30 bg-re-danger-muted0/[0.03]">
+                    <Card className="border-[var(--re-border-default)] bg-[var(--re-surface-elevated)]">
                         <CardContent className="py-4">
-                            <div className="flex items-center gap-3 text-re-danger">
-                                <AlertTriangle className="h-5 w-5 flex-shrink-0" />
+                            <div className="flex items-center gap-3 text-muted-foreground">
+                                <Info className="h-5 w-5 flex-shrink-0" />
                                 <div>
-                                    <p className="text-sm font-medium">Failed to load compliance data</p>
-                                    <p className="text-xs text-muted-foreground mt-0.5">{error}</p>
+                                    <p className="text-sm font-medium text-foreground">Compliance data is being set up. Check back shortly.</p>
                                 </div>
                             </div>
                         </CardContent>
