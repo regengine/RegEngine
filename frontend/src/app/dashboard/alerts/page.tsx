@@ -100,7 +100,7 @@ export default function AlertsDashboardPage() {
 
     const [filter, setFilter] = useState<SeverityFilter>('all');
 
-    const { data: alertsData, isLoading: loading, error: alertsError, refetch: loadAlerts } = useQuery({
+    const { data: alertsData, isLoading: loading, error: alertsError, refetch: loadAlerts, isSuccess } = useQuery({
         queryKey: ['alerts', tenantId],
         queryFn: async () => {
             const data = (await fetchAlerts(tenantId, apiKey || '')) as AlertsResponse;
@@ -111,6 +111,7 @@ export default function AlertsDashboardPage() {
 
     const alerts = alertsData ?? [];
     const error = alertsError?.message ?? null;
+    const fetchFailed = !!alertsError;
 
     const [ackError, setAckError] = useState<string | null>(null);
 
@@ -183,12 +184,23 @@ export default function AlertsDashboardPage() {
                 )}
 
                 {/* Error */}
-                {error && (
-                    <Card className="border-orange-300 dark:border-orange-700">
+                {fetchFailed && (
+                    <Card className="border-red-400 dark:border-red-700">
                         <CardContent className="py-4">
-                            <div className="flex items-center gap-3 text-orange-600 dark:text-orange-400">
-                                <AlertTriangle className="h-5 w-5 flex-shrink-0" />
-                                <p className="text-sm">{error}</p>
+                            <div className="flex items-center justify-between gap-3">
+                                <div className="flex items-center gap-3 text-red-600 dark:text-red-400">
+                                    <AlertTriangle className="h-5 w-5 flex-shrink-0" />
+                                    <p className="text-sm font-medium">Unable to load alerts. Your compliance status may have changed.</p>
+                                </div>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="rounded-xl text-xs flex-shrink-0 min-h-[44px] border-red-300 dark:border-red-700 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950"
+                                    onClick={() => loadAlerts()}
+                                    disabled={loading}
+                                >
+                                    <RefreshCw className={`h-3.5 w-3.5 mr-1 ${loading ? 'animate-spin' : ''}`} /> Retry
+                                </Button>
                             </div>
                         </CardContent>
                     </Card>
@@ -447,7 +459,7 @@ export default function AlertsDashboardPage() {
                     </div>
                 )}
 
-                {isLoggedIn && !loading && alerts.length === 0 && !error && (
+                {isLoggedIn && !loading && alerts.length === 0 && isSuccess && (
                     <div className="text-center py-12 text-muted-foreground">
                         <CheckCircle2 className="h-10 w-10 mx-auto mb-3 text-re-brand" />
                         <div className="font-medium">No alerts</div>
