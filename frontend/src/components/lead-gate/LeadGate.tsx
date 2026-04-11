@@ -3,6 +3,7 @@
 import { FormEvent, ReactNode, useCallback, useEffect, useState } from 'react';
 import { ArrowRight, Check, ChevronDown, Lock, Sparkles } from 'lucide-react';
 import { submitAssessment, type AssessmentFormData } from '@/app/actions/submit-assessment';
+import { useAuth } from '@/lib/auth-context';
 
 /* ────────────────────────────────────────────────────────────── */
 /*  Props                                                        */
@@ -50,7 +51,12 @@ export function LeadGate({
     children,
     onUnlock,
 }: LeadGateProps) {
-    const [step, setStep] = useState<'gate' | 'enrich' | 'done'>('gate');
+    const { user } = useAuth();
+
+    // Authenticated users bypass the lead gate — they already provided their info at signup
+    const authenticatedBypass = !!user;
+
+    const [step, setStep] = useState<'gate' | 'enrich' | 'done'>(authenticatedBypass ? 'done' : 'gate');
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [gateData, setGateData] = useState<Partial<AssessmentFormData>>({});
