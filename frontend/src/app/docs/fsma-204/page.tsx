@@ -254,7 +254,7 @@ export default function FSMA204GuidePage() {
                         background: T.surface,
                         border: `1px solid ${T.border}`,
                         borderRadius: '8px',
-                        overflow: 'hidden',
+                        overflowX: 'auto',
                     }}>
                         <table className="w-full border-collapse">
                             <thead>

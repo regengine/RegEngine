@@ -368,7 +368,7 @@ function EndpointCard({ endpoint }: { endpoint: Endpoint }) {
                     {endpoint.params_table && (
                         <div>
                             <h4 className="text-xs font-semibold uppercase text-muted-foreground mb-2">Parameters</h4>
-                            <div className="border rounded-lg overflow-hidden">
+                            <div className="border rounded-lg overflow-x-auto">
                                 <table className="w-full text-xs">
                                     <thead>
                                         <tr className="bg-muted/50 border-b">

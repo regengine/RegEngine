@@ -492,7 +492,7 @@ export default function ReceivingDockPage() {
 
                             {/* Item detail table */}
                             {allItems.length > 0 && (
-                                <div className="rounded-xl border border-[var(--re-border-default)] overflow-hidden">
+                                <div className="rounded-xl border border-[var(--re-border-default)] overflow-x-auto">
                                     <table className="w-full text-xs">
                                         <thead>
                                             <tr className="bg-[var(--re-surface-elevated)] text-left">

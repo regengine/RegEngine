@@ -327,7 +327,7 @@ export default function DpaPage() {
                 the Controller the opportunity to object. RegEngine imposes data protection
                 obligations on each Sub-Processor equivalent to those in this DPA.
               </p>
-              <div className="rounded-xl border border-[var(--re-surface-border)] overflow-hidden">
+              <div className="rounded-xl border border-[var(--re-surface-border)] overflow-x-auto">
                 <table className="w-full text-[12px]">
                   <thead>
                     <tr className="bg-[var(--re-surface-elevated)] border-b border-[var(--re-surface-border)]">

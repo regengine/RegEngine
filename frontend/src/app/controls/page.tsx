@@ -190,6 +190,7 @@ export default function MyControlsPage() {
       )}
 
       <div className="bg-white shadow-lg rounded-lg overflow-hidden">
+        <div className="overflow-x-auto">
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-re-surface-card">
             <tr>
@@ -251,6 +252,7 @@ export default function MyControlsPage() {
             )}
           </tbody>
         </table>
+        </div>
       </div>
     </div>
   );
