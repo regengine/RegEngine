@@ -207,15 +207,15 @@ async function proxyRequest(  request: NextRequest,
             outgoingHeaders.set(headerName, headerValue);
           }
         }
-        // Buffer the full response body before returning.  Passing response.body
-        // (a ReadableStream) directly causes Vercel to stream from the upstream
-        // connection.  If that connection drops mid-flight the edge layer
-        // converts the partial stream to a 502, even though the function already
-        // committed status=200.  Buffering ensures a complete response is handed
-        // to Vercel's edge before the function exits.
-        const responseBody = await response.arrayBuffer();
-        if (process.env.NODE_ENV !== 'production') { console.info(`[proxy/admin] ${method} ${path} → ${response.status}`); }
-        return new NextResponse(responseBody, {
+        // Stream the response body directly to the client, matching the
+        // ingestion proxy pattern. The previous arrayBuffer() approach
+        // caused 500 errors when buffering failed (connection drops,
+        // timeouts, large payloads) — even when upstream returned 200.
+        if (process.env.NODE_ENV !== 'production') {
+          console.info(`[proxy/admin] ${method} ${path} → ${response.status}`);
+        }
+
+        return new NextResponse(response.body, {
           status: response.status,
           headers: outgoingHeaders,
         });
