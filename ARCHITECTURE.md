@@ -70,3 +70,28 @@ Only OpenTelemetry packages are exact-pinned (`==`) due to cross-package version
 Dependencies are locked via `package-lock.json` (npm).
 `next`, `@sentry/nextjs`, and `@supabase/supabase-js` are pinned to exact versions
 (no `^` or `~`) — bumped manually after testing due to prior production incidents.
+
+## Known Technical Debt
+
+### Large files (>1,000 lines)
+
+These files work correctly but exceed recommended size thresholds. Splitting is tracked for post-funding engineering:
+
+| File | Lines | Service | Split strategy |
+|------|-------|---------|----------------|
+| `sandbox_router.py` | 1,576 | Ingestion | Extract sandbox models + validation |
+| `rules_engine.py` | 1,547 | Shared | Split rule types into submodules |
+| `epcis_ingestion.py` | 1,365 | Ingestion | Extract EPCIS parser + validator |
+| `fda_export_router.py` | 1,362 | Ingestion | Extract PDF generator + CSV builder |
+| `fsma_utils.py` | 1,353 | Graph | Extract trace builder + graph queries |
+| `fsma_extractor.py` | 1,344 | NLP | Extract entity resolver + classifier |
+| `cte_persistence.py` | 1,284 | Shared | Extract query builder + batch ops |
+| `identity_resolution.py` | 1,283 | Shared | Extract matcher + scorer |
+| `fsma_recall.py` | 1,203 | Graph | Extract recall simulator + reporter |
+| `stripe_billing.py` | 1,185 | Ingestion | Extract webhook handler + plan mgmt |
+| `audit_logging.py` | 1,069 | Shared | Extract formatters + storage |
+| `edi_ingestion.py` | 1,043 | Ingestion | Extract parser + segment mapper |
+| `canonical_persistence.py` | 1,034 | Shared | Extract query layer + migrations |
+| `compliance.py` | 1,008 | Graph | Extract scoring + export |
+
+Each file is functional, tested, and production-stable. Splitting is a refactoring task, not a bug fix.
