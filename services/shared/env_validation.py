@@ -20,14 +20,18 @@ logger = logging.getLogger("regengine.config")
 
 
 def require_env(*var_names: str) -> None:
-    """Exit immediately if any required environment variables are missing."""
+    """Warn loudly if required environment variables are missing.
+
+    Logs at CRITICAL level but does not exit — Railway and other PaaS
+    platforms may inject env vars after the module is first imported.
+    """
     missing = [v for v in var_names if not os.getenv(v)]
     if missing:
         logger.critical(
-            "Missing required environment variables: %s — exiting",
+            "Missing required environment variables: %s — "
+            "service may fail at runtime",
             ", ".join(missing),
         )
-        sys.exit(1)
 
 
 def warn_env(*var_names: str) -> None:
