@@ -100,7 +100,7 @@ jobs:
             cd frontend
             npm install --package-lock-only 2>/dev/null || npm install
             npm audit --audit-level=high --json > ../npm-audit-results.json || true
-            npm audit --audit-level=high || true
+            npm audit --audit-level=high
             cd ..
           else
             echo "No Node project detected."
@@ -127,7 +127,7 @@ jobs:
               echo "Auditing $req_file"
               audit_json=$(mktemp)
               pip-audit -r "$req_file" --format json --output "$audit_json" || true
-              pip-audit -r "$req_file" || true
+              pip-audit -r "$req_file"
               if [ $first -eq 0 ]; then
                 printf ',\n' >> pip-audit-results.json
               fi
@@ -140,7 +140,7 @@ jobs:
             printf '\n  ]\n}\n' >> pip-audit-results.json
           elif [ -f pyproject.toml ]; then
             pip-audit --format json --output pip-audit-results.json || true
-            pip-audit || true
+            pip-audit
           else
             echo "No Python deps detected."
             echo '{"info": "no python project"}' > pip-audit-results.json

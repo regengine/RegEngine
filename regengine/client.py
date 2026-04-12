@@ -3,8 +3,12 @@ RegEngine API Client
 """
 
 import httpx
+import time
+import logging
 from typing import Optional, List, Any, Dict
 from datetime import date
+
+logger = logging.getLogger("regengine.client")
 
 from .models import (
     Record,
@@ -40,21 +44,43 @@ class RegEngineClient:
     """
     
     DEFAULT_BASE_URL = "https://api.regengine.co"
-    
+    RETRYABLE_STATUS_CODES = {429, 500, 502, 503}
+
     def __init__(
         self,
         api_key: str,
         base_url: str = DEFAULT_BASE_URL,
         tenant_id: Optional[str] = None,
         timeout: int = 30,
+        connect_timeout: int = 30,
+        read_timeout: int = 60,
+        max_retries: int = 3,
+        retry_backoff_factor: float = 1.0,
     ):
+        """
+        Args:
+            api_key: Your RegEngine API key (format: rge_xxx)
+            base_url: API base URL (default: https://api.regengine.co)
+            tenant_id: Optional tenant ID for multi-tenant isolation
+            timeout: Overall request timeout in seconds (default: 30). Ignored if connect_timeout/read_timeout are set.
+            connect_timeout: Connection timeout in seconds (default: 30)
+            read_timeout: Read timeout in seconds (default: 60)
+            max_retries: Maximum number of retry attempts on transient failures (default: 3)
+            retry_backoff_factor: Base delay multiplier for exponential backoff in seconds (default: 1.0)
+        """
         if not api_key or not api_key.startswith("rge_"):
             raise ValidationError("API key must start with 'rge_'")
-        
+
         self.api_key = api_key
         self.base_url = base_url.rstrip("/")
         self.tenant_id = tenant_id
-        self.timeout = timeout
+        self.timeout = httpx.Timeout(
+            timeout=timeout,
+            connect=connect_timeout,
+            read=read_timeout,
+        )
+        self.max_retries = max_retries
+        self.retry_backoff_factor = retry_backoff_factor
         self._session = httpx.Client()
     
     def _headers(self) -> Dict[str, str]:
@@ -75,40 +101,70 @@ class RegEngineClient:
         params: Optional[Dict[str, Any]] = None,
         json: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
-        """Make an API request."""
-        url = f"{self.base_url}{path}"
-        
-        try:
-            response = self._session.request(
-                method=method,
-                url=url,
-                headers=self._headers(),
-                params=params,
-                json=json,
-                timeout=self.timeout,
-            )
-        except httpx.HTTPError as e:
-            raise RegEngineError(f"Request failed: {e}")
+        """Make an API request with automatic retry on transient failures.
 
-        # Handle error responses
-        if response.status_code == 401:
-            raise AuthenticationError("Invalid or expired API key")
-        elif response.status_code == 404:
-            raise NotFoundError(f"Resource not found: {path}")
-        elif response.status_code == 429:
-            raise RateLimitError("Rate limit exceeded. Please slow down requests.")
-        elif response.status_code >= 400:
+        Retries on 429, 500, 502, 503 with exponential backoff.
+        Respects the Retry-After header when present.
+        """
+        url = f"{self.base_url}{path}"
+        last_exc: Optional[Exception] = None
+
+        for attempt in range(self.max_retries + 1):
             try:
-                error = response.json().get("detail", response.text)
-            except Exception:
-                error = response.text
-            raise RegEngineError(f"API error ({response.status_code}): {error}")
-        
-        # Handle empty responses
-        if response.status_code == 204:
-            return {}
-        
-        return response.json()
+                response = self._session.request(
+                    method=method,
+                    url=url,
+                    headers=self._headers(),
+                    params=params,
+                    json=json,
+                    timeout=self.timeout,
+                )
+            except httpx.HTTPError as e:
+                last_exc = e
+                if attempt < self.max_retries:
+                    delay = self.retry_backoff_factor * (2 ** attempt)
+                    logger.warning("Request to %s failed (attempt %d/%d), retrying in %.1fs: %s",
+                                   path, attempt + 1, self.max_retries + 1, delay, e)
+                    time.sleep(delay)
+                    continue
+                raise RegEngineError(f"Request failed after {self.max_retries + 1} attempts: {e}")
+
+            # Retryable status codes
+            if response.status_code in self.RETRYABLE_STATUS_CODES and attempt < self.max_retries:
+                retry_after = response.headers.get("Retry-After")
+                if retry_after:
+                    try:
+                        delay = float(retry_after)
+                    except ValueError:
+                        delay = self.retry_backoff_factor * (2 ** attempt)
+                else:
+                    delay = self.retry_backoff_factor * (2 ** attempt)
+                logger.warning("Received %d from %s (attempt %d/%d), retrying in %.1fs",
+                               response.status_code, path, attempt + 1, self.max_retries + 1, delay)
+                time.sleep(delay)
+                continue
+
+            # Non-retryable error responses
+            if response.status_code == 401:
+                raise AuthenticationError("Invalid or expired API key")
+            elif response.status_code == 404:
+                raise NotFoundError(f"Resource not found: {path}")
+            elif response.status_code == 429:
+                raise RateLimitError("Rate limit exceeded. Please slow down requests.")
+            elif response.status_code >= 400:
+                try:
+                    error = response.json().get("detail", response.text)
+                except Exception:
+                    error = response.text
+                raise RegEngineError(f"API error ({response.status_code}): {error}")
+
+            # Success
+            if response.status_code == 204:
+                return {}
+            return response.json()
+
+        # Exhausted retries — raise last status error
+        raise RegEngineError(f"Request to {path} failed after {self.max_retries + 1} attempts")
     
     def _request_bytes(self, method: str, path: str, params: Optional[Dict[str, Any]] = None) -> bytes:
         """Make an API request that returns raw bytes (for file downloads)."""
