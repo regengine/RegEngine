@@ -81,6 +81,7 @@ class UserModel(Base):
     status = Column(String, nullable=False, default="active")  # active, locked, invited
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    last_login_at = Column(DateTime(timezone=True), nullable=True)
 
     __table_args__ = (
         Index("ix_users_email", "email"),

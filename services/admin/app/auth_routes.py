@@ -251,6 +251,12 @@ async def login(
             resource_id=str(session_data.id),
         )
 
+    # Track last login timestamp (best-effort — never blocks login)
+    try:
+        user.last_login_at = datetime.now(timezone.utc)
+    except Exception as e:
+        logger.warning("last_login_at_update_failed", user_id=str(user.id), error=str(e))
+
     db.commit()
 
     logger.info(
