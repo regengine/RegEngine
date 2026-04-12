@@ -26,7 +26,8 @@ RUN pip install --no-cache-dir \
     -r reqs/nlp.txt \
     -r reqs/compliance.txt \
     -r reqs/scheduler.txt \
-    -r reqs/shared.txt
+    -r reqs/shared.txt \
+    gunicorn>=22.0.0
 
 # Create non-root user
 RUN adduser --disabled-password --gecos '' --uid 1001 appuser
@@ -57,5 +58,7 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
 RUN chown -R appuser:appuser /app
 USER appuser
 
-# Run migrations then start monolith
-CMD ["sh", "-c", "bash /app/scripts/run-migrations.sh && uvicorn server.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
+# Run migrations then start monolith with Gunicorn + Uvicorn workers
+# WEB_CONCURRENCY controls worker count (default: 4).
+# Gunicorn manages process lifecycle; each worker is a Uvicorn async process.
+CMD ["sh", "-c", "bash /app/scripts/run-migrations.sh && gunicorn server.main:app --worker-class uvicorn.workers.UvicornWorker --workers ${WEB_CONCURRENCY:-4} --bind 0.0.0.0:${PORT:-8000} --timeout 120 --graceful-timeout 30 --keep-alive 5 --access-logfile - --error-logfile -"]

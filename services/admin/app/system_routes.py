@@ -329,5 +329,30 @@ async def revoke_jwt_key(
     """Revoke an entire signing key (sysadmin only)."""
     from app.auth_utils import revoke_all_for_kid
 
+    from shared.jwt_key_registry import get_key_registry
+    registry = await get_key_registry()
+    key = await registry.get_key_by_kid(kid)
+    if not key:
+        raise HTTPException(status_code=404, detail=f"Key {kid} not found")
+
     await revoke_all_for_kid(kid)
     return {"status": "revoked", "kid": kid}
+
+
+@router.post(
+    "/jwt/revoke-all",
+    summary="EMERGENCY: Revoke ALL JWT keys",
+    description=(
+        "Nuclear option — invalidates every existing session and token. "
+        "A fresh signing key is auto-generated. All users must re-authenticate."
+    ),
+    dependencies=[Depends(_require_sysadmin)],
+)
+async def revoke_all_jwt_keys(
+    current_user: UserModel = Depends(_require_sysadmin),
+):
+    """Revoke all JWT signing keys (sysadmin only). Emergency use."""
+    from app.auth_utils import revoke_all_jwt_keys as _revoke_all
+
+    count = await _revoke_all()
+    return {"status": "all_keys_revoked", "keys_revoked": count}

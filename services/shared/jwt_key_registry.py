@@ -205,6 +205,69 @@ class JWTKeyRegistry:
                 return key
         return None
 
+    async def revoke_key(self, kid: str, revoked_by: str = "admin") -> bool:
+        """Emergency: immediately invalidate a specific key by kid.
+
+        All tokens signed with this key will be rejected on the next
+        verification attempt. Use when a key is compromised.
+
+        Returns True if the key was found and revoked, False if not found.
+        """
+        keys = await self._load_keys()
+        found = False
+
+        for key in keys:
+            if key.kid == kid and key.is_valid:
+                key.is_valid = False
+                key.is_active = False
+                key.expires_at = 0  # Expired in the past
+                found = True
+                logger.warning(
+                    "jwt_key_emergency_revoked",
+                    kid=kid,
+                    revoked_by=revoked_by,
+                )
+                break
+
+        if found:
+            await self._save_keys(keys)
+
+            # If we revoked the only active key, auto-generate a replacement
+            active = [k for k in keys if k.is_active and k.is_valid]
+            if not active:
+                logger.warning("jwt_no_active_keys_after_revocation_auto_rotating")
+                await self.rotate(rotated_by=f"auto-after-revoke-{revoked_by}")
+
+        return found
+
+    async def revoke_all_keys(self, revoked_by: str = "admin") -> int:
+        """Emergency: invalidate ALL keys and generate a fresh one.
+
+        Nuclear option — every existing session/token becomes invalid.
+        Returns count of keys revoked.
+        """
+        keys = await self._load_keys()
+        count = 0
+
+        for key in keys:
+            if key.is_valid:
+                key.is_valid = False
+                key.is_active = False
+                key.expires_at = 0
+                count += 1
+
+        await self._save_keys(keys)
+
+        # Generate a fresh signing key
+        await self.rotate(rotated_by=f"revoke-all-{revoked_by}")
+
+        logger.warning(
+            "jwt_all_keys_revoked",
+            keys_revoked=count,
+            revoked_by=revoked_by,
+        )
+        return count
+
     async def cleanup_expired_keys(self) -> int:
         """Invalidate keys past their grace period. Returns count of expired keys."""
         keys = await self._load_keys()
@@ -236,6 +299,8 @@ class JWTKeyRegistry:
                     return keys
             except Exception as exc:
                 logger.warning("jwt_key_registry_redis_read_failed", error=str(exc))
+                from shared.redis_health import report_redis_fallback
+                report_redis_fallback("jwt_key_registry", str(exc))
 
         # Redis unavailable — use in-memory cache
         if self._fallback_keys:

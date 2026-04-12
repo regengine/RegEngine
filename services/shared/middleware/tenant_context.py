@@ -29,9 +29,17 @@ import logging
 from typing import Optional, Callable
 
 from fastapi import Request, HTTPException, Depends
+from prometheus_client import Counter
 from starlette.middleware.base import BaseHTTPMiddleware
 
 logger = logging.getLogger(__name__)
+
+# Track spoofing attempts for alerting
+tenant_header_rejected_total = Counter(
+    "tenant_header_rejected_total",
+    "Unauthenticated X-RegEngine-Tenant-ID header rejections",
+    ["client_host"],
+)
 
 
 class TenantContextMiddleware(BaseHTTPMiddleware):
@@ -115,11 +123,22 @@ class TenantContextMiddleware(BaseHTTPMiddleware):
                         detail=f"Invalid tenant ID format in header: {tenant_header}"
                     )
             else:
+                # Defense-in-depth: reject and track spoofing attempts.
+                # The nginx gateway should strip this header from external
+                # traffic, so seeing it here without a valid internal secret
+                # is suspicious.
                 client_host = request.client.host if request.client else "unknown"
                 logger.warning(
-                    "Rejected unauthenticated X-RegEngine-Tenant-ID header",
-                    extra={"client_host": client_host},
+                    "Rejected unauthenticated X-RegEngine-Tenant-ID header — "
+                    "possible spoofing attempt or missing gateway header strip",
+                    extra={
+                        "client_host": client_host,
+                        "attempted_tenant": tenant_header,
+                    },
                 )
+                tenant_header_rejected_total.labels(
+                    client_host=client_host
+                ).inc()
         
         # Method 3: From API key
         # API keys must be validated against the database (api_key_store).
