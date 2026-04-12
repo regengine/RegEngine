@@ -193,10 +193,10 @@ services:
       - "8500:8500"
 
   jaeger:
-    image: jaegertracing/all-in-one:latest
+    image: jaegertracing/all-in-one:1.54
     restart: unless-stopped
     ports:
-      - "16686:16686"
+      - "127.0.0.1:16686:16686"
     environment:
       - COLLECTOR_OTLP_ENABLED=true
     deploy:
@@ -207,9 +207,14 @@ services:
         reservations:
           cpus: '0.1'
           memory: 128M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   otel-collector:
-    image: otel/opentelemetry-collector-contrib:latest
+    image: otel/opentelemetry-collector-contrib:0.96.0
     restart: unless-stopped
     command: [ "--config=/etc/otel-collector-config.yaml" ]
     volumes:
@@ -220,6 +225,19 @@ services:
       - "8889:8889" # Prometheus metrics
     depends_on:
       - jaeger
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.1'
+          memory: 128M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
 
   nlp-service:
@@ -335,9 +353,10 @@ services:
       - --node-id=0
       - --kafka-addr=0.0.0.0:9092
       - --advertise-kafka-addr=redpanda:9092
+      - --set=auto_create_topics_enabled=false
     ports:
-      - "9092:9092"
-      - "9644:9644"
+      - "127.0.0.1:9092:9092"
+      - "127.0.0.1:9644:9644"
     healthcheck:
       test: [ "CMD", "rpk", "cluster", "health" ]
       interval: 15s
@@ -354,7 +373,7 @@ services:
       SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: redpanda:9092
       SCHEMA_REGISTRY_LISTENERS: http://0.0.0.0:8081
     ports:
-      - "8081:8081"
+      - "127.0.0.1:8081:8081"
 
   neo4j:
     image: neo4j:5.24-community
@@ -366,8 +385,8 @@ services:
       NEO4J_server_memory_heap_initial__size: 512m
       NEO4J_server_memory_heap_max__size: 1g
     ports:
-      - "7474:7474"
-      - "7687:7687"
+      - "127.0.0.1:7474:7474"
+      - "127.0.0.1:7687:7687"
     volumes:
       - neo4j_data:/data
     healthcheck:
@@ -387,7 +406,7 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-regengine}
       POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=en_US.UTF-8"
     ports:
-      - "5433:5432"
+      - "127.0.0.1:5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./scripts/init-postgres.sh:/docker-entrypoint-initdb.d/init-postgres.sh
@@ -405,7 +424,7 @@ services:
     image: redis:7
     restart: unless-stopped
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     volumes:
       - redis_data:/data
     healthcheck:
@@ -425,7 +444,7 @@ services:
     image: provectuslabs/kafka-ui:v0.7.2
     restart: unless-stopped
     ports:
-      - "8080:8080"
+      - "127.0.0.1:8080:8080"
     environment:
       KAFKA_CLUSTERS_0_NAME: local
       KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: redpanda:9092
@@ -497,11 +516,19 @@ services:
     profiles: [monitoring]
     environment:
       # POSTGRES_PASSWORD must be set — no credential fallback (#545)
-      - DATA_SOURCE_NAME=postgresql://regengine:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}@postgres:5432/regengine?sslmode=disable
+      - DATA_SOURCE_NAME=postgresql://regengine:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}@postgres:5432/regengine?sslmode=prefer
     ports:
       - "9187:9187"
     depends_on:
       - postgres
+
+networks:
+  frontend:
+    driver: bridge
+  backend:
+    driver: bridge
+  data:
+    driver: bridge
 
 volumes:
   neo4j_data:

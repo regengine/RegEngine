@@ -10,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 # Production Hardening
 from shared.rate_limit import add_rate_limiting, limiter
 from shared.metrics_auth import require_metrics_key
-from shared.cors import get_cors_origins
+from shared.cors import get_allowed_origins
 
 logger = structlog.get_logger("scheduler-api")
 
@@ -42,7 +42,7 @@ app = FastAPI(
 # CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=get_cors_origins(),
+    allow_origins=get_allowed_origins(),
     allow_credentials=True,
     allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type"],
@@ -76,13 +76,12 @@ async def health():
     }
 
 
-@app.get("/status")
+@app.get("/status", dependencies=[Depends(require_metrics_key)])
 @limiter.limit("30/minute")
 async def status():
     """Get detailed scheduler status with circuit breaker states.
 
-    This endpoint is rate limited to 30 requests per minute as it
-    accesses potentially expensive status collection logic.
+    Requires METRICS_API_KEY authentication. Rate limited to 30 req/min.
     """
     if _scheduler_service is None:
         return {"status": "starting", "service": "scheduler"}

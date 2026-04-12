@@ -270,13 +270,13 @@ jobs:
             -f services/${{ matrix.service }}/Dockerfile .
 
       - name: Run Trivy
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@0.28.0
         with:
           image-ref: "regengine-${{ matrix.service }}:ci"
           format: "json"
           output: "trivy-${{ matrix.service }}.json"
           severity: "CRITICAL,HIGH"
-          exit-code: "0"
+          exit-code: "1"
 
       - name: Upload Trivy results
         if: always()

@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Tuple
 
 import boto3
+from botocore.config import Config
 
 logger = logging.getLogger("s3_loader")
 
@@ -35,7 +36,7 @@ def load_s3_artifact(s3_uri: str) -> str:
     Requires object storage credentials configured in environment.
     """
     bucket, key = parse_s3_uri(s3_uri)
-    s3 = boto3.client("s3")
+    s3 = boto3.client("s3", config=Config(connect_timeout=5, read_timeout=30, retries={"max_attempts": 2}))
     # Try presigned URL for uniform handling
     try:
         url = s3.generate_presigned_url(

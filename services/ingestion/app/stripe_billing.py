@@ -743,6 +743,7 @@ async def _process_stripe_webhook(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail="Invalid webhook payload") from exc
     except stripe.error.SignatureVerificationError as exc:
+        logger.warning("stripe_webhook_signature_invalid: %s", exc)
         raise HTTPException(status_code=401, detail="Invalid Stripe signature") from exc
 
     await _handle_stripe_event(event)

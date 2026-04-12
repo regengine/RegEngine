@@ -224,3 +224,110 @@ async def get_system_metrics(
         chain_valid=chain_valid,
         open_alerts=open_alert_count,
     )
+
+
+# ── JWT Key Rotation (sysadmin only) ────────────────────────────────
+
+def _require_sysadmin(current_user: UserModel = Depends(get_current_user)):
+    """Dependency that requires the authenticated user to be a sysadmin."""
+    if not current_user.is_sysadmin:
+        raise HTTPException(status_code=403, detail="Sysadmin access required")
+    return current_user
+
+
+@router.post(
+    "/jwt/rotate",
+    summary="Rotate JWT signing key",
+    description="Generate a new signing key. Old key remains valid for 7-day grace period.",
+    dependencies=[Depends(_require_sysadmin)],
+)
+async def rotate_jwt_key(current_user: UserModel = Depends(_require_sysadmin)):
+    """Rotate the JWT signing key (sysadmin only)."""
+    from shared.jwt_key_registry import get_key_registry
+    from app.auth_utils import _sync_keys_from_registry
+
+    try:
+        registry = await get_key_registry()
+    except Exception as exc:
+        logger.error("jwt_rotate_registry_unavailable", error=str(exc))
+        raise HTTPException(status_code=503, detail="Key registry unavailable")
+
+    new_key = await registry.rotate(rotated_by=str(current_user.id))
+
+    # Refresh the sync cache so new tokens use the new key immediately
+    signing = await registry.get_signing_key()
+    verifying = await registry.get_verification_keys()
+    _sync_keys_from_registry(signing, verifying)
+
+    return {
+        "status": "rotated",
+        "new_kid": new_key.kid,
+        "grace_period_days": 7,
+        "message": "New tokens will use the new key. Existing tokens remain valid for 7 days.",
+    }
+
+
+@router.get(
+    "/jwt/keys",
+    summary="List JWT signing keys",
+    description="List all JWT keys and their lifecycle status (sysadmin only).",
+    dependencies=[Depends(_require_sysadmin)],
+)
+async def list_jwt_keys(current_user: UserModel = Depends(_require_sysadmin)):
+    """List all JWT keys and their status (sysadmin only)."""
+    from shared.jwt_key_registry import get_key_registry
+
+    try:
+        registry = await get_key_registry()
+    except Exception as exc:
+        logger.error("jwt_keys_registry_unavailable", error=str(exc))
+        raise HTTPException(status_code=503, detail="Key registry unavailable")
+
+    keys = await registry.get_all_keys()
+    return {
+        "keys": [
+            {
+                "kid": k.kid,
+                "algorithm": k.algorithm,
+                "created_at": k.created_at,
+                "expires_at": k.expires_at,
+                "is_active": k.is_active,
+                "is_valid": k.is_valid,
+            }
+            for k in keys
+        ]
+    }
+
+
+@router.post(
+    "/jwt/revoke",
+    summary="Revoke a JWT token by jti",
+    description="Add a token's jti to the revocation blocklist. The token will be rejected on next verification.",
+    dependencies=[Depends(_require_sysadmin)],
+)
+async def revoke_jwt_token(
+    jti: str,
+    current_user: UserModel = Depends(_require_sysadmin),
+):
+    """Revoke a specific JWT token (sysadmin only)."""
+    from app.auth_utils import revoke_token
+
+    await revoke_token(jti)
+    return {"status": "revoked", "jti": jti}
+
+
+@router.post(
+    "/jwt/revoke-key",
+    summary="Revoke all tokens for a signing key",
+    description="Invalidate a signing key — all tokens signed with it become invalid immediately.",
+    dependencies=[Depends(_require_sysadmin)],
+)
+async def revoke_jwt_key(
+    kid: str,
+    current_user: UserModel = Depends(_require_sysadmin),
+):
+    """Revoke an entire signing key (sysadmin only)."""
+    from app.auth_utils import revoke_all_for_kid
+
+    await revoke_all_for_kid(kid)
+    return {"status": "revoked", "kid": kid}
