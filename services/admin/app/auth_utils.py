@@ -203,18 +203,37 @@ async def revoke_all_for_kid(kid: str) -> None:
 
     This works by marking the key as invalid in the key registry, which
     causes decode_access_token to reject any token with that kid.
+    If the revoked key was the only active key, a new one is auto-generated.
     """
     from shared.jwt_key_registry import get_key_registry
     registry = await get_key_registry()
-    key = await registry.get_key_by_kid(kid)
-    if key:
-        key.is_valid = False
-        await registry._save_keys(await registry.get_all_keys())
-        # Refresh sync cache
+    revoked = await registry.revoke_key(kid, revoked_by="admin-api")
+    if revoked:
+        # Refresh sync cache so this process picks up the change immediately
         signing = await registry.get_signing_key()
         verifying = await registry.get_verification_keys()
         _sync_keys_from_registry(signing, verifying)
         _logger.warning("jwt_kid_revoked: kid=%s", kid)
+    else:
+        _logger.warning("jwt_kid_revoke_not_found: kid=%s", kid)
+
+
+async def revoke_all_jwt_keys() -> int:
+    """Emergency: revoke ALL JWT keys and force re-authentication.
+
+    Nuclear option — every existing session becomes invalid.
+    A fresh signing key is auto-generated after revocation.
+    Returns count of keys revoked.
+    """
+    from shared.jwt_key_registry import get_key_registry
+    registry = await get_key_registry()
+    count = await registry.revoke_all_keys(revoked_by="admin-api-emergency")
+    # Refresh sync cache
+    signing = await registry.get_signing_key()
+    verifying = await registry.get_verification_keys()
+    _sync_keys_from_registry(signing, verifying)
+    _logger.warning("jwt_all_keys_revoked: count=%d", count)
+    return count
 
 
 def set_revocation_redis(redis_client) -> None:

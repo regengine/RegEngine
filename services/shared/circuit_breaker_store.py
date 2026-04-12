@@ -147,6 +147,8 @@ def get_store() -> CircuitStore:
             _global_store = RedisCircuitStore()
         except Exception as exc:
             logger.warning("redis_store_fallback_to_memory", error=str(exc))
+            from shared.redis_health import report_redis_fallback
+            report_redis_fallback("circuit_breaker", str(exc))
             _global_store = MemoryCircuitStore()
     else:
         _global_store = MemoryCircuitStore()
