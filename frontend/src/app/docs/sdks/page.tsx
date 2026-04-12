@@ -6,7 +6,17 @@ export const metadata: Metadata = {
   description: 'Official RegEngine client libraries for Python, Node.js, and Go, plus REST API usage guidance.',
 };
 import { ArrowLeft, Package, Mail, GitBranch, FileText } from 'lucide-react';
-import { T } from '@/lib/design-tokens';
+import { T as _T } from '@/lib/design-tokens';
+
+const T = {
+  ..._T,
+  heading: 'var(--re-text-primary)',
+  text: 'var(--re-text-secondary)',
+  textMuted: 'var(--re-text-muted)',
+  textDim: 'var(--re-text-muted)',
+  surface: 'var(--re-surface-card)',
+  border: 'var(--re-surface-border)',
+};
 
 export default function SDKsDocsPage() {
     return (
