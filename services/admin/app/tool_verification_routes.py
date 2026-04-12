@@ -20,6 +20,7 @@ from pydantic import BaseModel, EmailStr
 import redis.asyncio as aioredis
 
 from shared.blocked_email_domains import is_personal_email, extract_domain
+from shared.pii import mask_email
 from shared.rate_limit import limiter
 
 logger = structlog.get_logger("tool_verification")
@@ -199,11 +200,11 @@ async def verify_email(payload: VerifyEmailRequest, request: Request):
                 logger.error("resend_api_error", status=resp.status_code, body=resp.text)
                 raise HTTPException(status_code=500, detail="Failed to send verification email")
     else:
-        logger.warning("dev_mode_verification_code", email=email, code=code)
+        logger.warning("dev_mode_verification_code", email=mask_email(email), code=code)
 
     return VerifyEmailResponse(
         status="code_sent",
-        message=f"Verification code sent to {email}. Check your inbox.",
+        message="Verification code sent. Check your inbox.",
     )
 
 
@@ -223,7 +224,7 @@ async def confirm_code(payload: ConfirmCodeRequest, request: Request):
     try:
         _save_lead(email, domain, payload.tool_name)
     except Exception as exc:
-        logger.error("lead_save_failed", email=email, error=str(exc))
+        logger.error("lead_save_failed", email=mask_email(email), error=str(exc))
 
     # Sign a JWT for the cookie
     import jwt
@@ -239,7 +240,7 @@ async def confirm_code(payload: ConfirmCodeRequest, request: Request):
         algorithm="HS256",
     )
 
-    logger.info("tool_lead_verified", email=email, domain=domain, tool=payload.tool_name)
+    logger.info("tool_lead_verified", email=mask_email(email), domain=domain, tool=payload.tool_name)
     return ConfirmCodeResponse(status="verified", token=token)
 
 
