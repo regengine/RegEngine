@@ -9,6 +9,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
 import structlog
+from shared.pii import mask_email
 from pydantic import BaseModel, field_validator
 from sqlalchemy.orm import Session
 from sqlalchemy import func, select
@@ -44,13 +45,13 @@ def _send_invite_email(recipient_email: str, invite_link: str) -> None:
     """Send invite email via Resend if configured."""
     resend_api_key = os.getenv("RESEND_API_KEY")
     if not resend_api_key:
-        logger.warning("invite_email_skipped_missing_resend_api_key", email=recipient_email)
+        logger.warning("invite_email_skipped_missing_resend_api_key", email=mask_email(recipient_email))
         return
 
     try:
         import resend
     except ImportError:
-        logger.warning("invite_email_skipped_resend_not_installed", email=recipient_email)
+        logger.warning("invite_email_skipped_resend_not_installed", email=mask_email(recipient_email))
         return
 
     resend.api_key = resend_api_key
@@ -86,9 +87,9 @@ def _send_invite_email(recipient_email: str, invite_link: str) -> None:
         )
 
         response_id = response.get("id") if isinstance(response, dict) else None
-        logger.info("invite_email_sent", email=recipient_email, resend_id=response_id)
+        logger.info("invite_email_sent", email=mask_email(recipient_email), resend_id=response_id)
     except Exception as exc:  # pragma: no cover - external SDK/network behavior
-        logger.warning("invite_email_send_failed", email=recipient_email, error=str(exc))
+        logger.warning("invite_email_send_failed", email=mask_email(recipient_email), error=str(exc))
 
 # DTOs
 class InviteCreate(BaseModel):

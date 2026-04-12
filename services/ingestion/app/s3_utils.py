@@ -23,6 +23,9 @@ logger = structlog.get_logger("s3_utils")
 
 RAW_INGEST_BUCKET = "regengine-ingest-raw"
 
+# All uploads use AES-256 server-side encryption at rest.
+_SSE = {"ServerSideEncryption": "AES256"}
+
 
 def _client() -> BaseClient:
     settings = get_settings()
@@ -49,14 +52,14 @@ def put_json(bucket: str, key: str, payload: Any) -> str:
 
     try:
         body = json.dumps(payload, default=_json_serializer).encode("utf-8")
-        _client().put_object(Bucket=bucket, Key=key, Body=body, ContentType="application/json")
+        _client().put_object(Bucket=bucket, Key=key, Body=body, ContentType="application/json", **_SSE)
         return f"s3://{bucket}/{key}"
     except (ClientError, BotoCoreError) as exc:
         if isinstance(exc, ClientError) and exc.response["Error"]["Code"] == "NoSuchBucket":
             # Auto-create bucket for dev/demo robustness
             try:
                 _client().create_bucket(Bucket=bucket)
-                _client().put_object(Bucket=bucket, Key=key, Body=body, ContentType="application/json")
+                _client().put_object(Bucket=bucket, Key=key, Body=body, ContentType="application/json", **_SSE)
                 return f"s3://{bucket}/{key}"
             except Exception as create_exc:
                 logger.error("s3_create_bucket_failed", bucket=bucket, error=str(create_exc))
@@ -74,14 +77,14 @@ def put_bytes(
     """Upload raw bytes to S3 and return the object URI."""
 
     try:
-        _client().put_object(Bucket=bucket, Key=key, Body=content, ContentType=content_type)
+        _client().put_object(Bucket=bucket, Key=key, Body=content, ContentType=content_type, **_SSE)
         return f"s3://{bucket}/{key}"
     except (ClientError, BotoCoreError) as exc:
         if isinstance(exc, ClientError) and exc.response["Error"]["Code"] == "NoSuchBucket":
              # Auto-create bucket for dev/demo robustness
             try:
                 _client().create_bucket(Bucket=bucket)
-                _client().put_object(Bucket=bucket, Key=key, Body=content, ContentType=content_type)
+                _client().put_object(Bucket=bucket, Key=key, Body=content, ContentType=content_type, **_SSE)
                 return f"s3://{bucket}/{key}"
             except Exception as create_exc:
                 logger.error("s3_create_bucket_failed", bucket=bucket, error=str(create_exc))
@@ -167,6 +170,7 @@ def upload_raw_document(
             Body=content,
             ContentType=content_type,
             Metadata=s3_metadata,
+            **_SSE,
         )
         logger.info(
             "raw_document_uploaded",

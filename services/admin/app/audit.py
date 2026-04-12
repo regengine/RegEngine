@@ -78,6 +78,9 @@ class AuditLogger:
         event_category: str,
         severity: str = "info",
         actor_id: Optional[UUID] = None,
+        # actor_email is stored unmasked intentionally — FSMA 204 (21 CFR Part 1,
+        # Subpart S) requires traceability of record actions to specific individuals.
+        # This constitutes a legitimate interest basis under GDPR Art. 6(1)(f).
         actor_email: Optional[str] = None,
         actor_ip: Optional[str] = None,
         actor_ua: Optional[str] = None,

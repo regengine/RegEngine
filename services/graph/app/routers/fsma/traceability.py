@@ -45,7 +45,36 @@ router = APIRouter(tags=["Traceability"])
 logger = structlog.get_logger("fsma-traceability")
 
 
-@router.get("/trace/forward/{tlc}")
+@router.get(
+    "/trace/forward/{tlc}",
+    responses={
+        200: {
+            "description": "Forward trace result",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "lot_id": "LOT-2026-04-A1",
+                        "direction": "forward",
+                        "facilities": [
+                            {"gln": "0614141000012", "name": "Distribution Center Alpha", "type": "distribution_center"},
+                            {"gln": "0614141000029", "name": "Metro Fresh Market", "type": "retail"},
+                        ],
+                        "events": [
+                            {"cte_type": "shipping", "location": "Distribution Center Alpha", "timestamp": "2026-04-12T16:00:00Z"},
+                            {"cte_type": "receiving", "location": "Metro Fresh Market", "timestamp": "2026-04-13T08:30:00Z"},
+                        ],
+                        "downstream_lots": ["LOT-2026-04-B2"],
+                        "total_quantity": 500,
+                        "query_time_ms": 142,
+                        "hop_count": 2,
+                        "time_violations": [],
+                        "risk_flags": [],
+                    }
+                }
+            },
+        }
+    },
+)
 @limiter.limit("10/minute")
 async def trace_forward_endpoint(
     request: Request,
@@ -111,7 +140,35 @@ async def trace_forward_endpoint(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.get("/trace/backward/{tlc}")
+@router.get(
+    "/trace/backward/{tlc}",
+    responses={
+        200: {
+            "description": "Backward trace result",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "lot_id": "LOT-2026-04-A1",
+                        "direction": "backward",
+                        "facilities": [
+                            {"gln": "0614141000029", "name": "Port of Long Beach", "type": "first_receiver"},
+                            {"gln": "0614141000036", "name": "Salinas Valley Farm", "type": "grower"},
+                        ],
+                        "events": [
+                            {"cte_type": "receiving", "location": "Distribution Center Alpha", "timestamp": "2026-04-12T14:30:00Z"},
+                            {"cte_type": "shipping", "location": "Port of Long Beach", "timestamp": "2026-04-11T08:00:00Z"},
+                            {"cte_type": "harvesting", "location": "Salinas Valley Farm", "timestamp": "2026-04-10T06:00:00Z"},
+                        ],
+                        "source_lots": [],
+                        "total_quantity": 500,
+                        "query_time_ms": 98,
+                        "hop_count": 3,
+                    }
+                }
+            },
+        }
+    },
+)
 @limiter.limit("10/minute")
 async def trace_backward_endpoint(
     request: Request,
@@ -358,6 +415,33 @@ async def search_traceability_events(
 # ============================================================================
 
 class TraceabilityEventRequest(BaseModel):
+    model_config = {
+        "json_schema_extra": {
+            "examples": [
+                {
+                    "event_type": "receiving",
+                    "event_date": "2026-04-12",
+                    "tlc": "LOT-2026-04-A1",
+                    "location_identifier": "0614141000012",
+                    "quantity": 500,
+                    "uom": "cases",
+                    "product_description": "Organic romaine lettuce, 24ct",
+                    "gtin": "00614141000012",
+                },
+                {
+                    "event_type": "shipping",
+                    "event_date": "2026-04-12",
+                    "tlc": "LOT-2026-04-A1",
+                    "location_identifier": "0614141000029",
+                    "quantity": 200,
+                    "uom": "cases",
+                    "product_description": "Organic romaine lettuce, 24ct",
+                    "gtin": "00614141000012",
+                },
+            ]
+        }
+    }
+
     event_type: CTEType
     event_date: str
     tlc: str

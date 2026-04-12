@@ -26,6 +26,21 @@ router = APIRouter()
 
 
 class BulkUploadParseResponse(BaseModel):
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "session_id": "sess_a1b2c3d4e5f6",
+                "status": "parsed",
+                "detected_format": "csv",
+                "facilities": 3,
+                "ftl_scopes": 2,
+                "tlcs": 15,
+                "events": 42,
+                "warnings": ["Row 12: quantity field empty, defaulted to 0"],
+            }
+        }
+    }
+
     session_id: str
     status: str
     detected_format: str

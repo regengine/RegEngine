@@ -18,6 +18,7 @@ from app.password_policy import validate_password, PasswordPolicyError
 from app.session_store import RedisSessionStore, SessionData
 from shared.supabase_client import get_supabase
 from shared.funnel_events import emit_funnel_event
+from shared.pii import mask_email
 from shared.rate_limit import limiter
 from shared.pagination import PaginationParams
 
@@ -251,6 +252,12 @@ async def login(
             resource_id=str(session_data.id),
         )
 
+    # Track last login timestamp (best-effort — never blocks login)
+    try:
+        user.last_login_at = datetime.now(timezone.utc)
+    except Exception as e:
+        logger.warning("last_login_at_update_failed", user_id=str(user.id), error=str(e))
+
     db.commit()
 
     logger.info(
@@ -309,7 +316,7 @@ async def signup(
             if supabase_user and getattr(supabase_user, "id", None):
                 supabase_user_id = UUID(str(supabase_user.id))
         except (OSError, TimeoutError, ConnectionError, ValueError, RuntimeError, AttributeError) as exc:  # pragma: no cover - external dependency behavior
-            logger.warning("supabase_signup_provisioning_failed", email=normalized_email, error=str(exc))
+            logger.warning("supabase_signup_provisioning_failed", email=mask_email(normalized_email), error=str(exc))
 
     new_user = UserModel(
         id=supabase_user_id or uuid.uuid4(),
@@ -333,7 +340,7 @@ async def signup(
     }
     if payload.partner_tier:
         tenant_settings["partner_tier"] = payload.partner_tier
-        logger.info("design_partner_signup", email=normalized_email, tier=payload.partner_tier)
+        logger.info("design_partner_signup", email=mask_email(normalized_email), tier=payload.partner_tier)
 
     new_tenant = TenantModel(
         name=tenant_name,
@@ -795,7 +802,7 @@ async def reset_password(
     ).scalar_one_or_none()
 
     if not user:
-        logger.warning("reset_password_user_not_found", email=normalized_email)
+        logger.warning("reset_password_user_not_found", email=mask_email(normalized_email))
         raise HTTPException(status_code=404, detail="User not found")
 
     if user.status != "active":
