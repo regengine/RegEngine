@@ -150,12 +150,12 @@ jobs:
         run: |
           export PYTHONPATH=$(pwd):$PYTHONPATH
           cd services/${{ matrix.service }}
-          # Per-service coverage thresholds — ratcheted up 2026-04-01.
+          # Per-service coverage thresholds — ratcheted up 2026-04-12.
           # Strategy: set floor at (actual - 2%). Bump after each test cycle.
           THRESHOLD=50
           case "${{ matrix.service }}" in
-            compliance) THRESHOLD=18 ;;  # was 15; actual ~18%
-            scheduler)  THRESHOLD=24 ;;  # was 22; actual ~24%
+            compliance) THRESHOLD=30 ;;  # was 18; bumped with new validation/checklist/spreadsheet tests
+            scheduler)  THRESHOLD=35 ;;  # was 24; bumped with new state/kafka/notification tests
             admin)      THRESHOLD=50 ;;
             graph)      THRESHOLD=50 ;;
             ingestion)  THRESHOLD=42 ;;  # was 40; actual ~42%
