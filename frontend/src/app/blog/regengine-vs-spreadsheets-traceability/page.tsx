@@ -82,7 +82,7 @@ export default function RegEngineVsSpreadsheets() {
               <div className="p-6 rounded-lg bg-[var(--re-surface-secondary)] border border-[var(--re-surface-border)]">
                 <h4 className="font-semibold text-[var(--re-text-primary)] mb-3 flex items-center gap-2">
                   <CheckCircle2 className="w-5 h-5 text-[var(--re-brand)]" />
-                  RegEngine Solution
+                  RegEngine Platform
                 </h4>
                 <ul className="space-y-2 text-[var(--re-text-secondary)] text-sm">
                   <li>• Centralized database with single source of truth</li>
@@ -124,7 +124,7 @@ export default function RegEngineVsSpreadsheets() {
               <div className="p-6 rounded-lg bg-[var(--re-surface-secondary)] border border-[var(--re-surface-border)]">
                 <h4 className="font-semibold text-[var(--re-text-primary)] mb-3 flex items-center gap-2">
                   <CheckCircle2 className="w-5 h-5 text-[var(--re-brand)]" />
-                  RegEngine Solution
+                  RegEngine Platform
                 </h4>
                 <ul className="space-y-2 text-[var(--re-text-secondary)] text-sm">
                   <li>• Automate data capture from your ERP, WMS, and other systems</li>
@@ -167,7 +167,7 @@ export default function RegEngineVsSpreadsheets() {
               <div className="p-6 rounded-lg bg-[var(--re-surface-secondary)] border border-[var(--re-surface-border)]">
                 <h4 className="font-semibold text-[var(--re-text-primary)] mb-3 flex items-center gap-2">
                   <CheckCircle2 className="w-5 h-5 text-[var(--re-brand)]" />
-                  RegEngine Solution
+                  RegEngine Platform
                 </h4>
                 <ul className="space-y-2 text-[var(--re-text-secondary)] text-sm">
                   <li>• One-click query: search by product name, date range, lot code, or customer</li>
@@ -210,7 +210,7 @@ export default function RegEngineVsSpreadsheets() {
               <div className="p-6 rounded-lg bg-[var(--re-surface-secondary)] border border-[var(--re-surface-border)]">
                 <h4 className="font-semibold text-[var(--re-text-primary)] mb-3 flex items-center gap-2">
                   <CheckCircle2 className="w-5 h-5 text-[var(--re-brand)]" />
-                  RegEngine Solution
+                  RegEngine Platform
                 </h4>
                 <ul className="space-y-2 text-[var(--re-text-secondary)] text-sm">
                   <li>• Single source of truth: one database, always up to date</li>
@@ -249,7 +249,7 @@ export default function RegEngineVsSpreadsheets() {
               <div className="p-6 rounded-lg bg-[var(--re-surface-secondary)] border border-[var(--re-surface-border)]">
                 <h4 className="font-semibold text-[var(--re-text-primary)] mb-3 flex items-center gap-2">
                   <CheckCircle2 className="w-5 h-5 text-[var(--re-brand)]" />
-                  RegEngine Solution
+                  RegEngine Platform
                 </h4>
                 <ul className="space-y-2 text-[var(--re-text-secondary)] text-sm">
                   <li>• Supplier portal: suppliers log in and submit traceability data directly</li>

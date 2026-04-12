@@ -41,6 +41,7 @@ import {
   useLabelsHealth,
 } from '@/hooks/use-api';
 
+import { RegEngineWordmark } from '@/components/layout/regengine-wordmark';
 import { TenantSwitcher } from './tenant-switcher';
 import { MobileNav } from './mobile-nav';
 
@@ -96,15 +97,13 @@ export function Header() {
         <div className="flex items-center gap-2 md:hidden">
           <MobileNav />
           <Link href="/" className="flex items-center space-x-2">
-            <Activity className="h-6 w-6 text-primary" />
-            <span className="text-xl font-bold">RegEngine</span>
+            <RegEngineWordmark size="md" />
             <Badge variant="outline" className="text-[9px] font-bold uppercase tracking-widest text-re-brand bg-re-brand-muted border-re-brand/20 px-1.5 py-0 h-4 rounded-full">FOUNDING COHORT</Badge>
           </Link>
         </div>
 
         <Link href="/" className="hidden md:flex items-center space-x-2 smooth-transition hover:scale-105">
-          <Activity className="h-6 w-6 text-primary" />
-          <span className="text-xl font-bold">RegEngine</span>
+          <RegEngineWordmark size="md" />
           <Badge variant="outline" className="text-[9px] font-bold uppercase tracking-widest text-re-brand bg-re-brand-muted border-re-brand/20 px-1.5 py-0 h-4 rounded-full">FOUNDING COHORT</Badge>
         </Link>
 

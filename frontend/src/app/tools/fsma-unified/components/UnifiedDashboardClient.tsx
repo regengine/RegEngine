@@ -21,7 +21,7 @@ import { LeadGate } from "@/components/lead-gate/LeadGate";
 export function UnifiedDashboardClient() {
     return (
         <FreeToolPageShell
-            title="AI-Powered Cold Chain Monitor"
+            title="Automated Cold Chain Monitor"
             subtitle="Detect temperature excursions and supply chain anomalies before they become recalls."
             relatedToolIds={['knowledge-graph', 'ftl-checker', 'roi-calculator', 'recall-readiness']}
         >

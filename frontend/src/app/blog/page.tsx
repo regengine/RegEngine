@@ -55,7 +55,7 @@ const BLOG_POSTS = [
   },
   {
     slug: 'food-traceability-software',
-    title: 'Food Traceability Software: How to Choose the Right Solution',
+    title: 'Food Traceability Software: How to Choose the Right Platform',
     excerpt: 'Evaluate food traceability platforms by capability, integration, compliance coverage, and total cost of ownership.',
     icon: Database,
     date: 'April 2026',

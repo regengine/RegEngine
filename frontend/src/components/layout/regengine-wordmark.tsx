@@ -58,7 +58,7 @@ export function RegEngineWordmark({
                         ...textStyle,
                     }}
                 >
-                    RegEngine
+                    Reg<span style={{ color: 'var(--re-brand)' }}>Engine</span>
                 </span>
             ) : null}
         </span>

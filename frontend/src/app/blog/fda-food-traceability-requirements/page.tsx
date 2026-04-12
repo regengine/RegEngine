@@ -246,7 +246,7 @@ export default function FDAFoodTraceabilityRequirements() {
               </li>
             </ul>
             <p className="text-[1.05rem] text-[var(--re-text-secondary)] leading-relaxed">
-              The FDA prefers data in EPCIS 2.0 format (Electronic Product Code Information Services), a standardized data interchange format. This ensures that data can flow seamlessly between suppliers, your company, and the FDA.
+              The FDA prefers data in EPCIS 2.0 format (Electronic Product Code Information Services), a standardized data interchange format. This ensures that data can flow automatically between suppliers, your company, and the FDA.
             </p>
           </div>
 

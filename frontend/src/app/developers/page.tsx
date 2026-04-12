@@ -130,7 +130,7 @@ export default function DevelopersPage() {
             <section className="relative z-[2] max-w-[900px] mx-auto px-4 sm:px-6 pb-12 sm:pb-16">
                 <h2 className="font-display text-2xl font-bold text-re-text-primary mb-3 text-center">API capabilities</h2>
                 <p className="text-sm text-re-text-muted text-center mb-10 max-w-lg mx-auto">
-                    Six core services, one unified API. Everything you need for end-to-end FSMA 204 compliance.
+                    Six core services, one unified API. Everything you need for complete FSMA 204 compliance.
                 </p>
                 <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-5">
                     {capabilities.map((cap) => (

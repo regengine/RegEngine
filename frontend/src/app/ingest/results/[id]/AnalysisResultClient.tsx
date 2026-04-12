@@ -50,7 +50,7 @@ export default function AnalysisResultClient() {
             time: "+1.5s"
         },
         {
-            title: "Blockchain Anchor",
+            title: "Hash-Chain Anchor",
             icon: Shield,
             status: "pending",
             hash: "Waiting...",

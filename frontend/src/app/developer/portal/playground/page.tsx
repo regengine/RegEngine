@@ -211,7 +211,7 @@ const ENDPOINTS: Endpoint[] = [
     id: 'chain-verify',
     path: '/api/v1/chain/verify-all',
     method: 'POST',
-    description: 'Verify blockchain chain integrity',
+    description: 'Verify hash-chain integrity',
     proxyPath: '/api/ingestion/api/v1/chain/verify-all',
     sampleBody: {},
   },

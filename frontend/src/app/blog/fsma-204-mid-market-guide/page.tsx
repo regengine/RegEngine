@@ -77,7 +77,7 @@ export default function FSMA204MidMarketGuide() {
                 },
                 {
                   name: 'Cost Constraints',
-                  desc: 'Enterprise platforms cost $100K+ annually. You need a solution that doesn\'t break your budget.',
+                  desc: 'Enterprise platforms cost $100K+ annually. You need a platform that doesn\'t break your budget.',
                 },
                 {
                   name: 'Supply Chain Collaboration',
@@ -206,7 +206,7 @@ export default function FSMA204MidMarketGuide() {
                   <li>• Integrate with all major suppliers and customers</li>
                   <li>• Refine processes based on pilot learnings</li>
                   <li>• Conduct enterprise-wide training</li>
-                  <li>• Perform end-to-end compliance validation</li>
+                  <li>• Perform full-chain compliance validation</li>
                 </ul>
               </div>
 

@@ -100,7 +100,7 @@ export default function FSMA204ComplianceChecklist() {
               {[
                 { task: 'Define your CTEs and KDEs', detail: 'For each product line or business unit, document exactly which CTEs apply and what KDEs you need to capture', done: false },
                 { task: 'Standardize your Traceability Lot Code (TLC)', detail: 'Create a consistent format for TLCs across your business. Document how to generate and track them', done: false },
-                { task: 'Choose a platform or solution', detail: 'Select a FSMA 204 platform (RegEngine, others) or decide to build in-house. Secure executive approval and budget', done: false },
+                { task: 'Choose a compliance platform', detail: 'Select a FSMA 204 platform (RegEngine, others) or decide to build in-house. Secure executive approval and budget', done: false },
                 { task: 'Draft a supplier/customer data template', detail: 'Create a simple form or format for suppliers to submit traceability data to you. Test with 2-3 key suppliers', done: false },
                 { task: 'Plan your 24-hour response process', detail: 'Document how you\'ll retrieve and report traceability data to the FDA within 24 hours. Who does what? What systems involved?', done: false },
                 { task: 'Get IT and Operations buy-in', detail: 'Brief your IT and Operations teams on what\'s coming. Identify integration points and resource needs', done: false },
