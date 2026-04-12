@@ -89,6 +89,9 @@ class _RedisBucket:
                     fallback="in_memory",
                 )
                 self._fallback_logged = True
+            # Alert via Sentry (deduplicated)
+            from shared.redis_health import report_redis_fallback
+            report_redis_fallback("rate_limiter", str(exc))
             return self._fallback_bucket.is_allowed(key, limit, window)
 
 

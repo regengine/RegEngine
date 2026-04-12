@@ -89,7 +89,7 @@ export function MobileMenu({ user, showLoggedIn, pathname, mobileOpen, setMobile
 
                 {/* Primary Nav Links */}
                 <div style={{ padding: "8px 12px" }}>
-                    {(user ? [
+                    {(showLoggedIn ? [
                         { label: 'Dashboard', href: '/dashboard' },
                         { label: 'Heartbeat', href: '/dashboard/heartbeat' },
                         { label: 'Compliance', href: '/dashboard/compliance' },

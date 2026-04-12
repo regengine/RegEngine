@@ -1,11 +1,4 @@
 import type { Metadata } from 'next';
-import Link from 'next/link';
-import {
-    Check, X, Zap, Rocket, Crown, ArrowRight, HelpCircle, Lock, ShieldCheck, KeyRound,
-} from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { PricingCheckoutButton } from '@/components/billing/PricingCheckoutButton';
 import { PricingPageClient } from '@/components/pricing/PricingPageClient';
 
 export const metadata: Metadata = {
@@ -70,7 +63,7 @@ const PRICING_TIERS = [
     {
         id: 'base',
         name: 'Base',
-        Icon: Zap,
+        icon: 'zap' as const,
         description: '1 facility, getting started',
         gaMonthly: 999,
         gaAnnual: 849,
@@ -92,7 +85,7 @@ const PRICING_TIERS = [
     {
         id: 'standard',
         name: 'Standard',
-        Icon: Rocket,
+        icon: 'rocket' as const,
         description: '2–3 facilities, scaling up',
         gaMonthly: 1299,
         gaAnnual: 1099,
@@ -113,7 +106,7 @@ const PRICING_TIERS = [
     {
         id: 'premium',
         name: 'Premium',
-        Icon: Crown,
+        icon: 'crown' as const,
         description: '4+ facilities, full coverage',
         gaMonthly: 1499,
         gaAnnual: 1275,

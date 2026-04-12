@@ -427,8 +427,89 @@ async def root():
 # ── Health check ─────────────────────────────────────────────────
 @app.get("/health", tags=["system"])
 async def health():
+    """Lightweight liveness probe — always returns 200 if the process is up."""
     return {"status": "healthy", "service": "regengine"}
+
 
 @app.get("/readiness", tags=["system"])
 async def readiness():
-    return {"status": "ready", "service": "regengine"}
+    """Deep readiness probe — verifies critical dependencies.
+
+    Returns 200 if all dependencies are reachable, 503 otherwise.
+    Use this for load balancer health checks so traffic isn't routed
+    to instances that can't actually serve requests.
+    """
+    import asyncio
+    from fastapi.responses import JSONResponse
+
+    checks: dict[str, dict] = {}
+
+    # --- PostgreSQL ---
+    try:
+        from sqlalchemy import text, create_engine
+        db_url = os.getenv("DATABASE_URL")
+        if db_url:
+            engine = create_engine(db_url, pool_pre_ping=True)
+            with engine.connect() as conn:
+                conn.execute(text("SELECT 1"))
+            engine.dispose()
+            checks["postgres"] = {"status": "ok"}
+        else:
+            checks["postgres"] = {"status": "not_configured"}
+    except Exception as exc:
+        checks["postgres"] = {"status": "error", "error": str(exc)[:200]}
+
+    # --- Redis ---
+    try:
+        import redis as _redis
+        redis_url = os.getenv("REDIS_URL")
+        if redis_url:
+            r = _redis.from_url(redis_url, socket_connect_timeout=2)
+            r.ping()
+            r.close()
+            checks["redis"] = {"status": "ok"}
+        else:
+            checks["redis"] = {"status": "not_configured"}
+    except Exception as exc:
+        checks["redis"] = {"status": "error", "error": str(exc)[:200]}
+
+    # --- Neo4j ---
+    try:
+        from neo4j import GraphDatabase
+        neo4j_uri = os.getenv("NEO4J_URI")
+        if neo4j_uri:
+            driver = GraphDatabase.driver(
+                neo4j_uri,
+                auth=(
+                    os.getenv("NEO4J_USER", "neo4j"),
+                    os.getenv("NEO4J_PASSWORD", ""),
+                ),
+            )
+            driver.verify_connectivity()
+            driver.close()
+            checks["neo4j"] = {"status": "ok"}
+        else:
+            checks["neo4j"] = {"status": "not_configured"}
+    except Exception as exc:
+        checks["neo4j"] = {"status": "error", "error": str(exc)[:200]}
+
+    # --- Determine overall status ---
+    # Postgres is required; Redis and Neo4j are degraded but not fatal
+    pg_ok = checks.get("postgres", {}).get("status") in ("ok", "not_configured")
+    all_ok = all(c.get("status") != "error" for c in checks.values())
+
+    if not pg_ok:
+        return JSONResponse(
+            status_code=503,
+            content={
+                "status": "not_ready",
+                "service": "regengine",
+                "checks": checks,
+            },
+        )
+
+    return {
+        "status": "ready" if all_ok else "degraded",
+        "service": "regengine",
+        "checks": checks,
+    }

@@ -6,7 +6,17 @@ export const metadata: Metadata = {
   description: 'Build FDA-compliant traceability systems with RegEngine APIs. CTEs, KDEs, FDA Request Mode, supply chain tracing, and cryptographic verification.',
 };
 import { ArrowLeft, Utensils, CheckCircle, Clock, FileText, Zap, Shield, AlertTriangle, ExternalLink } from 'lucide-react';
-import { T } from '@/lib/design-tokens';
+import { T as _T } from '@/lib/design-tokens';
+
+const T = {
+  ..._T,
+  heading: 'var(--re-text-primary)',
+  text: 'var(--re-text-secondary)',
+  textMuted: 'var(--re-text-muted)',
+  textDim: 'var(--re-text-muted)',
+  surface: 'var(--re-surface-card)',
+  border: 'var(--re-surface-border)',
+};
 
 export default function FSMA204GuidePage() {
     return (
@@ -204,7 +214,7 @@ export default function FSMA204GuidePage() {
 
                     {/* Response */}
                     <div style={{
-                        background: 'rgba(0,0,0,0.4)',
+                        background: 'var(--re-surface-elevated)',
                         borderRadius: '8px',
                         overflow: 'hidden',
                         border: `1px solid ${T.border}`,
@@ -339,7 +349,7 @@ export default function FSMA204GuidePage() {
                     </p>
 
                     <div style={{
-                        background: 'rgba(0,0,0,0.4)',
+                        background: 'var(--re-surface-elevated)',
                         padding: '16px 20px',
                         borderRadius: '8px',
                         border: `1px solid ${T.border}`,

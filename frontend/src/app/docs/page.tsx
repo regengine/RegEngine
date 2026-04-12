@@ -20,7 +20,19 @@ import {
   Package,
   FileText,
 } from 'lucide-react';
-import { T } from '@/lib/design-tokens';
+import { T as _T } from '@/lib/design-tokens';
+
+// Wrap design tokens to use theme-aware CSS variables for text/heading colors,
+// while keeping accent/border tokens that work across themes.
+const T = {
+  ..._T,
+  heading: 'var(--re-text-primary)',
+  text: 'var(--re-text-secondary)',
+  textMuted: 'var(--re-text-muted)',
+  textDim: 'var(--re-text-muted)',
+  surface: 'var(--re-surface-card)',
+  border: 'var(--re-surface-border)',
+};
 
 export const metadata: Metadata = {
   title: 'API Documentation | RegEngine',
@@ -282,7 +294,7 @@ export default function DocsHomePage() {
               <code
                 className="block text-sm px-4 py-2 rounded-md"
                 style={{
-                  background: 'rgba(0,0,0,0.4)',
+                  background: 'var(--re-surface-elevated)',
                   border: `1px solid ${T.border}`,
                   color: T.accent,
                   fontFamily: T.fontMono,
@@ -298,7 +310,7 @@ export default function DocsHomePage() {
               <code
                 className="block text-sm px-4 py-2 rounded-md"
                 style={{
-                  background: 'rgba(0,0,0,0.4)',
+                  background: 'var(--re-surface-elevated)',
                   border: `1px solid ${T.border}`,
                   color: T.text,
                   fontFamily: T.fontMono,
@@ -379,14 +391,14 @@ export default function DocsHomePage() {
               >
                 <div
                   className="flex items-center justify-between px-4 py-2"
-                  style={{ background: 'rgba(255,255,255,0.03)', borderBottom: `1px solid ${T.border}` }}
+                  style={{ background: 'var(--re-surface-elevated)', borderBottom: `1px solid ${T.border}` }}
                 >
                   <span className="font-mono text-xs" style={{ color: T.textMuted }}>{tab.label}</span>
                   <span className="font-mono text-[10px] uppercase tracking-wide" style={{ color: T.accent }}>{tab.lang}</span>
                 </div>
                 <pre
                   className="m-0 px-5 py-4 overflow-x-auto text-[13px] leading-relaxed"
-                  style={{ background: 'rgba(0,0,0,0.5)', color: T.text }}
+                  style={{ background: 'var(--re-surface-elevated)', color: T.text }}
                 >
                   <code>{tab.code}</code>
                 </pre>
@@ -406,7 +418,7 @@ export default function DocsHomePage() {
             </div>
             <pre
               className="m-0 px-5 py-4 overflow-x-auto text-[13px] leading-relaxed"
-              style={{ background: 'rgba(0,0,0,0.4)', color: T.textMuted }}
+              style={{ background: 'var(--re-surface-elevated)', color: T.textMuted }}
             >
               <code>{responseSample}</code>
             </pre>
@@ -498,7 +510,7 @@ export default function DocsHomePage() {
           <div className="flex items-center gap-4">
             <code
               className="px-4 py-2 rounded-md text-[13px]"
-              style={{ background: 'rgba(255,255,255,0.03)', color: T.textMuted, fontFamily: T.fontMono }}
+              style={{ background: 'var(--re-surface-elevated)', color: T.textMuted, fontFamily: T.fontMono }}
             >
               python verify_chain.py --audit
             </code>

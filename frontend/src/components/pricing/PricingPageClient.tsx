@@ -10,10 +10,16 @@ import { Badge } from '@/components/ui/badge';
 import { PricingCheckoutButton } from '@/components/billing/PricingCheckoutButton';
 import { analytics } from '@/lib/analytics';
 
+const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
+    zap: Zap,
+    rocket: Rocket,
+    crown: Crown,
+};
+
 interface PricingTier {
     id: string;
     name: string;
-    Icon: any;
+    icon: string;
     description: string;
     gaMonthly: number;
     gaAnnual: number;
@@ -76,7 +82,7 @@ export function PricingPageClient({ pricingTiers }: { pricingTiers: PricingTier[
             <section className="relative z-[2] max-w-[1280px] mx-auto px-4 sm:px-6 pb-10 sm:pb-[60px]">
                 <div className="grid grid-cols-[repeat(auto-fit,minmax(260px,1fr))] gap-5">
                     {pricingTiers.map((tier) => {
-                        const Icon = tier.Icon;
+                        const Icon = ICON_MAP[tier.icon] ?? Zap;
                         return (
                             <div
                                 key={tier.id}

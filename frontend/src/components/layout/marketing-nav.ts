@@ -22,18 +22,17 @@ export const MARKETING_FREE_TOOLS: MarketingToolLink[] = [
     { emoji: "🥬", label: "FTL Checker", desc: "Verify FDA Food Traceability List coverage", href: "/tools/ftl-checker" },
     { emoji: "🛡️", label: "Recall Readiness", desc: "Assess your recall response capability", href: "/tools/recall-readiness" },
     { emoji: "📊", label: "ROI Calculator", desc: "Calculate your compliance cost savings", href: "/tools/roi-calculator" },
-    { emoji: "🔧", label: "All Free Tools", desc: "Browse the full compliance toolkit", href: "/tools" },
 ];
 
 export const MARKETING_FOOTER_PRODUCT_LINKS: MarketingNavLink[] = [
     ...MARKETING_PRIMARY_NAV,
     { label: "Case Studies", href: "/case-studies" },
-    { label: "Integrations", href: "/integrations" },
+    { label: "Integrations", href: "/docs/api" },
     { label: "Get Started", href: "/onboarding" },
 ];
 
 export const MARKETING_FOOTER_DEVELOPER_LINKS: MarketingNavLink[] = [
-    { label: "Developer Portal", href: "/developers" },
+    { label: "Developer Portal", href: "/developer/portal" },
     { label: "API Docs", href: "/docs/api" },
     { label: "Quickstart", href: "/docs/quickstart" },
     { label: "SDKs", href: "/docs/sdks" },
