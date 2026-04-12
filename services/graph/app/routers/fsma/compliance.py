@@ -889,6 +889,23 @@ def get_plan_template(
 # ============================================================================
 
 class ComplianceScoreResponse(BaseModel):
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "tenant_id": "550e8400-e29b-41d4-a716-446655440000",
+                "overall_score": 87.5,
+                "obligation_coverage": 92.0,
+                "control_effectiveness": 85.0,
+                "evidence_freshness": 88.0,
+                "total_obligations": 28,
+                "controls_mapped": 24,
+                "evidence_items": 156,
+                "is_demo": False,
+                "generated_at": "2026-04-12T14:30:00Z",
+            }
+        }
+    }
+
     tenant_id: str
     overall_score: float
     obligation_coverage: float
