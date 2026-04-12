@@ -34,8 +34,7 @@ export function DesktopNav({
 
     return (
         <div className="marketing-desktop-nav" style={{ display: "flex", alignItems: "center", gap: "28px" }}>
-            {(user ? [
-                { label: 'Dashboard', href: '/dashboard' },
+            {(showLoggedIn ? [
                 { label: 'Compliance', href: '/dashboard/compliance' },
                 { label: 'Suppliers', href: '/dashboard/suppliers' },
                 { label: 'Products', href: '/dashboard/products' },

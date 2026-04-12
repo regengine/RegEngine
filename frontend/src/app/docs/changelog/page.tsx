@@ -1,6 +1,16 @@
 import Link from 'next/link';
 import { ArrowLeft, FileText } from 'lucide-react';
-import { T } from '@/lib/design-tokens';
+import { T as _T } from '@/lib/design-tokens';
+
+const T = {
+  ..._T,
+  heading: 'var(--re-text-primary)',
+  text: 'var(--re-text-secondary)',
+  textMuted: 'var(--re-text-muted)',
+  textDim: 'var(--re-text-muted)',
+  surface: 'var(--re-surface-card)',
+  border: 'var(--re-surface-border)',
+};
 
 export default function ChangelogPage() {
     return (

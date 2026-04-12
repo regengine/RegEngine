@@ -6,7 +6,17 @@ export const metadata: Metadata = {
   description: 'HTTP status codes and API-specific error responses for the RegEngine API, with fixes and retry strategies.',
 };
 import { ArrowLeft, AlertCircle, XCircle, AlertTriangle, Info } from 'lucide-react';
-import { T } from '@/lib/design-tokens';
+import { T as _T } from '@/lib/design-tokens';
+
+const T = {
+  ..._T,
+  heading: 'var(--re-text-primary)',
+  text: 'var(--re-text-secondary)',
+  textMuted: 'var(--re-text-muted)',
+  textDim: 'var(--re-text-muted)',
+  surface: 'var(--re-surface-card)',
+  border: 'var(--re-surface-border)',
+};
 
 const errorCodes = [
     // 4xx Client Errors
