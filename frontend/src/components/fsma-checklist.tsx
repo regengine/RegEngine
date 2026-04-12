@@ -42,7 +42,7 @@ const checklistItems = [
     {
         id: "tlc_linkage",
         title: "TLCs linked across events",
-        description: "Traceability Lot Codes connected end-to-end across your supply chain",
+        description: "Traceability Lot Codes connected from harvest to distribution across your supply chain",
         regulation: "21 CFR § 1.1320",
         url: "https://www.ecfr.gov/current/title-21/chapter-I/subchapter-A/part-1/subpart-S/section-1.1320",
     },

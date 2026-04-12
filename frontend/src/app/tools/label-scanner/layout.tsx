@@ -22,7 +22,7 @@ const jsonLd = {
     name: 'AI Food Label Scanner',
     operatingSystem: 'All',
     applicationCategory: 'BusinessApplication',
-    description: 'AI-powered food label extraction tool that maps product data to FSMA 204 Key Data Elements.',
+    description: 'Food label extraction tool that maps product data to FSMA 204 Key Data Elements using NLP.',
     offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
     publisher: { '@type': 'Organization', name: 'RegEngine' },
 };

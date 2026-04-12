@@ -3,10 +3,10 @@ import type { Metadata } from 'next';
 import { ArrowRight, CheckCircle2, AlertCircle, TrendingUp, BarChart3, Zap } from 'lucide-react';
 
 export const metadata: Metadata = {
-  title: 'Food Traceability Software: How to Choose the Right Solution | RegEngine',
+  title: 'Food Traceability Software: How to Choose the Right Platform | RegEngine',
   description: 'Evaluate food traceability platforms by capability, integration, compliance coverage, and total cost of ownership. A practical guide to selecting FSMA 204 software.',
   openGraph: {
-    title: 'Food Traceability Software: How to Choose the Right Solution | RegEngine',
+    title: 'Food Traceability Software: How to Choose the Right Platform | RegEngine',
     description: 'Evaluate food traceability platforms by capability, integration, compliance coverage, and total cost of ownership. A practical guide to selecting FSMA 204 software.',
     type: 'website',
   },
@@ -30,7 +30,7 @@ export default function FoodTraceabilitySoftwarePage() {
             Food Traceability Platform Guide
           </p>
           <h1 className="font-serif text-[clamp(2rem,5vw,3rem)] font-bold leading-[1.2] tracking-tight mb-4">
-            Food Traceability Software: How to Choose the Right Solution
+            Food Traceability Software: How to Choose the Right Platform
           </h1>
           <p className="text-lg text-[var(--re-text-secondary)] leading-relaxed mb-6 max-w-[700px]">
             Selecting a food traceability platform is one of the most critical decisions you'll make for FSMA 204 compliance. With dozens of vendors and competing feature sets, how do you know which one will actually work for your business?
@@ -50,7 +50,7 @@ export default function FoodTraceabilitySoftwarePage() {
           <div className="mb-12">
             <h2 className="text-2xl font-bold mb-4 text-[var(--re-text-primary)]">The Selection Challenge</h2>
             <p className="text-[var(--re-text-secondary)] leading-relaxed mb-6">
-              Food traceability software ranges from basic Excel-based tracking to enterprise-grade platforms with AI-powered supply chain visibility. Some vendors pitch themselves as FSMA 204 specialists. Others are generic supply chain tools retrofitted with compliance features. Many promise integration with your ERP—until you learn the integration costs $50K+ and takes six months.
+              Food traceability software ranges from basic Excel-based tracking to enterprise-grade platforms with automated supply chain visibility. Some vendors pitch themselves as FSMA 204 specialists. Others are generic supply chain tools retrofitted with compliance features. Many promise integration with your ERP—until you learn the integration costs $50K+ and takes six months.
             </p>
             <p className="text-[var(--re-text-secondary)] leading-relaxed mb-6">
               The problem: most vendor comparison tools are written by vendors. They highlight features that make their product look best, not features that matter most for your compliance deadline or your budget.
@@ -185,7 +185,7 @@ export default function FoodTraceabilitySoftwarePage() {
               <div className="bg-[var(--re-surface-secondary)] border border-[var(--re-surface-border)] rounded-lg p-6">
                 <h3 className="font-semibold text-[var(--re-text-primary)] mb-3">Record Retention and Proof</h3>
                 <p className="text-sm text-[var(--re-text-secondary)] mb-3">
-                  FSMA 204 requires 2-year data retention with tamper-evident proof. Does the platform use cryptographic hashing or blockchain-style verification to prove records haven't been altered? This matters for audits.
+                  FSMA 204 requires 2-year data retention with tamper-evident proof. Does the platform use cryptographic hashing or SHA-256 verification to prove records haven't been altered? This matters for audits.
                 </p>
               </div>
             </div>

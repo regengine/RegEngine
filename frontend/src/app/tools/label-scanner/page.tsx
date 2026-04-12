@@ -242,7 +242,7 @@ export default function LabelScannerPage() {
                     </div>
                     <div>
                         <h1 className="text-3xl font-bold text-[var(--re-text-primary)]">Label Scanner</h1>
-                        <p className="text-sm text-[var(--re-text-muted)]">AI-powered food label extraction</p>
+                        <p className="text-sm text-[var(--re-text-muted)]">NLP-based food label extraction</p>
                     </div>
                 </div>
                 <p className="text-base text-[var(--re-text-muted)] leading-relaxed max-w-[640px]">

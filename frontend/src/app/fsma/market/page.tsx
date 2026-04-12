@@ -66,7 +66,7 @@ export default function TargetMarketPage() {
                                 <div className="flex-1">
                                     <p className="text-sm">
                                         These companies handle products on the FDA Food Traceability List (FTL)
-                                        and must implement end-to-end traceability including CTEs, KDEs, and
+                                        and must implement full-chain traceability including CTEs, KDEs, and
                                         24-hour FDA response capabilities.
                                     </p>
                                 </div>

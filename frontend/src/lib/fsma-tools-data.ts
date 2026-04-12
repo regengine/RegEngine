@@ -142,7 +142,7 @@ export const FREE_TOOLS = [
     },
     {
         id: 'fsma-unified',
-        title: 'AI-Powered Cold Chain Monitor',
+        title: 'Automated Cold Chain Monitor',
         description: 'Detect temperature excursions and supply chain anomalies.',
         icon: AlertTriangle,
         href: '/tools/fsma-unified'

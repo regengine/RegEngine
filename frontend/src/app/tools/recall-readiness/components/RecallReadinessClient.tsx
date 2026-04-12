@@ -293,7 +293,7 @@ export function RecallReadinessClient() {
                             </div>
                             <div className="p-6 rounded-2xl bg-[var(--re-brand-muted)] border border-[var(--re-brand)]/20">
                                 <h4 className="font-bold mb-3 flex items-center gap-2">
-                                    <Shield className="h-4 w-4 text-[var(--re-brand)]" /> RegEngine Solution
+                                    <Shield className="h-4 w-4 text-[var(--re-brand)]" /> RegEngine Platform
                                 </h4>
                                 <p className="text-xs text-[var(--re-text-secondary)] leading-relaxed mb-4">
                                     RegEngine automates KDE capture and guarantees 24-hour retrieval with one-click sortable spreadsheet exports.
