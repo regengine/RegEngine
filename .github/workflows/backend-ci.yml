@@ -227,20 +227,44 @@ jobs:
           docker run --rm regengine-${{ matrix.service }}:test \
             python -c "print('Build OK')"
 
+  # ── Security (Hard Gate) ─────────────────────────────────
+  security:
+    name: Security Audit ${{ matrix.service }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [admin, compliance, graph, ingestion, nlp, scheduler]
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Run pip-audit
+        run: |
+          pip install pip-audit
+          cd services/${{ matrix.service }}
+          pip-audit -r requirements.txt --desc on
+
   # ── CI Summary ───────────────────────────────────────────
   ci-status:
     name: CI Status Gate
     if: always()
-    needs: [test, lint, docker-build]
+    needs: [test, lint, docker-build, security]
     runs-on: ubuntu-latest
     steps:
       - name: Check results
         run: |
-          echo "Test:   ${{ needs.test.result }}"
-          echo "Lint:   ${{ needs.lint.result }}"
-          echo "Docker: ${{ needs.docker-build.result }}"
-          if [[ "${{ needs.test.result }}" == "failure" ]]; then
-            echo "::error::Test suite failed"
+          echo "Test:     ${{ needs.test.result }}"
+          echo "Lint:     ${{ needs.lint.result }}"
+          echo "Docker:   ${{ needs.docker-build.result }}"
+          echo "Security: ${{ needs.security.result }}"
+          if [[ "${{ needs.test.result }}" == "failure" || "${{ needs.security.result }}" == "failure" ]]; then
+            echo "::error::Test suite or Security Audit failed"
             exit 1
           fi
           echo "✅ All checks passed"
