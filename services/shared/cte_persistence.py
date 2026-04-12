@@ -43,6 +43,7 @@ class CTERecord:
         "id", "tenant_id", "event_type", "traceability_lot_code",
         "product_description", "quantity", "unit_of_measure",
         "location_gln", "location_name", "event_timestamp",
+        "event_entry_timestamp",
         "source", "idempotency_key", "sha256_hash", "chain_hash",
         "validation_status", "ingested_at", "kdes", "alerts",
     )
@@ -247,6 +248,7 @@ class CTEPersistence:
         epcis_action: Optional[str] = None,
         epcis_biz_step: Optional[str] = None,
         source_event_id: Optional[str] = None,
+        event_entry_timestamp: Optional[str] = None,
     ) -> StoreResult:
         """
         Persist a CTE event with its KDEs, hash chain entry, and alerts.
@@ -321,12 +323,18 @@ class CTEPersistence:
         chain_hash = compute_chain_hash(sha256_hash, previous_chain_hash)
 
         # --- Insert CTE event ---
+        # event_entry_timestamp: FDA 21 CFR 1.1455 — when the record was entered
+        # into the system, distinct from event_timestamp (when the event occurred).
+        # Falls back to NOW() if the caller does not supply it.
+        _entry_ts = event_entry_timestamp or datetime.now(timezone.utc).isoformat()
+
         self.session.execute(
             text("""
                 INSERT INTO fsma.cte_events (
                     id, tenant_id, event_type, traceability_lot_code,
                     product_description, quantity, unit_of_measure,
                     location_gln, location_name, event_timestamp,
+                    event_entry_timestamp,
                     source, source_event_id, idempotency_key,
                     sha256_hash, chain_hash,
                     epcis_event_type, epcis_action, epcis_biz_step,
@@ -335,6 +343,7 @@ class CTEPersistence:
                     :id, :tenant_id, :event_type, :tlc,
                     :product_description, :quantity, :unit_of_measure,
                     :location_gln, :location_name, :event_timestamp,
+                    :event_entry_timestamp,
                     :source, :source_event_id, :idempotency_key,
                     :sha256_hash, :chain_hash,
                     :epcis_event_type, :epcis_action, :epcis_biz_step,
@@ -353,6 +362,7 @@ class CTEPersistence:
                 "location_gln": location_gln,
                 "location_name": location_name,
                 "event_timestamp": event_timestamp,
+                "event_entry_timestamp": _entry_ts,
                 "source": source,
                 "source_event_id": source_event_id,
                 "idempotency_key": idempotency_key,
@@ -643,7 +653,7 @@ class CTEPersistence:
                 for i, row in enumerate(chunk):
                     values_clauses.append(
                         f"(:id_{i}, :tid_{i}, :et_{i}, :tlc_{i}, :pd_{i}, :qty_{i}, :uom_{i}, "
-                        f":gln_{i}, :ln_{i}, :ts_{i}, :src_{i}, :seid_{i}, :ik_{i}, "
+                        f":gln_{i}, :ln_{i}, :ts_{i}, :eets_{i}, :src_{i}, :seid_{i}, :ik_{i}, "
                         f":sha_{i}, :ch_{i}, :eet_{i}, :ea_{i}, :ebs_{i}, :vs_{i})"
                     )
                     params.update({
@@ -652,6 +662,7 @@ class CTEPersistence:
                         f"pd_{i}": row["product_description"], f"qty_{i}": row["quantity"],
                         f"uom_{i}": row["unit_of_measure"], f"gln_{i}": row["location_gln"],
                         f"ln_{i}": row["location_name"], f"ts_{i}": row["event_timestamp"],
+                        f"eets_{i}": row.get("event_entry_timestamp", datetime.now(timezone.utc).isoformat()),
                         f"src_{i}": row["source"], f"seid_{i}": row["source_event_id"],
                         f"ik_{i}": row["idempotency_key"], f"sha_{i}": row["sha256_hash"],
                         f"ch_{i}": row["chain_hash"], f"eet_{i}": row["epcis_event_type"],
@@ -663,6 +674,7 @@ class CTEPersistence:
                         id, tenant_id, event_type, traceability_lot_code,
                         product_description, quantity, unit_of_measure,
                         location_gln, location_name, event_timestamp,
+                        event_entry_timestamp,
                         source, source_event_id, idempotency_key,
                         sha256_hash, chain_hash,
                         epcis_event_type, epcis_action, epcis_biz_step,
@@ -837,7 +849,8 @@ class CTEPersistence:
                     e.product_description, e.quantity, e.unit_of_measure,
                     e.location_gln, e.location_name,
                     e.event_timestamp, e.sha256_hash, e.chain_hash,
-                    e.source, e.validation_status, e.ingested_at
+                    e.source, e.validation_status, e.ingested_at,
+                    e.event_entry_timestamp
                 FROM fsma.cte_events e
                 WHERE {where}
                 ORDER BY e.event_timestamp ASC
@@ -865,6 +878,7 @@ class CTEPersistence:
                 "source": row[11],
                 "validation_status": row[12],
                 "ingested_at": row[13].isoformat() if row[13] else None,
+                "event_entry_timestamp": row[14].isoformat() if row[14] else None,
                 "kdes": {},
                 # Trace relationship metadata (used in FDA export CSV)
                 "trace_seed_tlc": seed_tlc,
