@@ -4,15 +4,15 @@ FDA 21 CFR 1.1455 requires recording when data was entered into the
 traceability system, distinct from when the event occurred (event_timestamp).
 Existing rows are backfilled from ingested_at as the best available proxy.
 
-Revision ID: v054
-Revises: v053
+Revision ID: a8b9c0d1e2f3
+Revises: 97a8b9c0d1e2
 Create Date: 2026-04-13
 """
 from alembic import op
 
 # revision identifiers
-revision = "v054"
-down_revision = "v053"
+revision = "a8b9c0d1e2f3"
+down_revision = "97a8b9c0d1e2"
 branch_labels = None
 depends_on = None
 
