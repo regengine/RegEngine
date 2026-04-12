@@ -203,7 +203,11 @@ _PROD_ORIGINS = [
 _DEV_ORIGINS = [
     "http://localhost:3000",
     "http://localhost:3001",
+    "http://localhost:8000",
+    "http://localhost:8002",
     "http://localhost:8080",
+    "http://localhost:8400",
+    "http://127.0.0.1:3000",
 ]
 _raw_cors = os.getenv("CORS_ORIGINS", "")
 if _raw_cors:

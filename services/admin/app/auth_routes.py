@@ -239,26 +239,9 @@ async def login(
 
     access_token = create_access_token(access_token_data)
 
-    # Audit Log
-    if active_tenant_id:
-        AuditLogger.log_event(
-            db,
-            tenant_id=active_tenant_id,
-            event_type="user.login",
-            action="session.create",
-            event_category="authentication",
-            actor_id=user.id,
-            resource_type="session",
-            resource_id=str(session_data.id),
-        )
-
-    # Track last login timestamp (best-effort — never blocks login)
-    try:
-        user.last_login_at = datetime.now(timezone.utc)
-    except Exception as e:
-        logger.warning("last_login_at_update_failed", user_id=str(user.id), error=str(e))
-
-    db.commit()
+    # ── Login is complete at this point ──
+    # The access token and session are ready. Everything below is
+    # best-effort bookkeeping that must never block authentication.
 
     logger.info(
         "login_success",
@@ -266,13 +249,35 @@ async def login(
         session_id=str(session_data.id),
     )
 
-    return TokenResponse(
+    response = TokenResponse(
         access_token=access_token,
         refresh_token=raw_refresh_token,
         tenant_id=active_tenant_id,
         user={"id": str(user.id), "email": user.email, "is_sysadmin": user.is_sysadmin},
         available_tenants=available_tenants
     )
+
+    # Best-effort side-effects: audit log + last_login_at
+    # Failures are logged but never prevent the user from logging in.
+    try:
+        if active_tenant_id:
+            AuditLogger.log_event(
+                db,
+                tenant_id=active_tenant_id,
+                event_type="user.login",
+                action="session.create",
+                event_category="authentication",
+                actor_id=user.id,
+                resource_type="session",
+                resource_id=str(session_data.id),
+            )
+        user.last_login_at = datetime.now(timezone.utc)
+        db.commit()
+    except Exception as e:
+        logger.warning("login_side_effects_failed", user_id=str(user.id), error=str(e))
+        db.rollback()
+
+    return response
 
 
 @router.post("/signup", response_model=TokenResponse)
@@ -400,30 +405,6 @@ async def signup(
     }
     access_token = create_access_token(access_token_data)
 
-    AuditLogger.log_event(
-        db,
-        tenant_id=new_tenant.id,
-        event_type="tenant.create",
-        action="tenant.create",
-        event_category="tenant_management",
-        actor_id=new_user.id,
-        resource_type="tenant",
-        resource_id=str(new_tenant.id),
-        metadata={"tenant_name": new_tenant.name, "signup": True},
-    )
-
-    emit_funnel_event(
-        tenant_id=str(new_tenant.id),
-        event_name="signup_completed",
-        metadata={
-            "source": "auth.signup",
-            "user_id": str(new_user.id),
-        },
-        db_session=db,
-    )
-
-    db.commit()
-
     logger.info(
         "signup_success",
         user_id=str(new_user.id),
@@ -431,13 +412,42 @@ async def signup(
         supabase_user_linked=bool(supabase_user_id),
     )
 
-    return TokenResponse(
+    response = TokenResponse(
         access_token=access_token,
         refresh_token=raw_refresh_token,
         tenant_id=new_tenant.id,
         user={"id": str(new_user.id), "email": new_user.email, "is_sysadmin": new_user.is_sysadmin},
         available_tenants=[{"id": new_tenant.id, "name": new_tenant.name, "slug": new_tenant.slug}],
     )
+
+    # Best-effort side-effects: audit log + funnel event
+    try:
+        AuditLogger.log_event(
+            db,
+            tenant_id=new_tenant.id,
+            event_type="tenant.create",
+            action="tenant.create",
+            event_category="tenant_management",
+            actor_id=new_user.id,
+            resource_type="tenant",
+            resource_id=str(new_tenant.id),
+            metadata={"tenant_name": new_tenant.name, "signup": True},
+        )
+        emit_funnel_event(
+            tenant_id=str(new_tenant.id),
+            event_name="signup_completed",
+            metadata={
+                "source": "auth.signup",
+                "user_id": str(new_user.id),
+            },
+            db_session=db,
+        )
+        db.commit()
+    except Exception as e:
+        logger.warning("signup_side_effects_failed", user_id=str(new_user.id), error=str(e))
+        db.rollback()
+
+    return response
 
 
 
