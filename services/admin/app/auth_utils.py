@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta, timezone
 from typing import Optional
+import uuid
 import jwt
 from passlib.context import CryptContext
 import os
@@ -43,24 +44,189 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 def get_password_hash(password: str) -> str:
     return pwd_context.hash(password)
 
+
+# ──────────────────────────────────────────────────────────────
+# JWT Token Creation & Verification (with kid-based key rotation)
+# ──────────────────────────────────────────────────────────────
+# _active_kid / _active_secret are set by initialize_key_registry()
+# when the async registry bootstraps. Until then, the module-level
+# SECRET_KEY is used (backward-compatible, zero-downtime).
+# ──────────────────────────────────────────────────────────────
+
+_active_kid: Optional[str] = None
+_active_secret: Optional[str] = None
+_verification_keys: dict[str, str] = {}  # kid -> secret
+_revoked_jtis: set[str] = set()  # in-memory fallback when Redis unavailable
+_revocation_redis = None  # set by lifespan init
+
+
+def _sync_keys_from_registry(signing_key, verification_keys) -> None:
+    """Cache registry keys into module-level state for sync access.
+
+    Called from the async initialization path so that the sync
+    create_access_token / decode_access_token functions have
+    up-to-date keys without awaiting Redis on every call.
+    """
+    global _active_kid, _active_secret, _verification_keys
+    _active_kid = signing_key.kid
+    _active_secret = signing_key.secret
+    _verification_keys = {k.kid: k.secret for k in verification_keys}
+
+
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
     to_encode = data.copy()
     if expires_delta:
         expire = datetime.now(timezone.utc) + expires_delta
     else:
         expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    to_encode.update({"exp": expire})
-    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    to_encode.update({
+        "exp": expire,
+        "jti": str(uuid.uuid4()),  # unique token ID for revocation
+    })
+
+    # Use registry key if available, otherwise fall back to static SECRET_KEY
+    signing_secret = _active_secret or SECRET_KEY
+    kid = _active_kid  # None until registry initializes (legacy tokens have no kid)
+
+    headers = {}
+    if kid:
+        headers["kid"] = kid
+
+    encoded_jwt = jwt.encode(
+        to_encode,
+        signing_secret,
+        algorithm=ALGORITHM,
+        headers=headers if headers else None,
+    )
     return encoded_jwt
+
+
+def decode_access_token(token: str) -> dict:
+    # Read the unverified header to get kid (if present)
+    try:
+        unverified_header = jwt.get_unverified_header(token)
+    except jwt.exceptions.DecodeError:
+        # Malformed token — let jwt.decode raise the proper error
+        return jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+
+    kid = unverified_header.get("kid")
+
+    if kid and _verification_keys:
+        # New-style token: look up the specific key by kid
+        key_secret = _verification_keys.get(kid)
+        if key_secret:
+            payload = jwt.decode(token, key_secret, algorithms=[ALGORITHM])
+            return _check_revoked(payload)
+
+        # kid present but not in our registry — key may have expired
+        _logger.warning("jwt_unknown_kid: %s", kid)
+        raise jwt.exceptions.InvalidSignatureError(
+            f"Token signed with unknown or expired key: {kid}"
+        )
+
+    # Legacy token (no kid) or registry not yet initialized:
+    # Try all verification keys, then fall back to static SECRET_KEY
+    if _verification_keys:
+        for vk_secret in _verification_keys.values():
+            try:
+                payload = jwt.decode(token, vk_secret, algorithms=[ALGORITHM])
+                return _check_revoked(payload)
+            except jwt.exceptions.InvalidSignatureError:
+                continue
+
+    # Final fallback — static env var key
+    payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+    return _check_revoked(payload)
+
+
+def _check_revoked(payload: dict) -> dict:
+    """Raise if the token's jti has been revoked. Returns payload if ok."""
+    jti = payload.get("jti")
+    if not jti:
+        return payload  # legacy token without jti — cannot be individually revoked
+
+    # Check in-memory set first (fast path)
+    if jti in _revoked_jtis:
+        raise jwt.exceptions.InvalidTokenError("Token has been revoked")
+
+    # Check Redis if available (shared across workers)
+    if _revocation_redis:
+        try:
+            import asyncio
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                # We're in an async context but this is a sync function.
+                # The Redis check will be handled by the async revocation
+                # path in dependencies.py. The in-memory set is the sync guard.
+                pass
+            else:
+                if loop.run_until_complete(_revocation_redis.sismember("regengine:jwt:revoked", jti)):
+                    _revoked_jtis.add(jti)  # cache locally
+                    raise jwt.exceptions.InvalidTokenError("Token has been revoked")
+        except RuntimeError:
+            pass  # no event loop — rely on in-memory set
+    return payload
+
+
+async def check_revoked_async(jti: str) -> bool:
+    """Async revocation check — called from auth dependencies."""
+    if jti in _revoked_jtis:
+        return True
+    if _revocation_redis:
+        try:
+            if await _revocation_redis.sismember("regengine:jwt:revoked", jti):
+                _revoked_jtis.add(jti)
+                return True
+        except Exception:
+            pass
+    return False
+
+
+async def revoke_token(jti: str, ttl_seconds: Optional[int] = None) -> None:
+    """Revoke a token by its jti. TTL defaults to ACCESS_TOKEN_EXPIRE_MINUTES."""
+    if ttl_seconds is None:
+        ttl_seconds = ACCESS_TOKEN_EXPIRE_MINUTES * 60
+
+    _revoked_jtis.add(jti)
+    _logger.warning("jwt_token_revoked: jti=%s", jti)
+
+    if _revocation_redis:
+        try:
+            await _revocation_redis.sadd("regengine:jwt:revoked", jti)
+            await _revocation_redis.expire("regengine:jwt:revoked", ttl_seconds + 300)
+        except Exception as exc:
+            _logger.warning("jwt_revoke_redis_failed: %s", exc)
+
+
+async def revoke_all_for_kid(kid: str) -> None:
+    """Revoke an entire signing key — all tokens signed with it become invalid.
+
+    This works by marking the key as invalid in the key registry, which
+    causes decode_access_token to reject any token with that kid.
+    """
+    from shared.jwt_key_registry import get_key_registry
+    registry = await get_key_registry()
+    key = await registry.get_key_by_kid(kid)
+    if key:
+        key.is_valid = False
+        await registry._save_keys(await registry.get_all_keys())
+        # Refresh sync cache
+        signing = await registry.get_signing_key()
+        verifying = await registry.get_verification_keys()
+        _sync_keys_from_registry(signing, verifying)
+        _logger.warning("jwt_kid_revoked: kid=%s", kid)
+
+
+def set_revocation_redis(redis_client) -> None:
+    """Set the Redis client for revocation checks (called from lifespan)."""
+    global _revocation_redis
+    _revocation_redis = redis_client
+
 
 def create_refresh_token() -> str:
     # Opaque token for database storage
     return secrets.token_urlsafe(64)
 
-def decode_access_token(token: str) -> dict:
-    return jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-
 def hash_token(token: str) -> str:
     import hashlib
     return hashlib.sha256(token.encode()).hexdigest()
-

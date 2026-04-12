@@ -92,6 +92,34 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     else:
         log.info("supabase_credentials_present")
 
+    # JWT Key Registry (non-blocking — falls back to static AUTH_SECRET_KEY)
+    try:
+        from shared.jwt_key_registry import JWTKeyRegistry, set_key_registry
+        from app.auth_utils import _sync_keys_from_registry, set_revocation_redis
+        import redis.asyncio as _aioredis
+
+        _redis_url = os.getenv("REDIS_URL", "redis://redis:6379/0")
+        _jwt_redis = _aioredis.from_url(_redis_url, decode_responses=True)
+
+        # Share the Redis client for token revocation checks
+        set_revocation_redis(_jwt_redis)
+        _jwt_registry = JWTKeyRegistry(redis_client=_jwt_redis)
+        await _jwt_registry.initialize()
+        set_key_registry(_jwt_registry)
+
+        # Cache keys into auth_utils for sync access
+        _signing = await _jwt_registry.get_signing_key()
+        _verifying = await _jwt_registry.get_verification_keys()
+        _sync_keys_from_registry(_signing, _verifying)
+
+        # Clean up any expired keys
+        await _jwt_registry.cleanup_expired_keys()
+
+        log.info("jwt_key_registry_ready", active_kid=_signing.kid)
+    except Exception as e:
+        log.warning("jwt_key_registry_init_failed", error=str(e))
+        # Continue — auth_utils falls back to static SECRET_KEY
+
     # Kafka consumer (optional feature, never blocks startup)
     _start_review_consumer()
 

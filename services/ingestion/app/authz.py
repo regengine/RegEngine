@@ -5,6 +5,8 @@ from __future__ import annotations
 import hmac
 import logging
 import os
+import time
+import threading
 from datetime import datetime, timezone
 from functools import lru_cache
 from typing import Optional
@@ -17,6 +19,34 @@ from app.config import get_settings
 
 logger = logging.getLogger("authz")
 from shared.auth import APIKey, require_api_key
+
+
+# ---------------------------------------------------------------------------
+# Auth failure rate limiting — blocks IPs after repeated failed auth attempts
+# ---------------------------------------------------------------------------
+_AUTH_FAIL_WINDOW = 300  # 5-minute window
+_AUTH_FAIL_MAX = 15      # max failures before blocking
+_auth_failures: dict[str, list[float]] = {}
+_auth_failures_lock = threading.Lock()
+
+
+def _check_auth_rate_limit(client_ip: str) -> None:
+    """Raise 429 if client_ip has exceeded auth failure threshold."""
+    now = time.time()
+    cutoff = now - _AUTH_FAIL_WINDOW
+    with _auth_failures_lock:
+        attempts = _auth_failures.get(client_ip, [])
+        attempts = [t for t in attempts if t > cutoff]
+        _auth_failures[client_ip] = attempts
+        if len(attempts) >= _AUTH_FAIL_MAX:
+            logger.warning("auth_rate_limit_blocked: %s (%d failures)", client_ip, len(attempts))
+            raise HTTPException(status_code=429, detail="Too many authentication failures")
+
+
+def _record_auth_failure(client_ip: str) -> None:
+    """Record a failed auth attempt for rate limiting."""
+    with _auth_failures_lock:
+        _auth_failures.setdefault(client_ip, []).append(time.time())
 
 
 def _is_production_env() -> bool:
@@ -193,6 +223,10 @@ async def get_ingestion_principal(
     """
     settings = get_settings()
     configured_api_key = getattr(settings, "api_key", None)
+    client_ip = request.client.host if request.client else "unknown"
+
+    # Check if this IP is temporarily blocked due to repeated auth failures
+    _check_auth_rate_limit(client_ip)
 
     if configured_api_key:
         if x_regengine_api_key and hmac.compare_digest(
@@ -207,6 +241,7 @@ async def get_ingestion_principal(
             )
 
         if not x_regengine_api_key:
+            _record_auth_failure(client_ip)
             raise HTTPException(status_code=401, detail="Invalid or missing API key")
 
         try:
@@ -219,6 +254,7 @@ async def get_ingestion_principal(
             principal = _lookup_scoped_key_from_db(x_regengine_api_key)
             if principal:
                 return principal
+            _record_auth_failure(client_ip)
             raise exc
 
     # Local-dev/test default when API_KEY is not configured.

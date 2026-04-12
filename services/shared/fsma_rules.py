@@ -17,7 +17,8 @@ class TraceEvent(BaseModel):
     event_date: str  # Original string preserved for audit/evidence
     normalized_timestamp: Optional[datetime] = Field(default=None) # Computed, always UTC
     event_type: Optional[str] = None
-    
+    responsible_party_contact: Optional[str] = None  # FSMA 204 KDE
+
     @field_validator('normalized_timestamp', mode='before')
     @classmethod
     def parse_and_normalize(cls, v: Any) -> datetime:

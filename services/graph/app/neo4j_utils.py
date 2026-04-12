@@ -139,16 +139,19 @@ class Neo4jClient:
             In Neo4j Community Edition, this may not be supported.
         """
         db_name = self.get_tenant_database_name(tenant_id)
-        # Sanitize database name to prevent Cypher injection
+        # Sanitize database name — strict allowlist only.
+        # Neo4j DDL does not support parameterized database names, so
+        # regex validation is the primary defense against injection.
         import re
-        if not re.match(r'^[a-zA-Z0-9_\-]+$', db_name):
+        if not re.match(r'^[a-zA-Z][a-zA-Z0-9_]{0,62}$', db_name):
             raise ValueError(f"Invalid database name: {db_name}")
         # Connect to system database to create new database
         async with self._driver.session(database="system") as session:
-            # Check if database already exists
+            # Check if database already exists (parameterized — safe)
             result = await session.run("SHOW DATABASES WHERE name = $name", name=db_name)
             if not await result.single():
-                await session.run(f"CREATE DATABASE `{db_name}` IF NOT EXISTS")
+                # DDL does not support parameters; name is validated above
+                await session.run(f"CREATE DATABASE {db_name} IF NOT EXISTS")
 
     async def __aenter__(self):
         """Async context manager support."""

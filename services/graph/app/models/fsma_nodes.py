@@ -255,6 +255,7 @@ class TraceEvent:
     document_id: Optional[str] = None  # Source document reference
     confidence: Optional[float] = None
     tenant_id: Optional[str] = None
+    responsible_party_contact: Optional[str] = None  # FSMA 204 KDE
     # Merkle hash-chain integrity
     sha256_hash: Optional[str] = None
     chain_hash: Optional[str] = None

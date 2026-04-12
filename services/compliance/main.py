@@ -59,6 +59,16 @@ add_security(app)
 add_rate_limiting(app)
 add_observability(app, service_name="compliance-service")
 
+from fastapi.middleware.cors import CORSMiddleware
+from shared.cors import get_allowed_origins, should_allow_credentials
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=get_allowed_origins(),
+    allow_credentials=should_allow_credentials(),
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "X-RegEngine-API-Key", "X-Request-ID", "X-Tenant-ID"],
+)
 app.add_middleware(RequestIDMiddleware)
 app.add_middleware(TenantRateLimitMiddleware, default_rpm=100)
 

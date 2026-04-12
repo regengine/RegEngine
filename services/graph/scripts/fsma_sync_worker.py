@@ -214,6 +214,12 @@ class FSMASyncWorker:
 
         tenant_id = event.get("tenant_id", "")
         db_name = f"reg_tenant_{tenant_id.replace('-', '')}" if tenant_id else None
+        # Validate database name to prevent injection via crafted tenant_id
+        if db_name:
+            import re
+            if not re.match(r'^[a-zA-Z][a-zA-Z0-9_]{0,62}$', db_name):
+                logger.warning("fsma_sync_invalid_db_name", db_name=db_name, tenant_id=tenant_id)
+                return
 
         properties = {
             "event_type": event.get("event_type"),
