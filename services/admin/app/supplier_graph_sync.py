@@ -143,8 +143,8 @@ class SupplierGraphSync:
 
     @classmethod
     def from_env(cls) -> "SupplierGraphSync":
-        uri = os.getenv("NEO4J_URI") or os.getenv("NEO4J_URL")
-        password = os.getenv("NEO4J_PASSWORD")
+        uri = (os.getenv("NEO4J_URI") or os.getenv("NEO4J_URL") or "").strip()
+        password = os.getenv("NEO4J_PASSWORD", "").strip()
         user = os.getenv("NEO4J_USER", "neo4j")
 
         if not uri or not password or GraphDatabase is None:
@@ -153,7 +153,7 @@ class SupplierGraphSync:
         try:
             driver = GraphDatabase.driver(uri, auth=(user, password))
             return cls(enabled=True, driver=driver)
-        except (OSError, TimeoutError, ConnectionError, ValueError, RuntimeError) as exc:  # pragma: no cover - runtime resilience
+        except Exception as exc:  # pragma: no cover - catch all driver init errors including ConfigurationError
             logger.warning(
                 "supplier_graph_sync_disabled",
                 reason="neo4j_connection_failed",
