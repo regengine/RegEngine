@@ -10,10 +10,10 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
-from app.supplier_cte_service import _persist_supplier_cte_event
-from app.supplier_graph_sync import supplier_graph_sync
-from app.supplier_onboarding_routes import FTL_CATEGORY_LOOKUP
-from app.sqlalchemy_models import (
+from ..supplier_cte_service import _persist_supplier_cte_event
+from ..supplier_graph_sync import supplier_graph_sync
+from ..supplier_onboarding_routes import FTL_CATEGORY_LOOKUP
+from ..sqlalchemy_models import (
     SupplierCTEEventModel,
     SupplierFacilityFTLCategoryModel,
     SupplierFacilityModel,

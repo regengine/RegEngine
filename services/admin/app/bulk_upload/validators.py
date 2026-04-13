@@ -5,7 +5,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field, ValidationError, field_validator
 
-from app.supplier_cte_service import _next_merkle_hash, _sha256_json
+from ..supplier_cte_service import _next_merkle_hash, _sha256_json
 
 
 # ── Auto-clean helpers ────────────────────────────────────────────

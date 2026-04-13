@@ -17,12 +17,12 @@ from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy import select, and_
 from sqlalchemy.orm import Session
 
-from app.database import get_session
-from app.dependencies import get_current_user
-from app.sqlalchemy_models import AuditLogModel, UserModel, MembershipModel
-from app.models import TenantContext
-from app.audit import AuditLogger
-from app.audit_integrity import verify_chain
+from .database import get_session
+from .dependencies import get_current_user
+from .sqlalchemy_models import AuditLogModel, UserModel, MembershipModel
+from .models import TenantContext
+from .audit import AuditLogger
+from .audit_integrity import verify_chain
 
 logger = structlog.get_logger("audit_export")
 

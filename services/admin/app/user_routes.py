@@ -8,11 +8,11 @@ from datetime import datetime
 import structlog
 from pydantic import BaseModel
 
-from app.database import get_session
-from app.sqlalchemy_models import UserModel, MembershipModel, RoleModel
-from app.dependencies import get_current_user, PermissionChecker
-from app.audit import AuditLogger
-from app.models import TenantContext
+from .database import get_session
+from .sqlalchemy_models import UserModel, MembershipModel, RoleModel
+from .dependencies import get_current_user, PermissionChecker
+from .audit import AuditLogger
+from .models import TenantContext
 from shared.pagination import PaginationParams, PaginatedResponse
 
 router = APIRouter()

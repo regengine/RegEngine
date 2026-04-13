@@ -13,10 +13,10 @@ from pydantic import BaseModel, Field
 from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
-from app.database import get_session
-from app.dependencies import get_current_user
-from app.models import TenantContext
-from app.sqlalchemy_models import (
+from .database import get_session
+from .dependencies import get_current_user
+from .models import TenantContext
+from .sqlalchemy_models import (
     SupplierCTEEventModel,
     SupplierFacilityFTLCategoryModel,
     SupplierFacilityModel,
@@ -24,8 +24,8 @@ from app.sqlalchemy_models import (
     SupplierTraceabilityLotModel,
     UserModel,
 )
-from app.supplier_graph_sync import supplier_graph_sync
-from app.supplier_cte_service import (
+from .supplier_graph_sync import supplier_graph_sync
+from .supplier_cte_service import (
     _persist_supplier_cte_event,
 )
 

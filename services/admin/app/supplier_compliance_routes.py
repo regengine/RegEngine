@@ -14,11 +14,11 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
-from app.database import get_session
-from app.dependencies import get_current_user
-from app.models import TenantContext
-from app.sqlalchemy_models import UserModel
-from app.supplier_onboarding_routes import (
+from .database import get_session
+from .dependencies import get_current_user
+from .models import TenantContext
+from .sqlalchemy_models import UserModel
+from .supplier_onboarding_routes import (
     SupplierComplianceScoreResponse,
     SupplierComplianceGap,
     SupplierComplianceGapsResponse,

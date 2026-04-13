@@ -10,7 +10,7 @@ from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.sqlalchemy_models import (
+from .sqlalchemy_models import (
     SupplierCTEEventModel,
     SupplierFacilityModel,
     SupplierTraceabilityLotModel,

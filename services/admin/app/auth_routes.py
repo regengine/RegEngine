@@ -9,13 +9,13 @@ from uuid import UUID
 import uuid
 import re
 
-from app.database import get_session
-from app.sqlalchemy_models import UserModel, MembershipModel, TenantModel, RoleModel
-from app.auth_utils import verify_password, get_password_hash, create_access_token, create_refresh_token, decode_access_token, hash_token, REFRESH_TOKEN_EXPIRE_DAYS
-from app.dependencies import get_current_user, PermissionChecker, get_session_store
-from app.audit import AuditLogger
-from app.password_policy import validate_password, PasswordPolicyError
-from app.session_store import RedisSessionStore, SessionData
+from .database import get_session
+from .sqlalchemy_models import UserModel, MembershipModel, TenantModel, RoleModel
+from .auth_utils import verify_password, get_password_hash, create_access_token, create_refresh_token, decode_access_token, hash_token, REFRESH_TOKEN_EXPIRE_DAYS
+from .dependencies import get_current_user, PermissionChecker, get_session_store
+from .audit import AuditLogger
+from .password_policy import validate_password, PasswordPolicyError
+from .session_store import RedisSessionStore, SessionData
 from shared.supabase_client import get_supabase
 from shared.funnel_events import emit_funnel_event
 from shared.pii import mask_email

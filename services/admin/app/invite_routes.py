@@ -16,14 +16,14 @@ from sqlalchemy import func, select
 
 from shared.pagination import PaginationParams
 
-from app.database import get_session
-from app.sqlalchemy_models import InviteModel, RoleModel, UserModel, MembershipModel
-from app.dependencies import get_current_user, PermissionChecker
-from app.audit import AuditLogger
-from app.auth_utils import get_password_hash
-from app.models import TenantContext
-from app.password_policy import validate_password, PasswordPolicyError
-from app.supplier_graph_sync import supplier_graph_sync
+from .database import get_session
+from .sqlalchemy_models import InviteModel, RoleModel, UserModel, MembershipModel
+from .dependencies import get_current_user, PermissionChecker
+from .audit import AuditLogger
+from .auth_utils import get_password_hash
+from .models import TenantContext
+from .password_policy import validate_password, PasswordPolicyError
+from .supplier_graph_sync import supplier_graph_sync
 
 router = APIRouter()
 logger = structlog.get_logger("invite_routes")

@@ -8,8 +8,8 @@ import os
 import uuid as uuid_module
 from sqlalchemy import text, select
 from shared.resilient_http import resilient_client
-from app.dependencies import get_current_user, get_session
-from app.sqlalchemy_models import UserModel
+from .dependencies import get_current_user, get_session
+from .sqlalchemy_models import UserModel
 from sqlalchemy.orm import Session
 
 router = APIRouter(prefix="/system", tags=["system"])

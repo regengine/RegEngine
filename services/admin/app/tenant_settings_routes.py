@@ -11,9 +11,9 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 from sqlalchemy.orm.attributes import flag_modified
 
-from app.database import get_session
-from app.dependencies import get_current_user
-from app.sqlalchemy_models import TenantModel, MembershipModel, UserModel
+from .database import get_session
+from .dependencies import get_current_user
+from .sqlalchemy_models import TenantModel, MembershipModel, UserModel
 
 router = APIRouter(prefix="/tenants", tags=["Tenant Settings"])
 logger = structlog.get_logger("tenant_settings")

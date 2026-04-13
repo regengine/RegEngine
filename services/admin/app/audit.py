@@ -17,7 +17,7 @@ import structlog
 from sqlalchemy import select, desc
 from sqlalchemy.orm import Session
 
-from app.sqlalchemy_models import AuditLogModel
+from .sqlalchemy_models import AuditLogModel
 
 logger = structlog.get_logger("audit")
 

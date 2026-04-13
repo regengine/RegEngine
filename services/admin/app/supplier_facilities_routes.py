@@ -14,19 +14,19 @@ from sqlalchemy.orm import Session
 
 from shared.pagination import PaginationParams
 
-from app.database import get_session
-from app.dependencies import get_current_user
-from app.models import TenantContext
-from app.sqlalchemy_models import (
+from .database import get_session
+from .dependencies import get_current_user
+from .models import TenantContext
+from .sqlalchemy_models import (
     SupplierCTEEventModel,
     SupplierFacilityFTLCategoryModel,
     SupplierFacilityModel,
     SupplierTraceabilityLotModel,
     UserModel,
 )
-from app.supplier_graph_sync import supplier_graph_sync
-from app.supplier_cte_service import _persist_supplier_cte_event
-from app.supplier_onboarding_routes import (
+from .supplier_graph_sync import supplier_graph_sync
+from .supplier_cte_service import _persist_supplier_cte_event
+from .supplier_onboarding_routes import (
     FTL_CATEGORY_CATALOG,
     FTL_CATEGORY_LOOKUP,
     SupplierFacilityCreateRequest,

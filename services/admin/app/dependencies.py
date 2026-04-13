@@ -8,17 +8,17 @@ import structlog
 from jwt.exceptions import PyJWTError as JWTError
 import os
 
-from app.database import get_session
-from app.sqlalchemy_models import UserModel, MembershipModel, RoleModel
-from app.models import TenantContext
-from app.auth_utils import decode_access_token
+from .database import get_session
+from .sqlalchemy_models import UserModel, MembershipModel, RoleModel
+from .models import TenantContext
+from .auth_utils import decode_access_token
 # Supabase Integration
 from shared.supabase_client import get_supabase
 from shared.permissions import has_permission
 from shared.env import is_production
 
 # Redis Session Store
-from app.session_store import RedisSessionStore, redact_connection_url
+from .session_store import RedisSessionStore, redact_connection_url
 
 # Define oauth2_scheme (although we use custom login mostly, this helps Swagger UI)
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")

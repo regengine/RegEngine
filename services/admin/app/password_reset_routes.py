@@ -6,12 +6,12 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.database import get_session
-from app.sqlalchemy_models import UserModel, MembershipModel
-from app.auth_utils import get_password_hash, verify_password
-from app.audit import AuditLogger
-from app.password_policy import validate_password, PasswordPolicyError
-from app.dependencies import get_current_user
+from .database import get_session
+from .sqlalchemy_models import UserModel, MembershipModel
+from .auth_utils import get_password_hash, verify_password
+from .audit import AuditLogger
+from .password_policy import validate_password, PasswordPolicyError
+from .dependencies import get_current_user
 from shared.rate_limit import limiter
 
 router = APIRouter(prefix="/auth", tags=["auth"])
