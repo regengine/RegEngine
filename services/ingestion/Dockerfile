@@ -1,7 +1,8 @@
 # RegEngine Ingestion Service
 # Supports: PDF, HTML, XML, CSV, Excel, Word DOCX, EDI
 
-FROM python:3.11-slim
+# Pin to patch version for reproducible builds (#1010)
+FROM python:3.11.9-slim
 
 WORKDIR /app
 
