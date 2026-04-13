@@ -4,6 +4,30 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from shared.cors import get_allowed_origins
 
+# Paths exempt from TrustedHost validation (infra probes, metrics).
+# Railway's internal health-checker may send a Host header that doesn't
+# match any configured domain (e.g. container IP or private hostname).
+_TRUSTED_HOST_EXEMPT_PATHS = {"/health", "/ready", "/metrics", "/"}
+
+
+class _HealthBypassTrustedHostMiddleware:
+    """ASGI middleware: skip TrustedHost for health/readiness probes.
+
+    Delegates all other requests to Starlette's TrustedHostMiddleware unchanged.
+    """
+
+    def __init__(self, app, allowed_hosts=None):
+        self.app = app
+        self.trusted_host_app = TrustedHostMiddleware(
+            app, allowed_hosts=allowed_hosts or []
+        )
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] == "http" and scope.get("path", "") in _TRUSTED_HOST_EXEMPT_PATHS:
+            await self.app(scope, receive, send)
+        else:
+            await self.trusted_host_app(scope, receive, send)
+
 
 def add_security(app: FastAPI):
     """Add CORS and TrustedHost security middleware to the FastAPI app."""
@@ -25,7 +49,7 @@ def add_security(app: FastAPI):
             "X-Metrics-Key",
         ],
     )
-    app.add_middleware(TrustedHostMiddleware, allowed_hosts=[
+    app.add_middleware(_HealthBypassTrustedHostMiddleware, allowed_hosts=[
         "*.regengine.co",
         "*.up.railway.app",
         "*.railway.internal",
@@ -40,5 +64,5 @@ def add_security(app: FastAPI):
         "graph-service",
         "scheduler",
         "otel-collector",
-        "gateway"
+        "gateway",
     ])
