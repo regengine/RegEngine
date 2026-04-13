@@ -15,7 +15,7 @@ import { buildCsp } from '@/lib/csp';
 // Sysadmin status cache — avoids a DB query on every /sysadmin/* request.
 // In-memory LRU with a 60-second TTL, keyed by auth_user_id.
 // ---------------------------------------------------------------------------
-const SYSADMIN_CACHE_TTL_MS = 60 * 1000; // 60 seconds — short TTL limits the window for delayed privilege revocation
+const SYSADMIN_CACHE_TTL_MS = 5 * 1000; // 5 seconds — minimizes window for privilege revocation delay (#967)
 const SYSADMIN_CACHE_MAX_SIZE = 256;
 
 interface SysadminCacheEntry {

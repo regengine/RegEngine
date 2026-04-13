@@ -31,6 +31,25 @@ from app.security import utc_now
 
 logger = logging.getLogger("compliance-api")
 
+# Audit logging for compliance-critical mutations (#987)
+_audit_logger = logging.getLogger("compliance-audit")
+
+
+def _emit_compliance_audit(action: str, tenant_id: str, resource_type: str, resource_id: str, **extra: Any) -> None:
+    """Emit a structured audit log entry for compliance store mutations."""
+    _audit_logger.info(
+        "compliance_store_mutation",
+        extra={
+            "action": action,
+            "tenant_id": tenant_id,
+            "resource_type": resource_type,
+            "resource_id": resource_id,
+            "timestamp": utc_now().isoformat(),
+            **extra,
+        },
+    )
+
+
 DEFAULT_TENANT_ID = None  # No fallback — all operations must supply a valid tenant_id
 
 
@@ -454,6 +473,10 @@ class ComplianceStore:
                             )
                             self._add_edge(tenant_id, "Control", control_id, "VERIFIED_BY", "Test", test_id)
 
+                _emit_compliance_audit(
+                    "save_regulatory_map", tenant_id, "Regulation", regulation_id,
+                    source_name=request.get("source_name", ""),
+                )
                 return regulation_id
             finally:
                 if db_tx is not None:
@@ -512,6 +535,10 @@ class ComplianceStore:
                 except SQLAlchemyError as error:
                     logger.warning("compliance_store_register_model_persist_failed", extra={"error": str(error)})
 
+            _emit_compliance_audit(
+                "register_model", tenant_id, "Model", request.id,
+                model_name=request.name, version=request.version,
+            )
             return record
 
     def get_model(self, tenant_id: str, model_id: str) -> Optional[ModelRecordResponse]:
@@ -599,6 +626,10 @@ class ComplianceStore:
                 except SQLAlchemyError as error:
                     logger.warning("compliance_store_validation_persist_failed", extra={"error": str(error)})
 
+            _emit_compliance_audit(
+                "add_validation", tenant_id, "Validation", row["id"],
+                model_id=model_id, validation_type=request.validation_type,
+            )
             return row
 
     def add_model_change(self, tenant_id: str, model_id: str, request: ModelChangeRequest) -> dict:

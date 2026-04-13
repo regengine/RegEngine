@@ -19,6 +19,7 @@ from .config import settings
 from .fsma_spreadsheet import generate_fda_csv
 
 _logger = logging.getLogger(__name__)
+_audit_logger = logging.getLogger("compliance-audit")
 
 router = APIRouter(tags=["fsma-compliance"])
 
@@ -289,14 +290,18 @@ async def fsma_audit_spreadsheet(
         ) from exc
 
     if resp.status_code >= 500:
+        correlation_id = str(uuid.uuid4())
+        _logger.error("graph_service_5xx", extra={"status": resp.status_code, "body": resp.text[:200], "correlation_id": correlation_id})
         raise HTTPException(
             status_code=502,
-            detail=f"Graph service error ({resp.status_code}): {resp.text[:200]}",
+            detail=f"Upstream service temporarily unavailable (ref: {correlation_id})",
         )
     if resp.status_code >= 400:
+        correlation_id = str(uuid.uuid4())
+        _logger.warning("graph_service_4xx", extra={"status": resp.status_code, "body": resp.text[:200], "correlation_id": correlation_id})
         raise HTTPException(
             status_code=resp.status_code,
-            detail=f"Graph service rejected request: {resp.text[:200]}",
+            detail=f"Request could not be processed (ref: {correlation_id})",
         )
     data = resp.json()
 
@@ -307,6 +312,20 @@ async def fsma_audit_spreadsheet(
         start_date=start_date,
         end_date=end_date,
         requesting_entity=requesting_entity or "",
+    )
+
+    # Audit log the FDA export (#988)
+    _audit_logger.info(
+        "fda_export_generated",
+        extra={
+            "export_type": "fda_csv",
+            "start_date": start_date,
+            "end_date": end_date,
+            "tlc_filter": tlc,
+            "requesting_entity": requesting_entity,
+            "tenant_id": tenant_id,
+            "event_count": len(events),
+        },
     )
 
     filename = f"fsma_204_audit_{start_date}_{end_date}.csv"

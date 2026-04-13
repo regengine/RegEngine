@@ -142,6 +142,27 @@ if _unknown_flags:
     )
 
 
+# Compliance-critical routers that must not be silently disabled (#979)
+_COMPLIANCE_ROUTERS = {
+    "canonical_records", "rules", "exceptions", "fda_export", "chain_verification",
+}
+_disabled_compliance = _DISABLED_ROUTERS & _COMPLIANCE_ROUTERS
+if _disabled_compliance:
+    import structlog as _sl_compliance
+    _allow_disable = _os.getenv("ALLOW_DISABLE_COMPLIANCE_ROUTERS", "").lower() == "true"
+    if not _allow_disable:
+        raise RuntimeError(
+            f"CRITICAL: Compliance-critical routers disabled without "
+            f"ALLOW_DISABLE_COMPLIANCE_ROUTERS=true: {sorted(_disabled_compliance)}. "
+            f"This violates FSMA 204 requirements."
+        )
+    _sl_compliance.get_logger("router_flags").critical(
+        "compliance_routers_disabled",
+        disabled=sorted(_disabled_compliance),
+        hint="ALLOW_DISABLE_COMPLIANCE_ROUTERS is set. System running in degraded compliance mode.",
+    )
+
+
 def _router_enabled(name: str) -> bool:
     """Check if a router should be mounted (not in DISABLED_ROUTERS)."""
     enabled = name.lower() not in _DISABLED_ROUTERS

@@ -93,7 +93,8 @@ def get_db_manager() -> Optional[DatabaseManager]:
         logger.info("db_connected_successfully")
         return manager
     except (ValueError, KeyError, psycopg.Error, ConnectionError, OSError) as e:
-        logger.error("db_init_failed", error=str(e), url=db_url)
+        parsed = urlparse(db_url)
+        logger.error("db_init_failed", error=str(e), db_host=parsed.hostname, db_port=parsed.port or 5432)
         return None
 
 from .pipeline import ScraperPipeline
@@ -243,6 +244,10 @@ async def ingest_regulation(
             status_code=403,
             detail="API key does not have jurisdiction access for US regulations"
         )
+
+    # Validate webhook URL early to prevent SSRF (#990)
+    if webhook:
+        _validate_url(webhook)
 
     if not file.filename.endswith((".pdf", ".docx")):
         raise HTTPException(status_code=400, detail="Only PDF and DOCX files are supported")
@@ -661,7 +666,8 @@ async def ingest_url(
         raise HTTPException(status_code=403, detail="Access to government URLs requires entitlement")
 
     logger.info("ingest_url_request", url=url_str, tenant_id=tenant_id, job_id=job_id)
-    
+    _validate_url(url_str)  # SSRF guard: scheme, port, credential, and private IP checks (#991)
+
     db_manager = get_db_manager()
     audit_logger = None
     if db_manager:

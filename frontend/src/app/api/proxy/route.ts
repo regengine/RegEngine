@@ -57,8 +57,10 @@ export async function POST(request: NextRequest) {
         const data = await backendResponse.json().catch(() => ({}));
         return NextResponse.json(data, { status: backendResponse.status });
     } catch (err) {
+        const correlationId = crypto.randomUUID();
+        console.error('[proxy] Request failed', { correlationId, error: String(err) });
         return NextResponse.json(
-            { error: 'Proxy request failed', detail: String(err) },
+            { error: 'Proxy request failed', correlation_id: correlationId },
             { status: 502 }
         );
     }

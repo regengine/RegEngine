@@ -28,12 +28,31 @@ REQUIRE_DIGIT = os.getenv("PASSWORD_REQUIRE_DIGIT", "true").lower() == "true"
 REQUIRE_SPECIAL = os.getenv("PASSWORD_REQUIRE_SPECIAL", "true").lower() == "true"
 MAX_LENGTH = int(os.getenv("PASSWORD_MAX_LENGTH", "128"))
 
-# Common password blocklist (expand in production)
-COMMON_PASSWORDS = {
-    "password", "password123", "123456", "qwerty", "admin", "letmein",
-    "welcome", "monkey", "dragon", "master", "123456789", "12345678",
-    "abc123", "111111", "iloveyou", "trustno1", "sunshine", "princess",
-}
+# Common password blocklist — NIST SP 800-63B requires checking against
+# breach corpuses.  Load from file when available; fall back to inline set (#970).
+import pathlib as _pathlib
+
+_BLOCKLIST_PATH = _pathlib.Path(__file__).resolve().parent.parent.parent.parent / "data" / "common_passwords.txt"
+
+
+def _load_blocklist() -> frozenset:
+    try:
+        with open(_BLOCKLIST_PATH) as f:
+            return frozenset(line.strip().lower() for line in f if line.strip())
+    except FileNotFoundError:
+        pass
+    # Inline fallback — minimum viable blocklist
+    return frozenset({
+        "password", "password123", "123456", "qwerty", "admin", "letmein",
+        "welcome", "monkey", "dragon", "master", "123456789", "12345678",
+        "abc123", "111111", "iloveyou", "trustno1", "sunshine", "princess",
+        "football", "baseball", "shadow", "michael", "batman", "access",
+        "hello", "charlie", "donald", "login", "passw0rd", "1234567890",
+        "regengine", "compliance", "traceability", "fsma204",
+    })
+
+
+COMMON_PASSWORDS = _load_blocklist()
 
 
 class PasswordPolicyError(Exception):

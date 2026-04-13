@@ -63,7 +63,12 @@ TOPIC_FSMA_DLQ = "fsma.dead_letter"
 
 # Max retries before sending to DLQ
 MAX_RETRIES = 3
-_retry_counts: dict[str, int] = {}
+# Bounded retry tracker — TTL prevents unbounded growth under partial failures (#994)
+try:
+    from cachetools import TTLCache
+    _retry_counts: dict[str, int] = TTLCache(maxsize=50_000, ttl=3600)  # type: ignore[assignment]
+except ImportError:
+    _retry_counts: dict[str, int] = {}  # type: ignore[no-redef]
 
 RESOLVER = EntityResolver()
 CLASSIFIER = SignalClassifier()

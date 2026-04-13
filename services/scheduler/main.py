@@ -449,9 +449,19 @@ class SchedulerService:
         )
         logger.info("job_scheduled", job_id="deadline_monitor", interval_minutes=5)
 
+        # Inactive account disablement — NIST AC-2(3) (#974)
+        self.scheduler.add_job(
+            self.disable_inactive_accounts,
+            trigger=IntervalTrigger(hours=24),
+            id="inactive_account_sweep",
+            name="Disable Inactive Accounts (90 days)",
+            replace_existing=True,
+        )
+        logger.info("job_scheduled", job_id="inactive_account_sweep", interval_hours=24)
+
         logger.info(
             "scheduler_ready",
-            total_jobs=4,
+            total_jobs=5,
             scrapers=list(self.scrapers.keys()),
         )
 
@@ -530,6 +540,39 @@ class SchedulerService:
                 db.close()
         except (ImportError, RuntimeError, ConnectionError, ValueError) as e:
             logger.error("deadline_monitor_failed", error=str(e))
+
+    def disable_inactive_accounts(self) -> None:
+        """Disable accounts with no login for 90+ days — NIST AC-2(3) (#974)."""
+        try:
+            from shared.database import SessionLocal
+
+            db = SessionLocal()
+            try:
+                result = db.execute(
+                    __import__("sqlalchemy").text("""
+                        UPDATE users
+                        SET status = 'disabled'
+                        WHERE status = 'active'
+                          AND last_login_at IS NOT NULL
+                          AND last_login_at < NOW() - INTERVAL '90 days'
+                        RETURNING id, email
+                    """)
+                )
+                disabled = result.fetchall()
+                db.commit()
+
+                if disabled:
+                    logger.warning(
+                        "inactive_accounts_disabled",
+                        count=len(disabled),
+                        user_ids=[str(r[0]) for r in disabled],
+                    )
+                else:
+                    logger.debug("inactive_account_sweep_ok", disabled_count=0)
+            finally:
+                db.close()
+        except (ImportError, RuntimeError, ConnectionError, ValueError) as e:
+            logger.error("inactive_account_sweep_failed", error=str(e))
 
     def run_initial_scrape(self) -> None:
         """Run all scrapers immediately on startup."""
