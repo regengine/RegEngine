@@ -169,18 +169,18 @@ const DIFFERENTIATORS = [
 
 export default function WhyRegEnginePage() {
     return (
-        <main className="min-h-screen bg-re-surface-base">
+        <main className="min-h-screen bg-[var(--re-surface-base)] text-[var(--re-text-secondary)]">
             {/* Hero Section */}
-            <section className="border-b border-white/10 px-4 sm:px-6 py-16 sm:py-24">
+            <section className="border-b border-[var(--re-surface-border)] px-4 sm:px-6 py-16 sm:py-24">
                 <div className="max-w-5xl mx-auto">
                     <div className="inline-flex items-center gap-2 mb-6">
-                        <Badge variant="outline" className="bg-white/5 border-white/20 text-white">
+                        <Badge variant="outline" className="bg-[var(--re-surface-elevated)] border-[var(--re-border-subtle)] text-[var(--re-text-primary)]">
                             Built Different
                         </Badge>
                     </div>
-                    <h1 className="font-display text-4xl sm:text-5xl lg:text-6xl font-bold text-white mb-6 leading-tight">
+                    <h1 className="font-display text-4xl sm:text-5xl lg:text-6xl font-bold text-[var(--re-text-primary)] mb-6 leading-tight">
                         FSMA 204 Compliance,{' '}
-                        <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-cyan-300">
+                        <span className="text-transparent bg-clip-text bg-gradient-to-r from-[var(--re-brand)] to-[var(--re-brand-light)]">
                             Built for You
                         </span>
                     </h1>
@@ -188,13 +188,13 @@ export default function WhyRegEnginePage() {
                         RegEngine is the only FSMA 204 platform with an API-first architecture, transparent pricing, and a 48-hour path to FDA-ready compliance. No 6-month implementations. No hidden costs. No vendor lock-in.
                     </p>
                     <div className="flex flex-col sm:flex-row gap-4">
-                        <Button asChild size="lg" className="bg-re-info hover:bg-re-info text-white">
+                        <Button asChild size="lg" className="bg-re-info hover:bg-re-info text-[var(--re-text-primary)]">
                             <Link href="/signup">
                                 Start Free Trial
                                 <ArrowRight className="ml-2 h-4 w-4" />
                             </Link>
                         </Button>
-                        <Button asChild variant="outline" size="lg" className="border-white/20 text-white hover:bg-white/10">
+                        <Button asChild variant="outline" size="lg" className="border-[var(--re-border-subtle)] text-[var(--re-text-primary)] hover:bg-[var(--re-surface-elevated)]">
                             <Link href="/pricing">
                                 View Pricing
                             </Link>
@@ -204,10 +204,10 @@ export default function WhyRegEnginePage() {
             </section>
 
             {/* Differentiators Grid */}
-            <section className="border-b border-white/10 px-4 sm:px-6 py-16 sm:py-24">
+            <section className="border-b border-[var(--re-surface-border)] px-4 sm:px-6 py-16 sm:py-24">
                 <div className="max-w-6xl mx-auto">
                     <div className="mb-16 text-center">
-                        <h2 className="font-display text-3xl sm:text-4xl font-bold text-white mb-4">
+                        <h2 className="font-display text-3xl sm:text-4xl font-bold text-[var(--re-text-primary)] mb-4">
                             Six Reasons Teams Choose RegEngine
                         </h2>
                         <p className="text-re-text-tertiary text-lg max-w-2xl mx-auto">
@@ -221,14 +221,14 @@ export default function WhyRegEnginePage() {
                             return (
                                 <div
                                     key={idx}
-                                    className="group rounded-lg border border-white/10 bg-white/[0.02] p-6 hover:border-white/20 hover:bg-white/[0.05] transition-all"
+                                    className="group rounded-lg border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] p-6 hover:border-[var(--re-border-subtle)] hover:bg-[var(--re-surface-elevated)] transition-all"
                                 >
                                     <div className="flex items-start gap-4">
                                         <div className="rounded-lg bg-re-info/20 p-3 text-re-info group-hover:bg-re-info/30 transition-colors">
                                             <Icon className="h-5 w-5" />
                                         </div>
                                         <div className="flex-1">
-                                            <h3 className="text-lg font-semibold text-white mb-2">
+                                            <h3 className="text-lg font-semibold text-[var(--re-text-primary)] mb-2">
                                                 {item.title}
                                             </h3>
                                             <p className="text-sm text-re-text-tertiary mb-3">
@@ -247,10 +247,10 @@ export default function WhyRegEnginePage() {
             </section>
 
             {/* Comparison Section */}
-            <section className="border-b border-white/10 px-4 sm:px-6 py-16 sm:py-24">
+            <section className="border-b border-[var(--re-surface-border)] px-4 sm:px-6 py-16 sm:py-24">
                 <div className="max-w-7xl mx-auto">
                     <div className="mb-12 text-center">
-                        <h2 className="font-display text-3xl sm:text-4xl font-bold text-white mb-4">
+                        <h2 className="font-display text-3xl sm:text-4xl font-bold text-[var(--re-text-primary)] mb-4">
                             Feature-by-Feature Comparison
                         </h2>
                         <p className="text-re-text-tertiary text-lg max-w-2xl mx-auto">
@@ -261,8 +261,8 @@ export default function WhyRegEnginePage() {
                     <div className="overflow-x-auto">
                         <table className="w-full border-collapse">
                             <thead>
-                                <tr className="border-b border-white/10">
-                                    <th className="text-left py-4 px-4 font-semibold text-white">
+                                <tr className="border-b border-[var(--re-surface-border)]">
+                                    <th className="text-left py-4 px-4 font-semibold text-[var(--re-text-primary)]">
                                         Feature
                                     </th>
                                     <th className="text-center py-4 px-4 font-semibold text-re-info">
@@ -283,9 +283,9 @@ export default function WhyRegEnginePage() {
                                 {COMPARISON_DATA.map((row, idx) => (
                                     <tr
                                         key={idx}
-                                        className="border-b border-white/5 hover:bg-white/[0.02] transition-colors"
+                                        className="border-b border-[var(--re-border-subtle)] hover:bg-[var(--re-surface-card)] transition-colors"
                                     >
-                                        <td className="py-4 px-4 text-white font-medium text-sm">
+                                        <td className="py-4 px-4 text-[var(--re-text-primary)] font-medium text-sm">
                                             {row.feature}
                                         </td>
                                         <td className="text-center py-4 px-4">
@@ -346,9 +346,9 @@ export default function WhyRegEnginePage() {
                         </table>
                     </div>
 
-                    <div className="mt-8 p-4 rounded-lg border border-re-info/20 bg-re-info-muted0/10 flex gap-3">
+                    <div className="mt-8 p-4 rounded-lg border border-re-info/20 bg-[var(--re-info-bg)] flex gap-3">
                         <AlertCircle className="h-5 w-5 text-re-info flex-shrink-0 mt-0.5" />
-                        <p className="text-sm text-blue-200">
+                        <p className="text-sm text-[var(--re-text-secondary)]">
                             <strong>Note:</strong> Comparison data is current as of April 2026 and based on public pricing, documentation, and customer interviews. Competitor features change; if you spot an error, email{' '}
                             <a
                                 href="mailto:support@regengine.co"
@@ -363,12 +363,12 @@ export default function WhyRegEnginePage() {
             </section>
 
             {/* Detailed Differentiator Sections */}
-            <section className="border-b border-white/10 px-4 sm:px-6 py-16 sm:py-24">
+            <section className="border-b border-[var(--re-surface-border)] px-4 sm:px-6 py-16 sm:py-24">
                 <div className="max-w-5xl mx-auto space-y-16">
                     {/* API-First */}
                     <div className="grid md:grid-cols-2 gap-8 items-center">
                         <div>
-                            <h3 className="text-2xl sm:text-3xl font-bold text-white mb-4">
+                            <h3 className="text-2xl sm:text-3xl font-bold text-[var(--re-text-primary)] mb-4">
                                 API-First, Not UI-Only
                             </h3>
                             <p className="text-re-text-secondary mb-4 leading-relaxed">
@@ -391,7 +391,7 @@ export default function WhyRegEnginePage() {
                                 ))}
                             </ul>
                         </div>
-                        <div className="hidden md:block rounded-lg border border-white/10 bg-white/[0.02] p-6">
+                        <div className="hidden md:block rounded-lg border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] p-6">
                             <code className="text-xs text-re-text-secondary font-mono leading-relaxed block">
                                 {`POST /api/ctes
 Content-Type: application/json
@@ -416,27 +416,27 @@ HTTP 201
 
                     {/* Pricing */}
                     <div className="grid md:grid-cols-2 gap-8 items-center">
-                        <div className="order-2 md:order-1 hidden md:block rounded-lg border border-white/10 bg-white/[0.02] p-8">
+                        <div className="order-2 md:order-1 hidden md:block rounded-lg border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] p-8">
                             <div className="space-y-4">
                                 <div className="rounded-lg bg-re-info/20 p-4 border border-re-info/30">
                                     <p className="text-sm text-re-text-tertiary mb-1">Base Plan</p>
-                                    <p className="text-3xl font-bold text-white">$425/mo</p>
+                                    <p className="text-3xl font-bold text-[var(--re-text-primary)]">$425/mo</p>
                                     <p className="text-xs text-re-text-tertiary mt-2">Billed annually ($499/mo monthly) • 1 facility • 500 CTEs/mo</p>
                                 </div>
-                                <div className="rounded-lg bg-white/5 p-4 border border-white/10">
+                                <div className="rounded-lg bg-[var(--re-surface-elevated)] p-4 border border-[var(--re-surface-border)]">
                                     <p className="text-sm text-re-text-tertiary mb-1">Standard Plan</p>
-                                    <p className="text-3xl font-bold text-white">$549/mo</p>
+                                    <p className="text-3xl font-bold text-[var(--re-text-primary)]">$549/mo</p>
                                     <p className="text-xs text-re-text-tertiary mt-2">Billed annually ($649/mo monthly) • 2–3 facilities • Unlimited CTEs</p>
                                 </div>
-                                <div className="rounded-lg bg-white/5 p-4 border border-white/10">
+                                <div className="rounded-lg bg-[var(--re-surface-elevated)] p-4 border border-[var(--re-surface-border)]">
                                     <p className="text-sm text-re-text-tertiary mb-1">Premium Plan</p>
-                                    <p className="text-3xl font-bold text-white">$639/mo</p>
+                                    <p className="text-3xl font-bold text-[var(--re-text-primary)]">$639/mo</p>
                                     <p className="text-xs text-re-text-tertiary mt-2">Billed annually ($749/mo monthly) • 4+ facilities • Dedicated support</p>
                                 </div>
                             </div>
                         </div>
                         <div className="order-1 md:order-2">
-                            <h3 className="text-2xl sm:text-3xl font-bold text-white mb-4">
+                            <h3 className="text-2xl sm:text-3xl font-bold text-[var(--re-text-primary)] mb-4">
                                 Pricing You Can See Before You Sign
                             </h3>
                             <p className="text-re-text-secondary mb-4 leading-relaxed">
@@ -464,7 +464,7 @@ HTTP 201
                     {/* Speed */}
                     <div className="grid md:grid-cols-2 gap-8 items-center">
                         <div>
-                            <h3 className="text-2xl sm:text-3xl font-bold text-white mb-4">
+                            <h3 className="text-2xl sm:text-3xl font-bold text-[var(--re-text-primary)] mb-4">
                                 48 Hours to FDA-Ready Compliance
                             </h3>
                             <p className="text-re-text-secondary mb-4 leading-relaxed">
@@ -481,7 +481,7 @@ HTTP 201
                                     { step: '4', label: 'Export FDA-ready trace data' },
                                 ].map((item) => (
                                     <div key={item.step} className="flex gap-4 items-start">
-                                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-re-info/30 border border-blue-500/50 text-sm font-semibold text-blue-300">
+                                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-re-info/30 border border-[var(--re-info)]/50 text-sm font-semibold text-[var(--re-info)]">
                                             {item.step}
                                         </div>
                                         <p className="text-re-text-secondary pt-1">{item.label}</p>
@@ -489,7 +489,7 @@ HTTP 201
                                 ))}
                             </div>
                         </div>
-                        <div className="rounded-lg border border-white/10 bg-gradient-to-br from-blue-600/10 to-transparent p-8">
+                        <div className="rounded-lg border border-[var(--re-surface-border)] bg-gradient-to-br from-[var(--re-info)]/10 to-transparent p-8">
                             <div className="text-center">
                                 <p className="text-sm text-re-text-tertiary mb-2">Typical Implementation Time</p>
                                 <div className="space-y-4">
@@ -497,7 +497,7 @@ HTTP 201
                                         <p className="text-2xl font-bold text-re-success mb-1">48 hours</p>
                                         <p className="text-xs text-re-text-tertiary">RegEngine</p>
                                     </div>
-                                    <div className="h-px bg-white/10" />
+                                    <div className="h-px bg-[var(--re-surface-border)]" />
                                     <div>
                                         <p className="text-2xl font-bold text-re-text-tertiary mb-1">4–6 months</p>
                                         <p className="text-xs text-re-text-muted">FoodLogiQ, SafetyChain</p>
@@ -513,7 +513,7 @@ HTTP 201
 
                     {/* CTE Coverage */}
                     <div className="grid md:grid-cols-2 gap-8 items-center">
-                        <div className="order-2 md:order-1 rounded-lg border border-white/10 bg-white/[0.02] p-8">
+                        <div className="order-2 md:order-1 rounded-lg border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] p-8">
                             <h4 className="text-sm font-semibold text-re-text-secondary mb-6">All 7 FSMA 204 CTE Types</h4>
                             <div className="space-y-3">
                                 {[
@@ -533,7 +533,7 @@ HTTP 201
                             </div>
                         </div>
                         <div className="order-1 md:order-2">
-                            <h3 className="text-2xl sm:text-3xl font-bold text-white mb-4">
+                            <h3 className="text-2xl sm:text-3xl font-bold text-[var(--re-text-primary)] mb-4">
                                 Complete CTE/KDE Coverage
                             </h3>
                             <p className="text-re-text-secondary mb-4 leading-relaxed">
@@ -561,7 +561,7 @@ HTTP 201
                     {/* EPCIS */}
                     <div className="grid md:grid-cols-2 gap-8 items-center">
                         <div>
-                            <h3 className="text-2xl sm:text-3xl font-bold text-white mb-4">
+                            <h3 className="text-2xl sm:text-3xl font-bold text-[var(--re-text-primary)] mb-4">
                                 EPCIS 2.0 Native
                             </h3>
                             <p className="text-re-text-secondary mb-4 leading-relaxed">
@@ -584,7 +584,7 @@ HTTP 201
                                 ))}
                             </ul>
                         </div>
-                        <div className="hidden md:block rounded-lg border border-white/10 bg-white/[0.02] p-6">
+                        <div className="hidden md:block rounded-lg border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] p-6">
                             <code className="text-xs text-re-text-secondary font-mono leading-relaxed block overflow-auto">
                                 {`<events>
   <EPCISEvent>
@@ -609,7 +609,7 @@ HTTP 201
 
                     {/* SMB Focus */}
                     <div className="grid md:grid-cols-2 gap-8 items-center">
-                        <div className="order-2 md:order-1 rounded-lg border border-white/10 bg-white/[0.02] p-8">
+                        <div className="order-2 md:order-1 rounded-lg border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] p-8">
                             <p className="text-sm text-re-text-tertiary mb-4">RegEngine is built for companies like:</p>
                             <ul className="space-y-2">
                                 {[
@@ -627,7 +627,7 @@ HTTP 201
                             </ul>
                         </div>
                         <div className="order-1 md:order-2">
-                            <h3 className="text-2xl sm:text-3xl font-bold text-white mb-4">
+                            <h3 className="text-2xl sm:text-3xl font-bold text-[var(--re-text-primary)] mb-4">
                                 Built for SMBs, Not Enterprises Only
                             </h3>
                             <p className="text-re-text-secondary mb-4 leading-relaxed">
@@ -655,10 +655,10 @@ HTTP 201
             </section>
 
             {/* Honest Positioning */}
-            <section className="border-b border-white/10 px-4 sm:px-6 py-16 sm:py-24">
+            <section className="border-b border-[var(--re-surface-border)] px-4 sm:px-6 py-16 sm:py-24">
                 <div className="max-w-4xl mx-auto">
-                    <div className="rounded-lg border border-white/10 bg-white/[0.02] p-8 sm:p-12">
-                        <h2 className="font-display text-3xl font-bold text-white mb-4">
+                    <div className="rounded-lg border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] p-8 sm:p-12">
+                        <h2 className="font-display text-3xl font-bold text-[var(--re-text-primary)] mb-4">
                             What RegEngine Is NOT
                         </h2>
                         <p className="text-re-text-secondary mb-8">
@@ -688,7 +688,7 @@ HTTP 201
                                         <AlertCircle className="h-3 w-3 text-re-warning" />
                                     </div>
                                     <div>
-                                        <p className="font-semibold text-white">{item.title}</p>
+                                        <p className="font-semibold text-[var(--re-text-primary)]">{item.title}</p>
                                         <p className="text-sm text-re-text-tertiary">{item.detail}</p>
                                     </div>
                                 </div>
@@ -699,9 +699,9 @@ HTTP 201
             </section>
 
             {/* Social Proof / Industry Fit */}
-            <section className="border-b border-white/10 px-4 sm:px-6 py-16 sm:py-24">
+            <section className="border-b border-[var(--re-surface-border)] px-4 sm:px-6 py-16 sm:py-24">
                 <div className="max-w-4xl mx-auto text-center">
-                    <h2 className="font-display text-3xl sm:text-4xl font-bold text-white mb-4">
+                    <h2 className="font-display text-3xl sm:text-4xl font-bold text-[var(--re-text-primary)] mb-4">
                         Who's RegEngine For?
                     </h2>
                     <p className="text-re-text-secondary text-lg mb-12 max-w-2xl mx-auto">
@@ -732,10 +732,10 @@ HTTP 201
                         ].map((item, idx) => (
                             <div
                                 key={idx}
-                                className="rounded-lg border border-white/10 bg-white/[0.02] p-6 hover:border-white/20 hover:bg-white/[0.05] transition-all"
+                                className="rounded-lg border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] p-6 hover:border-[var(--re-border-subtle)] hover:bg-[var(--re-surface-elevated)] transition-all"
                             >
                                 <div className="text-4xl mb-3">{item.emoji}</div>
-                                <h3 className="text-lg font-semibold text-white mb-2">
+                                <h3 className="text-lg font-semibold text-[var(--re-text-primary)] mb-2">
                                     {item.title}
                                 </h3>
                                 <p className="text-sm text-re-text-tertiary">{item.detail}</p>
@@ -748,25 +748,25 @@ HTTP 201
             {/* CTA Section */}
             <section className="px-4 sm:px-6 py-16 sm:py-24">
                 <div className="max-w-4xl mx-auto text-center">
-                    <h2 className="font-display text-3xl sm:text-4xl font-bold text-white mb-4">
+                    <h2 className="font-display text-3xl sm:text-4xl font-bold text-[var(--re-text-primary)] mb-4">
                         Ready to Get Compliant?
                     </h2>
                     <p className="text-re-text-secondary text-lg mb-8 max-w-2xl mx-auto">
                         Sign up in minutes. First 30 days are free. No credit card required. No long-term contracts.
                     </p>
                     <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                        <Button asChild size="lg" className="bg-re-info hover:bg-re-info text-white">
+                        <Button asChild size="lg" className="bg-re-info hover:bg-re-info text-[var(--re-text-primary)]">
                             <Link href="/signup">
                                 Start Free Trial
                                 <ArrowRight className="ml-2 h-4 w-4" />
                             </Link>
                         </Button>
-                        <Button asChild variant="outline" size="lg" className="border-white/20 text-white hover:bg-white/10">
+                        <Button asChild variant="outline" size="lg" className="border-[var(--re-border-subtle)] text-[var(--re-text-primary)] hover:bg-[var(--re-surface-elevated)]">
                             <Link href="/contact">
                                 Talk to Us
                             </Link>
                         </Button>
-                        <Button asChild variant="outline" size="lg" className="border-white/20 text-white hover:bg-white/10">
+                        <Button asChild variant="outline" size="lg" className="border-[var(--re-border-subtle)] text-[var(--re-text-primary)] hover:bg-[var(--re-surface-elevated)]">
                             <Link href="/pricing">
                                 View Pricing
                             </Link>
@@ -774,11 +774,11 @@ HTTP 201
                     </div>
                     <p className="text-sm text-re-text-muted mt-8">
                         Questions? Email{' '}
-                        <a href="mailto:support@regengine.co" className="text-re-text-tertiary hover:text-white underline">
+                        <a href="mailto:support@regengine.co" className="text-re-text-tertiary hover:text-[var(--re-text-primary)] underline">
                             support@regengine.co
                         </a>
                         {' '}or join our{' '}
-                        <a href="https://slack.regengine.co" className="text-re-text-tertiary hover:text-white underline" target="_blank" rel="noopener noreferrer">
+                        <a href="https://slack.regengine.co" className="text-re-text-tertiary hover:text-[var(--re-text-primary)] underline" target="_blank" rel="noopener noreferrer">
                             community Slack
                         </a>
                         .
