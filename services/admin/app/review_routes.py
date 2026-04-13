@@ -38,6 +38,13 @@ class ReviewItemsResponse(BaseModel):
     limit: int
 
 
+class ReviewActionResponse(BaseModel):
+    """Response for review item action (approve/reject)."""
+    status: str
+    review_id: str
+    updated: bool
+
+
 def _get_tracker():
     """Get the hallucination tracker for review queue operations."""
     from .metrics import get_hallucination_tracker
@@ -100,7 +107,7 @@ async def get_review_queue(
         )
 
 
-@router.post("/review/{review_id}/approve")
+@router.post("/review/{review_id}/approve", response_model=ReviewActionResponse)
 async def approve_review_item(
     review_id: str,
     api_key: APIKey = Depends(require_api_key),
@@ -121,7 +128,7 @@ async def approve_review_item(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.post("/review/{review_id}/reject")
+@router.post("/review/{review_id}/reject", response_model=ReviewActionResponse)
 async def reject_review_item(
     review_id: str,
     api_key: APIKey = Depends(require_api_key),

@@ -8,7 +8,10 @@ import structlog
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 
 from shared.auth import APIKey, require_api_key
-from .models import FederalRegisterIngestRequest, ECFRIngestRequest, FDAIngestRequest
+from .models import (
+    FederalRegisterIngestRequest, ECFRIngestRequest, FDAIngestRequest,
+    FederalRegisterResponse, ECFRResponse, FDAResponse, ListSourcesResponse
+)
 from .routes import _run_adapter_ingest
 
 from regengine_ingestion.sources import FederalRegisterAdapter, ECFRAdapter, FDAAdapter
@@ -17,7 +20,7 @@ logger = structlog.get_logger("ingestion")
 router = APIRouter(tags=["ingestion-sources"])
 
 
-@router.post("/v1/ingest/federal-register", status_code=202)
+@router.post("/v1/ingest/federal-register", status_code=202, response_model=FederalRegisterResponse)
 async def ingest_federal_register(
     payload: FederalRegisterIngestRequest,
     background_tasks: BackgroundTasks,
@@ -44,7 +47,7 @@ async def ingest_federal_register(
     return {"status": "accepted", "job_id": job_id, "message": "Federal Register ingestion started"}
 
 
-@router.post("/v1/ingest/ecfr", status_code=202)
+@router.post("/v1/ingest/ecfr", status_code=202, response_model=ECFRResponse)
 async def ingest_ecfr(
     payload: ECFRIngestRequest,
     background_tasks: BackgroundTasks,
@@ -70,7 +73,7 @@ async def ingest_ecfr(
     return {"status": "accepted", "job_id": job_id, "message": "eCFR ingestion started"}
 
 
-@router.post("/v1/ingest/fda", status_code=202)
+@router.post("/v1/ingest/fda", status_code=202, response_model=FDAResponse)
 async def ingest_fda(
     payload: FDAIngestRequest,
     background_tasks: BackgroundTasks,
@@ -95,7 +98,7 @@ async def ingest_fda(
     return {"status": "accepted", "job_id": job_id, "message": "FDA ingestion started"}
 
 
-@router.get("/v1/ingest/sources")
+@router.get("/v1/ingest/sources", response_model=ListSourcesResponse)
 async def list_sources(api_key: APIKey = Depends(require_api_key)):
     """List available source adapters and their capabilities."""
     return {

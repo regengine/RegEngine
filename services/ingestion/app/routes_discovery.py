@@ -12,7 +12,11 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from shared.auth import APIKey, require_api_key
 
 from .config import get_settings
-from .models import DiscoveryQueueItem, BulkDiscoveryRequest
+from .models import (
+    DiscoveryQueueItem, BulkDiscoveryRequest, ManualQueueResponse,
+    DiscoveryApprovalResponse, DiscoveryRejectionResponse,
+    BulkDiscoveryApprovalResponse, BulkDiscoveryRejectionResponse
+)
 from kernel.discovery import discovery
 
 logger = structlog.get_logger("ingestion.discovery")
@@ -39,7 +43,7 @@ async def get_discovery_queue(api_key: APIKey = Depends(require_api_key)):
     return results
 
 
-@router.get("/v1/ingest/manual-queue")
+@router.get("/v1/ingest/manual-queue", response_model=ManualQueueResponse)
 async def get_manual_queue(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=500),
@@ -82,7 +86,7 @@ async def get_manual_queue(
     }
 
 
-@router.post("/v1/ingest/discovery/approve")
+@router.post("/v1/ingest/discovery/approve", response_model=DiscoveryApprovalResponse)
 async def approve_discovery(
     index: int,
     background_tasks: BackgroundTasks,
@@ -105,7 +109,7 @@ async def approve_discovery(
     return {"status": "approved", "body": body, "url": url}
 
 
-@router.post("/v1/ingest/discovery/reject")
+@router.post("/v1/ingest/discovery/reject", response_model=DiscoveryRejectionResponse)
 async def reject_discovery(
     index: int,
     api_key: APIKey = Depends(require_api_key),
@@ -123,7 +127,7 @@ async def reject_discovery(
     return {"status": "rejected", "index": index}
 
 
-@router.post("/v1/ingest/discovery/bulk-approve")
+@router.post("/v1/ingest/discovery/bulk-approve", response_model=BulkDiscoveryApprovalResponse)
 async def bulk_approve_discovery(
     payload: BulkDiscoveryRequest,
     background_tasks: BackgroundTasks,
@@ -151,7 +155,7 @@ async def bulk_approve_discovery(
     return {"status": "approved", "count": len(approved), "items": approved}
 
 
-@router.post("/v1/ingest/discovery/bulk-reject")
+@router.post("/v1/ingest/discovery/bulk-reject", response_model=BulkDiscoveryRejectionResponse)
 async def bulk_reject_discovery(
     payload: BulkDiscoveryRequest,
     api_key: APIKey = Depends(require_api_key),

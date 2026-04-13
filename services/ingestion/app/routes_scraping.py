@@ -21,6 +21,7 @@ from .scrapers.state_adaptors.fl_rss import FloridaRSSScraper
 from .scrapers.state_adaptors.tx_rss import TexasRegistryScraper
 from .scrapers.state_adaptors.google_discovery import GoogleDiscoveryScraper
 from .scrapers.state_adaptors.fda_enforcement import FDAEnforcementScraper
+from .models import ScrapeResponse, ScrapeRegistryResponse, IngestAllRegulationsResponse
 from kernel.discovery import discovery
 from plugins.fsma.sources import FSMA_SOURCES
 
@@ -38,7 +39,7 @@ ADAPTORS: dict[str, AdaptorRegistryScraper] = {
 }
 
 
-@router.post("/v1/scrape/cppa", status_code=202)
+@router.post("/v1/scrape/cppa", status_code=202, response_model=ScrapeResponse)
 async def scrape_cppa(
     url: str,
     background_tasks: BackgroundTasks,
@@ -58,7 +59,7 @@ async def scrape_cppa(
     return {"status": "accepted", "message": "Generic scrape job started"}
 
 
-@router.post("/scrape/{adaptor}")
+@router.post("/scrape/{adaptor}", response_model=ScrapeRegistryResponse)
 def scrape_registry(
     adaptor: str,
     api_key: APIKey = Depends(require_api_key),
@@ -93,7 +94,7 @@ def scrape_registry(
     return {"adaptor": adaptor, "count": len(results), "sources": results}
 
 
-@router.post("/v1/ingest/all-regulations")
+@router.post("/v1/ingest/all-regulations", response_model=IngestAllRegulationsResponse)
 async def ingest_all_regulations(
     background_tasks: BackgroundTasks,
     api_key: APIKey = Depends(require_api_key),

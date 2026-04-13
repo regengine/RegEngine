@@ -136,7 +136,7 @@ def get_compliance_status(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.get("/alerts/{tenant_id}", dependencies=[Depends(PermissionChecker("analysis.read"))])
+@router.get("/alerts/{tenant_id}", response_model=list[AlertResponse], dependencies=[Depends(PermissionChecker("analysis.read"))])
 def list_alerts(
     tenant_id: str,
     status: Optional[str] = Query(None, description="Filter by status: ACTIVE, ACKNOWLEDGED, RESOLVED"),
@@ -159,7 +159,7 @@ def list_alerts(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.get("/alerts/{tenant_id}/{alert_id}", dependencies=[Depends(PermissionChecker("analysis.read"))])
+@router.get("/alerts/{tenant_id}/{alert_id}", response_model=AlertResponse, dependencies=[Depends(PermissionChecker("analysis.read"))])
 def get_alert(
     tenant_id: str,
     alert_id: str,
@@ -181,7 +181,7 @@ def get_alert(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.post("/alerts/{tenant_id}/{alert_id}/acknowledge", dependencies=[Depends(PermissionChecker("analysis.create"))])
+@router.post("/alerts/{tenant_id}/{alert_id}/acknowledge", response_model=AlertResponse, dependencies=[Depends(PermissionChecker("analysis.create"))])
 def acknowledge_alert(
     tenant_id: str,
     alert_id: str,
@@ -202,7 +202,7 @@ def acknowledge_alert(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.post("/alerts/{tenant_id}/{alert_id}/resolve", dependencies=[Depends(PermissionChecker("analysis.create"))])
+@router.post("/alerts/{tenant_id}/{alert_id}/resolve", response_model=AlertResponse, dependencies=[Depends(PermissionChecker("analysis.create"))])
 def resolve_alert(
     tenant_id: str,
     alert_id: str,
@@ -227,7 +227,7 @@ def resolve_alert(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.post("/alerts", dependencies=[Depends(PermissionChecker("analysis.create"))])
+@router.post("/alerts", response_model=AlertResponse, status_code=201, dependencies=[Depends(PermissionChecker("analysis.create"))])
 def create_alert(
     request: CreateAlertRequest,
     session=Depends(get_session),
@@ -256,7 +256,7 @@ def create_alert(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.get("/profile/{tenant_id}", dependencies=[Depends(PermissionChecker("analysis.read"))])
+@router.get("/profile/{tenant_id}", response_model=dict[str, Any], dependencies=[Depends(PermissionChecker("analysis.read"))])
 def get_product_profile(
     tenant_id: str,
     session=Depends(get_session),
@@ -280,7 +280,7 @@ def get_product_profile(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.put("/profile/{tenant_id}", dependencies=[Depends(PermissionChecker("analysis.create"))])
+@router.put("/profile/{tenant_id}", response_model=dict[str, Any], dependencies=[Depends(PermissionChecker("analysis.create"))])
 def update_product_profile(
     tenant_id: str,
     request: ProductProfileRequest,

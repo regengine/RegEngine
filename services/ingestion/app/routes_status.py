@@ -13,12 +13,16 @@ import redis
 from shared.auth import APIKey, require_api_key
 from .config import get_settings
 from .routes import get_db_manager
+from .models import (
+    IngestionStatusResponse, DocumentAnalysisResponse, JobStatusResponse,
+    JobLogsResponse, ListDocumentsResponse, VerifyDocumentResponse
+)
 
 logger = structlog.get_logger("ingestion")
 router = APIRouter(tags=["ingestion-status"])
 
 
-@router.get("/v1/ingest/status/{job_id}")
+@router.get("/v1/ingest/status/{job_id}", response_model=IngestionStatusResponse)
 async def get_ingestion_status(job_id: str, api_key: APIKey = Depends(require_api_key)):
     """Check the status of a background ingestion job."""
     settings = get_settings()
@@ -38,7 +42,7 @@ async def get_ingestion_status(job_id: str, api_key: APIKey = Depends(require_ap
     return response
 
 
-@router.get("/v1/ingest/documents/{document_id}/analysis")
+@router.get("/v1/ingest/documents/{document_id}/analysis", response_model=DocumentAnalysisResponse)
 async def get_document_analysis(document_id: str, api_key: APIKey = Depends(require_api_key)):
     """Return an analysis summary for a completed ingestion job."""
     settings = get_settings()
@@ -61,7 +65,7 @@ async def get_document_analysis(document_id: str, api_key: APIKey = Depends(requ
     }
 
 
-@router.get("/v1/audit/jobs/{job_id}")
+@router.get("/v1/audit/jobs/{job_id}", response_model=JobStatusResponse)
 async def get_job_status(job_id: str, api_key: APIKey = Depends(require_api_key)):
     """Get high-level status and metrics for an ingestion job."""
     db_manager = get_db_manager()
@@ -77,7 +81,7 @@ async def get_job_status(job_id: str, api_key: APIKey = Depends(require_api_key)
         db_manager.close()
 
 
-@router.get("/v1/audit/logs/{job_id}")
+@router.get("/v1/audit/logs/{job_id}", response_model=JobLogsResponse)
 async def get_job_logs(job_id: str, limit: int = 100, api_key: APIKey = Depends(require_api_key)):
     """Get detailed audit entries for a specific job."""
     db_manager = get_db_manager()
@@ -91,7 +95,7 @@ async def get_job_logs(job_id: str, limit: int = 100, api_key: APIKey = Depends(
         db_manager.close()
 
 
-@router.get("/v1/ingest/documents")
+@router.get("/v1/ingest/documents", response_model=ListDocumentsResponse)
 async def list_documents(
     vertical: Optional[str] = None,
     source_type: Optional[str] = None,
@@ -111,7 +115,7 @@ async def list_documents(
         db_manager.close()
 
 
-@router.get("/v1/verify/{document_id}")
+@router.get("/v1/verify/{document_id}", response_model=VerifyDocumentResponse)
 async def verify_document(document_id: str, api_key: APIKey = Depends(require_api_key)):
     """Verify document integrity by re-computing hashes and comparing with stored metadata."""
     db_manager = get_db_manager()

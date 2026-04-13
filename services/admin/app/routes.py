@@ -154,6 +154,33 @@ class FunnelResponse(BaseModel):
     stages: list[FunnelStageResponse]
 
 
+class HealthResponse(BaseModel):
+    """Health check response."""
+
+    status: str
+    dependencies: Optional[dict] = None
+
+
+class ReadinessResponse(BaseModel):
+    """Readiness probe response."""
+
+    status: str
+    service: str
+
+
+class ConsumerHealthResponse(BaseModel):
+    """Consumer health check response."""
+
+    healthy: Optional[bool] = None
+
+
+class APIKeyRevokeResponse(BaseModel):
+    """Response for revoking an API key."""
+
+    status: str
+    key_id: str
+
+
 def verify_admin_key(
     request: Request,
     x_admin_key: Optional[str] = Header(None, alias="X-Admin-Key"),
@@ -293,7 +320,7 @@ async def health():
     return JSONResponse(content=result, status_code=sc)
 
 
-@router.get("/ready")
+@router.get("/ready", response_model=ReadinessResponse)
 async def readiness():
     """Readiness probe for k8s orchestration."""
     return {"status": "ready", "service": "admin-api"}
@@ -428,7 +455,7 @@ async def list_api_keys(
     )
 
 
-@v1_router.delete("/admin/keys/{key_id}")
+@v1_router.delete("/admin/keys/{key_id}", response_model=APIKeyRevokeResponse)
 async def revoke_api_key(
     key_id: str,
     _: bool = Depends(verify_admin_key),

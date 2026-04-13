@@ -23,7 +23,12 @@ class ChangePasswordRequest(BaseModel):
     new_password: str
 
 
-@router.post("/change-password")
+class ChangePasswordResponse(BaseModel):
+    """Response for password change endpoint."""
+    message: str
+
+
+@router.post("/change-password", response_model=ChangePasswordResponse)
 @limiter.limit("3/minute")
 def change_password(
     payload: ChangePasswordRequest,

@@ -36,6 +36,10 @@ class RoleResponse(BaseModel):
     name: str
     is_system: bool
 
+class UserActionResponse(BaseModel):
+    """Response for user action operations."""
+    status: str
+
 
 # --- Endpoints ---
 
@@ -83,7 +87,7 @@ async def list_users(
 
     return PaginatedResponse(items=results, total=total, skip=pagination.skip, limit=pagination.limit)
 
-@router.patch("/admin/users/{user_id}/role", dependencies=[Depends(PermissionChecker("users.manage_roles"))])
+@router.patch("/admin/users/{user_id}/role", response_model=UserActionResponse, dependencies=[Depends(PermissionChecker("users.manage_roles"))])
 async def update_user_role(
     user_id: UUID,
     update: RoleUpdate,
@@ -149,7 +153,7 @@ async def update_user_role(
     db.commit()
     return {"status": "updated"}
 
-@router.post("/admin/users/{user_id}/deactivate", dependencies=[Depends(PermissionChecker("users.disable"))])
+@router.post("/admin/users/{user_id}/deactivate", response_model=UserActionResponse, dependencies=[Depends(PermissionChecker("users.disable"))])
 async def deactivate_user(
     user_id: UUID,
     current_user: UserModel = Depends(get_current_user),
@@ -205,7 +209,7 @@ async def deactivate_user(
     db.commit()
     return {"status": "deactivated"}
 
-@router.post("/admin/users/{user_id}/reactivate", dependencies=[Depends(PermissionChecker("users.manage_roles"))])
+@router.post("/admin/users/{user_id}/reactivate", response_model=UserActionResponse, dependencies=[Depends(PermissionChecker("users.manage_roles"))])
 async def reactivate_user(
     user_id: UUID,
     current_user: UserModel = Depends(get_current_user),

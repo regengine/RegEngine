@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 from uuid import UUID
 
 import structlog
@@ -26,6 +26,7 @@ from shared.tenant_models import (
     ProductType,
     TenantControl,
 )
+from .models import ControlResponse, ProductResponse, MappingResponse, LinkResponse, ControlsListResponse, ProductsListResponse
 
 # Try to import overlay utilities - may not be available in all environments
 try:
@@ -109,7 +110,7 @@ def get_tenant_id_from_api_key(api_key: APIKey) -> UUID:
 # Control Endpoints
 
 
-@router.post("/controls", status_code=status.HTTP_201_CREATED)
+@router.post("/controls", status_code=status.HTTP_201_CREATED, response_model=ControlResponse)
 async def create_control(
     request: CreateControlRequest,
     api_key: APIKey = Depends(require_api_key),
@@ -154,7 +155,7 @@ async def create_control(
         )
 
 
-@router.get("/controls")
+@router.get("/controls", response_model=ControlsListResponse)
 async def list_controls(
     framework: Optional[str] = None,
     pagination: PaginationParams = Depends(),
@@ -191,7 +192,7 @@ async def list_controls(
         )
 
 
-@router.get("/controls/{control_id}")
+@router.get("/controls/{control_id}", response_model=dict[str, Any])
 async def get_control_details(
     control_id: UUID,
     api_key: APIKey = Depends(require_api_key),
@@ -225,7 +226,7 @@ async def get_control_details(
         )
 
 
-@router.put("/controls/{control_id}")
+@router.put("/controls/{control_id}", response_model=ControlResponse)
 async def update_control(
     control_id: UUID,
     request: CreateControlRequest,
@@ -319,7 +320,7 @@ async def delete_control(
 # Product Endpoints
 
 
-@router.post("/products", status_code=status.HTTP_201_CREATED)
+@router.post("/products", status_code=status.HTTP_201_CREATED, response_model=ProductResponse)
 async def create_product(
     request: CreateProductRequest,
     api_key: APIKey = Depends(require_api_key),
@@ -364,7 +365,7 @@ async def create_product(
         )
 
 
-@router.get("/products")
+@router.get("/products", response_model=ProductsListResponse)
 async def list_products(
     product_type: Optional[str] = None,
     pagination: PaginationParams = Depends(),
@@ -401,7 +402,7 @@ async def list_products(
         )
 
 
-@router.get("/products/{product_id}/requirements")
+@router.get("/products/{product_id}/requirements", response_model=dict[str, Any])
 async def get_product_requirements(
     product_id: UUID,
     api_key: APIKey = Depends(require_api_key),
@@ -437,7 +438,7 @@ async def get_product_requirements(
         )
 
 
-@router.get("/products/{product_id}/compliance-gaps")
+@router.get("/products/{product_id}/compliance-gaps", response_model=dict[str, Any])
 async def get_compliance_gaps(
     product_id: UUID,
     jurisdiction: str,
@@ -513,7 +514,7 @@ async def delete_product(
 # Mapping Endpoints
 
 
-@router.post("/mappings", status_code=status.HTTP_201_CREATED)
+@router.post("/mappings", status_code=status.HTTP_201_CREATED, response_model=MappingResponse)
 async def create_mapping(
     request: CreateMappingRequest,
     api_key: APIKey = Depends(require_api_key),
@@ -567,7 +568,7 @@ async def create_mapping(
         )
 
 
-@router.post("/products/link-control", status_code=status.HTTP_201_CREATED)
+@router.post("/products/link-control", status_code=status.HTTP_201_CREATED, response_model=LinkResponse)
 async def link_control_to_product(
     request: LinkControlToProductRequest,
     api_key: APIKey = Depends(require_api_key),
@@ -651,7 +652,7 @@ async def delete_mapping(
 # Provision Query Endpoints
 
 
-@router.get("/provisions/{provision_hash}/overlays")
+@router.get("/provisions/{provision_hash}/overlays", response_model=dict[str, Any])
 async def get_provision_overlays(
     provision_hash: str,
     api_key: APIKey = Depends(require_api_key),

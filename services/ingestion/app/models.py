@@ -144,6 +144,7 @@ class NormalizedEvent(BaseModel):
     normalized_s3_path: str
     text_s3_uri: Optional[str] = None  # Claim Check pointer for payloads > 1MB
     timestamp: datetime
+    event_entry_timestamp: Optional[datetime] = None  # FDA 21 CFR 1.1455; added by migration v054
     content_sha256: str
     is_duplicate: bool = False
 
@@ -216,6 +217,222 @@ class ExportVerifyResponse(BaseModel):
     current_record_count: int
     data_integrity: str
     original_generated_at: str
+    verified_at: str
+
+
+# Response models for ingestion routes
+
+class IngestRegulationResponse(BaseModel):
+    """Response from POST /v1/ingest/regulation."""
+
+    job_id: str
+    status: str
+    message: str
+    webhook: Optional[str] = None
+
+
+class ManualQueueItem(BaseModel):
+    """Item in the manual queue response."""
+
+    index: int
+    body: str
+    url: Optional[str] = None
+
+
+class ManualQueueResponse(BaseModel):
+    """Response from GET /v1/ingest/manual-queue."""
+
+    tenant_id: str
+    total: int
+    skip: int
+    limit: int
+    items: List[ManualQueueItem]
+
+
+class DiscoveryApprovalResponse(BaseModel):
+    """Response from POST /v1/ingest/discovery/approve."""
+
+    status: str
+    body: str
+    url: str
+
+
+class DiscoveryRejectionResponse(BaseModel):
+    """Response from POST /v1/ingest/discovery/reject."""
+
+    status: str
+    index: int
+
+
+class BulkDiscoveryApprovalItem(BaseModel):
+    """Item in bulk approval response."""
+
+    body: str
+    url: str
+
+
+class BulkDiscoveryApprovalResponse(BaseModel):
+    """Response from POST /v1/ingest/discovery/bulk-approve."""
+
+    status: str
+    count: int
+    items: List[BulkDiscoveryApprovalItem]
+
+
+class BulkDiscoveryRejectionResponse(BaseModel):
+    """Response from POST /v1/ingest/discovery/bulk-reject."""
+
+    status: str
+    count: int
+
+
+class ScrapeResponse(BaseModel):
+    """Response from POST /v1/scrape/cppa."""
+
+    status: str
+    message: str
+
+
+class ScrapeRegistrySource(BaseModel):
+    """Source item in registry scrape response."""
+
+    pass  # Dynamic structure: varies by adaptor
+
+
+class ScrapeRegistryResponse(BaseModel):
+    """Response from POST /scrape/{adaptor}."""
+
+    adaptor: str
+    count: int
+    sources: List[dict]
+
+
+class IngestAllRegulationsResponse(BaseModel):
+    """Response from POST /v1/ingest/all-regulations."""
+
+    job_id: str
+    status: str
+    jurisdiction: str
+    duration_ms: int
+    sources_attempted: int
+    queued_manual: int
+    unchanged: int
+    ingested: int
+    failed: int
+
+
+class SourceCapability(BaseModel):
+    """Capability of a source adapter."""
+
+    pass  # Will contain string values
+
+
+class SourceItem(BaseModel):
+    """Individual source in the sources list."""
+
+    id: str
+    name: str
+    type: str
+    jurisdiction: str
+    capabilities: List[str]
+
+
+class ListSourcesResponse(BaseModel):
+    """Response from GET /v1/ingest/sources."""
+
+    sources: List[SourceItem]
+
+
+class FederalRegisterResponse(BaseModel):
+    """Response from POST /v1/ingest/federal-register."""
+
+    status: str
+    job_id: str
+    message: str
+
+
+class ECFRResponse(BaseModel):
+    """Response from POST /v1/ingest/ecfr."""
+
+    status: str
+    job_id: str
+    message: str
+
+
+class FDAResponse(BaseModel):
+    """Response from POST /v1/ingest/fda."""
+
+    status: str
+    job_id: str
+    message: str
+
+
+class IngestionStatusResponse(BaseModel):
+    """Response from GET /v1/ingest/status/{job_id}."""
+
+    job_id: str
+    status: str
+    result: Optional[dict] = None
+
+
+class DocumentAnalysisResponse(BaseModel):
+    """Response from GET /v1/ingest/documents/{document_id}/analysis."""
+
+    document_id: str
+    status: str
+    risk_score: int
+    obligations_count: int
+    missing_dates_count: int
+    critical_risks: List[dict]
+
+
+class JobStatusResponse(BaseModel):
+    """Response from GET /v1/audit/jobs/{job_id}."""
+
+    pass  # Will return raw job dict from db_manager
+
+
+class AuditLogEntry(BaseModel):
+    """Individual audit log entry."""
+
+    pass  # Will contain audit log structure
+
+
+class JobLogsResponse(BaseModel):
+    """Response from GET /v1/audit/logs/{job_id}."""
+
+    job_id: str
+    entries: List[dict]
+
+
+class DocumentMetadata(BaseModel):
+    """Metadata for a document in list_documents response."""
+
+    pass  # Dynamic structure
+
+
+class ListDocumentsResponse(BaseModel):
+    """Response from GET /v1/ingest/documents."""
+
+    documents: List[dict]
+    count: int
+
+
+class DocumentHash(BaseModel):
+    """Hash values for a document."""
+
+    content_sha256: str
+    content_sha512: str
+    text_sha256: str
+    text_sha512: str
+
+
+class VerifyDocumentResponse(BaseModel):
+    """Response from GET /v1/verify/{document_id}."""
+
+    document_id: str
+    status: str
+    hashes: DocumentHash
     verified_at: str
 
 

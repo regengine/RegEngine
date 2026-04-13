@@ -40,6 +40,7 @@ class User(BaseModel):
     status: str = "active"
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
+    last_login_at: Optional[datetime] = None  # Added by migration v053
 
     class Config:
         schema_extra = {
@@ -75,6 +76,7 @@ class Membership(BaseModel):
     user_id: UUID
     tenant_id: UUID
     role_id: UUID
+    is_active: bool = True
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
 
@@ -206,6 +208,147 @@ from sqlalchemy import text
 # ============================================================================
 # Database session management
 # ============================================================================
+
+# ============================================================================
+# Response Models for API Endpoints
+# ============================================================================
+
+class ControlResponse(BaseModel):
+    """Response model for control operations."""
+
+    id: str
+    tenant_id: str
+    control_id: str
+    title: str
+    description: str
+    framework: str
+    created_at: str
+    updated: Optional[bool] = None
+
+
+class ProductResponse(BaseModel):
+    """Response model for product operations."""
+
+    id: str
+    tenant_id: str
+    product_name: str
+    description: str
+    product_type: str
+    jurisdictions: list[str]
+    created_at: str
+
+
+class MappingResponse(BaseModel):
+    """Response model for mapping operations."""
+
+    id: str
+    tenant_id: str
+    control_id: str
+    provision_hash: str
+    mapping_type: str
+    confidence: float
+    notes: Optional[str]
+    created_at: str
+
+
+class LinkResponse(BaseModel):
+    """Response model for control-product links."""
+
+    product_id: str
+    control_id: str
+    tenant_id: str
+    created_at: str
+
+
+class PaginatedListResponse(BaseModel):
+    """Generic paginated list response."""
+
+    items: list[dict] = []
+    total: int
+    skip: int
+    limit: int
+
+
+class ControlsListResponse(BaseModel):
+    """Response model for listing controls."""
+
+    controls: list[dict]
+    total: int
+    skip: int
+    limit: int
+
+
+class ProductsListResponse(BaseModel):
+    """Response model for listing products."""
+
+    products: list[dict]
+    total: int
+    skip: int
+    limit: int
+
+
+class StatusResponse(BaseModel):
+    """Generic status response."""
+
+    status: str
+    message: Optional[str] = None
+
+
+class ErrorResponse(BaseModel):
+    """Standard error response."""
+
+    detail: str
+    status_code: Optional[int] = None
+
+
+class PermissionCheckResponse(BaseModel):
+    """Response for permission check."""
+
+    message: str
+    user: str
+
+
+class SessionListResponse(BaseModel):
+    """Response for listing sessions."""
+
+    items: list[dict]
+    total: int
+    skip: int
+    limit: int
+
+
+class SessionRevokeResponse(BaseModel):
+    """Response for revoking a session."""
+
+    status: str
+
+
+class RevokeAllSessionsResponse(BaseModel):
+    """Response for revoking all sessions."""
+
+    status: str
+    revoked_count: int
+
+
+class RegisterAdminResponse(BaseModel):
+    """Response for initial admin registration."""
+
+    message: str
+    user_id: str
+    tenant_id: str
+
+
+class ChangePasswordResponse(BaseModel):
+    """Response for password change."""
+
+    status: str
+
+
+class ResetPasswordResponse(BaseModel):
+    """Response for password reset."""
+
+    status: str
+
 
 class TenantContext:
     """Helper class for managing tenant context in database sessions."""

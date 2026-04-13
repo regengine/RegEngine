@@ -78,6 +78,16 @@ class ValidationResult(BaseModel):
     warnings: list[ValidationWarning] = []
 
 
+class IndustriesResponse(BaseModel):
+    industries: list[dict[str, Any]]
+    total: int
+
+
+class ChecklistsResponse(BaseModel):
+    checklists: list[dict[str, Any]]
+    total: int
+
+
 # ---------------------------------------------------------------------------
 # FSMA 204 rules — loaded from fsma_rules.json at startup (#546)
 # ---------------------------------------------------------------------------
@@ -134,20 +144,20 @@ _ALLOWED_CTE_TYPES: set[str] = set(_validation_cfg.get("allowed_cte_types", []))
 # Routes
 # ---------------------------------------------------------------------------
 
-@router.get("/industries", dependencies=[Depends(require_api_key)])
-async def list_industries() -> dict:
+@router.get("/industries", dependencies=[Depends(require_api_key)], response_model=IndustriesResponse)
+async def list_industries() -> IndustriesResponse:
     return {"industries": [i.model_dump() for i in _INDUSTRIES], "total": len(_INDUSTRIES)}
 
 
-@router.get("/checklists", dependencies=[Depends(require_api_key)])
-async def list_checklists(industry: str | None = None) -> dict:
+@router.get("/checklists", dependencies=[Depends(require_api_key)], response_model=ChecklistsResponse)
+async def list_checklists(industry: str | None = None) -> ChecklistsResponse:
     results = _CHECKLISTS
     if industry:
         results = [c for c in results if c.industry.lower() == industry.lower()]
     return {"checklists": [c.model_dump() for c in results], "total": len(results)}
 
 
-@router.get("/checklists/{checklist_id}", dependencies=[Depends(require_api_key)])
+@router.get("/checklists/{checklist_id}", dependencies=[Depends(require_api_key)], response_model=ComplianceChecklist)
 async def get_checklist(checklist_id: str) -> ComplianceChecklist:
     checklist = _CHECKLIST_INDEX.get(checklist_id)
     if not checklist:
@@ -155,7 +165,7 @@ async def get_checklist(checklist_id: str) -> ComplianceChecklist:
     return checklist
 
 
-@router.post("/validate", dependencies=[Depends(require_api_key)])
+@router.post("/validate", dependencies=[Depends(require_api_key)], response_model=ValidationResult)
 async def validate_config(request: ValidationRequest) -> ValidationResult:
     errors: list[ValidationError] = []
     warnings: list[ValidationWarning] = []

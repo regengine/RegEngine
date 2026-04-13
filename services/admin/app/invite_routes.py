@@ -5,6 +5,7 @@ import os
 import re
 import secrets
 from datetime import datetime, timedelta, timezone
+from typing import Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -116,9 +117,18 @@ class InviteResponse(BaseModel):
 class AcceptInviteRequest(BaseModel):
     token: str
     password: str
-    name: str  # Assuming we might want name, though User model doesn't explicitly show it in sqlalchemy_models check. 
-               # Note: UserModel has no 'name' col in the viewed file (step 2800), only email/password_hash/mfa/sysadmin/status. 
+    name: str  # Assuming we might want name, though User model doesn't explicitly show it in sqlalchemy_models check.
+               # Note: UserModel has no 'name' col in the viewed file (step 2800), only email/password_hash/mfa/sysadmin/status.
                # So I will ignore name for now or assume it's metadata.
+
+class RevokeInviteResponse(BaseModel):
+    """Response for revoking an invite."""
+    status: str
+
+class AcceptInviteResponse(BaseModel):
+    """Response for accepting an invite."""
+    status: str
+    user_id: str
 
 # --- Admin Endpoints ---
 
@@ -218,7 +228,7 @@ async def create_invite(
         invite_link=invite_link
     )
 
-@router.get("/admin/invites", dependencies=[Depends(PermissionChecker("users.read"))])
+@router.get("/admin/invites", response_model=dict[str, Any], dependencies=[Depends(PermissionChecker("users.read"))])
 async def list_invites(
     pagination: PaginationParams = Depends(),
     db: Session = Depends(get_session),
@@ -258,7 +268,7 @@ async def list_invites(
         })
     return {"items": results, "total": total, "skip": pagination.skip, "limit": pagination.limit}
 
-@router.post("/admin/invites/{invite_id}/revoke", dependencies=[Depends(PermissionChecker("users.invite"))])
+@router.post("/admin/invites/{invite_id}/revoke", response_model=RevokeInviteResponse, dependencies=[Depends(PermissionChecker("users.invite"))])
 async def revoke_invite(
     invite_id: UUID,
     current_user: UserModel = Depends(get_current_user),
@@ -294,7 +304,7 @@ async def revoke_invite(
 
 # --- Public Endpoint ---
 
-@router.post("/auth/accept-invite")
+@router.post("/auth/accept-invite", response_model=AcceptInviteResponse, status_code=201)
 async def accept_invite(
     request: AcceptInviteRequest,
     db: Session = Depends(get_session)

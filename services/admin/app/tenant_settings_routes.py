@@ -61,7 +61,19 @@ class OnboardingResponse(BaseModel):
     partner_tier: str | None = None
 
 
-@router.patch("/{tenant_id}/settings")
+class SettingsUpdateResponse(BaseModel):
+    """Response for updating tenant settings."""
+    status: str
+    settings: dict
+
+
+class PartnerStatusResponse(BaseModel):
+    """Response for updating partner status."""
+    status: str
+    partner_tier: str | None = None
+
+
+@router.patch("/{tenant_id}/settings", response_model=SettingsUpdateResponse)
 async def update_tenant_settings(
     tenant_id: UUID,
     payload: SettingsUpdate,
@@ -120,7 +132,7 @@ async def get_onboarding_status(
     )
 
 
-@router.patch("/{tenant_id}/partner-status")
+@router.patch("/{tenant_id}/partner-status", response_model=PartnerStatusResponse)
 async def update_partner_status(
     tenant_id: UUID,
     payload: PartnerStatusUpdate,

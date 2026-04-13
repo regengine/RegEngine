@@ -35,7 +35,10 @@ from shared.auth import APIKey, require_api_key, verify_jurisdiction_access
 
 from .config import get_settings
 from .kafka_utils import send
-from .models import IngestRequest, DirectIngestRequest, NormalizedDocument, NormalizedEvent, DiscoveryQueueItem, BulkDiscoveryRequest
+from .models import (
+    IngestRequest, DirectIngestRequest, NormalizedDocument, NormalizedEvent,
+    DiscoveryQueueItem, BulkDiscoveryRequest, IngestRegulationResponse
+)
 from .normalization import normalize_document
 from .s3_utils import put_bytes, put_json
 from .scrapers.state_generic import StateRegistryScraper as GenericStateScraper
@@ -224,7 +227,7 @@ async def process_regulation_ingestion(job_id: str, name: str, filename: str, te
             os.remove(tmp_path)
 
 
-@router.post("/v1/ingest/regulation", status_code=202)
+@router.post("/v1/ingest/regulation", status_code=202, response_model=IngestRegulationResponse)
 async def ingest_regulation(
     name: str,
     background_tasks: BackgroundTasks,

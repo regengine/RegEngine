@@ -16,6 +16,11 @@ from .dependencies import get_current_user, PermissionChecker, get_session_store
 from .audit import AuditLogger
 from .password_policy import validate_password, PasswordPolicyError
 from .session_store import RedisSessionStore, SessionData
+from .models import (
+    PermissionCheckResponse, SessionListResponse, SessionRevokeResponse,
+    RevokeAllSessionsResponse, RegisterAdminResponse, ChangePasswordResponse,
+    ResetPasswordResponse
+)
 from shared.supabase_client import get_supabase
 from shared.funnel_events import emit_funnel_event
 from shared.pii import mask_email
@@ -147,9 +152,9 @@ def get_me(user: UserModel = Depends(get_current_user)):
     """Get current user context (verifies token and tenant context)."""
     return user
 
-@router.get("/check-permission")
+@router.get("/check-permission", response_model=PermissionCheckResponse)
 def check_perm(
-    user: UserModel = Depends(get_current_user), 
+    user: UserModel = Depends(get_current_user),
     authorized: bool = Depends(PermissionChecker("admin.read"))
 ):
     """Test RBAC."""
@@ -545,7 +550,7 @@ async def refresh_session(
     )
 
 
-@router.get("/sessions", dependencies=[Depends(get_current_user)])
+@router.get("/sessions", response_model=SessionListResponse, dependencies=[Depends(get_current_user)])
 async def list_sessions(
     pagination: PaginationParams = Depends(),
     current_user: UserModel = Depends(get_current_user),
@@ -572,7 +577,7 @@ async def list_sessions(
         "limit": pagination.limit,
     }
 
-@router.post("/sessions/{session_id}/revoke", dependencies=[Depends(get_current_user)])
+@router.post("/sessions/{session_id}/revoke", response_model=SessionRevokeResponse, dependencies=[Depends(get_current_user)])
 async def revoke_session(
     session_id: UUID,
     current_user: UserModel = Depends(get_current_user),
@@ -591,7 +596,7 @@ async def revoke_session(
     
     return {"status": "revoked"}
 
-@router.post("/logout-all", dependencies=[Depends(get_current_user)])
+@router.post("/logout-all", response_model=RevokeAllSessionsResponse, dependencies=[Depends(get_current_user)])
 async def revoke_all_sessions(
     current_user: UserModel = Depends(get_current_user),
     session_store: RedisSessionStore = Depends(get_session_store)
@@ -605,7 +610,7 @@ async def revoke_all_sessions(
 
 
 
-@router.post("/register")
+@router.post("/register", response_model=RegisterAdminResponse)
 @limiter.limit("3/minute")
 def register_initial_admin(payload: RegisterRequest, request: Request, db: Session = Depends(get_session)):
     """Bootstrapping endpoint to create the first admin and tenant."""
@@ -698,7 +703,7 @@ class ChangePasswordRequest(BaseModel):
     new_password: str
 
 
-@router.post("/change-password")
+@router.post("/change-password", response_model=ChangePasswordResponse)
 @limiter.limit("5/minute")
 async def change_password(
     payload: ChangePasswordRequest,
@@ -748,7 +753,7 @@ class ResetPasswordRequest(BaseModel):
     new_password: str
 
 
-@router.post("/reset-password")
+@router.post("/reset-password", response_model=ResetPasswordResponse)
 @limiter.limit("5/minute")
 async def reset_password(
     payload: ResetPasswordRequest,

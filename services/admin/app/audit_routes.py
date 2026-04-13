@@ -9,11 +9,12 @@ Enterprise customers use this to feed their SIEM or prove compliance.
 import hashlib
 import json
 from datetime import datetime, timezone, timedelta
-from typing import Optional
+from typing import Optional, Any
 from uuid import UUID
 
 import structlog
 from fastapi import APIRouter, Depends, Query, HTTPException
+from pydantic import BaseModel
 from sqlalchemy import select, and_
 from sqlalchemy.orm import Session
 
@@ -29,7 +30,14 @@ logger = structlog.get_logger("audit_export")
 router = APIRouter(prefix="/v1/audit", tags=["audit"])
 
 
-@router.get("/export")
+class AuditExportResponse(BaseModel):
+    """Response for audit log export endpoint."""
+    export: dict[str, Any]
+    entries: list[dict[str, Any]]
+    integrity: dict[str, Any]
+
+
+@router.get("/export", response_model=AuditExportResponse)
 def export_audit_logs(
     db: Session = Depends(get_session),
     current_user: UserModel = Depends(get_current_user),

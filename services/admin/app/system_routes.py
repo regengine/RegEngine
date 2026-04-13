@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Dict, Any, List, Optional
 import httpx
 import structlog
@@ -35,6 +35,28 @@ class SystemMetricsResponse(BaseModel):
     chain_length: Optional[int] = None
     chain_valid: Optional[bool] = None
     open_alerts: Optional[int] = None
+
+class JWTRotateResponse(BaseModel):
+    """Response for JWT key rotation."""
+    status: str
+    new_kid: str
+    grace_period_days: int
+    message: str
+
+class JWTKeysResponse(BaseModel):
+    """Response for listing JWT keys."""
+    keys: List[Dict[str, Any]]
+
+class JWTRevokeResponse(BaseModel):
+    """Response for JWT token/key revocation."""
+    status: str
+    jti: Optional[str] = None
+    kid: Optional[str] = None
+
+class JWTRevokeAllResponse(BaseModel):
+    """Response for emergency JWT revocation."""
+    status: str
+    keys_revoked: int
 
 def _detect_default(docker_name: str, railway_url: str) -> str:
     """Use Railway URL when running on Railway, Docker hostname otherwise."""
@@ -237,6 +259,8 @@ def _require_sysadmin(current_user: UserModel = Depends(get_current_user)):
 
 @router.post(
     "/jwt/rotate",
+    response_model=JWTRotateResponse,
+    status_code=201,
     summary="Rotate JWT signing key",
     description="Generate a new signing key. Old key remains valid for 7-day grace period.",
     dependencies=[Depends(_require_sysadmin)],
@@ -269,6 +293,7 @@ async def rotate_jwt_key(current_user: UserModel = Depends(_require_sysadmin)):
 
 @router.get(
     "/jwt/keys",
+    response_model=JWTKeysResponse,
     summary="List JWT signing keys",
     description="List all JWT keys and their lifecycle status (sysadmin only).",
     dependencies=[Depends(_require_sysadmin)],
@@ -301,6 +326,7 @@ async def list_jwt_keys(current_user: UserModel = Depends(_require_sysadmin)):
 
 @router.post(
     "/jwt/revoke",
+    response_model=JWTRevokeResponse,
     summary="Revoke a JWT token by jti",
     description="Add a token's jti to the revocation blocklist. The token will be rejected on next verification.",
     dependencies=[Depends(_require_sysadmin)],
@@ -318,6 +344,7 @@ async def revoke_jwt_token(
 
 @router.post(
     "/jwt/revoke-key",
+    response_model=JWTRevokeResponse,
     summary="Revoke all tokens for a signing key",
     description="Invalidate a signing key — all tokens signed with it become invalid immediately.",
     dependencies=[Depends(_require_sysadmin)],
@@ -341,6 +368,7 @@ async def revoke_jwt_key(
 
 @router.post(
     "/jwt/revoke-all",
+    response_model=JWTRevokeAllResponse,
     summary="EMERGENCY: Revoke ALL JWT keys",
     description=(
         "Nuclear option — invalidates every existing session and token. "

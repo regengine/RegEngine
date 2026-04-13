@@ -110,6 +110,23 @@ RETENTION_CONFIGS: Dict[RetentionPolicy, RetentionConfig] = {
 }
 
 
+# Allowlist of table names that may be used in retention SQL queries.
+# Derived from RetentionPolicy enum values — prevents SQL injection
+# if resource_type is ever populated from untrusted input.
+_ALLOWED_RESOURCE_TABLES: frozenset[str] = frozenset(
+    policy.value.replace("-", "_") for policy in RetentionPolicy
+)
+
+
+def _validate_resource_type(resource_type: str) -> None:
+    """Validate resource_type against the retention policy allowlist."""
+    if resource_type not in _ALLOWED_RESOURCE_TABLES:
+        raise ValueError(
+            f"resource_type '{resource_type}' is not in the retention allowlist: "
+            f"{sorted(_ALLOWED_RESOURCE_TABLES)}"
+        )
+
+
 # =============================================================================
 # Data Retention Events
 # =============================================================================
@@ -275,6 +292,7 @@ class DataRetentionManager:
         Returns:
             True if soft-delete succeeded
         """
+        _validate_resource_type(resource_type)
         try:
             # Update record to mark as deleted
             deleted_at = datetime.now(timezone.utc)
@@ -354,6 +372,7 @@ class DataRetentionManager:
         Returns:
             True if hard-delete succeeded
         """
+        _validate_resource_type(resource_type)
         try:
             # Verify record was soft-deleted
             check_query = text(f"""

@@ -34,12 +34,28 @@ def _get_db():
 #   fsma.tenant_notification_prefs (column: prefs)
 #   fsma.tenant_onboarding (column: state)
 
+_ALLOWED_JSONB_TABLES: dict[str, str] = {
+    "tenant_settings": "settings",
+    "tenant_notification_prefs": "prefs",
+    "tenant_onboarding": "state",
+}
+
+
+def _validate_table_column(table: str, column: str) -> None:
+    """Validate table/column against the allowlist to prevent SQL injection."""
+    allowed_col = _ALLOWED_JSONB_TABLES.get(table)
+    if allowed_col is None:
+        raise ValueError(f"Table '{table}' is not in the JSONB allowlist: {list(_ALLOWED_JSONB_TABLES)}")
+    if column != allowed_col:
+        raise ValueError(f"Column '{column}' is not allowed for table '{table}' (expected '{allowed_col}')")
+
 
 def get_jsonb(tenant_id: str, table: str, column: str) -> Optional[dict]:
     """Read JSONB data from a dedicated tenant table.
 
     Returns None if DB unavailable or row doesn't exist.
     """
+    _validate_table_column(table, column)
     db = _get_db()
     if not db:
         return None
@@ -63,6 +79,7 @@ def set_jsonb(tenant_id: str, table: str, column: str, data: dict) -> bool:
 
     Returns True on success, False on failure.
     """
+    _validate_table_column(table, column)
     db = _get_db()
     if not db:
         logger.error("db_write_skipped table=%s tenant=%s reason=no_connection", table, tenant_id)

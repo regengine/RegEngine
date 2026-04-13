@@ -45,7 +45,7 @@ from .supplier_onboarding_routes import (
 router = APIRouter(prefix="/supplier", tags=["supplier-onboarding"])
 
 
-@router.get("/ftl-categories")
+@router.get("/ftl-categories", response_model=dict[str, list[dict[str, Any]]])
 async def get_ftl_categories(
     current_user: UserModel = Depends(get_current_user),
 ) -> dict[str, list[dict[str, Any]]]:
@@ -53,7 +53,7 @@ async def get_ftl_categories(
     return {"categories": FTL_CATEGORY_CATALOG}
 
 
-@router.get("/facilities")
+@router.get("/facilities", response_model=dict[str, Any])
 async def list_supplier_facilities(
     pagination: PaginationParams = Depends(),
     current_user: UserModel = Depends(get_current_user),
@@ -385,7 +385,7 @@ async def create_tlc(
     )
 
 
-@router.get("/tlcs")
+@router.get("/tlcs", response_model=dict[str, Any])
 async def list_tlcs(
     facility_id: str | None = None,
     pagination: PaginationParams = Depends(),

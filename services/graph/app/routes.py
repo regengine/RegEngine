@@ -1,10 +1,11 @@
-from typing import Optional
+from typing import Optional, Any
 
 import structlog
 from fastapi import APIRouter, HTTPException, Query, Depends, Request
 from shared.metrics_auth import require_metrics_key
 from fastapi.responses import PlainTextResponse
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
+from pydantic import BaseModel
 import uuid
 import sys
 from pathlib import Path
@@ -26,6 +27,28 @@ from .routers import labels, lineage_traversal, regulations
 from .routers.fsma import trace_router, science_router, recall_router, metrics_router, compliance_router
 
 logger = structlog.get_logger("graph-api")
+
+
+# ---------------------------------------------------------------------------
+# Response Models
+# ---------------------------------------------------------------------------
+
+class ProvisionItem(BaseModel):
+    hash: str
+    status: Optional[str] = None
+    provenance: Optional[dict[str, Any]] = None
+    extraction: Optional[dict[str, Any]] = None
+    doc_hash: Optional[str] = None
+    tenant_id: Optional[str] = None
+
+
+class ProvisionsByRequestResponse(BaseModel):
+    count: int
+    total_count: int
+    limit: int
+    offset: int
+    items: list[ProvisionItem]
+
 
 v1_router.include_router(regulations.router, prefix="/regulations", tags=["regulations"])
 v1_router.include_router(labels.router, prefix="/labels", tags=["labels"])
@@ -71,7 +94,7 @@ def metrics():
     return PlainTextResponse(generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 
-@v1_router.get("/provisions/by-request")
+@v1_router.get("/provisions/by-request", response_model=ProvisionsByRequestResponse)
 @limiter.limit("10/minute")
 async def provisions_by_request_id(
     request: Request,
@@ -80,7 +103,7 @@ async def provisions_by_request_id(
     offset: int = Query(default=0, ge=0, description="Number of items to skip"),
     api_key: str = Depends(require_api_key),
     tenant_id: uuid.UUID = Depends(get_current_tenant_id),
-):
+) -> ProvisionsByRequestResponse:
     """Return provisions whose provenance.request_id matches ``id``.
 
     Supports offset-based pagination via ``limit`` and ``offset`` (#564).
