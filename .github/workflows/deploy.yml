@@ -21,7 +21,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check backend CI status
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           script: |
             const sha = context.sha;
@@ -41,7 +41,7 @@ jobs:
             }
 
       - name: Require CI green
-        uses: lewagon/wait-on-check-action@v1.3.4
+        uses: lewagon/wait-on-check-action@v1.6.1
         with:
           ref: ${{ github.sha }}
           running-workflow-name: 'Wait for CI'
