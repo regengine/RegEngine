@@ -72,7 +72,6 @@ export default function sitemap(): MetadataRoute.Sitemap {
         { url: `${baseUrl}/retailer-readiness`, changeFrequency: 'monthly' as const, priority: 0.7 },
         { url: `${baseUrl}/docs`, changeFrequency: 'monthly' as const, priority: 0.7 },
         { url: `${baseUrl}/docs/fsma-204`, changeFrequency: 'monthly' as const, priority: 0.6 },
-        { url: `${baseUrl}/verticals/food-safety`, changeFrequency: 'monthly' as const, priority: 0.6 },
     ];
 
     return [...marketingPages, ...contentPages, ...toolPages, ...resourcePages].map((page) => ({

@@ -62,7 +62,7 @@ export default function FSMA204ComplianceGuide() {
               FSMA 204 is the FDA's Food Traceability Rule. It requires covered food businesses to keep records identifying the immediate previous sources and immediate recipients of their products. When the FDA needs your traceability data—due to a foodborne illness outbreak, contamination, or suspected intentional adulteration—you have 24 hours to provide it.
             </p>
             <p className="text-[1.05rem] text-[var(--re-text-secondary)] leading-relaxed mb-6">
-              The rule applies to foods on the FDA's Food Traceability List (FTL), which includes 26 categories of high-risk foods: leafy greens, berry crops, bivalve mollusks, soft cheeses, and more. If your business handles any FTL product, FSMA 204 compliance is mandatory.
+              The rule applies to foods on the FDA's Food Traceability List (FTL), which covers 23 categories of high-risk foods — including leafy greens, berry crops, bivalve mollusks, soft cheeses, and more. If your business handles any FTL product, FSMA 204 compliance is mandatory.
             </p>
             <p className="text-[1.05rem] text-[var(--re-text-secondary)] leading-relaxed">
               The FDA designed FSMA 204 around two core concepts: Critical Tracking Events (CTEs) and Key Data Elements (KDEs). These are the data points your business must capture and retain for 2 years.
@@ -178,7 +178,7 @@ export default function FSMA204ComplianceGuide() {
               Who Is Covered by FSMA 204?
             </h2>
             <p className="text-[1.05rem] text-[var(--re-text-secondary)] leading-relaxed mb-8">
-              FSMA 204 applies to any business that handles foods on the FDA's Food Traceability List, which includes 26 categories across:
+              FSMA 204 applies to any business that handles foods on the FDA's Food Traceability List, which covers 23 categories across:
             </p>
             <ul className="space-y-2 mb-8 text-[1.05rem] text-[var(--re-text-secondary)] leading-relaxed">
               <li className="flex gap-3">
