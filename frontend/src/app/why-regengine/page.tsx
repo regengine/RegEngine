@@ -148,7 +148,7 @@ const DIFFERENTIATORS = [
         icon: Lock,
         title: 'Full CTE/KDE Coverage',
         description:
-            'All 7 FSMA 204 CTE types. Per-CTE KDE validation (not batch). Missing CTEs are the #1 reason FDA recalls fail.',
+            'All 7 FSMA 204 CTE types. Per-CTE KDE validation (not batch). Missing CTEs are a leading cause of FDA recall response delays.',
         detail: 'Every field in every CTE type is validated individually. No surprises on FDA submission day.',
     },
     {
@@ -537,7 +537,7 @@ HTTP 201
                                 Complete CTE/KDE Coverage
                             </h3>
                             <p className="text-re-text-secondary mb-4 leading-relaxed">
-                                All 7 FSMA 204 CTE types, fully implemented. Every field validated individually (not batch). Missing CTEs are the #1 reason FDA compliance fails.
+                                All 7 FSMA 204 CTE types, fully implemented. Every field validated individually (not batch). Missing CTEs are a leading cause of FDA recall response delays.
                             </p>
                             <p className="text-re-text-tertiary text-sm mb-6">
                                 Most competitors cover a subset of CTEs or validate in batch. RegEngine covers all 7, with per-CTE KDE validation that catches errors before FDA submission.
