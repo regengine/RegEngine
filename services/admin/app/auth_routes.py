@@ -67,6 +67,54 @@ async def _clear_email_rate_limit(session_store: RedisSessionStore, email: str) 
     await client.delete(_email_attempt_key(email))
 
 
+# ── Account lockout (cumulative, cross-IP) — NIST AC-7 / OWASP A07 (#972) ──
+_LOCKOUT_THRESHOLD = 10
+_LOCKOUT_DURATION = 86400  # 24 hours
+_PROGRESSIVE_DELAY_START = 3  # start delays after 3rd cumulative failure
+
+
+def _lockout_key(email: str) -> str:
+    return f"login_lockout:{email}"
+
+
+async def _check_account_lockout(session_store: RedisSessionStore, email: str) -> None:
+    """Raise 423 if account is locked due to cumulative login failures."""
+    client = await session_store._get_client()
+    count_str = await client.get(_lockout_key(email))
+    if count_str and int(count_str) >= _LOCKOUT_THRESHOLD:
+        raise HTTPException(
+            status_code=status.HTTP_423_LOCKED,
+            detail="Account temporarily locked due to repeated failed login attempts. Contact support or wait 24 hours.",
+            headers={"Retry-After": str(_LOCKOUT_DURATION)},
+        )
+
+
+async def _record_lockout_attempt(session_store: RedisSessionStore, email: str) -> int:
+    """Increment cumulative failure counter. Returns new count."""
+    client = await session_store._get_client()
+    key = _lockout_key(email)
+    async with client.pipeline(transaction=False) as pipe:
+        pipe.incr(key)
+        pipe.expire(key, _LOCKOUT_DURATION)
+        results = await pipe.execute()
+    count = results[0]
+
+    # Progressive delay after Nth failure
+    if count >= _PROGRESSIVE_DELAY_START:
+        delay = min(2 ** (count - _PROGRESSIVE_DELAY_START), 30)
+        await asyncio.sleep(delay)
+
+    if count == _LOCKOUT_THRESHOLD:
+        logger.warning("account_locked", email=mask_email(email), cumulative_failures=count)
+
+    return count
+
+
+async def _clear_lockout(session_store: RedisSessionStore, email: str) -> None:
+    client = await session_store._get_client()
+    await client.delete(_lockout_key(email))
+
+
 async def _persist_session(
     session_store: RedisSessionStore,
     session_data: SessionData,
@@ -171,6 +219,8 @@ async def login(
     # 1. Verify User (normalize email to lowercase for case-insensitive match)
     normalized_login_email = payload.email.strip().lower()
 
+    # Account lockout check — cumulative failures across all IPs (#972)
+    await _check_account_lockout(session_store, normalized_login_email)
     # Per-email rate limit — check before any DB work to prevent enumeration
     await _check_email_rate_limit(session_store, normalized_login_email)
 
@@ -180,6 +230,7 @@ async def login(
     if not user or not verify_password(payload.password, user.password_hash):
         logger.warning("login_failed", reason="invalid_credentials")
         await _record_failed_login_attempt(session_store, normalized_login_email)
+        await _record_lockout_attempt(session_store, normalized_login_email)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password",
@@ -205,8 +256,9 @@ async def login(
             active_tenant_id = tenant.id
             active_tenant_status = tenant.status
     
-    # Clear failed-attempt counter on successful credential verification
+    # Clear failed-attempt counters on successful credential verification
     await _clear_email_rate_limit(session_store, normalized_login_email)
+    await _clear_lockout(session_store, normalized_login_email)
 
     # 3. Create Session in Redis (replaces PostgreSQL session)
     raw_refresh_token = create_refresh_token()
@@ -841,3 +893,60 @@ async def reset_password(
 
     logger.info("reset_password_success", user_id=str(user.id))
     return {"status": "success"}
+
+
+# ── Re-authentication gate for sensitive operations — OWASP API6:2023 (#976) ──
+
+class ConfirmPasswordRequest(BaseModel):
+    password: str = Field(max_length=128)
+
+
+@router.post("/confirm")
+async def confirm_password(
+    payload: ConfirmPasswordRequest,
+    current_user: UserModel = Depends(get_current_user),
+):
+    """Verify password and return short-lived elevation token for sensitive ops."""
+    if not verify_password(payload.password, current_user.password_hash):
+        raise HTTPException(status_code=401, detail="Incorrect password")
+
+    elevation_token = create_access_token(
+        data={
+            "sub": str(current_user.id),
+            "elevated": True,
+        },
+        expires_delta=timedelta(minutes=5),
+    )
+    return {"elevation_token": elevation_token, "expires_in": 300}
+
+
+async def require_reauth(request: Request, current_user: UserModel = Depends(get_current_user)):
+    """FastAPI dependency — requires a recent elevation token for sensitive ops."""
+    elevation_header = request.headers.get("X-Elevation-Token")
+    if not elevation_header:
+        raise HTTPException(status_code=403, detail="Re-authentication required for this operation")
+    try:
+        payload = decode_access_token(elevation_header)
+        if not payload.get("elevated"):
+            raise HTTPException(status_code=403, detail="Invalid elevation token")
+        if str(payload.get("sub")) != str(current_user.id):
+            raise HTTPException(status_code=403, detail="Elevation token user mismatch")
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(status_code=403, detail="Elevation token expired or invalid")
+
+
+# ── Admin: Unlock locked account (#972) ──
+
+@router.post("/unlock", dependencies=[Depends(PermissionChecker("admin:manage_users"))])
+async def unlock_account(
+    email: str = Query(...),
+    session_store: RedisSessionStore = Depends(get_session_store),
+):
+    """Admin endpoint to unlock a locked-out account."""
+    normalized = email.strip().lower()
+    await _clear_lockout(session_store, normalized)
+    await _clear_email_rate_limit(session_store, normalized)
+    logger.info("account_unlocked", email=mask_email(normalized))
+    return {"unlocked": True, "email": mask_email(normalized)}

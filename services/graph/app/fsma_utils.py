@@ -135,6 +135,9 @@ async def trace_forward(
     Returns:
         TraceResult with all downstream facilities, events, lots, and any time violations
     """
+    if not isinstance(max_depth, int) or max_depth < 1:
+        raise ValueError(f"max_depth must be a positive integer, got {max_depth!r}")
+
     start_time = time.time()
 
     # Cap variable-length expansion to avoid combinatorial blowup.
@@ -392,6 +395,9 @@ async def trace_backward(
     Returns:
         TraceResult with all upstream facilities, events, and lots
     """
+    if not isinstance(max_depth, int) or max_depth < 1:
+        raise ValueError(f"max_depth must be a positive integer, got {max_depth!r}")
+
     start_time = time.time()
 
     # Cap variable-length expansion (same rationale as trace_forward)
@@ -549,6 +555,7 @@ async def find_gaps(
         e.document_id as document_id,
         CASE WHEN e.event_date IS NULL OR e.event_date = '' THEN 'missing_date' ELSE '' END +
         CASE WHEN NOT EXISTS { MATCH (e)<-[:UNDERWENT]-(l:Lot) } THEN ',missing_lot' ELSE '' END as gaps
+    LIMIT 2000
     """
 
     gaps = []
@@ -1182,6 +1189,7 @@ async def find_orphaned_lots(
         most_recent_event.type as last_event_type,
         most_recent_event.event_date as last_event_date
     ORDER BY most_recent_event.event_date ASC
+    LIMIT 2000
     """
 
     orphans = []

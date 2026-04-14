@@ -167,6 +167,8 @@ class LLMGenerativeExtractor:
         start_time = time.perf_counter()
         log = logger.bind(corr_id=correlation_id, jurisdiction=jurisdiction, model=self.client.model)
 
+        from shared.pii import redact_pii
+        text = redact_pii(text)  # Strip PII before external API call (#981)
         prompt = f"REGULATION TEXT ({jurisdiction}):\n{text[:50000]}"
 
         for attempt in range(self.max_retries + 1):

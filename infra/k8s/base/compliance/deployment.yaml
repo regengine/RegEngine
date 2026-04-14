@@ -14,11 +14,18 @@ spec:
       labels:
         app: compliance
     spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
       containers:
       - name: compliance
         image: regengine/compliance-service:$(IMAGE_TAG)
         securityContext:
           allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+              - ALL
         ports:
         - containerPort: 8000
         envFrom:

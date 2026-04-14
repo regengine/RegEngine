@@ -90,7 +90,7 @@ services:
       retries: 3
       start_period: 10s
     ports:
-      - "8600:8600"
+      - "127.0.0.1:8600:8600"
 
   admin-api:
     build:
@@ -98,7 +98,7 @@ services:
       dockerfile: ./services/admin/Dockerfile
     restart: unless-stopped
     ports:
-      - "8400:8400"
+      - "127.0.0.1:8400:8400"
     environment:
       <<: *env_common
       LOG_LEVEL: INFO
@@ -133,7 +133,7 @@ services:
       dockerfile: ./services/ingestion/Dockerfile
     restart: unless-stopped
     ports:
-      - "8002:8000"
+      - "127.0.0.1:8002:8000"
     environment:
       <<: *env_common
       # Override DATABASE_URL to use the async driver (required by shared.api_key_store)
@@ -190,7 +190,7 @@ services:
       timeout: 3s
       retries: 10
     ports:
-      - "8500:8500"
+      - "127.0.0.1:8500:8500"
 
   jaeger:
     image: jaegertracing/all-in-one:1.54
@@ -265,7 +265,7 @@ services:
       timeout: 3s
       retries: 10
     ports:
-      - "8100:8100"
+      - "127.0.0.1:8100:8100"
 
   graph-service:
     build:
@@ -299,7 +299,7 @@ services:
       - ./services/graph/main.py:/app/main.py
       - ./services/shared:/app/shared
     ports:
-      - "8200:8200"
+      - "127.0.0.1:8200:8200"
 
 
   compliance-worker:
@@ -354,6 +354,8 @@ services:
       - --kafka-addr=0.0.0.0:9092
       - --advertise-kafka-addr=redpanda:9092
       - --set=auto_create_topics_enabled=false
+      - --set=redpanda.enable_idempotence=true
+      # NOTE: min.insync.replicas requires 2+ brokers; not applicable for single-node dev
     ports:
       - "127.0.0.1:9092:9092"
       - "127.0.0.1:9644:9644"
@@ -408,7 +410,20 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-regengine}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}
       POSTGRES_DB: ${POSTGRES_DB:-regengine}
-      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=en_US.UTF-8"
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=en_US.UTF-8 --auth-host=scram-sha-256"
+      POSTGRES_HOST_AUTH_METHOD: scram-sha-256
+    # SSL flags require server.crt/server.key mounted into the PG data dir.
+    # In local dev these certs may not exist — postgres will still start without
+    # SSL but log a warning. For production, mount TLS certs and uncomment ssl lines.
+    command: >
+      postgres
+      -c ssl=on
+      -c ssl_cert_file=/var/lib/postgresql/server.crt
+      -c ssl_key_file=/var/lib/postgresql/server.key
+      -c password_encryption=scram-sha-256
+      -c log_statement=all
+      -c log_connections=on
+      -c log_disconnections=on
     ports:
       - "127.0.0.1:5433:5432"
     volumes:
@@ -438,11 +453,7 @@ services:
       retries: 5
     # (#570) Cap memory at 256 MB; evict least-recently-used keys when full
     # so Redis never OOM-kills and always accepts new rate-limit/session writes.
-    command: >
-      redis-server
-      --appendonly yes
-      --maxmemory 256mb
-      --maxmemory-policy allkeys-lru
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory", "256mb", "--maxmemory-policy", "allkeys-lru", "--requirepass", "${REDIS_PASSWORD:-changeme_dev}"]
 
   kafka-ui:
     image: provectuslabs/kafka-ui:v0.7.2
@@ -463,7 +474,7 @@ services:
     restart: unless-stopped
     profiles: [monitoring]
     ports:
-      - "9090:9090"
+      - "127.0.0.1:9090:9090"
     volumes:
       - ./infra/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus_data:/prometheus
@@ -477,7 +488,7 @@ services:
     restart: unless-stopped
     profiles: [monitoring]
     ports:
-      - "3001:3000"
+      - "127.0.0.1:3001:3000"
     environment:
       - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
       # 'admin' default is a trivially guessable password — require explicit set (#545)
@@ -510,7 +521,7 @@ services:
     environment:
       - REDIS_ADDR=redis://redis:6379
     ports:
-      - "9121:9121"
+      - "127.0.0.1:9121:9121"
     depends_on:
       - redis
 
@@ -522,7 +533,7 @@ services:
       # POSTGRES_PASSWORD must be set — no credential fallback (#545)
       - DATA_SOURCE_NAME=postgresql://regengine:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}@postgres:5432/regengine?sslmode=prefer
     ports:
-      - "9187:9187"
+      - "127.0.0.1:9187:9187"
     depends_on:
       - postgres
 

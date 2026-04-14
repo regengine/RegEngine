@@ -14,11 +14,18 @@ spec:
       labels:
         app: scheduler
     spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
       containers:
       - name: scheduler
         image: regengine/scheduler:$(IMAGE_TAG)
         securityContext:
           allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+              - ALL
         envFrom:
         - secretRef:
             name: scheduler-secrets

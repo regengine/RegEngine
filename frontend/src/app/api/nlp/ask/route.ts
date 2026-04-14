@@ -65,10 +65,13 @@ export async function POST(request: NextRequest) {
             signal: AbortSignal.timeout(30_000),
         });
     } catch (err) {
+        const correlationId = crypto.randomUUID();
+        console.error('[nlp/ask] Upstream request failed', { correlationId, upstreamUrl, error: String(err) });
         return NextResponse.json(
             {
                 error: 'nlp_service_unreachable',
-                detail: `Could not reach NLP service at ${upstreamUrl}: ${String(err)}`,
+                detail: 'NLP service is temporarily unavailable. Please retry.',
+                correlation_id: correlationId,
             },
             { status: 503 },
         );

@@ -40,9 +40,9 @@ const TIER_ICONS: Record<string, React.ElementType> = {
 
 const TIER_GRADIENTS: Record<string, string> = {
 
-    growth: 'linear-gradient(135deg, #3b82f6, #2563eb)',
-    scale: 'linear-gradient(135deg, #8b5cf6, #7c3aed)',
-    enterprise: 'linear-gradient(135deg, #f59e0b, #d97706)',
+    growth: 'linear-gradient(135deg, var(--re-brand-blue, #3b82f6), var(--re-brand-blue-dark, #2563eb))',
+    scale: 'linear-gradient(135deg, var(--re-brand-purple, #8b5cf6), var(--re-brand-purple-dark, #7c3aed))',
+    enterprise: 'linear-gradient(135deg, var(--re-brand-amber, #f59e0b), var(--re-brand-amber-dark, #d97706))',
 };
 
 export function PlanCard({
@@ -102,8 +102,8 @@ export function PlanCard({
             {/* Popular badge */}
             {highlighted && (
                 <Badge
-                    className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-0.5 text-xs font-semibold"
-                    style={{ background: 'var(--re-info)', color: '#fff' }}
+                    className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-0.5 text-xs font-semibold text-white"
+                    style={{ background: 'var(--re-info)' }}
                 >
                     Most Popular
                 </Badge>

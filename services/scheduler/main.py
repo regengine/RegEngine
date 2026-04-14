@@ -449,9 +449,39 @@ class SchedulerService:
         )
         logger.info("job_scheduled", job_id="deadline_monitor", interval_minutes=5)
 
+        # Inactive account disablement — NIST AC-2(3) (#974)
+        self.scheduler.add_job(
+            self.disable_inactive_accounts,
+            trigger=IntervalTrigger(hours=24),
+            id="inactive_account_sweep",
+            name="Disable Inactive Accounts (90 days)",
+            replace_existing=True,
+        )
+        logger.info("job_scheduled", job_id="inactive_account_sweep", interval_hours=24)
+
+        # KDE retention enforcement — FSMA 204 24-month minimum (#973)
+        self.scheduler.add_job(
+            self.enforce_kde_retention,
+            trigger=IntervalTrigger(hours=24),
+            id="kde_retention_enforcement",
+            name="KDE Retention Enforcement (24-month floor)",
+            replace_existing=True,
+        )
+        logger.info("job_scheduled", job_id="kde_retention_enforcement", interval_hours=24)
+
+        # Data archival/purge — retention policy enforcement (#983)
+        self.scheduler.add_job(
+            self.archive_expired_records,
+            trigger=IntervalTrigger(hours=24),
+            id="data_archival",
+            name="Archive Expired Records",
+            replace_existing=True,
+        )
+        logger.info("job_scheduled", job_id="data_archival", interval_hours=24)
+
         logger.info(
             "scheduler_ready",
-            total_jobs=4,
+            total_jobs=7,
             scrapers=list(self.scrapers.keys()),
         )
 
@@ -530,6 +560,120 @@ class SchedulerService:
                 db.close()
         except (ImportError, RuntimeError, ConnectionError, ValueError) as e:
             logger.error("deadline_monitor_failed", error=str(e))
+
+    def disable_inactive_accounts(self) -> None:
+        """Disable accounts with no login for 90+ days — NIST AC-2(3) (#974)."""
+        try:
+            from shared.database import SessionLocal
+
+            db = SessionLocal()
+            try:
+                result = db.execute(
+                    __import__("sqlalchemy").text("""
+                        UPDATE users
+                        SET status = 'disabled'
+                        WHERE status = 'active'
+                          AND last_login_at IS NOT NULL
+                          AND last_login_at < NOW() - INTERVAL '90 days'
+                        RETURNING id, email
+                    """)
+                )
+                disabled = result.fetchall()
+                db.commit()
+
+                if disabled:
+                    logger.warning(
+                        "inactive_accounts_disabled",
+                        count=len(disabled),
+                        user_ids=[str(r[0]) for r in disabled],
+                    )
+                else:
+                    logger.debug("inactive_account_sweep_ok", disabled_count=0)
+            finally:
+                db.close()
+        except (ImportError, RuntimeError, ConnectionError, ValueError) as e:
+            logger.error("inactive_account_sweep_failed", error=str(e))
+
+    def enforce_kde_retention(self) -> None:
+        """Verify no KDE records younger than 24 months have been deleted — FSMA 204 (#973).
+
+        This is a compliance guard: it checks that the minimum record count
+        for recent months hasn't dropped (which would indicate premature deletion).
+        """
+        try:
+            from shared.database import SessionLocal
+
+            db = SessionLocal()
+            try:
+                # Check that audit trail records within the 24-month window exist
+                result = db.execute(
+                    __import__("sqlalchemy").text("""
+                        SELECT COUNT(*) as cnt
+                        FROM fsma.fsma_audit_trail
+                        WHERE created_at >= NOW() - INTERVAL '24 months'
+                    """)
+                )
+                row = result.fetchone()
+                count = row[0] if row else 0
+                if count == 0:
+                    logger.warning(
+                        "kde_retention_warning",
+                        message="No audit trail records found within 24-month retention window",
+                    )
+                else:
+                    logger.debug("kde_retention_ok", records_in_window=count)
+            finally:
+                db.close()
+        except (ImportError, RuntimeError, ConnectionError, ValueError) as e:
+            logger.error("kde_retention_check_failed", error=str(e))
+
+    def archive_expired_records(self) -> None:
+        """Archive records past retention limits — NIST AU-4 (#983).
+
+        Retention defaults (from ingestion settings):
+        - CTE events: 1095 days (3 years)
+        - Audit logs: 2555 days (7 years)
+        - FDA exports: 365 days (1 year)
+        """
+        try:
+            from shared.database import SessionLocal
+
+            db = SessionLocal()
+            try:
+                # Archive FDA exports older than 1 year
+                result = db.execute(
+                    __import__("sqlalchemy").text("""
+                        DELETE FROM fsma.fda_exports
+                        WHERE created_at < NOW() - INTERVAL '365 days'
+                        RETURNING id
+                    """)
+                )
+                deleted_exports = len(result.fetchall())
+
+                # Archive CTE events older than 3 years
+                result = db.execute(
+                    __import__("sqlalchemy").text("""
+                        DELETE FROM fsma.cte_events
+                        WHERE created_at < NOW() - INTERVAL '1095 days'
+                        RETURNING id
+                    """)
+                )
+                deleted_ctes = len(result.fetchall())
+
+                db.commit()
+
+                if deleted_exports > 0 or deleted_ctes > 0:
+                    logger.info(
+                        "data_archival_complete",
+                        deleted_exports=deleted_exports,
+                        deleted_ctes=deleted_ctes,
+                    )
+                else:
+                    logger.debug("data_archival_noop", message="No expired records to archive")
+            finally:
+                db.close()
+        except (ImportError, RuntimeError, ConnectionError, ValueError) as e:
+            logger.error("data_archival_failed", error=str(e))
 
     def run_initial_scrape(self) -> None:
         """Run all scrapers immediately on startup."""

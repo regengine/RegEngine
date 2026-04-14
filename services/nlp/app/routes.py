@@ -5,6 +5,7 @@ import hmac
 import time
 from typing import Any, Optional
 from urllib.parse import quote
+import uuid
 from uuid import UUID
 
 import httpx
@@ -314,14 +315,18 @@ async def _graph_get(
         ) from exc
 
     if response.status_code >= 500:
+        correlation_id = str(uuid.uuid4())
+        logger.error("graph_service_5xx", status=response.status_code, body=response.text[:500], correlation_id=correlation_id)
         raise HTTPException(
             status_code=502,
-            detail=f"Graph service error ({response.status_code}): {response.text[:500]}",
+            detail=f"Upstream service temporarily unavailable (ref: {correlation_id})",
         )
     if response.status_code >= 400:
+        correlation_id = str(uuid.uuid4())
+        logger.warning("graph_service_4xx", status=response.status_code, body=response.text[:500], correlation_id=correlation_id)
         raise HTTPException(
             status_code=response.status_code,
-            detail=f"Graph service rejected request: {response.text[:500]}",
+            detail=f"Request could not be processed (ref: {correlation_id})",
         )
 
     try:

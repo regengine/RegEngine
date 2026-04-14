@@ -39,6 +39,7 @@ from .resolution import EntityResolver
 from .s3_utils import get_bytes
 
 logger = structlog.get_logger("nlp-consumer")
+_audit_logger = structlog.get_logger("nlp-consumer-audit")
 
 try:
     MESSAGES_COUNTER = Counter("nlp_messages_total", "NLP messages processed", ["status"])
@@ -63,7 +64,12 @@ TOPIC_FSMA_DLQ = "fsma.dead_letter"
 
 # Max retries before sending to DLQ
 MAX_RETRIES = 3
-_retry_counts: dict[str, int] = {}
+# Bounded retry tracker — TTL prevents unbounded growth under partial failures (#994)
+try:
+    from cachetools import TTLCache
+    _retry_counts: dict[str, int] = TTLCache(maxsize=50_000, ttl=3600)  # type: ignore[assignment]
+except ImportError:
+    _retry_counts: dict[str, int] = {}  # type: ignore[no-redef]
 
 RESOLVER = EntityResolver()
 CLASSIFIER = SignalClassifier()
@@ -544,6 +550,22 @@ def run_consumer() -> None:
                             ),
                         )
                         MESSAGES_COUNTER.labels(status="success").inc()
+
+                        # Synchronous audit logging for FSMA compliance (#982)
+                        try:
+                            _audit_logger.info(
+                                "nlp_extraction_audited",
+                                extra={
+                                    "document_id": doc_id,
+                                    "tenant_id": tenant_id,
+                                    "source_url": source_url,
+                                    "extraction_count": len(extractions),
+                                    "timestamp": _now_iso(),
+                                },
+                            )
+                        except Exception as _audit_exc:
+                            logger.error("nlp_audit_logging_failed", document_id=doc_id, error=str(_audit_exc))
+
                         consumer.commit()
                     except (ValidationError, KafkaTimeoutError) as exc:
                         # Track retries per document

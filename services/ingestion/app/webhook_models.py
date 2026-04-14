@@ -8,6 +8,7 @@ FSMA 204 traceability events into RegEngine.
 
 from __future__ import annotations
 
+import os
 import re
 from datetime import datetime, timedelta, timezone
 from enum import Enum
@@ -167,8 +168,10 @@ class IngestEvent(BaseModel):
         clean = re.sub(r"\D", "", v)
         is_valid, error_msg = validate_gln(clean) if len(clean) == 13 else (False, f"GLN must be exactly 13 digits, got {len(clean)}")
         if not is_valid:
-            _gln_logger.warning("invalid_gln value=%s error=%s", v, error_msg)
-            # Return cleaned value anyway — warn, don't reject
+            strict = os.getenv("STRICT_GLN_VALIDATION", "true").lower() == "true"
+            if strict:
+                raise ValueError(f"Invalid GLN: {error_msg}")
+            _gln_logger.warning("invalid_gln value=%s error=%s (strict mode disabled)", v, error_msg)
             return clean if len(clean) == 13 else v
         return clean
 

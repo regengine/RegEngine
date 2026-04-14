@@ -48,15 +48,27 @@ def verify_hash(content: bytes, expected_sha256: str) -> bool:
     return actual_sha256 == expected_sha256
 
 
-def generate_document_id(content_sha256: str, prefix_length: int = 16) -> str:
+def generate_document_id(content_sha256: str, prefix_length: int = 64) -> str:
     """
     Generate a document ID from content hash.
-    
+
+    Uses full 64-char SHA-256 hex digest by default to prevent birthday
+    collision risk in large corpora (#977).  Legacy callers passing
+    prefix_length < 64 will still work but get a deprecation warning.
+
     Args:
         content_sha256: SHA-256 hash of content
-        prefix_length: Length of hash prefix to use
-        
+        prefix_length: Length of hash prefix to use (default: 64, full digest)
+
     Returns:
         Document ID string
     """
+    if prefix_length < 64:
+        import warnings
+        warnings.warn(
+            f"generate_document_id prefix_length={prefix_length} is deprecated; "
+            "use full 64-char digest for collision safety",
+            DeprecationWarning,
+            stacklevel=2,
+        )
     return content_sha256[:prefix_length]

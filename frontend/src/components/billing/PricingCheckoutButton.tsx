@@ -107,7 +107,7 @@ export function PricingCheckoutButton({
                 )}
             </Button>
             {error && (
-                <p style={{ color: '#ef4444', fontSize: '12px', marginTop: '8px', textAlign: 'center' }}>
+                <p className="text-red-500 text-xs mt-2 text-center">
                     {error}
                 </p>
             )}

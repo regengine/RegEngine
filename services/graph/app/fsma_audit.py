@@ -54,48 +54,63 @@ def _get_audit_db_engine():
             return None
 
 
+_PERSIST_MAX_RETRIES = 3
+
+
 def _persist_audit_entry(entry) -> None:
-    """Persist an audit entry to Postgres. Best-effort — failures logged, not raised."""
+    """Persist an audit entry to Postgres with retry. Raises on total failure (#971)."""
     engine = _get_audit_db_engine()
     if engine is None:
         return
 
-    try:
-        from sqlalchemy import text
-        with engine.connect() as conn:
-            conn.execute(
-                text("""
-                    INSERT INTO fsma.fsma_audit_trail
-                    (event_id, actor, actor_type, action, target_type, target_id,
-                     tenant_id, correlation_id, confidence, evidence_link,
-                     checksum, previous_checksum, diff_json, created_at)
-                    VALUES
-                    (:event_id, :actor, :actor_type, :action, :target_type, :target_id,
-                     :tenant_id, :correlation_id, :confidence, :evidence_link,
-                     :checksum, :previous_checksum, :diff_json, :created_at)
-                    ON CONFLICT DO NOTHING
-                """),
-                {
-                    "event_id": entry.event_id,
-                    "actor": entry.actor,
-                    "actor_type": entry.actor_type.value if hasattr(entry.actor_type, 'value') else str(entry.actor_type),
-                    "action": entry.action.value if hasattr(entry.action, 'value') else str(entry.action),
-                    "target_type": entry.target_type,
-                    "target_id": entry.target_id,
-                    "tenant_id": entry.tenant_id,
-                    "correlation_id": entry.correlation_id,
-                    "confidence": entry.confidence,
-                    "evidence_link": entry.evidence_link,
-                    "checksum": entry.checksum,
-                    "previous_checksum": entry.previous_checksum,
-                    "diff_json": json.dumps([d.to_dict() for d in entry.diff]) if entry.diff else None,
-                    "created_at": entry.timestamp,
-                },
-            )
-            conn.commit()
-    except Exception as e:
-        # Best-effort: log failure but don't break in-memory audit
-        logging.getLogger("fsma_audit").warning("Failed to persist audit entry: %s", e)
+    import time as _time
+    from sqlalchemy import text
+
+    _insert_sql = text("""
+        INSERT INTO fsma.fsma_audit_trail
+        (event_id, actor, actor_type, action, target_type, target_id,
+         tenant_id, correlation_id, confidence, evidence_link,
+         checksum, previous_checksum, diff_json, created_at)
+        VALUES
+        (:event_id, :actor, :actor_type, :action, :target_type, :target_id,
+         :tenant_id, :correlation_id, :confidence, :evidence_link,
+         :checksum, :previous_checksum, :diff_json, :created_at)
+        ON CONFLICT DO NOTHING
+    """)
+    _params = {
+        "event_id": entry.event_id,
+        "actor": entry.actor,
+        "actor_type": entry.actor_type.value if hasattr(entry.actor_type, 'value') else str(entry.actor_type),
+        "action": entry.action.value if hasattr(entry.action, 'value') else str(entry.action),
+        "target_type": entry.target_type,
+        "target_id": entry.target_id,
+        "tenant_id": entry.tenant_id,
+        "correlation_id": entry.correlation_id,
+        "confidence": entry.confidence,
+        "evidence_link": entry.evidence_link,
+        "checksum": entry.checksum,
+        "previous_checksum": entry.previous_checksum,
+        "diff_json": json.dumps([d.to_dict() for d in entry.diff]) if entry.diff else None,
+        "created_at": entry.timestamp,
+    }
+
+    last_exc: Optional[Exception] = None
+    for attempt in range(_PERSIST_MAX_RETRIES):
+        try:
+            with engine.connect() as conn:
+                conn.execute(_insert_sql, _params)
+                conn.commit()
+            return  # success
+        except Exception as e:
+            last_exc = e
+            if attempt < _PERSIST_MAX_RETRIES - 1:
+                _time.sleep(min(2 ** attempt, 4))
+
+    # All retries exhausted — log at ERROR and raise so caller knows
+    logging.getLogger("fsma_audit").error(
+        "CRITICAL: Audit entry lost after %d retries: event_id=%s error=%s",
+        _PERSIST_MAX_RETRIES, entry.event_id, last_exc,
+    )
 
 
 def _row_to_audit_entry(row) -> "FSMAAuditEntry":
@@ -143,13 +158,44 @@ def _row_to_audit_entry(row) -> "FSMAAuditEntry":
     return entry
 
 
-def _query_audit_trail(where_clause: str, params: dict, limit: int = 200) -> List["FSMAAuditEntry"]:
-    """Execute a SELECT against fsma.fsma_audit_trail and return FSMAAuditEntry list."""
+def _query_audit_trail(
+    *,
+    target_id: Optional[str] = None,
+    tenant_id: Optional[str] = None,
+    action: Optional[str] = None,
+    start: Optional[datetime] = None,
+    end: Optional[datetime] = None,
+    limit: int = 200,
+) -> List["FSMAAuditEntry"]:
+    """Execute a SELECT against fsma.fsma_audit_trail and return FSMAAuditEntry list.
+
+    Uses typed filter kwargs instead of raw SQL strings to prevent injection (#968).
+    """
     engine = _get_audit_db_engine()
     if engine is None:
         return []
     try:
         from sqlalchemy import text
+
+        conditions: List[str] = []
+        params: Dict[str, Any] = {"_limit": limit}
+        if target_id is not None:
+            conditions.append("target_id = :target_id")
+            params["target_id"] = target_id
+        if tenant_id is not None:
+            conditions.append("tenant_id = :tenant_id")
+            params["tenant_id"] = tenant_id
+        if action is not None:
+            conditions.append("action = :action")
+            params["action"] = action
+        if start is not None:
+            conditions.append("created_at >= :start")
+            params["start"] = start
+        if end is not None:
+            conditions.append("created_at <= :end")
+            params["end"] = end
+
+        where_clause = ("WHERE " + " AND ".join(conditions)) if conditions else ""
         sql = f"""
             SELECT event_id, actor, actor_type, action, target_type, target_id,
                    tenant_id, correlation_id, confidence, evidence_link,
@@ -160,7 +206,7 @@ def _query_audit_trail(where_clause: str, params: dict, limit: int = 200) -> Lis
             LIMIT :_limit
         """
         with engine.connect() as conn:
-            rows = conn.execute(text(sql), {**params, "_limit": limit}).fetchall()
+            rows = conn.execute(text(sql), params).fetchall()
         return [_row_to_audit_entry(r) for r in rows]
     except Exception as e:
         logging.getLogger("fsma_audit").warning("Failed to query audit trail: %s", e)
@@ -342,6 +388,25 @@ class FSMAAuditLog:
         self._lock = threading.RLock()
         self._by_target: Dict[str, List[str]] = {}  # target_id -> [event_ids]
         self._by_tenant: Dict[str, List[str]] = {}  # tenant_id -> [event_ids]
+        self._last_db_checksum: Optional[str] = self._load_last_checksum()
+
+    @staticmethod
+    def _load_last_checksum() -> Optional[str]:
+        """Bootstrap chain integrity from DB on restart (#986)."""
+        engine = _get_audit_db_engine()
+        if engine is None:
+            return None
+        try:
+            from sqlalchemy import text
+            with engine.connect() as conn:
+                row = conn.execute(
+                    text("SELECT checksum FROM fsma.fsma_audit_trail ORDER BY created_at DESC LIMIT 1")
+                ).fetchone()
+                if row:
+                    return row[0]
+        except Exception as e:
+            logging.getLogger("fsma_audit").warning("Failed to load last audit checksum: %s", e)
+        return None
 
     def log(
         self,
@@ -376,10 +441,12 @@ class FSMAAuditLog:
             The created audit entry
         """
         with self._lock:
-            # Get previous checksum for chain
+            # Get previous checksum for chain (falls back to DB on first entry after restart)
             previous_checksum = None
             if self._entries:
                 previous_checksum = self._entries[-1].checksum
+            elif self._last_db_checksum:
+                previous_checksum = self._last_db_checksum
 
             entry = FSMAAuditEntry(
                 actor=actor,
@@ -428,7 +495,7 @@ class FSMAAuditLog:
         Reads from PostgreSQL when available so entries survive restarts.
         Falls back to the in-process cache when the DB is unreachable.
         """
-        db_entries = _query_audit_trail("WHERE target_id = :target_id", {"target_id": target_id})
+        db_entries = _query_audit_trail(target_id=target_id)
         if db_entries:
             return db_entries
         # Fallback to in-memory
@@ -442,7 +509,7 @@ class FSMAAuditLog:
         Reads from PostgreSQL when available so entries survive restarts.
         Falls back to the in-process cache when the DB is unreachable.
         """
-        db_entries = _query_audit_trail("WHERE tenant_id = :tenant_id", {"tenant_id": tenant_id})
+        db_entries = _query_audit_trail(tenant_id=tenant_id)
         if db_entries:
             return db_entries
         # Fallback to in-memory
@@ -456,7 +523,7 @@ class FSMAAuditLog:
         Reads from PostgreSQL when available so entries survive restarts.
         Falls back to the in-process cache when the DB is unreachable.
         """
-        db_entries = _query_audit_trail("WHERE action = :action", {"action": action.value})
+        db_entries = _query_audit_trail(action=action.value)
         if db_entries:
             return db_entries
         # Fallback to in-memory
@@ -469,10 +536,7 @@ class FSMAAuditLog:
         Reads from PostgreSQL when available so entries survive restarts.
         Falls back to the in-process cache when the DB is unreachable.
         """
-        db_entries = _query_audit_trail(
-            "WHERE created_at >= :start AND created_at <= :end",
-            {"start": start, "end": end},
-        )
+        db_entries = _query_audit_trail(start=start, end=end)
         if db_entries:
             return db_entries
         # Fallback to in-memory
@@ -492,7 +556,7 @@ class FSMAAuditLog:
         Reads from PostgreSQL when available so entries survive restarts.
         Falls back to the in-process cache when the DB is unreachable.
         """
-        db_entries = _query_audit_trail("", {})
+        db_entries = _query_audit_trail()
         if db_entries:
             return db_entries
         # Fallback to in-memory
