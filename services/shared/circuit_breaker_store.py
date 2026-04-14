@@ -11,7 +11,7 @@ Usage::
     store = get_store()
 
     # Or explicit
-    store = RedisCircuitStore(redis_url="redis://redis:6379/3")
+    store = RedisCircuitStore(redis_url="rediss://redis:6379/3")
 """
 
 from __future__ import annotations
@@ -92,7 +92,7 @@ class RedisCircuitStore:
     def __init__(self, redis_url: Optional[str] = None) -> None:
         import redis as _redis
 
-        url = redis_url or os.getenv("CIRCUIT_BREAKER_REDIS_URL") or os.getenv("REDIS_URL", "redis://redis:6379/0")
+        url = redis_url or os.getenv("CIRCUIT_BREAKER_REDIS_URL") or os.getenv("REDIS_URL", "rediss://redis:6379/0")
         self._redis = _redis.from_url(url, decode_responses=True, socket_connect_timeout=2)
         self._redis.ping()  # Fail fast if Redis is unreachable
         self._prefix = "cb:"

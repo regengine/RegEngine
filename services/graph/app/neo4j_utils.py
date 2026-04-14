@@ -26,6 +26,7 @@ def driver():
                     max_connection_lifetime=settings.neo4j_max_lifetime,
                     max_connection_pool_size=settings.neo4j_pool_size,
                     connection_acquisition_timeout=settings.neo4j_pool_timeout,
+                    encrypted=settings.neo4j_encrypted,
                 )
     return _driver
 
@@ -57,6 +58,7 @@ class Neo4jClient:
             max_connection_lifetime=settings.neo4j_max_lifetime,
             max_connection_pool_size=settings.neo4j_pool_size,
             connection_acquisition_timeout=settings.neo4j_pool_timeout,
+            encrypted=settings.neo4j_encrypted,
         )
         # Force usage of default database for Community Edition support
         # In Enterprise, we would use 'database' argument

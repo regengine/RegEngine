@@ -54,7 +54,7 @@ async def _get_redis() -> aioredis.Redis | None:
         return None
     if _redis_client is None:
         try:
-            url = os.getenv("REDIS_URL", "redis://redis:6379/0")
+            url = os.getenv("REDIS_URL", "rediss://redis:6379/0")
             _redis_client = aioredis.from_url(
                 url, encoding="utf-8", decode_responses=True, max_connections=5,
             )

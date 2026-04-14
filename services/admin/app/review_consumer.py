@@ -199,7 +199,7 @@ def run_consumer() -> None:
         bootstrap_servers=bootstrap,
         enable_auto_commit=False,
         auto_offset_reset="earliest",
-        group_id="admin-review-consumer",
+        group_id=settings.consumer_group_id,
     )
 
     tracker = get_hallucination_tracker()

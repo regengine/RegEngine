@@ -38,7 +38,7 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
 
     def __init__(self, app, redis_url: str | None = None):
         super().__init__(app)
-        self.redis_url = redis_url or os.getenv("REDIS_URL", "redis://redis:6379/0")
+        self.redis_url = redis_url or os.getenv("REDIS_URL", "rediss://redis:6379/0")
         self._client: redis.Redis | None = None
         self._redis_available: bool | None = None
 

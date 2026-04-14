@@ -46,7 +46,7 @@ class Settings(ObjectStorageMixin, BaseServiceSettings):
 
     # AI & Cache
     groq_api_key: Optional[str] = Field(default=None, alias="GROQ_API_KEY")
-    redis_url: str = Field(default="redis://redis:6379/0", alias="REDIS_URL")
+    redis_url: str = Field(default="rediss://redis:6379/0", alias="REDIS_URL")
 
 
 @lru_cache(maxsize=1)

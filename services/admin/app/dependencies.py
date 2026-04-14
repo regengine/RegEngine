@@ -36,7 +36,7 @@ def get_session_store() -> RedisSessionStore:
     """
     global _session_store
     if _session_store is None:
-        redis_url = os.getenv("REDIS_URL", "redis://redis:6379/0")
+        redis_url = os.getenv("REDIS_URL", "rediss://redis:6379/0")
         _session_store = RedisSessionStore(redis_url)
         logger.info("session_store_initialized", redis_url=redact_connection_url(redis_url))
     return _session_store

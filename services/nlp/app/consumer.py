@@ -421,7 +421,7 @@ def run_consumer() -> None:
         bootstrap_servers=settings.kafka_bootstrap,
         enable_auto_commit=False,
         auto_offset_reset="earliest",
-        group_id="nlp-service",
+        group_id=settings.consumer_group_id,
     )
     producer = KafkaProducer(
         bootstrap_servers=settings.kafka_bootstrap,

@@ -105,30 +105,44 @@ def ensure_topic(
     num_partitions: int = 1,
     replication_factor: int = 1,
     *,
+    min_insync_replicas: int | None = None,
     kafka_library: str = "kafka-python",
 ) -> None:
     """Create a Kafka topic idempotently.
 
     Supports both ``kafka-python`` and ``confluent-kafka`` admin clients.
     If the topic already exists, this is a no-op.
+
+    Args:
+        min_insync_replicas: Topic-level min.insync.replicas override (#1005).
+            Defaults to None (inherits broker default). Set to 2 in production
+            with multi-broker clusters so acks=all actually requires 2+ replicas.
     """
     if kafka_library == "confluent-kafka":
-        _ensure_topic_confluent(topic, bootstrap_servers, num_partitions, replication_factor)
+        _ensure_topic_confluent(topic, bootstrap_servers, num_partitions, replication_factor, min_insync_replicas)
     else:
-        _ensure_topic_kafka_python(topic, bootstrap_servers, num_partitions, replication_factor)
+        _ensure_topic_kafka_python(topic, bootstrap_servers, num_partitions, replication_factor, min_insync_replicas)
 
 
 def _ensure_topic_kafka_python(
-    topic: str, bootstrap: str, partitions: int, replication: int
+    topic: str, bootstrap: str, partitions: int, replication: int,
+    min_isr: int | None = None,
 ) -> None:
     """kafka-python based topic creation."""
     try:
         from kafka.admin import KafkaAdminClient, NewTopic
         from kafka.errors import TopicAlreadyExistsError
 
+        topic_configs = {}
+        if min_isr is not None:
+            topic_configs["min.insync.replicas"] = str(min_isr)
+
         admin = KafkaAdminClient(bootstrap_servers=bootstrap)
         try:
-            admin.create_topics([NewTopic(topic, num_partitions=partitions, replication_factor=replication)])
+            admin.create_topics([NewTopic(
+                topic, num_partitions=partitions, replication_factor=replication,
+                topic_configs=topic_configs if topic_configs else None,
+            )])
             logger.info("topic_created", topic=topic)
         except TopicAlreadyExistsError:
             pass
@@ -141,14 +155,22 @@ def _ensure_topic_kafka_python(
 
 
 def _ensure_topic_confluent(
-    topic: str, bootstrap: str, partitions: int, replication: int
+    topic: str, bootstrap: str, partitions: int, replication: int,
+    min_isr: int | None = None,
 ) -> None:
     """confluent-kafka based topic creation."""
     try:
         from confluent_kafka.admin import AdminClient, NewTopic
 
+        topic_config = {}
+        if min_isr is not None:
+            topic_config["min.insync.replicas"] = str(min_isr)
+
         admin = AdminClient({"bootstrap.servers": bootstrap})
-        futures = admin.create_topics([NewTopic(topic, num_partitions=partitions, replication_factor=replication)])
+        futures = admin.create_topics([NewTopic(
+            topic, num_partitions=partitions, replication_factor=replication,
+            config=topic_config if topic_config else None,
+        )])
         for t, f in futures.items():
             try:
                 f.result()

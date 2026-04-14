@@ -98,7 +98,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         from app.auth_utils import _sync_keys_from_registry, set_revocation_redis
         import redis.asyncio as _aioredis
 
-        _redis_url = os.getenv("REDIS_URL", "redis://redis:6379/0")
+        _redis_url = os.getenv("REDIS_URL", "rediss://redis:6379/0")
         _jwt_redis = _aioredis.from_url(_redis_url, decode_responses=True)
 
         # Share the Redis client for token revocation checks

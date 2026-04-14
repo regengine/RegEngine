@@ -660,13 +660,28 @@ class SchedulerService:
                 )
                 deleted_ctes = len(result.fetchall())
 
+                # Archive sysadmin access logs older than 7 years (NIST AU-4, #1009)
+                deleted_audit = 0
+                try:
+                    result = db.execute(
+                        __import__("sqlalchemy").text("""
+                            DELETE FROM audit.sysadmin_access_log
+                            WHERE accessed_at < NOW() - INTERVAL '2555 days'
+                            RETURNING id
+                        """)
+                    )
+                    deleted_audit = len(result.fetchall())
+                except Exception:
+                    pass  # Table may not exist on all databases
+
                 db.commit()
 
-                if deleted_exports > 0 or deleted_ctes > 0:
+                if deleted_exports > 0 or deleted_ctes > 0 or deleted_audit > 0:
                     logger.info(
                         "data_archival_complete",
                         deleted_exports=deleted_exports,
                         deleted_ctes=deleted_ctes,
+                        deleted_audit_logs=deleted_audit,
                     )
                 else:
                     logger.debug("data_archival_noop", message="No expired records to archive")

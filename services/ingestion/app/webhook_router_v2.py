@@ -355,7 +355,7 @@ def _get_redis_client():
     """Get Redis client for counter persistence. Returns None if unavailable."""
     try:
         import redis
-        redis_url = os.getenv("REDIS_URL", "redis://redis:6379/0")
+        redis_url = os.getenv("REDIS_URL", "rediss://redis:6379/0")
         return redis.from_url(redis_url, decode_responses=True, socket_timeout=1)
     except Exception:
         logger.debug("redis_client_unavailable", exc_info=True)

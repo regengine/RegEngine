@@ -18,13 +18,18 @@ class Settings(BaseServiceSettings):
     consumer_group_id: str = Field(
         default="fsma-graph-service", alias="KAFKA_CONSUMER_GROUP_ID"
     )
-    neo4j_uri: str = Field(default="bolt://neo4j:7687", alias="NEO4J_URI")
+    neo4j_uri: str = Field(default="bolt+s://neo4j:7687", alias="NEO4J_URI")
     neo4j_user: str = Field(default="neo4j", alias="NEO4J_USER")
     # No default password - must be set via environment variable
     neo4j_password: str = Field(alias="NEO4J_PASSWORD")
     neo4j_pool_size: int = Field(default=50, alias="NEO4J_POOL_SIZE")
     neo4j_pool_timeout: float = Field(default=60.0, alias="NEO4J_POOL_TIMEOUT")
     neo4j_max_lifetime: int = Field(default=3600, alias="NEO4J_MAX_LIFETIME")
+    # TLS encryption for Bolt connections (NIST SC-8, #985).
+    # bolt+s:// enables TLS with system CA verification.
+    # bolt+ssc:// enables TLS with self-signed cert acceptance (dev only).
+    # bolt:// disables TLS (set NEO4J_URI=bolt://neo4j:7687 for local dev).
+    neo4j_encrypted: bool = Field(default=True, alias="NEO4J_ENCRYPTED")
 
     # Security & Compliance Patterns
     redaction_patterns: list[str] = Field(

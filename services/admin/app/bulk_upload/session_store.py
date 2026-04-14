@@ -15,7 +15,7 @@ logger = structlog.get_logger("bulk_upload.session_store")
 
 class BulkUploadSessionStore:
     def __init__(self, redis_url: str | None = None, ttl_seconds: int = 3600):
-        self.redis_url = redis_url or os.getenv("REDIS_URL", "redis://redis:6379/0")
+        self.redis_url = redis_url or os.getenv("REDIS_URL", "rediss://redis:6379/0")
         self.ttl_seconds = ttl_seconds
         self._client: redis.Redis | None = None
         self._redis_available: bool | None = None

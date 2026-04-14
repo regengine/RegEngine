@@ -1,20 +1,32 @@
+# ---------- builder stage: compile C extensions with gcc ----------
+FROM python:3.11-slim AS builder
+
+RUN apt-get update && apt-get install -y \
+    gcc \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /build
+
+# Install shared requirements
+COPY services/shared/requirements.txt /build/shared_requirements.txt
+RUN pip install --no-cache-dir --prefix=/install -r /build/shared_requirements.txt
+
+# Install NLP service requirements
+COPY services/nlp/requirements.txt /build/requirements.txt
+RUN pip install --no-cache-dir --prefix=/install -r /build/requirements.txt
+
+# ---------- runtime stage: no gcc, no build tools (#996) ----------
 FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install system dependencies
+# Runtime-only system deps
 RUN apt-get update && apt-get install -y \
-    gcc \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Install shared requirements
-COPY services/shared/requirements.txt /app/shared_requirements.txt
-RUN pip install --no-cache-dir -r /app/shared_requirements.txt
-
-# Install Python dependencies
-COPY services/nlp/requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# Copy pre-built Python packages from builder
+COPY --from=builder /install /usr/local
 
 # Create non-root user for security
 RUN adduser --disabled-password --gecos '' --uid 1001 appuser

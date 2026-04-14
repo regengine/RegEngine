@@ -17,6 +17,10 @@ class Settings(ObjectStorageMixin, BaseServiceSettings):
     )
     topic_in: str = Field(default="ingest.normalized", alias="KAFKA_TOPIC_NORMALIZED")
     topic_out: str = Field(default="nlp.extracted", alias="KAFKA_TOPIC_NLP")
+    # Consumer group isolation (#1008) — unique per service, env-configurable.
+    consumer_group_id: str = Field(
+        default="nlp-service", alias="KAFKA_CONSUMER_GROUP_ID"
+    )
 
     # Extraction Thresholds (SR 11-7 validation)
     extraction_confidence_high: float = Field(
@@ -69,6 +73,7 @@ except Exception as exc:
         kafka_bootstrap="redpanda:9092",
         topic_in="ingest.normalized",
         topic_out="nlp.extracted",
+        consumer_group_id="nlp-service",
         log_level="INFO",
         extraction_confidence_high=0.95,
         extraction_confidence_medium=0.85,

@@ -45,7 +45,7 @@ class SchedulerSettings(BaseServiceSettings):
 
     # Redis (for circuit breaker state)
     redis_url: str = Field(
-        default="redis://redis:6379/1",
+        default="rediss://redis:6379/1",
         description="Redis URL for circuit breaker state",
     )
 
