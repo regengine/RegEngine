@@ -4,6 +4,7 @@ Tests for FSMA 204 Traceability Plan Builder.
 
 import pytest
 from shared.fsma_plan_builder import (
+    FIRM_TYPE_PROCEDURES,
     FirmInfo,
     FirmType,
     FTLCommodity,
@@ -253,25 +254,35 @@ class TestPlanExport:
         assert "## Certification" in md
 
     def test_export_markdown_has_all_sections(self, sample_firm):
-        """Test Markdown export includes all required sections."""
+        """Test Markdown export includes all required sections for a processor."""
         builder = TraceabilityPlanBuilder(sample_firm)
         plan = builder.build()
-        
+
         md = export_plan_markdown(plan)
-        
-        required_sections = [
+
+        # Universal sections (always present)
+        for section in [
             "Traceability Contact",
             "Record Storage",
             "TLC Format",
+            "24-Hour Recall Response",
+            "Training Procedure",
+        ]:
+            assert section in md, f"Missing universal section: {section}"
+
+        # Processor-specific CTE sections
+        for section in [
             "Receiving Procedure",
             "Shipping Procedure",
             "Transformation Procedure",
-            "24-Hour Recall Response",
-            "Training Procedure",
-        ]
-        
-        for section in required_sections:
-            assert section in md, f"Missing section: {section}"
+            "Cooling Procedure",
+            "Initial Packing Procedure",
+        ]:
+            assert section in md, f"Missing processor section: {section}"
+
+        # Processor should NOT have these
+        assert "Harvesting Procedure" not in md
+        assert "Holding & Storage Procedure" not in md
 
 
 # =============================================================================
@@ -344,10 +355,87 @@ class TestPlanBuilderIntegration:
             address="1 Country Road, Rural, CA 95000",
             firm_type=FirmType.GROWER,
         )
-        
+
         builder = TraceabilityPlanBuilder(firm)
         plan = builder.build()
-        
-        # Should still generate valid procedures
-        assert "Small Family Farm" in plan.receiving_procedure
+
+        # Grower gets harvesting, cooling, initial packing, shipping
+        assert "Small Family Farm" in plan.harvesting_procedure
+        assert "Small Family Farm" in plan.shipping_procedure
+        assert plan.cooling_procedure  # growers cool produce
+        assert plan.initial_packing_procedure  # growers pack
+
+        # Grower should NOT get receiving or transformation
+        assert plan.receiving_procedure == ""
+        assert plan.transformation_procedure == ""
+        assert plan.holding_procedure == ""
+
+        # Universal procedures always present
         assert plan.recall_contact is not None
+        assert plan.tlc_assignment_procedure
+
+    def test_distributor_plan_no_transformation(self):
+        """Test that distributors get holding but not transformation."""
+        firm = FirmInfo(
+            name="Metro Cold Storage",
+            address="500 Logistics Ave, Newark, NJ 07105",
+            firm_type=FirmType.DISTRIBUTOR,
+            contact_name="Pat Chen",
+            contact_email="pchen@metrocold.com",
+            contact_phone="973-555-4000",
+        )
+
+        builder = TraceabilityPlanBuilder(firm)
+        plan = builder.build()
+
+        # Distributor gets receiving, holding, shipping
+        assert "Metro Cold Storage" in plan.receiving_procedure
+        assert "Metro Cold Storage" in plan.holding_procedure
+        assert "Metro Cold Storage" in plan.shipping_procedure
+
+        # Distributor should NOT get transformation or harvesting
+        assert plan.transformation_procedure == ""
+        assert plan.harvesting_procedure == ""
+        assert plan.cooling_procedure == ""
+        assert plan.initial_packing_procedure == ""
+
+    def test_retailer_plan_receiving_only(self):
+        """Test that retailers only get receiving procedure."""
+        firm = FirmInfo(
+            name="Corner Market",
+            address="100 Main St, Anytown, USA",
+            firm_type=FirmType.RETAILER,
+        )
+
+        builder = TraceabilityPlanBuilder(firm)
+        plan = builder.build()
+
+        assert "Corner Market" in plan.receiving_procedure
+        assert plan.shipping_procedure == ""
+        assert plan.transformation_procedure == ""
+        assert plan.holding_procedure == ""
+
+    def test_firm_type_procedures_covers_all_types(self):
+        """Every FirmType has an entry in FIRM_TYPE_PROCEDURES."""
+        for ft in FirmType:
+            assert ft in FIRM_TYPE_PROCEDURES, f"Missing mapping for {ft}"
+
+    def test_to_dict_omits_empty_procedures(self):
+        """to_dict should not include CTE procedures that are empty."""
+        firm = FirmInfo(
+            name="Test Retailer",
+            address="123 Test",
+            firm_type=FirmType.RETAILER,
+        )
+        builder = TraceabilityPlanBuilder(firm)
+        plan = builder.build()
+        result = export_plan_json(plan)
+
+        procedures = result["procedures"]
+        assert "receiving" in procedures
+        assert "transformation" not in procedures
+        assert "shipping" not in procedures
+        assert "holding" not in procedures
+        # Universal procedures always present
+        assert "tlc_assignment" in procedures
+        assert "recall" in procedures

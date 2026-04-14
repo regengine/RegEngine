@@ -24,11 +24,14 @@ from typing import Any, Dict, List, Optional
 class CTEType(str, Enum):
     """Critical Tracking Event Types per FSMA 204."""
 
+    HARVESTING = "HARVESTING"
+    COOLING = "COOLING"
+    INITIAL_PACKING = "INITIAL_PACKING"
+    FIRST_LAND_BASED_RECEIVING = "FIRST_LAND_BASED_RECEIVING"
     SHIPPING = "SHIPPING"
     RECEIVING = "RECEIVING"
     TRANSFORMATION = "TRANSFORMATION"
     CREATION = "CREATION"
-    INITIAL_PACKING = "INITIAL_PACKING"
 
 
 class FacilityType(str, Enum):

@@ -100,28 +100,52 @@ class TraceabilityPlan:
     version: str
     created_date: str
     last_updated: str
-    
+
     # Required plan elements
     commodities: List[FTLCommodity] = field(default_factory=list)
     record_locations: List[RecordLocation] = field(default_factory=list)
-    
-    # Procedures
+
+    # CTE Procedures (populated based on firm type)
     receiving_procedure: str = ""
     shipping_procedure: str = ""
     transformation_procedure: str = ""
-    
+    harvesting_procedure: str = ""
+    cooling_procedure: str = ""
+    initial_packing_procedure: str = ""
+    first_land_receiving_procedure: str = ""
+    holding_procedure: str = ""
+
     # TLC Assignment
     tlc_format: str = ""
     tlc_assignment_procedure: str = ""
-    
+
     # Training
     training_procedure: str = ""
-    
+
     # 24-hour recall response
     recall_procedure: str = ""
     recall_contact: str = ""
-    
+
     def to_dict(self) -> Dict[str, Any]:
+        # Only include CTE procedures that were generated for this firm type
+        procedures = {
+            "tlc_assignment": self.tlc_assignment_procedure,
+            "training": self.training_procedure,
+            "recall": self.recall_procedure,
+        }
+        for key, value in [
+            ("harvesting", self.harvesting_procedure),
+            ("cooling", self.cooling_procedure),
+            ("initial_packing", self.initial_packing_procedure),
+            ("first_land_receiving", self.first_land_receiving_procedure),
+            ("receiving", self.receiving_procedure),
+            ("transformation", self.transformation_procedure),
+            ("holding", self.holding_procedure),
+            ("shipping", self.shipping_procedure),
+        ]:
+            if value:
+                procedures[key] = value
+
         return {
             "plan_id": self.plan_id,
             "firm": self.firm.to_dict(),
@@ -139,14 +163,7 @@ class TraceabilityPlan:
                 }
                 for r in self.record_locations
             ],
-            "procedures": {
-                "receiving": self.receiving_procedure,
-                "shipping": self.shipping_procedure,
-                "transformation": self.transformation_procedure,
-                "tlc_assignment": self.tlc_assignment_procedure,
-                "training": self.training_procedure,
-                "recall": self.recall_procedure,
-            },
+            "procedures": procedures,
             "tlc_format": self.tlc_format,
             "recall_contact": self.recall_contact,
         }
@@ -372,6 +389,226 @@ Maintain training records including:
 - Employee acknowledgment
 """
 
+HARVESTING_PROCEDURE_TEMPLATE = """
+## Harvesting Procedure for {firm_name}
+
+### Purpose
+Document the harvest of FTL commodities and capture required KDEs at the point of origin.
+
+### Scope
+Applies to all harvesting operations for foods on the FTL at {address}.
+
+### Procedure
+
+1. **Pre-Harvest**
+   - Identify field or growing area by name or identifier
+   - Verify commodity is on the Food Traceability List
+
+2. **Record Required KDEs**
+   For each harvest lot, record:
+   - [ ] Commodity harvested
+   - [ ] Quantity and Unit of Measure
+   - [ ] Farm location (GLN or address)
+   - [ ] Field identification (name or GPS coordinates)
+   - [ ] Harvest date
+   - [ ] Name of harvester or responsible party
+   - [ ] Reference document number
+
+3. **TLC Assignment**
+   - Assign TLC at point of harvest per format: {tlc_format}
+   - Link TLC to field identification and harvest date
+
+4. **Documentation**
+   - Enter all KDEs into {record_system}
+   - Retain records for minimum 2 years
+"""
+
+COOLING_PROCEDURE_TEMPLATE = """
+## Cooling Procedure for {firm_name}
+
+### Purpose
+Document the cooling of FTL commodities and capture required KDEs per §1.1325.
+
+### Scope
+Applies to all cooling operations for produce on the FTL at {address}.
+
+### Procedure
+
+1. **Upon Receipt for Cooling**
+   - Verify commodity TLC from harvest or receiving
+   - Record pre-cooling temperature
+
+2. **Record Required KDEs**
+   For each lot cooled, record:
+   - [ ] Traceability Lot Code (TLC)
+   - [ ] Commodity description
+   - [ ] Quantity and Unit of Measure
+   - [ ] Cooling location identifier (GLN or address)
+   - [ ] Date and time cooling began
+   - [ ] Farm location of origin (GLN or address)
+   - [ ] Reference document number
+
+3. **Temperature Monitoring**
+   - Record target temperature and time to reach it
+   - Document cooling method (forced air, hydro, vacuum)
+   - Log temperature checks per facility SOP
+
+4. **Documentation**
+   - Enter all KDEs into {record_system}
+   - Retain records for minimum 2 years
+"""
+
+INITIAL_PACKING_PROCEDURE_TEMPLATE = """
+## Initial Packing Procedure for {firm_name}
+
+### Purpose
+Document the initial packing of FTL commodities and assign TLCs at first pack point per §1.1330.
+
+### Scope
+Applies to all initial packing operations for foods on the FTL at {address}.
+
+### Procedure
+
+1. **Receive Raw/Harvested Product**
+   - Verify harvest documentation accompanies product
+   - Record commodity received and date received
+
+2. **Record Required KDEs**
+   For each lot initially packed, record:
+   - [ ] Commodity received
+   - [ ] Quantity received and Unit of Measure
+   - [ ] Farm location (GLN or address)
+   - [ ] Field identification
+   - [ ] Harvester name and phone
+   - [ ] Harvest date
+   - [ ] Cooling location and date (if applicable)
+   - [ ] New TLC assigned to packed product
+   - [ ] Product description of packed output
+   - [ ] Quantity packed and Unit of Measure
+   - [ ] Packing location (GLN or address)
+   - [ ] Pack date
+   - [ ] Reference document number
+
+3. **TLC Assignment**
+   - Assign TLC at point of initial packing per format: {tlc_format}
+   - This TLC follows the product through the supply chain
+   - Link TLC to harvest lot, field, and cooling records
+
+4. **Documentation**
+   - Enter all KDEs into {record_system}
+   - Retain records for minimum 2 years
+"""
+
+FIRST_LAND_RECEIVING_PROCEDURE_TEMPLATE = """
+## First Land-Based Receiving Procedure for {firm_name}
+
+### Purpose
+Document the first land-based receipt of seafood and capture required KDEs per §1.1335.
+
+### Scope
+Applies to all first land-based receiving of finfish, crustaceans, and molluscan shellfish at {address}.
+
+### Procedure
+
+1. **Prior to Arrival**
+   - Verify incoming vessel/container documentation
+   - Confirm species and harvest area information available
+
+2. **Record Required KDEs**
+   For each lot received at first land-based point, record:
+   - [ ] Traceability Lot Code (TLC) — assign if not already present
+   - [ ] Species and product description
+   - [ ] Quantity and Unit of Measure
+   - [ ] Harvest area (FAO zone, state waters, or GPS)
+   - [ ] Vessel name or aquaculture site identifier
+   - [ ] Landing port and date
+   - [ ] Name and contact of receiver
+   - [ ] Reference document number
+
+3. **For Molluscan Shellfish (Bivalves)**
+   Additional KDEs:
+   - [ ] Harvest tag number
+   - [ ] NSSP Dealer Certificate number
+   - [ ] Harvest date and area (per NSSP requirements)
+
+4. **TLC Assignment**
+   - Assign TLC at point of first land-based receipt: {tlc_format}
+   - Link to vessel/harvest documentation
+
+5. **Documentation**
+   - Enter all KDEs into {record_system}
+   - Retain records for minimum 2 years
+"""
+
+HOLDING_PROCEDURE_TEMPLATE = """
+## Holding & Storage Procedure for {firm_name}
+
+### Purpose
+Document how TLC integrity is maintained during storage and holding operations.
+
+### Scope
+Applies to all holding and storage operations for foods on the FTL at {address}.
+
+### Procedure
+
+1. **Receiving into Storage**
+   - Verify inbound TLC and KDE documentation is complete
+   - Assign storage location (bay, rack, zone) and record
+
+2. **TLC Integrity During Holding**
+   - Maintain supplier TLC on all stored product — do not reassign
+   - Segregate lots by TLC to prevent commingling
+   - Label storage locations with TLC and product description
+   - If lots must be combined, follow Transformation Procedure
+
+3. **Inventory Verification**
+   - Conduct periodic TLC inventory reconciliation
+   - Verify physical lot labels match {record_system} records
+   - Document and investigate any discrepancies
+
+4. **Picking and Staging for Shipment**
+   - Pull correct TLC lots per order using FIFO
+   - Verify TLC on picked product matches shipping order
+   - Stage by outbound shipment to prevent cross-lot errors
+
+5. **Documentation**
+   - Log storage location assignments in {record_system}
+   - Record any lot movements within the facility
+   - Retain records for minimum 2 years
+"""
+
+
+# =============================================================================
+# FIRM TYPE → APPLICABLE PROCEDURES
+# =============================================================================
+
+FIRM_TYPE_PROCEDURES: Dict[FirmType, List[str]] = {
+    FirmType.GROWER: [
+        "harvesting", "cooling", "initial_packing", "shipping",
+    ],
+    FirmType.PROCESSOR: [
+        "receiving", "cooling", "initial_packing", "transformation", "shipping",
+    ],
+    FirmType.MANUFACTURER: [
+        "receiving", "transformation", "shipping",
+    ],
+    FirmType.PACKER: [
+        "receiving", "initial_packing", "shipping",
+    ],
+    FirmType.HOLDER: [
+        "receiving", "holding", "shipping",
+    ],
+    FirmType.DISTRIBUTOR: [
+        "receiving", "holding", "shipping",
+    ],
+    FirmType.RETAILER: [
+        "receiving",
+    ],
+    FirmType.RESTAURANT: [
+        "receiving",
+    ],
+}
+
 
 # =============================================================================
 # PLAN BUILDER
@@ -428,7 +665,50 @@ class TraceabilityPlanBuilder:
             address=self.firm.address,
             tlc_format=self.tlc_format or "[PLANT]-[YYYYMMDD]-[SEQ]",
         )
-    
+
+    def _generate_harvesting_procedure(self) -> str:
+        """Generate harvesting procedure from template."""
+        return HARVESTING_PROCEDURE_TEMPLATE.format(
+            firm_name=self.firm.name,
+            address=self.firm.address,
+            tlc_format=self.tlc_format or "[PLANT]-[YYYYMMDD]-[SEQ]",
+            record_system=self.record_system,
+        )
+
+    def _generate_cooling_procedure(self) -> str:
+        """Generate cooling procedure from template."""
+        return COOLING_PROCEDURE_TEMPLATE.format(
+            firm_name=self.firm.name,
+            address=self.firm.address,
+            record_system=self.record_system,
+        )
+
+    def _generate_initial_packing_procedure(self) -> str:
+        """Generate initial packing procedure from template."""
+        return INITIAL_PACKING_PROCEDURE_TEMPLATE.format(
+            firm_name=self.firm.name,
+            address=self.firm.address,
+            tlc_format=self.tlc_format or "[PLANT]-[YYYYMMDD]-[SEQ]",
+            record_system=self.record_system,
+        )
+
+    def _generate_first_land_receiving_procedure(self) -> str:
+        """Generate first land-based receiving procedure from template."""
+        return FIRST_LAND_RECEIVING_PROCEDURE_TEMPLATE.format(
+            firm_name=self.firm.name,
+            address=self.firm.address,
+            tlc_format=self.tlc_format or "[PLANT]-[YYYYMMDD]-[SEQ]",
+            record_system=self.record_system,
+        )
+
+    def _generate_holding_procedure(self) -> str:
+        """Generate holding/storage procedure from template."""
+        return HOLDING_PROCEDURE_TEMPLATE.format(
+            firm_name=self.firm.name,
+            address=self.firm.address,
+            record_system=self.record_system,
+        )
+
     def _generate_tlc_procedure(self) -> str:
         """Generate TLC assignment procedure from template."""
         # Generate example TLC
@@ -462,9 +742,33 @@ class TraceabilityPlanBuilder:
         )
     
     def build(self) -> TraceabilityPlan:
-        """Build the complete traceability plan."""
+        """Build the complete traceability plan.
+
+        Generates only the CTE procedures applicable to the firm type.
+        Universal procedures (TLC assignment, training, recall) are always included.
+        """
         now = datetime.now(timezone.utc).isoformat()
-        
+        applicable = set(FIRM_TYPE_PROCEDURES.get(
+            self.firm.firm_type,
+            ["receiving", "shipping", "transformation"],  # safe fallback
+        ))
+
+        procedure_generators = {
+            "receiving": self._generate_receiving_procedure,
+            "shipping": self._generate_shipping_procedure,
+            "transformation": self._generate_transformation_procedure,
+            "harvesting": self._generate_harvesting_procedure,
+            "cooling": self._generate_cooling_procedure,
+            "initial_packing": self._generate_initial_packing_procedure,
+            "first_land_receiving": self._generate_first_land_receiving_procedure,
+            "holding": self._generate_holding_procedure,
+        }
+
+        generated: Dict[str, str] = {}
+        for name, gen in procedure_generators.items():
+            if name in applicable:
+                generated[name] = gen()
+
         plan = TraceabilityPlan(
             plan_id=str(uuid.uuid4()),
             firm=self.firm,
@@ -473,9 +777,14 @@ class TraceabilityPlanBuilder:
             last_updated=now,
             commodities=self.commodities,
             record_locations=self.record_locations,
-            receiving_procedure=self._generate_receiving_procedure(),
-            shipping_procedure=self._generate_shipping_procedure(),
-            transformation_procedure=self._generate_transformation_procedure(),
+            receiving_procedure=generated.get("receiving", ""),
+            shipping_procedure=generated.get("shipping", ""),
+            transformation_procedure=generated.get("transformation", ""),
+            harvesting_procedure=generated.get("harvesting", ""),
+            cooling_procedure=generated.get("cooling", ""),
+            initial_packing_procedure=generated.get("initial_packing", ""),
+            first_land_receiving_procedure=generated.get("first_land_receiving", ""),
+            holding_procedure=generated.get("holding", ""),
             tlc_format=self.tlc_format,
             tlc_assignment_procedure=self._generate_tlc_procedure(),
             training_procedure=self._generate_training_procedure(),
@@ -552,19 +861,29 @@ def export_plan_markdown(plan: TraceabilityPlan) -> str:
 
 **Format:** `{plan.tlc_format}`
 
----
+"""
 
-{plan.receiving_procedure}
+    # CTE procedures — only include sections generated for this firm type
+    cte_procedures = [
+        plan.harvesting_procedure,
+        plan.cooling_procedure,
+        plan.initial_packing_procedure,
+        plan.first_land_receiving_procedure,
+        plan.receiving_procedure,
+        plan.transformation_procedure,
+        plan.holding_procedure,
+        plan.shipping_procedure,
+    ]
+    for proc in cte_procedures:
+        if proc:
+            md += f"""---
 
----
+{proc}
 
-{plan.shipping_procedure}
+"""
 
----
-
-{plan.transformation_procedure}
-
----
+    # Universal procedures (always included)
+    md += f"""---
 
 {plan.tlc_assignment_procedure}
 
