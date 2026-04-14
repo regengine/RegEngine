@@ -111,7 +111,11 @@ def extract_fsma_facts(text: str) -> List[Dict]:
     # Regex for "January 20, 2026" or "July 20, 2028"
     
     # Broad pattern for the date itself
-    date_pattern = re.compile(r"\b(January|July)\s+\d{1,2},\s+\d{4}\b", re.I)
+    _ALL_MONTHS = (
+        "January|February|March|April|May|June|"
+        "July|August|September|October|November|December"
+    )
+    date_pattern = re.compile(rf"\b({_ALL_MONTHS})\s+\d{{1,2}},\s+\d{{4}}\b", re.I)
     
     # Context pattern to ensure it's a compliance date
     context_window_size = 100
