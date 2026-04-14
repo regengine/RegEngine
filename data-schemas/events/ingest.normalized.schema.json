@@ -1,0 +1,78 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "Ingest Normalized Event",
+    "description": "Schema for inbound Kafka events from the ingestion service to the NLP consumer. Validates required fields before processing to prevent unsafe consumption (OWASP API10:2023).",
+    "type": "object",
+    "properties": {
+        "event_id": {
+            "type": "string",
+            "minLength": 1
+        },
+        "document_id": {
+            "type": "string",
+            "minLength": 1
+        },
+        "doc_id": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Legacy alias for document_id"
+        },
+        "document_hash": {
+            "type": "string",
+            "minLength": 1
+        },
+        "content_hash": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Legacy alias for document_hash"
+        },
+        "tenant_id": {
+            "type": ["string", "null"],
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+        },
+        "source_system": {
+            "type": "string"
+        },
+        "source_url": {
+            "type": "string",
+            "format": "uri"
+        },
+        "raw_s3_path": {
+            "type": "string"
+        },
+        "normalized_s3_path": {
+            "type": "string",
+            "pattern": "^s3://[a-zA-Z0-9._-]+/.+$",
+            "description": "Must be a valid S3 URI"
+        },
+        "text_clean": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Inline text content (alternative to normalized_s3_path)"
+        },
+        "text_s3_uri": {
+            "type": ["string", "null"]
+        },
+        "timestamp": {
+            "type": "string"
+        },
+        "content_sha256": {
+            "type": "string"
+        },
+        "is_duplicate": {
+            "type": "boolean"
+        },
+        "provenance": {
+            "type": "object"
+        }
+    },
+    "anyOf": [
+        { "required": ["document_id"] },
+        { "required": ["doc_id"] }
+    ],
+    "oneOf": [
+        { "required": ["normalized_s3_path"] },
+        { "required": ["text_clean"] }
+    ],
+    "additionalProperties": true
+}
