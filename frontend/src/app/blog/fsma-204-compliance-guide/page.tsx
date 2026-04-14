@@ -168,7 +168,7 @@ export default function FSMA204ComplianceGuide() {
               This is why your traceability system cannot rely on manual processes or spreadsheets. When the FDA calls, you need to generate a complete, audit-ready report in minutes, not days.
             </p>
             <p className="text-[1.05rem] text-[var(--re-text-secondary)] leading-relaxed">
-              You must also retain all traceability records for 2 years. This means your system needs robust backup, archival, and retrieval capabilities to ensure data integrity over time.
+              You must also retain all traceability records for the required period (up to 2 years depending on product type — shorter for perishable foods). This means your system needs robust backup, archival, and retrieval capabilities to ensure data integrity over time.
             </p>
           </div>
 
