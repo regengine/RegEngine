@@ -120,6 +120,19 @@ class MembershipModel(Base):
     )
 
 
+class MFARecoveryCodeModel(Base):
+    """One-time-use recovery codes for MFA account recovery."""
+    __tablename__ = "admin_mfa_recovery_codes"
+
+    id = Column(GUID(), primary_key=True, default=uuid_module.uuid4)
+    user_id = Column(GUID(), ForeignKey("users.id"), nullable=False)
+    code_hash = Column(String, nullable=False)
+    used_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    __table_args__ = (
+        Index("ix_mfa_recovery_codes_user", "user_id"),
+    )
 
 
 class AuditLogModel(Base):

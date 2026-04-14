@@ -22,6 +22,8 @@ except ImportError:
     )
 
 from fastapi import Depends, Header, HTTPException, status
+from sqlalchemy import select
+from sqlalchemy.orm import Session
 from pydantic import BaseModel
 
 _logger = logging.getLogger("mfa")
@@ -204,28 +206,31 @@ def verify_recovery_code(code: str, hashed_code: str) -> bool:
 # ──────────────────────────────────────────────────────────────
 async def require_mfa(
     x_mfa_token: Optional[str] = Header(None),
+    current_user: "UserModel" = Depends(lambda: None),
+    db: Session = Depends(lambda: None),
 ) -> str:
     """
-    FastAPI dependency to validate MFA token from X-MFA-Token header.
+    FastAPI dependency to cryptographically verify MFA token from X-MFA-Token header.
 
-    This dependency can be injected into route handlers that require MFA.
-    It extracts and validates the token from the request header.
+    Verifies TOTP codes against the user's enrolled secret, or validates
+    one-time recovery codes against stored hashes (marking them as used).
 
-    Usage in routes:
-        @router.post("/admin/protected")
-        async def protected_route(mfa_token: str = Depends(require_mfa)):
-            # mfa_token is the validated token
-            ...
+    Requires both ``get_current_user`` and ``get_session`` to be wired via
+    dependency_overrides or the helper ``require_mfa_dependency()``.
 
     Args:
         x_mfa_token: MFA token from X-MFA-Token header
+        current_user: Authenticated user (injected via dependency override)
+        db: Database session (injected via dependency override)
 
     Returns:
-        str: Validated MFA token
+        str: Verified MFA token
 
     Raises:
-        HTTPException: 403 if token is missing or invalid
+        HTTPException: 403 if token is missing, invalid format, or fails verification
     """
+    from .sqlalchemy_models import MFARecoveryCodeModel
+
     if not x_mfa_token:
         _logger.warning("MFA token missing from request")
         raise HTTPException(
@@ -233,9 +238,14 @@ async def require_mfa(
             detail="MFA token required (X-MFA-Token header)",
         )
 
-    # Token format validation: expect 6-digit TOTP or recovery code
-    # For TOTP: 6 digits
-    # For recovery codes: "XXXX-XXXX" format (8 chars + 1 dash)
+    if not current_user or not current_user.mfa_secret:
+        _logger.warning("MFA required but user has no MFA secret enrolled")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="MFA not enrolled for this account",
+        )
+
+    # Classify token format
     is_totp = len(x_mfa_token) == 6 and x_mfa_token.isdigit()
     is_recovery = (
         len(x_mfa_token) == 9
@@ -245,13 +255,71 @@ async def require_mfa(
     )
 
     if not (is_totp or is_recovery):
-        _logger.warning(f"Invalid MFA token format: {x_mfa_token}")
+        _logger.warning("Invalid MFA token format")
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Invalid MFA token format",
         )
 
+    # TOTP verification
+    if is_totp:
+        if not verify_totp(secret=current_user.mfa_secret, token=x_mfa_token):
+            _logger.warning(f"TOTP verification failed for user {current_user.id}")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Invalid MFA token",
+            )
+        return x_mfa_token
+
+    # Recovery code verification
+    code_hash = hash_recovery_code(x_mfa_token.upper())
+    recovery = db.execute(
+        select(MFARecoveryCodeModel).where(
+            MFARecoveryCodeModel.user_id == current_user.id,
+            MFARecoveryCodeModel.code_hash == code_hash,
+            MFARecoveryCodeModel.used_at.is_(None),
+        )
+    ).scalar_one_or_none()
+
+    if not recovery:
+        _logger.warning(f"Recovery code verification failed for user {current_user.id}")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Invalid MFA token",
+        )
+
+    # Mark recovery code as consumed (one-time use)
+    recovery.used_at = datetime.now(timezone.utc)
+    db.commit()
+    _logger.info(f"Recovery code consumed for user {current_user.id}")
     return x_mfa_token
+
+
+def require_mfa_dependency():
+    """
+    Factory that returns ``require_mfa`` wired with real auth + DB dependencies.
+
+    Usage in routes::
+
+        @router.post("/admin/protected")
+        async def protected_route(mfa_token: str = Depends(require_mfa_dependency())):
+            ...
+    """
+    from .dependencies import get_current_user
+    from .database import get_session
+
+    async def _require_mfa(
+        x_mfa_token: Optional[str] = Header(None),
+        current_user=Depends(get_current_user),
+        db: Session = Depends(get_session),
+    ) -> str:
+        return await require_mfa(
+            x_mfa_token=x_mfa_token,
+            current_user=current_user,
+            db=db,
+        )
+
+    return _require_mfa
 
 
 # ──────────────────────────────────────────────────────────────
