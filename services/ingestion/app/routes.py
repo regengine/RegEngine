@@ -18,7 +18,7 @@ from urllib.parse import urlparse
 
 import httpx
 import structlog
-from fastapi import APIRouter, Depends, Header, HTTPException, BackgroundTasks, Body, File, UploadFile, Query, Form
+from fastapi import APIRouter, Depends, Header, HTTPException, BackgroundTasks, Body, File, Request, UploadFile, Query, Form
 from fastapi.responses import PlainTextResponse
 from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_latest
 from httpx import Response
@@ -32,6 +32,7 @@ except ModuleNotFoundError:  # pragma: no cover - local/test environments may no
 
 # Add shared module to path
 from shared.auth import APIKey, require_api_key, verify_jurisdiction_access
+from shared.tenant_rate_limiting import consume_tenant_rate_limit
 
 from .config import get_settings
 from .kafka_utils import send
@@ -164,6 +165,47 @@ ADAPTORS: dict[str, AdaptorRegistryScraper] = {
 }
 
 
+# ---------------------------------------------------------------------------
+# Per-endpoint rate limiting (OWASP API4:2023)
+# ---------------------------------------------------------------------------
+
+def _endpoint_rate_limit(bucket: str, rpm: int):
+    """FastAPI dependency factory enforcing a per-tenant, per-endpoint rate limit.
+
+    Uses the same ``consume_tenant_rate_limit`` backend as the RBAC authz layer
+    so limits are shared across replicas when Redis is available.
+    """
+
+    async def _check(
+        request: Request,
+        api_key: APIKey = Depends(require_api_key),
+    ) -> APIKey:
+        tenant_id = api_key.tenant_id or "anonymous"
+        allowed, remaining = consume_tenant_rate_limit(
+            tenant_id=tenant_id,
+            bucket_suffix=f"endpoint.{bucket}",
+            limit=rpm,
+            window=60,
+        )
+        if not allowed:
+            raise HTTPException(
+                status_code=429,
+                detail=f"Rate limit exceeded for tenant '{tenant_id}' on '{bucket}'",
+                headers={
+                    "Retry-After": "60",
+                    "X-RateLimit-Limit": str(rpm),
+                    "X-RateLimit-Remaining": "0",
+                    "X-RateLimit-Tenant": tenant_id,
+                    "X-RateLimit-Scope": bucket,
+                },
+            )
+        request.state.rate_limit_remaining = remaining
+        request.state.rate_limit_scope = bucket
+        return api_key
+
+    return _check
+
+
 async def process_regulation_ingestion(job_id: str, name: str, filename: str, tenant_id: str, webhook: Optional[str] = None):
     """Background task to process regulation ingestion with webhook notification (v2)."""
     settings = get_settings()
@@ -234,7 +276,7 @@ async def ingest_regulation(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     webhook: Optional[str] = Query(None),
-    api_key: APIKey = Depends(require_api_key),
+    api_key: APIKey = Depends(_endpoint_rate_limit("ingest.regulation", 5)),
 ):
     """Ingest a regulation and codify it asynchronously with optional webhook notification (v2)."""
     # Entitlement check
@@ -494,7 +536,7 @@ def _process_and_emit(
 @router.post("/v1/ingest", response_model=NormalizedEvent)
 async def ingest_direct(
     payload: DirectIngestRequest = Body(...),
-    api_key: APIKey = Depends(require_api_key),
+    api_key: APIKey = Depends(_endpoint_rate_limit("ingest.direct", 20)),
 ) -> NormalizedEvent:
     """Ingest a single document directly from text/bytes."""
     endpoint = "ingest_direct"
@@ -570,7 +612,7 @@ async def ingest_file(
     file: UploadFile = File(...),
     source_system: str = Form("generic"),
     vertical: Optional[str] = Form(None),
-    api_key: APIKey = Depends(require_api_key),
+    api_key: APIKey = Depends(_endpoint_rate_limit("ingest.file", 10)),
 ) -> NormalizedEvent:
     """Ingest a single document from a file upload (v2)."""
     endpoint = "ingest_file"
@@ -648,7 +690,7 @@ async def ingest_file(
 @router.post("/v1/ingest/url", response_model=NormalizedEvent)
 async def ingest_url(
     payload: IngestRequest,
-    api_key: APIKey = Depends(require_api_key),
+    api_key: APIKey = Depends(_endpoint_rate_limit("ingest.url", 20)),
 ) -> NormalizedEvent:
     """Ingest a single document from a URL."""
     url_str = str(payload.url)
