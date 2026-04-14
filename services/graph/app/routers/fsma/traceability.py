@@ -426,6 +426,7 @@ class TraceabilityEventRequest(BaseModel):
                     "quantity": 500,
                     "uom": "cases",
                     "product_description": "Organic romaine lettuce, 24ct",
+                    "responsible_party_contact": "Jane Doe, 555-0100, jane@example.com",
                     "gtin": "00614141000012",
                 },
                 {
@@ -436,6 +437,7 @@ class TraceabilityEventRequest(BaseModel):
                     "quantity": 200,
                     "uom": "cases",
                     "product_description": "Organic romaine lettuce, 24ct",
+                    "responsible_party_contact": "John Smith, 555-0200, john@example.com",
                     "gtin": "00614141000012",
                 },
             ]
@@ -446,6 +448,7 @@ class TraceabilityEventRequest(BaseModel):
     event_date: str
     tlc: str
     location_identifier: str
+    responsible_party_contact: str  # FSMA 204 KDE per 21 CFR 1.1370(c)
     quantity: Optional[float] = None
     uom: Optional[str] = None
     product_description: Optional[str] = None
@@ -494,6 +497,7 @@ async def log_traceability_event(
                 type=payload.event_type,
                 event_date=payload.event_date,
                 tenant_id=str(tenant_id),
+                responsible_party_contact=payload.responsible_party_contact,
             )
             await session.run(TraceEvent.create_cypher(), properties=trace_event.node_properties)
 

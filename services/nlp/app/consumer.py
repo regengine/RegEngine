@@ -231,16 +231,42 @@ def _convert_entities_to_extraction(
 def _load_schema() -> Draft7Validator:
     """Load JSON schema using standardized project path discovery."""
     from shared.paths import project_root
-    
+
     repo_root = project_root()
     schema_path = repo_root / "data-schemas" / "events" / "nlp.extracted.schema.json"
-    
+
     if not schema_path.exists():
         logger.error("schema_not_found", path=str(schema_path))
         raise FileNotFoundError(f"Could not find schema at {schema_path}")
 
     schema = json.loads(schema_path.read_text())
     return Draft7Validator(schema)
+
+
+def _load_inbound_schema() -> Draft7Validator:
+    """Load inbound event schema for validating Kafka messages from ingestion.
+
+    Addresses OWASP API10:2023 — Unsafe Consumption of APIs.
+    """
+    from shared.paths import project_root
+
+    repo_root = project_root()
+    schema_path = repo_root / "data-schemas" / "events" / "ingest.normalized.schema.json"
+
+    if not schema_path.exists():
+        logger.error("inbound_schema_not_found", path=str(schema_path))
+        raise FileNotFoundError(f"Could not find inbound schema at {schema_path}")
+
+    schema = json.loads(schema_path.read_text())
+    return Draft7Validator(schema)
+
+
+# Eagerly load inbound schema at module level so validation is fast per-message
+try:
+    _INBOUND_VALIDATOR = _load_inbound_schema()
+except (FileNotFoundError, json.JSONDecodeError) as _schema_err:
+    logger.error("inbound_schema_load_failed", error=str(_schema_err))
+    _INBOUND_VALIDATOR = None
 
 
 def _ensure_topic(topic: str) -> None:
@@ -459,8 +485,29 @@ def run_consumer() -> None:
 
                     if not evt: continue
 
+                    # Extract doc_id early for logging (before validation)
                     doc_id = evt.get("document_id") or evt.get("doc_id") or "unknown"
                     span.set_attribute("document_id", doc_id)
+
+                    # --- Inbound schema validation (OWASP API10:2023) ---
+                    if _INBOUND_VALIDATOR is not None:
+                        errors = list(_INBOUND_VALIDATOR.iter_errors(evt))
+                        if errors:
+                            error_msg = "; ".join(e.message for e in errors[:5])
+                            logger.error(
+                                "inbound_schema_invalid",
+                                document_id=doc_id,
+                                error=error_msg,
+                                offset=record.offset,
+                            )
+                            _send_to_fsma_dlq(
+                                producer, evt,
+                                f"Inbound schema invalid: {error_msg}",
+                                doc_id, headers=kafka_headers,
+                            )
+                            MESSAGES_COUNTER.labels(status="rejected").inc()
+                            consumer.commit()
+                            continue
 
                     try:
                         doc_hash = evt.get("document_hash") or evt.get("content_hash") or doc_id

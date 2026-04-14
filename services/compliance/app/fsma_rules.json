@@ -301,7 +301,8 @@
       "location",
       "quantity",
       "unit_of_measure",
-      "product_description"
+      "product_description",
+      "responsible_party_contact"
     ],
     "receiving_required_fields": [
       "prior_source_tlc"
