@@ -75,29 +75,43 @@ else
     run_test "Unit Tests" "python3 -m pytest tests/shared/ -v --tb=short 2>&1 | tail -30"
 fi
 
-# 3. Contract Tests
+# 3. Contract Tests (need live services)
 echo -e "${BLUE}━━━ 3. Contract Tests ━━━${NC}"
 echo ""
 
-run_test "Contract Tests" "python3 -m pytest tests/contract/ -v --tb=short 2>&1 | tail -20"
+if $QUICK_MODE; then
+    echo -e "${YELLOW}⚠ Skipping contract tests in quick mode (require live services)${NC}"
+    ((SKIPPED++))
+elif [[ $SERVICES_DOWN -eq 0 ]]; then
+    run_test "Contract Tests" "python3 -m pytest tests/contract/ -v --tb=short 2>&1 | tail -20"
+else
+    echo -e "${YELLOW}⚠ Skipping contract tests - some services are down${NC}"
+    ((SKIPPED++))
+fi
 
-# 4. Security Tests
+# 4. Security Tests (hermetic — no live services needed)
 echo -e "${BLUE}━━━ 4. Security Tests ━━━${NC}"
 echo ""
 
 if [[ -d "tests/security" ]]; then
-    export PYTHONPATH=$PYTHONPATH:$(pwd)/services/admin
-    run_test "Security Tests" "python3 -m pytest tests/security/ -v --tb=short 2>&1 | tail -20"
+    if $QUICK_MODE; then
+        run_test "Security Tests (quick)" "python3 -m pytest tests/security/ -q --tb=no -x 2>&1 | tail -5"
+    else
+        run_test "Security Tests" "python3 -m pytest tests/security/ -v --tb=short 2>&1 | tail -20"
+    fi
 else
     echo -e "${YELLOW}⚠ Security tests directory not found${NC}"
     ((SKIPPED++))
 fi
 
-# 5. E2E Tests
+# 5. E2E Tests (need live services)
 echo -e "${BLUE}━━━ 5. E2E Tests ━━━${NC}"
 echo ""
 
-if [[ $SERVICES_DOWN -eq 0 ]]; then
+if $QUICK_MODE; then
+    echo -e "${YELLOW}⚠ Skipping E2E tests in quick mode (require live services)${NC}"
+    ((SKIPPED++))
+elif [[ $SERVICES_DOWN -eq 0 ]]; then
     run_test "E2E Tests" "python3 -m pytest tests/e2e/ -v --tb=short 2>&1 | tail -20"
 else
     echo -e "${YELLOW}⚠ Skipping E2E tests - some services are down${NC}"
