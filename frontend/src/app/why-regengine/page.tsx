@@ -752,7 +752,7 @@ HTTP 201
                         Ready to Get Compliant?
                     </h2>
                     <p className="text-re-text-secondary text-lg mb-8 max-w-2xl mx-auto">
-                        Sign up in minutes. First 30 days are free. No credit card required. No long-term contracts.
+                        Sign up in minutes. Start with a 14-day free trial. No credit card required. No long-term contracts.
                     </p>
                     <div className="flex flex-col sm:flex-row gap-4 justify-center">
                         <Button asChild size="lg" className="bg-re-info hover:bg-re-info text-[var(--re-text-primary)]">

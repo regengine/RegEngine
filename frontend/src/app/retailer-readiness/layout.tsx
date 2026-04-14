@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
-    title: 'Retailer Supplier FSMA 204 Compliance | RegEngine — Retailer-Ready in 30 Days',
+    title: 'Retailer Supplier FSMA 204 Compliance | RegEngine — FDA-Ready Export in 48 Hours',
     description:
         'Meet major retailer traceability requirements before their internal deadlines. API-first FSMA 204 compliance for food suppliers — automated CTEs, 5-second trace, and FDA-ready exports. Free assessment available.',
     keywords: [
@@ -15,7 +15,7 @@ export const metadata: Metadata = {
         'CTE KDE traceability',
     ],
     openGraph: {
-        title: 'Retailer-Ready in 30 Days | RegEngine FSMA 204 Compliance',
+        title: 'FDA-Ready Export in 48 Hours | RegEngine FSMA 204 Compliance',
         description:
             'API-first traceability for food suppliers. Automated CTEs, 5-second trace, FDA-ready exports. Free assessment.',
         type: 'website',
@@ -23,7 +23,7 @@ export const metadata: Metadata = {
     },
     twitter: {
         card: 'summary_large_image',
-        title: 'Retailer-Ready in 30 Days | RegEngine',
+        title: 'FDA-Ready Export in 48 Hours | RegEngine',
         description:
             'Meet major retailer FSMA 204 requirements before their internal deadlines. Free compliance assessment.',
     },
