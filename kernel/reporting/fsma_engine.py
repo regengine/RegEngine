@@ -917,8 +917,8 @@ class FSMAApplicabilityEngine:
         {
             "id": "cheese-fresh-soft",
             "name": "Fresh Soft Cheese",
-            "examples": "Queso fresco, ricotta, mascarpone, cottage cheese, cream cheese, panela",
-            "exclusions": "Hard cheeses per 21 CFR 133.150 (e.g., cheddar, parmesan, aged cotija) are excluded.",
+            "examples": "Queso fresco, ricotta, mascarpone, cream cheese, panela",
+            "exclusions": "Hard cheeses per 21 CFR 133.150 (e.g., cheddar, parmesan, aged cotija) are excluded. Cottage cheese is exempt (finalized April 2026; listed on IMS List, §1.1305(d)).",
             "covered": True,
             "outbreak_frequency": "HIGH",
             "ctes": ["Receiving", "Transformation", "Shipping"],
