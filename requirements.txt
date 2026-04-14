@@ -23,10 +23,10 @@ tenacity>=8.2.3
 # Observability — all 4 otel packages must share the same version
 prometheus-client>=0.19.0
 prometheus-fastapi-instrumentator>=7.0.0
-opentelemetry-api==1.30.0
-opentelemetry-sdk==1.30.0
-opentelemetry-instrumentation-fastapi==0.51b0
-opentelemetry-exporter-otlp==1.30.0
+opentelemetry-api==1.41.0
+opentelemetry-sdk==1.41.0
+opentelemetry-instrumentation-fastapi==0.62b0
+opentelemetry-exporter-otlp==1.41.0
 
 # Security
 passlib[argon2]>=1.7.4
