@@ -143,6 +143,14 @@ services:
       ADMIN_DATABASE_URL: ${ADMIN_DATABASE_URL:-postgresql+psycopg://${POSTGRES_USER:-regengine}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}@postgres:5432/regengine_admin}
       # CORS origins for frontend access (comma-separated)
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000,http://localhost:8080}
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
     depends_on:
       postgres:
         condition: service_healthy
@@ -247,6 +255,14 @@ services:
     restart: unless-stopped
     environment:
       <<: *env_common
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
     volumes:
       - ./services/nlp/app:/app/services/nlp/app
       - ./services/shared:/app/services/shared
