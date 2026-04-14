@@ -1,6 +1,5 @@
 # Stage 1: Build
-# Pin to patch version for reproducible builds (#1010)
-FROM node:20.18.0-alpine AS builder
+FROM node:20-alpine AS builder
 WORKDIR /app
 COPY package*.json ./
 RUN npm ci
@@ -10,8 +9,7 @@ ENV REGENGINE_DEPLOY_MODE=static
 RUN npm run build
 
 # Stage 2: Production
-# Pin to patch version for reproducible builds (#1010)
-FROM node:20.18.0-alpine AS runner
+FROM node:20-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
