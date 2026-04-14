@@ -258,11 +258,139 @@ class TestTopicNames:
     def test_graph_update_topic_name(self):
         """Verify graph update topic name."""
         from services.nlp.app.consumer import TOPIC_GRAPH_UPDATE
-        
+
         assert TOPIC_GRAPH_UPDATE == "graph.update"
 
     def test_needs_review_topic_name(self):
         """Verify needs review topic name."""
         from services.nlp.app.consumer import TOPIC_NEEDS_REVIEW
-        
+
         assert TOPIC_NEEDS_REVIEW == "nlp.needs_review"
+
+
+class TestLoadInboundSchema:
+    """Tests for inbound schema loading (OWASP API10:2023)."""
+
+    def test_load_inbound_schema_returns_validator(self):
+        """Verify _load_inbound_schema returns a usable validator."""
+        from services.nlp.app.consumer import _load_inbound_schema
+
+        validator = _load_inbound_schema()
+        assert validator is not None
+
+    def test_module_level_validator_loaded(self):
+        """Verify the eagerly-loaded inbound validator is available."""
+        from services.nlp.app.consumer import _INBOUND_VALIDATOR
+
+        assert _INBOUND_VALIDATOR is not None
+
+
+class TestInboundSchemaValidation:
+    """Tests for inbound Kafka message schema validation."""
+
+    def test_valid_event_with_s3_path(self):
+        """Valid event with normalized_s3_path passes validation."""
+        from services.nlp.app.consumer import _INBOUND_VALIDATOR
+
+        evt = {
+            "document_id": "doc-123",
+            "document_hash": "abc123",
+            "tenant_id": "550e8400-e29b-41d4-a716-446655440000",
+            "normalized_s3_path": "s3://bucket/key/file.json",
+            "timestamp": "2026-04-14T00:00:00Z",
+        }
+        errors = list(_INBOUND_VALIDATOR.iter_errors(evt))
+        assert errors == []
+
+    def test_valid_event_with_text_clean(self):
+        """Valid event with inline text_clean passes validation."""
+        from services.nlp.app.consumer import _INBOUND_VALIDATOR
+
+        evt = {
+            "document_id": "doc-456",
+            "text_clean": "Banks must maintain capital ratios.",
+            "timestamp": "2026-04-14T00:00:00Z",
+        }
+        errors = list(_INBOUND_VALIDATOR.iter_errors(evt))
+        assert errors == []
+
+    def test_valid_event_with_legacy_doc_id(self):
+        """Valid event using legacy doc_id field passes validation."""
+        from services.nlp.app.consumer import _INBOUND_VALIDATOR
+
+        evt = {
+            "doc_id": "legacy-789",
+            "text_clean": "Firms should report quarterly.",
+        }
+        errors = list(_INBOUND_VALIDATOR.iter_errors(evt))
+        assert errors == []
+
+    def test_rejects_missing_document_identifier(self):
+        """Event missing both document_id and doc_id is rejected."""
+        from services.nlp.app.consumer import _INBOUND_VALIDATOR
+
+        evt = {
+            "normalized_s3_path": "s3://bucket/key.json",
+            "timestamp": "2026-04-14T00:00:00Z",
+        }
+        errors = list(_INBOUND_VALIDATOR.iter_errors(evt))
+        assert len(errors) > 0
+
+    def test_rejects_missing_content_source(self):
+        """Event missing both normalized_s3_path and text_clean is rejected."""
+        from services.nlp.app.consumer import _INBOUND_VALIDATOR
+
+        evt = {
+            "document_id": "doc-no-content",
+            "timestamp": "2026-04-14T00:00:00Z",
+        }
+        errors = list(_INBOUND_VALIDATOR.iter_errors(evt))
+        assert len(errors) > 0
+
+    def test_rejects_invalid_tenant_id_format(self):
+        """Event with non-UUID tenant_id is rejected."""
+        from services.nlp.app.consumer import _INBOUND_VALIDATOR
+
+        evt = {
+            "document_id": "doc-bad-tenant",
+            "tenant_id": "not-a-uuid",
+            "normalized_s3_path": "s3://bucket/key.json",
+        }
+        errors = list(_INBOUND_VALIDATOR.iter_errors(evt))
+        assert len(errors) > 0
+        assert any("tenant_id" in str(e.path) or "tenant_id" in e.message for e in errors)
+
+    def test_rejects_integer_tenant_id(self):
+        """Event with integer tenant_id is rejected (type mismatch)."""
+        from services.nlp.app.consumer import _INBOUND_VALIDATOR
+
+        evt = {
+            "document_id": "doc-int-tenant",
+            "tenant_id": 12345,
+            "normalized_s3_path": "s3://bucket/key.json",
+        }
+        errors = list(_INBOUND_VALIDATOR.iter_errors(evt))
+        assert len(errors) > 0
+
+    def test_rejects_invalid_s3_path(self):
+        """Event with non-S3 normalized_s3_path is rejected."""
+        from services.nlp.app.consumer import _INBOUND_VALIDATOR
+
+        evt = {
+            "document_id": "doc-bad-path",
+            "normalized_s3_path": "/etc/passwd",
+        }
+        errors = list(_INBOUND_VALIDATOR.iter_errors(evt))
+        assert len(errors) > 0
+
+    def test_null_tenant_id_accepted(self):
+        """Null tenant_id is valid (multi-tenancy is optional)."""
+        from services.nlp.app.consumer import _INBOUND_VALIDATOR
+
+        evt = {
+            "document_id": "doc-no-tenant",
+            "tenant_id": None,
+            "normalized_s3_path": "s3://bucket/key.json",
+        }
+        errors = list(_INBOUND_VALIDATOR.iter_errors(evt))
+        assert errors == []

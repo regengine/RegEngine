@@ -46,6 +46,7 @@ def _valid_config(**overrides) -> dict:
         "quantity": 100,
         "unit_of_measure": "cases",
         "product_description": "Organic Romaine Lettuce",
+        "responsible_party_contact": "Jane Doe, 555-0100, jane@example.com",
     }
     base.update(overrides)
     return base
@@ -149,8 +150,35 @@ class TestRequiredFieldValidation:
         )
         body = resp.json()
         assert body["valid"] is False
-        # At minimum, tlc, cte_type, event_date, location, quantity, unit_of_measure
-        assert len(body["errors"]) >= 6
+        # At minimum, tlc, cte_type, event_date, location, quantity, unit_of_measure,
+        # product_description, responsible_party_contact
+        assert len(body["errors"]) >= 8
+
+    def test_missing_responsible_party_contact_produces_error(self):
+        config = _valid_config()
+        del config["responsible_party_contact"]
+        resp = client.post(
+            "/validate",
+            json={"config": config},
+            headers=_headers(),
+        )
+        body = resp.json()
+        assert body["valid"] is False
+        error_paths = [e["path"] for e in body["errors"]]
+        assert "responsible_party_contact" in error_paths
+
+    def test_null_responsible_party_contact_produces_error(self):
+        config = _valid_config(responsible_party_contact=None)
+        resp = client.post(
+            "/validate",
+            json={"config": config},
+            headers=_headers(),
+        )
+        body = resp.json()
+        assert body["valid"] is False
+        rpc_errors = [e for e in body["errors"] if e["path"] == "responsible_party_contact"]
+        assert len(rpc_errors) == 1
+        assert rpc_errors[0]["code"] == "NULL_REQUIRED_FIELD"
 
     def test_empty_string_is_not_null(self):
         """An empty string is present and non-null, so it should pass the null check."""
