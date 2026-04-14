@@ -10,16 +10,13 @@ Tables already indexed (no change needed):
   supplier_facility_ftl_categories, supplier_traceability_lots,
   supplier_cte_events, supplier_funnel_events, review_items
 
-Tables receiving new indexes:
-  users.tenant_id — added here (column may not exist yet); used for
-                    tenant-scoped user lookups and future RLS policies
-  fsma.fsma_audit_trail.tenant_id — standalone index for audit API queries
-                                     (composite idx_audit_trail_tenant_time
-                                     exists but a single-column index is
-                                     needed for RLS policy scans)
-  fsma.cte_events.tenant_id — standalone index for traceability API queries
-                               (idx_cte_events_tenant exists from V002 but
-                               is recreated here under the canonical name)
+Tables needing indexes:
+  fsma.fsma_audit_trail.tenant_id — queried by tenant in audit API
+  fsma.cte_events.tenant_id — queried by tenant in traceability API
+
+NOTE: public.users does NOT have a tenant_id column (users is a global
+identity table; tenant association is via the memberships table).
+The original migration incorrectly tried to index users.tenant_id.
 
 Revision ID: b1c2d3e4f5a6
 Revises: a8b9c0d1e2f3
@@ -34,27 +31,12 @@ depends_on = None
 
 
 def upgrade() -> None:
-    # ------------------------------------------------------------------
-    # Step 1: Ensure tenant_id column exists on public.users.
-    #
-    # The users table uses id-based RLS isolation (not tenant_id), so no
-    # prior migration added this column.  We add it as nullable TEXT so
-    # existing rows are unaffected; it can be backfilled and constrained
-    # in a follow-up migration once application code is updated.
-    # ------------------------------------------------------------------
-    op.execute("""
-        ALTER TABLE public.users
-        ADD COLUMN IF NOT EXISTS tenant_id TEXT;
-    """)
+    # NOTE: public.users has no tenant_id column (global identity table).
+    # Tenant scoping is via the memberships join table, not a direct FK.
+    # The original ix_users_tenant_id index was removed — it would crash
+    # because the column does not exist.
 
-    # ------------------------------------------------------------------
-    # Step 2: Create the indexes.  All use IF NOT EXISTS so this
-    # migration is fully idempotent on databases that already have them.
-    # ------------------------------------------------------------------
-    op.execute("""
-        CREATE INDEX IF NOT EXISTS ix_users_tenant_id
-        ON public.users (tenant_id);
-    """)
+    # Use IF NOT EXISTS so the migration is idempotent
     op.execute("""
         CREATE INDEX IF NOT EXISTS ix_fsma_audit_trail_tenant_id
         ON fsma.fsma_audit_trail (tenant_id);
@@ -66,13 +48,5 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.execute("DROP INDEX IF EXISTS public.ix_users_tenant_id;")
     op.execute("DROP INDEX IF EXISTS fsma.ix_fsma_audit_trail_tenant_id;")
     op.execute("DROP INDEX IF EXISTS fsma.ix_cte_events_tenant_id;")
-    # Remove the tenant_id column added to users in this migration.
-    # Only drop it if it was added here (i.e. it is nullable with no default,
-    # which is the signature of our ADD COLUMN IF NOT EXISTS above).
-    op.execute("""
-        ALTER TABLE public.users
-        DROP COLUMN IF EXISTS tenant_id;
-    """)
