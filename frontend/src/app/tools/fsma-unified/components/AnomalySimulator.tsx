@@ -288,7 +288,7 @@ export function AnomalyDetectionSimulator() {
                                 <div className="h-[300px] w-full rounded-2xl border p-2"><ResponsiveContainer width="100%" height="100%">
                                     <LineChart data={streamData} margin={{ top: 10, right: 14, bottom: 6, left: 6 }}>
                                         <CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="idx" tick={false} label={{ value: "90 days (hourly)", position: "insideBottom", offset: -2 }} /><YAxis domain={[32, 46]} />
-                                        <Tooltip formatter={(v: string | number, n: string) => n === "tempF" ? [`${fmt(Number(v))} °F`, "Temp"] : [v, n]} labelFormatter={(l: number) => streamData[l]?.hour || l} />
+                                        <Tooltip formatter={(v, n) => n === "tempF" ? [`${fmt(Number(v ?? 0))} °F`, "Temp"] : [String(v ?? ""), String(n)]} labelFormatter={(l) => streamData[Number(l)]?.hour || String(l)} />
                                         <ReferenceLine y={40} stroke="#ef4444" strokeDasharray="6 3" /><Legend /><Line type="monotone" dataKey="tempF" dot={false} strokeWidth={2} stroke="#3b82f6" />
                                     </LineChart>
                                 </ResponsiveContainer></div>
