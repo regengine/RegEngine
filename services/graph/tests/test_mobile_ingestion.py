@@ -67,6 +67,7 @@ def test_log_traceability_event_success(mock_neo4j_client, mock_validation):
         "event_date": "2026-02-22",
         "tlc": "TLC-2024-001",
         "location_identifier": "0614141000036",
+        "responsible_party_contact": "Jane Doe, 555-0100, jane@example.com",
         "product_description": "Green Spinach 10oz",
         "gtin": "10614141000019"
     }
@@ -82,6 +83,38 @@ def test_log_traceability_event_success(mock_neo4j_client, mock_validation):
     # Check that persistence was triggered correctly
     mock_run = mock_neo4j_client.session.return_value.__aenter__.return_value.run
     assert mock_run.call_count == 5 # TraceEvent, Lot, Facility, and 2 Relationships
+
+def test_log_traceability_event_missing_responsible_party_contact(mock_neo4j_client, mock_validation):
+    """Verify that missing responsible_party_contact returns 422 per 21 CFR 1.1370(c)."""
+    from services.graph.app.routers.fsma.traceability import router
+    from shared.auth import require_api_key
+    from shared.middleware import get_current_tenant_id
+    from shared.rate_limit import add_rate_limiting
+
+    app = FastAPI()
+    add_rate_limiting(app)
+    app.include_router(router)
+
+    app.dependency_overrides[require_api_key] = lambda: {"tenant_id": "test-tenant"}
+    app.dependency_overrides[get_current_tenant_id] = lambda: uuid.UUID("00000000-0000-0000-0000-000000000001")
+
+    client = TestClient(app)
+
+    payload = {
+        "event_type": "RECEIVING",
+        "event_date": "2026-02-22",
+        "tlc": "TLC-2024-001",
+        "location_identifier": "0614141000036",
+        # responsible_party_contact intentionally omitted
+    }
+
+    response = client.post("/event", json=payload)
+
+    assert response.status_code == 422, f"Expected 422, got {response.status_code}: {response.json()}"
+
+    # Verify no persistence occurred
+    mock_neo4j_client.session.return_value.__aenter__.return_value.run.assert_not_called()
+
 
 def test_log_traceability_event_invalid_tlc(mock_neo4j_client, mock_validation):
     """Verify that identity validation failures are handled with 400 Bad Request."""
@@ -106,7 +139,8 @@ def test_log_traceability_event_invalid_tlc(mock_neo4j_client, mock_validation):
         "event_type": "RECEIVING",
         "event_date": "2026-02-22",
         "tlc": "!!!INVALID!!!",
-        "location_identifier": "0614141000036"
+        "location_identifier": "0614141000036",
+        "responsible_party_contact": "Jane Doe, 555-0100, jane@example.com",
     }
     
     response = client.post("/event", json=payload)
