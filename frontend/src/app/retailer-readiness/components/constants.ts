@@ -110,7 +110,7 @@ export const FAQ_ITEMS = [
    COMPETITOR DATA
    ───────────────────────────────────────────────────────────── */
 export const COMPETITORS = [
-    { feature: 'Starting price', regengine: '$425/mo', foodlogiq: '$2,500+/mo', tracelink: 'Enterprise only' },
+    { feature: 'Starting price', regengine: '$425/mo', foodlogiq: 'Contact sales', tracelink: 'Enterprise only' },
     { feature: 'Setup time', regengine: '2–4 weeks', foodlogiq: '3–6 months', tracelink: '6–12 months' },
     { feature: 'API-first', regengine: '✓ Full REST API', foodlogiq: 'Limited', tracelink: 'Portal-based' },
     { feature: 'FDA export format', regengine: '✓ One-click', foodlogiq: 'Manual config', tracelink: 'Custom build' },

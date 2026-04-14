@@ -188,7 +188,7 @@ export function PricingPageClient({ pricingTiers }: { pricingTiers: PricingTier[
                         <div className="hidden sm:block w-px h-4 bg-[var(--re-surface-border)]" />
                         <div className="flex items-center gap-2.5 text-sm text-[var(--re-text-muted)]">
                             <ShieldCheck className="w-4 h-4 text-[var(--re-brand)] shrink-0" />
-                            <span>SOC 2 Type II certified infrastructure (Supabase, Vercel)</span>
+                            <span>Built on SOC 2 Type II certified infrastructure (Supabase, Vercel)</span>
                         </div>
                         <div className="hidden sm:block w-px h-4 bg-[var(--re-surface-border)]" />
                         <div className="flex items-center gap-2.5 text-sm text-[var(--re-text-muted)]">

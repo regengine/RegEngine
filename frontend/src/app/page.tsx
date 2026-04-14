@@ -54,7 +54,7 @@ export const metadata: Metadata = {
 /* ------------------------------------------------------------------ */
 
 const TRUST_SIGNALS = [
-  "Retailer-ready in 30 days",
+  "First FDA-ready export in 48 hours",
   "1hr 40min recall response",
   "API-first",
   "Built for FSMA 204",
@@ -113,7 +113,7 @@ const FREE_TOOLS = [
   },
   {
     title: "Live Data Sandbox",
-    desc: "Paste your CSV. RegEngine evaluates it against all 25 FSMA 204 rules. Nothing stored.",
+    desc: "Paste your CSV. RegEngine evaluates it against FSMA 204 traceability requirements across all 7 CTE types. Nothing stored.",
     href: "#sandbox",
     icon: Database,
     tag: "Try now",
@@ -460,7 +460,7 @@ export default function RegEngineLanding() {
             Paste your data. See what breaks.
           </h2>
           <p className="text-[var(--re-text-secondary)] max-w-[560px] leading-relaxed">
-            Drop your CSV and RegEngine evaluates it against all 25 FSMA 204 rules in real time. Nothing is stored.
+            Drop your CSV and RegEngine evaluates it against FSMA 204 traceability requirements across all 7 CTE types in real time. Nothing is stored.
           </p>
         </div>
         <SandboxUpload />

@@ -49,7 +49,7 @@ export default function HeroSection({ heroRef }: HeroSectionProps) {
                 maxWidth: 540, margin: '0 auto 32px', lineHeight: 1.7,
             }}>
                 Walmart, Kroger, and Costco require supplier traceability — and audit suppliers regularly.
-                RegEngine gets you retailer-ready in 30 days with API and CSV ingest, no portal logins required.
+                RegEngine gets you from first upload to FDA-ready export in 48 hours, fully retailer-ready in 2–4 weeks — via API and CSV ingest, no portal logins required.
             </p>
 
             <div className="flex flex-col sm:flex-row gap-3 justify-center items-center">
