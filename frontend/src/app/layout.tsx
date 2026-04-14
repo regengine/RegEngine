@@ -78,6 +78,9 @@ export const metadata: Metadata = {
     title: 'RegEngine — FSMA 204 Food Traceability Compliance',
     description: 'Meet FDA and retailer traceability deadlines. Ingest supplier data, verify chain of custody, and export audit-ready records in minutes.',
   },
+  verification: {
+    google: 'AaGncRw3D_Qa40yoaX50kcpMvan5bTfHf5XzpHHzuFY',
+  },
 }
 
 export default async function RootLayout({
