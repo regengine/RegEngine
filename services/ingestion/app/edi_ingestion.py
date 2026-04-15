@@ -1,3 +1,11 @@
+# ============================================================
+# UNSAFE ZONE: This file (1043 lines) mixes EDI X12 segment
+# parsing (856/850/810/861), field mapping, CTE normalization,
+# and validation in a single module. Fragile string parsing of
+# EDI segments — changes to segment mapping risk silent data
+# corruption in ingested events.
+# Refactoring target — see PHASE 3.5 in REGENGINE_CODEBASE_REMEDIATION_PRD.md
+# ============================================================
 """EDI inbound ingestion router.
 
 Accepts partner-authenticated X12 documents and normalizes them into FSMA CTE

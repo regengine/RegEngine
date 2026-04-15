@@ -11,15 +11,6 @@ Database tables (V047):
     - fsma.entity_aliases
     - fsma.entity_merge_history
     - fsma.identity_review_queue
-
-Usage:
-    from shared.identity_resolution import IdentityResolutionService
-
-    svc = IdentityResolutionService(db_session)
-    entity = svc.register_entity(tenant_id, "facility", "Example Cold Storage", gln="0012345000015")
-    svc.add_alias(tenant_id, entity["entity_id"], "name", "EXAMPLE Cold Storage LLC", "csv_upload")
-    matches = svc.find_entity_by_alias(tenant_id, "name", "Example Cold Storage")
-    fuzzy = svc.find_potential_matches(tenant_id, "Example Cold Stora", entity_type="facility")
 """
 
 from __future__ import annotations
@@ -34,28 +25,15 @@ from uuid import uuid4
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from shared.identity_resolution.constants import (
+    VALID_ENTITY_TYPES,
+    VALID_ALIAS_TYPES,
+    VALID_REVIEW_STATUSES,
+    AMBIGUOUS_THRESHOLD_LOW,
+    AMBIGUOUS_THRESHOLD_HIGH,
+)
+
 logger = logging.getLogger("identity-resolution")
-
-# ---------------------------------------------------------------------------
-# Valid enum values (mirrors DB CHECK constraints)
-# ---------------------------------------------------------------------------
-
-VALID_ENTITY_TYPES = frozenset({
-    "firm", "facility", "product", "lot", "trading_relationship",
-})
-
-VALID_ALIAS_TYPES = frozenset({
-    "name", "gln", "gtin", "fda_registration", "internal_code",
-    "duns", "tlc_prefix", "address_variant", "abbreviation", "trade_name",
-})
-
-VALID_REVIEW_STATUSES = frozenset({
-    "confirmed_match", "confirmed_distinct", "deferred",
-})
-
-# Minimum confidence threshold for auto-queuing ambiguous matches
-AMBIGUOUS_THRESHOLD_LOW = 0.60
-AMBIGUOUS_THRESHOLD_HIGH = 0.90
 
 
 # ---------------------------------------------------------------------------

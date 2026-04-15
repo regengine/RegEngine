@@ -1,20 +1,8 @@
 """
-Canonical Event Persistence Layer.
+Canonical Event Store — write orchestration, read path, and trace queries.
 
-Provides database-backed storage for TraceabilityEvents in the canonical
-model (fsma.traceability_events). This replaces direct writes to
-fsma.cte_events for new ingestion paths.
-
-This module also writes to the legacy cte_events table during the migration
-period (dual-write) to maintain backward compatibility with existing
-export and graph sync code.
-
-Usage:
-    from shared.canonical_persistence import CanonicalEventStore
-
-    store = CanonicalEventStore(db_session)
-    result = store.persist_event(canonical_event)
-    results = store.persist_events_batch(tenant_id, events)
+Persists TraceabilityEvents to fsma.traceability_events with idempotency,
+hash chain integrity, and ingestion run tracking.
 """
 
 from __future__ import annotations
@@ -33,48 +21,12 @@ from shared.canonical_event import (
     IngestionRun,
     IngestionRunStatus,
 )
-from shared.cte_persistence import (
-    compute_chain_hash,
-    StoreResult,
-    ChainVerification,
-)
+from shared.cte_persistence import compute_chain_hash
+from shared.canonical_persistence.models import CanonicalStoreResult
+from shared.canonical_persistence import migration
 
 logger = logging.getLogger("canonical-persistence")
 
-
-# ---------------------------------------------------------------------------
-# Persistence Result
-# ---------------------------------------------------------------------------
-
-class CanonicalStoreResult:
-    """Result of persisting a canonical event."""
-
-    __slots__ = (
-        "success", "event_id", "sha256_hash", "chain_hash",
-        "idempotent", "errors", "legacy_event_id",
-    )
-
-    def __init__(self, **kwargs):
-        for slot in self.__slots__:
-            setattr(self, slot, kwargs.get(slot))
-
-    def to_legacy_result(self) -> StoreResult:
-        """Convert to legacy StoreResult for backward compatibility."""
-        return StoreResult(
-            success=self.success,
-            event_id=self.event_id,
-            sha256_hash=self.sha256_hash,
-            chain_hash=self.chain_hash,
-            idempotent=self.idempotent,
-            errors=self.errors or [],
-            kde_completeness=1.0,
-            alerts=[],
-        )
-
-
-# ---------------------------------------------------------------------------
-# Canonical Event Store
-# ---------------------------------------------------------------------------
 
 class CanonicalEventStore:
     """
@@ -85,14 +37,6 @@ class CanonicalEventStore:
     """
 
     def __init__(self, session: Session, dual_write: bool = True, skip_chain_write: bool = False):
-        """
-        Args:
-            session: SQLAlchemy session with tenant context.
-            dual_write: If True, also writes to legacy cte_events table.
-            skip_chain_write: If True, skips hash chain insertion. Use when
-                the caller (e.g., EPCIS/webhook dual-write path) has already
-                written the chain entry via the legacy CTEPersistence path.
-        """
         self.session = session
         self.dual_write = dual_write
         self.skip_chain_write = skip_chain_write
@@ -139,10 +83,7 @@ class CanonicalEventStore:
         return str(run.id)
 
     def complete_ingestion_run(
-        self,
-        run_id: str,
-        accepted: int,
-        rejected: int,
+        self, run_id: str, accepted: int, rejected: int,
         errors: Optional[List[Dict]] = None,
     ) -> None:
         """Mark an ingestion run as completed."""
@@ -170,25 +111,15 @@ class CanonicalEventStore:
     # Single Event Persistence
     # ------------------------------------------------------------------
 
-    def persist_event(
-        self,
-        event: TraceabilityEvent,
-    ) -> CanonicalStoreResult:
+    def persist_event(self, event: TraceabilityEvent) -> CanonicalStoreResult:
         """
         Persist a single canonical TraceabilityEvent.
 
-        Handles:
-        1. Idempotency check
-        2. Hash chain computation
-        3. Write to canonical table
-        4. Dual-write to legacy table (if enabled)
-        5. Hash chain entry
-
-        Returns CanonicalStoreResult.
+        Handles: idempotency check, hash chain, canonical write,
+        dual-write (legacy), hash chain entry, transformation links.
         """
         tenant_id = str(event.tenant_id)
 
-        # Ensure hashes are computed
         if not event.sha256_hash:
             event.prepare_for_persistence()
 
@@ -205,12 +136,9 @@ class CanonicalEventStore:
 
             if existing:
                 return CanonicalStoreResult(
-                    success=True,
-                    event_id=str(existing[0]),
-                    sha256_hash=existing[1],
-                    chain_hash=existing[2],
-                    idempotent=True,
-                    errors=[],
+                    success=True, event_id=str(existing[0]),
+                    sha256_hash=existing[1], chain_hash=existing[2],
+                    idempotent=True, errors=[],
                 )
 
         # --- Get chain head ---
@@ -237,10 +165,8 @@ class CanonicalEventStore:
 
         # --- Mark superseded event ---
         if event.supersedes_event_id:
-            # Guard: reject self-referencing amendments
             if event.supersedes_event_id == event.event_id:
                 raise ValueError("Event cannot supersede itself")
-            # Guard: reject superseding an already-superseded event
             target_status = self.session.execute(
                 text("""
                     SELECT status FROM fsma.traceability_events
@@ -260,35 +186,27 @@ class CanonicalEventStore:
                       AND tenant_id = :tid
                       AND status = 'active'
                 """),
-                {
-                    "superseded_id": str(event.supersedes_event_id),
-                    "tid": tenant_id,
-                },
+                {"superseded_id": str(event.supersedes_event_id), "tid": tenant_id},
             )
 
         # --- Insert hash chain entry ---
-        # Skip if the caller already wrote the chain entry (e.g., EPCIS/webhook
-        # dual-write paths that go through CTEPersistence.store_event() first).
         if not self.skip_chain_write:
             self._insert_chain_entry(
-                tenant_id=tenant_id,
-                event_id=str(event.event_id),
-                sequence_num=next_sequence,
-                event_hash=event.sha256_hash,
-                previous_chain_hash=previous_chain_hash,
-                chain_hash=chain_hash,
+                tenant_id=tenant_id, event_id=str(event.event_id),
+                sequence_num=next_sequence, event_hash=event.sha256_hash,
+                previous_chain_hash=previous_chain_hash, chain_hash=chain_hash,
             )
 
-        # --- Dual-write to legacy table ---
+        # --- Dual-write to legacy table (TEMPORARY — see migration.py) ---
         legacy_id = None
         if self.dual_write:
-            legacy_id = self._dual_write_legacy(event)
+            legacy_id = migration.dual_write_legacy(self.session, event)
 
-        # --- Create transformation links if this is a transformation event ---
+        # --- Create transformation links ---
         self._create_transformation_links(event)
 
-        # --- Publish to graph sync queue ---
-        self._publish_graph_sync(event)
+        # --- Publish to graph sync (TEMPORARY — see migration.py) ---
+        migration.publish_graph_sync(event)
 
         logger.info(
             "canonical_event_persisted",
@@ -303,37 +221,22 @@ class CanonicalEventStore:
         )
 
         return CanonicalStoreResult(
-            success=True,
-            event_id=str(event.event_id),
-            sha256_hash=event.sha256_hash,
-            chain_hash=chain_hash,
-            idempotent=False,
-            errors=[],
-            legacy_event_id=legacy_id,
+            success=True, event_id=str(event.event_id),
+            sha256_hash=event.sha256_hash, chain_hash=chain_hash,
+            idempotent=False, errors=[], legacy_event_id=legacy_id,
         )
 
     # ------------------------------------------------------------------
     # Batch Persistence
     # ------------------------------------------------------------------
 
-    def persist_events_batch(
-        self,
-        events: List[TraceabilityEvent],
-    ) -> List[CanonicalStoreResult]:
-        """
-        Persist multiple canonical events in optimized batches.
-
-        Follows the same pattern as CTEPersistence.store_events_batch:
-        1. Batch idempotency check
-        2. Sequential chain hash computation
-        3. Batch INSERT
-        """
+    def persist_events_batch(self, events: List[TraceabilityEvent]) -> List[CanonicalStoreResult]:
+        """Persist multiple canonical events in optimized batches."""
         if not events:
             return []
 
         tenant_id = str(events[0].tenant_id)
 
-        # Ensure all events have hashes
         for evt in events:
             if not evt.sha256_hash:
                 evt.prepare_for_persistence()
@@ -411,25 +314,23 @@ class CanonicalEventStore:
             previous_chain_hash = chain_hash
             next_sequence += 1
 
-        # --- Batch INSERT canonical events ---
+        # --- Batch INSERT ---
         for chunk_start in range(0, len(new_events), 50):
             chunk = new_events[chunk_start:chunk_start + 50]
             self._batch_insert_canonical_events(chunk)
 
-        # --- Batch INSERT chain entries ---
         for chunk_start in range(0, len(chain_entries), 100):
             chunk = chain_entries[chunk_start:chunk_start + 100]
             self._batch_insert_chain_entries(chunk)
 
-        # --- Create transformation links ---
         for evt in new_events:
             self._create_transformation_links(evt)
 
-        # --- Dual-write legacy ---
+        # --- Dual-write legacy (TEMPORARY — see migration.py) ---
         if self.dual_write and new_events:
             for evt in new_events:
                 try:
-                    self._dual_write_legacy(evt)
+                    migration.dual_write_legacy(self.session, evt)
                 except Exception as e:
                     logger.warning(
                         "legacy_dual_write_failed",
@@ -449,61 +350,11 @@ class CanonicalEventStore:
         return results
 
     # ------------------------------------------------------------------
-    # Graph Sync
-    # ------------------------------------------------------------------
-
-    def _publish_graph_sync(self, event: TraceabilityEvent) -> None:
-        """Publish canonical event to Redis for Neo4j graph sync."""
-        import os
-        redis_url = os.getenv("REDIS_URL")
-        if not redis_url:
-            return
-
-        try:
-            import redis as redis_lib
-            client = redis_lib.from_url(redis_url)
-            message = {
-                "event": "canonical.created",
-                "data": {
-                    "canonical_event": {
-                        "event_id": str(event.event_id),
-                        "tenant_id": str(event.tenant_id),
-                        "event_type": event.event_type.value,
-                        "traceability_lot_code": event.traceability_lot_code,
-                        "product_reference": event.product_reference,
-                        "quantity": event.quantity,
-                        "unit_of_measure": event.unit_of_measure,
-                        "event_timestamp": event.event_timestamp.isoformat(),
-                        "from_facility_reference": event.from_facility_reference,
-                        "to_facility_reference": event.to_facility_reference,
-                        "from_entity_reference": event.from_entity_reference,
-                        "to_entity_reference": event.to_entity_reference,
-                        "source_system": event.source_system.value,
-                        "confidence_score": event.confidence_score,
-                        "schema_version": event.schema_version,
-                        "sha256_hash": event.sha256_hash,
-                    },
-                },
-            }
-            import json as _json
-            client.rpush("neo4j-sync", _json.dumps(message, default=str))
-        except Exception as exc:
-            logger.warning("canonical_graph_sync_failed", extra={
-                "event_id": str(event.event_id), "error": str(exc),
-            })
-
-    # ------------------------------------------------------------------
     # Transformation Links
     # ------------------------------------------------------------------
 
     def _create_transformation_links(self, event: TraceabilityEvent) -> None:
-        """
-        If this is a transformation event with input_lot_codes in KDEs,
-        create adjacency rows in fsma.transformation_links.
-
-        Each input TLC gets one row linking it to the output TLC
-        (the event's own traceability_lot_code).
-        """
+        """Create adjacency rows in fsma.transformation_links for transformation events."""
         if event.event_type.value != "transformation":
             return
 
@@ -520,7 +371,6 @@ class CanonicalEventStore:
             if not input_tlc or not isinstance(input_tlc, str):
                 continue
             try:
-                # Resolve input_event_id if the input TLC exists in our DB
                 input_event_row = self.session.execute(
                     text("""
                         SELECT event_id FROM fsma.traceability_events
@@ -568,10 +418,8 @@ class CanonicalEventStore:
                 logger.warning(
                     "transformation_link_create_failed",
                     extra={
-                        "event_id": event_id,
-                        "input_tlc": input_tlc,
-                        "output_tlc": output_tlc,
-                        "error": str(exc),
+                        "event_id": event_id, "input_tlc": input_tlc,
+                        "output_tlc": output_tlc, "error": str(exc),
                     },
                 )
 
@@ -579,10 +427,8 @@ class CanonicalEventStore:
             logger.info(
                 "transformation_links_created",
                 extra={
-                    "event_id": event_id,
-                    "output_tlc": output_tlc,
-                    "input_count": len(input_lot_codes),
-                    "tenant_id": tenant_id,
+                    "event_id": event_id, "output_tlc": output_tlc,
+                    "input_count": len(input_lot_codes), "tenant_id": tenant_id,
                 },
             )
 
@@ -591,11 +437,7 @@ class CanonicalEventStore:
     # ------------------------------------------------------------------
 
     def trace_forward(self, tenant_id: str, tlc: str, max_depth: int = 5) -> List[Dict[str, Any]]:
-        """
-        Forward trace: Given an input TLC, find all output TLCs it contributed to.
-        Recursively follows the adjacency graph up to max_depth hops.
-        Returns list of {output_tlc, transformation_event_id, depth, process_type}.
-        """
+        """Forward trace: find all output TLCs an input TLC contributed to."""
         results = []
         visited = set()
         queue = [(tlc, 0)]
@@ -619,10 +461,8 @@ class CanonicalEventStore:
             for row in rows:
                 output_tlc = row[0]
                 results.append({
-                    "input_tlc": current_tlc,
-                    "output_tlc": output_tlc,
-                    "transformation_event_id": str(row[1]),
-                    "process_type": row[2],
+                    "input_tlc": current_tlc, "output_tlc": output_tlc,
+                    "transformation_event_id": str(row[1]), "process_type": row[2],
                     "output_quantity": float(row[3]) if row[3] else None,
                     "output_unit": row[4],
                     "confidence_score": float(row[5]) if row[5] else 1.0,
@@ -634,10 +474,7 @@ class CanonicalEventStore:
         return results
 
     def trace_backward(self, tenant_id: str, tlc: str, max_depth: int = 5) -> List[Dict[str, Any]]:
-        """
-        Backward trace: Given an output TLC, find all input TLCs that contributed to it.
-        Recursively follows the adjacency graph up to max_depth hops.
-        """
+        """Backward trace: find all input TLCs that contributed to an output TLC."""
         results = []
         visited = set()
         queue = [(tlc, 0)]
@@ -661,10 +498,8 @@ class CanonicalEventStore:
             for row in rows:
                 input_tlc = row[0]
                 results.append({
-                    "input_tlc": input_tlc,
-                    "output_tlc": current_tlc,
-                    "transformation_event_id": str(row[1]),
-                    "process_type": row[2],
+                    "input_tlc": input_tlc, "output_tlc": current_tlc,
+                    "transformation_event_id": str(row[1]), "process_type": row[2],
                     "input_quantity": float(row[3]) if row[3] else None,
                     "input_unit": row[4],
                     "confidence_score": float(row[5]) if row[5] else 1.0,
@@ -703,22 +538,17 @@ class CanonicalEventStore:
             return None
 
         return {
-            "event_id": str(row[0]),
-            "tenant_id": str(row[1]),
-            "source_system": row[2],
-            "source_record_id": row[3],
+            "event_id": str(row[0]), "tenant_id": str(row[1]),
+            "source_system": row[2], "source_record_id": row[3],
             "event_type": row[4],
             "event_timestamp": row[5].isoformat() if row[5] else None,
             "event_timezone": row[6],
-            "product_reference": row[7],
-            "lot_reference": row[8],
+            "product_reference": row[7], "lot_reference": row[8],
             "traceability_lot_code": row[9],
             "quantity": float(row[10]) if row[10] else 0,
             "unit_of_measure": row[11],
-            "from_entity_reference": row[12],
-            "to_entity_reference": row[13],
-            "from_facility_reference": row[14],
-            "to_facility_reference": row[15],
+            "from_entity_reference": row[12], "to_entity_reference": row[13],
+            "from_facility_reference": row[14], "to_facility_reference": row[15],
             "transport_reference": row[16],
             "kdes": row[17] if isinstance(row[17], dict) else json.loads(row[17] or "{}"),
             "raw_payload": row[18] if isinstance(row[18], dict) else json.loads(row[18] or "{}"),
@@ -727,26 +557,19 @@ class CanonicalEventStore:
             "confidence_score": float(row[21]) if row[21] else 1.0,
             "status": row[22],
             "supersedes_event_id": str(row[23]) if row[23] else None,
-            "schema_version": row[24],
-            "sha256_hash": row[25],
-            "chain_hash": row[26],
+            "schema_version": row[24], "sha256_hash": row[25], "chain_hash": row[26],
             "created_at": row[27].isoformat() if row[27] else None,
             "amended_at": row[28].isoformat() if row[28] else None,
         }
 
     def query_events_by_tlc(
-        self,
-        tenant_id: str,
-        tlc: str,
-        start_date: Optional[str] = None,
-        end_date: Optional[str] = None,
+        self, tenant_id: str, tlc: str,
+        start_date: Optional[str] = None, end_date: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         """Query canonical events for a TLC within a date range."""
         params: Dict[str, Any] = {"tid": tenant_id, "tlc": tlc}
         where_clauses = [
-            "tenant_id = :tid",
-            "traceability_lot_code = :tlc",
-            "status = 'active'",
+            "tenant_id = :tid", "traceability_lot_code = :tlc", "status = 'active'",
         ]
 
         if start_date:
@@ -775,19 +598,13 @@ class CanonicalEventStore:
 
         return [
             {
-                "event_id": str(r[0]),
-                "event_type": r[1],
-                "traceability_lot_code": r[2],
-                "product_reference": r[3],
-                "quantity": float(r[4]) if r[4] else 0,
-                "unit_of_measure": r[5],
-                "from_facility_reference": r[6],
-                "to_facility_reference": r[7],
+                "event_id": str(r[0]), "event_type": r[1],
+                "traceability_lot_code": r[2], "product_reference": r[3],
+                "quantity": float(r[4]) if r[4] else 0, "unit_of_measure": r[5],
+                "from_facility_reference": r[6], "to_facility_reference": r[7],
                 "event_timestamp": r[8].isoformat() if r[8] else None,
-                "sha256_hash": r[9],
-                "chain_hash": r[10],
-                "source_system": r[11],
-                "status": r[12],
+                "sha256_hash": r[9], "chain_hash": r[10],
+                "source_system": r[11], "status": r[12],
                 "kdes": r[13] if isinstance(r[13], dict) else json.loads(r[13] or "{}"),
                 "provenance_metadata": r[14] if isinstance(r[14], dict) else json.loads(r[14] or "{}"),
                 "confidence_score": float(r[15]) if r[15] else 1.0,
@@ -797,7 +614,7 @@ class CanonicalEventStore:
         ]
 
     # ------------------------------------------------------------------
-    # Internal Helpers
+    # Internal Write Helpers
     # ------------------------------------------------------------------
 
     def _insert_canonical_event(self, event: TraceabilityEvent) -> None:
@@ -892,13 +709,8 @@ class CanonicalEventStore:
         self.session.execute(text(sql), params)
 
     def _insert_chain_entry(
-        self,
-        tenant_id: str,
-        event_id: str,
-        sequence_num: int,
-        event_hash: str,
-        previous_chain_hash: Optional[str],
-        chain_hash: str,
+        self, tenant_id: str, event_id: str, sequence_num: int,
+        event_hash: str, previous_chain_hash: Optional[str], chain_hash: str,
     ) -> None:
         """Insert a hash chain entry."""
         self.session.execute(
@@ -912,12 +724,9 @@ class CanonicalEventStore:
                 )
             """),
             {
-                "tenant_id": tenant_id,
-                "cte_event_id": event_id,
-                "sequence_num": sequence_num,
-                "event_hash": event_hash,
-                "previous_chain_hash": previous_chain_hash,
-                "chain_hash": chain_hash,
+                "tenant_id": tenant_id, "cte_event_id": event_id,
+                "sequence_num": sequence_num, "event_hash": event_hash,
+                "previous_chain_hash": previous_chain_hash, "chain_hash": chain_hash,
             },
         )
 
@@ -930,12 +739,9 @@ class CanonicalEventStore:
                 f"(:tid_{i}, :eid_{i}, :seq_{i}, :eh_{i}, :pch_{i}, :ch_{i})"
             )
             params.update({
-                f"tid_{i}": entry["tenant_id"],
-                f"eid_{i}": entry["cte_event_id"],
-                f"seq_{i}": entry["sequence_num"],
-                f"eh_{i}": entry["event_hash"],
-                f"pch_{i}": entry["previous_chain_hash"],
-                f"ch_{i}": entry["chain_hash"],
+                f"tid_{i}": entry["tenant_id"], f"eid_{i}": entry["cte_event_id"],
+                f"seq_{i}": entry["sequence_num"], f"eh_{i}": entry["event_hash"],
+                f"pch_{i}": entry["previous_chain_hash"], f"ch_{i}": entry["chain_hash"],
             })
         sql = f"""
             INSERT INTO fsma.hash_chain (
@@ -944,91 +750,3 @@ class CanonicalEventStore:
             ) VALUES {', '.join(values_clauses)}
         """
         self.session.execute(text(sql), params)
-
-    def _dual_write_legacy(self, event: TraceabilityEvent) -> Optional[str]:
-        """
-        Write to legacy fsma.cte_events for backward compatibility.
-
-        During the migration period, both tables receive writes so that
-        existing export and graph sync code continues to work.
-        """
-        try:
-            legacy_id = str(event.event_id)
-            self.session.execute(
-                text("""
-                    INSERT INTO fsma.cte_events (
-                        id, tenant_id, event_type, traceability_lot_code,
-                        product_description, quantity, unit_of_measure,
-                        location_gln, location_name, event_timestamp,
-                        source, source_event_id, idempotency_key,
-                        sha256_hash, chain_hash,
-                        epcis_event_type, epcis_action, epcis_biz_step,
-                        validation_status
-                    ) VALUES (
-                        :id, :tenant_id, :event_type, :tlc,
-                        :product_description, :quantity, :unit_of_measure,
-                        :location_gln, :location_name, :event_timestamp,
-                        :source, :source_event_id, :idempotency_key,
-                        :sha256_hash, :chain_hash,
-                        :epcis_event_type, :epcis_action, :epcis_biz_step,
-                        :validation_status
-                    )
-                    ON CONFLICT (tenant_id, idempotency_key) DO NOTHING
-                """),
-                {
-                    "id": legacy_id,
-                    "tenant_id": str(event.tenant_id),
-                    "event_type": event.event_type.value,
-                    "tlc": event.traceability_lot_code,
-                    "product_description": event.product_reference or "",
-                    "quantity": event.quantity,
-                    "unit_of_measure": event.unit_of_measure,
-                    "location_gln": event.from_facility_reference if event.from_facility_reference and len(event.from_facility_reference) == 13 else None,
-                    "location_name": event.from_facility_reference or event.to_facility_reference,
-                    "event_timestamp": event.event_timestamp.isoformat(),
-                    "source": event.source_system.value,
-                    "source_event_id": event.source_record_id,
-                    "idempotency_key": event.idempotency_key,
-                    "sha256_hash": event.sha256_hash,
-                    "chain_hash": event.chain_hash,
-                    "epcis_event_type": event.epcis_event_type,
-                    "epcis_action": event.epcis_action,
-                    "epcis_biz_step": event.epcis_biz_step,
-                    "validation_status": "valid" if event.status.value == "active" else event.status.value,
-                },
-            )
-
-            # Write KDEs to legacy table
-            for kde_key, kde_value in event.kdes.items():
-                if kde_value is None:
-                    continue
-                nested = self.session.begin_nested()
-                try:
-                    self.session.execute(
-                        text("""
-                            INSERT INTO fsma.cte_kdes (
-                                tenant_id, cte_event_id, kde_key, kde_value, is_required
-                            ) VALUES (
-                                :tenant_id, :cte_event_id, :kde_key, :kde_value, :is_required
-                            )
-                            ON CONFLICT (cte_event_id, kde_key) DO NOTHING
-                        """),
-                        {
-                            "tenant_id": str(event.tenant_id),
-                            "cte_event_id": legacy_id,
-                            "kde_key": kde_key,
-                            "kde_value": str(kde_value),
-                            "is_required": False,
-                        },
-                    )
-                except Exception:
-                    logger.debug("KDE insert failed, rolling back savepoint", exc_info=True)
-                    nested.rollback()
-
-            return legacy_id
-        except Exception as e:
-            logger.warning(
-                "legacy_dual_write_failed",
-                extra={"event_id": str(event.event_id), "error": str(e)},
-            )
-            return None
