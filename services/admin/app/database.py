@@ -24,6 +24,8 @@ def _create_engine():
     if database_url:
         sqlalchemy_url = _sqlalchemy_url(database_url)
         logger.info("admin_database_configured", url=database_url.split("@")[-1])
+        # prepare_threshold=0 disables prepared statements — required for
+        # Supabase PgBouncer (transaction mode) which doesn't support them.
         return create_engine(
             sqlalchemy_url,
             pool_pre_ping=True,
@@ -31,6 +33,7 @@ def _create_engine():
             pool_size=int(os.getenv("ADMIN_DB_POOL_SIZE", "10")),
             max_overflow=int(os.getenv("ADMIN_DB_MAX_OVERFLOW", "20")),
             pool_recycle=int(os.getenv("DB_POOL_RECYCLE", "300")),
+            connect_args={"prepare_threshold": 0},
         )
 
     fallback_url = os.getenv("ADMIN_FALLBACK_SQLITE", "sqlite:///./admin.db")
