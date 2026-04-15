@@ -18,6 +18,8 @@ from typing import Any, Dict, List, Optional
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from shared.observability.workflow_logger import workflow_span
+
 from shared.rules.types import RuleDefinition, RuleEvaluationResult, EvaluationSummary
 from shared.rules.evaluators.stateless import EVALUATORS
 from shared.rules.evaluators.relational import RELATIONAL_EVALUATORS
@@ -113,30 +115,40 @@ class RulesEngine:
         event_type = event_data.get("event_type", "")
         event_id = event_data.get("event_id", "")
 
-        applicable_rules = self.get_applicable_rules(event_type)
+        with workflow_span("compliance_evaluation",
+                           tenant_id=tenant_id or "") as span:
+            applicable_rules = self.get_applicable_rules(event_type)
 
-        summary = EvaluationSummary(
-            event_id=event_id,
-            total_rules=len(applicable_rules),
-        )
+            summary = EvaluationSummary(
+                event_id=event_id,
+                total_rules=len(applicable_rules),
+            )
 
-        for rule in applicable_rules:
-            result = self._evaluate_single_rule(event_data, rule)
-            summary.results.append(result)
+            for rule in applicable_rules:
+                result = self._evaluate_single_rule(event_data, rule)
+                summary.results.append(result)
 
-            if result.result == "pass":
-                summary.passed += 1
-            elif result.result == "fail":
-                summary.failed += 1
-                if result.severity == "critical":
-                    summary.critical_failures.append(result)
-            elif result.result == "warn":
-                summary.warned += 1
-            elif result.result in ("skip", "error"):
-                summary.skipped += 1
+                if result.result == "pass":
+                    summary.passed += 1
+                elif result.result == "fail":
+                    summary.failed += 1
+                    if result.severity == "critical":
+                        summary.critical_failures.append(result)
+                elif result.result == "warn":
+                    summary.warned += 1
+                elif result.result in ("skip", "error"):
+                    summary.skipped += 1
 
-        if persist and tenant_id:
-            self._persist_evaluations(tenant_id, event_id, summary.results)
+            if persist and tenant_id:
+                self._persist_evaluations(tenant_id, event_id, summary.results)
+
+            outcome = "fail" if summary.failed > 0 else "pass"
+            span.set_outcome(outcome,
+                             event_id=event_id,
+                             rule_count=len(applicable_rules),
+                             passed=summary.passed,
+                             failed=summary.failed,
+                             warned=summary.warned)
 
         return summary
 

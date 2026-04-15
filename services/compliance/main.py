@@ -31,6 +31,7 @@ from shared.observability import add_observability
 from shared.error_handling import install_exception_handlers
 from shared.health import HealthCheck, install_health_router
 from shared.middleware import RequestIDMiddleware
+from shared.correlation import CorrelationIdMiddleware
 from shared.tenant_rate_limiting import TenantRateLimitMiddleware
 
 # Initialize structured JSON logging before app/middleware creation
@@ -67,9 +68,10 @@ app.add_middleware(
     allow_origins=get_allowed_origins(),
     allow_credentials=should_allow_credentials(),
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type", "X-RegEngine-API-Key", "X-Request-ID", "X-Tenant-ID"],
+    allow_headers=["Authorization", "Content-Type", "X-RegEngine-API-Key", "X-Request-ID", "X-Correlation-ID", "X-Tenant-ID"],
 )
 app.add_middleware(RequestIDMiddleware)
+app.add_middleware(CorrelationIdMiddleware)
 app.add_middleware(TenantRateLimitMiddleware, default_rpm=100)
 
 from shared.request_safety import RequestSizeLimitMiddleware, RequestTimeoutMiddleware

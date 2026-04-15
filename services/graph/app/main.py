@@ -64,9 +64,11 @@ add_rate_limiting(app)
 add_observability(app, service_name="graph-service")
 
 from shared.middleware import TenantContextMiddleware, RequestIDMiddleware
+from shared.correlation import CorrelationIdMiddleware
 from shared.tenant_rate_limiting import TenantRateLimitMiddleware
 
 app.add_middleware(RequestIDMiddleware)
+app.add_middleware(CorrelationIdMiddleware)
 app.add_middleware(TenantContextMiddleware)
 app.add_middleware(TenantRateLimitMiddleware, default_rpm=100)
 

@@ -547,5 +547,12 @@ def _ingest_single_event(tenant_id: str, event: dict) -> tuple[dict, int]:
                 detail="Database unavailable — EPCIS ingest cannot proceed.",
             ) from exc
 
-        logger.warning("epcis_db_persistence_failed_using_fallback error=%s", str(exc))
+        logger.warning("epcis_db_persistence_failed_using_fallback",
+                       outcome="degraded",
+                       workflow="epcis_ingestion",
+                       error_category=type(exc).__name__,
+                       detail="DB unavailable — using in-memory fallback. "
+                              "DATA WILL BE LOST on restart. "
+                              "This should NEVER happen in production.",
+                       error=str(exc))
         return _ingest_single_event_fallback(event)

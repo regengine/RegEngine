@@ -15,6 +15,7 @@ from pydantic import BaseModel, Field
 
 from app.shared.tenant_resolution import resolve_tenant_id
 from app.webhook_compat import _verify_api_key
+from shared.observability.workflow_logger import workflow_span
 
 from services.ingestion.app.epcis.normalization import (
     _normalize_epcis_to_cte,
@@ -55,7 +56,11 @@ async def ingest_epcis_event(
     if not resolved_tenant:
         raise HTTPException(status_code=400, detail="Tenant context required")
 
-    payload, status_code = _ingest_single_event(resolved_tenant, event)
+    with workflow_span("epcis_ingestion", tenant_id=resolved_tenant) as span:
+        payload, status_code = _ingest_single_event(resolved_tenant, event)
+        span.set_outcome("pass" if status_code < 400 else "fail",
+                         cte_id=payload.get("cte_id", ""),
+                         idempotent=payload.get("idempotent", False))
     return JSONResponse(content=payload, status_code=status_code)
 
 

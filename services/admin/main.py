@@ -227,9 +227,9 @@ app.add_middleware(
     allow_origins=cors_origins,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type", "X-RegEngine-API-Key", "X-Admin-Key", "X-Tenant-ID", "X-Request-ID"],
+    allow_headers=["Authorization", "Content-Type", "X-RegEngine-API-Key", "X-Admin-Key", "X-Tenant-ID", "X-Request-ID", "X-Correlation-ID"],
 )
-# app.add_middleware(CorrelationIdMiddleware)
+app.add_middleware(CorrelationIdMiddleware)
 
 # Audit context middleware — captures IP, UA, request_id for tamper-evident audit trail
 from app.audit_middleware import AuditContextMiddleware

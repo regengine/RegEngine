@@ -70,6 +70,7 @@ from .queries import (
 )
 from .recall import export_recall_filtered_handler
 from .verification import verify_export_handler
+from shared.observability.workflow_logger import workflow_span
 
 logger = logging.getLogger("fda-export")
 
@@ -118,40 +119,48 @@ async def export_fda_spreadsheet(
         from shared.database import SessionLocal
         from shared.cte_persistence import CTEPersistence
 
-        db_session = SessionLocal()
-        persistence = CTEPersistence(db_session)
+        with workflow_span("fda_export", tenant_id=tenant_id) as span:
+            db_session = SessionLocal()
+            persistence = CTEPersistence(db_session)
 
-        # Query events
-        events = persistence.query_events_by_tlc(
-            tenant_id=tenant_id,
-            tlc=tlc,
-            start_date=start_date,
-            end_date=end_date,
-        )
-
-        if not events:
-            raise HTTPException(
-                status_code=404,
-                detail=f"No traceability records found for TLC '{tlc}'"
+            # Query events
+            events = persistence.query_events_by_tlc(
+                tenant_id=tenant_id,
+                tlc=tlc,
+                start_date=start_date,
+                end_date=end_date,
             )
 
-        # Generate CSV as canonical export evidence.
-        csv_content = _generate_csv(events)
-        export_hash = hashlib.sha256(csv_content.encode("utf-8")).hexdigest()
-        chain_verification = persistence.verify_chain(tenant_id=tenant_id)
-        completeness_summary = _build_completeness_summary(events)
+            if not events:
+                span.set_outcome("empty", tlc=tlc)
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"No traceability records found for TLC '{tlc}'"
+                )
 
-        # Log the export
-        persistence.log_export(
-            tenant_id=tenant_id,
-            export_hash=export_hash,
-            record_count=len(events),
-            query_tlc=tlc,
-            query_start_date=start_date,
-            query_end_date=end_date,
-            generated_by="api_package" if format == "package" else "api",
-        )
-        db_session.commit()
+            # Generate CSV as canonical export evidence.
+            csv_content = _generate_csv(events)
+            export_hash = hashlib.sha256(csv_content.encode("utf-8")).hexdigest()
+            chain_verification = persistence.verify_chain(tenant_id=tenant_id)
+            completeness_summary = _build_completeness_summary(events)
+
+            # Log the export
+            persistence.log_export(
+                tenant_id=tenant_id,
+                export_hash=export_hash,
+                record_count=len(events),
+                query_tlc=tlc,
+                query_start_date=start_date,
+                query_end_date=end_date,
+                generated_by="api_package" if format == "package" else "api",
+            )
+            db_session.commit()
+
+            span.set_outcome("pass",
+                             record_count=len(events),
+                             export_hash=export_hash,
+                             format=format,
+                             tlc=tlc)
 
         timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
         safe_tlc = _safe_filename_token(tlc)

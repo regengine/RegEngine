@@ -63,9 +63,14 @@ def _audit_log_validation_failure(
             loop = asyncio.get_running_loop()
             loop.create_task(coro)
         except RuntimeError:
-            pass  # No running loop — skip async audit (logged via stdlib above)
+            logger.warning("audit_log_no_event_loop",
+                           outcome="degraded",
+                           detail="No running event loop — async audit skipped")
     except Exception:
-        logger.debug("audit_log_validation_failure: could not emit audit event", exc_info=True)
+        logger.warning("audit_log_validation_failure",
+                       outcome="degraded",
+                       detail="Could not emit audit event for validation failure",
+                       exc_info=True)
 
 
 def _default_product_description(normalized: dict) -> str:

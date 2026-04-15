@@ -76,6 +76,7 @@ add_observability(app, service_name="ingestion-service")
 from fastapi.middleware.cors import CORSMiddleware
 from shared.cors import get_allowed_origins, should_allow_credentials
 from shared.middleware import TenantContextMiddleware, RequestIDMiddleware
+from shared.correlation import CorrelationIdMiddleware
 from shared.tenant_rate_limiting import TenantRateLimitMiddleware
 
 app.add_middleware(
@@ -83,9 +84,10 @@ app.add_middleware(
     allow_origins=get_allowed_origins(),
     allow_credentials=should_allow_credentials(),
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type", "X-RegEngine-API-Key", "X-Request-ID", "X-Tenant-ID"],
+    allow_headers=["Authorization", "Content-Type", "X-RegEngine-API-Key", "X-Request-ID", "X-Correlation-ID", "X-Tenant-ID"],
 )
 app.add_middleware(RequestIDMiddleware)
+app.add_middleware(CorrelationIdMiddleware)
 app.add_middleware(TenantContextMiddleware)
 app.add_middleware(TenantRateLimitMiddleware, default_rpm=100)
 

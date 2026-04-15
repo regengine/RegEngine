@@ -4,6 +4,7 @@ import contextvars
 import uuid
 from typing import Optional
 
+import structlog
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.types import ASGIApp
@@ -20,7 +21,8 @@ class CorrelationIdMiddleware(BaseHTTPMiddleware):
     Middleware to handle Correlation IDs for distributed tracing.
 
     Checks for 'X-Correlation-ID' header, generates one if missing,
-    sets it in context, and returns it in the response header.
+    sets it in context, binds to structlog, and returns it in the
+    response header.
     """
 
     def __init__(self, app: ASGIApp, header_name: str = "X-Correlation-ID"):
@@ -34,6 +36,7 @@ class CorrelationIdMiddleware(BaseHTTPMiddleware):
             correlation_id = str(uuid.uuid4())
 
         token = correlation_id_ctx.set(correlation_id)
+        structlog.contextvars.bind_contextvars(correlation_id=correlation_id)
 
         try:
             response = await call_next(request)
@@ -41,3 +44,4 @@ class CorrelationIdMiddleware(BaseHTTPMiddleware):
             return response
         finally:
             correlation_id_ctx.reset(token)
+            structlog.contextvars.unbind_contextvars("correlation_id")
