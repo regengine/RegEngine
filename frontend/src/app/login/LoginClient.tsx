@@ -84,6 +84,18 @@ export default function LoginPage() {
         setError(null);
     }, []);
 
+    // When middleware redirects here with session_expired, clear the stale
+    // Supabase session so the user gets a clean login form without redirect loops.
+    useEffect(() => {
+        const errorParam = searchParams.get('error');
+        if (errorParam === 'session_expired' || errorParam === 'token_invalid') {
+            import('@/lib/supabase/client').then(({ createSupabaseBrowserClient }) => {
+                const sb = createSupabaseBrowserClient();
+                sb.auth.signOut().catch(() => {});
+            });
+        }
+    }, [searchParams]);
+
     useEffect(() => {
         if (!isHydrated || !user) {
             return;

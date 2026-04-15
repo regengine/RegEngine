@@ -1,42 +1,18 @@
 Generic single-database configuration.
 
-## Migration chain (Alembic — FSMA schema)
+## Migration chain
 
-The Alembic migrations in `alembic/versions/` manage the **FSMA-specific schema
-only**. The current revision chain is:
-
-  a1b2c3d4e5f6  (baseline — V042, consolidates V002–V042)
-       ↓
-  b2c3d4e5f6a7  V048 — operational hardening (SLA tracking, chain verification log)
-       ↓
-  c3d4e5f6a7b8  V049 — fsma_audit_trail persistent log
-       ↓
-  d4e5f6a7b8c9  V050 — task_queue (replaces Kafka consumers)
-       ↓
-  e5f6a7b8c9d0  V051 — RLS for 8 V042 tenant_* tables + consolidated SQL RLS hardening
-                        (SQL_V048 sysadmin defense-in-depth, SQL_V049 obligations/FTL,
-                         SQL_V050 reference tables)
+Alembic is the **single migration system** for RegEngine. The `migrations/`
+directory of raw SQL files was removed after consolidation (April 2026).
 
 To upgrade to the latest head:
 
     alembic upgrade head
 
+Run `alembic history` to see the full chain.
+
 ## Admin service migrations (separate runner)
 
-`services/admin/migrations/V1–V36` are managed **outside Alembic** by the
-admin service's own migration runner (Flyway / raw SQL). They must be applied
-manually or via the admin service startup process. Do **not** attempt to run
-them with `alembic upgrade` — they are not registered in `alembic_version`.
-
-The Alembic chain covers the FSMA-specific schema (`fsma.*`) only. The admin
-service migrations cover the `public` schema tables managed by the admin
-service (tenants, memberships, users, API keys, etc.).
-
-## Conflicting SQL file names
-
-The `migrations/` directory contains SQL files prefixed `SQL_V048`, `SQL_V049`,
-and `SQL_V050`. These were originally named `V048`, `V049`, `V050` and
-conflicted with the Alembic migrations of the same numbers. They have been
-renamed with the `SQL_` prefix to avoid confusion. Their content has been
-incorporated into the V051 Alembic migration (`upgrade()` function) so they
-are applied as part of the normal `alembic upgrade head` flow.
+`services/admin/migrations/V1–V40` are managed **outside Alembic** by the
+admin service's own migration runner. They will be merged into the main
+Alembic chain during monolith consolidation (Phase 4).

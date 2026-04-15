@@ -56,13 +56,8 @@ import {
   Building2,
 } from 'lucide-react';
 
-// Demo facilities for visualization when no API
-const DEMO_FACILITIES: Facility[] = [
-  { gln: '1234567890123', name: 'Fresh Farms', type: 'FARM' },
-  { gln: '2345678901234', name: 'Sunshine Packing', type: 'PROCESSOR' },
-  { gln: '3456789012345', name: 'Metro Distribution', type: 'DISTRIBUTOR' },
-  { gln: '4567890123456', name: 'City Grocery', type: 'RETAILER' },
-];
+// Empty state shown before a trace is run
+const EMPTY_FACILITIES: Facility[] = [];
 
 export default function FSMADashboardPage() {
   const { apiKey } = useAuth();
@@ -300,7 +295,7 @@ export default function FSMADashboardPage() {
                     </div>
                   ) : (
                     <SupplyChainGraph
-                      facilities={traceResult.data?.facilities || DEMO_FACILITIES}
+                      facilities={traceResult.data?.facilities || EMPTY_FACILITIES}
                       events={traceResult.data?.events}
                       highlightedFacility={selectedFacility?.gln}
                       onFacilityClick={setSelectedFacility}

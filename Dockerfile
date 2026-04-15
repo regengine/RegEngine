@@ -16,10 +16,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Create non-root user
 RUN adduser --disabled-password --gecos '' --uid 1001 appuser
 
-# Copy Alembic migration framework
+# Copy Alembic migration framework (single migration system)
 COPY alembic.ini /app/alembic.ini
 COPY alembic /app/alembic
-COPY migrations /app/migrations
 COPY scripts/run-migrations.sh /app/scripts/run-migrations.sh
 
 # Copy all service code

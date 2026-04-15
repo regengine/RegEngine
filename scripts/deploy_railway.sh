@@ -1,16 +1,16 @@
 #!/bin/bash
-# RegEngine Railway Deployment Script
+# RegEngine Railway Deployment Script (Monolith)
 # Run from repo root: ./scripts/deploy_railway.sh
 #
+# The monolith (server/main.py) runs all 6 service domains in a single container.
+# Migrations run automatically on startup via scripts/run-migrations.sh.
+#
 # Prerequisites:
-#   1. Set DATABASE_URL from Railway Postgres service (Connection tab > Public URL)
-#   2. Set NEO4J_URI, NEO4J_USER, NEO4J_PASSWORD from Railway Neo4j service
+#   1. Set DATABASE_URL from Railway Postgres or Supabase
+#   2. Optionally set NEO4J_URI/NEO4J_USER/NEO4J_PASSWORD (graph features)
 #
 # Usage:
-#   export DATABASE_URL="postgresql://postgres:xxx@xxx.railway.app:5432/railway"
-#   export NEO4J_URI="neo4j+s://xxx.railway.app:7687"
-#   export NEO4J_USER="neo4j"
-#   export NEO4J_PASSWORD="xxx"
+#   export DATABASE_URL="postgresql://postgres:xxx@db.xxx.supabase.co:6543/postgres"
 #   ./scripts/deploy_railway.sh
 
 set -euo pipefail
@@ -23,15 +23,18 @@ NC='\033[0m'
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
+# Default monolith URL — override with MONOLITH_URL env var
+MONOLITH_URL="${MONOLITH_URL:-https://regengine-production.up.railway.app}"
+
 echo "========================================"
-echo " RegEngine Railway Deploy"
+echo " RegEngine Railway Deploy (Monolith)"
 echo "========================================"
 echo ""
 
 # ── Step 0: Check prereqs ───────────────────────────────────
 if [ -z "${DATABASE_URL:-}" ]; then
   echo -e "${RED}ERROR: DATABASE_URL not set${NC}"
-  echo "Get it from Railway > Postgres service > Variables tab > DATABASE_URL"
+  echo "Get it from Supabase > Settings > Database > Connection string"
   exit 1
 fi
 
@@ -42,74 +45,15 @@ echo ""
 echo "── Step 1: Push to GitHub ──"
 git -C "$REPO_ROOT" push origin main
 echo -e "${GREEN}✓${NC} Pushed — Railway will auto-deploy"
-
-# ── Step 2: Run PostgreSQL migrations (admin) ───────────────
 echo ""
-echo "── Step 2: PostgreSQL migrations (admin, 34 files) ──"
+echo "  Monolith builds from root Dockerfile."
+echo "  Migrations run automatically on startup (Alembic + advisory lock)."
 
-ADMIN_MIGRATIONS="$REPO_ROOT/services/admin/migrations"
-MIGRATION_COUNT=0
-MIGRATION_FAIL=0
-
-# Sort by version number (V1, V3, V4, ... V23, V23_5, V24, ...)
-for f in $(ls "$ADMIN_MIGRATIONS"/V*.sql | sort -t'V' -k2 -V); do
-  fname=$(basename "$f")
-  echo -n "  $fname ... "
-  if psql "$DATABASE_URL" -f "$f" -q 2>/dev/null; then
-    echo -e "${GREEN}OK${NC}"
-    ((MIGRATION_COUNT++))
-  else
-    echo -e "${YELLOW}SKIP (already applied or error)${NC}"
-    ((MIGRATION_FAIL++))
-  fi
-done
-
-echo -e "${GREEN}✓${NC} Admin migrations: $MIGRATION_COUNT applied, $MIGRATION_FAIL skipped"
-
-# ── Step 3: Run ingestion migration ─────────────────────────
+# ── Step 2: Neo4j constraints (optional) ────────────────────
 echo ""
-echo "── Step 3: Ingestion schema migration ──"
-INGESTION_SQL="$REPO_ROOT/services/ingestion/migrations/V001__ingestion_schema.sql"
-if [ -f "$INGESTION_SQL" ]; then
-  echo -n "  V001__ingestion_schema.sql ... "
-  if psql "$DATABASE_URL" -f "$INGESTION_SQL" -q 2>/dev/null; then
-    echo -e "${GREEN}OK${NC}"
-  else
-    echo -e "${YELLOW}SKIP${NC}"
-  fi
-fi
-
-# ── Step 4: Run compliance migration ────────────────────────
-echo ""
-echo "── Step 4: Compliance schema migration ──"
-COMPLIANCE_SQL="$REPO_ROOT/services/compliance/migrations/V1__fair_lending_compliance_os.sql"
-if [ -f "$COMPLIANCE_SQL" ]; then
-  echo -n "  V1__fair_lending_compliance_os.sql ... "
-  if psql "$DATABASE_URL" -f "$COMPLIANCE_SQL" -q 2>/dev/null; then
-    echo -e "${GREEN}OK${NC}"
-  else
-    echo -e "${YELLOW}SKIP${NC}"
-  fi
-fi
-
-# ── Step 5: Run app user setup ──────────────────────────────
-echo ""
-echo "── Step 5: App user setup ──"
-SETUP_SQL="$ADMIN_MIGRATIONS/setup_app_user.sql"
-if [ -f "$SETUP_SQL" ]; then
-  echo -n "  setup_app_user.sql ... "
-  if psql "$DATABASE_URL" -f "$SETUP_SQL" -q 2>/dev/null; then
-    echo -e "${GREEN}OK${NC}"
-  else
-    echo -e "${YELLOW}SKIP${NC}"
-  fi
-fi
-
-# ── Step 6: Neo4j constraints ───────────────────────────────
-echo ""
-echo "── Step 6: Neo4j constraints ──"
+echo "── Step 2: Neo4j constraints (optional) ──"
 if [ -z "${NEO4J_URI:-}" ]; then
-  echo -e "${YELLOW}SKIP: NEO4J_URI not set — set it to run constraints${NC}"
+  echo -e "${YELLOW}SKIP: NEO4J_URI not set — graph features disabled${NC}"
 else
   echo -e "${GREEN}✓${NC} NEO4J_URI set"
   cd "$REPO_ROOT"
@@ -117,18 +61,14 @@ else
   python3 services/graph/scripts/init_db_constraints.py
 fi
 
-# ── Step 7: Verify services ────────────────────────────────
+# ── Step 3: Verify monolith ────────────────────────────────
 echo ""
-echo "── Step 7: Verify services (waiting 30s for redeploy) ──"
+echo "── Step 3: Verify monolith (waiting 30s for redeploy) ──"
 sleep 30
 
-ADMIN_URL="https://regengine-production.up.railway.app/health"
-INGESTION_URL="https://believable-respect-production-2fb3.up.railway.app/health"
-COMPLIANCE_URL="https://intelligent-essence-production.up.railway.app/health"
-
-for svc_label_url in "Admin|$ADMIN_URL" "Ingestion|$INGESTION_URL" "Compliance|$COMPLIANCE_URL"; do
-  IFS='|' read -r label url <<< "$svc_label_url"
-  echo -n "  $label ... "
+for endpoint in "health" "readiness"; do
+  url="$MONOLITH_URL/$endpoint"
+  echo -n "  GET /$endpoint ... "
   status=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "$url" 2>/dev/null || echo "000")
   if [ "$status" = "200" ]; then
     echo -e "${GREEN}$status OK${NC}"
@@ -137,13 +77,29 @@ for svc_label_url in "Admin|$ADMIN_URL" "Ingestion|$INGESTION_URL" "Compliance|$
   fi
 done
 
+# Check feature flags
+echo ""
+echo -n "  Features: "
+features=$(curl -s --max-time 10 "$MONOLITH_URL/api/v1/features" 2>/dev/null || echo "{}")
+echo "$features" | python3 -c "
+import sys, json
+try:
+    d = json.load(sys.stdin)
+    enabled = d.get('enabled', [])
+    disabled = d.get('disabled', [])
+    print(f'{len(enabled)} enabled, {len(disabled)} disabled')
+except:
+    print('(could not parse)')
+" 2>/dev/null || echo "(unavailable)"
+
 echo ""
 echo "========================================"
 echo -e "${GREEN} Deploy complete!${NC}"
 echo "========================================"
 echo ""
-echo "Remaining manual steps:"
-echo "  1. Stripe: Create products in dashboard, add keys to Railway ingestion service"
-echo "  2. Resend: Verify domain DNS records"
-echo "  3. Optional: Rename Railway services to meaningful names"
-echo "  4. Optional: Set up api.regengine.co custom domain on admin service"
+echo "  Monolith: $MONOLITH_URL"
+echo "  Docs:     $MONOLITH_URL/docs  (dev only)"
+echo "  Health:   $MONOLITH_URL/health"
+echo ""
+echo "  Disable specific routers: DISABLED_ROUTERS=graph,nlp"
+echo "  Scale workers:            WEB_CONCURRENCY=2"
