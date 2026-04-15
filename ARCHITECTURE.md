@@ -31,9 +31,30 @@ Next.js App Router deployed to Vercel. Proxies API calls to backend services via
 - **Cache:** Redis
 - **Message queue:** Redpanda (Kafka-compatible)
 
+## Production Spine vs Experimental
+
+**Production spine** (must work, must be tested, must be monitored):
+```
+ingestion → canonicalization → identity resolution → compliance evaluation → audit → FDA export
+```
+
+**Experimental / non-essential** (isolated from production spine):
+- `services/graph/` — Neo4j graph queries, knowledge graph. Target: consolidate into
+  PostgreSQL. Do not let graph requirements shape core architecture decisions.
+- `services/nlp/` — Document ingestion, regulatory text extraction. Useful but not
+  required for core FSMA 204 compliance. The production spine runs without it.
+- Advanced NLP entity extraction via Kafka consumers — legacy pipeline, being replaced
+  by direct function calls in the monolith.
+
+The production spine can stand on its own without graph or NLP services.
+
 ## Target Architecture
 
-The long-term plan is to consolidate the 6 services into a single monolith, replacing Kafka/Redis with PostgreSQL-native patterns. This consolidation has not started — all services are currently independently deployed and tested.
+The 6 services are consolidating into a modular monolith. This is ~95% complete:
+`server/main.py` already mounts 66 routers from all services into a single FastAPI app.
+One inter-service HTTP call remains (Stripe billing → Admin tenant creation).
+The scheduler service still runs as a separate process (APScheduler with distributed
+leadership). See ASYNC_PROCESSES.md for details.
 
 ## Dependency Management
 
@@ -73,25 +94,24 @@ Dependencies are locked via `package-lock.json` (npm).
 
 ## Known Technical Debt
 
-### Large files (>1,000 lines)
+### Large file splits (completed)
 
-These files work correctly but exceed recommended size thresholds. Splitting is tracked for post-funding engineering:
+12 of 14 monolithic files (>1,000 lines) have been split into focused subpackages.
+All splits preserve backward-compatible imports via `__init__.py` re-exports.
 
-| File | Lines | Service | Split strategy |
-|------|-------|---------|----------------|
-| `sandbox_router.py` | 1,576 | Ingestion | Extract sandbox models + validation |
-| `rules_engine.py` | 1,547 | Shared | Split rule types into submodules |
-| `epcis_ingestion.py` | 1,365 | Ingestion | Extract EPCIS parser + validator |
-| `fda_export_router.py` | 1,362 | Ingestion | Extract PDF generator + CSV builder |
-| `fsma_utils.py` | 1,353 | Graph | Extract trace builder + graph queries |
-| `fsma_extractor.py` | 1,344 | NLP | Extract entity resolver + classifier |
-| `cte_persistence.py` | 1,284 | Shared | Extract query builder + batch ops |
-| `identity_resolution.py` | 1,283 | Shared | Extract matcher + scorer |
-| `fsma_recall.py` | 1,203 | Graph | Extract recall simulator + reporter |
-| `stripe_billing.py` | 1,185 | Ingestion | Extract webhook handler + plan mgmt |
-| `audit_logging.py` | 1,069 | Shared | Extract formatters + storage |
-| `edi_ingestion.py` | 1,043 | Ingestion | Extract parser + segment mapper |
-| `canonical_persistence.py` | 1,034 | Shared | Extract query layer + migrations |
-| `compliance.py` | 1,008 | Graph | Extract scoring + export |
-
-Each file is functional, tested, and production-stable. Splitting is a refactoring task, not a bug fix.
+| File | Status | Package |
+|------|--------|---------|
+| `rules_engine.py` | ✅ Split | `shared/rules/` (9 modules) |
+| `sandbox_router.py` | ✅ Split | `ingestion/app/sandbox/` |
+| `epcis_ingestion.py` | ✅ Split | `ingestion/app/epcis/` |
+| `fda_export_router.py` | ✅ Split | `ingestion/app/fda_export/` |
+| `fsma_utils.py` | ✅ Split | `graph/app/fsma/` |
+| `canonical_persistence.py` | ✅ Split | `shared/canonical_persistence/` |
+| `identity_resolution.py` | ✅ Split | `shared/identity_resolution/` |
+| `audit_logging.py` | ✅ Split | `shared/audit_logging/` |
+| `cte_persistence.py` | ✅ Split | `shared/cte_persistence/` |
+| `edi_ingestion.py` | ✅ Split | `ingestion/app/edi_ingestion/` |
+| `stripe_billing.py` | ✅ Split | `ingestion/app/stripe_billing/` |
+| `fsma_recall.py` | ✅ Split | `graph/app/fsma_recall/` |
+| `fsma_extractor.py` | Relocated | `nlp/app/extractors/` |
+| `compliance.py` | Relocated | `graph/app/routers/fsma/` |
