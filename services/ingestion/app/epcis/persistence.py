@@ -1,0 +1,551 @@
+"""EPCIS event persistence layer.
+
+Handles database queries, event fetching, listing, and ingestion with
+fallback to in-memory storage when DB is unavailable outside production.
+"""
+
+from __future__ import annotations
+
+import json
+import logging
+import os
+from datetime import datetime, timezone
+from typing import Any, Optional
+from uuid import uuid4
+
+from fastapi import HTTPException
+from sqlalchemy import text
+
+from shared.database import get_db_safe
+
+from services.ingestion.app.epcis.extraction import _extract_lot_data
+from services.ingestion.app.epcis.normalization import (
+    _compliance_alerts,
+    _event_idempotency_key,
+    _extract_kdes,
+    _kde_completeness,
+    _normalize_epcis_to_cte,
+)
+from services.ingestion.app.epcis.validation import (
+    _default_product_description,
+    _validate_as_fsma_event,
+    _validate_epcis,
+    _validate_epcis_glns,
+)
+
+logger = logging.getLogger("epcis-ingestion")
+
+# Backward-compatible names retained for tests and non-production fallback.
+_epcis_store: dict[str, dict] = {}
+_epcis_idempotency_index: dict[str, str] = {}
+
+
+def _is_production() -> bool:
+    from shared.env import is_production
+    return is_production()
+
+
+# Safety: Allow in-memory fallback only outside production.
+# This prevents unintended data loss if DB unavailability is transient.
+def _allow_in_memory_fallback() -> bool:
+    explicit = os.getenv("ALLOW_EPCIS_IN_MEMORY_FALLBACK")
+    if explicit is not None:
+        return explicit.lower() in {"1", "true", "yes"}
+    return not _is_production()
+
+
+def _safe_iso(value: Any) -> str:
+    if isinstance(value, datetime):
+        if value.tzinfo is None:
+            return value.replace(tzinfo=timezone.utc).isoformat()
+        return value.astimezone(timezone.utc).isoformat()
+    if isinstance(value, str):
+        return value
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _build_kde_map(event: dict, normalized: dict, idempotency_key: str) -> dict[str, Any]:
+    kde_map = {kde["kde_type"]: kde["kde_value"] for kde in _extract_kdes(event)}
+
+    kde_map["epcis_document_json"] = json.dumps(event, sort_keys=True, separators=(",", ":"))
+    kde_map["epcis_idempotency_key"] = idempotency_key
+
+    if normalized.get("product_id"):
+        kde_map["product_id"] = normalized["product_id"]
+    if normalized.get("source_location_id"):
+        kde_map["ship_from_gln"] = normalized["source_location_id"]
+    if normalized.get("dest_location_id"):
+        kde_map["ship_to_gln"] = normalized["dest_location_id"]
+
+    return kde_map
+
+
+def _query_alert_rows(db_session, tenant_id: str, event_id: str) -> list[dict]:
+    # Allowlisted column identifiers for fsma.compliance_alerts dynamic SQL
+    _ALLOWED_COLS = frozenset(
+        {
+            "tenant_id",
+            "org_id",
+            "cte_event_id",
+            "event_id",
+            "message",
+            "description",
+            "alert_type",
+            "severity",
+            "created_at",
+            "id",
+            "title",
+            "resolved",
+            "acknowledged",
+            "resolved_at",
+            "acknowledged_at",
+            "resolved_by",
+            "acknowledged_by",
+            "details",
+            "metadata",
+            "entity_id",
+        }
+    )
+
+    raw_columns = {
+        row[0]
+        for row in db_session.execute(
+            text(
+                """
+                SELECT column_name
+                FROM information_schema.columns
+                WHERE table_schema = 'fsma'
+                  AND table_name = 'compliance_alerts'
+                """
+            )
+        ).fetchall()
+    }
+    # Only allow known-safe column names to prevent SQL injection
+    columns = raw_columns & _ALLOWED_COLS
+    if not columns:
+        return []
+
+    tenant_col = (
+        "tenant_id"
+        if "tenant_id" in columns
+        else ("org_id" if "org_id" in columns else None)
+    )
+    event_col = (
+        "cte_event_id"
+        if "cte_event_id" in columns
+        else ("event_id" if "event_id" in columns else None)
+    )
+    if tenant_col is None or event_col is None:
+        return []
+
+    message_expr = (
+        "message"
+        if "message" in columns
+        else ("description" if "description" in columns else "alert_type")
+    )
+    # All interpolated identifiers are guaranteed members of _ALLOWED_COLS
+    rows = db_session.execute(
+        text(
+            f"""
+            SELECT severity, alert_type, {message_expr} AS message
+            FROM fsma.compliance_alerts
+            WHERE {tenant_col} = :tenant_id
+              AND {event_col} = :event_id
+            ORDER BY created_at DESC
+            """
+        ),
+        {"tenant_id": tenant_id, "event_id": event_id},
+    ).fetchall()
+    return [
+        {"severity": row.severity, "alert_type": row.alert_type, "message": row.message}
+        for row in rows
+    ]
+
+
+def _parse_epcis_document(kdes: dict[str, Any], normalized: dict[str, Any]) -> dict:
+    raw_json = kdes.get("epcis_document_json")
+    if raw_json:
+        try:
+            parsed = json.loads(raw_json)
+            if isinstance(parsed, dict):
+                return parsed
+        except json.JSONDecodeError:
+            logger.warning("epcis_document_json_parse_failed")
+
+    ilmd: dict[str, Any] = {}
+    if normalized.get("lot_code"):
+        ilmd["cbvmda:lotNumber"] = normalized["lot_code"]
+    if normalized.get("tlc"):
+        ilmd["fsma:traceabilityLotCode"] = normalized["tlc"]
+
+    event: dict[str, Any] = {
+        "type": normalized.get("epcis_event_type") or "ObjectEvent",
+        "eventTime": normalized.get("event_time") or datetime.now(timezone.utc).isoformat(),
+        "action": normalized.get("epcis_action") or "OBSERVE",
+        "bizStep": normalized.get("epcis_biz_step") or "urn:epcglobal:cbv:bizstep:receiving",
+        "ilmd": ilmd,
+    }
+    if normalized.get("source_location_id"):
+        event["sourceList"] = [
+            {"type": "urn:epcglobal:cbv:sdt:possessing_party", "source": normalized["source_location_id"]}
+        ]
+    if normalized.get("dest_location_id"):
+        event["destinationList"] = [
+            {"type": "urn:epcglobal:cbv:sdt:possessing_party", "destination": normalized["dest_location_id"]}
+        ]
+    return event
+
+
+def _fetch_event_from_db(tenant_id: str, event_id: str) -> Optional[dict]:
+    db_session = get_db_safe()
+    try:
+        row = db_session.execute(
+            text(
+                """
+                SELECT
+                    id::text AS id,
+                    ingested_at,
+                    idempotency_key,
+                    event_type,
+                    epcis_event_type,
+                    epcis_action,
+                    epcis_biz_step,
+                    event_timestamp,
+                    traceability_lot_code,
+                    source,
+                    location_gln,
+                    quantity,
+                    unit_of_measure
+                FROM fsma.cte_events
+                WHERE tenant_id = :tenant_id
+                  AND id = :event_id
+                LIMIT 1
+                """
+            ),
+            {"tenant_id": tenant_id, "event_id": event_id},
+        ).fetchone()
+        if not row:
+            return None
+
+        kde_rows = db_session.execute(
+            text(
+                """
+                SELECT kde_key, kde_value, is_required
+                FROM fsma.cte_kdes
+                WHERE tenant_id = :tenant_id
+                  AND cte_event_id = :event_id
+                """
+            ),
+            {"tenant_id": tenant_id, "event_id": event_id},
+        ).fetchall()
+
+        kdes = [
+            {"kde_type": kde.kde_key, "kde_value": kde.kde_value, "required": bool(kde.is_required)}
+            for kde in kde_rows
+        ]
+        kde_map = {kde["kde_type"]: kde["kde_value"] for kde in kdes}
+
+        normalized = {
+            "event_type": row.event_type,
+            "epcis_event_type": row.epcis_event_type,
+            "epcis_action": row.epcis_action,
+            "epcis_biz_step": row.epcis_biz_step,
+            "event_time": _safe_iso(row.event_timestamp),
+            "lot_code": kde_map.get("lotNumber", ""),
+            "tlc": row.traceability_lot_code,
+            "product_id": kde_map.get("product_id"),
+            "location_id": row.location_gln,
+            "source_location_id": kde_map.get("ship_from_gln"),
+            "dest_location_id": kde_map.get("ship_to_gln"),
+            "quantity": row.quantity,
+            "unit_of_measure": row.unit_of_measure,
+            "data_source": row.source,
+            "validation_status": "valid",
+        }
+
+        alerts = _query_alert_rows(db_session, tenant_id, row.id)
+        return {
+            "id": row.id,
+            "ingested_at": _safe_iso(row.ingested_at),
+            "idempotency_key": row.idempotency_key,
+            "epcis_document": _parse_epcis_document(kde_map, normalized),
+            "normalized_cte": normalized,
+            "kdes": kdes,
+            "alerts": alerts,
+            "kde_completeness": _kde_completeness(kdes),
+        }
+    finally:
+        db_session.close()
+
+
+def _list_events_from_db(
+    tenant_id: str,
+    start_date: Optional[str],
+    end_date: Optional[str],
+    product_id: Optional[str],
+) -> list[dict]:
+    db_session = get_db_safe()
+    try:
+        where = ["tenant_id = :tenant_id"]
+        params: dict[str, Any] = {"tenant_id": tenant_id}
+
+        if start_date:
+            where.append("event_timestamp >= :start_date")
+            params["start_date"] = start_date
+        if end_date:
+            where.append("event_timestamp < :end_date")
+            params["end_date"] = end_date
+
+        rows = db_session.execute(
+            text(
+                f"""
+                SELECT
+                    id::text AS id,
+                    event_type,
+                    epcis_event_type,
+                    epcis_action,
+                    epcis_biz_step,
+                    event_timestamp,
+                    traceability_lot_code,
+                    source,
+                    location_gln,
+                    quantity,
+                    unit_of_measure
+                FROM fsma.cte_events
+                WHERE {' AND '.join(where)}
+                ORDER BY event_timestamp DESC
+                LIMIT 2000
+                """
+            ),
+            params,
+        ).fetchall()
+
+        events: list[dict] = []
+        for row in rows:
+            kde_rows = db_session.execute(
+                text(
+                    """
+                    SELECT kde_key, kde_value
+                    FROM fsma.cte_kdes
+                    WHERE tenant_id = :tenant_id
+                      AND cte_event_id = :event_id
+                    """
+                ),
+                {"tenant_id": tenant_id, "event_id": row.id},
+            ).fetchall()
+            kde_map = {kde.kde_key: kde.kde_value for kde in kde_rows}
+
+            normalized = {
+                "event_type": row.event_type,
+                "epcis_event_type": row.epcis_event_type,
+                "epcis_action": row.epcis_action,
+                "epcis_biz_step": row.epcis_biz_step,
+                "event_time": _safe_iso(row.event_timestamp),
+                "lot_code": kde_map.get("lotNumber", ""),
+                "tlc": row.traceability_lot_code,
+                "product_id": kde_map.get("product_id"),
+                "location_id": row.location_gln,
+                "source_location_id": kde_map.get("ship_from_gln"),
+                "dest_location_id": kde_map.get("ship_to_gln"),
+                "quantity": row.quantity,
+                "unit_of_measure": row.unit_of_measure,
+                "data_source": row.source,
+                "validation_status": "valid",
+            }
+
+            if product_id and normalized.get("product_id") != product_id:
+                continue
+
+            events.append(_parse_epcis_document(kde_map, normalized))
+
+        return events
+    finally:
+        db_session.close()
+
+
+def _ingest_single_event_fallback(event: dict) -> tuple[dict, int]:
+    errors = _validate_epcis(event)
+    if errors:
+        raise HTTPException(status_code=400, detail={"errors": errors})
+
+    idempotency_key = _event_idempotency_key(event)
+    existing_event_id = _epcis_idempotency_index.get(idempotency_key)
+    if existing_event_id:
+        existing_record = _epcis_store[existing_event_id]
+        return (
+            {
+                "status": 200,
+                "cte_id": existing_event_id,
+                "validation_status": existing_record["normalized_cte"]["validation_status"],
+                "kde_completeness": existing_record.get("kde_completeness", 1.0),
+                "alerts": existing_record["alerts"],
+                "idempotent": True,
+            },
+            200,
+        )
+
+    event_id = str(uuid4())
+    normalized = _normalize_epcis_to_cte(event)
+    kdes = _extract_kdes(event)
+    alerts = _compliance_alerts(normalized, kdes)
+    alerts.extend(_validate_epcis_glns(normalized))
+
+    # Validate against FSMAEvent Pydantic model before storing
+    fsma_validated = _validate_as_fsma_event(normalized)
+    if fsma_validated:
+        normalized["fsma_validation_status"] = "passed"
+    else:
+        normalized["fsma_validation_status"] = "failed"
+        alerts.append({
+            "severity": "warning",
+            "alert_type": "fsma_validation",
+            "message": "Event did not pass FSMAEvent schema validation",
+        })
+
+    stored = {
+        "id": event_id,
+        "ingested_at": datetime.now(timezone.utc).isoformat(),
+        "idempotency_key": idempotency_key,
+        "epcis_document": event,
+        "normalized_cte": normalized,
+        "kdes": kdes,
+        "alerts": alerts,
+        "kde_completeness": _kde_completeness(kdes),
+    }
+    _epcis_store[event_id] = stored
+    _epcis_idempotency_index[idempotency_key] = event_id
+
+    return (
+        {
+            "status": 201,
+            "cte_id": event_id,
+            "validation_status": "warning" if alerts else "valid",
+            "kde_completeness": stored["kde_completeness"],
+            "alerts": alerts,
+            "idempotent": False,
+        },
+        201,
+    )
+
+
+def _ingest_single_event_db(tenant_id: str, event: dict) -> tuple[dict, int]:
+    from shared.cte_persistence import CTEPersistence
+
+    errors = _validate_epcis(event)
+    if errors:
+        raise HTTPException(status_code=400, detail={"errors": errors})
+
+    idempotency_key = _event_idempotency_key(event)
+    normalized = _normalize_epcis_to_cte(event)
+    kdes = _extract_kdes(event)
+    alerts = _compliance_alerts(normalized, kdes)
+    alerts.extend(_validate_epcis_glns(normalized))
+    kde_map = _build_kde_map(event, normalized, idempotency_key)
+
+    # Validate against FSMAEvent Pydantic model before DB persistence
+    fsma_validated = _validate_as_fsma_event(normalized, tenant_id)
+    if fsma_validated:
+        kde_map["fsma_validation_status"] = "passed"
+    else:
+        kde_map["fsma_validation_status"] = "failed"
+        alerts.append({
+            "severity": "warning",
+            "alert_type": "fsma_validation",
+            "message": "Event did not pass FSMAEvent schema validation",
+        })
+
+    event_time = normalized.get("event_time") or datetime.now(timezone.utc).isoformat()
+    quantity = normalized.get("quantity")
+    try:
+        quantity_value = float(quantity) if quantity is not None else 1.0
+    except (TypeError, ValueError):
+        quantity_value = 1.0
+    if quantity_value <= 0:
+        quantity_value = 1.0
+
+    db_session = get_db_safe()
+    try:
+        persistence = CTEPersistence(db_session)
+        result = persistence.store_event(
+            tenant_id=tenant_id,
+            event_type=normalized["event_type"],
+            traceability_lot_code=normalized["tlc"],
+            product_description=_default_product_description(normalized),
+            quantity=quantity_value,
+            unit_of_measure=normalized.get("unit_of_measure") or "units",
+            event_timestamp=event_time,
+            source="epcis",
+            source_event_id=str(event.get("eventID") or idempotency_key),
+            location_gln=normalized.get("location_id"),
+            location_name=None,
+            kdes=kde_map,
+            alerts=alerts,
+            epcis_event_type=normalized.get("epcis_event_type"),
+            epcis_action=normalized.get("epcis_action"),
+            epcis_biz_step=normalized.get("epcis_biz_step"),
+        )
+        db_session.commit()
+
+        # Canonical normalization — write to traceability_events + evaluate rules
+        if not result.idempotent:
+            try:
+                from shared.canonical_event import normalize_epcis_event
+                from shared.canonical_persistence import CanonicalEventStore
+                canonical = normalize_epcis_event(event, tenant_id)
+                canonical_store = CanonicalEventStore(db_session, dual_write=False, skip_chain_write=True)
+                canonical_store.set_tenant_context(tenant_id)
+                canonical_store.persist_event(canonical)
+                # Auto-evaluate rules
+                from shared.rules_engine import RulesEngine
+                engine = RulesEngine(db_session)
+                event_data = {
+                    "event_id": str(canonical.event_id),
+                    "event_type": canonical.event_type.value,
+                    "traceability_lot_code": canonical.traceability_lot_code,
+                    "product_reference": canonical.product_reference,
+                    "quantity": canonical.quantity,
+                    "unit_of_measure": canonical.unit_of_measure,
+                    "from_facility_reference": canonical.from_facility_reference,
+                    "to_facility_reference": canonical.to_facility_reference,
+                    "from_entity_reference": canonical.from_entity_reference,
+                    "to_entity_reference": canonical.to_entity_reference,
+                    "kdes": canonical.kdes,
+                }
+                engine.evaluate_event(event_data, persist=True, tenant_id=tenant_id)
+                db_session.commit()
+            except Exception as canon_err:
+                logger.warning("epcis_canonical_write_skipped: %s", str(canon_err))
+
+    except Exception:
+        db_session.rollback()
+        raise
+    finally:
+        db_session.close()
+
+    status_code = 200 if result.idempotent else 201
+    return (
+        {
+            "status": status_code,
+            "cte_id": result.event_id,
+            "validation_status": "warning" if alerts else "valid",
+            "kde_completeness": _kde_completeness(kdes),
+            "alerts": alerts,
+            "idempotent": result.idempotent,
+        },
+        status_code,
+    )
+
+
+def _ingest_single_event(tenant_id: str, event: dict) -> tuple[dict, int]:
+    try:
+        return _ingest_single_event_db(tenant_id, event)
+    except Exception as exc:
+        if not _allow_in_memory_fallback():
+            logger.error("epcis_db_persistence_failed_no_fallback error=%s", str(exc))
+            raise HTTPException(
+                status_code=503,
+                detail="Database unavailable — EPCIS ingest cannot proceed.",
+            ) from exc
+
+        logger.warning("epcis_db_persistence_failed_using_fallback error=%s", str(exc))
+        return _ingest_single_event_fallback(event)

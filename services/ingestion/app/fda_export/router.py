@@ -1,0 +1,811 @@
+"""
+FDA 24-Hour Export Router.
+
+Provides the endpoints that fulfill RegEngine's core promise:
+"When the FDA calls, produce compliant traceability records within 24 hours."
+
+This module reads from the Postgres persistence layer (fsma.cte_events)
+and generates sortable, searchable CSV exports in the FDA's expected format.
+
+Endpoints:
+    GET  /api/v1/fda/export            — Generate FDA spreadsheet/package for a TLC
+    GET  /api/v1/fda/export/all        — Export all events (date-filtered)
+    GET  /api/v1/fda/export/history     — View export audit log
+    GET  /api/v1/fda/export/recall      — Recall-filtered FDA export
+    POST /api/v1/fda/export/verify      — Verify a previous export's integrity
+    GET  /api/v1/fda/export/v2          — Export from canonical model with compliance columns
+    GET  /api/v1/fda/export/merkle-root — Merkle root for a tenant's hash chain
+    GET  /api/v1/fda/export/merkle-proof — Merkle inclusion proof for a specific event
+    GET  /api/v1/fda/trace/{tlc}        — Trace transformation graph for a TLC
+"""
+
+from __future__ import annotations
+
+import hashlib
+import io
+import logging
+from datetime import datetime, timezone
+from typing import Any, Literal, Optional
+
+from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import StreamingResponse
+
+from app.authz import require_permission
+from app.export_models import ExportHistoryResponse, ExportVerifyResponse
+from app.fda_export_service import (
+    _build_chain_verification_payload,
+    _build_completeness_summary,
+    _build_fda_package,
+    _generate_csv,
+    _generate_csv_v2,
+    _generate_pdf,
+    _safe_filename_token,
+)
+from app.subscription_gate import require_active_subscription
+from app.webhook_models import REQUIRED_KDES_BY_CTE, WebhookCTEType
+
+from .formatters import (
+    build_compliance_headers,
+    build_csv_response,
+    build_package_response,
+    build_pdf_response,
+    generate_csv_and_hash,
+    generate_csv_v2_and_hash,
+    make_timestamp,
+    safe_filename_token,
+)
+from .merkle import get_merkle_root_handler, get_merkle_proof_handler
+from .queries import (
+    build_recall_where_clause,
+    build_v2_where_clause,
+    fetch_export_log_history,
+    fetch_recall_events,
+    fetch_trace_graph_data,
+    fetch_v2_events,
+    format_export_log_rows,
+    log_recall_export,
+    log_v2_export,
+    rows_to_event_dicts,
+    v2_rows_to_event_dicts,
+)
+from .recall import export_recall_filtered_handler
+from .verification import verify_export_handler
+
+logger = logging.getLogger("fda-export")
+
+router = APIRouter(prefix="/api/v1/fda", tags=["FDA Export"])
+
+
+# ---------------------------------------------------------------------------
+# Endpoints
+# ---------------------------------------------------------------------------
+
+@router.get(
+    "/export",
+    summary="Generate FDA export for a traceability lot code",
+    description=(
+        "Query all CTE events for a specific TLC within an optional date range, "
+        "generate the FDA-required CSV spreadsheet, log the export for audit, "
+        "and return the file. This is the endpoint that fulfills the 24-hour "
+        "FDA response requirement."
+    ),
+    responses={
+        200: {
+            "content": {
+                "text/csv": {},
+                "application/zip": {},
+                "application/pdf": {},
+            },
+            "description": "FDA-compliant CSV, ZIP package, or PDF report",
+        },
+    },
+)
+async def export_fda_spreadsheet(
+    tlc: str = Query(..., description="Traceability Lot Code to trace"),
+    start_date: Optional[str] = Query(None, description="Start date filter (YYYY-MM-DD)"),
+    end_date: Optional[str] = Query(None, description="End date filter (YYYY-MM-DD)"),
+    format: Literal["package", "csv", "pdf"] = Query(
+        default="package",
+        description="Export format: package (zip bundle), csv, or pdf",
+    ),
+    tenant_id: str = Query(..., description="Tenant identifier"),
+    _auth=Depends(require_permission("fda.export")),
+    _subscription=Depends(require_active_subscription),
+):
+    """Generate and return an FDA-compliant traceability export."""
+    db_session = None
+    try:
+        from shared.database import SessionLocal
+        from shared.cte_persistence import CTEPersistence
+
+        db_session = SessionLocal()
+        persistence = CTEPersistence(db_session)
+
+        # Query events
+        events = persistence.query_events_by_tlc(
+            tenant_id=tenant_id,
+            tlc=tlc,
+            start_date=start_date,
+            end_date=end_date,
+        )
+
+        if not events:
+            raise HTTPException(
+                status_code=404,
+                detail=f"No traceability records found for TLC '{tlc}'"
+            )
+
+        # Generate CSV as canonical export evidence.
+        csv_content = _generate_csv(events)
+        export_hash = hashlib.sha256(csv_content.encode("utf-8")).hexdigest()
+        chain_verification = persistence.verify_chain(tenant_id=tenant_id)
+        completeness_summary = _build_completeness_summary(events)
+
+        # Log the export
+        persistence.log_export(
+            tenant_id=tenant_id,
+            export_hash=export_hash,
+            record_count=len(events),
+            query_tlc=tlc,
+            query_start_date=start_date,
+            query_end_date=end_date,
+            generated_by="api_package" if format == "package" else "api",
+        )
+        db_session.commit()
+
+        timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+        safe_tlc = _safe_filename_token(tlc)
+
+        logger.info(
+            "fda_export_generated",
+            extra={
+                "tlc": tlc,
+                "record_count": len(events),
+                "export_hash": export_hash[:16],
+                "tenant_id": tenant_id,
+                "format": format,
+            },
+        )
+
+        kde_coverage = completeness_summary["required_kde_coverage_ratio"]
+        kde_warnings = completeness_summary["events_with_missing_required_fields"]
+        compliance_headers: dict[str, str] = {
+            "X-KDE-Coverage": str(kde_coverage),
+            "X-KDE-Warnings": str(kde_warnings),
+        }
+        if kde_coverage < 0.80:
+            compliance_headers["X-Compliance-Warning"] = "KDE coverage below 80% threshold"
+
+        if format == "package":
+            chain_payload = _build_chain_verification_payload(
+                tenant_id=tenant_id,
+                tlc=tlc,
+                events=events,
+                csv_hash=export_hash,
+                chain_verification=chain_verification,
+                completeness_summary=completeness_summary,
+            )
+            package_bytes, package_meta = _build_fda_package(
+                events=events,
+                csv_content=csv_content,
+                csv_hash=export_hash,
+                chain_payload=chain_payload,
+                completeness_summary=completeness_summary,
+                tenant_id=tenant_id,
+                tlc=tlc,
+                query_start_date=start_date,
+                query_end_date=end_date,
+            )
+            filename = f"fda_traceability_package_{safe_tlc}_{timestamp}.zip"
+            return StreamingResponse(
+                io.BytesIO(package_bytes),
+                media_type="application/zip",
+                headers={
+                    "Content-Disposition": f"attachment; filename={filename}",
+                    "X-Export-Hash": export_hash,
+                    "X-Package-Hash": package_meta["package_hash"],
+                    "X-Record-Count": str(len(events)),
+                    "X-Chain-Integrity": "VERIFIED" if chain_verification.valid else "UNVERIFIED",
+                    **compliance_headers,
+                },
+            )
+
+        if format == "pdf":
+            pdf_bytes = _generate_pdf(events, metadata={
+                "tlc": tlc,
+                "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC"),
+                "start_date": start_date,
+                "end_date": end_date,
+            })
+            filename = f"fda_export_{safe_tlc}_{timestamp}.pdf"
+            return StreamingResponse(
+                io.BytesIO(pdf_bytes),
+                media_type="application/pdf",
+                headers={
+                    "Content-Disposition": f"attachment; filename={filename}",
+                    "X-Export-Hash": export_hash,
+                    "X-Record-Count": str(len(events)),
+                    "X-Chain-Integrity": "VERIFIED" if chain_verification.valid else "UNVERIFIED",
+                    **compliance_headers,
+                },
+            )
+
+        filename = f"fda_export_{safe_tlc}_{timestamp}.csv"
+        return StreamingResponse(
+            iter([csv_content]),
+            media_type="text/csv",
+            headers={
+                "Content-Disposition": f"attachment; filename={filename}",
+                "X-Export-Hash": export_hash,
+                "X-Record-Count": str(len(events)),
+                "X-Chain-Integrity": "VERIFIED" if chain_verification.valid else "UNVERIFIED",
+                **compliance_headers,
+            },
+        )
+
+    except HTTPException:
+        raise
+    except (ImportError, ValueError, RuntimeError, OSError) as e:
+        logger.error("fda_export_failed", extra={"error": str(e), "tlc": tlc})
+        raise HTTPException(status_code=500, detail="Export failed. Check server logs for details.")
+    finally:
+        if db_session:
+            db_session.close()
+
+
+@router.get(
+    "/export/all",
+    summary="Export all CTE events",
+    description="Export all traceability events for a tenant within an optional date range.",
+    responses={
+        200: {
+            "content": {
+                "text/csv": {},
+                "application/zip": {},
+                "application/pdf": {},
+            },
+            "description": "FDA-compliant CSV, ZIP package, or PDF report",
+        },
+    },
+)
+async def export_all_events(
+    start_date: Optional[str] = Query(None, description="Start date (YYYY-MM-DD)"),
+    end_date: Optional[str] = Query(None, description="End date (YYYY-MM-DD)"),
+    event_type: Optional[str] = Query(None, description="Filter by CTE type"),
+    format: Literal["package", "csv", "pdf"] = Query(
+        default="csv",
+        description="Export format: package (zip bundle), csv, or pdf",
+    ),
+    tenant_id: str = Query(..., description="Tenant identifier"),
+    _auth=Depends(require_permission("fda.export")),
+    _subscription=Depends(require_active_subscription),
+):
+    """Export all events as FDA-format CSV."""
+    db_session = None
+    try:
+        from shared.database import SessionLocal
+        from shared.cte_persistence import CTEPersistence
+
+        db_session = SessionLocal()
+        persistence = CTEPersistence(db_session)
+
+        _EXPORT_LIMIT = 10000
+        events, total = persistence.query_all_events(
+            tenant_id=tenant_id,
+            start_date=start_date,
+            end_date=end_date,
+            event_type=event_type,
+            limit=_EXPORT_LIMIT,
+        )
+
+        # Batch-fetch by distinct TLCs to avoid O(N*M) query amplification
+        tlcs = list({evt["traceability_lot_code"] for evt in events})
+        full_events = []
+        for tlc_batch_start in range(0, len(tlcs), 50):
+            tlc_batch = tlcs[tlc_batch_start:tlc_batch_start + 50]
+            for tlc in tlc_batch:
+                full = persistence.query_events_by_tlc(
+                    tenant_id=tenant_id,
+                    tlc=tlc,
+                    start_date=start_date,
+                    end_date=end_date,
+                )
+                full_events.extend(full)
+
+        # Deduplicate by event ID
+        seen = set()
+        deduped = []
+        for e in full_events:
+            if e["id"] not in seen:
+                seen.add(e["id"])
+                deduped.append(e)
+
+        csv_content = _generate_csv(deduped)
+        export_hash = hashlib.sha256(csv_content.encode("utf-8")).hexdigest()
+        chain_verification = persistence.verify_chain(tenant_id=tenant_id)
+        completeness_summary = _build_completeness_summary(deduped)
+
+        persistence.log_export(
+            tenant_id=tenant_id,
+            export_hash=export_hash,
+            record_count=len(deduped),
+            query_start_date=start_date,
+            query_end_date=end_date,
+            generated_by="api_package_all" if format == "package" else "api",
+        )
+        db_session.commit()
+
+        timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+        kde_coverage = completeness_summary["required_kde_coverage_ratio"]
+        kde_warnings = completeness_summary["events_with_missing_required_fields"]
+        compliance_headers: dict[str, str] = {
+            "X-KDE-Coverage": str(kde_coverage),
+            "X-KDE-Warnings": str(kde_warnings),
+            "X-Total-Count": str(total),
+        }
+        if total > _EXPORT_LIMIT:
+            compliance_headers["X-Truncated"] = (
+                f"Result set truncated to {_EXPORT_LIMIT} events out of {total}. "
+                "Use date filters to narrow the query."
+            )
+        if kde_coverage < 0.80:
+            compliance_headers["X-Compliance-Warning"] = "KDE coverage below 80% threshold"
+
+        if format == "package":
+            chain_payload = _build_chain_verification_payload(
+                tenant_id=tenant_id,
+                tlc=None,
+                events=deduped,
+                csv_hash=export_hash,
+                chain_verification=chain_verification,
+                completeness_summary=completeness_summary,
+            )
+            package_bytes, package_meta = _build_fda_package(
+                events=deduped,
+                csv_content=csv_content,
+                csv_hash=export_hash,
+                chain_payload=chain_payload,
+                completeness_summary=completeness_summary,
+                tenant_id=tenant_id,
+                tlc=None,
+                query_start_date=start_date,
+                query_end_date=end_date,
+            )
+            filename = f"fda_export_all_{timestamp}.zip"
+            return StreamingResponse(
+                io.BytesIO(package_bytes),
+                media_type="application/zip",
+                headers={
+                    "Content-Disposition": f"attachment; filename={filename}",
+                    "X-Export-Hash": export_hash,
+                    "X-Package-Hash": package_meta["package_hash"],
+                    "X-Record-Count": str(len(deduped)),
+                    "X-Chain-Integrity": "VERIFIED" if chain_verification.valid else "UNVERIFIED",
+                    **compliance_headers,
+                },
+            )
+
+        if format == "pdf":
+            pdf_bytes = _generate_pdf(deduped, metadata={
+                "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC"),
+                "start_date": start_date,
+                "end_date": end_date,
+            })
+            filename = f"fda_export_all_{timestamp}.pdf"
+            return StreamingResponse(
+                io.BytesIO(pdf_bytes),
+                media_type="application/pdf",
+                headers={
+                    "Content-Disposition": f"attachment; filename={filename}",
+                    "X-Export-Hash": export_hash,
+                    "X-Record-Count": str(len(deduped)),
+                    "X-Chain-Integrity": "VERIFIED" if chain_verification.valid else "UNVERIFIED",
+                    **compliance_headers,
+                },
+            )
+
+        filename = f"fda_export_all_{timestamp}.csv"
+
+        return StreamingResponse(
+            iter([csv_content]),
+            media_type="text/csv",
+            headers={
+                "Content-Disposition": f"attachment; filename={filename}",
+                "X-Export-Hash": export_hash,
+                "X-Record-Count": str(len(deduped)),
+                "X-Chain-Integrity": "VERIFIED" if chain_verification.valid else "UNVERIFIED",
+                **compliance_headers,
+            },
+        )
+
+    except HTTPException:
+        raise
+    except (ImportError, ValueError, RuntimeError, OSError) as e:
+        logger.error("fda_export_all_failed", extra={"error": str(e)})
+        raise HTTPException(status_code=500, detail="Export failed. Check server logs for details.")
+    finally:
+        if db_session:
+            db_session.close()
+
+
+@router.get(
+    "/export/history",
+    response_model=ExportHistoryResponse,
+    summary="View FDA export audit log",
+    description="Returns the history of all FDA exports generated for this tenant.",
+)
+async def export_history(
+    tenant_id: str = Query(..., description="Tenant identifier"),
+    limit: int = Query(50, ge=1, le=200),
+    _auth=Depends(require_permission("fda.read")),
+    _subscription=Depends(require_active_subscription),
+):
+    """Return export audit log."""
+    db_session = None
+    try:
+        from shared.database import SessionLocal
+        db_session = SessionLocal()
+
+        rows = fetch_export_log_history(db_session, tenant_id, limit)
+        return format_export_log_rows(rows, tenant_id)
+
+    except (ImportError, ValueError, RuntimeError, OSError) as e:
+        logger.error("export_history_failed", extra={"error": str(e)})
+        raise HTTPException(status_code=500, detail="History query failed. Check server logs for details.")
+    finally:
+        if db_session:
+            db_session.close()
+
+
+@router.get(
+    "/export/recall",
+    summary="Recall-filtered FDA export",
+    description=(
+        "Generate an FDA-compliant export filtered by product, location, and/or date range. "
+        "This is the endpoint used during actual FDA recall investigations: "
+        "'Show me everything from [location] on [date] for [product].' "
+        "Supports any combination of filters."
+    ),
+    responses={
+        200: {
+            "content": {
+                "text/csv": {},
+                "application/zip": {},
+            },
+            "description": "FDA-compliant CSV or ZIP package",
+        },
+    },
+)
+async def export_recall_filtered(
+    tenant_id: str = Query(..., description="Tenant identifier"),
+    product: Optional[str] = Query(None, description="Product description (partial match)"),
+    location: Optional[str] = Query(None, description="Location name or GLN (partial match)"),
+    tlc: Optional[str] = Query(None, description="Traceability Lot Code (exact or partial)"),
+    event_type: Optional[str] = Query(None, description="CTE type filter"),
+    start_date: Optional[str] = Query(None, description="Start date (YYYY-MM-DD)"),
+    end_date: Optional[str] = Query(None, description="End date (YYYY-MM-DD)"),
+    format: Literal["package", "csv"] = Query(
+        default="csv",
+        description="Export format: package (zip bundle) or csv",
+    ),
+    _auth=Depends(require_permission("fda.export")),
+    _subscription=Depends(require_active_subscription),
+):
+    """Generate recall-filtered FDA export with flexible search criteria."""
+    return await export_recall_filtered_handler(
+        tenant_id=tenant_id,
+        product=product,
+        location=location,
+        tlc=tlc,
+        event_type=event_type,
+        start_date=start_date,
+        end_date=end_date,
+        format=format,
+    )
+
+
+@router.post(
+    "/export/verify",
+    response_model=ExportVerifyResponse,
+    summary="Verify a previous export's integrity",
+    description=(
+        "Re-generate an export with the same parameters and compare its hash "
+        "to the original. Proves that the underlying data hasn't been tampered with."
+    ),
+)
+async def verify_export(
+    export_id: str = Query(..., description="Export log ID to verify"),
+    tenant_id: str = Query(..., description="Tenant identifier"),
+    _auth=Depends(require_permission("fda.verify")),
+    _subscription=Depends(require_active_subscription),
+):
+    """Verify that an export can be reproduced with the same hash."""
+    return await verify_export_handler(
+        export_id=export_id,
+        tenant_id=tenant_id,
+    )
+
+
+# ---------------------------------------------------------------------------
+# V2 Export — Canonical Model (fsma.traceability_events + rule evaluations)
+# ---------------------------------------------------------------------------
+
+@router.get(
+    "/export/v2",
+    summary="Generate FDA export from canonical model (v2)",
+    description=(
+        "Query traceability events from the canonical fsma.traceability_events table, "
+        "join rule evaluation results from fsma.rule_evaluations + fsma.rule_definitions, "
+        "and generate an FDA-compliant CSV/package with Compliance Status and Rule Failures "
+        "columns appended. Backward-compatible with v1 column layout — new columns are "
+        "appended at the end."
+    ),
+    responses={
+        200: {
+            "content": {
+                "text/csv": {},
+                "application/zip": {},
+            },
+            "description": "FDA-compliant CSV or ZIP package with compliance columns",
+        },
+    },
+)
+async def export_fda_spreadsheet_v2(
+    tenant_id: str = Query(..., description="Tenant identifier"),
+    tlc: Optional[str] = Query(None, description="Traceability Lot Code filter (exact or partial with %%)"),
+    start_date: Optional[str] = Query(None, description="Start date filter (YYYY-MM-DD)"),
+    end_date: Optional[str] = Query(None, description="End date filter (YYYY-MM-DD)"),
+    event_type: Optional[str] = Query(None, description="Filter by CTE type"),
+    format: Literal["package", "csv"] = Query(
+        default="csv",
+        description="Export format: package (zip bundle) or csv",
+    ),
+    _auth=Depends(require_permission("fda.export")),
+    _subscription=Depends(require_active_subscription),
+):
+    """Generate FDA-compliant traceability export from the canonical model with rule evaluation results."""
+    db_session = None
+    try:
+        from shared.database import SessionLocal
+        from shared.cte_persistence import CTEPersistence
+
+        db_session = SessionLocal()
+        persistence = CTEPersistence(db_session)
+
+        # ----- Build dynamic WHERE clause -----
+        where_clause, params = build_v2_where_clause(
+            tenant_id=tenant_id,
+            tlc=tlc,
+            event_type=event_type,
+            start_date=start_date,
+            end_date=end_date,
+        )
+
+        # ----- Query from canonical model with rule evaluations -----
+        rows = fetch_v2_events(db_session, where_clause, params)
+
+        if not rows:
+            detail_parts = [f"tenant_id='{tenant_id}'"]
+            if tlc:
+                detail_parts.append(f"tlc='{tlc}'")
+            if event_type:
+                detail_parts.append(f"event_type='{event_type}'")
+            if start_date:
+                detail_parts.append(f"from={start_date}")
+            if end_date:
+                detail_parts.append(f"to={end_date}")
+            raise HTTPException(
+                status_code=404,
+                detail=f"No traceability records found matching filters: {', '.join(detail_parts)}",
+            )
+
+        # ----- Convert rows to event dicts -----
+        events = v2_rows_to_event_dicts(rows)
+
+        # ----- Generate CSV with compliance columns -----
+        csv_content, export_hash = generate_csv_v2_and_hash(events)
+        chain_verification = persistence.verify_chain(tenant_id=tenant_id)
+        completeness_summary = _build_completeness_summary(events)
+
+        # ----- Compute compliance summary stats -----
+        total_events = len(events)
+        events_passing = sum(
+            1 for e in events
+            if e.get("rule_results") and all(r.get("passed") for r in e["rule_results"])
+        )
+        events_failing = sum(
+            1 for e in events
+            if e.get("rule_results") and any(not r.get("passed") for r in e["rule_results"])
+        )
+        events_no_rules = total_events - events_passing - events_failing
+
+        # ----- Log the export to audit table -----
+        log_v2_export(
+            db_session=db_session,
+            tenant_id=tenant_id,
+            events=events,
+            export_hash=export_hash,
+            format=format,
+            tlc=tlc,
+            start_date=start_date,
+            end_date=end_date,
+        )
+
+        timestamp = make_timestamp()
+        scope = _safe_filename_token(tlc or "all")
+
+        logger.info(
+            "fda_export_v2_generated",
+            extra={
+                "tlc": tlc,
+                "record_count": len(events),
+                "export_hash": export_hash[:16],
+                "tenant_id": tenant_id,
+                "format": format,
+                "compliance_pass": events_passing,
+                "compliance_fail": events_failing,
+                "compliance_no_rules": events_no_rules,
+            },
+        )
+
+        if format == "package":
+            # Build chain verification payload with provenance metadata
+            chain_payload_extras = {
+                "data_source": "fsma.traceability_events (canonical model)",
+                "compliance_summary": {
+                    "total_events": total_events,
+                    "events_passing": events_passing,
+                    "events_failing": events_failing,
+                    "events_no_rules": events_no_rules,
+                    "compliance_rate": round(events_passing / total_events, 4) if total_events else 0,
+                },
+                "provenance": {
+                    "source_table": "fsma.traceability_events",
+                    "rule_tables": ["fsma.rule_evaluations", "fsma.rule_definitions"],
+                    "export_version": "2.0",
+                },
+                "attestation": {
+                    "attested_by": "regengine-fda-export-router-v2",
+                    "assertion": (
+                        "Package generated from canonical fsma.traceability_events "
+                        "with rule evaluation results and chain verification."
+                    ),
+                },
+            }
+
+            filename = f"fda_v2_package_{scope}_{timestamp}.zip"
+            return build_package_response(
+                events=events,
+                csv_content=csv_content,
+                export_hash=export_hash,
+                chain_verification=chain_verification,
+                completeness_summary=completeness_summary,
+                tenant_id=tenant_id,
+                tlc=tlc,
+                start_date=start_date,
+                end_date=end_date,
+                filename=filename,
+                extra_headers={
+                    "X-Export-Version": "2.0",
+                    "X-KDE-Coverage": str(completeness_summary["required_kde_coverage_ratio"]),
+                    "X-Compliance-Rate": str(
+                        round(events_passing / total_events, 4) if total_events else 0
+                    ),
+                },
+                chain_payload_extras=chain_payload_extras,
+            )
+
+        # CSV-only response
+        filename = f"fda_v2_export_{scope}_{timestamp}.csv"
+        return build_csv_response(
+            csv_content=csv_content,
+            filename=filename,
+            export_hash=export_hash,
+            record_count=len(events),
+            chain_valid=chain_verification.valid,
+            extra_headers={
+                "X-Export-Version": "2.0",
+                "X-KDE-Coverage": str(completeness_summary["required_kde_coverage_ratio"]),
+                "X-Compliance-Rate": str(
+                    round(events_passing / total_events, 4) if total_events else 0
+                ),
+            },
+        )
+
+    except HTTPException:
+        raise
+    except (ImportError, ValueError, RuntimeError, OSError) as e:
+        logger.error("fda_export_v2_failed", extra={"error": str(e), "tenant_id": tenant_id})
+        raise HTTPException(status_code=500, detail="V2 export failed. Check server logs for details.")
+    finally:
+        if db_session:
+            db_session.close()
+
+
+# ---------------------------------------------------------------------------
+# Merkle Tree Verification Endpoints
+# ---------------------------------------------------------------------------
+
+
+@router.get(
+    "/export/merkle-root",
+    summary="Get Merkle root for a tenant's hash chain",
+    description=(
+        "Computes a Merkle tree from all hash chain entries for the tenant "
+        "and returns the root hash. This enables O(log n) verification of "
+        "individual event inclusion without walking the entire chain."
+    ),
+)
+async def get_merkle_root(
+    tenant_id: str = Query(..., description="Tenant identifier"),
+    _auth=Depends(require_permission("fda.verify")),
+):
+    """Return the current Merkle root for a tenant's hash chain."""
+    return await get_merkle_root_handler(tenant_id)
+
+
+@router.get(
+    "/export/merkle-proof",
+    summary="Get Merkle inclusion proof for a specific event",
+    description=(
+        "Generates a Merkle inclusion proof that cryptographically demonstrates "
+        "a specific event is part of the tenant's hash chain. The proof can be "
+        "independently verified with just the event hash, proof steps, and root."
+    ),
+)
+async def get_merkle_proof(
+    tenant_id: str = Query(..., description="Tenant identifier"),
+    event_id: str = Query(..., description="CTE event ID to prove inclusion for"),
+    _auth=Depends(require_permission("fda.verify")),
+):
+    """Return a Merkle inclusion proof for a specific event."""
+    return await get_merkle_proof_handler(tenant_id, event_id)
+
+
+# ---------------------------------------------------------------------------
+# Transformation trace graph
+# ---------------------------------------------------------------------------
+
+@router.get(
+    "/trace/{tlc}",
+    summary="Trace transformation graph for a TLC",
+    description=(
+        "Returns all TLCs reachable from the given lot code via "
+        "fsma.transformation_links — both upstream inputs and downstream outputs.  "
+        "Also returns the full CTE event count per linked lot so the UI can "
+        "show the trace tree without fetching the full FDA export."
+    ),
+    tags=["Traceability"],
+)
+async def trace_transformation_graph(
+    tlc: str,
+    tenant_id: str = Query(..., description="Tenant identifier"),
+    depth: int = Query(default=5, ge=1, le=10, description="Max traversal depth"),
+    _auth=Depends(require_permission("fda.read")),
+    _subscription=Depends(require_active_subscription),
+) -> dict:
+    """Return the transformation graph rooted at a given TLC."""
+    db_session = None
+    try:
+        from shared.database import SessionLocal
+        from shared.cte_persistence import CTEPersistence
+
+        db_session = SessionLocal()
+        persistence = CTEPersistence(db_session)
+
+        return fetch_trace_graph_data(
+            db_session=db_session,
+            persistence=persistence,
+            tenant_id=tenant_id,
+            tlc=tlc,
+            depth=depth,
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("trace_graph_failed", extra={"error": str(e), "tlc": tlc})
+        raise HTTPException(status_code=500, detail="Trace graph query failed.")
+    finally:
+        if db_session:
+            db_session.close()
