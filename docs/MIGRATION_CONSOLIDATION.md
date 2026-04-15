@@ -80,7 +80,9 @@ alembic stamp head  # if migrations were already applied via Flyway
 - Requires merging `ADMIN_DATABASE_URL` into `DATABASE_URL`
 - Depends on monolith consolidation completing first
 
-## Pre-requisites
-- [ ] Backup production database
-- [ ] Test `alembic upgrade head` on a clone
-- [ ] Verify `scripts/run-migrations.sh` handles both fresh and existing DBs
+## Status
+
+- [x] Phase 1: Port remaining raw SQL to Alembic (3 migrations created, April 15 2026)
+- [x] Phase 2: Validate against real database (Supabase, alembic upgrade head passes)
+- [x] Phase 3: Remove raw SQL directory (`migrations/` deleted)
+- [ ] Phase 4: Admin DB merge (deferred to monolith consolidation)
