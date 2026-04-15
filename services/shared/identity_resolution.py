@@ -1,3 +1,14 @@
+# ============================================================
+# UNSAFE ZONE: This file (1283 lines) mixes entity registration,
+# alias management, fuzzy matching algorithms, merge/split actions,
+# human review queue management, and history tracking in one module.
+# It is on the production spine (identity resolution step).
+# Refactoring target — see PHASE 3.3 in REGENGINE_CODEBASE_REMEDIATION_PRD.md
+# NOTE: If Neo4j→PostgreSQL consolidation is imminent, skip this
+# refactor and do the consolidation instead.
+# Changes here risk breaking ingestion, entity integrity, and
+# downstream compliance evaluation. Test thoroughly.
+# ============================================================
 """
 Identity Resolution Service.
 

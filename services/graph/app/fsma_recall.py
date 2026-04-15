@@ -1,3 +1,10 @@
+# ============================================================
+# UNSAFE ZONE: This file (1203 lines) mixes recall drill
+# orchestration, result tracking, SLA metrics calculation,
+# and periodic scheduling in a single module.
+# Not on the production spine (graph service is secondary).
+# Refactoring target — see PHASE 3.5 in REGENGINE_CODEBASE_REMEDIATION_PRD.md
+# ============================================================
 """
 FSMA 204 Mock Recall Automation Engine.
 

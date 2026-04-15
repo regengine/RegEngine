@@ -1,3 +1,10 @@
+# ============================================================
+# UNSAFE ZONE: This file (1018 lines) is the main ingestion
+# router — mixes HTTP route handlers with inline business logic,
+# validation, and persistence calls. On the production spine.
+# Changes here affect all ingestion paths (webhook, CSV, EPCIS).
+# Refactoring target — see PHASE 3.5 in REGENGINE_CODEBASE_REMEDIATION_PRD.md
+# ============================================================
 """API routes for the ingestion service."""
 
 from __future__ import annotations

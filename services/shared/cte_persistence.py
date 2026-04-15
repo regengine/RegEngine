@@ -1,3 +1,12 @@
+# ============================================================
+# UNSAFE ZONE: This file (1298 lines) is LEGACY — it writes to
+# fsma.cte_events + fsma.cte_kdes (the old schema). New ingestion
+# paths should use canonical_persistence.py (fsma.traceability_events).
+# This module mixes event storage, hash chain management, batch
+# operations, query building, and export queries.
+# Refactoring target — see PHASE 3 in REGENGINE_CODEBASE_REMEDIATION_PRD.md
+# Changes here risk breaking export, hash chain integrity, and graph sync.
+# ============================================================
 """
 FSMA 204 CTE Persistence Layer.
 

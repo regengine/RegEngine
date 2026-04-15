@@ -1,3 +1,11 @@
+# ============================================================
+# UNSAFE ZONE: This file (1025 lines) mixes compliance scoring,
+# graph-based traceability queries, CSV/export generation, and
+# route handling in one module. Duplicates Neo4jClient import.
+# Depends on Neo4j — will need rewrite during Neo4j→PostgreSQL
+# consolidation.
+# Refactoring target — see PHASE 3.5 in REGENGINE_CODEBASE_REMEDIATION_PRD.md
+# ============================================================
 from __future__ import annotations
 
 import csv

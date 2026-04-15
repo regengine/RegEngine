@@ -1,3 +1,13 @@
+# ============================================================
+# UNSAFE ZONE: This file (1069 lines) mixes application security
+# audit (login, access control) with compliance audit (data
+# modification, export events), plus tamper-evident hash/HMAC
+# integrity logic, logging decorators, and report generation.
+# The trust-critical integrity code (hashing/chaining) is
+# entangled with routine application logging concerns.
+# Refactoring target — see PHASE 3.4 in REGENGINE_CODEBASE_REMEDIATION_PRD.md
+# Changes to integrity logic risk silent audit chain corruption.
+# ============================================================
 """
 SEC-016: Comprehensive Audit Logging.
 

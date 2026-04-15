@@ -1,3 +1,12 @@
+# ============================================================
+# UNSAFE ZONE: This file (1034 lines) mixes canonical event writes,
+# legacy dual-write to cte_events, query/read logic, and migration
+# scaffolding in a single module. The dual-write code is temporary
+# but is interleaved with long-term persistence logic.
+# Refactoring target — see PHASE 3.2 in REGENGINE_CODEBASE_REMEDIATION_PRD.md
+# Changes here risk breaking ingestion, compliance reads, and export.
+# Test thoroughly across ingestion + compliance + export after any change.
+# ============================================================
 """
 Canonical Event Persistence Layer.
 

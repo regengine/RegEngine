@@ -1,3 +1,11 @@
+# ============================================================
+# UNSAFE ZONE: This file (1186 lines) mixes Stripe checkout
+# session creation, subscription lifecycle management, webhook
+# event processing, and pricing tier logic in one module.
+# Lives in ingestion service but is functionally admin/billing.
+# Not on the production spine. Do NOT touch unless billing is broken.
+# Refactoring target — see PHASE 3.5 in REGENGINE_CODEBASE_REMEDIATION_PRD.md
+# ============================================================
 """
 Stripe Billing Router.
 

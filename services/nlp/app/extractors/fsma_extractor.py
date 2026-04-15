@@ -1,3 +1,12 @@
+# ============================================================
+# UNSAFE ZONE: This file (1344 lines) mixes CTE extraction,
+# KDE extraction, entity resolution, document classification,
+# and layout-aware table parsing in a single module.
+# Not on the production spine (NLP is secondary), but changes
+# to extraction logic affect downstream graph updates and
+# review queue accuracy.
+# Refactoring target — see PHASE 3.5 in REGENGINE_CODEBASE_REMEDIATION_PRD.md
+# ============================================================
 """
 FSMA 204 Extractor for Critical Tracking Events (CTEs) and Key Data Elements (KDEs).
 
