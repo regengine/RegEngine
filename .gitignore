@@ -121,6 +121,11 @@ test-write
 # Development sample data
 sample_data/
 
+# Non-code artifacts (sales, demo exports, pilot output)
+demo_exports/
+sales_enablement/
+output/
+
 # Working docs and drafts (auto-generated / ephemeral)
 briefings/
 daily-briefs/

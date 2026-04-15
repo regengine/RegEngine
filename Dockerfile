@@ -9,25 +9,9 @@ RUN apt-get update && apt-get install -y \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Python dependencies — root pins + all service deps
+# Install Python dependencies — single consolidated requirements file
 COPY requirements.txt /app/requirements.txt
-COPY services/ingestion/requirements.txt /app/reqs/ingestion.txt
-COPY services/admin/requirements.txt /app/reqs/admin.txt
-COPY services/graph/requirements.txt /app/reqs/graph.txt
-COPY services/nlp/requirements.txt /app/reqs/nlp.txt
-COPY services/compliance/requirements.txt /app/reqs/compliance.txt
-COPY services/scheduler/requirements.txt /app/reqs/scheduler.txt
-COPY services/shared/requirements.txt /app/reqs/shared.txt
-RUN pip install --no-cache-dir \
-    -r requirements.txt \
-    -r reqs/ingestion.txt \
-    -r reqs/admin.txt \
-    -r reqs/graph.txt \
-    -r reqs/nlp.txt \
-    -r reqs/compliance.txt \
-    -r reqs/scheduler.txt \
-    -r reqs/shared.txt \
-    gunicorn>=22.0.0
+RUN pip install --no-cache-dir -r requirements.txt
 
 # Create non-root user
 RUN adduser --disabled-password --gecos '' --uid 1001 appuser

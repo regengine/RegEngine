@@ -49,6 +49,10 @@ require_env("DATABASE_URL", "REDIS_URL")
 from shared.error_handling import init_sentry
 init_sentry()
 
+# OpenTelemetry (standalone — no FastAPI)
+from shared.observability import setup_standalone_observability
+_tracer = setup_standalone_observability("scheduler")
+
 from app.config import get_settings
 from app.circuit_breaker import CircuitBreaker, CircuitOpenError, circuit_registry
 from app.kafka_producer import get_kafka_producer
@@ -171,6 +175,13 @@ class SchedulerService:
         """
         scraper, circuit_breaker = self.scrapers[source_type]
 
+        with _tracer.start_as_current_span(
+            "scheduler.run_scraper",
+            attributes={"source_type": source_type.value, "scraper": scraper.name},
+        ) as span:
+            self._run_scraper_inner(source_type, scraper, circuit_breaker, span)
+
+    def _run_scraper_inner(self, source_type, scraper, circuit_breaker, span) -> None:
         logger.info(
             "scraper_starting",
             source_type=source_type.value,
@@ -492,6 +503,10 @@ class SchedulerService:
         overdue or approaching their deadline (<2 hours). Designed to run
         every 5 minutes via APScheduler.
         """
+        with _tracer.start_as_current_span("scheduler.check_request_deadlines"):
+            self._check_request_deadlines_inner()
+
+    def _check_request_deadlines_inner(self) -> None:
         try:
             from shared.database import SessionLocal
             from shared.request_workflow import RequestWorkflow

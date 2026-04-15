@@ -1,3 +1,6 @@
+# DEPRECATED — use root requirements.txt (single source of truth)
+# This file is retained for backward compatibility only. Do not add deps here.
+# See pyproject.toml for canonical dependency specifications.
 # NLP Service Dependencies
 # Core versions aligned with pyproject.toml — see root requirements.txt
 
