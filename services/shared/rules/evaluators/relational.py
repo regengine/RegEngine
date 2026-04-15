@@ -132,7 +132,7 @@ def evaluate_temporal_order(
             f"(at {v['later_timestamp']}) occurs before {v['earlier_stage']} "
             f"(at {v['earlier_timestamp']}). "
             f"CTE events must follow the supply chain lifecycle order "
-            f"({rule.citation_reference or '21 CFR \u00a71.1310'})."
+            f"({rule.citation_reference or '21 CFR §1.1310'})."
         )
         return RuleEvaluationResult(
             rule_id=rule.rule_id, rule_version=rule.rule_version,
@@ -208,7 +208,7 @@ def evaluate_identity_consistency(
             f"'{m['product_reference']}' (at {m['event_type']}) vs "
             f"'{current_product}' (current event). "
             f"The same TLC must refer to the same product throughout the supply chain "
-            f"({rule.citation_reference or '21 CFR \u00a71.1310(a)'})."
+            f"({rule.citation_reference or '21 CFR §1.1310(a)'})."
         )
         return RuleEvaluationResult(
             rule_id=rule.rule_id, rule_version=rule.rule_version,
@@ -359,7 +359,7 @@ def evaluate_mass_balance(
             f"total output ({total_output}) exceeds total input ({total_input}) "
             f"by more than {tolerance_percent}% tolerance "
             f"(max allowed: {max_allowed:.2f}). "
-            f"({rule.citation_reference or '21 CFR \u00a71.1310'})."
+            f"({rule.citation_reference or '21 CFR §1.1310'})."
         )
         return RuleEvaluationResult(
             rule_id=rule.rule_id, rule_version=rule.rule_version,
