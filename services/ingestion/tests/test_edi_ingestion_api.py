@@ -13,7 +13,7 @@ sys.path.insert(0, str(service_dir))
 pytest.importorskip("fastapi")
 
 from app.authz import IngestionPrincipal, get_ingestion_principal
-import app.edi_ingestion as edi_ingestion
+import app.edi_ingestion.routes as edi_ingestion_routes
 from app.edi_ingestion import router as edi_router
 from app.webhook_models import EventResult, IngestResponse, WebhookCTEType
 
@@ -92,7 +92,7 @@ def client(monkeypatch: pytest.MonkeyPatch, captured_payload: dict) -> TestClien
             ],
         )
 
-    monkeypatch.setattr(edi_ingestion, "ingest_events", _fake_ingest_events)
+    monkeypatch.setattr(edi_ingestion_routes, "ingest_events", _fake_ingest_events)
 
     with TestClient(app) as test_client:
         yield test_client

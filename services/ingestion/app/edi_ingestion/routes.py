@@ -1,0 +1,432 @@
+# ============================================================
+# UNSAFE ZONE: This file (1043 lines) mixes EDI X12 segment
+# parsing (856/850/810/861), field mapping, CTE normalization,
+# and validation in a single module. Fragile string parsing of
+# EDI segments — changes to segment mapping risk silent data
+# corruption in ingested events.
+# Refactoring target — see PHASE 3.5 in REGENGINE_CODEBASE_REMEDIATION_PRD.md
+# ============================================================
+"""EDI inbound ingestion router.
+
+Accepts partner-authenticated X12 documents and normalizes them into FSMA CTE
+events through the existing webhook ingestion pipeline. Supports:
+  - 856 (ASN / Ship Notice)
+  - 850 (Purchase Order)
+  - 810 (Invoice)
+  - 861 (Receiving Advice)
+
+Extracts shipment details, product identifiers, quantities, and locations
+relevant to FSMA Critical Tracking Events.
+"""
+
+from __future__ import annotations
+
+import logging
+from typing import Any, Optional
+
+from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, UploadFile
+
+from app.authz import require_permission
+from app.format_extractors import is_edi_content
+from app.shared.tenant_resolution import resolve_tenant_id
+from app.shared.upload_limits import read_upload_with_limit, MAX_EDI_FILE_SIZE_BYTES
+from app.webhook_compat import ingest_events
+from app.webhook_models import (
+    IngestEvent,
+    WebhookCTEType,
+    WebhookPayload,
+)
+
+from .constants import (
+    _CTE_TYPE_BY_SET,
+    _REQUIRED_856_SEGMENTS,
+    _REQUIRED_SEGMENTS_BY_SET,
+    _SUPPORTED_TRANSACTION_SETS,
+)
+from .extractors import _extract_856_fields, _extract_fields_for_set
+from .models import EDIIngestResponse
+from .parser import _first_segment, _parse_x12_segments, _segment_id_set, _detect_transaction_set
+from .utils import (
+    _normalize_unit,
+    _safe_float,
+    _ship_timestamp_and_date,
+    _valid_gln_or_none,
+    _verify_partner_id,
+)
+from .validation import _validate_edi_as_fsma_event
+
+logger = logging.getLogger("edi-ingestion")
+
+router = APIRouter(prefix="/api/v1/ingest/edi", tags=["EDI Import"])
+
+_resolve_tenant_id = resolve_tenant_id
+
+
+@router.post(
+    "",
+    response_model=EDIIngestResponse,
+    status_code=201,
+    summary="Ingest X12 856 ASN",
+    description=(
+        "Partner-authenticated EDI inbound route for X12 856 Ship Notice/Manifest "
+        "documents. Validates required segments, extracts shipping KDEs, and "
+        "persists as FSMA shipping CTE events."
+    ),
+)
+async def ingest_edi_856(
+    file: UploadFile = File(..., description="X12 EDI file (856 ASN)"),
+    traceability_lot_code: str = Form(..., description="FSMA Traceability Lot Code"),
+    tenant_id: Optional[str] = Form(None, description="Optional tenant override"),
+    source: str = Form("edi_856_inbound", description="Source system identifier"),
+    product_description: Optional[str] = Form(None, description="Optional product description override"),
+    quantity_override: Optional[float] = Form(None, gt=0, description="Optional quantity override"),
+    unit_of_measure_override: Optional[str] = Form(None, description="Optional unit override"),
+    ship_from_location_override: Optional[str] = Form(None, description="Optional ship-from override"),
+    ship_to_location_override: Optional[str] = Form(None, description="Optional ship-to override"),
+    x_tenant_id: Optional[str] = Header(default=None, alias="X-Tenant-ID"),
+    x_partner_id: Optional[str] = Header(default=None, alias="X-Partner-ID"),
+    x_regengine_api_key: Optional[str] = Header(default=None, alias="X-RegEngine-API-Key"),
+    _auth=Depends(require_permission("edi.ingest")),
+) -> EDIIngestResponse:
+    sender_tenant_id = _resolve_tenant_id(tenant_id, x_tenant_id, x_regengine_api_key)
+    if not sender_tenant_id:
+        raise HTTPException(status_code=400, detail="Sender tenant context required")
+
+    _verify_partner_id(x_partner_id)
+
+    raw_bytes = await file.read()
+    if not raw_bytes:
+        raise HTTPException(status_code=400, detail="Empty EDI payload")
+
+    if not is_edi_content(raw_bytes):
+        raise HTTPException(status_code=400, detail="Unsupported EDI payload format")
+
+    raw_text = raw_bytes.decode("utf-8", errors="ignore")
+    segments = _parse_x12_segments(raw_text)
+    if not segments:
+        raise HTTPException(status_code=400, detail="Unable to parse EDI segments")
+
+    transaction_set = (_first_segment(segments, "ST") or ["", ""])[1]
+    if transaction_set != "856":
+        raise HTTPException(status_code=400, detail="Only X12 856 is currently supported")
+
+    present_segments = _segment_id_set(segments)
+    missing_segments = sorted(_REQUIRED_856_SEGMENTS - present_segments)
+    if missing_segments:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "message": "EDI 856 missing required segments",
+                "missing_segments": missing_segments,
+            },
+        )
+
+    extracted = _extract_856_fields(segments)
+    timestamp, ship_date = _ship_timestamp_and_date(
+        extracted.get("ship_date_raw"),
+        extracted.get("ship_time_raw"),
+    )
+
+    quantity = quantity_override if quantity_override is not None else extracted.get("quantity")
+    resolved_quantity = _safe_float(str(quantity) if quantity is not None else None, fallback=1.0)
+    resolved_unit = _normalize_unit(unit_of_measure_override or extracted.get("unit_of_measure"))
+
+    ship_from_name = (
+        ship_from_location_override
+        or extracted.get("ship_from_name")
+        or "Unknown ship-from"
+    )
+    ship_to_name = (
+        ship_to_location_override
+        or extracted.get("ship_to_name")
+        or "Unknown ship-to"
+    )
+
+    product_name = (
+        product_description
+        or extracted.get("product_description")
+        or "EDI 856 Shipment"
+    )
+
+    ship_from_gln_raw = extracted.get("ship_from_gln")
+    ship_to_gln_raw = extracted.get("ship_to_gln")
+    ship_from_gln = _valid_gln_or_none(ship_from_gln_raw)
+    ship_to_gln = _valid_gln_or_none(ship_to_gln_raw)
+
+    kdes: dict[str, Any] = {
+        "ship_date": ship_date,
+        "ship_from_location": ship_from_name,
+        "ship_to_location": ship_to_name,
+        "ship_from_gln": ship_from_gln or ship_from_gln_raw,
+        "ship_to_gln": ship_to_gln or ship_to_gln_raw,
+        "reference_document_number": extracted.get("reference_document_number"),
+        "carrier": extracted.get("carrier"),
+        "asn_number": extracted.get("asn_number"),
+        "edi_transaction_set": "856",
+        "edi_control_number": extracted.get("control_number"),
+        "edi_sender_id": extracted.get("sender_id"),
+        "edi_receiver_id": extracted.get("receiver_id"),
+        "partner_id": x_partner_id,
+        "immediate_previous_source": ship_from_name,
+    }
+
+    event = IngestEvent(
+        cte_type=WebhookCTEType.SHIPPING,
+        traceability_lot_code=traceability_lot_code,
+        product_description=product_name,
+        quantity=resolved_quantity,
+        unit_of_measure=resolved_unit,
+        location_gln=ship_from_gln,
+        location_name=ship_from_name,
+        timestamp=timestamp,
+        kdes={k: v for k, v in kdes.items() if v is not None and v != ""},
+    )
+
+    payload = WebhookPayload(
+        source=source,
+        events=[event],
+        tenant_id=sender_tenant_id,
+    )
+    ingestion_result = await ingest_events(
+        payload,
+        x_regengine_api_key=x_regengine_api_key,
+    )
+
+    return EDIIngestResponse(
+        sender_tenant_id=sender_tenant_id,
+        partner_id=x_partner_id,
+        traceability_lot_code=traceability_lot_code,
+        extracted={
+            "asn_number": extracted.get("asn_number"),
+            "quantity": resolved_quantity,
+            "unit_of_measure": resolved_unit,
+            "ship_from_location": ship_from_name,
+            "ship_to_location": ship_to_name,
+            "reference_document_number": extracted.get("reference_document_number"),
+        },
+        ingestion_result=ingestion_result,
+    )
+
+
+def _build_ingest_event_for_set(
+    transaction_set: str,
+    extracted: dict[str, Any],
+    traceability_lot_code: str,
+    product_description_override: str | None,
+    quantity_override: float | None,
+    unit_override: str | None,
+    location_override: str | None,
+) -> IngestEvent:
+    """Build an IngestEvent from extracted EDI fields for any supported set."""
+    cte_type = _CTE_TYPE_BY_SET.get(transaction_set, WebhookCTEType.SHIPPING)
+
+    # Resolve quantity
+    quantity = quantity_override if quantity_override is not None else extracted.get("quantity")
+    resolved_quantity = _safe_float(str(quantity) if quantity is not None else None, fallback=1.0)
+    resolved_unit = _normalize_unit(unit_override or extracted.get("unit_of_measure"))
+
+    # Resolve product description
+    product_name = (
+        product_description_override
+        or extracted.get("product_description")
+        or f"EDI {transaction_set} Item"
+    )
+
+    # Resolve location (varies by document type)
+    location_name = location_override
+    location_gln = None
+    if transaction_set in ("856", "850"):
+        location_name = location_name or extracted.get("ship_from_name") or extracted.get("seller_name") or "Unknown"
+        location_gln = _valid_gln_or_none(extracted.get("ship_from_gln") or extracted.get("seller_gln"))
+    elif transaction_set == "810":
+        location_name = location_name or extracted.get("seller_name") or "Unknown"
+        location_gln = _valid_gln_or_none(extracted.get("seller_gln"))
+    elif transaction_set == "861":
+        location_name = location_name or extracted.get("receiving_location_name") or "Unknown"
+        location_gln = _valid_gln_or_none(extracted.get("receiving_location_gln"))
+
+    # Resolve timestamp
+    date_field_map = {
+        "856": ("ship_date_raw", "ship_time_raw"),
+        "850": ("po_date_raw", None),
+        "810": ("invoice_date_raw", None),
+        "861": ("receive_date_raw", None),
+    }
+    date_field, time_field = date_field_map.get(transaction_set, (None, None))
+    timestamp, event_date = _ship_timestamp_and_date(
+        extracted.get(date_field) if date_field else None,
+        extracted.get(time_field) if time_field else None,
+    )
+
+    # Build KDEs
+    kdes: dict[str, Any] = {
+        "edi_transaction_set": transaction_set,
+        "edi_control_number": extracted.get("control_number"),
+        "edi_sender_id": extracted.get("sender_id"),
+        "edi_receiver_id": extracted.get("receiver_id"),
+        "reference_document_number": extracted.get("reference_document_number"),
+        "event_date": event_date,
+    }
+
+    if transaction_set == "856":
+        kdes.update({
+            "ship_from_location": extracted.get("ship_from_name"),
+            "ship_to_location": extracted.get("ship_to_name"),
+            "ship_from_gln": extracted.get("ship_from_gln"),
+            "ship_to_gln": extracted.get("ship_to_gln"),
+            "carrier": extracted.get("carrier"),
+            "asn_number": extracted.get("asn_number"),
+        })
+    elif transaction_set == "850":
+        kdes.update({
+            "po_number": extracted.get("po_number"),
+            "buyer_name": extracted.get("buyer_name"),
+            "seller_name": extracted.get("seller_name"),
+            "buyer_gln": extracted.get("buyer_gln"),
+            "seller_gln": extracted.get("seller_gln"),
+            "unit_price": extracted.get("unit_price"),
+        })
+    elif transaction_set == "810":
+        kdes.update({
+            "invoice_number": extracted.get("invoice_number"),
+            "po_number": extracted.get("po_number"),
+            "buyer_name": extracted.get("buyer_name"),
+            "seller_name": extracted.get("seller_name"),
+            "total_amount": extracted.get("total_amount"),
+        })
+    elif transaction_set == "861":
+        kdes.update({
+            "receiving_advice_number": extracted.get("receiving_advice_number"),
+            "po_number": extracted.get("po_number"),
+            "ship_from_location": extracted.get("ship_from_name"),
+            "receiving_location": extracted.get("receiving_location_name"),
+            "receiving_location_gln": extracted.get("receiving_location_gln"),
+            "condition_code": extracted.get("condition_code"),
+        })
+
+    return IngestEvent(
+        cte_type=cte_type,
+        traceability_lot_code=traceability_lot_code,
+        product_description=product_name,
+        quantity=resolved_quantity,
+        unit_of_measure=resolved_unit,
+        location_gln=location_gln,
+        location_name=location_name,
+        timestamp=timestamp,
+        kdes={k: v for k, v in kdes.items() if v is not None and v != ""},
+    )
+
+
+@router.post(
+    "/document",
+    response_model=EDIIngestResponse,
+    status_code=201,
+    summary="Ingest X12 EDI document (856/850/810/861)",
+    description=(
+        "Unified EDI inbound route that auto-detects the transaction set "
+        "(856 ASN, 850 Purchase Order, 810 Invoice, 861 Receiving Advice) "
+        "and extracts FSMA-relevant KDEs for CTE creation."
+    ),
+)
+async def ingest_edi_document(
+    file: UploadFile = File(..., description="X12 EDI file"),
+    traceability_lot_code: str = Form(..., description="FSMA Traceability Lot Code"),
+    tenant_id: Optional[str] = Form(None, description="Optional tenant override"),
+    source: str = Form("edi_inbound", description="Source system identifier"),
+    product_description: Optional[str] = Form(None, description="Optional product description override"),
+    quantity_override: Optional[float] = Form(None, gt=0, description="Optional quantity override"),
+    unit_of_measure_override: Optional[str] = Form(None, description="Optional unit override"),
+    location_override: Optional[str] = Form(None, description="Optional location name override"),
+    x_tenant_id: Optional[str] = Header(default=None, alias="X-Tenant-ID"),
+    x_partner_id: Optional[str] = Header(default=None, alias="X-Partner-ID"),
+    x_regengine_api_key: Optional[str] = Header(default=None, alias="X-RegEngine-API-Key"),
+    _auth=Depends(require_permission("edi.ingest")),
+) -> EDIIngestResponse:
+    """Ingest any supported X12 EDI document type."""
+    sender_tenant_id = _resolve_tenant_id(tenant_id, x_tenant_id, x_regengine_api_key)
+    if not sender_tenant_id:
+        raise HTTPException(status_code=400, detail="Sender tenant context required")
+
+    _verify_partner_id(x_partner_id)
+
+    raw_bytes = await read_upload_with_limit(file, max_bytes=MAX_EDI_FILE_SIZE_BYTES, label="EDI file")
+    if not raw_bytes:
+        raise HTTPException(status_code=400, detail="Empty EDI payload")
+
+    if not is_edi_content(raw_bytes):
+        raise HTTPException(status_code=400, detail="Unsupported EDI payload format")
+
+    raw_text = raw_bytes.decode("utf-8", errors="ignore")
+    segments = _parse_x12_segments(raw_text)
+    if not segments:
+        raise HTTPException(status_code=400, detail="Unable to parse EDI segments")
+
+    transaction_set = _detect_transaction_set(segments)
+    if not transaction_set:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported or unrecognized transaction set. Supported: {sorted(_SUPPORTED_TRANSACTION_SETS)}",
+        )
+
+    required_segments = _REQUIRED_SEGMENTS_BY_SET.get(transaction_set, set())
+    present_segments = _segment_id_set(segments)
+    missing_segments = sorted(required_segments - present_segments)
+    if missing_segments:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "message": f"EDI {transaction_set} missing required segments",
+                "missing_segments": missing_segments,
+            },
+        )
+
+    extracted = _extract_fields_for_set(transaction_set, segments)
+
+    # Validate against FSMAEvent model
+    fsma_validated = _validate_edi_as_fsma_event(
+        extracted, transaction_set, traceability_lot_code, sender_tenant_id,
+    )
+    if fsma_validated:
+        extracted["fsma_validation_status"] = "passed"
+    else:
+        extracted["fsma_validation_status"] = "failed"
+        logger.warning(
+            "edi_fsma_validation_warning set=%s tlc=%s",
+            transaction_set, traceability_lot_code,
+        )
+
+    event = _build_ingest_event_for_set(
+        transaction_set=transaction_set,
+        extracted=extracted,
+        traceability_lot_code=traceability_lot_code,
+        product_description_override=product_description,
+        quantity_override=quantity_override,
+        unit_override=unit_of_measure_override,
+        location_override=location_override,
+    )
+
+    payload = WebhookPayload(
+        source=f"{source}_{transaction_set}" if source == "edi_inbound" else source,
+        events=[event],
+        tenant_id=sender_tenant_id,
+    )
+    ingestion_result = await ingest_events(
+        payload,
+        x_regengine_api_key=x_regengine_api_key,
+    )
+
+    return EDIIngestResponse(
+        document_type=f"X12_{transaction_set}",
+        sender_tenant_id=sender_tenant_id,
+        partner_id=x_partner_id,
+        traceability_lot_code=traceability_lot_code,
+        extracted={
+            "transaction_set": transaction_set,
+            "quantity": extracted.get("quantity"),
+            "unit_of_measure": extracted.get("unit_of_measure"),
+            "product_description": extracted.get("product_description"),
+            "reference_document_number": extracted.get("reference_document_number"),
+            "fsma_validation_status": extracted.get("fsma_validation_status"),
+        },
+        ingestion_result=ingestion_result,
+    )
