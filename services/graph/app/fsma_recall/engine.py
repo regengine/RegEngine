@@ -1,455 +1,32 @@
 # ============================================================
-# UNSAFE ZONE: This file (1203 lines) mixes recall drill
-# orchestration, result tracking, SLA metrics calculation,
-# and periodic scheduling in a single module.
-# Not on the production spine (graph service is secondary).
-# Refactoring target — see PHASE 3.5 in REGENGINE_CODEBASE_REMEDIATION_PRD.md
+# FSMA 204 Recall — MockRecallEngine class
+# Split from monolithic fsma_recall.py — zero logic changes.
 # ============================================================
-"""
-FSMA 204 Mock Recall Automation Engine.
-
-Sprint 8: Programmatic recall drill execution, tracking, and FDA compliance.
-
-Per FSMA 204 requirements:
-- Organizations must be able to produce traceability records within 24 hours of FDA request
-- Regular mock recalls validate recall readiness
-- All drill results must be auditable
-
-This module provides:
-- MockRecallEngine: Orchestrates recall drill execution
-- RecallDrill: Represents a single mock recall exercise
-- RecallResult: Captures drill outcomes with SLA metrics
-- RecallSchedule: Manages periodic recall drill scheduling
-"""
-
 from __future__ import annotations
 
-import asyncio
-import hashlib
-import json
-import uuid
-from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
-from enum import Enum
-from typing import Any, Callable, Dict, List, Optional
 import inspect
+import uuid
+from datetime import datetime, timedelta, timezone
+from typing import Any, Callable, Dict, List, Optional
 
-
-class RecallStatus(str, Enum):
-    """Status of a recall drill."""
-
-    PENDING = "pending"
-    IN_PROGRESS = "in_progress"
-    COMPLETED = "completed"
-    FAILED = "failed"
-    CANCELLED = "cancelled"
-
-
-class RecallType(str, Enum):
-    """Type of recall drill."""
-
-    FORWARD_TRACE = "forward_trace"  # From raw material to consumer
-    BACKWARD_TRACE = "backward_trace"  # From consumer to source
-    FULL_TRACE = "full_trace"  # Both directions
-    TARGETED = "targeted"  # Specific facility/lot
-    MASS_BALANCE = "mass_balance"  # Quantity reconciliation
-
-
-class RecallSeverity(str, Enum):
-    """Simulated recall severity (FDA classification)."""
-
-    CLASS_I = "class_i"  # Serious health consequences or death
-    CLASS_II = "class_ii"  # Temporary/reversible health consequences
-    CLASS_III = "class_iii"  # Not likely to cause adverse health
-
-
-class SLAStatus(str, Enum):
-    """SLA compliance status for 24-hour mandate."""
-
-    MET = "met"  # Completed within 24 hours
-    AT_RISK = "at_risk"  # Approaching deadline
-    BREACHED = "breached"  # Exceeded 24 hours
-
-
-@dataclass
-class AffectedFacility:
-    """Facility identified in a recall trace."""
-
-    gln: str
-    name: str
-    facility_type: str  # grower, processor, distributor, retailer
-    lots_affected: List[str]
-    quantity_affected: float
-    unit_of_measure: str = "cases"
-    contact_info: Optional[Dict[str, str]] = None
-    notification_status: str = "pending"  # pending, notified, acknowledged
-
-
-@dataclass
-class RecallDrill:
-    """
-    Represents a single mock recall exercise.
-
-    Captures all parameters needed to execute and audit a recall drill.
-    """
-
-    drill_id: str
-    tenant_id: str
-    created_at: datetime
-    drill_type: RecallType
-    severity: RecallSeverity
-
-    # Target identification
-    target_lot: Optional[str] = None
-    target_gtin: Optional[str] = None
-    target_facility_gln: Optional[str] = None
-
-    # Drill metadata
-    initiated_by: str = "system"
-    reason: str = "scheduled_drill"
-    description: Optional[str] = None
-
-    # Execution tracking
-    status: RecallStatus = RecallStatus.PENDING
-    started_at: Optional[datetime] = None
-    completed_at: Optional[datetime] = None
-
-    # Results placeholder
-    result: Optional[RecallResult] = None
-
-    def __post_init__(self):
-        if not self.drill_id:
-            self.drill_id = f"drill_{uuid.uuid4().hex[:12]}"
-
-    @property
-    def duration_seconds(self) -> Optional[float]:
-        """Calculate drill duration in seconds."""
-        if self.started_at and self.completed_at:
-            return (self.completed_at - self.started_at).total_seconds()
-        elif self.started_at:
-            return (datetime.now(timezone.utc) - self.started_at).total_seconds()
-        return None
-
-    @property
-    def sla_status(self) -> SLAStatus:
-        """Determine SLA compliance status."""
-        if not self.started_at:
-            return SLAStatus.MET
-
-        elapsed = (datetime.now(timezone.utc) - self.started_at).total_seconds()
-        sla_limit = 24 * 3600  # 24 hours in seconds
-
-        if self.status == RecallStatus.COMPLETED:
-            if self.duration_seconds and self.duration_seconds <= sla_limit:
-                return SLAStatus.MET
-            return SLAStatus.BREACHED
-
-        # Still in progress
-        if elapsed > sla_limit:
-            return SLAStatus.BREACHED
-        elif elapsed > sla_limit * 0.75:  # 75% of deadline
-            return SLAStatus.AT_RISK
-        return SLAStatus.MET
-
-    def to_dict(self) -> Dict[str, Any]:
-        """Serialize drill for API response."""
-        return {
-            "drill_id": self.drill_id,
-            "tenant_id": self.tenant_id,
-            "created_at": self.created_at.isoformat(),
-            "drill_type": self.drill_type.value,
-            "severity": self.severity.value,
-            "target_lot": self.target_lot,
-            "target_gtin": self.target_gtin,
-            "target_facility_gln": self.target_facility_gln,
-            "initiated_by": self.initiated_by,
-            "reason": self.reason,
-            "description": self.description,
-            "status": self.status.value,
-            "started_at": self.started_at.isoformat() if self.started_at else None,
-            "completed_at": (
-                self.completed_at.isoformat() if self.completed_at else None
-            ),
-            "duration_seconds": self.duration_seconds,
-            "sla_status": self.sla_status.value,
-            "result": self.result.to_dict() if self.result else None,
-        }
-
-
-@dataclass
-class RecallResult:
-    """
-    Results of a recall drill execution.
-
-    Captures metrics, affected parties, and SLA compliance data.
-    """
-
-    drill_id: str
-    success: bool
-
-    # Trace metrics
-    lots_traced: int = 0
-    facilities_identified: int = 0
-    total_quantity_affected: float = 0.0
-    unit_of_measure: str = "cases"
-
-    # Trace depth
-    max_depth_forward: int = 0
-    max_depth_backward: int = 0
-
-    # SLA metrics
-    trace_time_seconds: float = 0.0
-    export_time_seconds: float = 0.0
-    total_time_seconds: float = 0.0
-    sla_compliant: bool = True
-
-    # Data quality
-    gaps_found: int = 0
-    orphans_found: int = 0
-    data_completeness_pct: float = 100.0
-
-    # Affected facilities
-    affected_facilities: List[AffectedFacility] = field(default_factory=list)
-
-    # Export artifacts
-    csv_export_path: Optional[str] = None
-    contact_list_path: Optional[str] = None
-
-    # Error tracking
-    errors: List[str] = field(default_factory=list)
-    warnings: List[str] = field(default_factory=list)
-
-    def to_dict(self) -> Dict[str, Any]:
-        """Serialize result for API response."""
-        return {
-            "drill_id": self.drill_id,
-            "success": self.success,
-            "lots_traced": self.lots_traced,
-            "facilities_identified": self.facilities_identified,
-            "total_quantity_affected": self.total_quantity_affected,
-            "unit_of_measure": self.unit_of_measure,
-            "max_depth_forward": self.max_depth_forward,
-            "max_depth_backward": self.max_depth_backward,
-            "trace_time_seconds": self.trace_time_seconds,
-            "export_time_seconds": self.export_time_seconds,
-            "total_time_seconds": self.total_time_seconds,
-            "sla_compliant": self.sla_compliant,
-            "gaps_found": self.gaps_found,
-            "orphans_found": self.orphans_found,
-            "data_completeness_pct": self.data_completeness_pct,
-            "affected_facilities": [
-                {
-                    "gln": f.gln,
-                    "name": f.name,
-                    "facility_type": f.facility_type,
-                    "lots_affected": f.lots_affected,
-                    "quantity_affected": f.quantity_affected,
-                    "unit_of_measure": f.unit_of_measure,
-                    "notification_status": f.notification_status,
-                }
-                for f in self.affected_facilities
-            ],
-            "csv_export_path": self.csv_export_path,
-            "contact_list_path": self.contact_list_path,
-            "errors": self.errors,
-            "warnings": self.warnings,
-        }
-
-    def get_summary(self) -> Dict[str, Any]:
-        """Get abbreviated summary for dashboards."""
-        return {
-            "drill_id": self.drill_id,
-            "success": self.success,
-            "lots_traced": self.lots_traced,
-            "facilities_identified": self.facilities_identified,
-            "total_time_seconds": self.total_time_seconds,
-            "sla_compliant": self.sla_compliant,
-            "data_completeness_pct": self.data_completeness_pct,
-        }
-
-
-@dataclass
-class ScheduledDrill:
-    """A scheduled recurring mock recall drill."""
-
-    schedule_id: str
-    tenant_id: str
-    drill_type: RecallType
-    severity: RecallSeverity
-    frequency_days: int  # How often to run (e.g., 90 = quarterly)
-    next_run: datetime
-    enabled: bool = True
-    last_run: Optional[datetime] = None
-    last_result: Optional[str] = None  # drill_id of last execution
-
-    # Target selection strategy
-    target_strategy: str = "random"  # random, rotating, specific
-    specific_targets: Optional[List[str]] = None  # For specific strategy
-
-    def to_dict(self) -> Dict[str, Any]:
-        """Serialize schedule for API response."""
-        return {
-            "schedule_id": self.schedule_id,
-            "tenant_id": self.tenant_id,
-            "drill_type": self.drill_type.value,
-            "severity": self.severity.value,
-            "frequency_days": self.frequency_days,
-            "next_run": self.next_run.isoformat(),
-            "enabled": self.enabled,
-            "last_run": self.last_run.isoformat() if self.last_run else None,
-            "last_result": self.last_result,
-            "target_strategy": self.target_strategy,
-            "specific_targets": self.specific_targets,
-        }
-
-
-def _get_db_engine():
-    """Return a SQLAlchemy engine for the shared PostgreSQL DB, or None if unconfigured."""
-    import os
-    db_url = os.getenv("DATABASE_URL")
-    if not db_url:
-        return None
-    try:
-        from sqlalchemy import create_engine
-        url = db_url.replace("postgresql://", "postgresql+psycopg2://", 1) if db_url.startswith("postgresql://") else db_url
-        return create_engine(url, pool_pre_ping=True, pool_size=2, max_overflow=4)
-    except Exception:
-        import logging
-        logging.getLogger("fsma_recall").warning("Recall DB engine creation failed", exc_info=True)
-        return None
-
-
-def _upsert_drill_row(engine, drill: "RecallDrill") -> None:
-    """Insert or update a recall drill row in fsma.task_queue."""
-    import json as _json
-    try:
-        from sqlalchemy import text as _text
-        payload = _json.dumps(drill.to_dict())
-        with engine.connect() as conn:
-            conn.execute(
-                _text("""
-                    INSERT INTO fsma.task_queue
-                        (task_type, payload, status, tenant_id, created_at,
-                         started_at, completed_at)
-                    VALUES
-                        ('recall_drill', :payload::jsonb, :status, :tenant_id,
-                         :created_at, :started_at, :completed_at)
-                    ON CONFLICT DO NOTHING
-                """),
-                {
-                    "payload": payload,
-                    "status": drill.status.value,
-                    "tenant_id": drill.tenant_id,
-                    "created_at": drill.created_at,
-                    "started_at": drill.started_at,
-                    "completed_at": drill.completed_at,
-                },
-            )
-            conn.commit()
-    except Exception as exc:  # pragma: no cover
-        import logging
-        logging.getLogger("fsma_recall").warning("Failed to persist recall drill: %s", exc)
-
-
-def _update_drill_row(engine, drill: "RecallDrill") -> None:
-    """Update an existing recall drill row by drill_id stored in payload."""
-    import json as _json
-    try:
-        from sqlalchemy import text as _text
-        payload = _json.dumps(drill.to_dict())
-        with engine.connect() as conn:
-            conn.execute(
-                _text("""
-                    UPDATE fsma.task_queue
-                    SET payload       = :payload::jsonb,
-                        status        = :status,
-                        started_at    = :started_at,
-                        completed_at  = :completed_at
-                    WHERE task_type = 'recall_drill'
-                      AND tenant_id  = :tenant_id
-                      AND payload->>'drill_id' = :drill_id
-                """),
-                {
-                    "payload": payload,
-                    "status": drill.status.value,
-                    "tenant_id": drill.tenant_id,
-                    "started_at": drill.started_at,
-                    "completed_at": drill.completed_at,
-                    "drill_id": drill.drill_id,
-                },
-            )
-            conn.commit()
-    except Exception as exc:  # pragma: no cover
-        import logging
-        logging.getLogger("fsma_recall").warning("Failed to update recall drill: %s", exc)
-
-
-def _load_drills_from_db(engine, tenant_id: str, limit: int = 50) -> List[Dict[str, Any]]:
-    """Query drill rows for a tenant from fsma.task_queue."""
-    try:
-        from sqlalchemy import text as _text
-        with engine.connect() as conn:
-            rows = conn.execute(
-                _text("""
-                    SELECT payload
-                    FROM fsma.task_queue
-                    WHERE task_type = 'recall_drill'
-                      AND tenant_id  = :tenant_id
-                    ORDER BY created_at DESC
-                    LIMIT :limit
-                """),
-                {"tenant_id": tenant_id, "limit": limit},
-            ).fetchall()
-        return [row[0] for row in rows]
-    except Exception as exc:  # pragma: no cover
-        import logging
-        logging.getLogger("fsma_recall").warning("Failed to load recall drills: %s", exc)
-        return []
-
-
-def _load_drill_by_id_from_db(engine, tenant_id: str, drill_id: str) -> Optional[Dict[str, Any]]:
-    """Query a single drill row by drill_id from fsma.task_queue."""
-    try:
-        from sqlalchemy import text as _text
-        with engine.connect() as conn:
-            row = conn.execute(
-                _text("""
-                    SELECT payload
-                    FROM fsma.task_queue
-                    WHERE task_type = 'recall_drill'
-                      AND tenant_id  = :tenant_id
-                      AND payload->>'drill_id' = :drill_id
-                    LIMIT 1
-                """),
-                {"tenant_id": tenant_id, "drill_id": drill_id},
-            ).fetchone()
-        return row[0] if row else None
-    except Exception as exc:  # pragma: no cover
-        import logging
-        logging.getLogger("fsma_recall").warning("Failed to load recall drill by id: %s", exc)
-        return None
-
-
-def _dict_to_recall_drill(d: Dict[str, Any]) -> "RecallDrill":
-    """Reconstruct a RecallDrill from its serialized dict (from DB payload)."""
-    drill = RecallDrill(
-        drill_id=d["drill_id"],
-        tenant_id=d["tenant_id"],
-        created_at=datetime.fromisoformat(d["created_at"]),
-        drill_type=RecallType(d["drill_type"]),
-        severity=RecallSeverity(d["severity"]),
-        target_lot=d.get("target_lot"),
-        target_gtin=d.get("target_gtin"),
-        target_facility_gln=d.get("target_facility_gln"),
-        initiated_by=d.get("initiated_by", "system"),
-        reason=d.get("reason", "manual_drill"),
-        description=d.get("description"),
-        status=RecallStatus(d.get("status", "pending")),
-        started_at=datetime.fromisoformat(d["started_at"]) if d.get("started_at") else None,
-        completed_at=datetime.fromisoformat(d["completed_at"]) if d.get("completed_at") else None,
-    )
-    # Skip checksum recalculation side-effects; result is not reconstructed
-    return drill
+from .models import (
+    AffectedFacility,
+    RecallDrill,
+    RecallResult,
+    RecallSeverity,
+    RecallStatus,
+    RecallType,
+    ScheduledDrill,
+    SLAStatus,
+)
+from .persistence import (
+    _get_db_engine,
+    _upsert_drill_row,
+    _update_drill_row,
+    _load_drills_from_db,
+    _load_drill_by_id_from_db,
+    _dict_to_recall_drill,
+)
 
 
 class MockRecallEngine:
@@ -591,7 +168,7 @@ class MockRecallEngine:
                         result = await self._trace_forward(drill.target_lot, tenant_id=drill.tenant_id)
                     else:
                         result = self._trace_forward(drill.target_lot, tenant_id=drill.tenant_id)
-                    
+
                     if result:
                         lots_traced += result.get("lots_count", 0)
                         max_forward = result.get("max_depth", 0)
@@ -618,7 +195,7 @@ class MockRecallEngine:
                         result = await self._trace_backward(drill.target_lot, tenant_id=drill.tenant_id)
                     else:
                         result = self._trace_backward(drill.target_lot, tenant_id=drill.tenant_id)
-                    
+
                     if result:
                         lots_traced += result.get("lots_count", 0)
                         max_backward = result.get("max_depth", 0)
@@ -672,7 +249,7 @@ class MockRecallEngine:
                         export_result = await self._export_fn(drill, facilities, tenant_id=drill.tenant_id)
                     else:
                         export_result = self._export_fn(drill, facilities, tenant_id=drill.tenant_id)
-                    
+
                     csv_path = export_result.get("csv_path")
                     contact_path = export_result.get("contact_path")
                 except Exception as e:
@@ -1130,81 +707,3 @@ class MockRecallEngine:
             )
 
         return recommendations
-
-
-# ============================================================================
-# GLOBAL INSTANCE & CONVENIENCE FUNCTIONS
-# ============================================================================
-
-_recall_engine: Optional[MockRecallEngine] = None
-
-
-def get_recall_engine() -> MockRecallEngine:
-    """Get or create the global MockRecallEngine instance."""
-    global _recall_engine
-    if _recall_engine is None:
-        _recall_engine = MockRecallEngine()
-    return _recall_engine
-
-
-def reset_recall_engine() -> None:
-    """Reset the global engine (for testing)."""
-    global _recall_engine
-    _recall_engine = None
-
-
-async def create_mock_recall(
-    tenant_id: str,
-    drill_type: str = "full_trace",
-    severity: str = "class_ii",
-    target_lot: Optional[str] = None,
-    initiated_by: str = "api",
-) -> Dict[str, Any]:
-    """
-    Convenience function to create and execute a mock recall drill.
-
-    Args:
-        tenant_id: Tenant identifier
-        drill_type: Type of recall (forward_trace, backward_trace, full_trace)
-        severity: FDA classification (class_i, class_ii, class_iii)
-        target_lot: Optional starting lot code
-        initiated_by: User/system identifier
-
-    Returns:
-        Dict with drill_id, status, and result summary
-    """
-    engine = get_recall_engine()
-
-    drill = engine.create_drill(
-        tenant_id=tenant_id,
-        drill_type=RecallType(drill_type),
-        severity=RecallSeverity(severity),
-        target_lot=target_lot,
-        initiated_by=initiated_by,
-        reason="api_request",
-    )
-
-    result = await engine.execute_drill(drill)
-
-    return {
-        "drill_id": drill.drill_id,
-        "status": drill.status.value,
-        "sla_status": drill.sla_status.value,
-        "result": result.get_summary(),
-    }
-
-
-def get_recall_history(
-    tenant_id: str,
-    limit: int = 20,
-) -> List[Dict[str, Any]]:
-    """Get recent recall drill history."""
-    engine = get_recall_engine()
-    drills = engine.get_drill_history(tenant_id, limit=limit)
-    return [d.to_dict() for d in drills]
-
-
-def get_recall_readiness(tenant_id: str) -> Dict[str, Any]:
-    """Get recall readiness report for tenant."""
-    engine = get_recall_engine()
-    return engine.get_readiness_report(tenant_id)

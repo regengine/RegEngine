@@ -27,8 +27,6 @@ Usage:
 
 from __future__ import annotations
 
-import hashlib
-import json
 import logging
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
@@ -36,167 +34,11 @@ from uuid import uuid4
 
 from sqlalchemy import text
 from sqlalchemy.orm import Session
-from sqlalchemy.exc import IntegrityError
+
+from .models import StoreResult, ChainVerification, MerkleVerification
+from .hashing import compute_event_hash, compute_chain_hash, compute_idempotency_key
 
 logger = logging.getLogger("cte-persistence")
-
-
-# ---------------------------------------------------------------------------
-# Data Transfer Objects
-# ---------------------------------------------------------------------------
-
-class CTERecord:
-    """A persisted CTE event with all associated data."""
-
-    __slots__ = (
-        "id", "tenant_id", "event_type", "traceability_lot_code",
-        "product_description", "quantity", "unit_of_measure",
-        "location_gln", "location_name", "event_timestamp",
-        "event_entry_timestamp",
-        "source", "idempotency_key", "sha256_hash", "chain_hash",
-        "validation_status", "ingested_at", "kdes", "alerts",
-    )
-
-    def __init__(self, **kwargs):
-        for slot in self.__slots__:
-            setattr(self, slot, kwargs.get(slot))
-
-
-class ChainEntry:
-    """A single entry in the hash chain ledger."""
-
-    __slots__ = (
-        "id", "tenant_id", "cte_event_id", "sequence_num",
-        "event_hash", "previous_chain_hash", "chain_hash", "created_at",
-    )
-
-    def __init__(self, **kwargs):
-        for slot in self.__slots__:
-            setattr(self, slot, kwargs.get(slot))
-
-
-class StoreResult:
-    """Result of storing a CTE event."""
-
-    __slots__ = (
-        "success", "event_id", "sha256_hash", "chain_hash",
-        "idempotent", "errors", "kde_completeness", "alerts",
-    )
-
-    def __init__(self, **kwargs):
-        for slot in self.__slots__:
-            setattr(self, slot, kwargs.get(slot))
-
-
-class ChainVerification:
-    """Result of verifying a tenant's hash chain."""
-
-    __slots__ = (
-        "valid", "chain_length", "errors", "checked_at",
-    )
-
-    def __init__(self, **kwargs):
-        for slot in self.__slots__:
-            setattr(self, slot, kwargs.get(slot))
-
-
-class MerkleVerification:
-    """Result of Merkle tree verification for a tenant's hash chain."""
-
-    __slots__ = (
-        "valid", "merkle_root", "chain_length", "tree_depth",
-        "errors", "checked_at",
-    )
-
-    def __init__(self, **kwargs):
-        for slot in self.__slots__:
-            setattr(self, slot, kwargs.get(slot))
-
-
-# ---------------------------------------------------------------------------
-# Hashing Utilities
-# ---------------------------------------------------------------------------
-
-def compute_event_hash(
-    event_id: str,
-    event_type: str,
-    tlc: str,
-    product_description: str,
-    quantity: float,
-    unit_of_measure: str,
-    location_gln: Optional[str],
-    location_name: Optional[str],
-    timestamp: str,
-    kdes: Dict[str, Any],
-) -> str:
-    """
-    Compute SHA-256 hash of an event using pipe-delimited canonical form.
-
-    This is the same algorithm as the original webhook_router, now centralized.
-    """
-    canonical = "|".join([
-        event_id,
-        event_type,
-        tlc,
-        product_description,
-        str(quantity),
-        unit_of_measure,
-        location_gln or "",
-        location_name or "",
-        timestamp,
-        json.dumps(kdes, sort_keys=True, default=str),
-    ])
-    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
-
-
-def compute_chain_hash(event_hash: str, previous_chain_hash: Optional[str]) -> str:
-    """
-    Chain this event's hash to the previous chain hash.
-
-    Chain root uses 'GENESIS' as the seed value.
-    """
-    chain_input = f"{previous_chain_hash or 'GENESIS'}|{event_hash}"
-    return hashlib.sha256(chain_input.encode("utf-8")).hexdigest()
-
-
-def compute_idempotency_key(
-    event_type: str,
-    tlc: str,
-    timestamp: str,
-    source: str,
-    kdes: Dict[str, Any],
-    location_gln: Optional[str] = None,
-    location_name: Optional[str] = None,
-) -> str:
-    """
-    Compute a deduplication key from event content (LEGACY path).
-
-    Two identical events from the same source AND location produce the same key,
-    preventing double-ingestion. Location is included because FSMA 204 treats
-    location as critical to event identity — the same product shipped from two
-    different warehouses at the same time are distinct events.
-
-    NOTE: This formula differs from TraceabilityEvent.compute_idempotency_key()
-    in canonical_event.py. The canonical version uses from_facility/to_facility
-    instead of location_gln/location_name, producing different keys for the same
-    real-world event. During dual-write, each table deduplicates independently
-    with its own formula — this is intentional and safe because idempotency keys
-    are scoped per-table (cte_events vs traceability_events).
-    """
-    canonical = json.dumps(
-        {
-            "event_type": event_type,
-            "tlc": tlc,
-            "timestamp": timestamp,
-            "source": source,
-            "location_gln": location_gln or "",
-            "location_name": location_name or "",
-            "kdes": kdes,
-        },
-        sort_keys=True,
-        separators=(",", ":"),
-    )
-    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
 # ---------------------------------------------------------------------------
