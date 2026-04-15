@@ -130,7 +130,7 @@ class WorkflowBase:
                     JOIN fsma.rule_definitions rd
                       ON re.rule_id = rd.rule_id AND re.rule_version = rd.rule_version
                     WHERE re.tenant_id = :tenant_id
-                      AND re.event_id = ANY(:event_ids)
+                      AND re.event_id = ANY(CAST(:event_ids AS uuid[]))
                       AND re.result IN ('fail', 'warn')
                 """),
                 {"tenant_id": tenant_id, "event_ids": event_ids},
@@ -144,7 +144,7 @@ class WorkflowBase:
                     SELECT DISTINCT event_id
                     FROM fsma.rule_evaluations
                     WHERE tenant_id = :tenant_id
-                      AND event_id = ANY(:event_ids)
+                      AND event_id = ANY(CAST(:event_ids AS uuid[]))
                 """),
                 {"tenant_id": tenant_id, "event_ids": event_ids},
             )
@@ -157,7 +157,7 @@ class WorkflowBase:
                 FROM fsma.exception_cases
                 WHERE tenant_id = :tenant_id
                   AND (request_case_id = :case_id
-                       OR linked_event_ids && :event_ids)
+                       OR linked_event_ids && CAST(:event_ids AS uuid[]))
                   AND status NOT IN ('resolved', 'waived')
             """),
             {

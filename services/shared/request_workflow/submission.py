@@ -65,10 +65,12 @@ class SubmissionMixin:
             else:
                 logger.warning(
                     "submission_forced_with_blockers",
-                    case_id=request_case_id,
-                    submitted_by=submitted_by,
-                    blocker_count=defect_check["blocker_count"],
-                    blockers=[b["message"] for b in defect_check["blockers"]],
+                    extra={
+                        "case_id": request_case_id,
+                        "submitted_by": submitted_by,
+                        "blocker_count": defect_check["blocker_count"],
+                        "blockers": [b["message"] for b in defect_check["blockers"]],
+                    },
                 )
 
         # Fetch the package to get its hash and record count
