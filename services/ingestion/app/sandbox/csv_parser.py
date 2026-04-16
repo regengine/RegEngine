@@ -35,6 +35,9 @@ _CSV_COLUMN_MAP = {
     "batch_number": "traceability_lot_code",
     "batch_no": "traceability_lot_code",
     "batch_id": "traceability_lot_code",
+    "lot_#": "traceability_lot_code",
+    "vendor_lot#": "traceability_lot_code",
+    "vendor_lot": "traceability_lot_code",
     # Product
     "product_description": "product_description",
     "product": "product_description",
@@ -42,6 +45,8 @@ _CSV_COLUMN_MAP = {
     "description": "product_description",
     "commodity": "product_description",
     "commodity_variety": "product_description",
+    "commodity/variety": "product_description",
+    "item_desc": "product_description",
     "item": "product_description",
     "item_description": "product_description",
     "sku": "product_description",
@@ -56,6 +61,7 @@ _CSV_COLUMN_MAP = {
     "units": "quantity",
     "weight": "quantity",
     "volume": "quantity",
+    "wt": "quantity",
     # Unit of measure
     "unit_of_measure": "unit_of_measure",
     "unit": "unit_of_measure",
@@ -101,6 +107,8 @@ _KDE_FIELD_ALIASES = {
     "harvested": "harvest_date",
     "date_harvested": "harvest_date",
     "harvest_dt": "harvest_date",
+    "date_picked": "harvest_date",
+    "pick_date": "harvest_date",
     # Cooling
     "cooling_date": "cooling_date",
     "cooled_date": "cooling_date",
@@ -120,12 +128,14 @@ _KDE_FIELD_ALIASES = {
     "shipped_date": "ship_date",
     "date_shipped": "ship_date",
     "shipping_date": "ship_date",
+    "ship_dt": "ship_date",
     # Receive date
     "receive_date": "receive_date",
     "received_date": "receive_date",
     "date_received": "receive_date",
     "receiving_date": "receive_date",
     "receipt_date": "receive_date",
+    "rcvd_dt": "receive_date",
     # Transformation
     "transformation_date": "transformation_date",
     "transform_date": "transformation_date",
@@ -148,6 +158,7 @@ _KDE_FIELD_ALIASES = {
     "destination": "ship_to_location",
     "destination_location": "ship_to_location",
     "dest_location": "ship_to_location",
+    "dest": "ship_to_location",
     "to_facility": "ship_to_location",
     "to_site": "ship_to_location",
     # GLNs
@@ -172,12 +183,14 @@ _KDE_FIELD_ALIASES = {
     "bol": "reference_document",
     "bol_number": "reference_document",
     "bill_of_lading": "reference_document",
+    "bol#": "reference_document",
     "invoice": "reference_document",
     "invoice_number": "reference_document",
     "invoice_no": "reference_document",
     "po": "reference_document",
     "po_number": "reference_document",
     "purchase_order": "reference_document",
+    "po#": "reference_document",
     # Carrier / transport
     "carrier": "carrier",
     "carrier_name": "carrier",
