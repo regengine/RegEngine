@@ -302,8 +302,9 @@ def _parse_csv_to_events(
     """
     reader = csv.DictReader(io.StringIO(csv_text))
     events = []
-    normalizations: List[Dict[str, str]] = []
+    normalizations: List[Dict[str, Any]] = []
     header_aliases_logged: set = set()
+    row_index = 0
 
     for row in reader:
         event: Dict[str, Any] = {"kdes": {}}
@@ -331,6 +332,8 @@ def _parse_csv_to_events(
                         "original": col.strip(),
                         "normalized": mapped,
                         "action_type": "header_alias",
+                        "reasoning": f"Column '{col.strip()}' is a common alias for the FSMA 204 field '{mapped}'. Renaming ensures consistent rule evaluation.",
+                        "event_index": -1,
                     })
                 continue
 
@@ -351,6 +354,8 @@ def _parse_csv_to_events(
                         "original": col.strip(),
                         "normalized": kde_canonical,
                         "action_type": "header_alias",
+                        "reasoning": f"Column '{col.strip()}' maps to the KDE field '{kde_canonical}' required by FSMA 204 for rule evaluation.",
+                        "event_index": -1,
                     })
                 continue
 
@@ -372,9 +377,12 @@ def _parse_csv_to_events(
                     "original": raw_cte,
                     "normalized": canonical_cte,
                     "action_type": "cte_type_normalize",
+                    "reasoning": f"CTE type '{raw_cte}' is not a canonical FSMA 204 type. Resolved to '{canonical_cte}' so CTE-specific rules (21 CFR 1.1310) can be applied.",
+                    "event_index": row_index,
                 })
             event["cte_type"] = canonical_cte
             events.append(event)
+            row_index += 1
 
     # Attach normalizations to be retrieved by caller
     if track_normalizations and events:
@@ -386,15 +394,15 @@ def _parse_csv_to_events(
 def _collect_value_normalizations(
     raw_events: List[Dict[str, Any]],
     canonical_events: List[Dict[str, Any]],
-) -> List[Dict[str, str]]:
+) -> List[Dict[str, Any]]:
     """Compare raw vs canonical events to find value-level normalizations.
 
     Detects UOM standardization, CTE type mapping, and quantity parsing.
     """
-    normalizations: List[Dict[str, str]] = []
+    normalizations: List[Dict[str, Any]] = []
     seen: set = set()
 
-    for raw, canonical in zip(raw_events, canonical_events):
+    for i, (raw, canonical) in enumerate(zip(raw_events, canonical_events)):
         # UOM normalization
         raw_uom = (raw.get("unit_of_measure") or "").strip()
         can_uom = (canonical.get("unit_of_measure") or "").strip()
@@ -407,6 +415,8 @@ def _collect_value_normalizations(
                     "original": raw_uom,
                     "normalized": can_uom,
                     "action_type": "uom_normalize",
+                    "reasoning": f"Unit '{raw_uom}' standardized to '{can_uom}' for consistent mass balance calculations across the supply chain.",
+                    "event_index": i,
                 })
 
         # CTE type normalization
@@ -421,6 +431,8 @@ def _collect_value_normalizations(
                     "original": raw_cte,
                     "normalized": can_cte,
                     "action_type": "cte_type_normalize",
+                    "reasoning": f"CTE type '{raw_cte}' resolved to canonical '{can_cte}' for FSMA 204 rule matching.",
+                    "event_index": i,
                 })
 
     return normalizations

@@ -69,6 +69,8 @@ class NormalizationAction(BaseModel):
     original: str = Field(..., description="Original value from the input")
     normalized: str = Field(..., description="Normalized/canonical value")
     action_type: str = Field(..., description="Type: header_alias, uom_normalize, cte_type_normalize")
+    reasoning: str = Field(default="", description="Human-readable explanation of why this normalization is suggested")
+    event_index: int = Field(default=-1, description="Index of the event this applies to (-1 = document-level, e.g. header aliases)")
 
 
 class SandboxResponse(BaseModel):

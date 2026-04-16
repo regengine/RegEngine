@@ -4,13 +4,14 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import {
   AlertTriangle, CheckCircle2, Loader2, Upload, XCircle,
   ShieldAlert, ChevronDown, ChevronUp, Download, Info, Pencil,
-  Database, FileUp, Clock, Sparkles, ArrowRight, Share2, Check, Link2,
+  Database, FileUp, Clock, Sparkles, Share2, Check, Link2,
   X, File,
 } from 'lucide-react';
 import { usePostHog } from 'posthog-js/react';
 import { SandboxGrid } from './sandbox-grid';
 import { SandboxResultsCTA } from './sandbox-grid/SandboxResultsCTA';
 import { generateComplianceReport } from './sandbox-grid/SandboxPdfReport';
+import { NormalizationReview } from './NormalizationReview';
 import { SANDBOX_SAMPLES, SAMPLE_CSV_DEFAULT } from './sandbox-samples';
 
 interface RuleResult {
@@ -44,6 +45,8 @@ interface NormalizationAction {
   original: string;
   normalized: string;
   action_type: string;
+  reasoning?: string;
+  event_index?: number;
 }
 
 interface SandboxResult {
@@ -244,6 +247,45 @@ export function SandboxUpload() {
   function handleDownloadReport() {
     if (!result) return;
     generateComplianceReport(result);
+  }
+
+  function handleApplyNormalizations(changes: { field: string; original: string; normalized: string; action_type: string }[]) {
+    if (!csvText) return;
+    let updated = csvText;
+
+    for (const change of changes) {
+      if (change.action_type === 'header_alias') {
+        // Replace the column header in the first line
+        const lines = updated.split('\n');
+        if (lines.length > 0) {
+          // Case-insensitive header replacement
+          const headerRegex = new RegExp(
+            `(?<=^|,)\\s*${change.original.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*(?=,|$)`,
+            'i',
+          );
+          lines[0] = lines[0].replace(headerRegex, change.normalized);
+          updated = lines.join('\n');
+        }
+      } else if (change.action_type === 'cte_type_normalize') {
+        // Replace CTE type values in data rows (not the header)
+        const lines = updated.split('\n');
+        for (let i = 1; i < lines.length; i++) {
+          // Replace exact CTE type value in the row
+          const cells = lines[i].split(',');
+          for (let j = 0; j < cells.length; j++) {
+            if (cells[j].trim().toLowerCase() === change.original.toLowerCase()) {
+              cells[j] = cells[j].replace(new RegExp(change.original.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i'), change.normalized);
+            }
+          }
+          lines[i] = cells.join(',');
+        }
+        updated = lines.join('\n');
+      }
+    }
+
+    setCsvText(updated);
+    setResult(null);
+    trackSandbox('NORMALIZATIONS_APPLIED', { count: changes.length });
   }
 
   async function handleShare() {
@@ -522,67 +564,12 @@ export function SandboxUpload() {
               ))}
             </div>
 
-            {/* Normalization Diff */}
+            {/* Normalization Review — accept/reject individual, by event, or bulk */}
             {result.normalizations && result.normalizations.length > 0 && (
-              <div className="rounded-lg border border-[var(--re-brand)]/20 bg-[var(--re-brand)]/5 overflow-hidden">
-                <button
-                  onClick={() => setExpandedEvents((prev) => {
-                    const next = new Set(prev);
-                    if (next.has(-1)) next.delete(-1);
-                    else next.add(-1);
-                    return next;
-                  })}
-                  className="w-full px-4 py-3 flex items-center justify-between cursor-pointer hover:bg-[var(--re-brand)]/10 transition-colors"
-                >
-                  <div className="flex items-center gap-2">
-                    <Sparkles className="w-4 h-4 text-[var(--re-brand)]" />
-                    <span className="text-[0.8rem] font-semibold text-[var(--re-brand)]">
-                      What RegEngine Normalized
-                    </span>
-                    <span className="text-[0.65rem] px-1.5 py-0.5 rounded-full bg-[var(--re-brand)]/15 text-[var(--re-brand)] font-mono">
-                      {result.normalizations.length}
-                    </span>
-                  </div>
-                  {expandedEvents.has(-1)
-                    ? <ChevronUp className="w-4 h-4 text-[var(--re-brand)]" />
-                    : <ChevronDown className="w-4 h-4 text-[var(--re-brand)]" />}
-                </button>
-
-                {expandedEvents.has(-1) && (
-                  <div className="border-t border-[var(--re-brand)]/10 px-4 py-3">
-                    {(() => {
-                      const grouped: Record<string, typeof result.normalizations> = {};
-                      for (const n of result.normalizations!) {
-                        const label = n.action_type === 'header_alias' ? 'Headers Mapped'
-                          : n.action_type === 'uom_normalize' ? 'Units Standardized'
-                          : n.action_type === 'cte_type_normalize' ? 'CTE Types Resolved'
-                          : 'Other';
-                        (grouped[label] ??= []).push(n);
-                      }
-                      return Object.entries(grouped).map(([label, items]) => (
-                        <div key={label} className="mb-3 last:mb-0">
-                          <div className="text-[0.65rem] font-medium text-[var(--re-text-muted)] uppercase tracking-wider mb-1.5">
-                            {label}
-                          </div>
-                          <div className="space-y-1">
-                            {items!.map((n, i) => (
-                              <div key={i} className="flex items-center gap-2 text-[0.7rem]">
-                                <code className="px-1.5 py-0.5 rounded bg-red-500/10 text-red-400 font-mono text-[0.65rem]">
-                                  {n.original}
-                                </code>
-                                <ArrowRight className="w-3 h-3 text-[var(--re-text-disabled)]" />
-                                <code className="px-1.5 py-0.5 rounded bg-green-500/10 text-green-400 font-mono text-[0.65rem]">
-                                  {n.normalized}
-                                </code>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      ));
-                    })()}
-                  </div>
-                )}
-              </div>
+              <NormalizationReview
+                normalizations={result.normalizations}
+                onApply={handleApplyNormalizations}
+              />
             )}
 
             {/* Actions Row */}
