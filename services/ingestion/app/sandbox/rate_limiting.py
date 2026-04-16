@@ -1,31 +1,121 @@
 """
-Sandbox rate limiting — simple in-memory, per-IP.
+Sandbox rate limiting — Redis-backed with in-memory fallback.
 
-Moved from sandbox_router.py.
+Uses a Redis sorted set for sliding-window rate limiting that persists
+across deploys and instances.  Falls back to in-memory if Redis is
+unavailable.
 """
 
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timezone
 from typing import Dict
 
 from fastapi import HTTPException
+from fastapi.responses import JSONResponse
 
+logger = logging.getLogger("sandbox.rate_limit")
+
+# ---------------------------------------------------------------------------
+# Config
+# ---------------------------------------------------------------------------
+
+_SANDBOX_RATE_LIMIT = 30  # requests per window
+_SANDBOX_WINDOW = 60  # seconds
+
+# ---------------------------------------------------------------------------
+# In-memory fallback
+# ---------------------------------------------------------------------------
 
 _rate_buckets: Dict[str, list] = {}
-_SANDBOX_RATE_LIMIT = 30  # requests per minute
-_SANDBOX_WINDOW = 60
 
 
-def _check_sandbox_rate_limit(client_ip: str) -> None:
-    """Simple per-IP rate limit for sandbox endpoint."""
-    now = datetime.now(timezone.utc).timestamp()
+def _check_in_memory(client_ip: str, now: float) -> int:
+    """In-memory sliding window. Returns remaining seconds if limited, else 0."""
     bucket = _rate_buckets.setdefault(client_ip, [])
-    # Prune old entries
     bucket[:] = [t for t in bucket if now - t < _SANDBOX_WINDOW]
     if len(bucket) >= _SANDBOX_RATE_LIMIT:
+        oldest = bucket[0]
+        return int(_SANDBOX_WINDOW - (now - oldest)) or 1
+    bucket.append(now)
+    return 0
+
+
+# ---------------------------------------------------------------------------
+# Redis
+# ---------------------------------------------------------------------------
+
+_redis_client = None
+_redis_failed = False
+
+
+def _get_redis():
+    global _redis_client, _redis_failed
+    if _redis_failed:
+        return None
+    if _redis_client is not None:
+        return _redis_client
+    try:
+        from app.config import get_settings
+        import redis as redis_lib
+        settings = get_settings()
+        _redis_client = redis_lib.from_url(
+            settings.redis_url,
+            decode_responses=True,
+            socket_connect_timeout=2,
+            socket_timeout=2,
+        )
+        _redis_client.ping()
+        return _redis_client
+    except Exception:
+        logger.debug("Redis unavailable for sandbox rate limiting, using in-memory fallback")
+        _redis_failed = True
+        return None
+
+
+def _check_redis(client_ip: str, now: float) -> int:
+    """Redis sorted-set sliding window. Returns remaining seconds if limited, else 0."""
+    r = _get_redis()
+    if r is None:
+        return _check_in_memory(client_ip, now)
+
+    key = f"sandbox:rate:{client_ip}"
+    try:
+        pipe = r.pipeline()
+        pipe.zremrangebyscore(key, 0, now - _SANDBOX_WINDOW)
+        pipe.zcard(key)
+        pipe.execute()
+
+        count = r.zcard(key)
+        if count >= _SANDBOX_RATE_LIMIT:
+            # Find when the oldest entry expires
+            oldest = r.zrange(key, 0, 0, withscores=True)
+            if oldest:
+                remaining = int(_SANDBOX_WINDOW - (now - oldest[0][1]))
+                return max(remaining, 1)
+            return 1
+
+        r.zadd(key, {f"{now}": now})
+        r.expire(key, _SANDBOX_WINDOW + 1)
+        return 0
+    except Exception:
+        logger.debug("Redis error in rate limit check, falling back to in-memory")
+        return _check_in_memory(client_ip, now)
+
+
+# ---------------------------------------------------------------------------
+# Public API
+# ---------------------------------------------------------------------------
+
+def _check_sandbox_rate_limit(client_ip: str) -> None:
+    """Check rate limit. Raises HTTPException with Retry-After header on 429."""
+    now = datetime.now(timezone.utc).timestamp()
+    retry_after = _check_redis(client_ip, now)
+
+    if retry_after > 0:
         raise HTTPException(
             status_code=429,
-            detail="Sandbox rate limit exceeded. Try again in a minute.",
+            detail="Sandbox rate limit exceeded. Try again shortly.",
+            headers={"Retry-After": str(retry_after)},
         )
-    bucket.append(now)

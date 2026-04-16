@@ -136,6 +136,7 @@ export function SandboxGrid({ initialCsv, initialResult, onBack }: SandboxGridPr
   // Evaluation state
   const [result, setResult] = useState<SandboxResult>(initialResult);
   const [isEvaluating, setIsEvaluating] = useState(false);
+  const [rateLimitMsg, setRateLimitMsg] = useState<string | null>(null);
 
   // Editing state
   const [editingCell, setEditingCell] = useState<{ row: number; col: number } | null>(null);
@@ -243,7 +244,18 @@ export function SandboxGrid({ initialCsv, initialResult, onBack }: SandboxGridPr
       // Discard if a newer evaluation has already been launched
       if (gen !== evalGenRef.current) return;
 
+      if (res.status === 429) {
+        const retryAfter = parseInt(res.headers.get('Retry-After') || '60', 10);
+        setRateLimitMsg(`Rate limit reached. Auto-retrying in ${retryAfter}s...`);
+        setTimeout(() => {
+          setRateLimitMsg(null);
+          scheduleReEval(history.data);
+        }, retryAfter * 1000);
+        return;
+      }
+
       if (res.ok) {
+        setRateLimitMsg(null);
         const data: SandboxResult = await res.json();
         setResult(data);
 
@@ -566,6 +578,7 @@ export function SandboxGrid({ initialCsv, initialResult, onBack }: SandboxGridPr
         canUndo={history.canUndo}
         canRedo={history.canRedo}
         isEvaluating={isEvaluating}
+        rateLimitMsg={rateLimitMsg}
         showTrace={showTrace}
         onUndo={history.undo}
         onRedo={history.redo}

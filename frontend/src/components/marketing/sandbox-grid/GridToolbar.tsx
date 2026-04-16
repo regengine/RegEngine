@@ -2,7 +2,7 @@
 
 import {
   Undo2, Redo2, Paintbrush, Download, ShieldCheck, ShieldAlert,
-  ArrowLeft, Loader2, GitBranch,
+  ArrowLeft, Loader2, GitBranch, Clock,
 } from 'lucide-react';
 
 interface GridToolbarProps {
@@ -11,6 +11,7 @@ interface GridToolbarProps {
   canUndo: boolean;
   canRedo: boolean;
   isEvaluating: boolean;
+  rateLimitMsg?: string | null;
   showTrace: boolean;
   onUndo: () => void;
   onRedo: () => void;
@@ -26,6 +27,7 @@ export function GridToolbar({
   canUndo,
   canRedo,
   isEvaluating,
+  rateLimitMsg,
   showTrace,
   onUndo,
   onRedo,
@@ -74,6 +76,13 @@ export function GridToolbar({
 
           {isEvaluating && (
             <Loader2 className="w-3.5 h-3.5 text-[var(--re-brand)] animate-spin" />
+          )}
+
+          {rateLimitMsg && (
+            <div className="flex items-center gap-1 text-[0.6rem] text-amber-400">
+              <Clock className="w-3 h-3" />
+              {rateLimitMsg}
+            </div>
           )}
         </div>
       </div>

@@ -68,6 +68,12 @@ async def sandbox_evaluate(payload: SandboxRequest, request: Request) -> Sandbox
     raw_events: List[Dict[str, Any]] = []
 
     if payload.csv:
+        # Enforce sandbox-specific payload size limit (2MB)
+        if len(payload.csv) > 2_000_000:
+            raise HTTPException(
+                status_code=413,
+                detail="CSV text too large for sandbox (max 2MB). Contact us for unlimited evaluation.",
+            )
         try:
             raw_events = _parse_csv_to_events(payload.csv)
         except Exception as e:
@@ -81,9 +87,12 @@ async def sandbox_evaluate(payload: SandboxRequest, request: Request) -> Sandbox
     else:
         raise HTTPException(status_code=400, detail="Provide either 'events' (JSON) or 'csv' (raw CSV text)")
 
-    # Cap at 50 events per request
-    if len(raw_events) > 50:
-        raise HTTPException(status_code=400, detail="Maximum 50 events per sandbox request")
+    # Cap at 500 events per request
+    if len(raw_events) > 500:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Your file has {len(raw_events)} events. Sandbox evaluates up to 500. Contact us for unlimited evaluation.",
+        )
 
     # Detect duplicate lot codes within same CTE type
     dup_warnings_by_index = _detect_duplicate_lots(raw_events)

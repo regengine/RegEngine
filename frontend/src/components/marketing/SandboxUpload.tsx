@@ -1,10 +1,10 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import {
   AlertTriangle, CheckCircle2, Loader2, Upload, XCircle,
   ShieldAlert, ChevronDown, ChevronUp, Download, Info, Pencil,
-  Database,
+  Database, FileUp, Clock,
 } from 'lucide-react';
 import { usePostHog } from 'posthog-js/react';
 import { SandboxGrid } from './sandbox-grid';
@@ -58,8 +58,48 @@ export function SandboxUpload() {
   const [expandedEvents, setExpandedEvents] = useState<Set<number>>(new Set());
   const [showGrid, setShowGrid] = useState(false);
   const [sampleMenuOpen, setSampleMenuOpen] = useState(false);
+  const [isDragOver, setIsDragOver] = useState(false);
+  const [rateLimitedUntil, setRateLimitedUntil] = useState<number | null>(null);
+  const [rateLimitCountdown, setRateLimitCountdown] = useState(0);
   const sampleMenuRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const posthog = usePostHog();
+
+  const MAX_FILE_SIZE = 2 * 1024 * 1024; // 2MB
+
+  // Rate limit countdown timer
+  useEffect(() => {
+    if (!rateLimitedUntil) return;
+    const tick = () => {
+      const remaining = Math.ceil((rateLimitedUntil - Date.now()) / 1000);
+      if (remaining <= 0) {
+        setRateLimitedUntil(null);
+        setRateLimitCountdown(0);
+      } else {
+        setRateLimitCountdown(remaining);
+      }
+    };
+    tick();
+    const interval = setInterval(tick, 1000);
+    return () => clearInterval(interval);
+  }, [rateLimitedUntil]);
+
+  // File drop/pick handler
+  const handleFile = useCallback((file: File) => {
+    if (file.size > MAX_FILE_SIZE) {
+      setError(`File too large (${(file.size / 1024 / 1024).toFixed(1)}MB). Sandbox limit is 2MB.`);
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const text = e.target?.result as string;
+      setCsvText(text);
+      setResult(null);
+      setError(null);
+      trackSandbox('FILE_UPLOAD', { file_name: file.name, file_size: file.size });
+    };
+    reader.readAsText(file);
+  }, []);
 
   // Close sample menu on outside click
   useEffect(() => {
@@ -109,6 +149,13 @@ export function SandboxUpload() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ csv: csvText }),
       });
+
+      if (res.status === 429) {
+        const retryAfter = parseInt(res.headers.get('Retry-After') || '60', 10);
+        setRateLimitedUntil(Date.now() + retryAfter * 1000);
+        setIsLoading(false);
+        return;
+      }
 
       if (!res.ok) {
         const err = await res.json().catch(() => ({ detail: `HTTP ${res.status}` }));
@@ -313,18 +360,49 @@ ${nonCompliantEvents.length > 0 ? `<h2 style="font-size:16px;margin-bottom:12px;
 
         {/* Input */}
         <div className="p-4">
-          <textarea
-            value={csvText}
-            onChange={(e) => { setCsvText(e.target.value); setResult(null); setError(null); }}
-            placeholder="Paste your CSV here — include headers like cte_type, traceability_lot_code, product_description, quantity, unit_of_measure..."
-            rows={6}
-            className="w-full bg-[var(--re-surface-base)] border border-[var(--re-surface-border)] rounded-lg p-3 font-mono text-[0.7rem] text-[var(--re-text-primary)] placeholder:text-[var(--re-text-disabled)] focus:outline-none focus:ring-2 focus:ring-[var(--re-brand)]/30 resize-y"
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".csv,.tsv,.txt"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) handleFile(file);
+              e.target.value = '';
+            }}
           />
+          <div
+            onDragOver={(e) => { e.preventDefault(); setIsDragOver(true); }}
+            onDragLeave={() => setIsDragOver(false)}
+            onDrop={(e) => {
+              e.preventDefault();
+              setIsDragOver(false);
+              const file = e.dataTransfer.files[0];
+              if (file) handleFile(file);
+            }}
+            className="relative"
+          >
+            {isDragOver && (
+              <div className="absolute inset-0 z-10 flex items-center justify-center rounded-lg border-2 border-dashed border-[var(--re-brand)] bg-[var(--re-brand)]/10 backdrop-blur-sm">
+                <div className="flex items-center gap-2 text-[var(--re-brand)] font-semibold text-sm">
+                  <FileUp className="w-5 h-5" />
+                  Drop your CSV here
+                </div>
+              </div>
+            )}
+            <textarea
+              value={csvText}
+              onChange={(e) => { setCsvText(e.target.value); setResult(null); setError(null); }}
+              placeholder="Paste your CSV here or drag-and-drop a .csv file — include headers like cte_type, traceability_lot_code, product_description, quantity, unit_of_measure..."
+              rows={6}
+              className="w-full bg-[var(--re-surface-base)] border border-[var(--re-surface-border)] rounded-lg p-3 font-mono text-[0.7rem] text-[var(--re-text-primary)] placeholder:text-[var(--re-text-disabled)] focus:outline-none focus:ring-2 focus:ring-[var(--re-brand)]/30 resize-y"
+            />
+          </div>
 
           <div className="flex items-center gap-3 mt-3">
             <button
               onClick={evaluate}
-              disabled={isLoading || !csvText.trim()}
+              disabled={isLoading || !csvText.trim() || !!rateLimitedUntil}
               className="inline-flex items-center gap-2 bg-[var(--re-brand)] text-white px-5 py-2 rounded-lg text-[0.8rem] font-semibold transition-all hover:bg-[var(--re-brand-dark)] disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isLoading ? (
@@ -336,11 +414,30 @@ ${nonCompliantEvents.length > 0 ? `<h2 style="font-size:16px;margin-bottom:12px;
                 <>Evaluate Against FSMA 204 Rules</>
               )}
             </button>
-            <span className="text-[0.65rem] text-[var(--re-text-disabled)]">
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="inline-flex items-center gap-1.5 text-[0.75rem] text-[var(--re-text-secondary)] hover:text-[var(--re-text-primary)] transition-colors cursor-pointer"
+            >
+              <FileUp className="w-3.5 h-3.5" />
+              Upload CSV
+            </button>
+            <span className="text-[0.65rem] text-[var(--re-text-disabled)] ml-auto">
               No data stored. Results are ephemeral.
             </span>
           </div>
         </div>
+
+        {/* Rate Limit Warning */}
+        {rateLimitedUntil && (
+          <div className="mx-4 mb-4 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3">
+            <div className="flex items-center gap-2">
+              <Clock className="w-4 h-4 text-amber-400" />
+              <span className="text-[0.75rem] text-amber-300">
+                Evaluation limit reached. Try again in <span className="font-mono font-bold">{rateLimitCountdown}s</span>
+              </span>
+            </div>
+          </div>
+        )}
 
         {/* Error */}
         {error && (
