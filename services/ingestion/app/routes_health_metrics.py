@@ -31,19 +31,24 @@ def health() -> dict[str, str]:
     unavailable.  Monitoring tools can alert on *degraded* without
     treating the service as fully down.
     """
-    settings = get_settings()
-    kafka_result = kafka_health_check(
-        bootstrap_servers=settings.kafka_bootstrap_servers, timeout=3.0,
-    )
-    kafka_status = kafka_result["status"]
-
-    if kafka_status != "available":
-        logger.warning(
-            "ingestion_health_kafka_unavailable: %s",
-            kafka_result.get("error", "unknown"),
+    # Kafka is optional — only check if explicitly configured
+    kafka_servers = _os.getenv("KAFKA_BOOTSTRAP_SERVERS", "")
+    if kafka_servers and kafka_servers not in ("redpanda:9092", "localhost:9092"):
+        settings = get_settings()
+        kafka_result = kafka_health_check(
+            bootstrap_servers=settings.kafka_bootstrap_servers, timeout=3.0,
         )
+        kafka_status = kafka_result["status"]
+        if kafka_status != "available":
+            logger.warning(
+                "ingestion_health_kafka_unavailable: %s",
+                kafka_result.get("error", "unknown"),
+            )
+        overall_status = "healthy" if kafka_status == "available" else "degraded"
+    else:
+        kafka_status = "not_configured"
+        overall_status = "healthy"
 
-    overall_status = "healthy" if kafka_status == "available" else "degraded"
     return {
         "status": overall_status,
         "service": "ingestion-service",
