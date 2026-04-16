@@ -136,3 +136,20 @@ class SandboxTraceRequest(BaseModel):
     tlc: str = Field(..., description="Traceability Lot Code to trace from")
     direction: str = Field(default="both", description="'upstream', 'downstream', or 'both'")
     max_depth: int = Field(default=10, description="Max traversal depth")
+
+
+# ---------------------------------------------------------------------------
+# Share Models
+# ---------------------------------------------------------------------------
+
+class SandboxShareRequest(BaseModel):
+    """Request to share sandbox evaluation results."""
+    csv: str = Field(..., description="Raw CSV text")
+    result: SandboxResponse = Field(..., description="Evaluation result to share")
+
+
+class SandboxShareResponse(BaseModel):
+    """Response after creating a shared result."""
+    share_id: str
+    share_url: str
+    expires_at: str

@@ -13,10 +13,14 @@ No auth required. No data stored. Rate-limited to prevent abuse.
 
 from __future__ import annotations
 
+import hashlib
 import logging
+import secrets
+from datetime import datetime, timezone, timedelta
 from typing import Any, Dict, List
 
 from fastapi import APIRouter, HTTPException, Request
+from sqlalchemy import text
 
 from app.sandbox.csv_parser import (
     _collect_value_normalizations,
@@ -33,6 +37,8 @@ from app.sandbox.models import (
     RuleResultResponse,
     SandboxRequest,
     SandboxResponse,
+    SandboxShareRequest,
+    SandboxShareResponse,
     SandboxTraceRequest,
     TraceGraphResponse,
 )
@@ -245,3 +251,96 @@ async def sandbox_evaluate(payload: SandboxRequest, request: Request) -> Sandbox
 async def sandbox_trace(payload: SandboxTraceRequest, request: Request) -> TraceGraphResponse:
     """Stateless in-memory lot tracing for the sandbox."""
     return await _sandbox_trace_impl(payload, request)
+
+
+# ---------------------------------------------------------------------------
+# Share endpoints
+# ---------------------------------------------------------------------------
+
+# In-memory share rate limiter (10/hour per IP)
+_share_buckets: Dict[str, list] = {}
+_SHARE_RATE_LIMIT = 10
+_SHARE_WINDOW = 3600
+
+
+@router.post(
+    "/share",
+    response_model=SandboxShareResponse,
+    summary="Create a shareable link for sandbox results",
+)
+async def sandbox_share(payload: SandboxShareRequest, request: Request) -> SandboxShareResponse:
+    """Store evaluation results and return a shareable URL."""
+    client_ip = request.client.host if request.client else "unknown"
+
+    # Rate limit shares (10/hour per IP)
+    now = datetime.now(timezone.utc).timestamp()
+    bucket = _share_buckets.setdefault(client_ip, [])
+    bucket[:] = [t for t in bucket if now - t < _SHARE_WINDOW]
+    if len(bucket) >= _SHARE_RATE_LIMIT:
+        raise HTTPException(status_code=429, detail="Share rate limit exceeded. Try again later.")
+    bucket.append(now)
+
+    share_id = secrets.token_urlsafe(12)
+    ip_hash = hashlib.sha256(client_ip.encode()).hexdigest()[:16]
+    expires_at = datetime.now(timezone.utc) + timedelta(days=30)
+
+    try:
+        from shared.database import get_db
+        with get_db() as db:
+            db.execute(
+                text(
+                    "INSERT INTO sandbox_shares (id, csv_text, result_json, ip_hash, expires_at) "
+                    "VALUES (:id, :csv, :result, :ip_hash, :expires_at)"
+                ),
+                {
+                    "id": share_id,
+                    "csv": payload.csv,
+                    "result": payload.result.model_dump_json(),
+                    "ip_hash": ip_hash,
+                    "expires_at": expires_at,
+                },
+            )
+            db.commit()
+    except Exception as e:
+        logger.error("sandbox_share_error", error=str(e))
+        raise HTTPException(status_code=503, detail="Sharing is temporarily unavailable.")
+
+    return SandboxShareResponse(
+        share_id=share_id,
+        share_url=f"/sandbox/results/{share_id}",
+        expires_at=expires_at.isoformat(),
+    )
+
+
+@router.get(
+    "/share/{share_id}",
+    response_model=SandboxResponse,
+    summary="Retrieve shared sandbox results",
+)
+async def sandbox_share_get(share_id: str) -> SandboxResponse:
+    """Retrieve shared evaluation results by ID."""
+    if len(share_id) > 20:
+        raise HTTPException(status_code=400, detail="Invalid share ID")
+
+    try:
+        from shared.database import get_db
+        with get_db() as db:
+            row = db.execute(
+                text(
+                    "UPDATE sandbox_shares SET view_count = view_count + 1 "
+                    "WHERE id = :id AND expires_at > now() "
+                    "RETURNING result_json"
+                ),
+                {"id": share_id},
+            ).fetchone()
+            db.commit()
+    except Exception as e:
+        logger.error("sandbox_share_get_error", error=str(e))
+        raise HTTPException(status_code=503, detail="Share retrieval temporarily unavailable.")
+
+    if not row:
+        raise HTTPException(status_code=404, detail="Shared result not found or expired.")
+
+    import json
+    result_data = row[0] if isinstance(row[0], dict) else json.loads(row[0])
+    return SandboxResponse(**result_data)

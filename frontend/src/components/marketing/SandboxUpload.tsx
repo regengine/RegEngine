@@ -4,7 +4,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import {
   AlertTriangle, CheckCircle2, Loader2, Upload, XCircle,
   ShieldAlert, ChevronDown, ChevronUp, Download, Info, Pencil,
-  Database, FileUp, Clock, Sparkles, ArrowRight,
+  Database, FileUp, Clock, Sparkles, ArrowRight, Share2, Check, Link2,
 } from 'lucide-react';
 import { usePostHog } from 'posthog-js/react';
 import { SandboxGrid } from './sandbox-grid';
@@ -70,6 +70,9 @@ export function SandboxUpload() {
   const [isDragOver, setIsDragOver] = useState(false);
   const [rateLimitedUntil, setRateLimitedUntil] = useState<number | null>(null);
   const [rateLimitCountdown, setRateLimitCountdown] = useState(0);
+  const [shareUrl, setShareUrl] = useState<string | null>(null);
+  const [isSharing, setIsSharing] = useState(false);
+  const [shareCopied, setShareCopied] = useState(false);
   const sampleMenuRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const posthog = usePostHog();
@@ -151,6 +154,7 @@ export function SandboxUpload() {
     setIsLoading(true);
     setError(null);
     setResult(null);
+    setShareUrl(null);
 
     try {
       const res = await fetch('/api/ingestion/api/v1/sandbox/evaluate', {
@@ -205,6 +209,38 @@ export function SandboxUpload() {
   function handleDownloadReport() {
     if (!result) return;
     generateComplianceReport(result);
+  }
+
+  async function handleShare() {
+    if (!result || !csvText.trim()) return;
+    setIsSharing(true);
+    try {
+      const res = await fetch('/api/ingestion/api/v1/sandbox/share', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ csv: csvText, result }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ detail: 'Share failed' }));
+        setError(err.detail || 'Share failed');
+        return;
+      }
+      const data = await res.json();
+      const fullUrl = `${window.location.origin}${data.share_url}`;
+      setShareUrl(fullUrl);
+      trackSandbox('SHARE', { share_id: data.share_id });
+    } catch {
+      setError('Failed to create share link');
+    } finally {
+      setIsSharing(false);
+    }
+  }
+
+  function copyShareUrl() {
+    if (!shareUrl) return;
+    navigator.clipboard.writeText(shareUrl);
+    setShareCopied(true);
+    setTimeout(() => setShareCopied(false), 2000);
   }
 
   return (
@@ -479,13 +515,31 @@ export function SandboxUpload() {
                   Fix Issues in Spreadsheet
                 </button>
               )}
-              <div className="ml-auto">
+              <div className="ml-auto flex items-center gap-2">
+                {shareUrl ? (
+                  <button
+                    onClick={copyShareUrl}
+                    className="inline-flex items-center gap-2 bg-green-500/10 border border-green-500/30 text-green-400 px-4 py-2 rounded-lg text-[0.75rem] font-medium transition-all hover:bg-green-500/20 cursor-pointer"
+                  >
+                    {shareCopied ? <Check className="w-4 h-4" /> : <Link2 className="w-4 h-4" />}
+                    {shareCopied ? 'Copied!' : 'Copy Share Link'}
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleShare}
+                    disabled={isSharing}
+                    className="inline-flex items-center gap-2 bg-white border border-re-border text-re-text-disabled px-4 py-2 rounded-lg text-[0.75rem] font-medium transition-all hover:bg-re-surface-card cursor-pointer disabled:opacity-50"
+                  >
+                    {isSharing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Share2 className="w-4 h-4" />}
+                    {isSharing ? 'Sharing...' : 'Share Results'}
+                  </button>
+                )}
                 <button
                   onClick={() => { trackSandbox('REPORT_DL'); handleDownloadReport(); }}
                   className="inline-flex items-center gap-2 bg-white border border-re-border text-re-text-disabled px-4 py-2 rounded-lg text-[0.75rem] font-medium transition-all hover:bg-re-surface-card cursor-pointer"
                 >
                   <Download className="w-4 h-4" />
-                  Download Compliance Report
+                  PDF Report
                 </button>
               </div>
             </div>
