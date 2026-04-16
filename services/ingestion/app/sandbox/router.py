@@ -87,7 +87,11 @@ async def sandbox_evaluate(payload: SandboxRequest, request: Request) -> Sandbox
                 detail="CSV text too large for sandbox (max 2MB). Contact us for unlimited evaluation.",
             )
         try:
-            raw_events = _parse_csv_to_events(payload.csv, track_normalizations=True)
+            raw_events = _parse_csv_to_events(
+                payload.csv,
+                erp_preset=payload.erp_preset,
+                track_normalizations=True,
+            )
         except Exception as e:
             raise HTTPException(status_code=400, detail=f"CSV parsing error: {str(e)}")
         if not raw_events:

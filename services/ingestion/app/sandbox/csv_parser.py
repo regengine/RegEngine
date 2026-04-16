@@ -287,9 +287,71 @@ _CTE_TYPE_ALIASES = {
 }
 
 
+# ---------------------------------------------------------------------------
+# ERP-specific CSV column presets
+# ---------------------------------------------------------------------------
+
+_ERP_PRESETS: Dict[str, Dict[str, str]] = {
+    "produce_pro": {
+        "item_no": "traceability_lot_code",
+        "item_desc": "product_description",
+        "item_description": "product_description",
+        "trans_type": "cte_type",
+        "trans_date": "timestamp",
+        "whse": "location_name",
+        "warehouse": "location_name",
+        "qty_shipped": "quantity",
+        "qty_received": "quantity",
+        "qty": "quantity",
+        "uom": "unit_of_measure",
+        "vendor_no": "location_name",
+        "vendor_name": "location_name",
+        "customer_no": "location_name",
+        "bol_no": "reference_document",
+        "po_no": "reference_document",
+        "lot_no": "traceability_lot_code",
+    },
+    "sap_b1": {
+        "docnum": "reference_document",
+        "itemcode": "traceability_lot_code",
+        "dscription": "product_description",
+        "quantity": "quantity",
+        "unitMsr": "unit_of_measure",
+        "whscode": "location_name",
+        "shiptocode": "location_name",
+        "docdate": "timestamp",
+        "batchnum": "traceability_lot_code",
+        "cardname": "location_name",
+    },
+    "aptean": {
+        "lot_number": "traceability_lot_code",
+        "item_id": "traceability_lot_code",
+        "item_name": "product_description",
+        "transaction_type": "cte_type",
+        "transaction_date": "timestamp",
+        "facility": "location_name",
+        "qty": "quantity",
+        "unit": "unit_of_measure",
+        "supplier": "location_name",
+        "document_ref": "reference_document",
+    },
+}
+
+
+def get_erp_presets() -> Dict[str, str]:
+    """Return available ERP preset names with display labels."""
+    return {
+        "generic": "Generic / Auto-detect",
+        "produce_pro": "Produce Pro",
+        "sap_b1": "SAP Business One",
+        "aptean": "Aptean (Freshlynx)",
+    }
+
+
 def _parse_csv_to_events(
     csv_text: str,
     *,
+    erp_preset: str | None = None,
     track_normalizations: bool = False,
 ) -> List[Dict[str, Any]]:
     """Parse CSV text into a list of event dicts matching our JSON format.
@@ -300,6 +362,12 @@ def _parse_csv_to_events(
     When track_normalizations=True, also returns normalization actions via
     a side-channel key "__normalizations__" on the first event (list of dicts).
     """
+    # Build column map — start with defaults, merge ERP preset if specified
+    col_map = dict(_CSV_COLUMN_MAP)
+    if erp_preset and erp_preset in _ERP_PRESETS:
+        for alias, canonical in _ERP_PRESETS[erp_preset].items():
+            col_map.setdefault(alias.lower(), canonical)
+
     reader = csv.DictReader(io.StringIO(csv_text))
     events = []
     normalizations: List[Dict[str, Any]] = []
@@ -313,8 +381,8 @@ def _parse_csv_to_events(
                 continue
             col_lower = col.strip().lower().replace(" ", "_")
 
-            # 1. Check top-level field map
-            mapped = _CSV_COLUMN_MAP.get(col_lower)
+            # 1. Check top-level field map (includes ERP preset aliases)
+            mapped = col_map.get(col_lower)
             if mapped:
                 if mapped == "quantity":
                     try:

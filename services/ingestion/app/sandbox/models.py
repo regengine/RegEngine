@@ -33,6 +33,7 @@ class SandboxRequest(BaseModel):
     events: Optional[List[SandboxEvent]] = Field(default=None, description="JSON events")
     csv: Optional[str] = Field(default=None, description="Raw CSV text")
     include_custom_rules: bool = Field(default=False, description="Include demo custom business rules")
+    erp_preset: Optional[str] = Field(default=None, description="ERP column mapping preset (produce_pro, sap_b1, aptean)")
 
 
 class RuleResultResponse(BaseModel):

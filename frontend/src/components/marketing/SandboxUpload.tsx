@@ -80,6 +80,7 @@ export function SandboxUpload() {
   const [shareCopied, setShareCopied] = useState(false);
   const [uploadedFiles, setUploadedFiles] = useState<{ name: string; lines: number; content: string }[]>([]);
   const [includeCustomRules, setIncludeCustomRules] = useState(false);
+  const [erpPreset, setErpPreset] = useState<string>('');
   const [leadGateOpen, setLeadGateOpen] = useState(false);
   const [leadGateAction, setLeadGateAction] = useState<'pdf' | 'share' | null>(null);
   const sampleMenuRef = useRef<HTMLDivElement>(null);
@@ -201,7 +202,11 @@ export function SandboxUpload() {
       const res = await fetch('/api/ingestion/api/v1/sandbox/evaluate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ csv: csvText, include_custom_rules: includeCustomRules }),
+        body: JSON.stringify({
+          csv: csvText,
+          include_custom_rules: includeCustomRules,
+          ...(erpPreset ? { erp_preset: erpPreset } : {}),
+        }),
       });
 
       if (res.status === 429) {
@@ -501,6 +506,16 @@ export function SandboxUpload() {
               <FileUp className="w-3.5 h-3.5" />
               {uploadedFiles.length > 0 ? 'Add File' : 'Upload CSV'}
             </button>
+            <select
+              value={erpPreset}
+              onChange={(e) => { setErpPreset(e.target.value); setResult(null); }}
+              className="text-[0.7rem] bg-[var(--re-surface-base)] border border-[var(--re-surface-border)] rounded px-2 py-1 text-[var(--re-text-secondary)] cursor-pointer"
+            >
+              <option value="">Auto-detect columns</option>
+              <option value="produce_pro">Produce Pro</option>
+              <option value="sap_b1">SAP Business One</option>
+              <option value="aptean">Aptean (Freshlynx)</option>
+            </select>
             <label className="inline-flex items-center gap-1.5 text-[0.7rem] text-[var(--re-text-secondary)] cursor-pointer select-none">
               <input
                 type="checkbox"
