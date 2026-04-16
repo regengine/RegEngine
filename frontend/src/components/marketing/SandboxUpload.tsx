@@ -1,18 +1,15 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import {
   AlertTriangle, CheckCircle2, Loader2, Upload, XCircle,
   ShieldAlert, ChevronDown, ChevronUp, Download, Info, Pencil,
+  Database,
 } from 'lucide-react';
 import { usePostHog } from 'posthog-js/react';
 import { SandboxGrid } from './sandbox-grid';
 import { SandboxResultsCTA } from './sandbox-grid/SandboxResultsCTA';
-
-const SAMPLE_CSV = `cte_type,traceability_lot_code,product_description,quantity,unit_of_measure,location_name,timestamp,harvest_date,reference_document,cooling_date,ship_date,ship_from_location,ship_to_location,tlc_source_reference,receive_date,receiving_location,immediate_previous_source
-harvesting,LOT-2026-001,Romaine Lettuce,2000,lbs,Valley Fresh Farms,2026-03-12T08:00:00Z,2026-03-12,,,,,,,,,
-shipping,LOT-2026-001,Romaine Lettuce,2000,lbs,Valley Fresh DC,2026-03-13T06:00:00Z,,BOL-4421,,,Valley Fresh Farms,FreshCo Distribution,Valley Fresh Farms LLC,,,
-receiving,LOT-2026-001,Romaine Lettuce,1900,lbs,FreshCo Distribution,2026-03-13T14:00:00Z,,INV-8832,,,,,,2026-03-13,FreshCo DC East,Valley Fresh Farms LLC`;
+import { SANDBOX_SAMPLES, SAMPLE_CSV_DEFAULT } from './sandbox-samples';
 
 interface RuleResult {
   rule_title: string;
@@ -60,7 +57,22 @@ export function SandboxUpload() {
   const [error, setError] = useState<string | null>(null);
   const [expandedEvents, setExpandedEvents] = useState<Set<number>>(new Set());
   const [showGrid, setShowGrid] = useState(false);
+  const [sampleMenuOpen, setSampleMenuOpen] = useState(false);
+  const sampleMenuRef = useRef<HTMLDivElement>(null);
   const posthog = usePostHog();
+
+  // Close sample menu on outside click
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (sampleMenuRef.current && !sampleMenuRef.current.contains(e.target as Node)) {
+        setSampleMenuOpen(false);
+      }
+    }
+    if (sampleMenuOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [sampleMenuOpen]);
 
   function trackSandbox(event: string, metadata: Record<string, unknown> = {}) {
     posthog.capture(`SANDBOX_${event}`, {
@@ -69,10 +81,20 @@ export function SandboxUpload() {
     });
   }
 
-  function loadSample() {
-    setCsvText(SAMPLE_CSV);
+  function loadSample(sampleId?: string) {
+    if (sampleId) {
+      const sample = SANDBOX_SAMPLES.find((s) => s.id === sampleId);
+      if (sample) {
+        setCsvText(sample.csv);
+        trackSandbox('LOAD_SAMPLE', { sample_id: sample.id, cte_type: sample.cteType, mess_level: sample.messLevel });
+      }
+    } else {
+      setCsvText(SAMPLE_CSV_DEFAULT);
+      trackSandbox('LOAD_SAMPLE', { sample_id: 'default' });
+    }
     setResult(null);
     setError(null);
+    setSampleMenuOpen(false);
   }
 
   async function evaluate() {
@@ -222,12 +244,55 @@ ${nonCompliantEvents.length > 0 ? `<h2 style="font-size:16px;margin-bottom:12px;
               Try Your Own Data
             </span>
           </div>
-          <button
-            onClick={loadSample}
-            className="text-[0.7rem] text-[var(--re-brand)] hover:underline cursor-pointer"
-          >
-            Load sample CSV
-          </button>
+          <div className="relative" ref={sampleMenuRef}>
+            <button
+              onClick={() => setSampleMenuOpen(!sampleMenuOpen)}
+              className="inline-flex items-center gap-1.5 text-[0.7rem] text-[var(--re-brand)] hover:underline cursor-pointer"
+            >
+              <Database className="w-3 h-3" />
+              Load sample data
+              <ChevronDown className={`w-3 h-3 transition-transform ${sampleMenuOpen ? 'rotate-180' : ''}`} />
+            </button>
+
+            {sampleMenuOpen && (
+              <div className="absolute right-0 top-full mt-1 w-80 bg-[var(--re-surface-card)] border border-[var(--re-surface-border)] rounded-lg shadow-xl z-50 overflow-hidden">
+                <div className="px-3 py-2 border-b border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)]">
+                  <span className="text-[0.65rem] font-medium text-[var(--re-text-muted)] uppercase tracking-wider">
+                    Choose a vendor scenario
+                  </span>
+                </div>
+                <div className="max-h-72 overflow-y-auto">
+                  {SANDBOX_SAMPLES.map((sample) => (
+                    <button
+                      key={sample.id}
+                      onClick={() => loadSample(sample.id)}
+                      className="w-full text-left px-3 py-2.5 hover:bg-[var(--re-surface-elevated)] transition-colors border-b border-[var(--re-surface-border)] last:border-b-0 cursor-pointer"
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-[0.75rem] font-medium text-[var(--re-text-primary)]">
+                          {sample.label}
+                        </span>
+                        <span className={`text-[0.6rem] px-1.5 py-0.5 rounded font-medium ${
+                          sample.messLevel === 'Low' ? 'bg-green-500/10 text-green-400' :
+                          sample.messLevel === 'Low–Medium' ? 'bg-green-500/10 text-green-400' :
+                          sample.messLevel === 'Medium' ? 'bg-yellow-500/10 text-yellow-400' :
+                          sample.messLevel === 'Medium–High' ? 'bg-orange-500/10 text-orange-400' :
+                          sample.messLevel === 'High' ? 'bg-red-500/10 text-red-400' :
+                          sample.messLevel === 'Very High' ? 'bg-red-600/10 text-red-500' :
+                          'bg-indigo-500/10 text-indigo-400'
+                        }`}>
+                          {sample.messLevel}
+                        </span>
+                      </div>
+                      <div className="text-[0.6rem] text-[var(--re-text-muted)] mt-0.5">
+                        {sample.persona} — {sample.messDescription}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Input */}
