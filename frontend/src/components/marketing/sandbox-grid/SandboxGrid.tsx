@@ -14,6 +14,7 @@ import { FixItTooltip } from './FixItTooltip';
 import { MassFillDialog } from './MassFillDialog';
 import { AddEventModal } from './AddEventModal';
 import { GridToolbar } from './GridToolbar';
+import { generateComplianceReport } from './SandboxPdfReport';
 import { TracePanel } from './TracePanel';
 import { SandboxResultsCTA } from './SandboxResultsCTA';
 import { ExportLeadGate } from './ExportLeadGate';
@@ -584,6 +585,7 @@ export function SandboxGrid({ initialCsv, initialResult, onBack }: SandboxGridPr
         onRedo={history.redo}
         onMassFill={() => setMassFillOpen(true)}
         onExportCsv={handleExportCsv}
+        onPdfReport={() => generateComplianceReport(result)}
         onBack={onBack}
         onToggleTrace={() => setShowTrace((v) => !v)}
       />

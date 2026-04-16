@@ -62,6 +62,14 @@ class EventEvaluationResponse(BaseModel):
     all_results: List[RuleResultResponse]
 
 
+class NormalizationAction(BaseModel):
+    """A single normalization action performed on the input data."""
+    field: str = Field(..., description="Canonical field name")
+    original: str = Field(..., description="Original value from the input")
+    normalized: str = Field(..., description="Normalized/canonical value")
+    action_type: str = Field(..., description="Type: header_alias, uom_normalize, cte_type_normalize")
+
+
 class SandboxResponse(BaseModel):
     """Response from sandbox evaluation."""
     total_events: int
@@ -73,6 +81,7 @@ class SandboxResponse(BaseModel):
     blocking_reasons: List[str]
     duplicate_warnings: List[str] = Field(default_factory=list, description="Warnings about duplicate lot codes within same CTE type")
     entity_warnings: List[str] = Field(default_factory=list, description="Warnings about possible entity name mismatches that may need standardization")
+    normalizations: List[NormalizationAction] = Field(default_factory=list, description="Normalizations applied to input data")
     events: List[EventEvaluationResponse]
 
 

@@ -4,11 +4,12 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import {
   AlertTriangle, CheckCircle2, Loader2, Upload, XCircle,
   ShieldAlert, ChevronDown, ChevronUp, Download, Info, Pencil,
-  Database, FileUp, Clock,
+  Database, FileUp, Clock, Sparkles, ArrowRight,
 } from 'lucide-react';
 import { usePostHog } from 'posthog-js/react';
 import { SandboxGrid } from './sandbox-grid';
 import { SandboxResultsCTA } from './sandbox-grid/SandboxResultsCTA';
+import { generateComplianceReport } from './sandbox-grid/SandboxPdfReport';
 import { SANDBOX_SAMPLES, SAMPLE_CSV_DEFAULT } from './sandbox-samples';
 
 interface RuleResult {
@@ -37,6 +38,13 @@ interface EventEvaluation {
   all_results: RuleResult[];
 }
 
+interface NormalizationAction {
+  field: string;
+  original: string;
+  normalized: string;
+  action_type: string;
+}
+
 interface SandboxResult {
   total_events: number;
   compliant_events: number;
@@ -48,6 +56,7 @@ interface SandboxResult {
   events: EventEvaluation[];
   duplicate_warnings?: string[];
   entity_warnings?: string[];
+  normalizations?: NormalizationAction[];
 }
 
 export function SandboxUpload() {
@@ -195,89 +204,7 @@ export function SandboxUpload() {
 
   function handleDownloadReport() {
     if (!result) return;
-    const nonCompliantEvents = result.events.filter((ev) => !ev.compliant);
-    const reportDate = new Date().toLocaleString();
-
-    const nonCompliantHtml = nonCompliantEvents
-      .map(
-        (ev) => `
-      <div style="border:1px solid #e5e7eb;border-radius:8px;padding:16px;margin-bottom:12px;">
-        <h3 style="margin:0 0 8px;font-size:14px;color:#1f2937;">
-          ${ev.traceability_lot_code} &mdash; ${ev.cte_type}
-        </h3>
-        <p style="margin:0 0 8px;font-size:12px;color:#6b7280;">Product: ${ev.product_description}</p>
-        ${ev.all_results
-          .filter((r) => r.result === 'fail')
-          .map(
-            (r) => `
-          <div style="border-left:3px solid #ef4444;padding-left:10px;margin-bottom:8px;">
-            <div style="font-size:12px;font-weight:600;color:#dc2626;">${r.rule_title}</div>
-            ${r.citation ? `<div style="font-size:11px;color:#6b7280;">Citation: ${r.citation}</div>` : ''}
-            ${r.why_failed ? `<div style="font-size:11px;color:#374151;margin-top:2px;">${r.why_failed}</div>` : ''}
-            ${r.remediation ? `<div style="font-size:11px;color:#4b5563;font-style:italic;margin-top:2px;">Remediation: ${r.remediation}</div>` : ''}
-          </div>`
-          )
-          .join('')}
-      </div>`
-      )
-      .join('');
-
-    const blockedHtml = result.submission_blocked
-      ? `<div style="background:#fef2f2;border:2px solid #fca5a5;border-radius:8px;padding:16px;margin-bottom:20px;">
-          <h2 style="margin:0 0 8px;font-size:16px;color:#dc2626;">FDA SUBMISSION BLOCKED</h2>
-          <ul style="margin:0;padding-left:20px;">
-            ${result.blocking_reasons.map((r) => `<li style="font-size:12px;color:#dc2626;margin-bottom:4px;">${r}</li>`).join('')}
-          </ul>
-        </div>`
-      : '';
-
-    const html = `<!DOCTYPE html>
-<html><head><title>RegEngine FSMA 204 Compliance Report</title>
-<style>
-  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 800px; margin: 0 auto; padding: 40px 24px; color: #1f2937; }
-  @media print { body { padding: 20px; } }
-</style>
-</head><body>
-<div style="border-bottom:2px solid #4f46e5;padding-bottom:12px;margin-bottom:24px;">
-  <h1 style="margin:0;font-size:22px;color:#4f46e5;">RegEngine FSMA 204 Compliance Report</h1>
-  <p style="margin:4px 0 0;font-size:12px;color:#6b7280;">Generated: ${reportDate}</p>
-</div>
-
-<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:24px;">
-  <div style="background:#f9fafb;border-radius:8px;padding:12px;text-align:center;">
-    <div style="font-size:24px;font-weight:700;">${result.total_events}</div>
-    <div style="font-size:11px;color:#6b7280;">Total Events</div>
-  </div>
-  <div style="background:#f0fdf4;border-radius:8px;padding:12px;text-align:center;">
-    <div style="font-size:24px;font-weight:700;color:#16a34a;">${result.compliant_events}</div>
-    <div style="font-size:11px;color:#6b7280;">Compliant</div>
-  </div>
-  <div style="background:#fef2f2;border-radius:8px;padding:12px;text-align:center;">
-    <div style="font-size:24px;font-weight:700;color:#dc2626;">${result.non_compliant_events}</div>
-    <div style="font-size:11px;color:#6b7280;">Non-Compliant</div>
-  </div>
-  <div style="background:#fffbeb;border-radius:8px;padding:12px;text-align:center;">
-    <div style="font-size:24px;font-weight:700;color:#d97706;">${result.total_rule_failures}</div>
-    <div style="font-size:11px;color:#6b7280;">Rule Failures</div>
-  </div>
-</div>
-
-${blockedHtml}
-
-${nonCompliantEvents.length > 0 ? `<h2 style="font-size:16px;margin-bottom:12px;">Non-Compliant Events</h2>${nonCompliantHtml}` : ''}
-
-<div style="border-top:1px solid #e5e7eb;margin-top:32px;padding-top:12px;text-align:center;">
-  <p style="font-size:11px;color:#9ca3af;">Generated by RegEngine &mdash; www.regengine.co</p>
-</div>
-</body></html>`;
-
-    const reportWindow = window.open('', '_blank');
-    if (reportWindow) {
-      reportWindow.document.write(html);
-      reportWindow.document.close();
-      reportWindow.focus();
-      setTimeout(() => reportWindow.print(), 300);
-    }
+    generateComplianceReport(result);
   }
 
   return (
@@ -477,6 +404,69 @@ ${nonCompliantEvents.length > 0 ? `<h2 style="font-size:16px;margin-bottom:12px;
                 </div>
               ))}
             </div>
+
+            {/* Normalization Diff */}
+            {result.normalizations && result.normalizations.length > 0 && (
+              <div className="rounded-lg border border-[var(--re-brand)]/20 bg-[var(--re-brand)]/5 overflow-hidden">
+                <button
+                  onClick={() => setExpandedEvents((prev) => {
+                    const next = new Set(prev);
+                    if (next.has(-1)) next.delete(-1);
+                    else next.add(-1);
+                    return next;
+                  })}
+                  className="w-full px-4 py-3 flex items-center justify-between cursor-pointer hover:bg-[var(--re-brand)]/10 transition-colors"
+                >
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-[var(--re-brand)]" />
+                    <span className="text-[0.8rem] font-semibold text-[var(--re-brand)]">
+                      What RegEngine Normalized
+                    </span>
+                    <span className="text-[0.65rem] px-1.5 py-0.5 rounded-full bg-[var(--re-brand)]/15 text-[var(--re-brand)] font-mono">
+                      {result.normalizations.length}
+                    </span>
+                  </div>
+                  {expandedEvents.has(-1)
+                    ? <ChevronUp className="w-4 h-4 text-[var(--re-brand)]" />
+                    : <ChevronDown className="w-4 h-4 text-[var(--re-brand)]" />}
+                </button>
+
+                {expandedEvents.has(-1) && (
+                  <div className="border-t border-[var(--re-brand)]/10 px-4 py-3">
+                    {(() => {
+                      const grouped: Record<string, typeof result.normalizations> = {};
+                      for (const n of result.normalizations!) {
+                        const label = n.action_type === 'header_alias' ? 'Headers Mapped'
+                          : n.action_type === 'uom_normalize' ? 'Units Standardized'
+                          : n.action_type === 'cte_type_normalize' ? 'CTE Types Resolved'
+                          : 'Other';
+                        (grouped[label] ??= []).push(n);
+                      }
+                      return Object.entries(grouped).map(([label, items]) => (
+                        <div key={label} className="mb-3 last:mb-0">
+                          <div className="text-[0.65rem] font-medium text-[var(--re-text-muted)] uppercase tracking-wider mb-1.5">
+                            {label}
+                          </div>
+                          <div className="space-y-1">
+                            {items!.map((n, i) => (
+                              <div key={i} className="flex items-center gap-2 text-[0.7rem]">
+                                <code className="px-1.5 py-0.5 rounded bg-red-500/10 text-red-400 font-mono text-[0.65rem]">
+                                  {n.original}
+                                </code>
+                                <ArrowRight className="w-3 h-3 text-[var(--re-text-disabled)]" />
+                                <code className="px-1.5 py-0.5 rounded bg-green-500/10 text-green-400 font-mono text-[0.65rem]">
+                                  {n.normalized}
+                                </code>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ));
+                    })()}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Actions Row */}
             <div className="flex items-center justify-between">

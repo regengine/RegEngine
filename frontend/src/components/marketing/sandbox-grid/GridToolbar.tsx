@@ -2,7 +2,7 @@
 
 import {
   Undo2, Redo2, Paintbrush, Download, ShieldCheck, ShieldAlert,
-  ArrowLeft, Loader2, GitBranch, Clock,
+  ArrowLeft, Loader2, GitBranch, Clock, FileText,
 } from 'lucide-react';
 
 interface GridToolbarProps {
@@ -17,6 +17,7 @@ interface GridToolbarProps {
   onRedo: () => void;
   onMassFill: () => void;
   onExportCsv: () => void;
+  onPdfReport?: () => void;
   onBack: () => void;
   onToggleTrace: () => void;
 }
@@ -33,6 +34,7 @@ export function GridToolbar({
   onRedo,
   onMassFill,
   onExportCsv,
+  onPdfReport,
   onBack,
   onToggleTrace,
 }: GridToolbarProps) {
@@ -129,6 +131,17 @@ export function GridToolbar({
           <GitBranch className="w-3.5 h-3.5" />
           Trace
         </button>
+
+        {onPdfReport && (
+          <button
+            onClick={onPdfReport}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[0.65rem] font-medium text-[var(--re-text-secondary)] hover:text-[var(--re-text-primary)] hover:bg-[var(--re-surface-base)] transition-all"
+            title="Download branded PDF compliance report"
+          >
+            <FileText className="w-3.5 h-3.5" />
+            PDF Report
+          </button>
+        )}
 
         <button
           onClick={onExportCsv}

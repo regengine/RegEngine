@@ -224,14 +224,23 @@ _KDE_FIELD_ALIASES = {
 _KDE_FIELDS = set(_KDE_FIELD_ALIASES.values())
 
 
-def _parse_csv_to_events(csv_text: str) -> List[Dict[str, Any]]:
+def _parse_csv_to_events(
+    csv_text: str,
+    *,
+    track_normalizations: bool = False,
+) -> List[Dict[str, Any]]:
     """Parse CSV text into a list of event dicts matching our JSON format.
 
     Supports flexible header naming — maps common aliases, abbreviations,
     and spreadsheet conventions to canonical field names.
+
+    When track_normalizations=True, also returns normalization actions via
+    a side-channel key "__normalizations__" on the first event (list of dicts).
     """
     reader = csv.DictReader(io.StringIO(csv_text))
     events = []
+    normalizations: List[Dict[str, str]] = []
+    header_aliases_logged: set = set()
 
     for row in reader:
         event: Dict[str, Any] = {"kdes": {}}
@@ -250,6 +259,16 @@ def _parse_csv_to_events(csv_text: str) -> List[Dict[str, Any]]:
                         event[mapped] = value.strip()
                 else:
                     event[mapped] = value.strip()
+
+                # Track header alias (once per unique alias)
+                if track_normalizations and col_lower != mapped and col_lower not in header_aliases_logged:
+                    header_aliases_logged.add(col_lower)
+                    normalizations.append({
+                        "field": mapped,
+                        "original": col.strip(),
+                        "normalized": mapped,
+                        "action_type": "header_alias",
+                    })
                 continue
 
             # 2. Check KDE alias map → store under canonical KDE name
@@ -260,6 +279,16 @@ def _parse_csv_to_events(csv_text: str) -> List[Dict[str, Any]]:
                 if kde_canonical == "input_traceability_lot_codes" and "," in val:
                     val = [t.strip() for t in val.split(",") if t.strip()]
                 event["kdes"][kde_canonical] = val
+
+                # Track KDE alias (once per unique alias)
+                if track_normalizations and col_lower != kde_canonical and col_lower not in header_aliases_logged:
+                    header_aliases_logged.add(col_lower)
+                    normalizations.append({
+                        "field": kde_canonical,
+                        "original": col.strip(),
+                        "normalized": kde_canonical,
+                        "action_type": "header_alias",
+                    })
                 continue
 
             # 3. Unknown columns go into kdes as-is
@@ -272,7 +301,54 @@ def _parse_csv_to_events(csv_text: str) -> List[Dict[str, Any]]:
         if "cte_type" in event:
             events.append(event)
 
+    # Attach normalizations to be retrieved by caller
+    if track_normalizations and events:
+        events[0]["__normalizations__"] = normalizations
+
     return events
+
+
+def _collect_value_normalizations(
+    raw_events: List[Dict[str, Any]],
+    canonical_events: List[Dict[str, Any]],
+) -> List[Dict[str, str]]:
+    """Compare raw vs canonical events to find value-level normalizations.
+
+    Detects UOM standardization, CTE type mapping, and quantity parsing.
+    """
+    normalizations: List[Dict[str, str]] = []
+    seen: set = set()
+
+    for raw, canonical in zip(raw_events, canonical_events):
+        # UOM normalization
+        raw_uom = (raw.get("unit_of_measure") or "").strip()
+        can_uom = (canonical.get("unit_of_measure") or "").strip()
+        if raw_uom and can_uom and raw_uom != can_uom:
+            key = ("uom", raw_uom)
+            if key not in seen:
+                seen.add(key)
+                normalizations.append({
+                    "field": "unit_of_measure",
+                    "original": raw_uom,
+                    "normalized": can_uom,
+                    "action_type": "uom_normalize",
+                })
+
+        # CTE type normalization
+        raw_cte = (raw.get("cte_type") or "").strip()
+        can_cte = (canonical.get("event_type") or "").strip()
+        if raw_cte and can_cte and raw_cte != can_cte:
+            key = ("cte", raw_cte)
+            if key not in seen:
+                seen.add(key)
+                normalizations.append({
+                    "field": "cte_type",
+                    "original": raw_cte,
+                    "normalized": can_cte,
+                    "action_type": "cte_type_normalize",
+                })
+
+    return normalizations
 
 
 def _normalize_for_rules(event: Dict[str, Any]) -> Dict[str, Any]:

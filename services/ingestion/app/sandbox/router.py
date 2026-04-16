@@ -18,13 +18,18 @@ from typing import Any, Dict, List
 
 from fastapi import APIRouter, HTTPException, Request
 
-from app.sandbox.csv_parser import _normalize_for_rules, _parse_csv_to_events
+from app.sandbox.csv_parser import (
+    _collect_value_normalizations,
+    _normalize_for_rules,
+    _parse_csv_to_events,
+)
 from app.sandbox.evaluators import (
     _evaluate_event_stateless,
     _evaluate_relational_in_memory,
 )
 from app.sandbox.models import (
     EventEvaluationResponse,
+    NormalizationAction,
     RuleResultResponse,
     SandboxRequest,
     SandboxResponse,
@@ -66,6 +71,7 @@ async def sandbox_evaluate(payload: SandboxRequest, request: Request) -> Sandbox
 
     # Parse events from JSON or CSV
     raw_events: List[Dict[str, Any]] = []
+    all_normalizations: List[Dict[str, str]] = []
 
     if payload.csv:
         # Enforce sandbox-specific payload size limit (2MB)
@@ -75,11 +81,14 @@ async def sandbox_evaluate(payload: SandboxRequest, request: Request) -> Sandbox
                 detail="CSV text too large for sandbox (max 2MB). Contact us for unlimited evaluation.",
             )
         try:
-            raw_events = _parse_csv_to_events(payload.csv)
+            raw_events = _parse_csv_to_events(payload.csv, track_normalizations=True)
         except Exception as e:
             raise HTTPException(status_code=400, detail=f"CSV parsing error: {str(e)}")
         if not raw_events:
             raise HTTPException(status_code=400, detail="No valid events found in CSV. Ensure 'cte_type' column exists.")
+
+        # Extract header-level normalizations tracked during parsing
+        all_normalizations = raw_events[0].pop("__normalizations__", [])
 
     elif payload.events:
         for ev in payload.events:
@@ -104,6 +113,9 @@ async def sandbox_evaluate(payload: SandboxRequest, request: Request) -> Sandbox
     all_canonical: List[Dict[str, Any]] = []
     for raw_event in raw_events:
         all_canonical.append(_normalize_for_rules(raw_event))
+
+    # Collect value-level normalizations (UOM, CTE type) by diffing raw vs canonical
+    all_normalizations.extend(_collect_value_normalizations(raw_events, all_canonical))
 
     # Run cross-event relational validation (temporal order, identity, mass balance)
     relational_results = _evaluate_relational_in_memory(all_canonical)
@@ -213,6 +225,9 @@ async def sandbox_evaluate(payload: SandboxRequest, request: Request) -> Sandbox
         blocking_reasons=unique_blocking,
         duplicate_warnings=all_duplicate_warnings,
         entity_warnings=entity_warnings,
+        normalizations=[
+            NormalizationAction(**n) for n in all_normalizations
+        ],
         events=event_results,
     )
 
