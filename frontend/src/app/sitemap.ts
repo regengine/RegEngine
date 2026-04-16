@@ -66,6 +66,37 @@ export default function sitemap(): MetadataRoute.Sitemap {
         { url: `${baseUrl}/blog/fsma-204-cte-kde-guide`, changeFrequency: 'monthly' as const, priority: 0.8 },
     ];
 
+    // Competitor comparison pages
+    const comparePages = [
+        'foodlogiq',
+        'tracegains',
+        'repositrak',
+    ].map((competitor) => ({
+        url: `${baseUrl}/compare/${competitor}`,
+        changeFrequency: 'monthly' as const,
+        priority: 0.8,
+    }));
+
+    // Per-CTE SEO landing pages
+    const ctePages = [
+        'harvesting',
+        'cooling',
+        'initial_packing',
+        'shipping',
+        'receiving',
+        'transformation',
+        'first_land_based_receiving',
+    ].map((cte) => ({
+        url: `${baseUrl}/fsma-204/${cte}`,
+        changeFrequency: 'monthly' as const,
+        priority: 0.8,
+    }));
+
+    // Interactive demo
+    const demoPages = [
+        { url: `${baseUrl}/demo`, changeFrequency: 'monthly' as const, priority: 0.9 },
+    ];
+
     // Resource pages
     const resourcePages = [
         { url: `${baseUrl}/tools`, changeFrequency: 'monthly' as const, priority: 0.8 },
@@ -74,7 +105,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
         { url: `${baseUrl}/docs/fsma-204`, changeFrequency: 'monthly' as const, priority: 0.6 },
     ];
 
-    return [...marketingPages, ...contentPages, ...toolPages, ...resourcePages].map((page) => ({
+    return [...marketingPages, ...contentPages, ...comparePages, ...ctePages, ...demoPages, ...toolPages, ...resourcePages].map((page) => ({
         ...page,
         lastModified: now,
     }));
