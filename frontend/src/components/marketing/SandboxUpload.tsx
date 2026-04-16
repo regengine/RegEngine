@@ -12,6 +12,7 @@ import { SandboxGrid } from './sandbox-grid';
 import { SandboxResultsCTA } from './sandbox-grid/SandboxResultsCTA';
 import { generateComplianceReport } from './sandbox-grid/SandboxPdfReport';
 import { NormalizationReview } from './NormalizationReview';
+import { ExportLeadGate } from './sandbox-grid/ExportLeadGate';
 import { SANDBOX_SAMPLES, SAMPLE_CSV_DEFAULT } from './sandbox-samples';
 
 interface RuleResult {
@@ -79,6 +80,8 @@ export function SandboxUpload() {
   const [shareCopied, setShareCopied] = useState(false);
   const [uploadedFiles, setUploadedFiles] = useState<{ name: string; lines: number; content: string }[]>([]);
   const [includeCustomRules, setIncludeCustomRules] = useState(false);
+  const [leadGateOpen, setLeadGateOpen] = useState(false);
+  const [leadGateAction, setLeadGateAction] = useState<'pdf' | 'share' | null>(null);
   const sampleMenuRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const posthog = usePostHog();
@@ -594,7 +597,7 @@ export function SandboxUpload() {
                   </button>
                 ) : (
                   <button
-                    onClick={handleShare}
+                    onClick={() => { setLeadGateAction('share'); setLeadGateOpen(true); }}
                     disabled={isSharing}
                     className="inline-flex items-center gap-2 bg-white border border-re-border text-re-text-disabled px-4 py-2 rounded-lg text-[0.75rem] font-medium transition-all hover:bg-re-surface-card cursor-pointer disabled:opacity-50"
                   >
@@ -603,7 +606,7 @@ export function SandboxUpload() {
                   </button>
                 )}
                 <button
-                  onClick={() => { trackSandbox('REPORT_DL'); handleDownloadReport(); }}
+                  onClick={() => { setLeadGateAction('pdf'); setLeadGateOpen(true); }}
                   className="inline-flex items-center gap-2 bg-white border border-re-border text-re-text-disabled px-4 py-2 rounded-lg text-[0.75rem] font-medium transition-all hover:bg-re-surface-card cursor-pointer"
                 >
                   <Download className="w-4 h-4" />
@@ -904,6 +907,24 @@ export function SandboxUpload() {
           </div>
         )}
       </div>
+
+      {/* Lead gate for PDF download + share */}
+      <ExportLeadGate
+        open={leadGateOpen}
+        onOpenChange={setLeadGateOpen}
+        onExport={() => {
+          if (leadGateAction === 'pdf') {
+            trackSandbox('REPORT_DL');
+            handleDownloadReport();
+          } else if (leadGateAction === 'share') {
+            handleShare();
+          }
+          setLeadGateAction(null);
+        }}
+        onTrack={trackSandbox}
+        defectCount={result?.non_compliant_events}
+        eventCount={result?.total_events}
+      />
     </div>
   );
 }

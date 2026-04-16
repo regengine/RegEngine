@@ -309,7 +309,7 @@ async def sandbox_share(payload: SandboxShareRequest, request: Request) -> Sandb
 
     return SandboxShareResponse(
         share_id=share_id,
-        share_url=f"/sandbox/results/{share_id}",
+        share_url=f"/sandbox/results/{share_id}?utm_source=sandbox_share&utm_medium=link",
         expires_at=expires_at.isoformat(),
     )
 

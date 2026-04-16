@@ -4,7 +4,8 @@ import {
   AlertTriangle, CheckCircle2, XCircle, ShieldAlert,
   ChevronDown, ChevronUp, Download, Sparkles, ArrowRight, Link2,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { usePostHog } from 'posthog-js/react';
 import { generateComplianceReport } from '@/components/marketing/sandbox-grid/SandboxPdfReport';
 
 // ---------------------------------------------------------------------------
@@ -62,6 +63,7 @@ interface SandboxResult {
 // ---------------------------------------------------------------------------
 
 export function SharedSandboxResult({ result, shareId }: { result: SandboxResult; shareId: string }) {
+  const posthog = usePostHog();
   const [expandedEvents, setExpandedEvents] = useState<Set<number>>(() => {
     const nonCompliant = new Set<number>();
     result.events.forEach((ev) => {
@@ -69,6 +71,16 @@ export function SharedSandboxResult({ result, shareId }: { result: SandboxResult
     });
     return nonCompliant;
   });
+
+  // Track share link views
+  useEffect(() => {
+    posthog.capture('SANDBOX_SHARE_VIEWED', {
+      share_id: shareId,
+      total_events: result.total_events,
+      compliant_events: result.compliant_events,
+      non_compliant_events: result.non_compliant_events,
+    });
+  }, []);  // eslint-disable-line react-hooks/exhaustive-deps
 
   function toggleEvent(index: number) {
     setExpandedEvents((prev) => {
