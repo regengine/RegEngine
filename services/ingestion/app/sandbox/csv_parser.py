@@ -236,6 +236,56 @@ _KDE_FIELD_ALIASES = {
 # Set of canonical KDE field names for quick lookup
 _KDE_FIELDS = set(_KDE_FIELD_ALIASES.values())
 
+# CTE type VALUE aliases — normalize messy CTE type values to canonical names.
+# Customers use all kinds of abbreviations and variations for CTE types.
+_CTE_TYPE_ALIASES = {
+    # Harvesting
+    "harvest": "harvesting",
+    "harvested": "harvesting",
+    "pick": "harvesting",
+    "picked": "harvesting",
+    "h": "harvesting",
+    # Cooling
+    "cool": "cooling",
+    "cooled": "cooling",
+    "pre-cool": "cooling",
+    "precool": "cooling",
+    "c": "cooling",
+    # Initial packing
+    "packing": "initial_packing",
+    "packed": "initial_packing",
+    "pack": "initial_packing",
+    "ip": "initial_packing",
+    # First land-based receiving
+    "flbr": "first_land_based_receiving",
+    "first_receiver": "first_land_based_receiving",
+    "landing": "first_land_based_receiving",
+    "dock": "first_land_based_receiving",
+    # Shipping
+    "ship": "shipping",
+    "shipped": "shipping",
+    "shipment": "shipping",
+    "dispatch": "shipping",
+    "s": "shipping",
+    # Receiving
+    "receive": "receiving",
+    "received": "receiving",
+    "receipt": "receiving",
+    "recv": "receiving",
+    "rcv": "receiving",
+    "r": "receiving",
+    # Transformation
+    "transform": "transformation",
+    "transformed": "transformation",
+    "process": "transformation",
+    "processed": "transformation",
+    "processing": "transformation",
+    "production": "transformation",
+    "mfg": "transformation",
+    "manufacturing": "transformation",
+    "t": "transformation",
+}
+
 
 def _parse_csv_to_events(
     csv_text: str,
@@ -311,7 +361,19 @@ def _parse_csv_to_events(
         if "timestamp" not in event:
             event["timestamp"] = datetime.now(timezone.utc).isoformat()
 
+        # Normalize CTE type value aliases (e.g., "receipt" → "receiving")
         if "cte_type" in event:
+            raw_cte = event["cte_type"]
+            cte_lower = raw_cte.strip().lower().replace(" ", "_").replace("-", "_")
+            canonical_cte = _CTE_TYPE_ALIASES.get(cte_lower, cte_lower)
+            if canonical_cte != cte_lower and track_normalizations:
+                normalizations.append({
+                    "field": "cte_type",
+                    "original": raw_cte,
+                    "normalized": canonical_cte,
+                    "action_type": "cte_type_normalize",
+                })
+            event["cte_type"] = canonical_cte
             events.append(event)
 
     # Attach normalizations to be retrieved by caller
