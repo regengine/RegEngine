@@ -312,6 +312,10 @@ app.include_router(audit_router)
 from app.tool_verification_routes import router as tool_verification_router
 app.include_router(tool_verification_router)
 
+# GDPR right-to-erasure
+from app.erasure_routes import router as erasure_router
+app.include_router(erasure_router)
+
 
 
 # ---------------------------------------------------------------------------

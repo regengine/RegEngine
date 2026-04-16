@@ -44,6 +44,39 @@ def _client() -> BaseClient:
     )
 
 
+def _ensure_bucket_security(client: BaseClient, bucket: str) -> None:
+    """Apply public access block and enforce encryption on a bucket.
+
+    Called after bucket creation to ensure no objects can be made public
+    and all uploads require server-side encryption.
+    """
+    try:
+        client.put_public_access_block(
+            Bucket=bucket,
+            PublicAccessBlockConfiguration={
+                "BlockPublicAcls": True,
+                "IgnorePublicAcls": True,
+                "BlockPublicPolicy": True,
+                "RestrictPublicBuckets": True,
+            },
+        )
+        logger.info("s3_public_access_blocked", bucket=bucket)
+    except (ClientError, BotoCoreError) as exc:
+        # Non-fatal — some S3-compatible stores (MinIO) may not support this
+        logger.warning("s3_public_access_block_failed", bucket=bucket, error=str(exc))
+
+    try:
+        client.put_bucket_encryption(
+            Bucket=bucket,
+            ServerSideEncryptionConfiguration={
+                "Rules": [{"ApplyServerSideEncryptionByDefault": {"SSEAlgorithm": "AES256"}}],
+            },
+        )
+        logger.info("s3_default_encryption_set", bucket=bucket)
+    except (ClientError, BotoCoreError) as exc:
+        logger.warning("s3_default_encryption_failed", bucket=bucket, error=str(exc))
+
+
 def put_json(bucket: str, key: str, payload: Any) -> str:
     """Serialize payload to JSON and upload to S3.
 
@@ -58,13 +91,15 @@ def put_json(bucket: str, key: str, payload: Any) -> str:
         if isinstance(exc, ClientError) and exc.response["Error"]["Code"] == "NoSuchBucket":
             # Auto-create bucket for dev/demo robustness
             try:
-                _client().create_bucket(Bucket=bucket)
-                _client().put_object(Bucket=bucket, Key=key, Body=body, ContentType="application/json", **_SSE)
+                client = _client()
+                client.create_bucket(Bucket=bucket)
+                _ensure_bucket_security(client, bucket)
+                client.put_object(Bucket=bucket, Key=key, Body=body, ContentType="application/json", **_SSE)
                 return f"s3://{bucket}/{key}"
             except Exception as create_exc:
                 logger.error("s3_create_bucket_failed", bucket=bucket, error=str(create_exc))
                 # Fall through to original error raise
-        
+
         logger.error("s3_put_failed", bucket=bucket, key=key, error=str(exc))
         raise HTTPException(
             status_code=500, detail="Failed to store data in S3"
