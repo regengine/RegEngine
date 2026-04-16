@@ -18,10 +18,10 @@ import { Badge } from '@/components/ui/badge';
 
 export const metadata: Metadata = {
     title: 'Why RegEngine | FSMA 204 Compliance Built Different',
-    description: 'API-first, transparent pricing, 48-hour speed to compliance. See how RegEngine outpaces FoodLogiQ, SafetyChain, and legacy competitors.',
+    description: 'API-first, transparent pricing, 48-hour speed to compliance. See how RegEngine outpaces Trustwell, SafetyChain, and legacy competitors.',
     openGraph: {
         title: 'Why RegEngine | FSMA 204 Compliance Built Different',
-        description: 'API-first, transparent pricing, 48-hour speed to compliance. See how RegEngine outpaces FoodLogiQ, SafetyChain, and legacy competitors.',
+        description: 'API-first, transparent pricing, 48-hour speed to compliance. See how RegEngine outpaces Trustwell, SafetyChain, and legacy competitors.',
         url: 'https://regengine.co/why-regengine',
         type: 'website',
     },
@@ -269,7 +269,7 @@ export default function WhyRegEnginePage() {
                                         RegEngine
                                     </th>
                                     <th className="text-center py-4 px-4 font-semibold text-re-text-tertiary">
-                                        FoodLogiQ
+                                        Trustwell
                                     </th>
                                     <th className="text-center py-4 px-4 font-semibold text-re-text-tertiary">
                                         SafetyChain
@@ -500,7 +500,7 @@ HTTP 201
                                     <div className="h-px bg-[var(--re-surface-border)]" />
                                     <div>
                                         <p className="text-2xl font-bold text-re-text-tertiary mb-1">4–6 months</p>
-                                        <p className="text-xs text-re-text-muted">FoodLogiQ, SafetyChain</p>
+                                        <p className="text-xs text-re-text-muted">Trustwell, SafetyChain</p>
                                     </div>
                                     <div>
                                         <p className="text-2xl font-bold text-re-text-tertiary mb-1">3–6 months</p>

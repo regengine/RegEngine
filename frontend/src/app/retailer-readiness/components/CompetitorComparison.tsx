@@ -37,7 +37,7 @@ export default function CompetitorComparison({ revealRef, visible }: CompetitorC
                 }}>
                     <span style={{ fontSize: 12, fontWeight: 600, color: T.heading, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Feature</span>
                     <span style={{ fontSize: 12, color: T.accent, fontWeight: 700 }}>RegEngine</span>
-                    <span style={{ fontSize: 12, fontWeight: 600, color: T.textDim }}>FoodLogiQ</span>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: T.textDim }}>Trustwell</span>
                     <span style={{ fontSize: 12, fontWeight: 600, color: T.textDim }}>TraceLink</span>
                 </div>
                 {COMPETITORS.map((row, i) => (
