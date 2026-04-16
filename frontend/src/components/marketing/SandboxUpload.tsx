@@ -255,37 +255,53 @@ ${nonCompliantEvents.length > 0 ? `<h2 style="font-size:16px;margin-bottom:12px;
             </button>
 
             {sampleMenuOpen && (
-              <div className="absolute right-0 top-full mt-1 w-80 bg-[var(--re-surface-card)] border border-[var(--re-surface-border)] rounded-lg shadow-xl z-50 overflow-hidden">
+              <div className="absolute right-0 top-full mt-1 w-96 bg-[var(--re-surface-card)] border border-[var(--re-surface-border)] rounded-lg shadow-xl z-50 overflow-hidden">
                 <div className="px-3 py-2 border-b border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)]">
                   <span className="text-[0.65rem] font-medium text-[var(--re-text-muted)] uppercase tracking-wider">
-                    Choose a vendor scenario
+                    Choose a vendor scenario — see what RegEngine normalizes
                   </span>
                 </div>
-                <div className="max-h-72 overflow-y-auto">
+                <div className="max-h-96 overflow-y-auto">
                   {SANDBOX_SAMPLES.map((sample) => (
                     <button
                       key={sample.id}
                       onClick={() => loadSample(sample.id)}
-                      className="w-full text-left px-3 py-2.5 hover:bg-[var(--re-surface-elevated)] transition-colors border-b border-[var(--re-surface-border)] last:border-b-0 cursor-pointer"
+                      className="w-full text-left px-3 py-2.5 hover:bg-[var(--re-surface-elevated)] transition-colors border-b border-[var(--re-surface-border)] last:border-b-0 cursor-pointer group"
                     >
-                      <div className="flex items-center justify-between">
+                      <div className="flex items-center justify-between mb-0.5">
                         <span className="text-[0.75rem] font-medium text-[var(--re-text-primary)]">
                           {sample.label}
                         </span>
-                        <span className={`text-[0.6rem] px-1.5 py-0.5 rounded font-medium ${
+                        <span className={`text-[0.6rem] px-1.5 py-0.5 rounded font-medium shrink-0 ml-2 ${
                           sample.messLevel === 'Low' ? 'bg-green-500/10 text-green-400' :
                           sample.messLevel === 'Low–Medium' ? 'bg-green-500/10 text-green-400' :
                           sample.messLevel === 'Medium' ? 'bg-yellow-500/10 text-yellow-400' :
                           sample.messLevel === 'Medium–High' ? 'bg-orange-500/10 text-orange-400' :
                           sample.messLevel === 'High' ? 'bg-red-500/10 text-red-400' :
                           sample.messLevel === 'Very High' ? 'bg-red-600/10 text-red-500' :
+                          sample.messLevel === 'Extreme' ? 'bg-purple-600/10 text-purple-400' :
                           'bg-indigo-500/10 text-indigo-400'
                         }`}>
                           {sample.messLevel}
                         </span>
                       </div>
-                      <div className="text-[0.6rem] text-[var(--re-text-muted)] mt-0.5">
+                      <div className="text-[0.6rem] text-[var(--re-text-muted)]">
                         {sample.persona} — {sample.messDescription}
+                      </div>
+                      <div className="flex flex-wrap gap-1 mt-1.5 opacity-60 group-hover:opacity-100 transition-opacity">
+                        {sample.normalizationHits.slice(0, 3).map((hit, i) => (
+                          <span
+                            key={i}
+                            className="text-[0.55rem] px-1.5 py-0.5 rounded bg-[var(--re-surface-base)] text-[var(--re-text-disabled)] border border-[var(--re-surface-border)]"
+                          >
+                            {hit.split('(')[0].trim()}
+                          </span>
+                        ))}
+                        {sample.normalizationHits.length > 3 && (
+                          <span className="text-[0.55rem] px-1.5 py-0.5 text-[var(--re-text-disabled)]">
+                            +{sample.normalizationHits.length - 3} more
+                          </span>
+                        )}
                       </div>
                     </button>
                   ))}
