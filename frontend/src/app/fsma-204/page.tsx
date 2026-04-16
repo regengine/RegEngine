@@ -169,7 +169,7 @@ export default function FSMA204BusinessGuidePage() {
             <div>
               <p className="font-medium text-[var(--re-text-primary)] mb-1">The deadline moved — the rule didn&apos;t.</p>
               <p className="text-[0.9rem] text-[var(--re-text-secondary)] leading-relaxed">
-                Congress directed FDA not to enforce before July 2028, but retailers like Walmart, Kroger, and Costco are already requiring traceability data from suppliers. Walmart required ASN compliance by August 2025. Kroger required EDI 856 compliance by June 2025. If you sell to a major retailer, your real deadline has already passed.
+                Congress directed FDA not to enforce before July 2028, but retailers like Walmart, Kroger, and Costco are already requiring traceability data from suppliers. Walmart has required ASN compliance since August 2025. Kroger has enforced EDI 856 compliance with chargebacks since June 2025. If you sell to a major retailer, your real deadline has already passed.
               </p>
             </div>
           </div>
