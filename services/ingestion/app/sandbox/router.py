@@ -141,7 +141,9 @@ async def sandbox_evaluate(payload: SandboxRequest, request: Request) -> Sandbox
         total_kde_errors += len(kde_errors)
 
         # Step 2: Stateless per-event rules evaluation
-        summary = _evaluate_event_stateless(canonical)
+        summary = _evaluate_event_stateless(
+            canonical, include_custom=payload.include_custom_rules,
+        )
 
         # Step 3: Merge relational results for this event
         event_id = canonical.get("event_id", "")

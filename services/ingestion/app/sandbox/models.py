@@ -32,6 +32,7 @@ class SandboxRequest(BaseModel):
     """Request body for sandbox evaluation."""
     events: Optional[List[SandboxEvent]] = Field(default=None, description="JSON events")
     csv: Optional[str] = Field(default=None, description="Raw CSV text")
+    include_custom_rules: bool = Field(default=False, description="Include demo custom business rules")
 
 
 class RuleResultResponse(BaseModel):

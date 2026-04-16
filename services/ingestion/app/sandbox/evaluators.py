@@ -29,7 +29,11 @@ from app.sandbox.rule_loader import _SANDBOX_RULES, _get_applicable_rules
 _RELATIONAL_EVAL_TYPES = {"temporal_order", "identity_consistency", "mass_balance"}
 
 
-def _evaluate_event_stateless(event_data: Dict[str, Any]) -> EvaluationSummary:
+def _evaluate_event_stateless(
+    event_data: Dict[str, Any],
+    *,
+    include_custom: bool = False,
+) -> EvaluationSummary:
     """Evaluate an event against all applicable stateless rules (no DB).
 
     Relational rules (temporal_order, identity_consistency, mass_balance) are
@@ -39,7 +43,7 @@ def _evaluate_event_stateless(event_data: Dict[str, Any]) -> EvaluationSummary:
     event_type = event_data.get("event_type", "")
     event_id = event_data.get("event_id", str(uuid4()))
 
-    applicable = _get_applicable_rules(event_type)
+    applicable = _get_applicable_rules(event_type, include_custom=include_custom)
     # Filter out relational rules — they're handled by the batch evaluator
     stateless_rules = [r for r in applicable if r.evaluation_logic.get("type") not in _RELATIONAL_EVAL_TYPES]
 

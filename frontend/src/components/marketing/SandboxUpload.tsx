@@ -5,6 +5,7 @@ import {
   AlertTriangle, CheckCircle2, Loader2, Upload, XCircle,
   ShieldAlert, ChevronDown, ChevronUp, Download, Info, Pencil,
   Database, FileUp, Clock, Sparkles, ArrowRight, Share2, Check, Link2,
+  X, File,
 } from 'lucide-react';
 import { usePostHog } from 'posthog-js/react';
 import { SandboxGrid } from './sandbox-grid';
@@ -73,6 +74,8 @@ export function SandboxUpload() {
   const [shareUrl, setShareUrl] = useState<string | null>(null);
   const [isSharing, setIsSharing] = useState(false);
   const [shareCopied, setShareCopied] = useState(false);
+  const [uploadedFiles, setUploadedFiles] = useState<{ name: string; lines: number; content: string }[]>([]);
+  const [includeCustomRules, setIncludeCustomRules] = useState(false);
   const sampleMenuRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const posthog = usePostHog();
@@ -96,7 +99,27 @@ export function SandboxUpload() {
     return () => clearInterval(interval);
   }, [rateLimitedUntil]);
 
-  // File drop/pick handler
+  // Merge multiple CSV files: use first file's headers, skip headers on subsequent files
+  function mergeCsvFiles(files: { content: string }[]): string {
+    if (files.length === 0) return '';
+    if (files.length === 1) return files[0].content;
+
+    const lines0 = files[0].content.trim().split('\n');
+    const header = lines0[0];
+    const merged = [header];
+
+    for (const f of files) {
+      const lines = f.content.trim().split('\n');
+      // Skip header row if it looks like the same headers
+      const startIdx = lines[0]?.toLowerCase().includes('cte') || lines[0]?.toLowerCase().includes('lot') ? 1 : 0;
+      for (let i = startIdx; i < lines.length; i++) {
+        if (lines[i].trim()) merged.push(lines[i]);
+      }
+    }
+    return merged.join('\n');
+  }
+
+  // File drop/pick handler — supports multiple files
   const handleFile = useCallback((file: File) => {
     if (file.size > MAX_FILE_SIZE) {
       setError(`File too large (${(file.size / 1024 / 1024).toFixed(1)}MB). Sandbox limit is 2MB.`);
@@ -105,7 +128,18 @@ export function SandboxUpload() {
     const reader = new FileReader();
     reader.onload = (e) => {
       const text = e.target?.result as string;
-      setCsvText(text);
+      const lines = text.trim().split('\n').length - 1; // exclude header
+
+      setUploadedFiles((prev) => {
+        if (prev.length >= 5) {
+          setError('Maximum 5 files in sandbox.');
+          return prev;
+        }
+        const next = [...prev, { name: file.name, lines, content: text }];
+        const merged = mergeCsvFiles(next);
+        setCsvText(merged);
+        return next;
+      });
       setResult(null);
       setError(null);
       trackSandbox('FILE_UPLOAD', { file_name: file.name, file_size: file.size });
@@ -146,6 +180,7 @@ export function SandboxUpload() {
     }
     setResult(null);
     setError(null);
+    setUploadedFiles([]);
     setSampleMenuOpen(false);
   }
 
@@ -160,7 +195,7 @@ export function SandboxUpload() {
       const res = await fetch('/api/ingestion/api/v1/sandbox/evaluate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ csv: csvText }),
+        body: JSON.stringify({ csv: csvText, include_custom_rules: includeCustomRules }),
       });
 
       if (res.status === 429) {
@@ -327,10 +362,13 @@ export function SandboxUpload() {
             ref={fileInputRef}
             type="file"
             accept=".csv,.tsv,.txt"
+            multiple
             className="hidden"
             onChange={(e) => {
-              const file = e.target.files?.[0];
-              if (file) handleFile(file);
+              const files = e.target.files;
+              if (files) {
+                for (let i = 0; i < files.length; i++) handleFile(files[i]);
+              }
               e.target.value = '';
             }}
           />
@@ -340,8 +378,8 @@ export function SandboxUpload() {
             onDrop={(e) => {
               e.preventDefault();
               setIsDragOver(false);
-              const file = e.dataTransfer.files[0];
-              if (file) handleFile(file);
+              const files = e.dataTransfer.files;
+              for (let i = 0; i < files.length; i++) handleFile(files[i]);
             }}
             className="relative"
           >
@@ -361,6 +399,40 @@ export function SandboxUpload() {
               className="w-full bg-[var(--re-surface-base)] border border-[var(--re-surface-border)] rounded-lg p-3 font-mono text-[0.7rem] text-[var(--re-text-primary)] placeholder:text-[var(--re-text-disabled)] focus:outline-none focus:ring-2 focus:ring-[var(--re-brand)]/30 resize-y"
             />
           </div>
+
+          {/* Uploaded files strip */}
+          {uploadedFiles.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 mt-2">
+              {uploadedFiles.map((f, i) => (
+                <span
+                  key={i}
+                  className="inline-flex items-center gap-1 px-2 py-1 rounded bg-[var(--re-surface-elevated)] border border-[var(--re-surface-border)] text-[0.6rem] text-[var(--re-text-secondary)]"
+                >
+                  <File className="w-3 h-3" />
+                  {f.name}
+                  <span className="text-[var(--re-text-disabled)]">({f.lines} rows)</span>
+                  <button
+                    onClick={() => {
+                      setUploadedFiles((prev) => {
+                        const next = prev.filter((_, j) => j !== i);
+                        setCsvText(next.length > 0 ? mergeCsvFiles(next) : '');
+                        return next;
+                      });
+                      setResult(null);
+                    }}
+                    className="ml-0.5 text-[var(--re-text-disabled)] hover:text-re-danger transition-colors"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </span>
+              ))}
+              {uploadedFiles.length >= 2 && (
+                <span className="text-[0.6rem] text-[var(--re-text-disabled)] self-center">
+                  {uploadedFiles.reduce((sum, f) => sum + f.lines, 0)} total rows
+                </span>
+              )}
+            </div>
+          )}
 
           <div className="flex items-center gap-3 mt-3">
             <button
@@ -382,8 +454,17 @@ export function SandboxUpload() {
               className="inline-flex items-center gap-1.5 text-[0.75rem] text-[var(--re-text-secondary)] hover:text-[var(--re-text-primary)] transition-colors cursor-pointer"
             >
               <FileUp className="w-3.5 h-3.5" />
-              Upload CSV
+              {uploadedFiles.length > 0 ? 'Add File' : 'Upload CSV'}
             </button>
+            <label className="inline-flex items-center gap-1.5 text-[0.7rem] text-[var(--re-text-secondary)] cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={includeCustomRules}
+                onChange={(e) => { setIncludeCustomRules(e.target.checked); setResult(null); }}
+                className="w-3.5 h-3.5 rounded border-[var(--re-surface-border)] accent-[var(--re-brand)]"
+              />
+              Custom Rules
+            </label>
             <span className="text-[0.65rem] text-[var(--re-text-disabled)] ml-auto">
               No data stored. Results are ephemeral.
             </span>
@@ -649,10 +730,12 @@ export function SandboxUpload() {
                         const passed = ev.all_results.filter((r) => r.result === 'pass');
                         const skipped = ev.all_results.filter((r) => r.result === 'skip');
 
-                        const structuralFailed = failed.filter((r) => !isRelational(r));
+                        const isCustom = (r: RuleResult) => r.category === 'custom_business_rule';
+                        const structuralFailed = failed.filter((r) => !isRelational(r) && !isCustom(r));
                         const relationalFailed = failed.filter((r) => isRelational(r));
-                        const structuralWarned = warned.filter((r) => !isRelational(r));
+                        const structuralWarned = warned.filter((r) => !isRelational(r) && !isCustom(r));
                         const relationalWarned = warned.filter((r) => isRelational(r));
+                        const customResults = [...failed.filter(isCustom), ...warned.filter(isCustom), ...passed.filter(isCustom)];
 
                         const renderRule = (rule: RuleResult, j: number) => (
                           <div
@@ -708,14 +791,28 @@ export function SandboxUpload() {
                               </div>
                             )}
 
+                            {/* Custom business rules */}
+                            {customResults.length > 0 && (
+                              <div className="space-y-1 border-t border-dashed border-[var(--re-surface-border)] pt-2 mt-2">
+                                <span className="text-[0.65rem] font-medium text-purple-400 flex items-center gap-1">
+                                  <Sparkles className="w-3 h-3" />
+                                  Custom Business Rules ({customResults.length}):
+                                </span>
+                                {customResults.map(renderRule)}
+                                <div className="text-[0.55rem] text-[var(--re-text-disabled)] italic mt-1">
+                                  Build your own rules in RegEngine&apos;s rule builder &mdash; temperature thresholds, supplier certifications, and more
+                                </div>
+                              </div>
+                            )}
+
                             {/* Passed rules */}
-                            {passed.length > 0 && (
+                            {passed.filter((r) => !isCustom(r)).length > 0 && (
                               <div className="space-y-1">
                                 <span className="text-[0.65rem] font-medium text-re-brand flex items-center gap-1">
                                   <CheckCircle2 className="w-3 h-3" />
-                                  Passed ({passed.length}):
+                                  Passed ({passed.filter((r) => !isCustom(r)).length}):
                                 </span>
-                                {passed.map(renderRule)}
+                                {passed.filter((r) => !isCustom(r)).map(renderRule)}
                               </div>
                             )}
 
