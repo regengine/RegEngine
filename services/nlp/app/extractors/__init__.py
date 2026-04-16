@@ -1,6 +1,11 @@
 """Deterministic extractor registry for provenance and replay flows."""
 
 from .fsma_extractor import FSMAExtractor
+from .fsma_types import (  # noqa: F401 — backward compat re-exports
+    CTEType, DocumentType, ExtractionConfidence,
+    LineItem, KDE, CTE, FSMAExtractionResult,
+    TOPIC_GRAPH_UPDATE, TOPIC_NEEDS_REVIEW, HITL_CONFIDENCE_THRESHOLD,
+)
 from .llm_extractor import LLMGenerativeExtractor
 
 # Hard-coded registry ensures replay tooling can map framework identifiers to
