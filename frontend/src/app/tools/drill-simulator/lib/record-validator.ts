@@ -7,22 +7,44 @@
 // TYPES & INTERFACES
 // ============================================================================
 
-export interface ParsedRecord {
-  rowIndex: number;
-  eventType?: string;
-  product?: string;
-  lotCode?: string;
-  gtin?: string;
-  locationGLN?: string;
-  sourceGLN?: string;
-  destGLN?: string;
-  timestamp?: string;
-  tlcSource?: string;
-  quantity?: string;
-  unitOfMeasure?: string;
-  referenceDocument?: string;
-  raw: Record<string, string>;
+/**
+ * The KDE (Key Data Element) fields a ParsedRecord may carry. Mapping from
+ * CSV/XLSX headers to these names lives in COLUMN_MAP below; validation code
+ * iterates this list to check completeness.
+ */
+export const PARSED_RECORD_FIELDS = [
+  'eventType',
+  'product',
+  'lotCode',
+  'gtin',
+  'locationGLN',
+  'sourceGLN',
+  'destGLN',
+  'timestamp',
+  'tlcSource',
+  'quantity',
+  'unitOfMeasure',
+  'referenceDocument',
+] as const;
+
+export type ParsedRecordField = typeof PARSED_RECORD_FIELDS[number];
+
+const PARSED_RECORD_FIELD_SET: ReadonlySet<string> = new Set(PARSED_RECORD_FIELDS);
+
+export function isParsedRecordField(field: string): field is ParsedRecordField {
+  return PARSED_RECORD_FIELD_SET.has(field);
 }
+
+/** A KDE field lookup that returns undefined for unknown field names — so
+ *  callers iterating arbitrary field strings don't have to widen to `any`. */
+export function getRecordField(record: ParsedRecord, field: string): string | undefined {
+  return isParsedRecordField(field) ? record[field] : undefined;
+}
+
+export type ParsedRecord = Partial<Record<ParsedRecordField, string>> & {
+  rowIndex: number;
+  raw: Record<string, string>;
+};
 
 export interface ValidationFinding {
   severity: 'critical' | 'major' | 'minor';
@@ -313,8 +335,10 @@ function mapRowToRecord(
 
   Object.entries(headerMap).forEach(([field, header]) => {
     const value = rowData[header]?.trim();
-    if (value) {
-      (record as any)[field] = value;
+    // COLUMN_MAP values are typed as `keyof ParsedRecord`, but headerMap keys
+    // lose that narrowing through Object.entries. Re-narrow via the field set.
+    if (value && isParsedRecordField(field)) {
+      record[field] = value;
     }
   });
 
@@ -384,8 +408,8 @@ export function validateRecords(records: ParsedRecord[], startTime: Date): Valid
 
   allRequiredFields.forEach((field) => {
     const present = records.filter((r) => {
-      const value = (r as any)[field];
-      return value && String(value).trim().length > 0;
+      const value = getRecordField(r, field);
+      return value && value.trim().length > 0;
     }).length;
 
     const missing = records.length - present;
@@ -415,8 +439,8 @@ export function validateRecords(records: ParsedRecord[], startTime: Date): Valid
     if (kde.percentage < 100) {
       const affectedRows = records
         .filter((r) => {
-          const value = (r as any)[kde.field];
-          return !value || String(value).trim().length === 0;
+          const value = getRecordField(r, kde.field);
+          return !value || value.trim().length === 0;
         })
         .map((r) => r.rowIndex);
 
@@ -582,9 +606,10 @@ function validateDataQuality(records: ParsedRecord[]): {
 
   // Check for invalid GLN format (13 digits)
   const invalidGLNRows: number[] = [];
+  const GLN_FIELDS = ['locationGLN', 'sourceGLN', 'destGLN'] as const satisfies readonly ParsedRecordField[];
   records.forEach((record) => {
-    ['locationGLN', 'sourceGLN', 'destGLN'].forEach((field) => {
-      const gln = (record as any)[field];
+    GLN_FIELDS.forEach((field) => {
+      const gln = record[field];
       if (gln && !isValidGLN(gln)) {
         invalidGLNRows.push(record.rowIndex);
       }
