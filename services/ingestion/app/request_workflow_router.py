@@ -30,7 +30,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from app.authz import require_permission, IngestionPrincipal
-from app.tenant_validation import validate_tenant_id
+from app.tenant_validation import validate_tenant_id, resolve_tenant
 from shared.database import get_db_session
 
 logger = logging.getLogger("request-workflow")
@@ -45,12 +45,6 @@ def _get_service(db_session):
     return RequestWorkflow(db_session)
 
 
-def _resolve_tenant(tenant_id: Optional[str], principal: IngestionPrincipal) -> str:
-    tid = tenant_id or principal.tenant_id
-    if not tid:
-        raise HTTPException(status_code=400, detail="Tenant context required")
-    validate_tenant_id(tid)
-    return tid
 
 
 # ---------------------------------------------------------------------------
@@ -111,7 +105,7 @@ async def list_requests(
     principal: IngestionPrincipal = Depends(require_permission("requests.read")),
     db_session=Depends(get_db_session),
 ):
-    tid = _resolve_tenant(tenant_id, principal)
+    tid = resolve_tenant(tenant_id, principal)
     svc = _get_service(db_session)
     cases = svc.get_active_cases(tid)
     return {"tenant_id": tid, "cases": cases, "total": len(cases)}
@@ -129,7 +123,7 @@ async def create_request(
     principal: IngestionPrincipal = Depends(require_permission("requests.write")),
     db_session=Depends(get_db_session),
 ):
-    tid = _resolve_tenant(tenant_id, principal)
+    tid = resolve_tenant(tenant_id, principal)
     svc = _get_service(db_session)
     case_id = svc.create_request_case(
         tenant_id=tid,
@@ -160,7 +154,7 @@ async def check_deadlines(
     principal: IngestionPrincipal = Depends(require_permission("requests.read")),
     db_session=Depends(get_db_session),
 ):
-    tid = _resolve_tenant(tenant_id, principal)
+    tid = resolve_tenant(tenant_id, principal)
     svc = _get_service(db_session)
     cases = svc.check_deadline_status(tid)
     overdue = [c for c in cases if c["urgency"] == "overdue"]
@@ -185,7 +179,7 @@ async def get_request(
     principal: IngestionPrincipal = Depends(require_permission("requests.read")),
     db_session=Depends(get_db_session),
 ):
-    tid = _resolve_tenant(tenant_id, principal)
+    tid = resolve_tenant(tenant_id, principal)
     svc = _get_service(db_session)
     cases = svc.get_active_cases(tid)
     for c in cases:
@@ -205,7 +199,7 @@ async def update_scope(
     principal: IngestionPrincipal = Depends(require_permission("requests.write")),
     db_session=Depends(get_db_session),
 ):
-    tid = _resolve_tenant(tenant_id, principal)
+    tid = resolve_tenant(tenant_id, principal)
     svc = _get_service(db_session)
     svc.update_scope(
         tenant_id=tid,
@@ -228,7 +222,7 @@ async def collect_records(
     principal: IngestionPrincipal = Depends(require_permission("requests.write")),
     db_session=Depends(get_db_session),
 ):
-    tid = _resolve_tenant(tenant_id, principal)
+    tid = resolve_tenant(tenant_id, principal)
     svc = _get_service(db_session)
     records = svc.collect_records(tid, request_case_id)
     return {
@@ -248,7 +242,7 @@ async def run_gap_analysis(
     principal: IngestionPrincipal = Depends(require_permission("requests.write")),
     db_session=Depends(get_db_session),
 ):
-    tid = _resolve_tenant(tenant_id, principal)
+    tid = resolve_tenant(tenant_id, principal)
     svc = _get_service(db_session)
     gaps = svc.run_gap_analysis(tid, request_case_id)
     return {
@@ -270,7 +264,7 @@ async def assemble_package(
     principal: IngestionPrincipal = Depends(require_permission("requests.write")),
     db_session=Depends(get_db_session),
 ):
-    tid = _resolve_tenant(tenant_id, principal)
+    tid = resolve_tenant(tenant_id, principal)
     svc = _get_service(db_session)
     package = svc.assemble_response_package(tid, request_case_id, generated_by)
     return {
@@ -293,7 +287,7 @@ async def add_signoff(
     principal: IngestionPrincipal = Depends(require_permission("requests.write")),
     db_session=Depends(get_db_session),
 ):
-    tid = _resolve_tenant(tenant_id, principal)
+    tid = resolve_tenant(tenant_id, principal)
     svc = _get_service(db_session)
     svc.add_signoff(
         tenant_id=tid,
@@ -317,7 +311,7 @@ async def submit_package(
     principal: IngestionPrincipal = Depends(require_permission("requests.write")),
     db_session=Depends(get_db_session),
 ):
-    tid = _resolve_tenant(tenant_id, principal)
+    tid = resolve_tenant(tenant_id, principal)
     svc = _get_service(db_session)
     try:
         result = svc.submit_package(
@@ -352,7 +346,7 @@ async def create_amendment(
     principal: IngestionPrincipal = Depends(require_permission("requests.write")),
     db_session=Depends(get_db_session),
 ):
-    tid = _resolve_tenant(tenant_id, principal)
+    tid = resolve_tenant(tenant_id, principal)
     svc = _get_service(db_session)
     package = svc.create_amendment(tid, request_case_id, body.generated_by)
     return {
@@ -374,7 +368,7 @@ async def package_history(
     principal: IngestionPrincipal = Depends(require_permission("requests.read")),
     db_session=Depends(get_db_session),
 ):
-    tid = _resolve_tenant(tenant_id, principal)
+    tid = resolve_tenant(tenant_id, principal)
     svc = _get_service(db_session)
     packages = svc.get_package_history(tid, request_case_id)
     return {
@@ -404,7 +398,7 @@ async def check_blockers(
     principal: IngestionPrincipal = Depends(require_permission("requests.read")),
     db_session=Depends(get_db_session),
 ):
-    tid = _resolve_tenant(tenant_id, principal)
+    tid = resolve_tenant(tenant_id, principal)
     svc = _get_service(db_session)
     result = svc.check_blocking_defects(tid, request_case_id)
     return {

@@ -29,7 +29,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import text
 
 from app.authz import require_permission, IngestionPrincipal
-from app.tenant_validation import validate_tenant_id
+from app.tenant_validation import validate_tenant_id, resolve_tenant
 from shared.database import get_db_session
 
 logger = logging.getLogger("auditor-review")
@@ -47,12 +47,6 @@ def _require_db(db_session):
     return db_session
 
 
-def _resolve_tenant(tenant_id: Optional[str], principal: IngestionPrincipal) -> str:
-    tid = tenant_id or principal.tenant_id
-    if not tid:
-        raise HTTPException(status_code=400, detail="Tenant context required")
-    validate_tenant_id(tid)
-    return tid
 
 
 # ---------------------------------------------------------------------------
@@ -73,7 +67,7 @@ async def audit_summary(
     db_session=Depends(get_db_session),
 ):
     db = _require_db(db_session)
-    tid = _resolve_tenant(tenant_id, principal)
+    tid = resolve_tenant(tenant_id, principal)
 
     # Total canonical events
     event_count = db.execute(
@@ -188,7 +182,7 @@ async def audit_events(
     db_session=Depends(get_db_session),
 ):
     db = _require_db(db_session)
-    tid = _resolve_tenant(tenant_id, principal)
+    tid = resolve_tenant(tenant_id, principal)
 
     where = ["e.tenant_id = :tid", "e.status = 'active'"]
     params: Dict[str, Any] = {"tid": tid, "lim": limit, "off": offset}
@@ -275,7 +269,7 @@ async def audit_event_detail(
     db_session=Depends(get_db_session),
 ):
     db = _require_db(db_session)
-    tid = _resolve_tenant(tenant_id, principal)
+    tid = resolve_tenant(tenant_id, principal)
 
     from shared.canonical_persistence import CanonicalEventStore
     store = CanonicalEventStore(db, dual_write=False)
@@ -373,7 +367,7 @@ async def audit_rules(
     db_session=Depends(get_db_session),
 ):
     db = _require_db(db_session)
-    tid = _resolve_tenant(tenant_id, principal)
+    tid = resolve_tenant(tenant_id, principal)
 
     rows = db.execute(
         text("""
@@ -425,7 +419,7 @@ async def audit_exceptions(
     db_session=Depends(get_db_session),
 ):
     db = _require_db(db_session)
-    tid = _resolve_tenant(tenant_id, principal)
+    tid = resolve_tenant(tenant_id, principal)
 
     rows = db.execute(
         text("""
@@ -474,7 +468,7 @@ async def audit_requests(
     db_session=Depends(get_db_session),
 ):
     db = _require_db(db_session)
-    tid = _resolve_tenant(tenant_id, principal)
+    tid = resolve_tenant(tenant_id, principal)
 
     rows = db.execute(
         text("""
@@ -526,7 +520,7 @@ async def audit_chain(
     db_session=Depends(get_db_session),
 ):
     db = _require_db(db_session)
-    tid = _resolve_tenant(tenant_id, principal)
+    tid = resolve_tenant(tenant_id, principal)
 
     from shared.cte_persistence import CTEPersistence
     persistence = CTEPersistence(db)
@@ -554,7 +548,7 @@ async def audit_export_log(
     db_session=Depends(get_db_session),
 ):
     db = _require_db(db_session)
-    tid = _resolve_tenant(tenant_id, principal)
+    tid = resolve_tenant(tenant_id, principal)
 
     rows = db.execute(
         text("""

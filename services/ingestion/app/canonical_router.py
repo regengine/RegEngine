@@ -30,7 +30,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from app.authz import require_permission, IngestionPrincipal
-from app.tenant_validation import validate_tenant_id
+from app.tenant_validation import validate_tenant_id, resolve_tenant
 from shared.canonical_persistence import CanonicalEventStore
 from shared.database import get_db_session
 
@@ -52,12 +52,6 @@ _ALLOWED_WHERE_FRAGMENTS = frozenset({
 })
 
 
-def _resolve_tenant(tenant_id: Optional[str], principal: IngestionPrincipal) -> str:
-    tid = tenant_id or principal.tenant_id
-    if not tid:
-        raise HTTPException(status_code=400, detail="Tenant context required")
-    validate_tenant_id(tid)
-    return tid
 
 
 # ---------------------------------------------------------------------------
@@ -85,7 +79,7 @@ async def list_records(
     if db_session is None:
         raise HTTPException(status_code=503, detail="Database unavailable")
 
-    tid = _resolve_tenant(tenant_id, principal)
+    tid = resolve_tenant(tenant_id, principal)
     from sqlalchemy import text
 
     where_clauses = ["tenant_id = :tid"]
@@ -173,7 +167,7 @@ async def list_ingestion_runs(
     if db_session is None:
         raise HTTPException(status_code=503, detail="Database unavailable")
 
-    tid = _resolve_tenant(tenant_id, principal)
+    tid = resolve_tenant(tenant_id, principal)
     from sqlalchemy import text
 
     where_parts = ["tenant_id = :tid"]
@@ -232,7 +226,7 @@ async def get_ingestion_run(
     if db_session is None:
         raise HTTPException(status_code=503, detail="Database unavailable")
 
-    tid = _resolve_tenant(tenant_id, principal)
+    tid = resolve_tenant(tenant_id, principal)
     from sqlalchemy import text
 
     row = db_session.execute(
@@ -286,7 +280,7 @@ async def get_record(
     if db_session is None:
         raise HTTPException(status_code=503, detail="Database unavailable")
 
-    tid = _resolve_tenant(tenant_id, principal)
+    tid = resolve_tenant(tenant_id, principal)
     from shared.canonical_persistence import CanonicalEventStore
     store = CanonicalEventStore(db_session, dual_write=False)
     event = store.get_event(tid, event_id)
@@ -363,7 +357,7 @@ async def get_record_history(
     if db_session is None:
         raise HTTPException(status_code=503, detail="Database unavailable")
 
-    tid = _resolve_tenant(tenant_id, principal)
+    tid = resolve_tenant(tenant_id, principal)
     chain = _get_amendment_chain(db_session, tid, event_id)
     return {"event_id": event_id, "amendment_chain": chain}
 
@@ -456,7 +450,7 @@ def trace_forward(
 ):
     if db_session is None:
         raise HTTPException(status_code=503, detail="Database unavailable")
-    tid = _resolve_tenant(tenant_id, principal)
+    tid = resolve_tenant(tenant_id, principal)
     db_session.execute(text("SET LOCAL app.tenant_id = :tid"), {"tid": tid})
 
     store = CanonicalEventStore(db_session, dual_write=False)
@@ -495,7 +489,7 @@ def trace_backward(
 ):
     if db_session is None:
         raise HTTPException(status_code=503, detail="Database unavailable")
-    tid = _resolve_tenant(tenant_id, principal)
+    tid = resolve_tenant(tenant_id, principal)
     db_session.execute(text("SET LOCAL app.tenant_id = :tid"), {"tid": tid})
 
     store = CanonicalEventStore(db_session, dual_write=False)

@@ -41,7 +41,7 @@ from sqlalchemy import text
 
 from shared.pagination import PaginationParams
 from app.authz import require_permission, IngestionPrincipal
-from app.tenant_validation import validate_tenant_id
+from app.tenant_validation import validate_tenant_id, resolve_tenant
 from shared.database import get_db_session
 
 logger = logging.getLogger("incident-command")
@@ -57,12 +57,6 @@ _ALLOWED_WHERE_FRAGMENTS = frozenset({
 })
 
 
-def _resolve_tenant(tenant_id: Optional[str], principal: IngestionPrincipal) -> str:
-    tid = tenant_id or principal.tenant_id
-    if not tid:
-        raise HTTPException(status_code=400, detail="Tenant context required")
-    validate_tenant_id(tid)
-    return tid
 
 
 # ---------------------------------------------------------------------------
@@ -122,7 +116,7 @@ async def list_incidents(
     if db_session is None:
         raise HTTPException(status_code=503, detail="Database unavailable")
 
-    tid = _resolve_tenant(tenant_id, principal)
+    tid = resolve_tenant(tenant_id, principal)
 
     # Use JSONB storage in a general-purpose table for incident data
     # This avoids adding another migration — incidents are stored as JSONB
@@ -186,7 +180,7 @@ async def open_incident(
     if db_session is None:
         raise HTTPException(status_code=503, detail="Database unavailable")
 
-    tid = _resolve_tenant(tenant_id, principal)
+    tid = resolve_tenant(tenant_id, principal)
     _ensure_incidents_table(db_session)
 
     incident_id = str(uuid4())
@@ -240,7 +234,7 @@ async def get_incident(
     if db_session is None:
         raise HTTPException(status_code=503, detail="Database unavailable")
 
-    tid = _resolve_tenant(tenant_id, principal)
+    tid = resolve_tenant(tenant_id, principal)
     _ensure_incidents_table(db_session)
 
     row = db_session.execute(
@@ -273,7 +267,7 @@ async def update_status(
     if db_session is None:
         raise HTTPException(status_code=503, detail="Database unavailable")
 
-    tid = _resolve_tenant(tenant_id, principal)
+    tid = resolve_tenant(tenant_id, principal)
     data = _get_incident_data(db_session, incident_id, tid)
 
     data["status"] = body.status
@@ -304,7 +298,7 @@ async def add_action(
     if db_session is None:
         raise HTTPException(status_code=503, detail="Database unavailable")
 
-    tid = _resolve_tenant(tenant_id, principal)
+    tid = resolve_tenant(tenant_id, principal)
     data = _get_incident_data(db_session, incident_id, tid)
 
     action_id = str(uuid4())
@@ -350,7 +344,7 @@ async def update_action(
     if db_session is None:
         raise HTTPException(status_code=503, detail="Database unavailable")
 
-    tid = _resolve_tenant(tenant_id, principal)
+    tid = resolve_tenant(tenant_id, principal)
     data = _get_incident_data(db_session, incident_id, tid)
 
     action = next((a for a in data.get("actions", []) if a["id"] == action_id), None)
@@ -384,7 +378,7 @@ async def post_update(
     if db_session is None:
         raise HTTPException(status_code=503, detail="Database unavailable")
 
-    tid = _resolve_tenant(tenant_id, principal)
+    tid = resolve_tenant(tenant_id, principal)
     data = _get_incident_data(db_session, incident_id, tid)
 
     update_id = str(uuid4())
@@ -414,7 +408,7 @@ async def impact_assessment(
     if db_session is None:
         raise HTTPException(status_code=503, detail="Database unavailable")
 
-    tid = _resolve_tenant(tenant_id, principal)
+    tid = resolve_tenant(tenant_id, principal)
     data = _get_incident_data(db_session, incident_id, tid)
 
     affected_lots = data.get("affected_lots", [])
@@ -486,7 +480,7 @@ async def close_incident(
     if db_session is None:
         raise HTTPException(status_code=503, detail="Database unavailable")
 
-    tid = _resolve_tenant(tenant_id, principal)
+    tid = resolve_tenant(tenant_id, principal)
     data = _get_incident_data(db_session, incident_id, tid)
 
     now = datetime.now(timezone.utc).isoformat()

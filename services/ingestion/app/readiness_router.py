@@ -29,7 +29,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import text
 
 from app.authz import require_permission, IngestionPrincipal
-from app.tenant_validation import validate_tenant_id
+from app.tenant_validation import validate_tenant_id, resolve_tenant
 from shared.database import get_db_session
 
 logger = logging.getLogger("readiness-wizard")
@@ -37,12 +37,6 @@ logger = logging.getLogger("readiness-wizard")
 router = APIRouter(prefix="/api/v1/readiness", tags=["Readiness Wizard"])
 
 
-def _resolve_tenant(tenant_id: Optional[str], principal: IngestionPrincipal) -> str:
-    tid = tenant_id or principal.tenant_id
-    if not tid:
-        raise HTTPException(status_code=400, detail="Tenant context required")
-    validate_tenant_id(tid)
-    return tid
 
 
 # ---------------------------------------------------------------------------
@@ -243,7 +237,7 @@ async def readiness_assessment(
     if db_session is None:
         raise HTTPException(status_code=503, detail="Database unavailable")
 
-    tid = _resolve_tenant(tenant_id, principal)
+    tid = resolve_tenant(tenant_id, principal)
     checklist = _evaluate_checklist(db_session, tid)
     level = _compute_maturity_level(checklist)
     level_info = MATURITY_LEVELS[level]
@@ -283,7 +277,7 @@ async def readiness_checklist(
     if db_session is None:
         raise HTTPException(status_code=503, detail="Database unavailable")
 
-    tid = _resolve_tenant(tenant_id, principal)
+    tid = resolve_tenant(tenant_id, principal)
     checklist = _evaluate_checklist(db_session, tid)
 
     # Group by level
@@ -322,7 +316,7 @@ async def readiness_gaps(
     if db_session is None:
         raise HTTPException(status_code=503, detail="Database unavailable")
 
-    tid = _resolve_tenant(tenant_id, principal)
+    tid = resolve_tenant(tenant_id, principal)
     checklist = _evaluate_checklist(db_session, tid)
     gaps = [item for item in checklist if not item["passed"]]
 

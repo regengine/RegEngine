@@ -26,7 +26,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from app.authz import require_permission, IngestionPrincipal
-from app.tenant_validation import validate_tenant_id
+from app.tenant_validation import validate_tenant_id, resolve_tenant
 from shared.database import get_db_session
 
 logger = logging.getLogger("identity-resolution")
@@ -41,12 +41,6 @@ def _get_service(db_session):
     return IdentityResolutionService(db_session)
 
 
-def _resolve_tenant(tenant_id: Optional[str], principal: IngestionPrincipal) -> str:
-    tid = tenant_id or principal.tenant_id
-    if not tid:
-        raise HTTPException(status_code=400, detail="Tenant context required")
-    validate_tenant_id(tid)
-    return tid
 
 
 # ---------------------------------------------------------------------------
@@ -111,7 +105,7 @@ async def list_entities(
     principal: IngestionPrincipal = Depends(require_permission("identity.read")),
     db_session=Depends(get_db_session),
 ):
-    tid = _resolve_tenant(tenant_id, principal)
+    tid = resolve_tenant(tenant_id, principal)
     svc = _get_service(db_session)
     if search:
         entities = svc.find_potential_matches(tid, search, entity_type=entity_type)
@@ -144,7 +138,7 @@ async def register_entity(
     principal: IngestionPrincipal = Depends(require_permission("identity.write")),
     db_session=Depends(get_db_session),
 ):
-    tid = _resolve_tenant(tenant_id, principal)
+    tid = resolve_tenant(tenant_id, principal)
     svc = _get_service(db_session)
     entity_id = svc.register_entity(
         tenant_id=tid,
@@ -176,7 +170,7 @@ async def get_entity(
     principal: IngestionPrincipal = Depends(require_permission("identity.read")),
     db_session=Depends(get_db_session),
 ):
-    tid = _resolve_tenant(tenant_id, principal)
+    tid = resolve_tenant(tenant_id, principal)
     svc = _get_service(db_session)
     entity = svc.get_entity(tid, entity_id)
     if not entity:
@@ -196,7 +190,7 @@ async def add_alias(
     principal: IngestionPrincipal = Depends(require_permission("identity.write")),
     db_session=Depends(get_db_session),
 ):
-    tid = _resolve_tenant(tenant_id, principal)
+    tid = resolve_tenant(tenant_id, principal)
     svc = _get_service(db_session)
     alias_id = svc.add_alias(
         tenant_id=tid,
@@ -220,7 +214,7 @@ async def lookup_by_alias(
     principal: IngestionPrincipal = Depends(require_permission("identity.read")),
     db_session=Depends(get_db_session),
 ):
-    tid = _resolve_tenant(tenant_id, principal)
+    tid = resolve_tenant(tenant_id, principal)
     svc = _get_service(db_session)
     entities = svc.find_entity_by_alias(tid, alias_value, alias_type)
     return {"tenant_id": tid, "matches": entities, "total": len(entities)}
@@ -238,7 +232,7 @@ async def find_matches(
     principal: IngestionPrincipal = Depends(require_permission("identity.read")),
     db_session=Depends(get_db_session),
 ):
-    tid = _resolve_tenant(tenant_id, principal)
+    tid = resolve_tenant(tenant_id, principal)
     svc = _get_service(db_session)
     matches = svc.find_potential_matches(
         tid, name, entity_type=entity_type, min_confidence=min_confidence,
@@ -256,7 +250,7 @@ async def merge_entities(
     principal: IngestionPrincipal = Depends(require_permission("identity.write")),
     db_session=Depends(get_db_session),
 ):
-    tid = _resolve_tenant(tenant_id, principal)
+    tid = resolve_tenant(tenant_id, principal)
     svc = _get_service(db_session)
     merge_id = svc.merge_entities(
         tenant_id=tid,
@@ -278,7 +272,7 @@ async def split_entities(
     principal: IngestionPrincipal = Depends(require_permission("identity.write")),
     db_session=Depends(get_db_session),
 ):
-    tid = _resolve_tenant(tenant_id, principal)
+    tid = resolve_tenant(tenant_id, principal)
     svc = _get_service(db_session)
     svc.split_entity(tid, body.merge_id, body.performed_by)
     return {"merge_id": body.merge_id, "status": "split"}
@@ -293,7 +287,7 @@ async def list_reviews(
     principal: IngestionPrincipal = Depends(require_permission("identity.read")),
     db_session=Depends(get_db_session),
 ):
-    tid = _resolve_tenant(tenant_id, principal)
+    tid = resolve_tenant(tenant_id, principal)
     svc = _get_service(db_session)
     reviews = svc.list_pending_reviews(tid)
     return {"tenant_id": tid, "reviews": reviews, "total": len(reviews)}
@@ -310,7 +304,7 @@ async def resolve_review(
     principal: IngestionPrincipal = Depends(require_permission("identity.write")),
     db_session=Depends(get_db_session),
 ):
-    tid = _resolve_tenant(tenant_id, principal)
+    tid = resolve_tenant(tenant_id, principal)
     svc = _get_service(db_session)
     svc.resolve_review(
         tenant_id=tid,
