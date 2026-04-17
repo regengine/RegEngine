@@ -40,6 +40,42 @@ _ALLOWED_JSONB_TABLES: dict[str, str] = {
     "tenant_onboarding": "state",
 }
 
+# Pre-computed static queries keyed by (table, column).
+# Storing the queries as fully-formed strings instead of interpolating
+# identifiers at call time closes the SQL-Injection-Defense CI grep (which
+# flags runtime-built SQL). Also strictly safer than the old approach,
+# which relied on _validate_table_column() being called on every path.
+
+_SELECT_JSONB_QUERIES: dict[tuple[str, str], str] = {
+    ("tenant_settings", "settings"):
+        "SELECT settings FROM fsma.tenant_settings WHERE tenant_id = :tid",
+    ("tenant_notification_prefs", "prefs"):
+        "SELECT prefs FROM fsma.tenant_notification_prefs WHERE tenant_id = :tid",
+    ("tenant_onboarding", "state"):
+        "SELECT state FROM fsma.tenant_onboarding WHERE tenant_id = :tid",
+}
+
+_UPSERT_JSONB_QUERIES: dict[tuple[str, str], str] = {
+    ("tenant_settings", "settings"): """
+        INSERT INTO fsma.tenant_settings (tenant_id, settings, created_at, updated_at)
+        VALUES (:tid, :data, now(), now())
+        ON CONFLICT (tenant_id) DO UPDATE
+        SET settings = :data, updated_at = now()
+    """,
+    ("tenant_notification_prefs", "prefs"): """
+        INSERT INTO fsma.tenant_notification_prefs (tenant_id, prefs, created_at, updated_at)
+        VALUES (:tid, :data, now(), now())
+        ON CONFLICT (tenant_id) DO UPDATE
+        SET prefs = :data, updated_at = now()
+    """,
+    ("tenant_onboarding", "state"): """
+        INSERT INTO fsma.tenant_onboarding (tenant_id, state, created_at, updated_at)
+        VALUES (:tid, :data, now(), now())
+        ON CONFLICT (tenant_id) DO UPDATE
+        SET state = :data, updated_at = now()
+    """,
+}
+
 
 def _validate_table_column(table: str, column: str) -> None:
     """Validate table/column against the allowlist to prevent SQL injection."""
@@ -56,14 +92,12 @@ def get_jsonb(tenant_id: str, table: str, column: str) -> Optional[dict]:
     Returns None if DB unavailable or row doesn't exist.
     """
     _validate_table_column(table, column)
+    query = _SELECT_JSONB_QUERIES[(table, column)]
     db = _get_db()
     if not db:
         return None
     try:
-        row = db.execute(
-            text(f"SELECT {column} FROM fsma.{table} WHERE tenant_id = :tid"),
-            {"tid": tenant_id}
-        ).fetchone()
+        row = db.execute(text(query), {"tid": tenant_id}).fetchone()
         if not row or not row[0]:
             return None
         return json.loads(row[0]) if isinstance(row[0], str) else row[0]
@@ -80,21 +114,14 @@ def set_jsonb(tenant_id: str, table: str, column: str, data: dict) -> bool:
     Returns True on success, False on failure.
     """
     _validate_table_column(table, column)
+    query = _UPSERT_JSONB_QUERIES[(table, column)]
     db = _get_db()
     if not db:
         logger.error("db_write_skipped table=%s tenant=%s reason=no_connection", table, tenant_id)
         return False
     try:
         data_json = json.dumps(data, default=str)
-        db.execute(
-            text(f"""
-                INSERT INTO fsma.{table} (tenant_id, {column}, created_at, updated_at)
-                VALUES (:tid, :data, now(), now())
-                ON CONFLICT (tenant_id) DO UPDATE
-                SET {column} = :data, updated_at = now()
-            """),
-            {"tid": tenant_id, "data": data_json}
-        )
+        db.execute(text(query), {"tid": tenant_id, "data": data_json})
         db.commit()
         return True
     except Exception as exc:
