@@ -5,7 +5,9 @@ const { withSentryConfig } = require("@sentry/nextjs");
 const isStatic = process.env.REGENGINE_DEPLOY_MODE === 'static';
 const apiGatewayUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
 const ingestionUrl = process.env.INGESTION_SERVICE_URL || (apiGatewayUrl && `${apiGatewayUrl}:8002`);
-const complianceUrl = process.env.COMPLIANCE_SERVICE_URL || (apiGatewayUrl && `${apiGatewayUrl}:8500`);
+// Note: COMPLIANCE_SERVICE_URL is read directly by the compliance route handler
+// (src/app/api/compliance/[...path]/route.ts) — no longer referenced here since
+// the /api/compliance rewrite was removed in #1221.
 
 // Validate service URLs at dev-server startup, not during build/lint/test.
 const isDevServer = process.env.NODE_ENV === 'development' && !process.env.NEXT_PHASE;
@@ -163,29 +165,45 @@ const nextConfig = {
     async rewrites() {
         if (isStatic) return []; // Rewrites not supported in static export
 
+        // ── Rewrites that coexist with /api/<service>/[...path]/route.ts handlers ──
+        // Next.js "afterFiles" rewrites run before dynamic routes, so when an
+        // external destination is set, the rewrite wins and the route handler
+        // is bypassed. Any rewrite that shadows a service with its own auth-
+        // checked handler (ingestion/compliance/controls/fsma/graph/review)
+        // is a security hazard — it skips requireProxyAuth, validateProxySession,
+        // and sanitizePath. Only keep rewrites for paths that have no handler.
+        //
+        // Removed 2026-04-17 (#1221):
+        //   - /api/compliance/:path*    (shadowed by the compliance route handler)
+        //
         // Filter out rewrites with undefined destinations — Vercel build may not
-        // have INGESTION_SERVICE_URL / COMPLIANCE_SERVICE_URL env vars set, and
-        // Next.js 16 treats "undefined/:path*" as a fatal error.
+        // have INGESTION_SERVICE_URL env var set, and Next.js 16 treats
+        // "undefined/:path*" as a fatal error.
         return [
+            // External API surface (documented in docs/API_VERSIONING.md).
+            // Keep as a rewrite — external callers use API-key auth, the frontend
+            // auth-gate layers would reject them as missing cookies/session.
             ingestionUrl && {
                 source: '/api/v1/ingestion/:path*',
                 destination: `${ingestionUrl}/v1/ingestion/:path*`,
             },
+            // Internal alias: /api/auth/* → /api/admin/auth/* so client code can
+            // use the shorter path. Destination is a same-origin route handler,
+            // so frontend auth layers still apply.
             {
                 source: '/api/auth/:path*',
                 destination: '/api/admin/auth/:path*',
             },
-            complianceUrl && {
-                source: '/api/compliance/:path*',
-                destination: `${complianceUrl}/:path*`,
-            },
-            // Proxy webhook ingestion to backend (bypasses Next.js CSRF)
+            // Proxy webhook ingestion to backend. External webhook senders
+            // (Shopify/SafetyCulture/etc.) authenticate via HMAC signatures, so
+            // the frontend auth-gate would reject them. The CSRF exempt list
+            // (src/lib/csrf.ts) covers /api/v1/webhooks/ so middleware passes.
             ingestionUrl && {
                 source: '/api/v1/webhooks/:path*',
                 destination: `${ingestionUrl}/v1/webhooks/:path*`,
             },
-            // API-03: Proxy admin health endpoint for external monitoring
-            // Skipped if NEXT_PUBLIC_API_BASE_URL is not set (individual service URLs used instead)
+            // API-03: proxy admin health endpoint for external monitoring.
+            // Public, unauthenticated — no handler needed.
             apiGatewayUrl && {
                 source: '/api/v1/health',
                 destination: `${apiGatewayUrl}/health`,
