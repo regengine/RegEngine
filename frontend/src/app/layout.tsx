@@ -1,5 +1,6 @@
 import { headers } from 'next/headers'
 import { Providers } from '@/lib/providers'
+import { stringifyForScript } from '@/lib/json-ld'
 import './globals.css'
 import { MarketingHeader } from '@/components/layout/marketing-header'
 import { AuthAwareFooter } from '@/components/layout/auth-aware-footer'
@@ -106,7 +107,7 @@ export default async function RootLayout({
           nonce={nonce}
           type="application/ld+json"
           dangerouslySetInnerHTML={{
-            __html: JSON.stringify({
+            __html: stringifyForScript({
               '@context': 'https://schema.org',
               '@type': 'Organization',
               name: 'RegEngine',
@@ -123,7 +124,7 @@ export default async function RootLayout({
           nonce={nonce}
           type="application/ld+json"
           dangerouslySetInnerHTML={{
-            __html: JSON.stringify({
+            __html: stringifyForScript({
               '@context': 'https://schema.org',
               '@type': 'WebSite',
               name: 'RegEngine',
@@ -137,7 +138,7 @@ export default async function RootLayout({
           nonce={nonce}
           type="application/ld+json"
           dangerouslySetInnerHTML={{
-            __html: JSON.stringify({
+            __html: stringifyForScript({
               '@context': 'https://schema.org',
               '@type': 'BreadcrumbList',
               itemListElement: [
@@ -158,7 +159,7 @@ export default async function RootLayout({
           nonce={nonce}
           type="application/ld+json"
           dangerouslySetInnerHTML={{
-            __html: JSON.stringify({
+            __html: stringifyForScript({
               '@context': 'https://schema.org',
               '@type': 'Product',
               name: 'RegEngine FSMA 204 Compliance Platform',
