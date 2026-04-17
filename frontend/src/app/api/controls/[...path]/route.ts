@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireProxyAuth, validateProxySession, getServerApiKey, getAdminMasterKey } from '@/lib/api-proxy';
+import { requireProxyAuth, validateProxySession, getServerApiKey, getAdminMasterKey, sanitizePath, proxyError } from '@/lib/api-proxy';
 import { getServerServiceURL } from '@/lib/api-config';
 
 const ADMIN_URL = (() => {
@@ -52,7 +52,10 @@ async function proxyRequest(
         const sessionError = await validateProxySession(request);
         if (sessionError) return sessionError;
 
-        const path = pathParts.join('/');
+        const path = sanitizePath(pathParts);
+        if (!path) {
+            return proxyError('Invalid path', 400, { code: 'INVALID_PATH' });
+        }
         const url = new URL(request.url);
         const queryString = url.search;
 

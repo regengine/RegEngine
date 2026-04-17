@@ -57,12 +57,21 @@ export async function signCsrfToken(token: string): Promise<string> {
         .join('');
 }
 
-/** Verify that a token matches its HMAC signature. */
+/** Verify that a token matches its HMAC signature.
+ *
+ *  Fail-closed in production: if no CSRF secret is configured we cannot
+ *  verify the token, so we reject the request. In dev/test we allow
+ *  through with a warning so local development doesn't require the env
+ *  var to be set.
+ */
 export async function verifyCsrfToken(token: string, signature: string): Promise<boolean> {
     if (!token || !signature) return false;
     const secret = getSecret();
     if (!secret) {
-        // No secret configured — skip CSRF check to avoid locking out all users
+        if (process.env.NODE_ENV === 'production') {
+            console.error('[csrf] CSRF_SECRET / AUTH_SECRET_KEY not set — rejecting mutating request');
+            return false;
+        }
         return true;
     }
     const expected = await signCsrfToken(token);
@@ -89,8 +98,27 @@ export function getCsrfTokenFromCookie(): string {
 /** HTTP methods that require CSRF validation. */
 export const CSRF_PROTECTED_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
-/** Paths exempt from CSRF checks (auth callbacks, webhooks, session bootstrap, public sandbox). */
-const CSRF_EXEMPT_PREFIXES = ['/api/auth/', '/api/admin/auth/', '/api/webhooks/', '/api/session', '/api/ingestion/api/v1/sandbox/', '/api/tools/'];
+/** Paths exempt from CSRF checks (auth callbacks, webhooks, session bootstrap, public sandbox, public tools).
+ *
+ *  Keep this list narrow. Broad prefixes like /api/tools/ silently exempt
+ *  every future handler placed there — list the specific public endpoints
+ *  instead so adding a new /api/tools/* route is a deliberate decision.
+ */
+const CSRF_EXEMPT_PREFIXES = [
+    '/api/auth/',
+    '/api/admin/auth/',
+    // Both webhook paths: /api/webhooks/* for local handlers, /api/v1/webhooks/*
+    // for the next.config.js rewrite to the ingestion service. External senders
+    // authenticate via HMAC signatures, not Bearer tokens, so they don't hit
+    // the Bearer bypass in middleware.ts.
+    '/api/webhooks/',
+    '/api/v1/webhooks/',
+    '/api/session',
+    '/api/ingestion/api/v1/sandbox/',
+    // Public unauthenticated tool endpoints — add new entries explicitly.
+    '/api/tools/check-access',
+    '/api/tools/verify',
+];
 
 /** Check whether a request path is exempt from CSRF verification. */
 export function isCsrfExempt(pathname: string): boolean {
