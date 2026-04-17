@@ -28,7 +28,7 @@ from pydantic import BaseModel, Field
 
 from shared.pagination import PaginationParams
 from app.authz import require_permission, IngestionPrincipal
-from app.tenant_validation import validate_tenant_id
+from app.tenant_validation import validate_tenant_id, resolve_tenant
 from shared.database import get_db_session
 
 logger = logging.getLogger("exception-queue")
@@ -41,17 +41,6 @@ def _get_service(db_session):
         raise HTTPException(status_code=503, detail="Database unavailable")
     from shared.exception_queue import ExceptionQueueService
     return ExceptionQueueService(db_session)
-
-
-def _resolve_tenant(
-    tenant_id: Optional[str],
-    principal: IngestionPrincipal,
-) -> str:
-    tid = tenant_id or principal.tenant_id
-    if not tid:
-        raise HTTPException(status_code=400, detail="Tenant context required")
-    validate_tenant_id(tid)
-    return tid
 
 
 # ---------------------------------------------------------------------------
@@ -110,7 +99,7 @@ async def list_exceptions(
     principal: IngestionPrincipal = Depends(require_permission("exceptions.read")),
     db_session=Depends(get_db_session),
 ):
-    tid = _resolve_tenant(tenant_id, principal)
+    tid = resolve_tenant(tenant_id, principal)
     svc = _get_service(db_session)
     cases = svc.list_exceptions(
         tenant_id=tid,
@@ -136,7 +125,7 @@ async def blocking_count(
     principal: IngestionPrincipal = Depends(require_permission("exceptions.read")),
     db_session=Depends(get_db_session),
 ):
-    tid = _resolve_tenant(tenant_id, principal)
+    tid = resolve_tenant(tenant_id, principal)
     svc = _get_service(db_session)
     count = svc.get_unresolved_blocking_count(tid)
     return {"tenant_id": tid, "blocking_count": count}
@@ -152,7 +141,7 @@ async def get_exception(
     principal: IngestionPrincipal = Depends(require_permission("exceptions.read")),
     db_session=Depends(get_db_session),
 ):
-    tid = _resolve_tenant(tenant_id, principal)
+    tid = resolve_tenant(tenant_id, principal)
     svc = _get_service(db_session)
     case = svc.get_exception(tid, case_id)
     if not case:
@@ -171,7 +160,7 @@ async def create_exception(
     principal: IngestionPrincipal = Depends(require_permission("exceptions.write")),
     db_session=Depends(get_db_session),
 ):
-    tid = _resolve_tenant(tenant_id, principal)
+    tid = resolve_tenant(tenant_id, principal)
     svc = _get_service(db_session)
     case_id = svc.create_exception(
         tenant_id=tid,
@@ -198,7 +187,7 @@ async def assign_owner(
     principal: IngestionPrincipal = Depends(require_permission("exceptions.write")),
     db_session=Depends(get_db_session),
 ):
-    tid = _resolve_tenant(tenant_id, principal)
+    tid = resolve_tenant(tenant_id, principal)
     svc = _get_service(db_session)
     svc.assign_owner(tid, case_id, body.owner_user_id)
     return {"case_id": case_id, "owner_user_id": body.owner_user_id, "status": "assigned"}
@@ -215,7 +204,7 @@ async def resolve_exception(
     principal: IngestionPrincipal = Depends(require_permission("exceptions.write")),
     db_session=Depends(get_db_session),
 ):
-    tid = _resolve_tenant(tenant_id, principal)
+    tid = resolve_tenant(tenant_id, principal)
     svc = _get_service(db_session)
     svc.resolve_exception(tid, case_id, body.resolution_summary, body.resolved_by)
     return {"case_id": case_id, "status": "resolved"}
@@ -232,7 +221,7 @@ async def waive_exception(
     principal: IngestionPrincipal = Depends(require_permission("exceptions.write")),
     db_session=Depends(get_db_session),
 ):
-    tid = _resolve_tenant(tenant_id, principal)
+    tid = resolve_tenant(tenant_id, principal)
     svc = _get_service(db_session)
     svc.waive_exception(tid, case_id, body.waiver_reason, body.waiver_approved_by)
     return {"case_id": case_id, "status": "waived"}
@@ -248,7 +237,7 @@ async def list_comments(
     principal: IngestionPrincipal = Depends(require_permission("exceptions.read")),
     db_session=Depends(get_db_session),
 ):
-    tid = _resolve_tenant(tenant_id, principal)
+    tid = resolve_tenant(tenant_id, principal)
     svc = _get_service(db_session)
     comments = svc.list_comments(tid, case_id)
     return {"case_id": case_id, "comments": comments, "total": len(comments)}
@@ -266,7 +255,7 @@ async def add_comment(
     principal: IngestionPrincipal = Depends(require_permission("exceptions.write")),
     db_session=Depends(get_db_session),
 ):
-    tid = _resolve_tenant(tenant_id, principal)
+    tid = resolve_tenant(tenant_id, principal)
     svc = _get_service(db_session)
     comment_id = svc.add_comment(tid, case_id, body.author_user_id, body.comment_text, body.comment_type)
     return {"comment_id": comment_id, "status": "created"}
