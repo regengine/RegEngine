@@ -22,7 +22,6 @@ COPY services/shared /app/shared
 # Copy Alembic migration framework
 COPY alembic.ini /app/alembic.ini
 COPY alembic /app/alembic
-COPY migrations /app/migrations
 COPY scripts/run-migrations.sh /app/scripts/run-migrations.sh
 
 # Copy service code

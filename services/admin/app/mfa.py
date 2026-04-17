@@ -11,8 +11,12 @@ This module provides:
 import os
 import secrets
 import logging
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 from datetime import datetime, timezone
+
+if TYPE_CHECKING:
+    # Forward-ref only; avoids a circular import between mfa and sqlalchemy_models.
+    from .sqlalchemy_models import UserModel
 
 try:
     import pyotp
