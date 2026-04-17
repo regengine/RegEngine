@@ -137,14 +137,15 @@ const nextConfig = {
                 destination: '/dashboard/settings',
                 permanent: true,
             },
-            // Canonical path for compliance is /dashboard/compliance
+            // Canonical path for the compliance landing is /dashboard/compliance.
+            // The sub-pages under /compliance/* (labels, profile, snapshots,
+            // status, traceability-plan) have their own content and are linked
+            // from the dashboard header — the previous catch-all `/compliance/:path*`
+            // redirect 301-ed every click to the bare /dashboard/compliance,
+            // losing the sub-route and breaking navigation (#1183).
+            // Only redirect the bare /compliance path.
             {
                 source: '/compliance',
-                destination: '/dashboard/compliance',
-                permanent: true,
-            },
-            {
-                source: '/compliance/:path*',
                 destination: '/dashboard/compliance',
                 permanent: true,
             },
