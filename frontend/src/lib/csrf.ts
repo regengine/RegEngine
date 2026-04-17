@@ -107,7 +107,12 @@ export const CSRF_PROTECTED_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']
 const CSRF_EXEMPT_PREFIXES = [
     '/api/auth/',
     '/api/admin/auth/',
+    // Both webhook paths: /api/webhooks/* for local handlers, /api/v1/webhooks/*
+    // for the next.config.js rewrite to the ingestion service. External senders
+    // authenticate via HMAC signatures, not Bearer tokens, so they don't hit
+    // the Bearer bypass in middleware.ts.
     '/api/webhooks/',
+    '/api/v1/webhooks/',
     '/api/session',
     '/api/ingestion/api/v1/sandbox/',
     // Public unauthenticated tool endpoints — add new entries explicitly.
