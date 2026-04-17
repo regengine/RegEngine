@@ -1,287 +1,76 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { sanitizePath, proxyError, getServerApiKey, requireProxyAuth, validateProxySession } from '@/lib/api-proxy';
+import { NextRequest } from 'next/server';
+import { createStreamProxy, applyCookieCredentials, passthroughRequestHeaders, isPublicHost, stripTrailingSlash } from '@/lib/proxy-factory';
 
 const DEFAULT_INGESTION_URL = 'http://localhost:8002';
-const VERCEL_PRIVATE_DNS_ERROR = 'DNS_HOSTNAME_RESOLVED_PRIVATE';
 
 // force-dynamic ensures the proxy runs as a serverless function on every request,
 // forwarding auth headers and query params to the ingestion backend.
-// For static export builds (CI), the proxyRequest function returns 503 early.
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ path: string[] }> },
-) {
-  const { path } = await params;
-  return proxyRequest(request, path, 'GET');
-}
-
-export async function POST(
-  request: NextRequest,
-  { params }: { params: Promise<{ path: string[] }> },
-) {
-  const { path } = await params;
-  return proxyRequest(request, path, 'POST');
-}
-export async function PUT(
-  request: NextRequest,
-  { params }: { params: Promise<{ path: string[] }> },
-) {
-  const { path } = await params;
-  return proxyRequest(request, path, 'PUT');
-}
-
-export async function PATCH(
-  request: NextRequest,
-  { params }: { params: Promise<{ path: string[] }> },
-) {
-  const { path } = await params;
-  return proxyRequest(request, path, 'PATCH');
-}
-
-export async function DELETE(
-  request: NextRequest,
-  { params }: { params: Promise<{ path: string[] }> },
-) {
-  const { path } = await params;
-  return proxyRequest(request, path, 'DELETE');
-}
-
-export async function OPTIONS(
-  request: NextRequest,
-  { params }: { params: Promise<{ path: string[] }> },
-) {  const { path } = await params;
-  return proxyRequest(request, path, 'OPTIONS');
-}
-
-async function proxyRequest(
-  request: NextRequest,
-  pathParts: string[],
-  method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'OPTIONS',
-) {
-  try {
-    if (process.env.REGENGINE_DEPLOY_MODE === 'static') {
-      return NextResponse.json(
-        { error: 'Ingestion API proxy unavailable during static build', static_mode: true },
-        { status: 503 },
-      );
-    }
-
-    // Defense-in-depth: reject requests with no auth credentials before proxying
-    const authError = requireProxyAuth(request);
-    if (authError) return authError;
-
-    // Validate Supabase session tokens (expired/revoked sessions get 401)
-    const sessionError = await validateProxySession(request);
-    if (sessionError) return sessionError;
-
-    const path = sanitizePath(pathParts);
-    if (!path) {
-      return proxyError('Invalid path', 400, { code: 'INVALID_PATH' });
-    }
-    const queryString = new URL(request.url).search;
-    const targetBases = getIngestionTargets();
-
-    if (targetBases.length === 0) {
-      return proxyError(
-        'Ingestion backend not configured — set NEXT_PUBLIC_INGESTION_URL, INGESTION_SERVICE_URL, or INGESTION_PRODUCTION_URL',
-        503,
-      );
-    }
-
-    const headers = new Headers();
-    const hasRequestBody = !['GET', 'OPTIONS'].includes(method);
-    const contentType = request.headers.get('content-type');
-    if (contentType) {
-      headers.set('Content-Type', contentType);
-    } else if (hasRequestBody) {
-      headers.set('Content-Type', 'application/json');
-    }
-    const passthroughHeaders = [
-      'authorization',
-      'x-api-key',
-      'x-admin-key',
-      'x-regengine-api-key',
-      'x-tenant-id',
-    ];
-    for (const key of passthroughHeaders) {
-      const value = request.headers.get(key);
-      if (value) {
-        headers.set(key, value);
-      }
-    }
-
-    // Inject access token from HTTP-only cookie as Bearer token
-    const cookieAccessToken = request.cookies.get('re_access_token')?.value;
-    if (cookieAccessToken) {
-      headers.set('authorization', `Bearer ${cookieAccessToken}`);
-    }
-
-    // Inject API key from HTTP-only cookie (preferred) or server-side env var.
-    // The client no longer sends X-RegEngine-API-Key — credentials live in cookies.
-    if (!headers.has('x-regengine-api-key')) {
-      const cookieApiKey = request.cookies.get('re_api_key')?.value;
-      const serverApiKey = cookieApiKey || process.env.REGENGINE_API_KEY || '';
-      headers.set('x-regengine-api-key', serverApiKey);
-    }
-
-    // Inject admin key from cookie if not already present
-    if (!headers.has('x-admin-key')) {
-      const cookieAdminKey = request.cookies.get('re_admin_key')?.value;
-      if (cookieAdminKey) {
-        headers.set('x-admin-key', cookieAdminKey);
-      }
-    }
-
-    // Inject tenant ID from cookie if not already present
-    if (!headers.has('x-tenant-id')) {
-      const cookieTenantId = request.cookies.get('re_tenant_id')?.value;
-      if (cookieTenantId) {
-        headers.set('x-tenant-id', cookieTenantId);
-      }
-    }
-
-    const fetchOptions: RequestInit = {
-      method,
-      headers,
-    };
-    let requestBody: ArrayBuffer | undefined;
-    if (hasRequestBody) {
-      const bodyBuffer = await request.arrayBuffer();
-      if (bodyBuffer.byteLength > 0) {
-        requestBody = bodyBuffer;
-        fetchOptions.body = requestBody;
-      }
-    }
-
-    const attemptErrors: string[] = [];
-
-    for (const targetBase of targetBases) {
-      const targetUrl = `${stripTrailingSlash(targetBase)}/${path}${queryString}`;
-      try {
-        const response = await fetch(targetUrl, fetchOptions);
-        if (shouldRetryResponse(response)) {
-          attemptErrors.push(
-            `target=${targetBase} status=${response.status} reason=${response.headers.get('x-vercel-error') || 'vercel_error'}`,
-          );
-          continue;
-        }
-
-        const outgoingHeaders = new Headers();
-        const passthroughResponseHeaders = [
-          'content-type',
-          'content-disposition',
-          'cache-control',
-          'x-fda-record-count',
-        ];        for (const headerName of passthroughResponseHeaders) {
-          const headerValue = response.headers.get(headerName);
-          if (headerValue) {
-            outgoingHeaders.set(headerName, headerValue);
-          }
-        }
-
-        return new NextResponse(response.body, {
-          status: response.status,
-          headers: outgoingHeaders,
-        });
-      } catch (error: unknown) {
-        const message = error instanceof Error ? error.message : 'Ingestion request failed';
-        attemptErrors.push(`target=${targetBase} error=${message}`);
-
-        if (hasRequestBody && requestBody) {
-          fetchOptions.body = requestBody;
-        }
-      }
-    }
-
-    console.error('[proxy/ingestion] 502 — all targets failed:', attemptErrors);
-    return proxyError('Unable to reach ingestion service', 502, { details: attemptErrors });
-  } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : 'Ingestion request failed';
-    console.error('[proxy/ingestion] 500 —', message);
-    return proxyError(message, 500);
-  }
-}
-
 function getIngestionTargets(): string[] {
-  const candidates: string[] = [];
-  const publicIngestionUrl = process.env.NEXT_PUBLIC_INGESTION_URL;
-  const internalIngestionUrl = process.env.INGESTION_SERVICE_URL;
+    const candidates: string[] = [];
+    const publicIngestionUrl = process.env.NEXT_PUBLIC_INGESTION_URL;
+    const internalIngestionUrl = process.env.INGESTION_SERVICE_URL;
 
-  if (publicIngestionUrl) {
-    candidates.push(publicIngestionUrl);
-  }
-
-  // NOTE: NEXT_PUBLIC_API_BASE_URL is intentionally NOT used here.
-  // It points at the admin service, which doesn't serve ingestion routes.
-
-  const runningOnVercel = Boolean(
-    process.env.VERCEL || process.env.VERCEL_URL || process.env.VERCEL_ENV,
-  );
-  if (internalIngestionUrl && (!runningOnVercel || isPublicHost(internalIngestionUrl))) {
-    candidates.push(internalIngestionUrl);
-  }
-
-  if (candidates.length === 0) {
-    const productionUrl = process.env.INGESTION_PRODUCTION_URL;
-    if (productionUrl) {
-      candidates.push(productionUrl);
-    } else if (runningOnVercel) {
-      console.error(
-        '[proxy/ingestion] No ingestion backend URL configured — set NEXT_PUBLIC_INGESTION_URL, INGESTION_SERVICE_URL, or INGESTION_PRODUCTION_URL',
-      );
-    } else {
-      candidates.push(DEFAULT_INGESTION_URL);
+    if (publicIngestionUrl) {
+        candidates.push(publicIngestionUrl);
     }
-  }
 
-  return Array.from(new Set(candidates.map((candidate) => stripTrailingSlash(candidate))));
+    // NOTE: NEXT_PUBLIC_API_BASE_URL is intentionally NOT used here.
+    // It points at the admin service, which doesn't serve ingestion routes.
+
+    const runningOnVercel = Boolean(
+        process.env.VERCEL || process.env.VERCEL_URL || process.env.VERCEL_ENV,
+    );
+    if (internalIngestionUrl && (!runningOnVercel || isPublicHost(internalIngestionUrl))) {
+        candidates.push(internalIngestionUrl);
+    }
+
+    if (candidates.length === 0) {
+        const productionUrl = process.env.INGESTION_PRODUCTION_URL;
+        if (productionUrl) {
+            candidates.push(productionUrl);
+        } else if (runningOnVercel) {
+            console.error(
+                '[proxy/ingestion] No ingestion backend URL configured — set NEXT_PUBLIC_INGESTION_URL, INGESTION_SERVICE_URL, or INGESTION_PRODUCTION_URL',
+            );
+        } else {
+            candidates.push(DEFAULT_INGESTION_URL);
+        }
+    }
+
+    return Array.from(new Set(candidates.map(stripTrailingSlash)));
 }
 
-function stripTrailingSlash(value: string): string {
-  return value.replace(/\/+$/, '');
-}
+const { GET, POST, PUT, PATCH, DELETE, OPTIONS } = createStreamProxy({
+    serviceName: 'ingestion',
+    resolveTargetBases: getIngestionTargets,
+    buildHeaders: (request: NextRequest) => {
+        const headers = new Headers();
+        const hasRequestBody = !['GET', 'OPTIONS'].includes(request.method);
+        const contentType = request.headers.get('content-type');
+        if (contentType) {
+            headers.set('Content-Type', contentType);
+        } else if (hasRequestBody) {
+            headers.set('Content-Type', 'application/json');
+        }
 
-function shouldRetryResponse(response: Response): boolean {
-  const vercelErrorHeader = response.headers.get('x-vercel-error') || '';
-  return vercelErrorHeader.includes(VERCEL_PRIVATE_DNS_ERROR);
-}
+        passthroughRequestHeaders(headers, request, [
+            'authorization',
+            'x-api-key',
+            'x-admin-key',
+            'x-regengine-api-key',
+            'x-tenant-id',
+        ]);
 
-function isPublicHost(urlValue: string): boolean {
-  try {
-    const parsed = new URL(urlValue);
-    if (!['http:', 'https:'].includes(parsed.protocol)) {
-      return false;
-    }
+        // Inject access token + API key + admin key + tenant ID from cookies.
+        // Unlike admin, ingestion overwrites an incoming Authorization header
+        // with the cookie token — preserving pre-refactor behavior.
+        applyCookieCredentials(headers, request);
 
-    const hostname = parsed.hostname.toLowerCase();
-    if (
-      hostname === 'localhost' ||
-      hostname === '127.0.0.1' ||
-      hostname === '::1' ||      hostname.endsWith('.local') ||
-      hostname.endsWith('.internal') ||
-      !hostname.includes('.')
-    ) {
-      return false;
-    }
+        return headers;
+    },
+});
 
-    if (hostname.startsWith('10.')) {
-      return false;
-    }
-
-    if (hostname.startsWith('192.168.')) {
-      return false;
-    }
-
-    const secondOctet = Number(hostname.split('.')[1]);
-    if (hostname.startsWith('172.') && secondOctet >= 16 && secondOctet <= 31) {
-      return false;
-    }
-
-    return true;
-  } catch {
-    return false;
-  }
-}
+export { GET, POST, PUT, PATCH, DELETE, OPTIONS };

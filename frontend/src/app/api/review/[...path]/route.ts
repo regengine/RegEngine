@@ -1,9 +1,14 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { sanitizePath, proxyError, getServerApiKey, getAdminMasterKey, requireProxyAuth, validateProxySession } from '@/lib/api-proxy';
+import { NextRequest } from 'next/server';
+import { createJsonProxy } from '@/lib/proxy-factory';
+import { getServerApiKey, getAdminMasterKey } from '@/lib/api-proxy';
 import { getServerServiceURL } from '@/lib/api-config';
 
-// Proxy review API requests to the Admin backend service
-// This allows browser clients to access review endpoints without CORS issues
+// Proxy review API requests to the Admin backend service.
+// Handles the approve/reject actions on flagged extractions — paths like
+//   /api/review/{id}/approve
+//   /api/review/{id}/reject
+// are transformed into
+//   ${ADMIN_URL}/v1/admin/review/flagged-extractions/{id}/approve
 
 const ADMIN_URL = (() => {
     const url = process.env.ADMIN_SERVICE_URL || getServerServiceURL('admin');
@@ -17,140 +22,37 @@ const ADMIN_URL = (() => {
 
 export const dynamic = 'force-dynamic';
 
-export async function GET(
-    request: NextRequest,
-    { params }: { params: Promise<{ path: string[] }> }
-) {
-    const resolvedParams = await params;
-    return proxyRequest(request, resolvedParams.path, 'GET');
+const ID_ACTION_RE = /^[0-9a-f-]+\/(approve|reject)$/;
+
+function resolveBackendPath(path: string): string {
+    return ID_ACTION_RE.test(path) ? `flagged-extractions/${path}` : path;
 }
 
-export async function POST(
-    request: NextRequest,
-    { params }: { params: Promise<{ path: string[] }> }
-) {
-    const resolvedParams = await params;
-    return proxyRequest(request, resolvedParams.path, 'POST');
-}
-
-export async function PUT(
-    request: NextRequest,
-    { params }: { params: Promise<{ path: string[] }> }
-) {
-    const resolvedParams = await params;
-    return proxyRequest(request, resolvedParams.path, 'PUT');
-}
-
-export async function PATCH(
-    request: NextRequest,
-    { params }: { params: Promise<{ path: string[] }> }
-) {
-    const resolvedParams = await params;
-    return proxyRequest(request, resolvedParams.path, 'PATCH');
-}
-
-export async function DELETE(
-    request: NextRequest,
-    { params }: { params: Promise<{ path: string[] }> }
-) {
-    const resolvedParams = await params;
-    return proxyRequest(request, resolvedParams.path, 'DELETE');
-}
-
-async function proxyRequest(
-    request: NextRequest,
-    pathParts: string[],
-    method: string
-) {
-    try {
-        // Guard against static export execution
-        if (process.env.REGENGINE_DEPLOY_MODE === 'static') {
-            return NextResponse.json(
-                { error: 'API unavailable in static export mode. Deploy with server-side rendering for full API access.', deploy_mode: 'static' },
-                { status: 503 },
-            );
-        }
-
-        // Defense-in-depth: reject requests with no auth credentials before proxying
-        const authError = requireProxyAuth(request);
-        if (authError) return authError;
-
-        // Validate Supabase session tokens (expired/revoked sessions get 401)
-        const sessionError = await validateProxySession(request);
-        if (sessionError) return sessionError;
-
-        const path = sanitizePath(pathParts);
-        if (!path) {
-            return proxyError('Invalid path', 400, { code: 'INVALID_PATH' });
-        }
-        const url = new URL(request.url);
-        const queryString = url.search;
-
-        const headers: Record<string, string> = {
-            'Content-Type': 'application/json',
-        };
+const { GET, POST, PUT, PATCH, DELETE } = createJsonProxy({
+    serviceName: 'review',
+    buildTargetUrl: (path, queryString) =>
+        `${ADMIN_URL}/v1/admin/review/${resolveBackendPath(path)}${queryString}`,
+    buildHeaders: (_request: NextRequest) => {
+        const headers = new Headers({ 'Content-Type': 'application/json' });
         const adminKey = getAdminMasterKey();
         if (adminKey) {
-            headers['X-Admin-Key'] = adminKey;
+            headers.set('X-Admin-Key', adminKey);
         }
         const apiKey = getServerApiKey();
         if (apiKey) {
-            headers['X-RegEngine-API-Key'] = apiKey;
+            headers.set('X-RegEngine-API-Key', apiKey);
         }
+        return headers;
+    },
+    transformBody: (body) => ({
+        reviewer_id: 'web-frontend',
+        notes: 'Action via web interface',
+        ...(body as Record<string, unknown>),
+    }),
+    defaultBody: (path) => ({
+        reviewer_id: 'web-frontend',
+        notes: `${path.includes('approve') ? 'Approved' : 'Rejected'} via web interface`,
+    }),
+});
 
-        const fetchOptions: RequestInit = {
-            method,
-            headers,
-        };
-
-        // Include body for POST/PUT/PATCH requests
-        if (method === 'POST' || method === 'PUT' || method === 'PATCH') {
-            try {
-                const body = await request.json();
-                // Add default reviewer info if not provided
-                const enrichedBody = {
-                    reviewer_id: 'web-frontend',
-                    notes: 'Action via web interface',
-                    ...body,
-                };
-                fetchOptions.body = JSON.stringify(enrichedBody);
-            } catch {
-                // For approve/reject with no body, send default payload
-                fetchOptions.body = JSON.stringify({
-                    reviewer_id: 'web-frontend',
-                    notes: `${path.includes('approve') ? 'Approved' : 'Rejected'} via web interface`,
-                });
-            }
-        }
-
-        // Build backend path - insert 'flagged-extractions' for ID-based routes
-        // Frontend: /api/review/{id}/approve → Backend: /v1/admin/review/flagged-extractions/{id}/approve
-        let backendPath = path;
-        if (path.match(/^[0-9a-f-]+\/(approve|reject)$/)) {
-            // This is an ID-based action, inject 'flagged-extractions' prefix
-            backendPath = `flagged-extractions/${path}`;
-        }
-
-        const response = await fetch(
-            `${ADMIN_URL}/v1/admin/review/${backendPath}${queryString}`,
-            fetchOptions
-        );
-
-        const data = await response.json().catch(() => ([]));
-
-        if (!response.ok) {
-            return NextResponse.json(
-                { error: data.detail || 'Review request failed' },
-                { status: response.status }
-            );
-        }
-
-        if (process.env.NODE_ENV !== 'production') { console.info(`[proxy/review] ${method} ${path} → ${response.status}`); }
-        return NextResponse.json(data);
-
-    } catch (error: unknown) {
-        console.error('Review proxy error:', error);
-        const message = error instanceof Error ? error.message : 'Review request failed';
-        return proxyError(message, 500);
-    }
-}
+export { GET, POST, PUT, PATCH, DELETE };

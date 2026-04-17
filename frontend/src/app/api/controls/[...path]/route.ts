@@ -1,6 +1,10 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { requireProxyAuth, validateProxySession, getServerApiKey, getAdminMasterKey, sanitizePath, proxyError } from '@/lib/api-proxy';
+import { NextRequest } from 'next/server';
+import { createJsonProxy } from '@/lib/proxy-factory';
+import { getServerApiKey, getAdminMasterKey } from '@/lib/api-proxy';
 import { getServerServiceURL } from '@/lib/api-config';
+
+// Proxy controls API requests to the Admin backend service.
+// Paths like /api/controls/foo are forwarded to ${ADMIN_URL}/v1/admin/foo.
 
 const ADMIN_URL = (() => {
     const url = process.env.ADMIN_SERVICE_URL || getServerServiceURL('admin');
@@ -14,100 +18,22 @@ const ADMIN_URL = (() => {
 
 export const dynamic = 'force-dynamic';
 
-export async function GET(
-    request: NextRequest,
-    { params }: { params: Promise<{ path: string[] }> }
-) {
-    const { path } = await params;
-    return proxyRequest(request, path, 'GET');
-}
-
-export async function POST(
-    request: NextRequest,
-    { params }: { params: Promise<{ path: string[] }> }
-) {
-    const { path } = await params;
-    return proxyRequest(request, path, 'POST');
-}
-
-async function proxyRequest(
-    request: NextRequest,
-    pathParts: string[],
-    method: string
-) {
-    try {
-        // Guard against static export execution
-        if (process.env.REGENGINE_DEPLOY_MODE === 'static') {
-            return NextResponse.json(
-                { error: 'API unavailable in static export mode. Deploy with server-side rendering for full API access.', deploy_mode: 'static' },
-                { status: 503 },
-            );
-        }
-
-        // Defense-in-depth: reject requests with no auth credentials before proxying
-        const authError = requireProxyAuth(request);
-        if (authError) return authError;
-
-        // Validate Supabase session tokens (expired/revoked sessions get 401)
-        const sessionError = await validateProxySession(request);
-        if (sessionError) return sessionError;
-
-        const path = sanitizePath(pathParts);
-        if (!path) {
-            return proxyError('Invalid path', 400, { code: 'INVALID_PATH' });
-        }
-        const url = new URL(request.url);
-        const queryString = url.search;
-
-        const headers: Record<string, string> = {
-            'Content-Type': 'application/json',
-        };
+const { GET, POST } = createJsonProxy({
+    serviceName: 'controls',
+    methods: ['GET', 'POST'],
+    buildTargetUrl: (path, queryString) => `${ADMIN_URL}/v1/admin/${path}${queryString}`,
+    buildHeaders: (_request: NextRequest) => {
+        const headers = new Headers({ 'Content-Type': 'application/json' });
         const adminKey = getAdminMasterKey();
         if (adminKey) {
-            headers['X-Admin-Key'] = adminKey;
+            headers.set('X-Admin-Key', adminKey);
         }
         const apiKey = getServerApiKey();
         if (apiKey) {
-            headers['X-RegEngine-API-Key'] = apiKey;
+            headers.set('X-RegEngine-API-Key', apiKey);
         }
+        return headers;
+    },
+});
 
-        const fetchOptions: RequestInit = {
-            method,
-            headers,
-        };
-
-        if (method === 'POST') {
-            try {
-                const body = await request.json();
-                fetchOptions.body = JSON.stringify(body);
-            } catch {
-                // No body or invalid JSON
-            }
-        }
-
-        const response = await fetch(
-            `${ADMIN_URL}/v1/admin/${path}${queryString}`,
-            fetchOptions
-        );
-
-        const data = await response.json().catch(() => ({}));
-
-        if (!response.ok) {
-            return NextResponse.json(
-                { error: data.detail || 'Controls request failed' },
-                { status: response.status }
-            );
-        }
-
-        if (process.env.NODE_ENV !== 'production') { console.info(`[proxy/controls] ${method} ${path} → ${response.status}`); }
-        return NextResponse.json(data);
-
-    } catch (error: unknown) {
-        console.error('Controls proxy error:', error);
-        const message = error instanceof Error ? error.message : 'Controls request failed';
-        return NextResponse.json(
-            { error: message },
-            { status: 500 }
-        );
-    }
-}
+export { GET, POST };
