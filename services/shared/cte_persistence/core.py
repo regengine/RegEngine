@@ -587,26 +587,36 @@ class CTEPersistence:
                 self.session.execute(text(sql), params)
 
         if chain_rows:
-            for chunk_start in range(0, len(chain_rows), 100):
-                chunk = chain_rows[chunk_start:chunk_start + 100]
-                values_clauses = []
-                params = {}
-                for i, row in enumerate(chunk):
-                    values_clauses.append(
-                        f"(:tid_{i}, :eid_{i}, :seq_{i}, :eh_{i}, :pch_{i}, :ch_{i})"
-                    )
-                    params.update({
-                        f"tid_{i}": row["tenant_id"], f"eid_{i}": row["cte_event_id"],
-                        f"seq_{i}": row["sequence_num"], f"eh_{i}": row["event_hash"],
-                        f"pch_{i}": row["previous_chain_hash"], f"ch_{i}": row["chain_hash"],
-                    })
-                sql = f"""
-                    INSERT INTO fsma.hash_chain (
-                        tenant_id, cte_event_id, sequence_num,
-                        event_hash, previous_chain_hash, chain_hash
-                    ) VALUES {', '.join(values_clauses)}
-                """
-                self.session.execute(text(sql), params)
+            # --- fix #1307 ---
+            # Previous implementation blindly INSERTed every chain row,
+            # but the companion cte_events INSERT above uses ON CONFLICT
+            # DO NOTHING — when a batch lost the idempotency race for one
+            # of its events, the chain still wrote and produced an orphan
+            # row pointing at a non-existent cte_event_id, which breaks
+            # verify_chain's expected_seq = i+1 check.
+            #
+            # We now mirror the single-event path: each chain row is
+            # inserted via INSERT ... SELECT guarded by a WHERE EXISTS
+            # check against fsma.cte_events, so orphan rows cannot occur.
+            # Rows are issued one at a time to keep the guarded form
+            # simple and avoid VALUES-expansion footguns.
+            for row in chain_rows:
+                self.session.execute(
+                    text("""
+                        INSERT INTO fsma.hash_chain (
+                            tenant_id, cte_event_id, sequence_num,
+                            event_hash, previous_chain_hash, chain_hash
+                        )
+                        SELECT :tenant_id, :cte_event_id, :sequence_num,
+                               :event_hash, :previous_chain_hash, :chain_hash
+                        WHERE EXISTS (
+                            SELECT 1 FROM fsma.cte_events
+                            WHERE id = :cte_event_id
+                              AND tenant_id = :tenant_id
+                        )
+                    """),
+                    row,
+                )
 
         logger.info(
             "batch_events_persisted",
