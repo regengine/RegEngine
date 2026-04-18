@@ -15,7 +15,7 @@ import structlog
 from fastapi import APIRouter, Depends, Header, HTTPException, status, Request, Query
 from shared.pagination import PaginationParams, PaginatedResponse
 from shared.metrics_auth import require_metrics_key
-from shared.rate_limit import limiter
+from shared.rate_limit import BruteForceLimiter, limiter
 from fastapi.responses import PlainTextResponse
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from pydantic import BaseModel, Field
@@ -44,36 +44,59 @@ v1_router = APIRouter(prefix="/v1", tags=["v1"])
 logger = structlog.get_logger("admin")
 
 # ---------------------------------------------------------------------------
-# Admin-key brute-force rate limiter (#534)
-# In-memory sliding-window counter: max 5 failed attempts per IP per 60 s.
-# Keyed by IP address; thread-safe; auto-expires stale entries.
+# Admin-key brute-force rate limiter (#534, hardened in #1392)
+#
+# Previously: per-process dict with a thread lock. Multi-worker /
+# multi-replica deployments (Railway, Vercel) turned the "5 attempts
+# per IP" limit into "5 * N_workers * N_replicas" -- an attacker with
+# rotated IPv6 addresses was effectively unconstrained.
+#
+# Now: backed by Redis via ``shared.rate_limit.BruteForceLimiter`` so
+# all workers share the same counter. Falls back to in-memory when
+# Redis is unavailable (local dev) -- the ``is_redis_backed`` flag
+# reports the active mode at startup so ops can alert on fallback in
+# prod.
 # ---------------------------------------------------------------------------
 _ADMIN_MAX_FAILURES = 5
 _ADMIN_WINDOW_SECONDS = 60
-_admin_failures: dict[str, list[float]] = defaultdict(list)
-_admin_failures_lock = Lock()
+
+_admin_brute_force = BruteForceLimiter(
+    namespace="admin_auth",
+    max_failures=_ADMIN_MAX_FAILURES,
+    window_seconds=_ADMIN_WINDOW_SECONDS,
+)
+
+if not _admin_brute_force.is_redis_backed:
+    logger.warning(
+        "admin_brute_force_limiter_fallback_inmem",
+        note=(
+            "BruteForceLimiter could not connect to Redis. Falling back "
+            "to per-process counter. Set REGENGINE_REDIS_URL to enable "
+            "cross-worker enforcement (#1392)."
+        ),
+    )
 
 
 def _admin_key_rate_limited(ip: str) -> bool:
     """Return True if this IP has exceeded the admin-key failure threshold."""
-    now = time.time()
-    with _admin_failures_lock:
-        # Expire attempts outside the sliding window
-        _admin_failures[ip] = [
-            t for t in _admin_failures[ip] if now - t < _ADMIN_WINDOW_SECONDS
-        ]
-        return len(_admin_failures[ip]) >= _ADMIN_MAX_FAILURES
+    return _admin_brute_force.is_limited(ip)
 
 
 def _record_admin_failure(ip: str) -> int:
     """Record a failed attempt and return the current failure count for this IP."""
-    now = time.time()
-    with _admin_failures_lock:
-        _admin_failures[ip].append(now)
-        # Keep the list bounded to avoid unbounded growth
-        if len(_admin_failures[ip]) > _ADMIN_MAX_FAILURES * 4:
-            _admin_failures[ip] = _admin_failures[ip][-(_ADMIN_MAX_FAILURES * 2):]
-        return len(_admin_failures[ip])
+    return _admin_brute_force.record_failure(ip)
+
+
+def _reset_admin_failures(ip: str) -> None:
+    """Clear failure counter on a successful admin authentication.
+
+    Without this a successful auth did not reset the counter -- 4
+    failures + 1 success followed by another failure would land at 5
+    and lock out the IP for 60 s needlessly. Reset on success keeps
+    the legitimate path smooth while still triggering lockout on
+    persistent failures.
+    """
+    _admin_brute_force.reset(ip)
 
 
 class CreateKeyRequest(BaseModel):
@@ -225,6 +248,11 @@ def verify_admin_key(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid admin credentials",
         )
+
+    # Success path: clear any accumulated failure count for this IP so
+    # a small number of typos before a successful auth does not cause
+    # an unexpected lockout on the next typo.
+    _reset_admin_failures(ip)
     return True
 
 

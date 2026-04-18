@@ -27,6 +27,11 @@ from app.tenant_validation import validate_tenant_id, resolve_tenant
 from shared.pagination import PaginationParams
 from shared.database import get_db_session
 
+# Backwards-compat alias: tests and older callers override this private name
+# via ``app.dependency_overrides[_get_db_session]``. Keep it pointing at the
+# canonical shared helper so dependency overrides work on either import path.
+_get_db_session = get_db_session
+
 logger = logging.getLogger("rules-router")
 
 router = APIRouter(prefix="/api/v1/rules", tags=["Rules Engine"])
@@ -71,11 +76,14 @@ class EvaluateBatchRequest(BaseModel):
 
 class EvaluationResponse(BaseModel):
     event_id: str
-    compliant: bool
+    compliant: Optional[bool]  # tri-state — None when no verdict (#1347, #1346)
+    no_verdict_reason: Optional[str] = None
     total_rules: int
     passed: int
     failed: int
     warned: int
+    errored: int = 0
+    not_ftl_scoped: int = 0
     critical_failures: List[Dict[str, Any]] = Field(default_factory=list)
     results: List[Dict[str, Any]] = Field(default_factory=list)
 
@@ -194,10 +202,13 @@ async def evaluate_event(
     return EvaluationResponse(
         event_id=body.event_id,
         compliant=summary.compliant,
+        no_verdict_reason=summary.no_verdict_reason,
         total_rules=summary.total_rules,
         passed=summary.passed,
         failed=summary.failed,
         warned=summary.warned,
+        errored=summary.errored,
+        not_ftl_scoped=summary.not_ftl_scoped,
         critical_failures=[
             {
                 "rule_id": f.rule_id,
@@ -244,17 +255,23 @@ async def evaluate_batch(
     events_data = [e.model_dump() for e in body.events]
     summaries = engine.evaluate_events_batch(events_data, tid, persist=persist)
 
+    # #1347 / #1346 — compliant is tri-state. None is "no verdict" and
+    # must not silently roll into the compliant count.
     return {
         "total_events": len(summaries),
-        "compliant_count": sum(1 for s in summaries if s.compliant),
-        "non_compliant_count": sum(1 for s in summaries if not s.compliant),
+        "compliant_count": sum(1 for s in summaries if s.compliant is True),
+        "non_compliant_count": sum(1 for s in summaries if s.compliant is False),
+        "no_verdict_count": sum(1 for s in summaries if s.compliant is None),
         "summaries": [
             {
                 "event_id": s.event_id,
                 "compliant": s.compliant,
+                "no_verdict_reason": s.no_verdict_reason,
                 "passed": s.passed,
                 "failed": s.failed,
                 "warned": s.warned,
+                "errored": s.errored,
+                "not_ftl_scoped": s.not_ftl_scoped,
                 "critical_count": len(s.critical_failures),
             }
             for s in summaries

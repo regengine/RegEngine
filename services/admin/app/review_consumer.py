@@ -1,7 +1,22 @@
-"""Kafka consumer that ingests low-confidence extractions and records them via HallucinationTracker."""
+"""Kafka consumer that ingests low-confidence extractions and records them via HallucinationTracker.
+
+Security hardening:
+- tenant_id from a Kafka message body is NOT trusted (#1388). When an
+  HMAC signing secret is configured via the ``NLP_REVIEW_HMAC_SECRET``
+  env var, we require each message to carry an ``hmac`` envelope
+  computed over the canonical payload. Messages without a valid HMAC
+  are routed to the DLQ. When no secret is configured (local dev), we
+  fall back to the legacy behavior but warn loudly on every message
+  so the missing envelope gate is visible in production logs.
+- source_text is HTML-escaped before DB store (#1390) so that stored
+  XSS via malicious supplier documents cannot propagate into the
+  admin UI.
+"""
 
 from __future__ import annotations
 
+import hashlib
+import hmac
 import json
 import os
 import sys
@@ -266,21 +281,108 @@ def _process_record(record, tracker: "HallucinationTracker", bootstrap: str, kaf
         _send_to_dlq(bootstrap, evt, str(exc), headers=kafka_headers)
 
 
+def _verify_hmac_envelope(evt: Dict[str, Any]) -> bool:
+    """Verify HMAC signature on an NLP->review event envelope.
+
+    Expected envelope shape:
+        {
+          "payload": {... original review event ...},
+          "hmac": "<hex digest>"
+        }
+
+    The signature is HMAC-SHA256 over the canonical JSON of
+    ``payload`` keyed with ``NLP_REVIEW_HMAC_SECRET``. Messages that do
+    not match the expected envelope shape, or where the digest does not
+    verify, return False -- the caller sends them to the DLQ.
+
+    If ``NLP_REVIEW_HMAC_SECRET`` is unset we return True (legacy
+    mode) but log a warning; set this env var in production to enforce
+    signing.
+    """
+    secret = os.getenv("NLP_REVIEW_HMAC_SECRET", "").strip()
+    if not secret:
+        logger.warning(
+            "review_consumer_hmac_secret_unset",
+            topic=TOPIC_NEEDS_REVIEW,
+            note=(
+                "NLP_REVIEW_HMAC_SECRET is not configured; "
+                "Kafka message envelopes are not being verified. Unsigned "
+                "events can inject cross-tenant review items (#1388)."
+            ),
+        )
+        return True
+
+    if not isinstance(evt, dict):
+        return False
+    payload = evt.get("payload")
+    sig = evt.get("hmac")
+    if not isinstance(payload, dict) or not isinstance(sig, str):
+        return False
+
+    canonical = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode(
+        "utf-8"
+    )
+    expected = hmac.new(secret.encode("utf-8"), canonical, hashlib.sha256).hexdigest()
+    return hmac.compare_digest(expected, sig)
+
+
 def _extract_and_record(evt: Dict[str, Any], tracker) -> Dict[str, Any]:
-    """Extract fields from event and record via tracker."""
-    tenant_id = evt.get("tenant_id")
-    document_id = evt.get("document_id")
-    extraction = evt.get("extraction") or {}
+    """Extract fields from event and record via tracker.
+
+    Hardening (#1388):
+    - When ``NLP_REVIEW_HMAC_SECRET`` is configured, the event must be
+      a signed envelope ``{payload, hmac}``. Unsigned or tampered
+      messages raise ``ValueError`` so ``_process_record`` routes them
+      to the DLQ.
+    - tenant_id is read from the inner ``payload`` of the verified
+      envelope. If the legacy bare-event path is used (no secret), we
+      still accept the event body directly -- but only after emitting
+      the ``review_consumer_hmac_secret_unset`` warning above.
+
+    Hardening (#1390):
+    - source_text is escaped via ``sanitize_source_text_for_store``
+      before insert. The DB stores the sanitized text so a later
+      unsanitized read path cannot leak stored XSS into the admin UI.
+    """
+    # --- Envelope verification ------------------------------------------
+    if not _verify_hmac_envelope(evt):
+        raise ValueError(
+            "review envelope failed HMAC verification -- "
+            "message rejected and routed to DLQ"
+        )
+
+    # Extract the inner payload if this is a signed envelope; otherwise
+    # fall back to treating the whole event as the payload (legacy).
+    if isinstance(evt, dict) and "payload" in evt and "hmac" in evt:
+        payload = evt["payload"]
+    else:
+        payload = evt
+
+    tenant_id = payload.get("tenant_id")
+    document_id = payload.get("document_id")
+    extraction = payload.get("extraction") or {}
     doc_hash = (
-        evt.get("doc_hash")
+        payload.get("doc_hash")
         or extraction.get("attributes", {}).get("doc_hash")
         or document_id
         or "unknown"
     )
     extractor = extraction.get("attributes", {}).get("extractor") or "unknown"
     confidence_score = extraction.get("confidence_score", 0.0)
-    source_text = extraction.get("source_text")
+    source_text_raw = extraction.get("source_text")
     provenance = extraction.get("attributes", {})
+
+    # Sanitize source_text before DB store (#1390).
+    from .text_sanitize import sanitize_source_text_for_store
+
+    sanitized_text = sanitize_source_text_for_store(source_text_raw)
+
+    # Also rewrite the source_text field inside the extraction dict so
+    # any downstream consumer that reads extraction["source_text"] sees
+    # the sanitized value rather than the raw document bytes.
+    if isinstance(extraction, dict) and "source_text" in extraction:
+        extraction = dict(extraction)
+        extraction["source_text"] = sanitized_text
 
     return _record_with_retry(
         tracker,
@@ -291,7 +393,7 @@ def _extract_and_record(evt: Dict[str, Any], tracker) -> Dict[str, Any]:
         confidence_score=confidence_score,
         extraction=extraction,
         provenance=provenance,
-        text_raw=source_text,
+        text_raw=sanitized_text,
     )
 
 

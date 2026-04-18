@@ -9,8 +9,8 @@ from pathlib import Path
 import tempfile
 import yaml
 
-from regulatory_engine.engine import RegulatoryEngine
-from regulatory_engine.models import RiskLevel
+from kernel.obligation.engine import RegulatoryEngine
+from kernel.obligation.models import RiskLevel
 
 
 # Test obligations YAML
