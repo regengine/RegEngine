@@ -10,25 +10,45 @@ survey of the current code, not issue-tracker titles alone.
 
 ## 0. Ghost children — issues OPEN on GitHub but fixed in code
 
-The survey surfaced an important cleanup: **seven** EPIC children that
-already have fix commits on `main` but stayed OPEN because the PRs
-that shipped them used range references (`#1356-#1358`) that
-GitHub's issue linker doesn't parse. They should be closed with a
-pointer to the fix commit before any planning work starts.
+The survey surfaced **five verified ghost closures** — EPIC children
+that already have fix commits on `main` but stayed OPEN because the
+PR that shipped them used range references (`#1356-#1358`,
+`#1362-#1365`) that GitHub's issue linker doesn't auto-close.
 
-| Issue | Fix | Why it's still open |
+| Issue | Fix | Why still open |
 |---|---|---|
-| [#1356](https://github.com/PetrefiedThunder/RegEngine/issues/1356) temperature UoM | commit 92bc068f (PR #1455) | range ref `#1356-#1358` didn't auto-close |
-| [#1357](https://github.com/PetrefiedThunder/RegEngine/issues/1357) GLN mod-10 | commit 92bc068f (PR #1455) | same |
-| [#1358](https://github.com/PetrefiedThunder/RegEngine/issues/1358) quantity=0 | commit 92bc068f (PR #1455) | same |
-| [#1362](https://github.com/PetrefiedThunder/RegEngine/issues/1362) regex ReDoS | commit 92bc068f (PR #1455) | range `#1362-#1365` |
-| [#1363](https://github.com/PetrefiedThunder/RegEngine/issues/1363) container factor | commit 92bc068f (PR #1455) | same |
-| [#1079](https://github.com/PetrefiedThunder/RegEngine/issues/1079) leaky 500s | `services/shared/error_handling.py:168-207` already returns safe message | never tracked by a PR |
-| [#1407](https://github.com/PetrefiedThunder/RegEngine/issues/1407) tenant-scope on admin routes | `services/admin/app/user_routes.py:97,162` already call `TenantContext.get_tenant_context` | never tracked by a PR |
-| [#1118](https://github.com/PetrefiedThunder/RegEngine/issues/1118) FSMAExtractor unreachable | `services/nlp/app/extractors/fsma_extractor.py` IS called from `consumer.py` | triage error in the audit |
+| [#1356](https://github.com/PetrefiedThunder/RegEngine/issues/1356) temperature UoM | commit `92bc068f` (PR #1455) | range ref `#1356-#1358` didn't auto-close |
+| [#1357](https://github.com/PetrefiedThunder/RegEngine/issues/1357) GLN mod-10 | commit `92bc068f` (PR #1455) | same |
+| [#1358](https://github.com/PetrefiedThunder/RegEngine/issues/1358) quantity=0 | commit `92bc068f` (PR #1455) | same |
+| [#1362](https://github.com/PetrefiedThunder/RegEngine/issues/1362) regex ReDoS | commit `92bc068f` (PR #1455) | range `#1362-#1365` |
+| [#1363](https://github.com/PetrefiedThunder/RegEngine/issues/1363) container factor | commit `92bc068f` (PR #1455) | same |
 
-Action: close each with a comment + commit SHA reference. No code
-change needed.
+Action: closed via `gh issue close` with commit-SHA comments. ✅ done.
+
+### Correction — three issues I initially misclassified
+
+The initial survey summary claimed #1079, #1407, and #1118 were also
+ghost closures. That was wrong on all three and the wrongly-closed
+issues have been reopened:
+
+- **#1079** — titled "HTTPException details leak `str(exc)` to
+  clients — information disclosure across ~25 handlers". The
+  `_unhandled_exception_handler` returns a safe message for truly
+  unhandled exceptions, but the issue is about ~25 route handlers
+  that explicitly construct `HTTPException(detail=f"…: {str(exc)}")`.
+  A grep finds 10+ instances in `services/admin/app/api_overlay.py`
+  alone. Real work — EPIC-K scope.
+- **#1407** — titled "admin: /v1/supplier/demo/reset is destructive,
+  has no RBAC check, no confirmation, no rate limit". Not about
+  `require_permission`. Real work — EPIC-K scope.
+- **#1118** — titled "nlp: arbitrage_detector is a 56-line
+  placeholder with hardcoded 0.85 confidence". Not about
+  `FSMAExtractor` being dead code. Real work — separate NLP scope,
+  may belong under EPIC-E or as a standalone.
+
+Lesson: verify issue titles before trusting agent summaries of
+numbered issues. These three are back OPEN and are tracked under
+their respective epic scopes below.
 
 ---
 
@@ -71,12 +91,14 @@ change needed.
 
 ## 3. EPIC-K — Admin RBAC + error hygiene + audit integrity
 **Tracker:** [#1460](https://github.com/PetrefiedThunder/RegEngine/issues/1460)
-**Scope after ghost-closure:** 5 real open issues (#1079 and #1407 close).
+**Scope:** 7 open issues after correction.
 
 ### Open children
+- **#1079** HTTPException `detail=str(exc)` across ~25 route handlers — `services/admin/app/api_overlay.py` (10+ sites) + others.
 - **#1083** role-change race — `services/admin/app/user_routes.py:90-154` `update_user_role`. No `SELECT FOR UPDATE`.
 - **#1405** audit middleware runs on `/health` and `/metrics` — `services/admin/app/audit_middleware.py:35-56`. No skip list.
 - **#1406** RBAC reads `user_id` from request body — needs audit of all admin POST/PATCH routes.
+- **#1407** `/v1/supplier/demo/reset` destructive, no RBAC check / confirmation / rate limit / tenant scope.
 - **#1414** X-Forwarded-For without trusted-proxy gating — `audit_middleware.py:48-56` `_get_client_ip`.
 - **#1415** audit hash omits `actor_id, actor_email, severity, endpoint` — `services/admin/app/audit.py:compute_integrity_hash` (line 25-54) currently hashes only `prev_hash, tenant_id, timestamp, event_type, action, resource_id, metadata`.
 
