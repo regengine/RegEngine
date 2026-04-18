@@ -45,6 +45,20 @@ EPIC-E (NLP), EPIC-F (rules engine), EPIC-K (admin/RBAC), and EPIC-N
 (ingestion parsers). EPIC-G (retire kernel/control) is a one-PR decision
 and does not need a tracking meta-issue.
 
+## Filed meta-issues — 2026-04-18
+
+| Epic | Meta-issue | Open children at filing |
+|---|---|---|
+| EPIC-B Postgres RLS fail-open | [#1456](https://github.com/PetrefiedThunder/RegEngine/issues/1456) | 7 |
+| EPIC-D Hash-chain appender + idempotency | [#1457](https://github.com/PetrefiedThunder/RegEngine/issues/1457) | 6 |
+| EPIC-E NLP extractor — adopt FSMAExtractor | [#1458](https://github.com/PetrefiedThunder/RegEngine/issues/1458) | 6 |
+| EPIC-F Rules engine — fail-closed + validator correctness | [#1459](https://github.com/PetrefiedThunder/RegEngine/issues/1459) | 8 |
+| EPIC-K Admin RBAC + error hygiene + audit integrity | [#1460](https://github.com/PetrefiedThunder/RegEngine/issues/1460) | 7 |
+| EPIC-N Ingestion parsers — ParseResult + webhook hardening | [#1461](https://github.com/PetrefiedThunder/RegEngine/issues/1461) | 14 |
+
+Duplicate residuals closed: #1093, #1124, #1213 (as completed with PR
+references to #1437 / #1448 / #1449 respectively).
+
 ## 0. Exact duplicates — close one of each pair
 
 | Keep | Close as dup | Reason |
