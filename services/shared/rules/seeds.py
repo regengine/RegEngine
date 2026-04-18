@@ -185,6 +185,39 @@ FSMA_RULE_SEEDS: List[Dict[str, Any]] = [
         "remediation_suggestion": "Record the date of transformation",
     },
     {
+        # #1364 — COOLING CTE rule had no temperature validation. FDA 21
+        # CFR §1.1330(b)(6) requires the cold-chain limit be observed
+        # (≤41°F / 5°C for most produce). The temperature_threshold
+        # evaluator wires services/shared/rules/uom.convert_temperature
+        # so the field can be recorded in C / F / K with equal trust.
+        "title": "Cooling: Temperature Within Cold-Chain Limit",
+        "description": (
+            "Cooling events must record a temperature at or below the "
+            "cold-chain limit (41°F / 5°C)."
+        ),
+        "severity": "critical",
+        "category": "kde_value",
+        "applicability_conditions": {"cte_types": ["cooling"], "ftl_scope": ["ALL"]},
+        "citation_reference": "21 CFR \u00a71.1330(b)(6)",
+        "evaluation_logic": {
+            "type": "temperature_threshold",
+            "params": {
+                "temperature_field": "kdes.cooling_temperature",
+                "temperature_unit_field": "kdes.cooling_temperature_unit",
+                "default_unit": "F",
+                "max_temperature": 41,
+                "threshold_unit": "F",
+            },
+        },
+        "failure_reason_template": (
+            "Cooling event recorded temperature exceeds 41°F cold-chain limit ({citation})"
+        ),
+        "remediation_suggestion": (
+            "Record the cooling temperature (in °F, °C, or K) and ensure it is at or below "
+            "41°F / 5°C for FTL-covered produce"
+        ),
+    },
+    {
         "title": "Cooling: Cooling Date Required",
         "description": "Cooling events must include the date of cooling",
         "severity": "critical",
@@ -227,15 +260,22 @@ FSMA_RULE_SEEDS: List[Dict[str, Any]] = [
         "remediation_suggestion": "Record the commodity and variety of the food (e.g., 'Romaine Lettuce, Whole Head')",
     },
     {
+        # #1358 — the legacy rule used `field_presence` on `quantity`
+        # alone, so an event with quantity=100 but no unit_of_measure
+        # silently passed "Quantity and UoM Required". Fail-closed: both
+        # fields must be present.
         "title": "Quantity and Unit of Measure Required",
-        "description": "Every CTE must include the quantity and unit of measure",
+        "description": "Every CTE must include the quantity AND unit of measure",
         "severity": "critical",
         "category": "kde_presence",
         "applicability_conditions": {"cte_types": [], "ftl_scope": ["ALL"]},
         "citation_reference": "21 CFR \u00a71.1310(b)(2)",
-        "evaluation_logic": {"type": "field_presence", "field": "quantity"},
-        "failure_reason_template": "Event missing quantity and unit of measure ({citation})",
-        "remediation_suggestion": "Record the quantity and unit of measure for this event",
+        "evaluation_logic": {
+            "type": "all_field_presence",
+            "params": {"fields": ["quantity", "unit_of_measure"]},
+        },
+        "failure_reason_template": "Event missing {field_name} required by {citation}",
+        "remediation_suggestion": "Record both the quantity and the unit of measure (e.g., 100 cases, 2000 lbs)",
     },
     {
         "title": "Location Identifier Required",
@@ -254,20 +294,23 @@ FSMA_RULE_SEEDS: List[Dict[str, Any]] = [
     },
     # --- Identifier Format Rules ---
     {
+        # #1357 — the legacy regex `^\d{13}$|^[^0-9].*$|^$` accepted empty
+        # strings and any non-numeric value. Replaced with the
+        # `gs1_identifier` evaluator which enforces 13 digits AND the
+        # GS1 mod-10 check digit per ISO/IEC 15420.
         "title": "GLN Format Validation",
-        "description": "If a GLN is provided, it must be exactly 13 digits with valid check digit",
+        "description": "If a GLN is provided, it must be exactly 13 digits with a valid GS1 check digit",
         "severity": "warning",
         "category": "identifier_format",
         "applicability_conditions": {"cte_types": [], "ftl_scope": ["ALL"]},
         "citation_reference": "GS1 General Specifications \u00a73.4.2",
         "evaluation_logic": {
-            "type": "field_format",
+            "type": "gs1_identifier",
             "field": "from_facility_reference",
-            "condition": "regex_if_present",
-            "params": {"pattern": r"^\d{13}$|^[^0-9].*$|^$"},
+            "params": {"kind": "gln", "condition": "required_if_present"},
         },
-        "failure_reason_template": "Facility GLN '{field_name}' is not a valid 13-digit GS1 identifier",
-        "remediation_suggestion": "Verify the GLN is exactly 13 digits with a valid GS1 check digit",
+        "failure_reason_template": "Facility GLN '{field_name}' is not a valid 13-digit GS1 identifier with correct mod-10 check digit",
+        "remediation_suggestion": "Verify the GLN is exactly 13 digits and the 13th digit matches the GS1 mod-10 checksum of the first 12",
     },
     # --- Lot Linkage Rules ---
     {
