@@ -548,6 +548,16 @@ class SchedulerService:
         )
         logger.info("job_scheduled", job_id="data_archival", interval_hours=24)
 
+        # Task queue retention — purge completed/dead rows (#1382)
+        self.scheduler.add_job(
+            self.purge_old_tasks,
+            trigger=IntervalTrigger(hours=24),
+            id="task_queue_purge",
+            name="Task Queue Retention (30-day purge)",
+            replace_existing=True,
+        )
+        logger.info("job_scheduled", job_id="task_queue_purge", interval_hours=24)
+
         # Nightly FSMA source sync — Phase 29 (#1135).
         # Previously defined in app/jobs.py on an orphaned BlockingScheduler
         # that was never started; the job has been running nowhere in
@@ -564,9 +574,45 @@ class SchedulerService:
 
         logger.info(
             "scheduler_ready",
-            total_jobs=8,
+            total_jobs=9,
             scrapers=list(self.scrapers.keys()),
         )
+
+    def purge_old_tasks(self) -> None:
+        """Purge completed/dead ``fsma.task_queue`` rows older than 30 days.
+
+        Closes #1382. Without this, completed and dead rows accumulate
+        forever: index bloat on ``idx_task_queue_tenant``, slower ad-hoc
+        observability queries, and ever-growing storage cost on Railway
+        Postgres.
+        """
+        try:
+            from shared.database import SessionLocal
+            from sqlalchemy import text as _sqltext
+
+            db = SessionLocal()
+            try:
+                result = db.execute(
+                    _sqltext(
+                        """
+                        DELETE FROM fsma.task_queue
+                        WHERE status IN ('completed', 'dead')
+                          AND COALESCE(completed_at, created_at)
+                              < NOW() - INTERVAL '30 days'
+                        RETURNING id
+                        """
+                    )
+                )
+                rows = result.fetchall()
+                db.commit()
+                if rows:
+                    logger.info("task_queue_purged", rows=len(rows))
+                else:
+                    logger.debug("task_queue_purge_noop")
+            finally:
+                db.close()
+        except (ImportError, RuntimeError, ConnectionError, ValueError) as e:
+            logger.error("task_queue_purge_failed", error=str(e))
 
     def run_fsma_nightly_sync(self) -> None:
         """Trigger a full FSMA source sync via the ingestion service.
