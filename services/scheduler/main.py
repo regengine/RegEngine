@@ -364,12 +364,23 @@ class SchedulerService:
             # (Partial per-item failures from emit_batch() are tracked by its
             # own retry/DLQ; see #1147 follow-up.)
             primary_emit_succeeded = failures == 0
+            if failures > 0:
+                metrics.record_kafka_emit_failure(
+                    source_type=source_type.value,
+                    failure_mode="partial_batch",
+                    count=failures,
+                )
         except (ConnectionError, TimeoutError, OSError, RuntimeError) as e:
             logger.error(
                 "kafka_emission_failed",
                 source_type=source_type.value,
                 count=len(items),
                 error=str(e),
+            )
+            metrics.record_kafka_emit_failure(
+                source_type=source_type.value,
+                failure_mode="hard_exception",
+                count=len(items),
             )
 
         # Transform FDA recalls to FSMA events and emit to graph consumer
