@@ -76,6 +76,7 @@ add_observability(app, service_name="ingestion-service")
 from fastapi.middleware.cors import CORSMiddleware
 from shared.cors import get_allowed_origins, should_allow_credentials
 from shared.middleware import TenantContextMiddleware, RequestIDMiddleware
+from shared.observability.correlation import CorrelationIdMiddleware
 from shared.tenant_rate_limiting import TenantRateLimitMiddleware
 
 app.add_middleware(
@@ -83,7 +84,7 @@ app.add_middleware(
     allow_origins=get_allowed_origins(),
     allow_credentials=should_allow_credentials(),
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type", "X-RegEngine-API-Key", "X-Request-ID", "X-Tenant-ID"],
+    allow_headers=["Authorization", "Content-Type", "X-RegEngine-API-Key", "X-Request-ID", "X-Tenant-ID", "X-Correlation-ID"],
 )
 app.add_middleware(RequestIDMiddleware)
 app.add_middleware(TenantContextMiddleware)
@@ -93,6 +94,9 @@ app.add_middleware(TenantRateLimitMiddleware, default_rpm=100)
 from shared.request_safety import RequestSizeLimitMiddleware, RequestTimeoutMiddleware
 app.add_middleware(RequestSizeLimitMiddleware, max_bytes=10 * 1024 * 1024)
 app.add_middleware(RequestTimeoutMiddleware, timeout_seconds=120)
+
+# Correlation-ID middleware — registered last so it runs first (outermost). (#1316)
+app.add_middleware(CorrelationIdMiddleware)
 
 # Global exception handlers (Sprint 18)
 from shared.error_handling import install_exception_handlers
