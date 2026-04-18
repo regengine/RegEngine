@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+from collections import OrderedDict
 from datetime import datetime, timezone
 from typing import Any, Optional
 from uuid import uuid4
@@ -35,9 +36,40 @@ from services.ingestion.app.epcis.validation import (
 
 logger = logging.getLogger("epcis-ingestion")
 
-# Backward-compatible names retained for tests and non-production fallback.
-_epcis_store: dict[str, dict] = {}
-_epcis_idempotency_index: dict[str, str] = {}
+# Tenant-scoped in-memory fallback stores (#1148). Outer dict is keyed by
+# ``tenant_id``; inner OrderedDicts are bounded per-tenant via FIFO
+# eviction in ``_fallback_store_put`` / ``_fallback_idempotency_put``.
+# Production fallback is gated off via ``_allow_in_memory_fallback`` —
+# these stores exist for development, tests, and the explicit
+# ``ALLOW_EPCIS_IN_MEMORY_FALLBACK`` override.
+_epcis_store: dict[str, "OrderedDict[str, dict]"] = {}
+_epcis_idempotency_index: dict[str, "OrderedDict[str, str]"] = {}
+
+_EPCIS_FALLBACK_CAP_PER_TENANT = int(
+    os.getenv("EPCIS_FALLBACK_CAP_PER_TENANT", "10000")
+)
+
+
+def _fallback_store_for(tenant_id: str) -> "OrderedDict[str, dict]":
+    return _epcis_store.setdefault(tenant_id, OrderedDict())
+
+
+def _fallback_idempotency_for(tenant_id: str) -> "OrderedDict[str, str]":
+    return _epcis_idempotency_index.setdefault(tenant_id, OrderedDict())
+
+
+def _fallback_store_put(tenant_id: str, event_id: str, record: dict) -> None:
+    store = _fallback_store_for(tenant_id)
+    store[event_id] = record
+    while len(store) > _EPCIS_FALLBACK_CAP_PER_TENANT:
+        store.popitem(last=False)
+
+
+def _fallback_idempotency_put(tenant_id: str, idem_key: str, event_id: str) -> None:
+    idx = _fallback_idempotency_for(tenant_id)
+    idx[idem_key] = event_id
+    while len(idx) > _EPCIS_FALLBACK_CAP_PER_TENANT:
+        idx.popitem(last=False)
 
 
 def _is_production() -> bool:
@@ -382,15 +414,24 @@ def _list_events_from_db(
         db_session.close()
 
 
-def _ingest_single_event_fallback(event: dict) -> tuple[dict, int]:
+def _ingest_single_event_fallback(tenant_id: str, event: dict) -> tuple[dict, int]:
+    """Persist an event to the tenant-scoped in-memory fallback store.
+
+    #1148: store and idempotency index are keyed by ``tenant_id`` — prior
+    flat layout allowed cross-tenant reads when the DB was unreachable.
+    Each tenant's partition is bounded by ``EPCIS_FALLBACK_CAP_PER_TENANT``
+    (default 10_000) and evicts FIFO.
+    """
     errors = _validate_epcis(event)
     if errors:
         raise HTTPException(status_code=400, detail={"errors": errors})
 
     idempotency_key = _event_idempotency_key(event)
-    existing_event_id = _epcis_idempotency_index.get(idempotency_key)
+    tenant_idx = _fallback_idempotency_for(tenant_id)
+    tenant_store = _fallback_store_for(tenant_id)
+    existing_event_id = tenant_idx.get(idempotency_key)
     if existing_event_id:
-        existing_record = _epcis_store[existing_event_id]
+        existing_record = tenant_store[existing_event_id]
         return (
             {
                 "status": 200,
@@ -413,13 +454,14 @@ def _ingest_single_event_fallback(event: dict) -> tuple[dict, int]:
     # #1239: in strict mode (default), validation failure is a hard 422 —
     # the event is NOT persisted. In advisory mode we persist with an
     # error-severity alert so FDA exports can filter it out.
-    fsma_validated = _validate_as_fsma_event(normalized)
+    fsma_validated = _validate_as_fsma_event(normalized, tenant_id)
     if fsma_validated:
         normalized["fsma_validation_status"] = "passed"
     else:
         if _fsma_strict_mode():
             logger.warning(
-                "epcis_fsma_validation_rejected tlc=%s event=%s",
+                "epcis_fsma_validation_rejected tenant=%s tlc=%s event=%s",
+                tenant_id,
                 normalized.get("tlc"),
                 normalized.get("event_time"),
             )
@@ -446,6 +488,7 @@ def _ingest_single_event_fallback(event: dict) -> tuple[dict, int]:
 
     stored = {
         "id": event_id,
+        "tenant_id": tenant_id,
         "ingested_at": datetime.now(timezone.utc).isoformat(),
         "idempotency_key": idempotency_key,
         "epcis_document": event,
@@ -454,8 +497,8 @@ def _ingest_single_event_fallback(event: dict) -> tuple[dict, int]:
         "alerts": alerts,
         "kde_completeness": _kde_completeness(kdes),
     }
-    _epcis_store[event_id] = stored
-    _epcis_idempotency_index[idempotency_key] = event_id
+    _fallback_store_put(tenant_id, event_id, stored)
+    _fallback_idempotency_put(tenant_id, idempotency_key, event_id)
 
     return (
         {
@@ -470,9 +513,16 @@ def _ingest_single_event_fallback(event: dict) -> tuple[dict, int]:
     )
 
 
-def _ingest_single_event_db(tenant_id: str, event: dict) -> tuple[dict, int]:
-    from shared.cte_persistence import CTEPersistence
+def _prepare_event_for_persistence(tenant_id: str, event: dict) -> dict:
+    """Pre-DB validation + normalization pipeline.
 
+    Runs all checks that can reject an event before any DB work:
+    structural EPCIS validation, CTE normalization (includes unmapped
+    bizStep rejection per #1153), FSMA schema gate (#1239), and
+    quantity acceptance (#1249 — no silent clamp to 1.0). Raises
+    ``HTTPException`` on any failure so the batch orchestrator can
+    abort before opening a DB transaction.
+    """
     errors = _validate_epcis(event)
     if errors:
         raise HTTPException(status_code=400, detail={"errors": errors})
@@ -518,73 +568,118 @@ def _ingest_single_event_db(tenant_id: str, event: dict) -> tuple[dict, int]:
             ),
         })
 
-    event_time = normalized.get("event_time") or datetime.now(timezone.utc).isoformat()
+    # #1249: quantity must be explicit. We no longer synthesize 1.0 for
+    # missing / non-numeric / non-positive values — that falsified FDA
+    # traceability records. Zero and negative quantities are legitimate
+    # FSMA values (empty pallet, reversal, recall correction) and are
+    # persisted as-is after FSMAEvent validation (which enforces ge=0
+    # for strict mode; advisory mode stores the original).
     quantity = normalized.get("quantity")
-    try:
-        quantity_value = float(quantity) if quantity is not None else 1.0
-    except (TypeError, ValueError):
-        quantity_value = 1.0
-    if quantity_value <= 0:
-        quantity_value = 1.0
-
-    db_session = get_db_safe()
-    try:
-        persistence = CTEPersistence(db_session)
-        result = persistence.store_event(
-            tenant_id=tenant_id,
-            event_type=normalized["event_type"],
-            traceability_lot_code=normalized["tlc"],
-            product_description=_default_product_description(normalized),
-            quantity=quantity_value,
-            unit_of_measure=normalized.get("unit_of_measure") or "units",
-            event_timestamp=event_time,
-            source="epcis",
-            source_event_id=str(event.get("eventID") or idempotency_key),
-            location_gln=normalized.get("location_id"),
-            location_name=None,
-            kdes=kde_map,
-            alerts=alerts,
-            epcis_event_type=normalized.get("epcis_event_type"),
-            epcis_action=normalized.get("epcis_action"),
-            epcis_biz_step=normalized.get("epcis_biz_step"),
+    if quantity is None:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "error": "missing_quantity",
+                "message": (
+                    "FSMA 204 requires a numeric quantity KDE. Silent "
+                    "synthesis to 1.0 was removed per #1249 — events must "
+                    "supply quantity via EPCIS quantityList."
+                ),
+            },
         )
-        db_session.commit()
+    try:
+        quantity_value = float(quantity)
+    except (TypeError, ValueError):
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "error": "non_numeric_quantity",
+                "quantity": str(quantity),
+                "message": (
+                    "EPCIS quantity must be numeric. Non-numeric values "
+                    "are rejected per #1249 rather than coerced to 1.0."
+                ),
+            },
+        )
 
-        # Canonical normalization — write to traceability_events + evaluate rules
-        if not result.idempotent:
-            try:
-                from shared.canonical_event import normalize_epcis_event
-                from shared.canonical_persistence import CanonicalEventStore
-                canonical = normalize_epcis_event(event, tenant_id)
-                canonical_store = CanonicalEventStore(db_session, dual_write=False, skip_chain_write=True)
-                canonical_store.set_tenant_context(tenant_id)
-                canonical_store.persist_event(canonical)
-                # Auto-evaluate rules
-                from shared.rules_engine import RulesEngine
-                engine = RulesEngine(db_session)
-                event_data = {
-                    "event_id": str(canonical.event_id),
-                    "event_type": canonical.event_type.value,
-                    "traceability_lot_code": canonical.traceability_lot_code,
-                    "product_reference": canonical.product_reference,
-                    "quantity": canonical.quantity,
-                    "unit_of_measure": canonical.unit_of_measure,
-                    "from_facility_reference": canonical.from_facility_reference,
-                    "to_facility_reference": canonical.to_facility_reference,
-                    "from_entity_reference": canonical.from_entity_reference,
-                    "to_entity_reference": canonical.to_entity_reference,
-                    "kdes": canonical.kdes,
-                }
-                engine.evaluate_event(event_data, persist=True, tenant_id=tenant_id)
-                db_session.commit()
-            except Exception as canon_err:
-                logger.warning("epcis_canonical_write_skipped: %s", str(canon_err))
+    event_time = normalized.get("event_time") or datetime.now(timezone.utc).isoformat()
+    return {
+        "event": event,
+        "idempotency_key": idempotency_key,
+        "normalized": normalized,
+        "kdes": kdes,
+        "alerts": alerts,
+        "kde_map": kde_map,
+        "quantity_value": quantity_value,
+        "event_time": event_time,
+    }
 
-    except Exception:
-        db_session.rollback()
-        raise
-    finally:
-        db_session.close()
+
+def _persist_prepared_event_in_session(
+    db_session, tenant_id: str, prepared: dict
+) -> tuple[dict, int]:
+    """Persist a prepared event using a caller-managed DB session.
+
+    Does NOT commit or close the session — the caller is responsible
+    for lifecycle. This is what the atomic batch path uses so a single
+    rollback can unwind every per-event change (#1156).
+    """
+    from shared.cte_persistence import CTEPersistence
+
+    normalized = prepared["normalized"]
+    kde_map = prepared["kde_map"]
+    event = prepared["event"]
+    alerts = prepared["alerts"]
+    kdes = prepared["kdes"]
+
+    persistence = CTEPersistence(db_session)
+    result = persistence.store_event(
+        tenant_id=tenant_id,
+        event_type=normalized["event_type"],
+        traceability_lot_code=normalized["tlc"],
+        product_description=_default_product_description(normalized),
+        quantity=prepared["quantity_value"],
+        unit_of_measure=normalized.get("unit_of_measure") or "units",
+        event_timestamp=prepared["event_time"],
+        source="epcis",
+        source_event_id=str(event.get("eventID") or prepared["idempotency_key"]),
+        location_gln=normalized.get("location_id"),
+        location_name=None,
+        kdes=kde_map,
+        alerts=alerts,
+        epcis_event_type=normalized.get("epcis_event_type"),
+        epcis_action=normalized.get("epcis_action"),
+        epcis_biz_step=normalized.get("epcis_biz_step"),
+    )
+
+    # Canonical normalization — write to traceability_events + evaluate rules.
+    # Kept best-effort: a canonical-write failure must not block CTE persistence.
+    if not result.idempotent:
+        try:
+            from shared.canonical_event import normalize_epcis_event
+            from shared.canonical_persistence import CanonicalEventStore
+            canonical = normalize_epcis_event(event, tenant_id)
+            canonical_store = CanonicalEventStore(db_session, dual_write=False, skip_chain_write=True)
+            canonical_store.set_tenant_context(tenant_id)
+            canonical_store.persist_event(canonical)
+            from shared.rules_engine import RulesEngine
+            engine = RulesEngine(db_session)
+            event_data = {
+                "event_id": str(canonical.event_id),
+                "event_type": canonical.event_type.value,
+                "traceability_lot_code": canonical.traceability_lot_code,
+                "product_reference": canonical.product_reference,
+                "quantity": canonical.quantity,
+                "unit_of_measure": canonical.unit_of_measure,
+                "from_facility_reference": canonical.from_facility_reference,
+                "to_facility_reference": canonical.to_facility_reference,
+                "from_entity_reference": canonical.from_entity_reference,
+                "to_entity_reference": canonical.to_entity_reference,
+                "kdes": canonical.kdes,
+            }
+            engine.evaluate_event(event_data, persist=True, tenant_id=tenant_id)
+        except Exception as canon_err:
+            logger.warning("epcis_canonical_write_skipped: %s", str(canon_err))
 
     status_code = 200 if result.idempotent else 201
     return (
@@ -600,9 +695,95 @@ def _ingest_single_event_db(tenant_id: str, event: dict) -> tuple[dict, int]:
     )
 
 
+def _ingest_single_event_db(tenant_id: str, event: dict) -> tuple[dict, int]:
+    """Own-session convenience wrapper for single-event DB ingest."""
+    prepared = _prepare_event_for_persistence(tenant_id, event)
+    db_session = get_db_safe()
+    try:
+        payload, status_code = _persist_prepared_event_in_session(
+            db_session, tenant_id, prepared
+        )
+        db_session.commit()
+        return payload, status_code
+    except Exception:
+        db_session.rollback()
+        raise
+    finally:
+        db_session.close()
+
+
+def _ingest_batch_events_db_atomic(
+    tenant_id: str, events: list[dict]
+) -> list[tuple[dict, int]]:
+    """Atomic batch ingest: validate all events first, then persist under a
+    single DB transaction. Any per-event failure rolls back the whole batch.
+
+    Closes #1156 — previously each event committed independently, leaving
+    partial state on mid-batch failure.
+    """
+    # Phase 1: pre-validate all events. Collect every error so the caller
+    # can return a per-index error map without half-committing work.
+    prepared_events: list[dict] = []
+    errors: list[dict] = []
+    for idx, event in enumerate(events):
+        try:
+            prepared_events.append(_prepare_event_for_persistence(tenant_id, event))
+        except HTTPException as exc:
+            errors.append({"index": idx, "status_code": exc.status_code, "detail": exc.detail})
+
+    if errors:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": "batch_validation_failed",
+                "mode": "atomic",
+                "message": (
+                    "One or more events failed pre-DB validation. No events "
+                    "were persisted. Use ?mode=partial to opt in to "
+                    "per-event processing with HTTP 207 semantics."
+                ),
+                "errors": errors,
+            },
+        )
+
+    # Phase 2: persist every prepared event under a single session.
+    db_session = get_db_safe()
+    results: list[tuple[dict, int]] = []
+    try:
+        for prepared in prepared_events:
+            payload, status_code = _persist_prepared_event_in_session(
+                db_session, tenant_id, prepared
+            )
+            results.append((payload, status_code))
+        db_session.commit()
+        return results
+    except Exception as exc:
+        db_session.rollback()
+        logger.error("epcis_batch_rollback tenant=%s error=%s", tenant_id, str(exc))
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": "batch_persistence_failed",
+                "mode": "atomic",
+                "message": (
+                    "Persistence failed mid-batch. All events in this batch "
+                    "were rolled back. Use ?mode=partial for best-effort "
+                    "per-event ingest."
+                ),
+                "cause": str(exc),
+            },
+        ) from exc
+    finally:
+        db_session.close()
+
+
 def _ingest_single_event(tenant_id: str, event: dict) -> tuple[dict, int]:
     try:
         return _ingest_single_event_db(tenant_id, event)
+    except HTTPException:
+        # Validation failures (400/422) must surface as-is — do not fall
+        # back to in-memory for rejected events.
+        raise
     except Exception as exc:
         if not _allow_in_memory_fallback():
             logger.error("epcis_db_persistence_failed_no_fallback error=%s", str(exc))
@@ -612,4 +793,4 @@ def _ingest_single_event(tenant_id: str, event: dict) -> tuple[dict, int]:
             ) from exc
 
         logger.warning("epcis_db_persistence_failed_using_fallback error=%s", str(exc))
-        return _ingest_single_event_fallback(event)
+        return _ingest_single_event_fallback(tenant_id, event)
