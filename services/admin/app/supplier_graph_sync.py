@@ -79,9 +79,9 @@ DELETE old
 WITH facility
 UNWIND $categories AS category
 MERGE (ftl:FTLCategory {category_id: category.id})
-SET ftl.name = category.name,
-    ftl.required_ctes = category.ctes,
-    ftl.updated_at = datetime()
+  ON CREATE SET ftl.name = category.name,
+                ftl.required_ctes = category.ctes,
+                ftl.created_at = datetime()
 MERGE (facility)-[:HANDLES]->(ftl)
 """
 

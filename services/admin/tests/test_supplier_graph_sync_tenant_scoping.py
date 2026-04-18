@@ -199,15 +199,24 @@ def test_get_required_ctes_for_facility_passes_tenant_id_to_driver():
 
 def test_ftl_category_is_not_mutated_on_match():
     """FTLCategory nodes are shared regulatory reference data and must NOT be
-    overwritten by tenant writes. Any SET against `ftl.` in the scoping query
-    would let tenant A rewrite tenant B's view of required_ctes.
+    overwritten by tenant writes on MATCH. Only ``ON CREATE SET`` is allowed,
+    which ensures a tenant cannot silently rewrite another tenant's view of
+    required_ctes after the node is seeded.
+
+    Every ``SET ftl.*`` clause in FACILITY_FTL_SCOPING_QUERY must be anchored
+    to ``ON CREATE`` (or to ``ON MATCH`` explicitly, but the latter would be a
+    bug). A bare ``SET ftl.*`` that follows a ``MERGE (ftl:FTLCategory ...)``
+    mutates the shared catalog on every write — the attack described in #1394.
     """
-    # The query must not contain `SET ftl.` mutations (other than at seed
-    # time, which lives in init_constraints/load_frameworks, not here).
-    assert not re.search(r"SET\s+ftl\.", FACILITY_FTL_SCOPING_QUERY), (
-        "FTLCategory must be treated as a read-only shared catalog — do not "
-        "mutate ftl.* on MATCH. See issue #1394."
-    )
+    # Find every SET that touches ftl.*; each occurrence must be immediately
+    # preceded by "ON CREATE" (allowing whitespace between).
+    for match in re.finditer(r"SET\s+ftl\.", FACILITY_FTL_SCOPING_QUERY):
+        prefix = FACILITY_FTL_SCOPING_QUERY[: match.start()].rstrip()
+        assert prefix.endswith("ON CREATE"), (
+            "FTLCategory mutation must be anchored to ON CREATE only — do not "
+            "mutate ftl.* on MATCH. See issue #1394. "
+            f"Found bare SET at offset {match.start()}: ...{prefix[-40:]!r}"
+        )
 
 
 # -----
