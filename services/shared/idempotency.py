@@ -3,6 +3,14 @@
 Provides deduplication for POST requests via Idempotency-Key header.
 Caches successful responses (2xx) for 24 hours to enable safe retries.
 Gracefully degrades if Redis is unavailable.
+
+Tenant isolation (#1237): cache keys are composed as
+``idempotency:{tenant_id}:{idempotency_key}`` so that two tenants who
+happen to choose the same key (``daily-batch-2026-04-17``) cannot see
+each other's cached responses. The tenant is sourced from the
+authenticated principal / ``X-Tenant-ID`` header, NOT the request body
+— the body is read once per request and cannot be used to spoof cache
+keys.
 """
 
 from __future__ import annotations
@@ -11,7 +19,7 @@ import hashlib
 import json
 import os
 import time
-from typing import Any, Callable
+from typing import Any, Callable, Optional
 
 import redis.asyncio as redis
 import structlog
@@ -21,9 +29,17 @@ from starlette.responses import StreamingResponse
 
 logger = structlog.get_logger("idempotency")
 
-# Cache key prefix for idempotency responses
+# Cache key prefix for idempotency responses.
+#
+# Prior to #1237 the prefix was ``idempotency:`` and keys were not
+# tenant-scoped, letting tenant B receive tenant A's cached 2xx response
+# when both happened to choose the same idempotency key. The new format
+# is ``idempotency:{tenant_id}:{idempotency_key}`` — see
+# ``_build_cache_key`` below. Legacy un-scoped keys will expire out on
+# their own 24h TTL.
 IDEMPOTENCY_KEY_PREFIX = "idempotency:"
 IDEMPOTENCY_TTL_SECONDS = 86400  # 24 hours
+_ANONYMOUS_TENANT = "_anonymous_"  # placeholder when no tenant resolvable
 
 
 class IdempotencyMiddleware(BaseHTTPMiddleware):
@@ -69,9 +85,33 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
         """Only cache POST requests."""
         return method.upper() == "POST"
 
-    def _get_cache_key(self, idempotency_key: str) -> str:
-        """Generate a Redis cache key from the idempotency key."""
-        return f"{IDEMPOTENCY_KEY_PREFIX}{idempotency_key}"
+    def _get_cache_key(self, idempotency_key: str, tenant_id: Optional[str] = None) -> str:
+        """Generate a tenant-scoped Redis cache key (#1237).
+
+        The cache key is ``idempotency:{tenant_id}:{idempotency_key}``
+        so that two tenants using the same idempotency key cannot see
+        each other's cached responses. If tenant cannot be resolved
+        (e.g. anonymous health probe), a sentinel namespace is used.
+        """
+        safe_tenant = tenant_id or _ANONYMOUS_TENANT
+        return f"{IDEMPOTENCY_KEY_PREFIX}{safe_tenant}:{idempotency_key}"
+
+    def _resolve_tenant_id(self, request: Request) -> Optional[str]:
+        """Resolve tenant from authenticated context — never from body.
+
+        Order: RBAC principal (set by auth middleware) > X-Tenant-ID
+        header. The request body is NOT consulted: if we did, an
+        attacker could include ``tenant_id`` in their JSON payload and
+        spoof the cache namespace.
+        """
+        principal = getattr(request.state, "principal", None)
+        principal_tenant = getattr(principal, "tenant_id", None) if principal else None
+        if principal_tenant:
+            return str(principal_tenant)
+        header_tenant = request.headers.get("X-Tenant-ID")
+        if header_tenant:
+            return header_tenant.strip()
+        return None
 
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
         """Check cache on receipt, cache response on return (if 2xx)."""
@@ -87,7 +127,8 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
         if not idempotency_key or len(idempotency_key) > 255:
             return await call_next(request)
 
-        cache_key = self._get_cache_key(idempotency_key)
+        tenant_id = self._resolve_tenant_id(request)
+        cache_key = self._get_cache_key(idempotency_key, tenant_id)
         client = await self._get_client()
 
         # If Redis available, check for cached response
@@ -99,6 +140,7 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
                     logger.info(
                         "idempotency_cache_hit",
                         idempotency_key=idempotency_key,
+                        tenant_id=tenant_id,
                         status=cached_response["status"],
                     )
                     return Response(
@@ -110,6 +152,7 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
                 logger.warning(
                     "idempotency_cache_read_error",
                     idempotency_key=idempotency_key,
+                    tenant_id=tenant_id,
                     error=str(exc),
                 )
                 # Continue to process request on cache read error
@@ -141,6 +184,7 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
                 logger.info(
                     "idempotency_cached",
                     idempotency_key=idempotency_key,
+                    tenant_id=tenant_id,
                     status=response.status_code,
                 )
 
@@ -155,6 +199,7 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
                 logger.warning(
                     "idempotency_cache_write_error",
                     idempotency_key=idempotency_key,
+                    tenant_id=tenant_id,
                     error=str(exc),
                 )
                 # Return original response on cache write error
