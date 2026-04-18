@@ -77,9 +77,18 @@ def _make_event(**overrides) -> Dict[str, Any]:
 
 
 def _engine_with_rules(rules: List[RuleDefinition], session=None) -> RulesEngine:
+    # Bypass ``__init__`` so tests can pre-seed ``_rules_cache``. Must
+    # still set every attribute the instance methods touch — since
+    # #1371 that now includes ``_cache_ttl_seconds`` and
+    # ``_rules_cache_loaded_at`` (freshness gate). Stamp loaded_at in
+    # the past so tests get cache-hit semantics without hitting the DB.
+    import time as _time
+
     engine = RulesEngine.__new__(RulesEngine)
     engine.session = session
+    engine._cache_ttl_seconds = 60
     engine._rules_cache = rules
+    engine._rules_cache_loaded_at = _time.monotonic()
     return engine
 
 

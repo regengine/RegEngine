@@ -52,9 +52,62 @@ class RulesEngine:
     against applicable rules, and persists evaluation results.
     """
 
-    def __init__(self, session: Session):
+    #: Default rule-cache time-to-live (seconds). Long-lived
+    #: ``RulesEngine`` instances (e.g. a future worker process holding
+    #: one engine across many events) otherwise serve stale rules
+    #: indefinitely when an admin retires or adds a rule (#1371).
+    #: Today's call sites all instantiate per-request, so the TTL is a
+    #: defense-in-depth measure with negligible cost in the
+    #: short-lived case. Override via the ``cache_ttl_seconds`` ctor
+    #: argument (0 disables caching entirely — useful in tests).
+    DEFAULT_CACHE_TTL_SECONDS: int = 60
+
+    def __init__(
+        self,
+        session: Session,
+        *,
+        cache_ttl_seconds: Optional[int] = None,
+    ):
         self.session = session
+        self._cache_ttl_seconds: int = (
+            cache_ttl_seconds
+            if cache_ttl_seconds is not None
+            else self.DEFAULT_CACHE_TTL_SECONDS
+        )
         self._rules_cache: Optional[List[RuleDefinition]] = None
+        # Monotonic timestamp (seconds) of the most recent
+        # ``load_active_rules`` call; ``None`` until the cache is
+        # populated. Used to decide whether the cached list is still
+        # fresh. Monotonic clock so system-time adjustments don't
+        # affect freshness math (#1371).
+        self._rules_cache_loaded_at: Optional[float] = None
+
+    def _is_cache_fresh(self) -> bool:
+        """Is the per-instance rule cache still within its TTL?"""
+        if self._rules_cache is None or self._rules_cache_loaded_at is None:
+            return False
+        if self._cache_ttl_seconds <= 0:
+            # TTL disabled → always treat as stale so every call reloads.
+            return False
+        import time as _time
+        age = _time.monotonic() - self._rules_cache_loaded_at
+        return age < self._cache_ttl_seconds
+
+    def invalidate_cache(self) -> None:
+        """Explicitly bust the per-instance rule cache (#1371).
+
+        Intended for admin-edit endpoints that mutate ``rule_definitions``
+        and want the next evaluation to see the change immediately,
+        without waiting for the TTL. Safe to call on a cold instance
+        (no-op).
+        """
+        if self._rules_cache is not None:
+            logger.info(
+                "rules_engine_cache_invalidated",
+                extra={"cached_rule_count": len(self._rules_cache)},
+            )
+        self._rules_cache = None
+        self._rules_cache_loaded_at = None
 
     def load_active_rules(self) -> List[RuleDefinition]:
         """Load all active (non-retired) rule definitions."""
@@ -91,6 +144,12 @@ class RulesEngine:
             ))
 
         self._rules_cache = rules
+        import time as _time
+        self._rules_cache_loaded_at = _time.monotonic()
+        logger.info(
+            "rules_engine_cache_loaded",
+            extra={"rule_count": len(rules), "ttl_seconds": self._cache_ttl_seconds},
+        )
         return rules
 
     def get_applicable_rules(
@@ -113,9 +172,11 @@ class RulesEngine:
         stamp an unclassified event "compliant" (#1346).
         """
         if rules is None:
-            # Use cache if explicitly populated (even with an empty list — a
-            # tenant with zero seeded rules is a valid state, not a cache miss).
-            if self._rules_cache is not None:
+            # Use cache if still fresh (#1371). An empty list is a valid
+            # cached state — a tenant with zero seeded rules should not
+            # re-hit the DB every call — so freshness is the gate, not
+            # non-None. Stale cache is transparently reloaded.
+            if self._is_cache_fresh():
                 rules = self._rules_cache
             else:
                 rules = self.load_active_rules()
