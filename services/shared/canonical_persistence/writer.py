@@ -197,8 +197,27 @@ class CanonicalEventStore:
         chain_hash = compute_chain_hash(event.sha256_hash, previous_chain_hash)
         event.chain_hash = chain_hash
 
-        # --- Insert canonical event ---
-        self._insert_canonical_event(event)
+        # --- Insert canonical event (fix #1252: ON CONFLICT DO NOTHING) ---
+        # Returns the inserted event_id, sha256_hash, chain_hash on success,
+        # or None when a concurrent writer won the idempotency race.  In
+        # that case we re-SELECT the winner's row and return idempotent
+        # without aborting the surrounding transaction.
+        inserted = self._insert_canonical_event(event)
+        if inserted is None and event.idempotency_key:
+            existing = self.session.execute(
+                text("""
+                    SELECT event_id, sha256_hash, chain_hash
+                    FROM fsma.traceability_events
+                    WHERE idempotency_key = :key AND tenant_id = :tid
+                """),
+                {"key": event.idempotency_key, "tid": tenant_id},
+            ).fetchone()
+            if existing:
+                return CanonicalStoreResult(
+                    success=True, event_id=str(existing[0]),
+                    sha256_hash=existing[1], chain_hash=existing[2],
+                    idempotent=True, errors=[],
+                )
 
         # --- Mark superseded event ---
         if event.supersedes_event_id:
@@ -657,9 +676,17 @@ class CanonicalEventStore:
     # Internal Write Helpers
     # ------------------------------------------------------------------
 
-    def _insert_canonical_event(self, event: TraceabilityEvent) -> None:
-        """Insert a single canonical event."""
-        self.session.execute(
+    def _insert_canonical_event(self, event: TraceabilityEvent) -> Optional[Tuple[str, str, str]]:
+        """Insert a single canonical event.
+
+        Uses ``ON CONFLICT (tenant_id, idempotency_key) DO NOTHING RETURNING``
+        so a concurrent writer winning the idempotency race does not abort
+        the surrounding transaction with a UNIQUE violation (fix #1252).
+
+        Returns the inserted (event_id, sha256_hash, chain_hash) tuple on
+        success, or None when the row already existed.
+        """
+        row = self.session.execute(
             text("""
                 INSERT INTO fsma.traceability_events (
                     event_id, tenant_id, source_system, source_record_id,
@@ -688,9 +715,14 @@ class CanonicalEventStore:
                     :sha256_hash, :chain_hash, :idempotency_key,
                     :epcis_event_type, :epcis_action, :epcis_biz_step
                 )
+                ON CONFLICT (tenant_id, idempotency_key) DO NOTHING
+                RETURNING event_id, sha256_hash, chain_hash
             """),
             self._event_to_params(event),
-        )
+        ).fetchone()
+        if row is None:
+            return None
+        return (str(row[0]), row[1], row[2])
 
     def _event_to_params(self, event: TraceabilityEvent) -> Dict[str, Any]:
         """Convert a TraceabilityEvent to SQL parameter dict."""
