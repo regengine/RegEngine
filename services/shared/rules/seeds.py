@@ -199,6 +199,139 @@ FSMA_RULE_SEEDS: List[Dict[str, Any]] = [
         "failure_reason_template": "Cooling event missing {field_name} ({citation})",
         "remediation_suggestion": "Record the date of cooling",
     },
+    # --- Per-CTE KDE gap-fill (#1102): per 21 CFR 1.1325-1.1335 every
+    # CTE needs enforcement of its mandated KDEs. Adding the rules the
+    # audit flagged as missing: cooling location + temperature,
+    # initial-packing location + harvest-location reference, and the
+    # two first-land-based-receiving fields used for import tracking.
+    {
+        "title": "Cooling: Cooling Location Required",
+        "description": "Cooling events must identify the location where cooling occurred",
+        "severity": "critical",
+        "category": "kde_presence",
+        "applicability_conditions": {"cte_types": ["cooling"], "ftl_scope": ["ALL"]},
+        "citation_reference": "21 CFR \u00a71.1330(b)(2)",
+        "evaluation_logic": {
+            "type": "multi_field_presence",
+            "field": "kdes.cooling_location",
+            "params": {
+                "fields": [
+                    "kdes.cooling_location",
+                    "kdes.location_name",
+                    "from_facility_reference",
+                ]
+            },
+        },
+        "failure_reason_template": "Cooling event missing {field_name} \u2014 cannot identify where cooling occurred ({citation})",
+        "remediation_suggestion": "Record the description or GLN of the location where the food was cooled",
+    },
+    {
+        "title": "Cooling: Temperature Reading Required",
+        "description": "Cooling events must include the achieved temperature (\u00b0F or \u00b0C) so thermal kill-step and cold-chain integrity can be audited",
+        "severity": "critical",
+        "category": "kde_presence",
+        "applicability_conditions": {"cte_types": ["cooling"], "ftl_scope": ["ALL"]},
+        "citation_reference": "21 CFR \u00a71.1330(b)(5)",
+        "evaluation_logic": {
+            "type": "multi_field_presence",
+            "field": "kdes.temperature",
+            "params": {
+                "fields": [
+                    "kdes.temperature",
+                    "kdes.temperature_celsius",
+                    "kdes.temperature_fahrenheit",
+                    "kdes.cooling_temperature",
+                ]
+            },
+        },
+        "failure_reason_template": "Cooling event missing {field_name} \u2014 temperature reading required for cold-chain audit ({citation})",
+        "remediation_suggestion": "Record the temperature achieved during cooling in \u00b0F or \u00b0C",
+    },
+    {
+        "title": "Initial Packing: Packing Location Required",
+        "description": "Initial-packing events must identify the location description of the packing facility",
+        "severity": "critical",
+        "category": "kde_presence",
+        "applicability_conditions": {"cte_types": ["initial_packing"], "ftl_scope": ["ALL"]},
+        "citation_reference": "21 CFR \u00a71.1335(b)(2)",
+        "evaluation_logic": {
+            "type": "multi_field_presence",
+            "field": "kdes.packing_location",
+            "params": {
+                "fields": [
+                    "kdes.packing_location",
+                    "kdes.location_name",
+                    "from_facility_reference",
+                ]
+            },
+        },
+        "failure_reason_template": "Initial-packing event missing {field_name} \u2014 cannot identify packing facility ({citation})",
+        "remediation_suggestion": "Record the description or GLN of the initial-packing location",
+    },
+    {
+        "title": "Initial Packing: Harvest Location Reference Required",
+        "description": "Initial-packing events must carry a reference to the originating harvest location so traceability back to the farm is preserved",
+        "severity": "critical",
+        "category": "kde_presence",
+        "applicability_conditions": {"cte_types": ["initial_packing"], "ftl_scope": ["ALL"]},
+        "citation_reference": "21 CFR \u00a71.1335(b)(3)",
+        "evaluation_logic": {
+            "type": "multi_field_presence",
+            "field": "kdes.harvest_location_ref",
+            "params": {
+                "fields": [
+                    "kdes.harvest_location_ref",
+                    "kdes.harvest_location",
+                    "kdes.farm_reference",
+                ]
+            },
+        },
+        "failure_reason_template": "Initial-packing event missing {field_name} \u2014 cannot trace back to harvest location ({citation})",
+        "remediation_suggestion": "Record the harvest location reference (GLN, farm name, or field identifier) this lot came from",
+    },
+    {
+        "title": "First Land-Based Receiving: Entry Point Required",
+        "description": "First land-based receiving events (FDA-regulated imports, aquatic catch landed from a vessel, etc.) must identify the point of entry",
+        "severity": "critical",
+        "category": "kde_presence",
+        "applicability_conditions": {"cte_types": ["first_land_based_receiving"], "ftl_scope": ["ALL"]},
+        "citation_reference": "21 CFR \u00a71.1325(c)(4)",
+        "evaluation_logic": {
+            "type": "multi_field_presence",
+            "field": "kdes.entry_point",
+            "params": {
+                "fields": [
+                    "kdes.entry_point",
+                    "kdes.port_of_entry",
+                    "kdes.receiving_location",
+                ]
+            },
+        },
+        "failure_reason_template": "First land-based receiving event missing {field_name} \u2014 cannot identify point of entry ({citation})",
+        "remediation_suggestion": "Record the port or land-based entry point where the food was received",
+    },
+    {
+        "title": "First Land-Based Receiving: Source Vessel / Origin Required",
+        "description": "First land-based receiving events must identify the source vessel or origin reference so the catch/shipment can be traced back to its pre-landing origin",
+        "severity": "critical",
+        "category": "kde_presence",
+        "applicability_conditions": {"cte_types": ["first_land_based_receiving"], "ftl_scope": ["ALL"]},
+        "citation_reference": "21 CFR \u00a71.1325(c)(5)",
+        "evaluation_logic": {
+            "type": "multi_field_presence",
+            "field": "kdes.source_vessel_name",
+            "params": {
+                "fields": [
+                    "kdes.source_vessel_name",
+                    "kdes.source_vessel",
+                    "kdes.origin_reference",
+                    "from_entity_reference",
+                ]
+            },
+        },
+        "failure_reason_template": "First land-based receiving event missing {field_name} \u2014 cannot identify source vessel or pre-landing origin ({citation})",
+        "remediation_suggestion": "Record the source vessel name (for marine catch) or upstream origin reference for the incoming lot",
+    },
     # --- Universal Rules (apply to all CTE types) ---
     {
         "title": "TLC Must Be Present",
