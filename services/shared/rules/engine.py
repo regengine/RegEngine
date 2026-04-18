@@ -33,7 +33,11 @@ from sqlalchemy.orm import Session
 
 from shared.rules.types import RuleDefinition, RuleEvaluationResult, EvaluationSummary
 from shared.rules.evaluators.stateless import EVALUATORS
-from shared.rules.evaluators.relational import RELATIONAL_EVALUATORS
+from shared.rules.evaluators.relational import (
+    RELATIONAL_EVALUATORS,
+    RelatedEventsCache,
+    fetch_related_events_batch,
+)
 from shared.rules.ftl import (
     is_ftl_food,
     event_has_ftl_hint,
@@ -227,8 +231,18 @@ class RulesEngine:
             )
             return summary
 
+        # #1365 — one cache per evaluate_event() call; all relational
+        # evaluators for this event share it, so fetch_related_events
+        # runs at most once per (tlc, tenant, exclude_event_id).
+        related_events_cache: RelatedEventsCache = {}
+
         for rule in applicable_rules:
-            result = self._evaluate_single_rule(event_data, rule, tenant_id=tenant_id)
+            result = self._evaluate_single_rule(
+                event_data,
+                rule,
+                tenant_id=tenant_id,
+                related_events_cache=related_events_cache,
+            )
             summary.results.append(result)
             self._tally_result(summary, result)
 
@@ -262,6 +276,32 @@ class RulesEngine:
         rules = self.load_active_rules()
         summaries = []
 
+        # #1365 — batch-prefetch related events for every (TLC, event_id)
+        # pair in the input set with a single query, instead of letting
+        # each relational rule trigger its own round-trip. The shared
+        # cache is passed to every _evaluate_single_rule call below.
+        batch_cache: RelatedEventsCache = {}
+        if self.session is not None:
+            tlc_pairs = [
+                (e.get("traceability_lot_code"), e.get("event_id"))
+                for e in events
+                if e.get("traceability_lot_code")
+            ]
+            if tlc_pairs:
+                try:
+                    fetch_related_events_batch(
+                        self.session, tlc_pairs, tenant_id, cache=batch_cache,
+                    )
+                except Exception as exc:
+                    # A prefetch failure should not abort the whole batch —
+                    # individual evaluators will fall back to per-event
+                    # queries (and log their own errors) via the empty
+                    # cache. Warn so SRE can spot the degraded path.
+                    logger.warning(
+                        "batch_prefetch_related_events_failed",
+                        extra={"error": str(exc), "tenant_id": tenant_id},
+                    )
+
         for event_data in events:
             event_type = event_data.get("event_type", "")
             event_id = event_data.get("event_id", "")
@@ -291,8 +331,18 @@ class RulesEngine:
                 summaries.append(summary)
                 continue
 
+            # #1365 — per-event cache shared by the relational rules in
+            # this event's evaluation. The batch prefetch below warms
+            # this cache with a single roundtrip before evaluation.
+            related_events_cache = batch_cache
+
             for rule in applicable:
-                result = self._evaluate_single_rule(event_data, rule, tenant_id=tenant_id)
+                result = self._evaluate_single_rule(
+                    event_data,
+                    rule,
+                    tenant_id=tenant_id,
+                    related_events_cache=related_events_cache,
+                )
                 summary.results.append(result)
                 self._tally_result(summary, result)
 
@@ -339,6 +389,7 @@ class RulesEngine:
         rule: RuleDefinition,
         *,
         tenant_id: Optional[str] = None,
+        related_events_cache: Optional[RelatedEventsCache] = None,
     ) -> RuleEvaluationResult:
         """Evaluate a single rule against a single event.
 
@@ -346,6 +397,9 @@ class RulesEngine:
         relational rule is dispatched without tenant_id, it is treated as
         an error (not a silent skip) so missing context is never treated
         as compliant.
+
+        related_events_cache is threaded into relational evaluators so
+        rules for the same event share a single DB fetch (#1365).
         """
         logic = rule.evaluation_logic
         eval_type = logic.get("type", "field_presence")
@@ -417,7 +471,9 @@ class RulesEngine:
                 )
             try:
                 return relational_evaluator(
-                    event_data, logic, rule, self.session, tenant_id=tenant_id
+                    event_data, logic, rule, self.session,
+                    tenant_id=tenant_id,
+                    related_events_cache=related_events_cache,
                 )
             except Exception as e:
                 logger.error(

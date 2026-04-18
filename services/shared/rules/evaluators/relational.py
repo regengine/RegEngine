@@ -13,13 +13,27 @@ Security (#1344):
     events lookup.
 
     The only tenant_id an evaluator is allowed to act on is the kwarg.
+
+Performance (#1365):
+    fetch_related_events is called once per (event, relational rule).
+    With three relational rules per event (temporal_order,
+    identity_consistency, mass_balance) that is 3 redundant round-trips
+    to Postgres per event.
+
+    A per-request memo cache ``related_events_cache`` is keyed on
+    (tlc, tenant_id, exclude_event_id) and passed through the engine.
+    Individual evaluators call ``fetch_related_events(session, tlc,
+    tenant, exclude, cache=cache)`` — a cache hit is free.
+
+    For multi-event runs, ``fetch_related_events_batch`` does a single
+    query per (tenant, tlc_set) and populates the cache.
 """
 
 import logging
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from sqlalchemy import text
+from sqlalchemy import bindparam, text
 from sqlalchemy.orm import Session
 
 from shared.rules.container_factors import ContainerFactorResolver
@@ -33,6 +47,11 @@ from shared.rules.uom import (
 )
 
 logger = logging.getLogger("rules-engine.relational")
+
+
+# Type alias — the cache the engine passes through to evaluators. Key
+# is (tlc, tenant_id, exclude_event_id); value is the list of event dicts.
+RelatedEventsCache = Dict[tuple, List[Dict[str, Any]]]
 
 
 def _resolve_tenant(
@@ -71,12 +90,28 @@ def fetch_related_events(
     traceability_lot_code: str,
     tenant_id: str,
     exclude_event_id: Optional[str] = None,
+    *,
+    cache: Optional[RelatedEventsCache] = None,
 ) -> List[Dict[str, Any]]:
     """Fetch all ACTIVE events for the same TLC + tenant.
 
     Returns list of dicts with event_id, event_type, event_timestamp,
     product_reference, quantity, unit_of_measure.
+
+    #1365 — if ``cache`` is provided, memoize by
+    ``(tlc, tenant_id, exclude_event_id)`` so multiple relational rules
+    evaluating the same event share a single DB round-trip. The cache
+    is created per-evaluation-run by the engine; callers outside the
+    engine may pass ``cache=None`` (default) for the original behavior.
     """
+    cache_key = (
+        str(traceability_lot_code),
+        str(tenant_id),
+        str(exclude_event_id) if exclude_event_id else None,
+    )
+    if cache is not None and cache_key in cache:
+        return cache[cache_key]
+
     query = text("""
         SELECT event_id, event_type, event_timestamp,
                product_reference, quantity, unit_of_measure
@@ -93,7 +128,7 @@ def fetch_related_events(
         "exclude_id": exclude_event_id,
     }).fetchall()
 
-    return [
+    result = [
         {
             "event_id": str(r[0]),
             "event_type": r[1],
@@ -104,6 +139,85 @@ def fetch_related_events(
         }
         for r in rows
     ]
+    if cache is not None:
+        cache[cache_key] = result
+    return result
+
+
+def fetch_related_events_batch(
+    session: Session,
+    tlc_event_pairs: List[tuple],
+    tenant_id: str,
+    *,
+    cache: Optional[RelatedEventsCache] = None,
+) -> RelatedEventsCache:
+    """Bulk-fetch related events for many (tlc, exclude_event_id) pairs.
+
+    Issues ONE query that selects all active events for all requested
+    TLCs in the tenant, then partitions the rows into per-TLC lists in
+    Python. Populates and returns ``cache`` (creating it if None) so
+    subsequent per-event ``fetch_related_events`` calls hit the cache.
+
+    Args:
+        session: SQLAlchemy session — scoped with RLS/tenant context.
+        tlc_event_pairs: iterable of (traceability_lot_code, exclude_event_id).
+        tenant_id: authenticated tenant id (#1344).
+        cache: optional existing cache to populate.
+
+    Returns:
+        The cache dict (``{(tlc, tenant_id, exclude_id): [events]}``).
+    """
+    if cache is None:
+        cache = {}
+    tenant_key = str(tenant_id)
+    unique_tlcs = {
+        str(tlc) for tlc, _ in tlc_event_pairs if tlc
+    }
+    if not unique_tlcs:
+        return cache
+
+    query = (
+        text("""
+            SELECT traceability_lot_code, event_id, event_type,
+                   event_timestamp, product_reference, quantity,
+                   unit_of_measure
+            FROM fsma.traceability_events
+            WHERE tenant_id = :tenant_id
+              AND status = 'active'
+              AND traceability_lot_code IN :tlcs
+            ORDER BY traceability_lot_code ASC, event_timestamp ASC
+        """)
+        .bindparams(bindparam("tlcs", expanding=True))
+    )
+    rows = session.execute(query, {
+        "tenant_id": tenant_key,
+        "tlcs": tuple(unique_tlcs),
+    }).fetchall()
+
+    per_tlc: Dict[str, List[Dict[str, Any]]] = {}
+    for r in rows:
+        per_tlc.setdefault(str(r[0]), []).append({
+            "event_id": str(r[1]),
+            "event_type": r[2],
+            "event_timestamp": r[3],
+            "product_reference": r[4],
+            "quantity": float(r[5]) if r[5] is not None else None,
+            "unit_of_measure": r[6],
+        })
+
+    for tlc, exclude_id in tlc_event_pairs:
+        if not tlc:
+            continue
+        tlc_key = str(tlc)
+        full = per_tlc.get(tlc_key, [])
+        exclude_key = str(exclude_id) if exclude_id else None
+        if exclude_key is None:
+            filtered = list(full)
+        else:
+            filtered = [e for e in full if str(e["event_id"]) != exclude_key]
+        cache[(tlc_key, tenant_key, exclude_key)] = filtered
+
+    return cache
 
 
 def evaluate_temporal_order(
@@ -113,11 +227,13 @@ def evaluate_temporal_order(
     session: Session,
     *,
     tenant_id: Optional[str] = None,
+    related_events_cache: Optional[RelatedEventsCache] = None,
 ) -> RuleEvaluationResult:
     """Detect chronology paradoxes -- e.g. shipping before harvesting.
 
     #1344 — tenant_id MUST come from the caller (authenticated context).
     Any tenant_id in event_data is ignored.
+    #1365 — related-events cache is optional; engine threads one through.
     """
     tlc = event_data.get("traceability_lot_code", "")
     event_id = event_data.get("event_id", "")
@@ -134,7 +250,9 @@ def evaluate_temporal_order(
             category=rule.category,
         )
 
-    related = fetch_related_events(session, tlc, auth_tid, str(event_id))
+    related = fetch_related_events(
+        session, tlc, auth_tid, str(event_id), cache=related_events_cache,
+    )
     if not related:
         return RuleEvaluationResult(
             rule_id=rule.rule_id, rule_version=rule.rule_version,
@@ -222,10 +340,12 @@ def evaluate_identity_consistency(
     session: Session,
     *,
     tenant_id: Optional[str] = None,
+    related_events_cache: Optional[RelatedEventsCache] = None,
 ) -> RuleEvaluationResult:
     """Detect product identity drift -- same TLC changing product mid-chain.
 
     #1344 — tenant_id MUST come from the caller (authenticated context).
+    #1365 — related-events cache is optional; engine threads one through.
     """
     tlc = event_data.get("traceability_lot_code", "")
     event_id = event_data.get("event_id", "")
@@ -244,7 +364,9 @@ def evaluate_identity_consistency(
             category=rule.category,
         )
 
-    related = fetch_related_events(session, tlc, auth_tid, str(event_id))
+    related = fetch_related_events(
+        session, tlc, auth_tid, str(event_id), cache=related_events_cache,
+    )
     if not related:
         return RuleEvaluationResult(
             rule_id=rule.rule_id, rule_version=rule.rule_version,
@@ -306,10 +428,12 @@ def evaluate_mass_balance(
     session: Session,
     *,
     tenant_id: Optional[str] = None,
+    related_events_cache: Optional[RelatedEventsCache] = None,
 ) -> RuleEvaluationResult:
     """Detect mass balance violations -- output exceeding input for same TLC.
 
     #1344 — tenant_id MUST come from the caller (authenticated context).
+    #1365 — related-events cache is optional; engine threads one through.
     """
     tlc = event_data.get("traceability_lot_code", "")
     event_id = event_data.get("event_id", "")
@@ -330,7 +454,9 @@ def evaluate_mass_balance(
             category=rule.category,
         )
 
-    related = fetch_related_events(session, tlc, auth_tid, str(event_id))
+    related = fetch_related_events(
+        session, tlc, auth_tid, str(event_id), cache=related_events_cache,
+    )
     if not related:
         return RuleEvaluationResult(
             rule_id=rule.rule_id, rule_version=rule.rule_version,
