@@ -270,6 +270,57 @@ class TestParameterizedSQL_Issue1254:
         assert ":tid" in sql
         assert ":tlc" in sql
 
+    def test_query_events_by_tlc_identical_sql_regardless_of_date_filters(self):
+        """Both date filters absent vs. both present must generate the same
+        SQL text — only bind-param values change.  This proves there's no
+        dynamic predicate assembly left."""
+        session = FakeSession()
+        session.add_rule(r"FROM fsma\.traceability_events", _FakeResult(rows=[]))
+
+        store = CanonicalEventStore(session=session, dual_write=False, skip_chain_write=True)
+        store.query_events_by_tlc(tenant_id="t", tlc="T")
+        sql_none, _ = session.calls[-1]
+
+        store.query_events_by_tlc(
+            tenant_id="t", tlc="T",
+            start_date="2026-01-01", end_date="2026-04-01",
+        )
+        sql_both, _ = session.calls[-1]
+
+        assert sql_none == sql_both, (
+            "SQL text must be identical regardless of filter values — "
+            "dynamic predicates are the injection vector this fix removes"
+        )
+
+    def test_batch_idempotency_check_uses_expanding_bindparam(self):
+        """The batch SELECT must not build placeholder names via f-string;
+        it should use SQLAlchemy's ``bindparam(expanding=True)`` which
+        generates ``IN (...)`` safely at prepare-time."""
+        session = FakeSession()
+        # The prepared SQL should contain `IN :keys`, not `IN (:k0, :k1, ...)`
+        session.add_rule(r"SELECT idempotency_key", _FakeResult(rows=[]))
+        session.add_rule(r"FROM fsma\.hash_chain", _FakeResult(rows=[]))
+
+        store = CanonicalEventStore(session=session, dual_write=False, skip_chain_write=True)
+        evt_a = _make_event(idemp_key="a")
+        evt_b = _make_event(idemp_key="b")
+        store.persist_events_batch([evt_a, evt_b])
+
+        idemp_calls = [
+            c for c in session.calls
+            if "SELECT idempotency_key" in c[0]
+        ]
+        assert idemp_calls, "batch idempotency SELECT should have been issued"
+        sql, params = idemp_calls[0]
+        # No per-index placeholders like ":k0"
+        assert ":k0" not in sql and ":k1" not in sql, (
+            "f-string-built placeholders must be replaced with expanding bindparam"
+        )
+        assert ":keys" in sql
+        # The bind param holds a list (expanding=True)
+        assert isinstance(params.get("keys"), list)
+        assert len(params["keys"]) == 2
+
 
 # ---------------------------------------------------------------------------
 # #1252 — Idempotent duplicate returns cleanly (no UNIQUE-violation abort)

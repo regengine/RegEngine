@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 from uuid import UUID, uuid4
 
-from sqlalchemy import text
+from sqlalchemy import bindparam, text
 from sqlalchemy.orm import Session
 
 from shared.canonical_event import (
@@ -300,23 +300,28 @@ class CanonicalEventStore:
             if not evt.sha256_hash:
                 evt.prepare_for_persistence()
 
-        # --- Batch idempotency check ---
+        # --- Batch idempotency check (fix #1254) ---
+        # Previous implementation built placeholder names via f-string
+        # (``:k0, :k1, ...``). The names themselves were not user input,
+        # but the pattern normalizes dynamic SQL assembly in this module.
+        # We replace it with SQLAlchemy's expanding bind parameter which
+        # generates the IN (...) list safely at prepare time.
         idemp_keys = [e.idempotency_key for e in events if e.idempotency_key]
         existing_map: Dict[str, Tuple[str, str, str]] = {}
+        _idemp_select = text(
+            """
+            SELECT idempotency_key, event_id, sha256_hash, chain_hash
+            FROM fsma.traceability_events
+            WHERE tenant_id = :tid AND idempotency_key IN :keys
+            """
+        ).bindparams(bindparam("keys", expanding=True))
         for chunk_start in range(0, len(idemp_keys), 100):
             chunk = idemp_keys[chunk_start:chunk_start + 100]
             if not chunk:
                 continue
-            placeholders = ", ".join(f":k{i}" for i in range(len(chunk)))
-            params = {f"k{i}": k for i, k in enumerate(chunk)}
-            params["tid"] = tenant_id
             rows = self.session.execute(
-                text(f"""
-                    SELECT idempotency_key, event_id, sha256_hash, chain_hash
-                    FROM fsma.traceability_events
-                    WHERE tenant_id = :tid AND idempotency_key IN ({placeholders})
-                """),
-                params,
+                _idemp_select,
+                {"tid": tenant_id, "keys": chunk},
             ).fetchall()
             for row in rows:
                 existing_map[row[0]] = (str(row[1]), row[2], row[3])
@@ -625,23 +630,23 @@ class CanonicalEventStore:
         self, tenant_id: str, tlc: str,
         start_date: Optional[str] = None, end_date: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
-        """Query canonical events for a TLC within a date range."""
-        params: Dict[str, Any] = {"tid": tenant_id, "tlc": tlc}
-        where_clauses = [
-            "tenant_id = :tid", "traceability_lot_code = :tlc", "status = 'active'",
-        ]
+        """Query canonical events for a TLC within a date range.
 
-        if start_date:
-            where_clauses.append("event_timestamp >= :start_date")
-            params["start_date"] = start_date
-        if end_date:
-            where_clauses.append("event_timestamp <= :end_date")
-            params["end_date"] = end_date
-
-        where = " AND ".join(where_clauses)
+        Fix #1254: no f-string interpolation of predicate text.  Date
+        filters are toggled via nullable bind parameters in the WHERE
+        clause (``:start_date IS NULL OR event_timestamp >= :start_date``).
+        This shape is constant SQL text regardless of inputs, so there
+        is no dynamic predicate assembly and no injection vector.
+        """
+        params: Dict[str, Any] = {
+            "tid": tenant_id,
+            "tlc": tlc,
+            "start_date": start_date,
+            "end_date": end_date,
+        }
 
         rows = self.session.execute(
-            text(f"""
+            text("""
                 SELECT event_id, event_type, traceability_lot_code,
                        product_reference, quantity, unit_of_measure,
                        from_facility_reference, to_facility_reference,
@@ -649,7 +654,13 @@ class CanonicalEventStore:
                        source_system, status, kdes, provenance_metadata,
                        confidence_score, created_at
                 FROM fsma.traceability_events
-                WHERE {where}
+                WHERE tenant_id = :tid
+                  AND traceability_lot_code = :tlc
+                  AND status = 'active'
+                  AND (CAST(:start_date AS timestamptz) IS NULL
+                       OR event_timestamp >= CAST(:start_date AS timestamptz))
+                  AND (CAST(:end_date AS timestamptz) IS NULL
+                       OR event_timestamp <= CAST(:end_date AS timestamptz))
                 ORDER BY event_timestamp ASC
             """),
             params,
