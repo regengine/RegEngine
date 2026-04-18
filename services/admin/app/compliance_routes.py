@@ -22,7 +22,11 @@ from sqlalchemy.orm import Session
 from .compliance_models import AlertSeverity, AlertSourceType
 from .compliance_service_sync import ComplianceServiceSync
 from .database import get_session
-from .dependencies import get_current_user, PermissionChecker
+from .dependencies import (
+    get_current_user,
+    PermissionChecker,
+    verify_path_tenant_matches,
+)
 
 logger = structlog.get_logger("compliance.routes")
 
@@ -114,7 +118,14 @@ class ProductProfileRequest(BaseModel):
 # ===========================================================================
 
 
-@router.get("/status/{tenant_id}", response_model=ComplianceStatusResponse, dependencies=[Depends(PermissionChecker("analysis.read"))])
+@router.get(
+    "/status/{tenant_id}",
+    response_model=ComplianceStatusResponse,
+    dependencies=[
+        Depends(PermissionChecker("analysis.read")),
+        Depends(verify_path_tenant_matches),
+    ],
+)
 def get_compliance_status(
     tenant_id: str,
     session=Depends(get_session),
@@ -136,7 +147,14 @@ def get_compliance_status(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.get("/alerts/{tenant_id}", response_model=list[AlertResponse], dependencies=[Depends(PermissionChecker("analysis.read"))])
+@router.get(
+    "/alerts/{tenant_id}",
+    response_model=list[AlertResponse],
+    dependencies=[
+        Depends(PermissionChecker("analysis.read")),
+        Depends(verify_path_tenant_matches),
+    ],
+)
 def list_alerts(
     tenant_id: str,
     status: Optional[str] = Query(None, description="Filter by status: ACTIVE, ACKNOWLEDGED, RESOLVED"),
@@ -159,7 +177,14 @@ def list_alerts(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.get("/alerts/{tenant_id}/{alert_id}", response_model=AlertResponse, dependencies=[Depends(PermissionChecker("analysis.read"))])
+@router.get(
+    "/alerts/{tenant_id}/{alert_id}",
+    response_model=AlertResponse,
+    dependencies=[
+        Depends(PermissionChecker("analysis.read")),
+        Depends(verify_path_tenant_matches),
+    ],
+)
 def get_alert(
     tenant_id: str,
     alert_id: str,
@@ -181,7 +206,14 @@ def get_alert(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.post("/alerts/{tenant_id}/{alert_id}/acknowledge", response_model=AlertResponse, dependencies=[Depends(PermissionChecker("analysis.create"))])
+@router.post(
+    "/alerts/{tenant_id}/{alert_id}/acknowledge",
+    response_model=AlertResponse,
+    dependencies=[
+        Depends(PermissionChecker("analysis.create")),
+        Depends(verify_path_tenant_matches),
+    ],
+)
 def acknowledge_alert(
     tenant_id: str,
     alert_id: str,
@@ -202,7 +234,14 @@ def acknowledge_alert(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.post("/alerts/{tenant_id}/{alert_id}/resolve", response_model=AlertResponse, dependencies=[Depends(PermissionChecker("analysis.create"))])
+@router.post(
+    "/alerts/{tenant_id}/{alert_id}/resolve",
+    response_model=AlertResponse,
+    dependencies=[
+        Depends(PermissionChecker("analysis.create")),
+        Depends(verify_path_tenant_matches),
+    ],
+)
 def resolve_alert(
     tenant_id: str,
     alert_id: str,
@@ -256,7 +295,14 @@ def create_alert(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.get("/profile/{tenant_id}", response_model=dict[str, Any], dependencies=[Depends(PermissionChecker("analysis.read"))])
+@router.get(
+    "/profile/{tenant_id}",
+    response_model=dict[str, Any],
+    dependencies=[
+        Depends(PermissionChecker("analysis.read")),
+        Depends(verify_path_tenant_matches),
+    ],
+)
 def get_product_profile(
     tenant_id: str,
     session=Depends(get_session),
@@ -280,7 +326,14 @@ def get_product_profile(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.put("/profile/{tenant_id}", response_model=dict[str, Any], dependencies=[Depends(PermissionChecker("analysis.create"))])
+@router.put(
+    "/profile/{tenant_id}",
+    response_model=dict[str, Any],
+    dependencies=[
+        Depends(PermissionChecker("analysis.create")),
+        Depends(verify_path_tenant_matches),
+    ],
+)
 def update_product_profile(
     tenant_id: str,
     request: ProductProfileRequest,
