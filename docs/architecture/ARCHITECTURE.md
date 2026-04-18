@@ -2,6 +2,11 @@
 
 Last updated: March 28, 2026
 
+> **Note (2026-04-18):** The 6-service topology diagram below reflects
+> code-level **router boundaries**, not deploy boundaries. Production
+> runs a single consolidated monolith. See
+> [`CONSOLIDATION.md`](CONSOLIDATION.md) for the current deployed shape.
+
 ## Purpose
 
 This document describes the architecture that is actually implemented in this repository and used for the current FSMA-first product wedge.
