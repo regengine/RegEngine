@@ -287,9 +287,11 @@ class TestRuleSeedData:
 
 class TestEvaluationSummary:
     def test_compliant_when_no_failures(self):
-        summary = EvaluationSummary(passed=5, failed=0, warned=1)
+        # #1347 — total_rules must be > 0 for compliant=True. An empty
+        # summary with passed=5 but total_rules unset is now "no verdict".
+        summary = EvaluationSummary(total_rules=6, passed=5, failed=0, warned=1)
         assert summary.compliant is True
 
     def test_non_compliant_when_failures(self):
-        summary = EvaluationSummary(passed=3, failed=2, warned=1)
+        summary = EvaluationSummary(total_rules=6, passed=3, failed=2, warned=1)
         assert summary.compliant is False

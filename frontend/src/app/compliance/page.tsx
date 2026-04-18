@@ -244,14 +244,14 @@ export default function CompliancePage() {
           <div className="mt-12 grid grid-cols-1 md:grid-cols-3 gap-6">
             <Card>
               <CardHeader>
-                <CardTitle>Validation API</CardTitle>
+                <CardTitle>Rule Evaluation API</CardTitle>
                 <CardDescription>
-                  Validate your configuration against any checklist programmatically
+                  Evaluate traceability events against the FSMA 204 rules engine programmatically
                 </CardDescription>
               </CardHeader>
               <CardContent>
                 <code className="text-xs bg-muted p-2 rounded block">
-                  POST /validate
+                  POST /api/v1/rules/evaluate
                 </code>
               </CardContent>
             </Card>
