@@ -250,11 +250,26 @@ def enqueue_task(
     payload: Dict[str, Any],
     tenant_id: Optional[str] = None,
     priority: int = 0,
+    idempotency_key: Optional[str] = None,
 ) -> Optional[int]:
     """Enqueue a task into the PostgreSQL task queue.
 
     This is the producer-side replacement for Kafka's send().
     Returns the task ID on success, None on failure.
+
+    Idempotency (#1164)
+    -------------------
+    When ``idempotency_key`` is provided, the insert uses
+    ``ON CONFLICT (tenant_id, idempotency_key) DO NOTHING``. A retried
+    call with the same (tenant_id, key) pair returns the existing task
+    ID — the task is enqueued exactly once. If the key is ``None`` the
+    legacy behavior is preserved (duplicates are possible).
+
+    Recommended keys:
+
+    * NLP extraction: ``f"nlp_extraction:{document_id}"``
+    * Graph update:   ``f"graph_update:{document_id}"``
+    * Review item:    ``f"review_item:{document_id}:{entity_type}"``
     """
     try:
         from shared.database import SessionLocal
@@ -263,6 +278,68 @@ def enqueue_task(
 
         db = SessionLocal()
         try:
+            if idempotency_key is not None:
+                # ON CONFLICT … DO NOTHING returns no rows if there was a
+                # conflict, so we fall through to a SELECT to retrieve the
+                # already-enqueued task's id. This is the at-least-once-safe
+                # shape used by the idempotency migration for task_queue.
+                row = db.execute(
+                    text(
+                        """
+                        INSERT INTO fsma.task_queue
+                            (task_type, payload, tenant_id, priority, idempotency_key)
+                        VALUES
+                            (:task_type, :payload::jsonb, :tenant_id, :priority, :key)
+                        ON CONFLICT (tenant_id, idempotency_key)
+                            WHERE idempotency_key IS NOT NULL
+                            DO NOTHING
+                        RETURNING id
+                        """
+                    ),
+                    {
+                        "task_type": task_type,
+                        "payload": json.dumps(payload),
+                        "tenant_id": tenant_id,
+                        "priority": priority,
+                        "key": idempotency_key,
+                    },
+                ).fetchone()
+                db.commit()
+                if row:
+                    return row[0]
+
+                # Conflict hit — look up the existing row and return its id
+                existing = db.execute(
+                    text(
+                        """
+                        SELECT id FROM fsma.task_queue
+                        WHERE tenant_id IS NOT DISTINCT FROM :tenant_id
+                          AND idempotency_key = :key
+                        LIMIT 1
+                        """
+                    ),
+                    {"tenant_id": tenant_id, "key": idempotency_key},
+                ).fetchone()
+                if existing:
+                    logger.info(
+                        "enqueue_task_idempotent_hit",
+                        task_type=task_type,
+                        tenant_id=tenant_id,
+                        idempotency_key=idempotency_key,
+                        task_id=existing[0],
+                    )
+                    return existing[0]
+                # If the partial unique index is missing from the DB (e.g.
+                # migration not yet applied), fall back to the legacy path
+                # below. This keeps enqueue semantically correct during a
+                # rolling deploy at the cost of allowing duplicates until
+                # the migration lands.
+                logger.warning(
+                    "enqueue_task_idempotency_fallback",
+                    task_type=task_type,
+                    hint="idempotency_key column or partial index not present",
+                )
+
             row = db.execute(
                 text("""
                     INSERT INTO fsma.task_queue (task_type, payload, tenant_id, priority)
