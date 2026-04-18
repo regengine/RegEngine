@@ -6,15 +6,31 @@ from uuid import UUID, uuid4
 
 import pytest
 
-from shared.audit import (
+# services/shared/audit.py was removed in commit 83d2f1bc (Phase 5
+# remediation — zero importers). The core types now live in
+# shared.audit_logging; the audit_api_key_created / audit_auth_success /
+# audit_auth_failure convenience helpers were removed outright. The
+# TestConvenienceFunctions suite below will NameError at runtime — that's
+# a real test failure, not a collection one, and is tracked separately.
+from shared.audit_logging import (
     AuditEvent,
     AuditEventType,
     AuditLogger,
     AuditSeverity,
-    audit_api_key_created,
-    audit_auth_failure,
-    audit_auth_success,
 )
+
+
+def _missing_helper(name):  # pragma: no cover - defensive stub
+    def _raise(*_args, **_kwargs):
+        raise NotImplementedError(
+            f"{name} was removed in #1053; update this test or restore the helper"
+        )
+    return _raise
+
+
+audit_api_key_created = _missing_helper("audit_api_key_created")
+audit_auth_failure = _missing_helper("audit_auth_failure")
+audit_auth_success = _missing_helper("audit_auth_success")
 
 
 class TestAuditEvent:
