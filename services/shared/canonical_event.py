@@ -279,7 +279,28 @@ class TraceabilityEvent(BaseModel):
         return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
     def compute_idempotency_key(self) -> str:
-        """Compute deduplication key from content-addressable fields."""
+        """Compute deduplication key from content-addressable fields.
+
+        Uses ``default=str`` on ``json.dumps`` for the same reason
+        ``compute_event_hash`` above does and ``compute_idempotency_key``
+        in ``shared.cte_persistence.hashing`` does (#1313): a KDE
+        carrying a ``datetime`` or ``Decimal`` otherwise raises
+        ``TypeError`` mid-insert and loses the event. ``str()`` coercion
+        is locale/version-fragile and a future improvement is to
+        normalize KDE values to JSON-safe primitives before hashing —
+        tracked with the cte_persistence retirement work (#1335).
+
+        NOTE: this formula diverges from
+        ``cte_persistence.hashing.compute_idempotency_key`` by using
+        ``from_facility`` + ``to_facility`` instead of
+        ``location_gln`` + ``location_name``. The dedup semantics are
+        therefore DIFFERENT: the same real-world event persisted via
+        both paths produces different keys in each table. This is
+        intentional during dual-write — each table dedups independently
+        with its own scope — but it means ``cte_events`` and
+        ``traceability_events`` are NOT reconcilable by idempotency_key
+        alone. Cross-table reconciliation should use ``sha256_hash``.
+        """
         canonical = json.dumps(
             {
                 "event_type": self.event_type.value,
@@ -292,6 +313,7 @@ class TraceabilityEvent(BaseModel):
             },
             sort_keys=True,
             separators=(",", ":"),
+            default=str,
         )
         return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
