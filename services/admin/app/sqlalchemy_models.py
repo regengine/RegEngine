@@ -76,7 +76,16 @@ class UserModel(Base):
     id = Column(GUID(), primary_key=True, default=uuid_module.uuid4)
     email = Column(String, nullable=False, unique=True)
     password_hash = Column(String, nullable=False)
+    # Legacy plaintext TOTP seed — preserved for backward compat during the
+    # encryption migration (#1376). New enrollments write mfa_secret_ciphertext;
+    # the plaintext column is read only when the ciphertext column is NULL.
     mfa_secret = Column(String, nullable=True)
+    # Fernet-encrypted TOTP seed — primary source once MFA_ENCRYPTION_KEY is set.
+    mfa_secret_ciphertext = Column(String, nullable=True)
+    # Monotonic counter bumped on password reset / logout-all to invalidate
+    # outstanding JWTs (#1349, #1375). Access tokens embed the value at mint
+    # time; get_current_user rejects tokens whose claim no longer matches.
+    token_version = Column(Integer, nullable=False, default=0, server_default="0")
     is_sysadmin = Column(Boolean, nullable=False, default=False)
     status = Column(String, nullable=False, default="active")  # active, locked, invited
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)

@@ -91,7 +91,9 @@ async def root() -> dict:
         "key_endpoints": {
             "industries": "/industries",
             "checklists": "/checklists",
-            "validate": "/validate",
+            # /validate was removed (#1203) — compliance rule evaluation is
+            # handled by services/ingestion/app/rules_router.py via
+            # services/shared/rules/engine.py.
             "fda_audit_spreadsheet": "/v1/fsma/audit/spreadsheet",
         },
     }
