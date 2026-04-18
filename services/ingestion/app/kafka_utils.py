@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import json
 from functools import lru_cache
-from typing import Optional
+from typing import Mapping, Optional
 
 import structlog
 from fastapi import HTTPException
+
+from shared.observability.kafka_propagation import inject_correlation_headers_tuples
 
 from .config import get_settings
 
@@ -55,11 +57,33 @@ class KeySerializer:
         return str(obj).encode("utf-8")
 
 
-def send(topic: str, payload: dict, key: Optional[str] = None) -> None:
-    """Send a message to Kafka."""
+def send(
+    topic: str,
+    payload: dict,
+    key: Optional[str] = None,
+    headers: Optional[Mapping[str, str]] = None,
+) -> None:
+    """Send a message to Kafka with correlation-ID propagation.
+
+    The ``correlation_id`` (and ``tenant_id`` when set on the current
+    structlog context) is attached as a Kafka header so downstream
+    consumers can re-hydrate the trace context. Callers can pass ``headers``
+    to add custom headers alongside correlation metadata (#1318).
+    """
+    # Extract extra headers (non-correlation ones) from caller so the
+    # propagation helper can merge them with the auto-injected ones.
+    extra: list = []
+    if headers:
+        for name, value in headers.items():
+            if not isinstance(value, (bytes, bytearray)):
+                value = str(value).encode("utf-8")
+            extra.append((name, value))
+
+    kafka_headers = inject_correlation_headers_tuples(existing=extra)
+
     try:
         producer = get_producer()
-        producer.produce(topic=topic, key=key, value=payload)
+        producer.produce(topic=topic, key=key, value=payload, headers=kafka_headers)
         producer.flush()
     except RuntimeError as exc:
         logger.warning("kafka_client_unavailable", topic=topic, error=str(exc))

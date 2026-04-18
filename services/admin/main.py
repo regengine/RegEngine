@@ -29,7 +29,8 @@ from app.compliance_routes import router as compliance_router
 from contextlib import asynccontextmanager
 from typing import AsyncIterator, Optional
 from fastapi import FastAPI
-# from shared.correlation import CorrelationIdMiddleware
+from shared.observability.correlation import CorrelationIdMiddleware
+from shared.observability.fastapi_metrics import install_metrics
 from fastapi.middleware.cors import CORSMiddleware
 
 
@@ -227,9 +228,8 @@ app.add_middleware(
     allow_origins=cors_origins,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type", "X-RegEngine-API-Key", "X-Admin-Key", "X-Tenant-ID", "X-Request-ID"],
+    allow_headers=["Authorization", "Content-Type", "X-RegEngine-API-Key", "X-Admin-Key", "X-Tenant-ID", "X-Request-ID", "X-Correlation-ID"],
 )
-# app.add_middleware(CorrelationIdMiddleware)
 
 # Audit context middleware — captures IP, UA, request_id for tamper-evident audit trail
 from app.audit_middleware import AuditContextMiddleware
@@ -248,6 +248,11 @@ from shared.request_safety import RequestSizeLimitMiddleware, RequestTimeoutMidd
 app.add_middleware(RequestSizeLimitMiddleware, max_bytes=10 * 1024 * 1024)
 app.add_middleware(RequestTimeoutMiddleware, timeout_seconds=120)
 
+# Correlation-ID middleware — registered LAST so it runs FIRST (outermost).
+# This makes correlation_id available to every downstream middleware and
+# handler via request.state / contextvar / structlog contextvars. (#1316)
+app.add_middleware(CorrelationIdMiddleware)
+
 @app.middleware("http")
 async def add_compliance_header(request, call_next):
     response = await call_next(request)
@@ -256,6 +261,9 @@ async def add_compliance_header(request, call_next):
 
 from shared.error_handling import install_exception_handlers
 install_exception_handlers(app)
+
+# Prometheus /metrics — RED metrics for every route, auth-guarded (#1325)
+install_metrics(app, service_name="admin-service")
 
 from shared.auth import validate_auth_config
 validate_auth_config()

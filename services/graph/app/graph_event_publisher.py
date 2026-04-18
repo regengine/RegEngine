@@ -4,6 +4,8 @@ import os
 
 from kafka import KafkaProducer
 
+from shared.observability.kafka_propagation import inject_correlation_headers_tuples
+
 # In prod, import from shared.schemas
 # from shared.schemas import GraphEvent, ControlPayload, MappingPayload
 
@@ -37,7 +39,13 @@ class GraphEventPublisher:
                 "control": control_data,
                 "status": "COMMITTED",
             }
-            self.producer.send(TOPIC_GRAPH_AUDIT, value=payload)
+            # Attach correlation headers so this audit event is traceable back
+            # to the originating request (#1318).
+            self.producer.send(
+                TOPIC_GRAPH_AUDIT,
+                value=payload,
+                headers=inject_correlation_headers_tuples(),
+            )
         except Exception as e:
             logger.error(f"Failed to publish control audit event: {e}")
 
@@ -52,6 +60,10 @@ class GraphEventPublisher:
                 "mapping": mapping_data,
                 "status": "COMMITTED",
             }
-            self.producer.send(TOPIC_GRAPH_AUDIT, value=payload)
+            self.producer.send(
+                TOPIC_GRAPH_AUDIT,
+                value=payload,
+                headers=inject_correlation_headers_tuples(),
+            )
         except Exception as e:
             logger.error(f"Failed to publish mapping audit event: {e}")

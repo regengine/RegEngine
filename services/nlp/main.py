@@ -28,6 +28,7 @@ from shared.logging_config import configure_logging  # (#556) shared structured 
 from shared.middleware.security import add_security
 from shared.rate_limit import add_rate_limiting
 from shared.observability import add_observability
+from shared.observability.fastapi_metrics import install_metrics
 
 # Initialize standardized logging early — all subsequent log calls are JSON
 configure_logging(service_name="nlp-service")
@@ -83,6 +84,7 @@ add_rate_limiting(app)
 add_observability(app, service_name="nlp-service")
 
 from shared.middleware import TenantContextMiddleware, RequestIDMiddleware
+from shared.observability.correlation import CorrelationIdMiddleware
 from shared.tenant_rate_limiting import TenantRateLimitMiddleware
 
 app.add_middleware(RequestIDMiddleware)
@@ -93,9 +95,15 @@ from shared.request_safety import RequestSizeLimitMiddleware, RequestTimeoutMidd
 app.add_middleware(RequestSizeLimitMiddleware, max_bytes=10 * 1024 * 1024)
 app.add_middleware(RequestTimeoutMiddleware, timeout_seconds=120)
 
+# Correlation-ID middleware — registered last so it runs first (outermost). (#1316)
+app.add_middleware(CorrelationIdMiddleware)
+
 # Global exception handlers (Sprint 18)
 from shared.error_handling import install_exception_handlers
 install_exception_handlers(app)
+
+# Prometheus /metrics — RED metrics for every route, auth-guarded (#1325)
+install_metrics(app, service_name="nlp-service")
 
 app.include_router(nlp_router, prefix="/api/v1", tags=["Text Analysis"])
 

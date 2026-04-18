@@ -55,6 +55,10 @@ from shared.paths import ensure_shared_importable
 ensure_shared_importable()
 
 from shared.observability import setup_standalone_observability
+from shared.observability.kafka_propagation import (
+    bind_correlation_context,
+    inject_correlation_headers_tuples,
+)
 
 tracer = setup_standalone_observability("admin-review-consumer")
 
@@ -229,16 +233,21 @@ def run_consumer() -> None:
 
         for records in messages.values():
             for record in records:
-                with tracer.start_as_current_span(
-                    "admin_review.process_message",
-                    attributes={"kafka.topic": record.topic, "kafka.offset": record.offset}
-                ) as span:
-                    # Propagate trace context to DLQ headers
-                    headers = []
-                    propagate.inject(headers)
-                    kafka_headers = [(k, v.encode("utf-8")) for k, v in headers]
+                # Re-hydrate correlation/tenant contextvars from inbound headers
+                # so every log record during handler execution carries the
+                # originator's trace ID (#1318).
+                with bind_correlation_context(record.headers or []):
+                    with tracer.start_as_current_span(
+                        "admin_review.process_message",
+                        attributes={"kafka.topic": record.topic, "kafka.offset": record.offset}
+                    ) as span:
+                        # Propagate trace + correlation context to DLQ headers.
+                        otel_headers: list = []
+                        propagate.inject(otel_headers)
+                        merged = [(k, v.encode("utf-8")) for k, v in otel_headers]
+                        kafka_headers = inject_correlation_headers_tuples(existing=merged)
 
-                    _process_record(record, tracker, bootstrap, kafka_headers)
+                        _process_record(record, tracker, bootstrap, kafka_headers)
 
         consumer.commit()  # commit once per poll batch
 
