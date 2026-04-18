@@ -34,6 +34,11 @@ from typing import Any, Dict, List, Optional, Tuple
 from uuid import uuid4
 
 from sqlalchemy import text
+from sqlalchemy.exc import (
+    DatabaseError,
+    OperationalError,
+    ProgrammingError,
+)
 from sqlalchemy.orm import Session
 
 from .models import StoreResult, ChainVerification, MerkleVerification
@@ -765,21 +770,47 @@ class CTEPersistence:
     # Read Path — FDA Export Queries
     # ------------------------------------------------------------------
 
+    # Default recursion depth for _expand_tlcs_via_transformation_links
+    # / query_events_by_tlc.  Bounded for two reasons:
+    #   1. Postgres recursive CTE cost grows fast with depth; >10 hops
+    #      on a dense transformation graph can blow memory.
+    #   2. FDA §1.1350(c) records requests must return within 24 hours;
+    #      we don't want a single misbehaving lot to DoS export.
+    # Kept as a class attribute so tests can monkey-patch it cleanly.
+    DEFAULT_TRAVERSAL_DEPTH: int = 5
+
     def _expand_tlcs_via_transformation_links(
         self,
         tenant_id: str,
         seed_tlc: str,
-        depth: int = 5,
+        depth: Optional[int] = None,
     ) -> List[str]:
         """Return all TLCs reachable from seed_tlc through transformation_links.
 
         Walks both directions (forward: seed → outputs, backward: seed → inputs)
-        using a breadth-first traversal capped at `depth` hops.  Returns the
+        using a breadth-first traversal capped at ``depth`` hops.  Returns the
         full set of TLCs including the seed itself.
 
-        Falls back to [seed_tlc] if the transformation_links table does not exist
-        or is unreachable (graceful degradation).
+        Args:
+            tenant_id: RLS tenant identifier.
+            seed_tlc: TLC to expand from.
+            depth: Max recursion depth.  Defaults to
+                ``DEFAULT_TRAVERSAL_DEPTH`` (5) — previously hard-coded
+                in the signature, now a class attribute so callers and
+                tests can raise/lower it without patching the signature
+                (#1322).
+
+        Falls back to ``[seed_tlc]`` if the transformation_links table
+        does not exist (fresh DB bootstrapping) or is unreachable.  All
+        other SQL errors are re-raised so they surface in callers
+        instead of silently truncating the trace — prior code swallowed
+        ``except Exception`` here which masked real FDA export bugs
+        (#1322).
         """
+        max_depth = depth if depth is not None else self.DEFAULT_TRAVERSAL_DEPTH
+        if max_depth < 0:
+            raise ValueError(f"depth must be >= 0, got {max_depth}")
+
         try:
             # Note: use CAST(:tlc AS text) rather than :tlc::text — SQLAlchemy's
             # text() parameter parser misidentifies :param::cast as a single token,
@@ -804,17 +835,43 @@ class CTEPersistence:
                     )
                     SELECT DISTINCT tlc FROM tlc_graph
                 """),
-                {"tid": tenant_id, "tlc": seed_tlc, "max_depth": depth},
+                {"tid": tenant_id, "tlc": seed_tlc, "max_depth": max_depth},
             ).fetchall()
             return [r[0] for r in rows] if rows else [seed_tlc]
-        except Exception as e:
-            # Roll back any aborted transaction so the session stays usable.
-            # Without this, a SQL error here poisons all subsequent queries on
-            # the same session with InFailedSqlTransaction.
-            logger.debug("transformation_links_traversal_skipped: %s %s", type(e).__name__, e)
+        except ProgrammingError as e:
+            # The transformation_links table does not exist — typical on
+            # environments that have not run the v043+ migrations yet.
+            # Degrade gracefully to "no graph" rather than failing the
+            # FDA export entirely.  Rollback so the session is reusable.
+            logger.info(
+                "transformation_links_table_missing",
+                extra={
+                    "tenant_id": tenant_id,
+                    "seed_tlc": seed_tlc,
+                    "error": str(e),
+                },
+            )
             try:
                 self.session.rollback()
-            except Exception:
+            except DatabaseError:
+                logger.debug("Rollback failed in recovery handler", exc_info=True)
+            return [seed_tlc]
+        except OperationalError as e:
+            # Transient DB connectivity issue — same degradation
+            # (legacy behaviour) but with a proper warning rather than
+            # a silent debug log.  Unknown DatabaseErrors below fall
+            # through to re-raise.
+            logger.warning(
+                "transformation_links_traversal_db_unavailable",
+                extra={
+                    "tenant_id": tenant_id,
+                    "seed_tlc": seed_tlc,
+                    "error": str(e),
+                },
+            )
+            try:
+                self.session.rollback()
+            except DatabaseError:
                 logger.debug("Rollback failed in recovery handler", exc_info=True)
             return [seed_tlc]
 
@@ -825,6 +882,7 @@ class CTEPersistence:
         start_date: Optional[str] = None,
         end_date: Optional[str] = None,
         follow_transformations: bool = True,
+        max_depth: Optional[int] = None,
     ) -> List[Dict[str, Any]]:
         """Query CTE events for a TLC within a date range.
 
@@ -835,6 +893,13 @@ class CTEPersistence:
 
         Set follow_transformations=False for point queries that should not
         expand the result set (e.g. internal dedup checks).
+
+        Args:
+            max_depth: Optional override for the transformation-link
+                recursion depth.  Defaults to
+                ``CTEPersistence.DEFAULT_TRAVERSAL_DEPTH`` (5 hops) —
+                see #1322; previously hard-coded.  Raising this trades
+                correctness-for-deep-chains against query cost.
 
         SECURITY (#1321): Previously this method did not call
         ``set_tenant_context``; it relied on the caller having set the
@@ -850,7 +915,9 @@ class CTEPersistence:
 
         # Resolve the full set of TLCs to query
         if follow_transformations:
-            tlc_set = self._expand_tlcs_via_transformation_links(tenant_id, tlc)
+            tlc_set = self._expand_tlcs_via_transformation_links(
+                tenant_id, tlc, depth=max_depth,
+            )
         else:
             tlc_set = [tlc]
 
