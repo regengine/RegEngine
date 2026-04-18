@@ -1030,16 +1030,46 @@ class IdentityResolutionService:
             results["firms"].append({**entity, "role": role})
 
         # --- Lots (traceability_lot_code) ---
+        # Fix #1175: TLC must be stored VERBATIM as alias_type='tlc' — the canonical
+        # form required by FSMA 204 traceability. The GTIN-14 prefix is registered
+        # as a SECONDARY `tlc_prefix` alias for fuzzy lookup only. Previously the
+        # code stored `tlc_prefix` as the primary alias, which dropped the
+        # variable lot-suffix and broke supplier trace-back.
         tlc = event.get("traceability_lot_code")
         if tlc:
             lot_entity = self._resolve_or_register(
                 tenant_id=tenant_id,
                 reference=tlc,
                 entity_type="lot",
-                alias_type="tlc_prefix",
+                alias_type="tlc",
                 source_system=source_system,
                 created_by=created_by,
             )
+            # If the TLC is a GTIN-14 + lot-suffix, register the 14-digit
+            # prefix as a secondary alias so prefix-based lookup still works
+            # (used by product-family queries). This is NOT the canonical
+            # identifier — it is a lossy fingerprint for fuzzy lookup.
+            if len(tlc) > 14 and tlc[:14].isdigit():
+                try:
+                    self._insert_alias(
+                        tenant_id=tenant_id,
+                        entity_id=lot_entity["entity_id"],
+                        alias_type="tlc_prefix",
+                        alias_value=tlc[:14],
+                        source_system=source_system,
+                        confidence=0.8,
+                        created_by=created_by,
+                    )
+                except (ValueError, RuntimeError) as exc:
+                    # Non-fatal — the canonical TLC alias is already persisted.
+                    logger.warning(
+                        "tlc_prefix_secondary_alias_failed",
+                        extra={
+                            "entity_id": lot_entity["entity_id"],
+                            "tlc": tlc,
+                            "error": str(exc),
+                        },
+                    )
             # Lots are associated with products but tracked separately
             results.setdefault("lots", []).append(lot_entity)
 
