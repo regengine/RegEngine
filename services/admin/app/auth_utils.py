@@ -79,10 +79,12 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
         expire = datetime.now(timezone.utc) + expires_delta
     else:
         expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    to_encode.update({
-        "exp": expire,
-        "jti": str(uuid.uuid4()),  # unique token ID for revocation
-    })
+    # Ensure every token carries a jti we can revoke individually. Callers may
+    # still pass a pre-allocated jti (e.g. elevation tokens that must be stored
+    # in Redis at mint-time); we only generate one if the caller did not.
+    if "jti" not in to_encode:
+        to_encode["jti"] = str(uuid.uuid4())
+    to_encode["exp"] = expire
 
     # Use registry key if available, otherwise fall back to static SECRET_KEY
     signing_secret = _active_secret or SECRET_KEY

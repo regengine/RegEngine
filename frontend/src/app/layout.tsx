@@ -205,7 +205,16 @@ export default async function RootLayout({
         <AccessibilityWidget />
         <CookieBanner enableAnalytics={enableVercelAnalytics} />
         <GoogleAnalytics />
+        {/*
+          Service-worker registration.
+          CSP enforces `script-src 'self' 'nonce-...' 'strict-dynamic'`, so any
+          inline <script> without the matching nonce is blocked by the browser.
+          Without the nonce, navigator.serviceWorker.register('/sw.js') never
+          runs and the offline-capable field capture (public/sw.js) silently
+          fails in production. (#1097)
+        */}
         <script
+          nonce={nonce}
           dangerouslySetInnerHTML={{
             __html: `if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('/sw.js')})}`,
           }}

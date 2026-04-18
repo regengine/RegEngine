@@ -145,19 +145,27 @@ TASK_HANDLERS: Dict[str, Callable[[Dict[str, Any]], None]] = {
 }
 
 
+# #1199: recall_drill and recall (the state machine row) are persisted in
+# fsma.task_queue for historical/state tracking, NOT as background work.
+# The worker must never claim them even if they somehow end up with
+# status='pending'. Keep this list narrowly scoped and update it when a
+# new non-handler task_type starts sharing the queue.
+NON_WORKER_TASK_TYPES = frozenset({
+    "recall_drill",  # #1199 — recall drill history rows
+    "recall",        # #1199 — recall state machine rows (future)
+})
+
+
 # ── Core worker loop ─────────────────────────────────────────────
 
 def _claim_task(db) -> Optional[Dict[str, Any]]:
-    """Atomically claim the next pending task.
+    """Atomically claim the next pending task using SELECT ... FOR UPDATE SKIP LOCKED.
 
-    Respects ``scheduled_at`` (#1181 — rows with a future ``scheduled_at``
-    are deferred) and per-row ``visibility_timeout_seconds`` (#1210 — so
-    a short task's lock does not hold the slot for 15 minutes on crash).
-
-    Falls back to the legacy claim SQL if the v059 migration has not yet
-    run (the new columns don't exist) — the fallback matches the shape
-    committed in v050 so the worker continues to function during a
-    rolling deploy.
+    #1199: claim only rows whose task_type has a registered handler.
+    This prevents the worker from claiming `recall_drill` history rows
+    (which are persisted as status='completed' by recall persistence,
+    but we keep this belt-and-suspenders guard in case a row ever
+    ends up pending).
     """
     from sqlalchemy import text
     from sqlalchemy.exc import ProgrammingError
@@ -165,75 +173,39 @@ def _claim_task(db) -> Optional[Dict[str, Any]]:
     now = datetime.now(timezone.utc)
     default_timeout_seconds = DEFAULT_TIMEOUT_SECONDS
 
-    try:
-        row = db.execute(
-            text(
-                """
-                UPDATE fsma.task_queue AS tq
-                SET status = 'processing',
-                    started_at = :now,
-                    locked_by = :worker,
-                    locked_until = :now + (
-                        COALESCE(tq.visibility_timeout_seconds, :default_timeout)
-                        || ' seconds'
-                    )::interval,
-                    attempts = tq.attempts + 1
-                FROM (
-                    SELECT id FROM fsma.task_queue
-                    WHERE (
-                            status = 'pending'
-                            AND COALESCE(scheduled_at, created_at) <= :now
-                          )
-                       OR (status = 'processing' AND locked_until < :now)
-                    ORDER BY priority DESC, created_at ASC
-                    LIMIT 1
-                    FOR UPDATE SKIP LOCKED
-                ) AS picked
-                WHERE tq.id = picked.id
-                RETURNING tq.id, tq.task_type, tq.payload, tq.attempts,
-                          tq.max_attempts, tq.visibility_timeout_seconds
-                """
-            ),
-            {"now": now, "worker": WORKER_ID, "default_timeout": default_timeout_seconds},
-        ).fetchone()
-    except ProgrammingError:
-        # Migration v059 not applied — columns scheduled_at /
-        # visibility_timeout_seconds don't exist. Use the legacy shape.
-        db.rollback()
-        lock_until = now + timedelta(minutes=LOCK_TIMEOUT_MINUTES)
-        row = db.execute(
-            text(
-                """
-                UPDATE fsma.task_queue
-                SET status = 'processing',
-                    started_at = :now,
-                    locked_by = :worker,
-                    locked_until = :lock_until,
-                    attempts = attempts + 1
-                WHERE id = (
-                    SELECT id FROM fsma.task_queue
-                    WHERE status = 'pending'
-                       OR (status = 'processing' AND locked_until < :now)
-                    ORDER BY priority DESC, created_at ASC
-                    LIMIT 1
-                    FOR UPDATE SKIP LOCKED
-                )
-                RETURNING id, task_type, payload, attempts, max_attempts
-                """
-            ),
-            {"now": now, "worker": WORKER_ID, "lock_until": lock_until},
-        ).fetchone()
-        if row:
-            db.commit()
-            return {
-                "id": row[0],
-                "task_type": row[1],
-                "payload": row[2] if isinstance(row[2], dict) else {},
-                "attempts": row[3],
-                "max_attempts": row[4],
-                "visibility_timeout_seconds": default_timeout_seconds,
-            }
-        return None
+    # Only claim tasks whose task_type has a registered handler.  This
+    # prevents us from fighting with recall_drill rows (which are owned
+    # by the recall engine, not the worker).
+    handler_types = list(TASK_HANDLERS.keys())
+
+    row = db.execute(
+        text("""
+            UPDATE fsma.task_queue
+            SET status = 'processing',
+                started_at = :now,
+                locked_by = :worker,
+                locked_until = :lock_until,
+                attempts = attempts + 1
+            WHERE id = (
+                SELECT id FROM fsma.task_queue
+                WHERE task_type = ANY(:handler_types)
+                  AND (
+                      status = 'pending'
+                      OR (status = 'processing' AND locked_until < :now)
+                  )
+                ORDER BY priority DESC, created_at ASC
+                LIMIT 1
+                FOR UPDATE SKIP LOCKED
+            )
+            RETURNING id, task_type, payload, attempts, max_attempts
+        """),
+        {
+            "now": now,
+            "worker": WORKER_ID,
+            "lock_until": lock_until,
+            "handler_types": handler_types,
+        },
+    ).fetchone()
 
     if row:
         db.commit()

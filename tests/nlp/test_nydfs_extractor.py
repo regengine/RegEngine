@@ -17,8 +17,16 @@ pytestmark = pytest.mark.skip(
     reason="NYDFS extractor requires full NLP pipeline and is skipped in unit test suite"
 )
 
-from services.nlp.app.extractors.nydfs_extractor import NYDFSExtractor
-from shared.schemas import ObligationType
+# Defer these imports so pytest can still COLLECT this file when the
+# nydfs_extractor module is absent (it was removed as part of the NLP
+# cleanup). Inline-import inside any fixture/test so collection succeeds;
+# pytestmark.skip prevents the tests from running anyway.
+try:
+    from services.nlp.app.extractors.nydfs_extractor import NYDFSExtractor  # noqa: F401
+    from shared.schemas import ObligationType  # noqa: F401
+except ModuleNotFoundError:
+    NYDFSExtractor = None  # type: ignore[assignment]
+    ObligationType = None  # type: ignore[assignment]
 
 
 class TestNYDFSExtractor:

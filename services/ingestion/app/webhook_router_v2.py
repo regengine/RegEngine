@@ -29,6 +29,7 @@ from shared.database import get_db_session
 from app.config import get_settings
 from app.tenant_validation import validate_tenant_id
 from shared.funnel_events import emit_funnel_event
+from shared.idempotency import IdempotencyDependency
 from shared.tenant_rate_limiting import consume_tenant_rate_limit
 from app.webhook_models import (
     ChainVerifyResponse,
@@ -40,6 +41,11 @@ from app.webhook_models import (
     WebhookPayload,
 )
 from shared.canonical_event import normalize_webhook_event
+
+# Backwards-compat alias: tests override this private name via
+# ``app.dependency_overrides[_get_db_session]``. Point it at the canonical
+# shared helper so the override matches the Depends() callable.
+_get_db_session = get_db_session
 
 logger = logging.getLogger("webhook-ingestion")
 
@@ -431,6 +437,12 @@ def _publish_graph_sync(event_id: str, event: IngestEvent, tenant_id: str) -> No
 # Ingest Endpoint
 # ---------------------------------------------------------------------------
 
+# #1232 — enforce ``Idempotency-Key`` on all webhook ingest calls. The
+# ``IdempotencyMiddleware`` mounted in ``main.py`` then caches the 2xx
+# response for 24h, scoped per tenant (#1237).
+_require_idempotency_key = IdempotencyDependency(strict=True)
+
+
 @router.post(
     "/ingest",
     response_model=IngestResponse,
@@ -438,7 +450,9 @@ def _publish_graph_sync(event_id: str, event: IngestEvent, tenant_id: str) -> No
     description=(
         "Accept CTE events from external systems (IoT platforms, ERPs, manual entry). "
         "Each event is validated against FSMA 204 KDE requirements, SHA-256 hashed, "
-        "chain-linked, and persisted to the compliance database."
+        "chain-linked, and persisted to the compliance database. "
+        "The ``Idempotency-Key`` header is REQUIRED — safe retries replay "
+        "the cached response for 24 hours. Cache keys are tenant-scoped."
     ),
 )
 async def ingest_events(
@@ -447,6 +461,7 @@ async def ingest_events(
     x_regengine_api_key: Optional[str] = Header(default=None, alias="X-RegEngine-API-Key"),
     _auth: None = Depends(_verify_api_key),
     _subscription: None = Depends(require_active_subscription),
+    _idempotency_key: Optional[str] = Depends(_require_idempotency_key),
     db_session=Depends(get_db_session),
 ) -> IngestResponse:
     """Process incoming webhook events with persistent storage."""

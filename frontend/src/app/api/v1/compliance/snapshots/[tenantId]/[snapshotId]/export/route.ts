@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerServiceURL } from '@/lib/api-config';
-import { requireProxyAuth, validateProxySession, getServerApiKey } from '@/lib/api-proxy';
+import {
+    requireProxyAuth,
+    validateProxySession,
+    getServerApiKey,
+    validateUuid,
+} from '@/lib/api-proxy';
 
 export const dynamic = 'force-dynamic';
 
@@ -30,7 +35,17 @@ export async function GET(
     const sessionError = await validateProxySession(request);
     if (sessionError) return sessionError;
 
-    const { tenantId, snapshotId } = await params;
+    const { tenantId: rawTenantId, snapshotId: rawSnapshotId } = await params;
+    // Validate UUIDs before interpolating into the upstream URL (see
+    // verify/route.ts — same hardening applied to every named-segment proxy).
+    const tenantId = validateUuid(rawTenantId);
+    const snapshotId = validateUuid(rawSnapshotId);
+    if (!tenantId || !snapshotId) {
+        return NextResponse.json(
+            { error: 'Invalid tenant or snapshot identifier' },
+            { status: 400 },
+        );
+    }
     const url = new URL(request.url);
     const queryString = url.search;
 

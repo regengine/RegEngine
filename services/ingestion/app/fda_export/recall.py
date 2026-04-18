@@ -21,6 +21,7 @@ from app.fda_export_service import (
 )
 
 from .queries import (
+    AuditLogWriteError,
     build_recall_where_clause,
     fetch_recall_events,
     log_recall_export,
@@ -45,16 +46,57 @@ async def export_recall_filtered_handler(
     start_date: Optional[str],
     end_date: Optional[str],
     format: str,
+    *,
+    user_id: Optional[str] = None,
+    user_email: Optional[str] = None,
+    request_id: Optional[str] = None,
+    user_agent: Optional[str] = None,
+    source_ip: Optional[str] = None,
 ):
     """Generate recall-filtered FDA export with flexible search criteria.
 
-    This is the core logic for the /export/recall endpoint.
+    This is the core logic for the /export/recall endpoint. Identity
+    fields are passed through to :func:`log_recall_export` so each
+    audit-log row records WHO produced the export and WHEN, satisfying
+    FSMA 204 §1.1455(c) chain-of-custody requirements (issues #1205,
+    #1209, #1215).
     """
-    # Require at least one filter to prevent full-table dumps
-    if not any([product, location, tlc, event_type, start_date]):
+    # Full-tenant recall dumps are regulatorily invalid and a
+    # competitive-intelligence leak vector. A real recall is scoped to
+    # an affected product/lot/location. See issue #1209.
+    #
+    # Rule 1: at least one *identifier* filter must be present. A date
+    # range alone is not sufficient — ``end_date`` alone previously
+    # satisfied the check, which let any authorized user dump the
+    # entire supply chain as a "recall" export.
+    has_identifier = any([product, location, tlc, event_type])
+    if not has_identifier:
         raise HTTPException(
             status_code=400,
-            detail="At least one filter is required (product, location, tlc, event_type, or start_date)",
+            detail=(
+                "Recall exports require at least one identifier filter "
+                "(product, location, tlc, or event_type). A date-range-only "
+                "query would return the entire tenant dataset, which is not "
+                "a valid recall scope."
+            ),
+        )
+
+    # Rule 2: if any date bound is supplied, both must be supplied and
+    # ``end_date >= start_date``. An open-ended ``end_date`` forces a
+    # time-bounded query that cannot silently include data older than
+    # the FSMA 204 two-year retention window.
+    if (start_date and not end_date) or (end_date and not start_date):
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Both start_date and end_date are required when either is "
+                "provided. Supply both bounds or omit both."
+            ),
+        )
+    if start_date and end_date and end_date < start_date:
+        raise HTTPException(
+            status_code=400,
+            detail="end_date must be on or after start_date.",
         )
 
     db_session = None
@@ -98,7 +140,10 @@ async def export_recall_filtered_handler(
         chain_verification = persistence.verify_chain(tenant_id=tenant_id)
         completeness_summary = _build_completeness_summary(events)
 
-        # Log the recall export
+        # Log the recall export. If the audit-log write fails,
+        # ``log_recall_export`` raises :class:`AuditLogWriteError`,
+        # which is translated into a 5xx below — the export must not
+        # succeed without its chain-of-custody row (issue #1215).
         log_recall_export(
             db_session=db_session,
             tenant_id=tenant_id,
@@ -108,6 +153,14 @@ async def export_recall_filtered_handler(
             tlc=tlc,
             start_date=start_date,
             end_date=end_date,
+            user_id=user_id,
+            user_email=user_email,
+            request_id=request_id,
+            user_agent=user_agent,
+            source_ip=source_ip,
+            product=product,
+            location=location,
+            event_type=event_type,
         )
 
         timestamp = make_timestamp()
@@ -157,6 +210,25 @@ async def export_recall_filtered_handler(
 
     except HTTPException:
         raise
+    except AuditLogWriteError as e:
+        logger.error(
+            "fda_recall_export_audit_log_blocked",
+            extra={
+                "tenant_id": tenant_id,
+                "user_id": user_id,
+                "request_id": request_id,
+                "error": str(e),
+            },
+        )
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "FDA export halted: audit-log write failed. The FSMA 204 "
+                "chain-of-custody requirement prevents returning an export "
+                "without a corresponding audit-trail row. Retry after the "
+                "underlying storage is restored."
+            ),
+        ) from e
     except (ImportError, ValueError, RuntimeError, OSError) as e:
         logger.error("fda_recall_export_failed", extra={"error": str(e)})
         raise HTTPException(status_code=500, detail="Recall export failed. Check server logs for details.")

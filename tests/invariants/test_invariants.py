@@ -196,11 +196,18 @@ class TestRuleEvaluationReproducibility:
         assert all(r.result == "pass" for r in results)
 
     def test_evaluation_summary_compliant_property(self):
-        """EvaluationSummary.compliant is True iff failed == 0."""
-        passing = EvaluationSummary(event_id="x", failed=0, passed=5)
-        failing = EvaluationSummary(event_id="x", failed=1, passed=4)
+        """EvaluationSummary.compliant is tri-state — True iff failed==0
+        AND errored==0 AND at least one rule actually ran (#1347, #1354)."""
+        passing = EvaluationSummary(event_id="x", total_rules=5, failed=0, passed=5)
+        failing = EvaluationSummary(event_id="x", total_rules=5, failed=1, passed=4)
+        empty = EvaluationSummary(event_id="x")
+        errored = EvaluationSummary(event_id="x", total_rules=5, passed=4, errored=1)
         assert passing.compliant is True
         assert failing.compliant is False
+        # #1347 — empty rule set must not silently report compliant=True.
+        assert empty.compliant is None
+        # #1354 — evaluator errors count as non-compliant, not skipped.
+        assert errored.compliant is False
 
 
 # ===================================================================
