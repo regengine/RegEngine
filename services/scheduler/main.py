@@ -274,6 +274,11 @@ class SchedulerService:
     ) -> List[EnforcementItem]:
         """Filter out previously seen items.
 
+        NOTE: This method INTENTIONALLY does not call ``mark_seen``. Marking an
+        item as seen before it has been successfully emitted downstream causes
+        permanent data loss on a broker outage (issue #1136). Call
+        :meth:`_mark_items_seen` only after successful emission.
+
         Args:
             items: List of enforcement items
             source_type: Source type for state tracking
@@ -290,7 +295,21 @@ class SchedulerService:
             if self.state_manager.is_new(item.source_id, content):
                 new_items.append(item)
 
-                # Mark as seen
+        return new_items
+
+    def _mark_items_seen(
+        self, items: List[EnforcementItem], source_type: SourceType
+    ) -> None:
+        """Persist the ``seen`` mark for items that have been emitted.
+
+        Used as the second half of an at-least-once emit-then-ack flow
+        (see #1136). If ``mark_seen`` itself fails mid-loop, the remaining
+        items stay un-marked and will be retried on the next scheduler tick
+        (downstream consumers must be idempotent on ``source_id``).
+        """
+        for item in items:
+            content = f"{item.title}|{item.summary or ''}|{item.url}"
+            try:
                 self.state_manager.mark_seen(
                     source_id=item.source_id,
                     source_type=source_type.value,
@@ -298,13 +317,26 @@ class SchedulerService:
                     title=item.title,
                     url=item.url,
                 )
-
-        return new_items
+            except Exception as e:  # pragma: no cover — logged, retried next tick
+                logger.error(
+                    "mark_seen_failed",
+                    source_id=item.source_id,
+                    source_type=source_type.value,
+                    error=str(e),
+                )
+                # Stop marking; remaining items will be re-attempted next run.
+                return
 
     def _process_new_items(
         self, items: List[EnforcementItem], source_type: SourceType
     ) -> None:
         """Process newly detected enforcement items.
+
+        Emits first, then marks items as seen only if the primary emission
+        succeeded without exception. This is the at-least-once path that
+        closes issue #1136: a Kafka outage leaves items un-seen so they
+        are re-attempted on the next tick rather than silently dropped.
+        Downstream consumers must be idempotent on ``source_id``.
 
         Args:
             items: List of new enforcement items
@@ -316,22 +348,34 @@ class SchedulerService:
             count=len(items),
         )
 
-        # Emit to Kafka (enforcement events)
+        # Emit to Kafka (enforcement events). This is the authoritative
+        # emission: if it raises, items stay un-marked and will be retried.
+        primary_emit_succeeded = False
         try:
             success, failures = self.kafka_producer.emit_batch(items)
             logger.info(
                 "kafka_events_emitted",
+                source_type=source_type.value,
                 success=success,
                 failures=failures,
             )
+            # Any hard failure means "not safe to mark seen" — retry next tick.
+            # (Partial per-item failures from emit_batch() are tracked by its
+            # own retry/DLQ; see #1147 follow-up.)
+            primary_emit_succeeded = failures == 0
         except (ConnectionError, TimeoutError, OSError, RuntimeError) as e:
-            logger.error("kafka_emission_failed", error=str(e))
+            logger.error(
+                "kafka_emission_failed",
+                source_type=source_type.value,
+                count=len(items),
+                error=str(e),
+            )
 
         # Transform FDA recalls to FSMA events and emit to graph consumer
         try:
             transformer = get_fsma_transformer()
             fsma_events = transformer.transform_batch(items)
-            
+
             if fsma_events:
                 fsma_success, fsma_failures = self.kafka_producer.emit_fsma_batch(fsma_events)
                 logger.info(
@@ -376,6 +420,19 @@ class SchedulerService:
                     title=item.title,
                     url=item.url,
                 )
+
+        # FINAL: mark items seen only if the primary emission succeeded
+        # cleanly. If Kafka was down the items stay un-marked and the next
+        # scheduler tick will re-discover and re-emit them (#1136).
+        if primary_emit_succeeded:
+            self._mark_items_seen(items, source_type)
+        else:
+            logger.warning(
+                "items_not_marked_seen_will_retry",
+                source_type=source_type.value,
+                count=len(items),
+                reason="primary_emission_failed_or_partial",
+            )
 
     def schedule_jobs(self) -> None:
         """Schedule all scraping jobs."""
