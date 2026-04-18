@@ -58,13 +58,13 @@ FOREACH (_ IN CASE WHEN invite IS NULL THEN [] ELSE [1] END |
 
 
 FACILITY_FTL_SCOPING_QUERY = """
-MERGE (supplier:SupplierContact {user_id: $supplier_user_id})
+MERGE (supplier:SupplierContact {user_id: $supplier_user_id, tenant_id: $tenant_id})
+ON CREATE SET supplier.tenant_id = $tenant_id
 SET supplier.email = $supplier_email,
-    supplier.tenant_id = $tenant_id,
     supplier.updated_at = datetime()
-MERGE (facility:SupplierFacility {facility_id: $facility_id})
-SET facility.tenant_id = $tenant_id,
-    facility.name = $facility_name,
+MERGE (facility:SupplierFacility {facility_id: $facility_id, tenant_id: $tenant_id})
+ON CREATE SET facility.tenant_id = $tenant_id
+SET facility.name = $facility_name,
     facility.street = $street,
     facility.city = $city,
     facility.state = $state,
