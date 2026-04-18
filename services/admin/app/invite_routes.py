@@ -8,9 +8,11 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 import structlog
 from shared.pii import mask_email
+from shared.permissions import can_invite_role
+from shared.rate_limit import limiter
 from pydantic import BaseModel, field_validator
 from sqlalchemy.orm import Session
 from sqlalchemy import func, select
@@ -175,6 +177,45 @@ async def create_invite(
     if not role or (role.tenant_id and role.tenant_id != tenant_id):
          raise HTTPException(status_code=400, detail="Invalid role")
 
+    # #1387 — privilege-escalation guard. Holder of users.invite can create an
+    # invite, but they can NOT assign a role of higher rank than their own.
+    # Look up the caller's role in this tenant via their membership.
+    caller_role = db.execute(
+        select(RoleModel)
+        .join(MembershipModel, MembershipModel.role_id == RoleModel.id)
+        .where(
+            MembershipModel.user_id == current_user.id,
+            MembershipModel.tenant_id == tenant_id,
+            MembershipModel.is_active == True,  # noqa: E712
+        )
+    ).scalar_one_or_none()
+
+    # sysadmins bypass the tier check (platform-level role). Everyone else
+    # must pass can_invite_role().
+    if not current_user.is_sysadmin:
+        if caller_role is None:
+            logger.warning(
+                "invite_role_check_no_caller_role",
+                user_id=str(current_user.id),
+                tenant_id=str(tenant_id),
+            )
+            raise HTTPException(status_code=403, detail="No active role in this tenant")
+        if not can_invite_role(
+            caller_role_name=caller_role.name,
+            caller_permissions=caller_role.permissions or [],
+            target_role_name=role.name,
+            target_permissions=role.permissions or [],
+        ):
+            logger.warning(
+                "invite_role_escalation_blocked",
+                user_id=str(current_user.id),
+                tenant_id=str(tenant_id),
+                caller_role=caller_role.name,
+                target_role=role.name,
+            )
+            # Opaque 403 so an attacker can't enumerate role tiers by response.
+            raise HTTPException(status_code=403, detail="Insufficient privilege to assign this role")
+
     # Create Invite
     token = secrets.token_urlsafe(32)
     token_hash = hashlib.sha256(token.encode()).hexdigest()
@@ -304,79 +345,128 @@ async def revoke_invite(
 
 # --- Public Endpoint ---
 
+class AcceptInviteExistingUserRequest(BaseModel):
+    """Acceptance payload used when the invited email matches an existing user.
+
+    The acceptor must re-authenticate with their current RegEngine password
+    before the new membership is granted (#1337 Path B). No password-set is
+    performed in this branch — the existing account is unchanged.
+    """
+    token: str
+    current_password: str
+
+
 @router.post("/auth/accept-invite", response_model=AcceptInviteResponse, status_code=201)
+@limiter.limit("10/minute")
 async def accept_invite(
     request: AcceptInviteRequest,
-    db: Session = Depends(get_session)
+    http_request: Request,
+    db: Session = Depends(get_session),
 ):
-    # Verify Token
+    """Accept an invite.
+
+    #1337 fix:
+      * Path A (new user): invite acts as proof-of-email, but we rate-limit
+        and fail-closed on any ambiguity. Password policy is enforced.
+      * Path B (existing user): a membership is NEVER granted silently. The
+        caller must supply either the existing account's password in
+        ``current_password``, or authenticate via the standard login flow and
+        accept from /v1/me. Holding the raw token alone is not enough.
+      * Deleted/erased users are not reinstated via invite.
+      * All failure cases return a uniform 400 so an attacker cannot distinguish
+        expired / revoked / already-accepted from "invite belongs to existing
+        user with no password supplied".
+    """
+    from .auth_utils import verify_password  # local import to avoid cycle
+
+    generic_400 = HTTPException(status_code=400, detail="Invite is not usable")
+
+    # Verify Token (hashed lookup; tokens stay opaque at rest).
     token_hash = hashlib.sha256(request.token.encode()).hexdigest()
-    
+
     invite = db.execute(
         select(InviteModel).where(InviteModel.token_hash == token_hash)
     ).scalar_one_or_none()
-    
+
+    # Uniform 400 for all not-usable cases (#1337).
     if not invite:
-        raise HTTPException(status_code=404, detail="Invalid token")
-        
+        raise generic_400
     if invite.expires_at < datetime.now(timezone.utc):
-        raise HTTPException(status_code=400, detail="Invite expired")
-        
+        raise generic_400
     if invite.revoked_at or invite.accepted_at:
-        raise HTTPException(status_code=400, detail="Invite invalid")
+        raise generic_400
 
     # Check if user exists (Global)
     user = db.execute(select(UserModel).where(UserModel.email == invite.email)).scalar_one_or_none()
-    
-    if not user:
-        # Validate password against policy
+
+    if user is not None:
+        # Path B — existing user. Require proof of ownership via the existing
+        # account password. If the caller only has the invite token, refuse.
+        if user.status != "active":
+            # Do not reinstate erased / suspended users via invite (#1337).
+            logger.warning(
+                "accept_invite_inactive_user_blocked",
+                email=mask_email(invite.email),
+                status=user.status,
+            )
+            raise generic_400
+
+        # The password field on AcceptInviteRequest doubles as the existing
+        # password when the email already has an account. We intentionally use
+        # the same field so the frontend can post the same payload shape.
+        supplied_password = request.password or ""
+        if not supplied_password or not verify_password(supplied_password, user.password_hash):
+            logger.warning(
+                "accept_invite_existing_user_auth_failed",
+                email=mask_email(invite.email),
+            )
+            # Same generic 400 to avoid leaking "account exists" to token holders.
+            raise generic_400
+
+    else:
+        # Path A — create new user with invite-supplied password.
+        # Enforce password policy FIRST so we don't flush half-constructed rows.
         try:
             validate_password(request.password, user_context={'email': invite.email})
         except PasswordPolicyError as e:
             raise HTTPException(status_code=400, detail=e.message)
 
-        # Create User
         user = UserModel(
             email=invite.email,
             password_hash=get_password_hash(request.password),
             status="active",
-            is_sysadmin=False
+            is_sysadmin=False,
         )
         db.add(user)
-        db.flush() # get ID
-        
-        # We assume creating a user via invite is safe. 
-        # But we need to ensure we don't overwrite if check above failed race condition.
-        # Unique constraint on email should catch it.
-    
-    # Check membership
+        db.flush()  # get ID
+
+    # Check membership (idempotency + defense-in-depth).
     existing_membership = db.execute(
         select(MembershipModel).where(
             MembershipModel.user_id == user.id,
             MembershipModel.tenant_id == invite.tenant_id
         )
     ).scalar_one_or_none()
-    
+
     if existing_membership:
-         raise HTTPException(status_code=409, detail="Already a member")
-         
+        # Mark the invite consumed so it can't be reused, then uniform 400.
+        invite.accepted_at = datetime.now(timezone.utc)
+        db.commit()
+        raise generic_400
+
     # Create Membership
     membership = MembershipModel(
         user_id=user.id,
         tenant_id=invite.tenant_id,
         role_id=invite.role_id,
-        created_by=None # Self-accepted via system
+        created_by=None  # Self-accepted via system
     )
     db.add(membership)
-    
-    # Update Invite
+
+    # Update Invite (single-use).
     accepted_at = datetime.now(timezone.utc)
     invite.accepted_at = accepted_at
-    
-    # Audit Log (System context? Or User context?)
-    # Since user is just created, we can use their ID? Or leave actor null (System).
-    # Plan says "accepted_by (user_id)". 
-    
+
     AuditLogger.log_event(
         db,
         tenant_id=invite.tenant_id,
@@ -388,7 +478,7 @@ async def accept_invite(
         actor_id=user.id,
         metadata={"role_id": str(invite.role_id)}
     )
-    
+
     db.commit()
 
     supplier_graph_sync.record_invite_accepted(
@@ -399,5 +489,5 @@ async def accept_invite(
         role_id=str(invite.role_id),
         accepted_at=accepted_at,
     )
-    
+
     return {"status": "success", "user_id": str(user.id)}

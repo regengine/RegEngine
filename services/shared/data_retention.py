@@ -17,6 +17,8 @@ from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
+from uuid import UUID
+
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
@@ -116,6 +118,16 @@ RETENTION_CONFIGS: Dict[RetentionPolicy, RetentionConfig] = {
 _ALLOWED_RESOURCE_TABLES: frozenset[str] = frozenset(
     policy.value.replace("-", "_") for policy in RetentionPolicy
 )
+
+
+# Resources whose rows span all tenants (no tenant_id column). Tenant
+# scoping is skipped for these by design; everything else MUST carry a
+# tenant predicate in retention writes.
+_GLOBAL_RESOURCES: frozenset[str] = frozenset({"user_account"})
+
+
+def _is_tenant_scoped(resource_type: str) -> bool:
+    return resource_type not in _GLOBAL_RESOURCES
 
 
 def _validate_resource_type(resource_type: str) -> None:
@@ -273,6 +285,7 @@ class DataRetentionManager:
         policy: RetentionPolicy,
         deletion_request: DeletionRequest,
         actor: AuditActor,
+        tenant_id: Optional[UUID] = None,
         reason: Optional[str] = None,
     ) -> bool:
         """Soft-delete a record by setting deleted_at timestamp.
@@ -280,33 +293,65 @@ class DataRetentionManager:
         This marks the record as deleted without removing it, allowing
         for recovery and compliance auditing.
 
+        SECURITY (#1399): ``tenant_id`` is REQUIRED for tenant-scoped
+        resources. A caller that supplies an attacker-influenced
+        ``record_id`` without tenant scoping gets a cross-tenant
+        soft-delete; this is prevented by always writing the tenant
+        predicate into the UPDATE.
+
         Args:
             db: Database session
-            resource_type: Type of resource (e.g., 'user', 'supplier_contact')
+            resource_type: Type of resource (e.g., 'user_account', 'supplier_contact')
             record_id: ID of the record to delete
             policy: Retention policy to apply
             deletion_request: Type of deletion request
             actor: Who requested the deletion
+            tenant_id: Tenant the record belongs to. Required for
+                tenant-scoped resources; must be ``None`` for global
+                resources (see ``_GLOBAL_RESOURCES``).
             reason: Reason for deletion
 
         Returns:
             True if soft-delete succeeded
         """
         _validate_resource_type(resource_type)
+
+        tenant_scoped = _is_tenant_scoped(resource_type)
+        if tenant_scoped and tenant_id is None:
+            raise ValueError(
+                f"tenant_id is required for tenant-scoped resource '{resource_type}'"
+            )
+        if not tenant_scoped and tenant_id is not None:
+            logger.warning(
+                "soft_delete_tenant_id_ignored_for_global_resource",
+                resource_type=resource_type,
+            )
+
         try:
             # Update record to mark as deleted
             deleted_at = datetime.now(timezone.utc)
 
-            update_query = text(f"""
-                UPDATE {resource_type}
-                SET deleted_at = :deleted_at
-                WHERE id = :record_id AND deleted_at IS NULL
-            """)
+            params: Dict[str, Any] = {
+                "deleted_at": deleted_at,
+                "record_id": record_id,
+            }
+            if tenant_scoped:
+                update_query = text(f"""
+                    UPDATE {resource_type}
+                    SET deleted_at = :deleted_at
+                    WHERE id = :record_id
+                      AND tenant_id = :tenant_id
+                      AND deleted_at IS NULL
+                """)
+                params["tenant_id"] = str(tenant_id)
+            else:
+                update_query = text(f"""
+                    UPDATE {resource_type}
+                    SET deleted_at = :deleted_at
+                    WHERE id = :record_id AND deleted_at IS NULL
+                """)
 
-            result = db.execute(
-                update_query,
-                {"deleted_at": deleted_at, "record_id": record_id},
-            )
+            result = db.execute(update_query, params)
             db.commit()
 
             if result.rowcount == 0:
@@ -554,6 +599,7 @@ class DataRetentionManager:
         policy: RetentionPolicy,
         deletion_request: DeletionRequest,
         actor: AuditActor,
+        tenant_id: Optional[UUID] = None,
         reason: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Process a complete GDPR deletion request.
@@ -589,6 +635,7 @@ class DataRetentionManager:
                 policy=policy,
                 deletion_request=deletion_request,
                 actor=actor,
+                tenant_id=tenant_id,
                 reason=reason,
             )
 

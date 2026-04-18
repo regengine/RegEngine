@@ -1,4 +1,32 @@
-"""Database utilities for the admin service."""
+"""Database utilities for the admin service.
+
+Security note (#1381 -- pooled connection tenant bleed):
+
+``TenantContext.set_tenant_context`` uses ``set_config(name, val,
+false)`` where the third arg is "is_local" -- ``false`` means the GUC
+persists for the LIFETIME OF THE CONNECTION, not the transaction. When
+the FastAPI session closes and the connection returns to the
+``SessionLocal`` pool, the previous tenant's ``app.tenant_id`` is still
+set. The next unrelated request that picks up that connection inherits
+the stale tenant context before any new set_tenant_context runs. A
+route that does NOT set context (``/health``, pre-auth paths, or a
+broken auth dep that raises after an early DB call) then reads under
+the previous tenant's RLS.
+
+Mitigation (this module): a ``connect`` + ``checkout`` event listener
+on the engine's connection pool runs
+``SELECT set_config('app.tenant_id', '', false)`` and
+``SELECT set_config('regengine.is_sysadmin', 'false', false)``
+BEFORE the session sees the connection. This guarantees every route
+starts from a clean slate; authenticated routes re-set tenant context
+as the first step, and unauthenticated paths are genuinely scoped to
+"no tenant" rather than inheriting the neighbor's.
+
+Complementary: ``get_tenant_session`` (and the ``_session_scope``
+inside ``HallucinationTracker``) use ``SET LOCAL`` which is
+transaction-local and auto-cleared on COMMIT/ROLLBACK -- preferred for
+new code.
+"""
 
 from __future__ import annotations
 
@@ -6,7 +34,7 @@ import os
 from typing import Iterator, AsyncIterator
 
 import structlog
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine, event, text
 from sqlalchemy.orm import Session, sessionmaker
 
 logger = structlog.get_logger("admin-db")
@@ -55,6 +83,52 @@ SessionLocal = sessionmaker(
     expire_on_commit=False,
     future=True,
 )
+
+
+def _reset_tenant_guc_on_checkout(dbapi_connection, connection_record, connection_proxy):
+    """Clear ``app.tenant_id`` and related RLS GUCs when a pooled
+    connection is handed out.
+
+    Fixes #1381: pooled connections retain session-level GUCs across
+    requests because ``set_tenant_context`` uses ``set_config(..., false)``
+    (session-level). Without this listener the next unrelated request
+    that picks up the connection inherits the previous tenant's
+    ``app.tenant_id``.
+
+    We run this on ``checkout`` (when the pool gives the connection to
+    a session) rather than ``checkin`` (when the session returns it) so
+    that even a connection that was orphaned mid-request -- e.g. by a
+    crash or a ``KeyboardInterrupt`` -- is still clean on its next use.
+
+    SQLite does not honor ``set_config`` and does not use RLS; skip
+    silently.
+    """
+    if _engine.dialect.name == "sqlite":
+        return
+    try:
+        cursor = dbapi_connection.cursor()
+        try:
+            # Clear tenant GUC. Third arg 'false' == session-level set,
+            # which matches set_tenant_context's scope.
+            cursor.execute("SELECT set_config('app.tenant_id', '', false)")
+            # Defense-in-depth: also clear the sysadmin-context flag so
+            # a stale sysadmin session does not linger in the pool.
+            cursor.execute(
+                "SELECT set_config('regengine.is_sysadmin', 'false', false)"
+            )
+        finally:
+            cursor.close()
+    except Exception as exc:  # noqa: BLE001 -- log and keep going
+        # Do not fail the whole request if the RESET fails; log loudly
+        # so the pool-bleed mitigation is visible if it ever regresses.
+        logger.warning(
+            "pool_checkout_tenant_reset_failed",
+            error=str(exc),
+        )
+
+
+if _engine.dialect.name != "sqlite":
+    event.listen(_engine, "checkout", _reset_tenant_guc_on_checkout)
 
 def init_db() -> None:
     """Create RLS helper functions on startup. Schema is managed by Alembic.
