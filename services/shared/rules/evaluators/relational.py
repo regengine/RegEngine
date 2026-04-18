@@ -22,8 +22,15 @@ from typing import Any, Dict, List, Optional
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from shared.rules.container_factors import ContainerFactorResolver
 from shared.rules.types import RuleDefinition, RuleEvaluationResult
-from shared.rules.uom import CTE_LIFECYCLE_ORDER, normalize_to_lbs
+from shared.rules.uom import (
+    CONTAINER_UOMS,
+    COUNT_UOMS,
+    CTE_LIFECYCLE_ORDER,
+    UnitConversionError,
+    normalize_to_lbs_strict,
+)
 
 logger = logging.getLogger("rules-engine.relational")
 
@@ -337,12 +344,18 @@ def evaluate_mass_balance(
     input_types = {"harvesting", "receiving", "first_land_based_receiving"}
     output_types = {"shipping"}
 
-    total_input = 0.0
-    total_output = 0.0
+    # #1362 — collect every (qty, uom, product, etype) up-front so we can
+    # convert everything into a common base (lbs) and fail-closed if any
+    # one entry can't be converted. The old code silently fell back to
+    # cross-unit arithmetic when normalize_to_lbs returned None, which
+    # produced nonsensical totals like "10 cases" + "100 lbs" = 110.
+    all_entries: List[tuple] = [(
+        float(current_quantity),
+        current_uom,
+        event_data.get("product_reference"),
+        current_type,
+    )]
     units_seen = set()
-    use_converted = False
-
-    all_entries = [(float(current_quantity), current_uom, current_type)]
     if current_uom:
         units_seen.add(current_uom.lower().strip())
 
@@ -353,58 +366,104 @@ def evaluate_mass_balance(
             continue
         if evt_uom:
             units_seen.add(evt_uom.lower().strip())
-        all_entries.append((float(evt_qty), evt_uom, evt["event_type"]))
+        all_entries.append((
+            float(evt_qty),
+            evt_uom,
+            evt.get("product_reference"),
+            evt["event_type"],
+        ))
 
-    if len(units_seen) > 1:
-        converted_entries = []
-        all_convertible = True
-        for qty, uom, etype in all_entries:
-            lbs = normalize_to_lbs(qty, uom) if uom else None
-            if lbs is None:
-                all_convertible = False
-                break
-            converted_entries.append((lbs, etype))
+    # Detect whether ANY entry requires a per-product container factor.
+    # If so we need a resolver; otherwise we can short-circuit and avoid
+    # the DB roundtrip.
+    needs_factor = any(
+        (uom or "").strip().lower().rstrip(".") in (CONTAINER_UOMS | COUNT_UOMS)
+        for _, uom, _, _ in all_entries
+    )
+    factor_resolver = ContainerFactorResolver(session) if needs_factor else None
 
-        if all_convertible:
-            use_converted = True
-            for lbs, etype in converted_entries:
-                if etype in input_types:
-                    total_input += lbs
-                elif etype in output_types:
-                    total_output += lbs
-
-    if not use_converted:
-        for qty, uom, etype in all_entries:
+    # Convert every entry into lbs. A single unconvertible entry aborts
+    # the whole rule with result="error" — we refuse to stamp a mass-
+    # balance verdict on partially-convertible inputs (#1362 / #1363).
+    total_input = 0.0
+    total_output = 0.0
+    converted_rows: List[Dict[str, Any]] = []
+    try:
+        for qty, uom, product_ref, etype in all_entries:
+            lbs = normalize_to_lbs_strict(
+                qty,
+                uom,
+                container_resolver=factor_resolver,
+                product_reference=product_ref,
+                tenant_id=auth_tid,
+            )
+            converted_rows.append({
+                "event_type": etype,
+                "quantity": qty,
+                "uom": uom,
+                "product_reference": product_ref,
+                "lbs": lbs,
+            })
             if etype in input_types:
-                total_input += qty
+                total_input += lbs
             elif etype in output_types:
-                total_output += qty
-
-    evidence = [{
-        "tlc": tlc,
-        "total_input": total_input,
-        "total_output": total_output,
-        "tolerance_percent": tolerance_percent,
-        "units_seen": list(units_seen),
-        "events_checked": len(related) + 1,
-        "uom_converted": use_converted,
-    }]
-
-    if len(units_seen) > 1 and not use_converted:
+                total_output += lbs
+    except UnitConversionError as exc:
+        logger.warning(
+            "mass_balance_conversion_failed",
+            extra={
+                "rule_id": rule.rule_id,
+                "tlc": tlc,
+                "tenant_id": auth_tid,
+                "value": exc.value,
+                "from_unit": exc.from_unit,
+                "reason": exc.reason,
+            },
+        )
         return RuleEvaluationResult(
             rule_id=rule.rule_id, rule_version=rule.rule_version,
             rule_title=rule.title, severity=rule.severity,
-            result="warn",
+            # #1362 — fail-closed: a non-convertible line-item means we
+            # cannot produce a mass-balance verdict. `errored` is tallied
+            # into summary.errored, which forces summary.compliant=False
+            # (see types.py). No silent pass.
+            result="error",
             why_failed=(
-                f"Mass balance check inconclusive for TLC '{tlc}': "
-                f"mixed units of measure detected ({', '.join(sorted(units_seen))}) "
-                f"and not all could be converted. "
-                f"Cannot reliably compare input ({total_input}) vs output ({total_output})."
+                f"Mass balance check cannot complete for TLC '{tlc}': "
+                f"could not convert {exc.value} {exc.from_unit!r} to lbs "
+                f"(reason: {exc.reason}). Configure a container factor "
+                f"for this product/UoM in product_container_factors, or "
+                f"record quantities in a direct mass unit (lbs/kg/oz/tons)."
             ),
-            evidence_fields_inspected=evidence,
+            evidence_fields_inspected=[{
+                "tlc": tlc,
+                "units_seen": sorted(units_seen),
+                "events_checked": len(related) + 1,
+                "conversion_failure": {
+                    "value": exc.value,
+                    "from_unit": exc.from_unit,
+                    "reason": exc.reason,
+                },
+            }],
             citation_reference=rule.citation_reference,
+            remediation_suggestion=(
+                "Seed fsma.product_container_factors with a factor for this "
+                "(tenant_id, product_reference, uom) triple, or change the "
+                "rule to only apply to direct-mass UoMs."
+            ),
             category=rule.category,
         )
+
+    evidence = [{
+        "tlc": tlc,
+        "total_input_lbs": total_input,
+        "total_output_lbs": total_output,
+        "tolerance_percent": tolerance_percent,
+        "units_seen": sorted(units_seen),
+        "events_checked": len(related) + 1,
+        "uom_converted": True,
+        "rows": converted_rows,
+    }]
 
     if total_input == 0 and total_output > 0:
         return RuleEvaluationResult(
