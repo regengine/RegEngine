@@ -65,6 +65,11 @@ def client(monkeypatch):
 
 
 def _mock_graph_response(events: list[dict]):
+    """Single-page graph response (``has_more=False``).
+
+    The handler drives a cursor-pagination loop even for small result
+    sets, so the stub must always return a terminator payload.
+    """
     class _Resp:
         status_code = 200
 
@@ -75,12 +80,45 @@ def _mock_graph_response(events: list[dict]):
         def json(self):
             return self._payload
 
-    resp = _Resp({"events": events})
+    resp = _Resp({"events": events, "has_more": False, "next_cursor": None})
 
     class _Ctx:
         async def __aenter__(self_inner):
             client = AsyncMock()
             client.get = AsyncMock(return_value=resp)
+            return client
+
+        async def __aexit__(self_inner, *args):
+            return None
+
+    return _Ctx()
+
+
+def _mock_paginated_graph_response(pages: list[dict]):
+    """Multi-page graph response. ``pages`` is a list of ``{"events":
+    [...], "has_more": bool, "next_cursor": str|None}`` dicts that
+    will be returned in order on successive ``client.get`` calls.
+    """
+    class _Resp:
+        status_code = 200
+
+        def __init__(self, payload):
+            self._payload = payload
+            self.text = "ok"
+
+        def json(self):
+            return self._payload
+
+    responses = [_Resp(p) for p in pages]
+    response_iter = iter(responses)
+
+    async def _get(*args, **kwargs):
+        return next(response_iter)
+
+    class _Ctx:
+        async def __aenter__(self_inner):
+            client = AsyncMock()
+            client.get = _get
             return client
 
         async def __aexit__(self_inner, *args):
@@ -97,6 +135,14 @@ def _patch_graph(client: TestClient, events: list[dict]):
         client._compliance_routes_mod,  # type: ignore[attr-defined]
         "resilient_client",
         return_value=_mock_graph_response(events),
+    )
+
+
+def _patch_graph_paginated(client: TestClient, pages: list[dict]):
+    return patch.object(
+        client._compliance_routes_mod,  # type: ignore[attr-defined]
+        "resilient_client",
+        return_value=_mock_paginated_graph_response(pages),
     )
 
 
@@ -263,6 +309,71 @@ def test_1108_malformed_event_date_in_graph_response_returns_400(client):
     assert r.status_code == 400
     detail = r.json()["detail"]
     assert "malformed event_date" in detail or "event_date" in detail
+
+
+# ---------------------------------------------------------------------------
+# #1038 — cursor pagination replaces single-page truncation
+# ---------------------------------------------------------------------------
+
+
+def _make_event(i: int) -> dict:
+    return {
+        "type": "SHIPPING",
+        "tlc": f"TLC-{i:04d}",
+        "product_description": "Romaine",
+        "quantity": 100,
+        "uom": "cases",
+        "kdes": {"event_date": f"2026-04-{(i % 28) + 1:02d}T10:00:00+00:00"},
+    }
+
+
+def test_1038_walks_all_pages_until_has_more_false(client):
+    """A 2-page result set must be fully consumed; the CSV contains
+    every row, not just the first page.
+    """
+    page_1 = [_make_event(i) for i in range(500)]
+    page_2 = [_make_event(i + 500) for i in range(123)]
+    pages = [
+        {"events": page_1, "has_more": True, "next_cursor": "cursor-abc"},
+        {"events": page_2, "has_more": False, "next_cursor": None},
+    ]
+    with _patch_graph_paginated(client, pages):
+        r = client.get(
+            "/v1/fsma/audit/spreadsheet",
+            params={"start_date": "2026-04-01", "end_date": "2026-04-17"},
+        )
+    assert r.status_code == 200
+    # Record Count metadata row appears in the CSV cover block.
+    body = r.text
+    assert "Record Count" in body
+    # All 623 events should be represented. Count the data-row TLCs
+    # (the TLCs are unique per event).
+    data_rows = [line for line in body.splitlines() if "TLC-" in line]
+    assert len(data_rows) == 623, f"expected 623 data rows, got {len(data_rows)}"
+
+
+def test_1038_exceeding_hard_cap_returns_413(client):
+    """When accumulated events exceed ``_MAX_EXPORT_EVENTS``, the
+    handler must 413 (Payload Too Large) rather than silently
+    producing a partial CSV.
+    """
+    # Build 101 pages of 500 → 50,500 events, just over the default cap.
+    pages = []
+    for i in range(101):
+        pages.append(
+            {
+                "events": [_make_event(i * 500 + j) for j in range(500)],
+                "has_more": i < 100,
+                "next_cursor": f"cursor-{i}" if i < 100 else None,
+            }
+        )
+    with _patch_graph_paginated(client, pages):
+        r = client.get(
+            "/v1/fsma/audit/spreadsheet",
+            params={"start_date": "2026-04-01", "end_date": "2026-04-17"},
+        )
+    assert r.status_code == 413
+    assert "hard cap" in r.json()["detail"] or "narrow" in r.json()["detail"]
 
 
 # ---------------------------------------------------------------------------

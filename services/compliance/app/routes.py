@@ -7,7 +7,7 @@ import re
 import uuid
 from datetime import date, datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -30,6 +30,15 @@ from .fsma_spreadsheet import FSMATimestampError, generate_fda_csv
 # for mandatory response. We still export them, but refuse ranges that
 # would materialize an unbounded history.
 _MAX_EXPORT_RANGE_DAYS = 366 * 2
+
+# Cursor-pagination parameters for the upstream graph service
+# (issue #1038). The graph service caps ``limit`` at 500; we request
+# that maximum and loop until ``has_more`` is false. The hard cap
+# bounds how much the compliance service is willing to buffer in
+# memory before producing the CSV — exceeding it returns HTTP 413
+# rather than silently truncating.
+_GRAPH_PAGE_SIZE = 500
+_MAX_EXPORT_EVENTS = 50_000
 
 # Narrow regex for safe filename tokens — ASCII alphanumerics plus
 # ``.``, ``_``, ``-``. Anything else is stripped to prevent CRLF /
@@ -358,12 +367,13 @@ async def fsma_audit_spreadsheet(
     # ---- Downstream request ----------------------------------------------
     # Use the parsed ISO strings going forward so the graph service sees
     # canonical values, never the raw query params.
-    params: dict[str, str] = {
+    base_params: dict[str, str] = {
         "start_date": start.isoformat(),
         "end_date": end.isoformat(),
+        "limit": str(_GRAPH_PAGE_SIZE),
     }
     if tlc:
-        params["tlc"] = tlc
+        base_params["tlc"] = tlc
 
     # Forward auth, tenant, and correlation headers to downstream graph service
     headers: dict[str, str] = {}
@@ -377,36 +387,89 @@ async def fsma_audit_spreadsheet(
     if request_id:
         headers["X-Request-ID"] = request_id
 
+    # ---- Cursor-paginated fetch (issue #1038) ----------------------------
+    # Graph service paginates at <=500 events and returns
+    # ``has_more=true`` + ``next_cursor`` when additional records exist.
+    # Loop until ``has_more`` is false OR the accumulated count exceeds
+    # :data:`_MAX_EXPORT_EVENTS` (the hard cap). We do NOT silently
+    # truncate the way the old single-page fetch did — exceeding the
+    # cap returns HTTP 413 so an operator sees "narrow your query"
+    # rather than "recall submission is missing 1500 events".
+    events: list[dict] = []
+    next_cursor: Optional[str] = None
     try:
         async with resilient_client(timeout=30.0, circuit_name="graph-service") as client:
-            resp = await client.get(
-                f"{_GRAPH_SERVICE_URL}/v1/fsma/traceability/search/events",
-                params=params,
-                headers=headers,
-            )
+            while True:
+                params = dict(base_params)
+                if next_cursor:
+                    params["starting_after"] = next_cursor
+
+                resp = await client.get(
+                    f"{_GRAPH_SERVICE_URL}/v1/fsma/traceability/search/events",
+                    params=params,
+                    headers=headers,
+                )
+
+                if resp.status_code >= 500:
+                    correlation_id = str(uuid.uuid4())
+                    _logger.error(
+                        "graph_service_5xx",
+                        extra={
+                            "status": resp.status_code,
+                            "body": resp.text[:200],
+                            "correlation_id": correlation_id,
+                        },
+                    )
+                    raise HTTPException(
+                        status_code=502,
+                        detail=f"Upstream service temporarily unavailable (ref: {correlation_id})",
+                    )
+                if resp.status_code >= 400:
+                    correlation_id = str(uuid.uuid4())
+                    _logger.warning(
+                        "graph_service_4xx",
+                        extra={
+                            "status": resp.status_code,
+                            "body": resp.text[:200],
+                            "correlation_id": correlation_id,
+                        },
+                    )
+                    raise HTTPException(
+                        status_code=resp.status_code,
+                        detail=f"Request could not be processed (ref: {correlation_id})",
+                    )
+
+                data = resp.json()
+                page = data.get("events") or data.get("results") or []
+                events.extend(page)
+
+                if len(events) > _MAX_EXPORT_EVENTS:
+                    _logger.warning(
+                        "fda_export_exceeded_hard_cap",
+                        extra={
+                            "tenant_id": tenant_id,
+                            "cap": _MAX_EXPORT_EVENTS,
+                            "accumulated": len(events),
+                        },
+                    )
+                    raise HTTPException(
+                        status_code=413,
+                        detail=(
+                            f"Export exceeds the {_MAX_EXPORT_EVENTS:,}-event "
+                            "hard cap — narrow your date range, TLC, or "
+                            "contact support for an async batched job"
+                        ),
+                    )
+
+                has_more = bool(data.get("has_more"))
+                next_cursor = data.get("next_cursor")
+                if not has_more or not next_cursor or not page:
+                    break
     except CircuitOpenError as exc:
         raise HTTPException(
             status_code=503,
             detail=f"Graph service circuit open — retry after {exc.retry_after:.0f}s",
         ) from exc
-
-    if resp.status_code >= 500:
-        correlation_id = str(uuid.uuid4())
-        _logger.error("graph_service_5xx", extra={"status": resp.status_code, "body": resp.text[:200], "correlation_id": correlation_id})
-        raise HTTPException(
-            status_code=502,
-            detail=f"Upstream service temporarily unavailable (ref: {correlation_id})",
-        )
-    if resp.status_code >= 400:
-        correlation_id = str(uuid.uuid4())
-        _logger.warning("graph_service_4xx", extra={"status": resp.status_code, "body": resp.text[:200], "correlation_id": correlation_id})
-        raise HTTPException(
-            status_code=resp.status_code,
-            detail=f"Request could not be processed (ref: {correlation_id})",
-        )
-    data = resp.json()
-
-    events = data.get("events") or data.get("results") or []
 
     # Zero-row exports produce an auditor-facing empty "official"
     # FDA spreadsheet that's easy to misread as "no compliance
