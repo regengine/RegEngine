@@ -83,10 +83,10 @@ def test_resolve_tenant_returns_none_when_nothing_set():
 # ---------------------------------------------------------------------------
 
 
-def test_idempotency_dependency_strict_blocks_missing_header():
+@pytest.mark.asyncio
+async def test_idempotency_dependency_strict_blocks_missing_header():
     """POST requests without Idempotency-Key get a 400 in strict mode."""
     from shared.idempotency import IdempotencyDependency
-    import asyncio
     from fastapi import HTTPException
 
     dep = IdempotencyDependency(strict=True)
@@ -95,21 +95,21 @@ def test_idempotency_dependency_strict_blocks_missing_header():
     request.headers = {}
 
     with pytest.raises(HTTPException) as exc:
-        asyncio.get_event_loop().run_until_complete(dep(request))
+        await dep(request)
     assert exc.value.status_code == 400
 
 
-def test_idempotency_dependency_strict_accepts_valid_header():
+@pytest.mark.asyncio
+async def test_idempotency_dependency_strict_accepts_valid_header():
     """Valid Idempotency-Key returns the key value."""
     from shared.idempotency import IdempotencyDependency
-    import asyncio
 
     dep = IdempotencyDependency(strict=True)
     request = MagicMock(spec=Request)
     request.method = "POST"
     request.headers = {"Idempotency-Key": "abc-123"}
 
-    result = asyncio.get_event_loop().run_until_complete(dep(request))
+    result = await dep(request)
     assert result == "abc-123"
 
 
