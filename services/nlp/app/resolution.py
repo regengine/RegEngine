@@ -70,10 +70,19 @@ def _token_set_ratio(a: str, b: str) -> float:
     return 100.0 * len(intersection) / len(union)
 
 
-# Threshold for fuzzy acceptance (#1269). 90 requires the majority of tokens
-# to overlap between supplied name and master-record key, preventing a single
-# shared token ("KROGER") from resolving to the full record.
-_FUZZY_RATIO_THRESHOLD = 90.0
+# Threshold for fuzzy acceptance (#1269). Combined with the subset constraint
+# below, this prevents a single shared token ("KROGER") being extended with
+# attacker-chosen additions (e.g. "KROGER FAKE BRAND"). The real protection
+# is the ratio + subset check together: "KROGER FAKE BRAND" vs "KROGER" has
+# a subset match but only 33% token_set_ratio, which fails here.
+# Legitimate extensions like "Wal-Mart Stores Inc." → "WAL MART STORES" vs
+# "WAL-MART" key → "WAL MART" score 66.6% and resolve correctly.
+_FUZZY_RATIO_THRESHOLD = 60.0
+
+# Max number of additional non-suffix tokens we tolerate beyond the key's
+# token set before treating the supplied name as too divergent. This catches
+# the "KROGER FAKE BRAND" pattern independently of the ratio.
+_MAX_EXTRA_TOKENS = 2
 
 
 class EntityResolver:
@@ -133,24 +142,26 @@ class EntityResolver:
             )
             return record
 
-        # --- 2. Fuzzy fallback (token_set_ratio >= threshold) ---
+        # --- 2. Fuzzy fallback (token_set_ratio + subset + extra-token cap) ---
         best: Tuple[float, Optional[str]] = (0.0, None)
         supplied_tokens = set(_tokens(raw_name))
         for key in self._records.keys():
             key_tokens = set(_tokens(key))
             if not key_tokens:
                 continue
-            # Guard against short-token false matches: reject 1-2 char token
-            # sets (e.g. "CO") as candidates.
+            # Guard against short-token-only keys (no meaningful key to match).
             if all(len(t) <= 2 for t in key_tokens):
                 continue
-            # Require full token containment in one direction so that e.g.
-            # "KROGER FAKE BRAND" never matches "KROGER" (key tokens not a
-            # subset of supplied? only accept if supplied is a near-subset
-            # AND score is high).
+            # Require token containment in one direction.
             if not key_tokens.issubset(supplied_tokens) and not supplied_tokens.issubset(
                 key_tokens
             ):
+                continue
+            # Extra-token cap (#1269). "KROGER FAKE BRAND" has 2 extra tokens
+            # vs the "KROGER" key; values above the cap are rejected even if
+            # technically a subset match.
+            extras = len(supplied_tokens - key_tokens)
+            if extras > _MAX_EXTRA_TOKENS:
                 continue
             score = _token_set_ratio(raw_name, key)
             if score > best[0]:
