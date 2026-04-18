@@ -308,7 +308,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       const { data } = supabase.auth.onAuthStateChange(async (event, session) => {
         if (isAuthErrorRedirect && event !== 'SIGNED_OUT') return;
-        if (session?.access_token && session.user) {
+
+        // #1073 Scope listener reactions explicitly. Supabase replays
+        // INITIAL_SESSION and SIGNED_IN on network reconnect, sleep/wake,
+        // and internal token refresh. If we reacted to every replay we'd
+        // clobber a freshly-set re_access_token with a stale Supabase
+        // value (or null it), producing the intermittent "you got logged
+        // out" reports. Only two events should mutate auth state:
+        //   TOKEN_REFRESHED — Supabase rotated a token; sync the cookie.
+        //   SIGNED_OUT      — user (or another tab) signed out; clear state.
+        // INITIAL_SESSION and SIGNED_IN are bootstrapped by the dedicated
+        // getUser().then(...) block above; we ignore them here so replays
+        // are a no-op.
+        if (event !== 'TOKEN_REFRESHED' && event !== 'SIGNED_OUT') {
+          return;
+        }
+
+        if (event === 'TOKEN_REFRESHED' && session?.access_token && session.user) {
           // Guard: if a custom RegEngine JWT session is already established
           // (accessToken is set), do NOT overwrite re_access_token with the
           // Supabase access_token. The middleware verifies re_access_token
@@ -369,7 +385,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Only run when authenticated
     if (!accessToken || !isHydrated) return;
 
-    const REFRESH_INTERVAL_MS = 45 * 60 * 1000; // Refresh every 45 min (before 60 min expiry)
+    // #1075 Shorten the proactive refresh cadence. Access-token TTL is 60 min
+    // and the backend has no per-token rotation marker — the old token stays
+    // valid until natural expiration. Refreshing at 45 min left a 15-min
+    // overlap window where an exfiltrated (XSS-stolen, shared-device-swiped)
+    // access token was still usable on the backend after the legitimate
+    // client had rotated past it.
+    //
+    // Refresh at 55 min instead: the overlap is now bounded by (60 - 55) =
+    // 5 min of the previous token's remaining validity. Does not address
+    // token compromise at rest on the backend (issue covers backend-side
+    // revocation as the next step), but halves the blast-radius window
+    // for the frontend-triggered rotation path.
+    const REFRESH_INTERVAL_MS = 55 * 60 * 1000; // 55 min (5-min overlap with 60-min TTL)
 
     const refreshSession = async () => {
       try {

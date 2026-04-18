@@ -107,9 +107,12 @@ class TestAddAlias:
             svc.add_alias(TENANT, "ent-1", "twitter_handle", "acme", "csv")
 
     def test_valid_alias_types(self):
+        # #1175: 'tlc' added as canonical verbatim Traceability Lot Code
+        # alias type; 'tlc_prefix' retained as secondary fuzzy-lookup alias.
         expected_types = {
             "name", "gln", "gtin", "fda_registration", "internal_code",
-            "duns", "tlc_prefix", "address_variant", "abbreviation", "trade_name",
+            "duns", "tlc", "tlc_prefix", "address_variant", "abbreviation",
+            "trade_name",
         }
         assert VALID_ALIAS_TYPES == expected_types
 

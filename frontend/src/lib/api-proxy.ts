@@ -34,6 +34,40 @@ export function sanitizePath(pathParts: string[]): string | null {
 }
 
 // ---------------------------------------------------------------------------
+// Typed path-segment validators
+// ---------------------------------------------------------------------------
+//
+// Proxies that use named dynamic segments ([tenantId], [snapshotId], etc.)
+// interpolate the segment directly into the upstream URL. Without validation,
+// a malicious value like `../../admin/key` or `%2e%2e/%2e%2e/admin` can
+// escape the intended path and hit an unintended backend endpoint.
+// Validate UUIDs before forwarding; return null on invalid input so the
+// caller can respond with 400.
+
+// RFC 4122 UUID v1-v5, case-insensitive.
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+/** Return the value lowercased if it is a valid UUID, else null. */
+export function validateUuid(value: string | undefined | null): string | null {
+  if (!value || typeof value !== 'string') return null;
+  if (!UUID_RE.test(value)) return null;
+  return value.toLowerCase();
+}
+
+/** Percent-encode a path segment after validating it is URL-safe.
+ *  Rejects segments with slashes, control chars, nulls, or `..` traversal. */
+export function safeSegment(value: string | undefined | null): string | null {
+  if (!value || typeof value !== 'string') return null;
+  if (value.length === 0 || value.length > 256) return null;
+  if (NULL_BYTE_RE.test(value)) return null;
+  if (value.includes('/') || value.includes('\\')) return null;
+  if (value === '.' || value === '..') return null;
+  // eslint-disable-next-line no-control-regex
+  if (/[\u0000-\u001f\u007f]/.test(value)) return null;
+  return encodeURIComponent(value);
+}
+
+// ---------------------------------------------------------------------------
 // Standardised error responses
 // ---------------------------------------------------------------------------
 

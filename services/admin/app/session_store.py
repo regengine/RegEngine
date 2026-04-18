@@ -455,18 +455,21 @@ class RedisSessionStore:
     
     async def revoke_all_user_sessions(self, user_id: UUID) -> int:
         """Revoke all sessions for a user (logout all devices).
-        
+
+        Also drops the refresh-token → session lookup keys so a stolen
+        refresh token cannot be redeemed even before the row TTL expires.
+
         Args:
             user_id: User to revoke sessions for
-            
+
         Returns:
             Number of sessions revoked
         """
         sessions = await self.list_user_sessions(user_id, active_only=True)
-        
+
         if not sessions:
             return 0
-        
+
         # Revoke all sessions in parallel
         client = await self._get_client()
         async with client.pipeline(transaction=False) as pipe:
@@ -476,15 +479,23 @@ class RedisSessionStore:
                     "is_revoked",
                     "true"
                 )
+                # Tear down the refresh-token mapping so /refresh can't claim it.
+                if session.refresh_token_hash:
+                    await pipe.delete(self._token_hash_key(session.refresh_token_hash))
             await pipe.execute()
-        
+
         logger.info(
             "user_sessions_revoked",
             user_id=str(user_id),
             count=len(sessions)
         )
-        
+
         return len(sessions)
+
+    # Alias kept for mission-brief compatibility and clarity at call sites.
+    async def revoke_all_for_user(self, user_id: UUID) -> int:
+        """See :py:meth:`revoke_all_user_sessions`. Alias used by password-reset and logout-all flows."""
+        return await self.revoke_all_user_sessions(user_id)
     
     async def cleanup_expired_sessions(self, user_id: UUID) -> int:
         """Clean up expired sessions for a user (maintenance).

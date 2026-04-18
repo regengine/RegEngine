@@ -7,10 +7,92 @@ from .parser import _first_segment
 from .utils import _safe_float
 
 
+def _extract_envelope_ids(segments: list[list[str]]) -> dict[str, Any]:
+    """Extract ISA + GS envelope identifiers (#1160, #1165).
+
+    Returns a dict containing:
+      - ``isa_sender_id``  (ISA[6])
+      - ``isa_receiver_id`` (ISA[8])
+      - ``isa13``           (ISA[13] — interchange control number, used for
+                            retransmission deduplication, #1165)
+      - ``gs_sender_id``    (GS[2] — application sender, #1160: the true
+                            trading-partner identity, not ISA)
+      - ``gs_receiver_id``  (GS[3])
+      - ``gs_control_number`` (GS[6])
+      - ``sender_id``       (GS sender_id first, ISA fallback — the
+                            canonical trading-partner identifier)
+      - ``receiver_id``     (same logic for receiver)
+      - ``envelope_mismatch`` bool — True when ISA and GS disagree on
+                                    sender or receiver. Callers should
+                                    reject rather than pick arbitrarily.
+    """
+    isa = _first_segment(segments, "ISA") or []
+    gs = _first_segment(segments, "GS") or []
+
+    isa_sender = (isa[6] if len(isa) > 6 else None) or None
+    isa_receiver = (isa[8] if len(isa) > 8 else None) or None
+    isa13 = (isa[13] if len(isa) > 13 else None) or None
+
+    gs_sender = (gs[2] if len(gs) > 2 else None) or None
+    gs_receiver = (gs[3] if len(gs) > 3 else None) or None
+    gs_control_number = (gs[6] if len(gs) > 6 else None) or None
+
+    # Strip whitespace — X12 envelope fields are fixed-width and right-padded.
+    def _strip(v: Any) -> Any:
+        return v.strip() if isinstance(v, str) else v
+
+    isa_sender = _strip(isa_sender)
+    isa_receiver = _strip(isa_receiver)
+    isa13 = _strip(isa13)
+    gs_sender = _strip(gs_sender)
+    gs_receiver = _strip(gs_receiver)
+    gs_control_number = _strip(gs_control_number)
+
+    envelope_mismatch = False
+    if gs_sender and isa_sender and gs_sender != isa_sender:
+        envelope_mismatch = True
+    if gs_receiver and isa_receiver and gs_receiver != isa_receiver:
+        envelope_mismatch = True
+
+    return {
+        "isa_sender_id": isa_sender,
+        "isa_receiver_id": isa_receiver,
+        "isa13": isa13,
+        "gs_sender_id": gs_sender,
+        "gs_receiver_id": gs_receiver,
+        "gs_control_number": gs_control_number,
+        # Canonical trading-partner identity: GS wins over ISA per X12 spec.
+        "sender_id": gs_sender or isa_sender,
+        "receiver_id": gs_receiver or isa_receiver,
+        "envelope_mismatch": envelope_mismatch,
+    }
+
+
+def _apply_envelope_ids(data: dict[str, Any], segments: list[list[str]]) -> None:
+    """Populate envelope fields on an extraction dict in-place."""
+    envelope = _extract_envelope_ids(segments)
+    data["sender_id"] = envelope["sender_id"]
+    data["receiver_id"] = envelope["receiver_id"]
+    data["isa_sender_id"] = envelope["isa_sender_id"]
+    data["isa_receiver_id"] = envelope["isa_receiver_id"]
+    data["gs_sender_id"] = envelope["gs_sender_id"]
+    data["gs_receiver_id"] = envelope["gs_receiver_id"]
+    data["isa13"] = envelope["isa13"]
+    data["gs_control_number"] = envelope["gs_control_number"]
+    data["envelope_mismatch"] = envelope["envelope_mismatch"]
+
+
 def _extract_856_fields(segments: list[list[str]]) -> dict[str, Any]:
     data: dict[str, Any] = {
         "sender_id": None,
         "receiver_id": None,
+        "isa_sender_id": None,
+        "isa_receiver_id": None,
+        "gs_sender_id": None,
+        "gs_receiver_id": None,
+        "isa13": None,
+        "gs_control_number": None,
+        "envelope_mismatch": False,
         "control_number": None,
         "asn_number": None,
         "ship_date_raw": None,
@@ -26,10 +108,7 @@ def _extract_856_fields(segments: list[list[str]]) -> dict[str, Any]:
         "carrier": None,
     }
 
-    isa = _first_segment(segments, "ISA")
-    if isa:
-        data["sender_id"] = isa[6] if len(isa) > 6 else None
-        data["receiver_id"] = isa[8] if len(isa) > 8 else None
+    _apply_envelope_ids(data, segments)
 
     st = _first_segment(segments, "ST")
     if st and len(st) > 2:
@@ -102,6 +181,13 @@ def _extract_850_fields(segments: list[list[str]]) -> dict[str, Any]:
     data: dict[str, Any] = {
         "sender_id": None,
         "receiver_id": None,
+        "isa_sender_id": None,
+        "isa_receiver_id": None,
+        "gs_sender_id": None,
+        "gs_receiver_id": None,
+        "isa13": None,
+        "gs_control_number": None,
+        "envelope_mismatch": False,
         "control_number": None,
         "po_number": None,
         "po_date_raw": None,
@@ -116,10 +202,7 @@ def _extract_850_fields(segments: list[list[str]]) -> dict[str, Any]:
         "reference_document_number": None,
     }
 
-    isa = _first_segment(segments, "ISA")
-    if isa:
-        data["sender_id"] = isa[6] if len(isa) > 6 else None
-        data["receiver_id"] = isa[8] if len(isa) > 8 else None
+    _apply_envelope_ids(data, segments)
 
     st = _first_segment(segments, "ST")
     if st and len(st) > 2:
@@ -178,6 +261,13 @@ def _extract_810_fields(segments: list[list[str]]) -> dict[str, Any]:
     data: dict[str, Any] = {
         "sender_id": None,
         "receiver_id": None,
+        "isa_sender_id": None,
+        "isa_receiver_id": None,
+        "gs_sender_id": None,
+        "gs_receiver_id": None,
+        "isa13": None,
+        "gs_control_number": None,
+        "envelope_mismatch": False,
         "control_number": None,
         "invoice_number": None,
         "invoice_date_raw": None,
@@ -193,10 +283,7 @@ def _extract_810_fields(segments: list[list[str]]) -> dict[str, Any]:
         "reference_document_number": None,
     }
 
-    isa = _first_segment(segments, "ISA")
-    if isa:
-        data["sender_id"] = isa[6] if len(isa) > 6 else None
-        data["receiver_id"] = isa[8] if len(isa) > 8 else None
+    _apply_envelope_ids(data, segments)
 
     st = _first_segment(segments, "ST")
     if st and len(st) > 2:
@@ -267,6 +354,13 @@ def _extract_861_fields(segments: list[list[str]]) -> dict[str, Any]:
     data: dict[str, Any] = {
         "sender_id": None,
         "receiver_id": None,
+        "isa_sender_id": None,
+        "isa_receiver_id": None,
+        "gs_sender_id": None,
+        "gs_receiver_id": None,
+        "isa13": None,
+        "gs_control_number": None,
+        "envelope_mismatch": False,
         "control_number": None,
         "receiving_advice_number": None,
         "receive_date_raw": None,
@@ -282,10 +376,7 @@ def _extract_861_fields(segments: list[list[str]]) -> dict[str, Any]:
         "condition_code": None,
     }
 
-    isa = _first_segment(segments, "ISA")
-    if isa:
-        data["sender_id"] = isa[6] if len(isa) > 6 else None
-        data["receiver_id"] = isa[8] if len(isa) > 8 else None
+    _apply_envelope_ids(data, segments)
 
     st = _first_segment(segments, "ST")
     if st and len(st) > 2:

@@ -159,6 +159,8 @@ def _install_fake_dependencies(
 
 @pytest.fixture()
 def client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
+    from app.subscription_gate import require_active_subscription
+
     app = FastAPI()
     app.include_router(fda_router)
     app.dependency_overrides[get_ingestion_principal] = lambda: IngestionPrincipal(
@@ -166,6 +168,9 @@ def client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
         scopes=["*"],
         auth_mode="test",
     )
+    # #1182: the subscription gate is now fail-closed; override it in tests so
+    # we don't need a Redis stand-in just to exercise export logic.
+    app.dependency_overrides[require_active_subscription] = lambda: None
 
     _install_fake_dependencies(
         monkeypatch,
@@ -253,6 +258,8 @@ def test_verify_export_recomputes_hash_for_full_export(monkeypatch: pytest.Monke
         datetime.now(timezone.utc),
     )
 
+    from app.subscription_gate import require_active_subscription
+
     app = FastAPI()
     app.include_router(fda_router)
     app.dependency_overrides[get_ingestion_principal] = lambda: IngestionPrincipal(
@@ -260,6 +267,8 @@ def test_verify_export_recomputes_hash_for_full_export(monkeypatch: pytest.Monke
         scopes=["*"],
         auth_mode="test",
     )
+    # #1182: bypass fail-closed subscription gate in tests.
+    app.dependency_overrides[require_active_subscription] = lambda: None
 
     _install_fake_dependencies(
         monkeypatch,

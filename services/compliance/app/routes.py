@@ -119,30 +119,6 @@ class Industry(BaseModel):
     checklist_count: int = 0
 
 
-class ValidationRequest(BaseModel):
-    config: dict[str, Any]
-    framework: str | None = None
-    strict: bool = False
-
-
-class ValidationError(BaseModel):
-    path: str
-    message: str
-    code: str | None = None
-
-
-class ValidationWarning(BaseModel):
-    path: str
-    message: str
-    suggestion: str | None = None
-
-
-class ValidationResult(BaseModel):
-    valid: bool
-    errors: list[ValidationError] = []
-    warnings: list[ValidationWarning] = []
-
-
 class IndustriesResponse(BaseModel):
     industries: list[dict[str, Any]]
     total: int
@@ -198,16 +174,23 @@ for _cl_data in _rules["checklists"]:
 
 _CHECKLIST_INDEX: dict[str, ComplianceChecklist] = {c.id: c for c in _CHECKLISTS}
 
-# Validation config sourced from JSON (#547)
-_validation_cfg = _rules.get("validation", {})
-_REQUIRED_FSMA_FIELDS: set[str] = set(_validation_cfg.get("required_fsma_fields", []))
-_RECEIVING_REQUIRED_FIELDS: set[str] = set(_validation_cfg.get("receiving_required_fields", []))
-_ALLOWED_CTE_TYPES: set[str] = set(_validation_cfg.get("allowed_cte_types", []))
-
 
 # ---------------------------------------------------------------------------
 # Routes
 # ---------------------------------------------------------------------------
+#
+# NOTE (#1203): The POST /validate endpoint was removed on 2026-04-17.
+#
+# It was orphaned — no backend caller and no React consumer actually invoked
+# it in production. EPCIS ingestion validates via its own Pydantic check
+# (see services/ingestion/app/epcis/validation.py), and the real compliance
+# logic lives in the versioned RulesEngine (services/shared/rules/engine.py)
+# which is wired through services/ingestion/app/rules_router.py.
+#
+# Keeping a dead validator advertised as "POST /validate" overstated product
+# functionality and risked accidental future callers relying on fail-open
+# behavior. If re-wiring is ever needed, do it by calling RulesEngine
+# directly from ingestion, not by resurrecting this endpoint.
 
 @router.get("/industries", dependencies=[Depends(require_api_key)], response_model=IndustriesResponse)
 async def list_industries() -> IndustriesResponse:
@@ -228,80 +211,6 @@ async def get_checklist(checklist_id: str) -> ComplianceChecklist:
     if not checklist:
         raise HTTPException(status_code=404, detail=f"Checklist '{checklist_id}' not found")
     return checklist
-
-
-@router.post("/validate", dependencies=[Depends(require_api_key)], response_model=ValidationResult)
-async def validate_config(request: ValidationRequest) -> ValidationResult:
-    errors: list[ValidationError] = []
-    warnings: list[ValidationWarning] = []
-
-    config = request.config
-    strict = request.strict
-
-    # Check for required FSMA 204 top-level fields; also reject explicit null values (#547)
-    for field in _REQUIRED_FSMA_FIELDS:
-        if field not in config:
-            errors.append(ValidationError(
-                path=field,
-                message=f"Required FSMA 204 field '{field}' is missing from configuration.",
-                code="MISSING_REQUIRED_FIELD",
-            ))
-        elif config[field] is None:
-            errors.append(ValidationError(
-                path=field,
-                message=f"Required FSMA 204 field '{field}' must not be null.",
-                code="NULL_REQUIRED_FIELD",
-            ))
-
-    # Validate cte_type against the allowed enum (guard .upper() against None) (#547)
-    raw_cte_type = config.get("cte_type")
-    cte_type_upper: str | None = raw_cte_type.upper() if isinstance(raw_cte_type, str) else None
-    if cte_type_upper is not None and _ALLOWED_CTE_TYPES and cte_type_upper not in _ALLOWED_CTE_TYPES:
-        errors.append(ValidationError(
-            path="cte_type",
-            message=(
-                f"Invalid cte_type '{raw_cte_type}'. "
-                f"Allowed values: {', '.join(sorted(_ALLOWED_CTE_TYPES))}."
-            ),
-            code="INVALID_CTE_TYPE",
-        ))
-
-    # For RECEIVING CTEs, prior_source_tlc is additionally required
-    if cte_type_upper == "RECEIVING":
-        for field in _RECEIVING_REQUIRED_FIELDS:
-            if field not in config:
-                errors.append(ValidationError(
-                    path=field,
-                    message=f"Field '{field}' is required for RECEIVING CTE events under FSMA 204.",
-                    code="MISSING_REQUIRED_FIELD",
-                ))
-            elif config[field] is None:
-                errors.append(ValidationError(
-                    path=field,
-                    message=f"Field '{field}' is required for RECEIVING CTE events and must not be null.",
-                    code="NULL_REQUIRED_FIELD",
-                ))
-
-    # Warn on missing optional but recommended fields
-    recommended = {"lot_size_unit", "supplier_reference", "product_description"}
-    for field in recommended:
-        if field not in config:
-            warnings.append(ValidationWarning(
-                path=field,
-                message=f"Recommended field '{field}' is not present.",
-                suggestion=f"Add '{field}' to improve traceability record completeness.",
-            ))
-
-    if strict and warnings:
-        for w in warnings:
-            errors.append(ValidationError(
-                path=w.path,
-                message=w.message,
-                code="STRICT_MODE_WARNING",
-            ))
-        warnings = []
-
-    return ValidationResult(valid=len(errors) == 0, errors=errors, warnings=warnings)
 
 
 # ---------------------------------------------------------------------------

@@ -1,10 +1,21 @@
 """
-Relational rule evaluators — 4-arg functions (event_data, logic, rule, session).
+Relational rule evaluators — 5-arg functions
+(event_data, logic, rule, session, *, tenant_id).
 
 These evaluators perform cross-event validation by querying the database
 for related events on the same traceability lot code.
+
+Security (#1344):
+    tenant_id is ALWAYS sourced from the authenticated request context
+    (passed in as a kwarg by the engine). ANY tenant_id field embedded
+    in event_data is IGNORED — a malicious or buggy caller could embed
+    another tenant's id and cause cross-tenant reads from the related-
+    events lookup.
+
+    The only tenant_id an evaluator is allowed to act on is the kwarg.
 """
 
+import logging
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
@@ -13,6 +24,39 @@ from sqlalchemy.orm import Session
 
 from shared.rules.types import RuleDefinition, RuleEvaluationResult
 from shared.rules.uom import CTE_LIFECYCLE_ORDER, normalize_to_lbs
+
+logger = logging.getLogger("rules-engine.relational")
+
+
+def _resolve_tenant(
+    event_data: Dict[str, Any],
+    session_tenant_id: Optional[str],
+    rule: RuleDefinition,
+) -> Optional[str]:
+    """Return the authenticated tenant_id, or None if unavailable.
+
+    Logs a security alert if event_data contains a tenant_id that does
+    NOT match the session tenant — that is a forged-payload attempt or
+    a caller bug, and either way we treat the session value as ground
+    truth.
+    """
+    if not session_tenant_id:
+        return None
+    payload_tid = event_data.get("tenant_id")
+    if payload_tid and str(payload_tid) != str(session_tenant_id):
+        logger.warning(
+            "rules_engine_tenant_mismatch",
+            extra={
+                "rule_id": rule.rule_id,
+                "session_tenant_id": str(session_tenant_id),
+                "payload_tenant_id": str(payload_tid),
+                "note": (
+                    "event_data.tenant_id differs from authenticated "
+                    "tenant — payload value ignored (#1344)"
+                ),
+            },
+        )
+    return str(session_tenant_id)
 
 
 def fetch_related_events(
@@ -60,21 +104,30 @@ def evaluate_temporal_order(
     logic: Dict[str, Any],
     rule: RuleDefinition,
     session: Session,
+    *,
+    tenant_id: Optional[str] = None,
 ) -> RuleEvaluationResult:
-    """Detect chronology paradoxes -- e.g. shipping before harvesting."""
-    tlc = event_data.get("traceability_lot_code", "")
-    tenant_id = event_data.get("tenant_id", "")
-    event_id = event_data.get("event_id", "")
+    """Detect chronology paradoxes -- e.g. shipping before harvesting.
 
-    if not tlc or not tenant_id:
+    #1344 — tenant_id MUST come from the caller (authenticated context).
+    Any tenant_id in event_data is ignored.
+    """
+    tlc = event_data.get("traceability_lot_code", "")
+    event_id = event_data.get("event_id", "")
+    auth_tid = _resolve_tenant(event_data, tenant_id, rule)
+
+    if not tlc or not auth_tid:
         return RuleEvaluationResult(
             rule_id=rule.rule_id, rule_version=rule.rule_version,
             rule_title=rule.title, severity=rule.severity,
-            result="skip", why_failed="Missing TLC or tenant_id for temporal check",
+            result="skip",
+            why_failed=(
+                "Missing TLC or authenticated tenant context for temporal check"
+            ),
             category=rule.category,
         )
 
-    related = fetch_related_events(session, tlc, str(tenant_id), str(event_id))
+    related = fetch_related_events(session, tlc, auth_tid, str(event_id))
     if not related:
         return RuleEvaluationResult(
             rule_id=rule.rule_id, rule_version=rule.rule_version,
@@ -160,23 +213,31 @@ def evaluate_identity_consistency(
     logic: Dict[str, Any],
     rule: RuleDefinition,
     session: Session,
+    *,
+    tenant_id: Optional[str] = None,
 ) -> RuleEvaluationResult:
-    """Detect product identity drift -- same TLC changing product mid-chain."""
+    """Detect product identity drift -- same TLC changing product mid-chain.
+
+    #1344 — tenant_id MUST come from the caller (authenticated context).
+    """
     tlc = event_data.get("traceability_lot_code", "")
-    tenant_id = event_data.get("tenant_id", "")
     event_id = event_data.get("event_id", "")
     current_product = event_data.get("product_reference")
+    auth_tid = _resolve_tenant(event_data, tenant_id, rule)
 
-    if not current_product or not tlc or not tenant_id:
+    if not current_product or not tlc or not auth_tid:
         return RuleEvaluationResult(
             rule_id=rule.rule_id, rule_version=rule.rule_version,
             rule_title=rule.title, severity=rule.severity,
             result="skip",
-            why_failed="Missing product_reference, TLC, or tenant_id for identity check",
+            why_failed=(
+                "Missing product_reference, TLC, or authenticated tenant "
+                "context for identity check"
+            ),
             category=rule.category,
         )
 
-    related = fetch_related_events(session, tlc, str(tenant_id), str(event_id))
+    related = fetch_related_events(session, tlc, auth_tid, str(event_id))
     if not related:
         return RuleEvaluationResult(
             rule_id=rule.rule_id, rule_version=rule.rule_version,
@@ -236,25 +297,33 @@ def evaluate_mass_balance(
     logic: Dict[str, Any],
     rule: RuleDefinition,
     session: Session,
+    *,
+    tenant_id: Optional[str] = None,
 ) -> RuleEvaluationResult:
-    """Detect mass balance violations -- output exceeding input for same TLC."""
+    """Detect mass balance violations -- output exceeding input for same TLC.
+
+    #1344 — tenant_id MUST come from the caller (authenticated context).
+    """
     tlc = event_data.get("traceability_lot_code", "")
-    tenant_id = event_data.get("tenant_id", "")
     event_id = event_data.get("event_id", "")
     current_quantity = event_data.get("quantity")
     current_uom = event_data.get("unit_of_measure", "")
     current_type = event_data.get("event_type", "")
+    auth_tid = _resolve_tenant(event_data, tenant_id, rule)
 
-    if not tlc or not tenant_id or current_quantity is None:
+    if not tlc or not auth_tid or current_quantity is None:
         return RuleEvaluationResult(
             rule_id=rule.rule_id, rule_version=rule.rule_version,
             rule_title=rule.title, severity=rule.severity,
             result="skip",
-            why_failed="Missing TLC, tenant_id, or quantity for mass balance check",
+            why_failed=(
+                "Missing TLC, authenticated tenant context, or quantity for "
+                "mass balance check"
+            ),
             category=rule.category,
         )
 
-    related = fetch_related_events(session, tlc, str(tenant_id), str(event_id))
+    related = fetch_related_events(session, tlc, auth_tid, str(event_id))
     if not related:
         return RuleEvaluationResult(
             rule_id=rule.rule_id, rule_version=rule.rule_version,

@@ -110,14 +110,37 @@ TASK_HANDLERS: Dict[str, Callable[[Dict[str, Any]], None]] = {
 }
 
 
+# #1199: recall_drill and recall (the state machine row) are persisted in
+# fsma.task_queue for historical/state tracking, NOT as background work.
+# The worker must never claim them even if they somehow end up with
+# status='pending'. Keep this list narrowly scoped and update it when a
+# new non-handler task_type starts sharing the queue.
+NON_WORKER_TASK_TYPES = frozenset({
+    "recall_drill",  # #1199 — recall drill history rows
+    "recall",        # #1199 — recall state machine rows (future)
+})
+
+
 # ── Core worker loop ─────────────────────────────────────────────
 
 def _claim_task(db) -> Optional[Dict[str, Any]]:
-    """Atomically claim the next pending task using SELECT ... FOR UPDATE SKIP LOCKED."""
+    """Atomically claim the next pending task using SELECT ... FOR UPDATE SKIP LOCKED.
+
+    #1199: claim only rows whose task_type has a registered handler.
+    This prevents the worker from claiming `recall_drill` history rows
+    (which are persisted as status='completed' by recall persistence,
+    but we keep this belt-and-suspenders guard in case a row ever
+    ends up pending).
+    """
     from sqlalchemy import text
 
     now = datetime.now(timezone.utc)
     lock_until = now + timedelta(minutes=LOCK_TIMEOUT_MINUTES)
+
+    # Only claim tasks whose task_type has a registered handler.  This
+    # prevents us from fighting with recall_drill rows (which are owned
+    # by the recall engine, not the worker).
+    handler_types = list(TASK_HANDLERS.keys())
 
     row = db.execute(
         text("""
@@ -129,15 +152,23 @@ def _claim_task(db) -> Optional[Dict[str, Any]]:
                 attempts = attempts + 1
             WHERE id = (
                 SELECT id FROM fsma.task_queue
-                WHERE status = 'pending'
-                   OR (status = 'processing' AND locked_until < :now)
+                WHERE task_type = ANY(:handler_types)
+                  AND (
+                      status = 'pending'
+                      OR (status = 'processing' AND locked_until < :now)
+                  )
                 ORDER BY priority DESC, created_at ASC
                 LIMIT 1
                 FOR UPDATE SKIP LOCKED
             )
             RETURNING id, task_type, payload, attempts, max_attempts
         """),
-        {"now": now, "worker": WORKER_ID, "lock_until": lock_until},
+        {
+            "now": now,
+            "worker": WORKER_ID,
+            "lock_until": lock_until,
+            "handler_types": handler_types,
+        },
     ).fetchone()
 
     if row:
