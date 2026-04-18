@@ -144,37 +144,9 @@ class TestSecretValidationScript:
         assert result.returncode == 1, f"Should reject 'test' object storage creds in production. Output: {result.stdout}"
 
 
-class TestDockerComposeSecrets:
-    """Test docker-compose.yml secret requirements."""
-
-    def test_docker_compose_requires_secrets(self):
-        """docker-compose.yml should use required variable syntax."""
-        compose_path = Path(__file__).parent.parent.parent / "docker-compose.yml"
-        content = compose_path.read_text()
-
-        # Check for required variable syntax (${VAR:?message})
-        assert "NEO4J_PASSWORD:?" in content, "NEO4J_PASSWORD should be required"
-        assert "ADMIN_MASTER_KEY:?" in content, "ADMIN_MASTER_KEY should be required"
-        assert "OBJECT_STORAGE_ACCESS_KEY_ID:?" in content, "OBJECT_STORAGE_ACCESS_KEY_ID should be required"
-        assert "OBJECT_STORAGE_SECRET_ACCESS_KEY:?" in content, "OBJECT_STORAGE_SECRET_ACCESS_KEY should be required"
-
-    def test_no_insecure_defaults_in_compose(self):
-        """docker-compose.yml should not contain insecure default patterns."""
-        compose_path = Path(__file__).parent.parent.parent / "docker-compose.yml"
-        content = compose_path.read_text()
-
-        insecure_patterns = [
-            ":-change-me",
-            ":-password",
-            ":-secret",
-            ":-test",
-            ":-demo",
-            ":-default",
-            ":-dev-admin-key",
-        ]
-
-        for pattern in insecure_patterns:
-            assert pattern not in content, f"Insecure default pattern found: {pattern}"
+class TestEnvExample:
+    """Test the .env.example file (docker-compose.yml checks deleted alongside
+    the file itself — see CONSOLIDATION.md / #1429)."""
 
     def test_env_example_has_no_real_secrets(self):
         """The .env.example file should not contain real secret values."""
