@@ -70,6 +70,13 @@ async def trace_forward(
     # - Dropped unused `rels` variable from WITH to reduce memory
     # - LIMIT 5000 caps result set to prevent runaway expansion on
     #   dense supply chain graphs
+    #
+    # SECURITY (#1256): variable-length paths must enforce tenant scope
+    # on *every* node in the path, not just the start node. Without the
+    # `ALL(n IN nodes(path) WHERE n.tenant_id = $tenant_id)` predicate,
+    # the traversal can cross tenant boundaries via shared facilities or
+    # shared events and leak data from other tenants. This is enforced
+    # whenever a non-null tenant_id is provided.
     query = (
         """
     MATCH path = (start:Lot {tlc: $tlc})-[:UNDERWENT|PRODUCED*1.."""
@@ -77,6 +84,9 @@ async def trace_forward(
         + """]->(end)
     USING INDEX start:Lot(tlc)
     WHERE ($tenant_id IS NULL OR start.tenant_id = $tenant_id)
+      AND ($tenant_id IS NULL OR ALL(
+              n IN nodes(path) WHERE n.tenant_id = $tenant_id
+          ))
     WITH path, nodes(path) as path_nodes
 
     // Extract events with dates for temporal validation
@@ -104,6 +114,7 @@ async def trace_forward(
 
     # Fallback query without temporal filtering (for comparison or if disabled).
     # Same optimizations: index hint, capped depth, LIMIT.
+    # Same tenant-path guard (#1256) applies.
     query_no_time_filter = (
         """
     MATCH path = (start:Lot {tlc: $tlc})-[:UNDERWENT|PRODUCED*1.."""
@@ -111,6 +122,9 @@ async def trace_forward(
         + """]->(end)
     USING INDEX start:Lot(tlc)
     WHERE ($tenant_id IS NULL OR start.tenant_id = $tenant_id)
+      AND ($tenant_id IS NULL OR ALL(
+              n IN nodes(path) WHERE n.tenant_id = $tenant_id
+          ))
     WITH path, nodes(path) as path_nodes
     UNWIND path_nodes as node
     WITH DISTINCT node, path
@@ -140,6 +154,24 @@ async def trace_forward(
             props = record["props"]
             hop = record["hop_count"]
             max_hops = max(max_hops, hop)
+
+            # SECURITY (#1256): invariant check — every returned node must
+            # belong to the caller's tenant. If Cypher somehow returned a
+            # cross-tenant node, raise rather than leak data. This mirrors
+            # the predicate in the query and guards against future edits.
+            node_tenant = props.get("tenant_id")
+            if tenant_id is not None and node_tenant not in (None, "", tenant_id):
+                logger.error(
+                    "trace_forward_tenant_invariant_violation",
+                    tlc=tlc,
+                    expected_tenant=tenant_id,
+                    node_tenant=node_tenant,
+                    labels=labels,
+                )
+                raise ValueError(
+                    f"trace_forward tenant invariant violation: returned node "
+                    f"tenant={node_tenant!r} does not match caller tenant={tenant_id!r}"
+                )
 
             if "Facility" in labels:
                 facilities.append(
@@ -172,10 +204,16 @@ async def trace_forward(
                     }
                 )
 
-    # Also get directly connected facilities via SHIPPED_TO
+    # Also get directly connected facilities via SHIPPED_TO.
+    # #1256: enforce tenant on BOTH the Lot and the Event to avoid
+    # returning facilities reached via cross-tenant events.
     facility_query = """
     MATCH (l:Lot {tlc: $tlc})-[:UNDERWENT]->(e:TraceEvent)-[:SHIPPED_TO]->(f:Facility)
-    WHERE ($tenant_id IS NULL OR l.tenant_id = $tenant_id)
+    WHERE ($tenant_id IS NULL OR (
+              l.tenant_id = $tenant_id
+              AND e.tenant_id = $tenant_id
+              AND f.tenant_id = $tenant_id
+          ))
     RETURN DISTINCT properties(f) as facility
     """
 
@@ -183,6 +221,18 @@ async def trace_forward(
         result = await session.run(facility_query, tlc=tlc, tenant_id=tenant_id)
         async for record in result:
             fac = record["facility"]
+            # SECURITY (#1256): invariant check for facility-only results.
+            fac_tenant = (fac or {}).get("tenant_id")
+            if tenant_id is not None and fac and fac_tenant not in (None, "", tenant_id):
+                logger.error(
+                    "trace_forward_facility_invariant_violation",
+                    tlc=tlc,
+                    expected_tenant=tenant_id,
+                    facility_tenant=fac_tenant,
+                )
+                raise ValueError(
+                    f"trace_forward facility invariant violation: tenant={fac_tenant!r}"
+                )
             if fac and fac not in [
                 f for f in facilities if f.get("gln") == fac.get("gln")
             ]:
@@ -325,6 +375,10 @@ async def trace_backward(
     # - USING INDEX hint anchors on indexed Lot(tlc) start node
     # - Capped rel_depth prevents combinatorial blowup
     # - LIMIT 5000 provides a safety net on dense graphs
+    #
+    # SECURITY (#1256): enforce tenant_id on every node in the path, not
+    # just the start node, so transitive traversals cannot cross tenant
+    # boundaries via shared events or facilities.
     query = (
         """
     MATCH path = (start:Lot {tlc: $tlc})<-[:PRODUCED|CONSUMED*1.."""
@@ -332,6 +386,9 @@ async def trace_backward(
         + """]-(source)
     USING INDEX start:Lot(tlc)
     WHERE ($tenant_id IS NULL OR start.tenant_id = $tenant_id)
+      AND ($tenant_id IS NULL OR ALL(
+              n IN nodes(path) WHERE n.tenant_id = $tenant_id
+          ))
     WITH path, nodes(path) as path_nodes
     UNWIND path_nodes as node
     WITH DISTINCT node, path
@@ -358,6 +415,23 @@ async def trace_backward(
             props = record["props"]
             hop = record["hop_count"]
             max_hops = max(max_hops, hop)
+
+            # SECURITY (#1256): invariant check — every returned node must
+            # belong to the caller's tenant. If the Cypher ALL(...) guard
+            # was bypassed, fail loud rather than silently leak data.
+            node_tenant = props.get("tenant_id")
+            if tenant_id is not None and node_tenant not in (None, "", tenant_id):
+                logger.error(
+                    "trace_backward_tenant_invariant_violation",
+                    tlc=tlc,
+                    expected_tenant=tenant_id,
+                    node_tenant=node_tenant,
+                    labels=labels,
+                )
+                raise ValueError(
+                    f"trace_backward tenant invariant violation: returned node "
+                    f"tenant={node_tenant!r} does not match caller tenant={tenant_id!r}"
+                )
 
             if "Facility" in labels:
                 facilities.append(
@@ -389,10 +463,17 @@ async def trace_backward(
                     }
                 )
 
-    # Also get source facilities via SHIPPED relationship
+    # Also get source facilities via SHIPPED relationship.
+    # #1256: enforce tenant on Facility, Event, AND Lot — all three nodes
+    # on the path must belong to the caller so we never return a source
+    # facility reached via a cross-tenant event.
     facility_query = """
     MATCH (f:Facility)-[:SHIPPED]->(e:TraceEvent)-[:INCLUDED]->(l:Lot {tlc: $tlc})
-    WHERE ($tenant_id IS NULL OR l.tenant_id = $tenant_id)
+    WHERE ($tenant_id IS NULL OR (
+              l.tenant_id = $tenant_id
+              AND e.tenant_id = $tenant_id
+              AND f.tenant_id = $tenant_id
+          ))
     RETURN DISTINCT properties(f) as facility
     """
 
@@ -400,6 +481,17 @@ async def trace_backward(
         result = await session.run(facility_query, tlc=tlc, tenant_id=tenant_id)
         async for record in result:
             fac = record["facility"]
+            fac_tenant = (fac or {}).get("tenant_id")
+            if tenant_id is not None and fac and fac_tenant not in (None, "", tenant_id):
+                logger.error(
+                    "trace_backward_facility_invariant_violation",
+                    tlc=tlc,
+                    expected_tenant=tenant_id,
+                    facility_tenant=fac_tenant,
+                )
+                raise ValueError(
+                    f"trace_backward facility invariant violation: tenant={fac_tenant!r}"
+                )
             if fac and fac not in [
                 f for f in facilities if f.get("gln") == fac.get("gln")
             ]:
