@@ -1195,120 +1195,50 @@ def run_consumer() -> None:
 
                         # Synchronous audit logging for FSMA compliance (#982)
                         try:
-                            if inline_text:
-                                text = str(inline_text)[:2_000_000]
-                                source_url = provenance.get(
-                                    "source_url", evt.get("source_url", "unknown")
-                                )
-                            else:
-                                _, _, bucket_key = norm_path.partition("s3://")
-                                bucket, _, key = bucket_key.partition("/")
-                                payload = json.loads(get_bytes(bucket, key))
-                                text = payload.get("text", "")[:2_000_000]
-                                source_url = payload.get("source_url", "unknown")
-
-                            # Extract entities using existing extractor
-                            entities = extract_entities(text)
-
-                            # Convert to canonical ExtractionPayload format
-                            extractions = _convert_entities_to_extraction(
-                                entities, doc_id, source_url
+                            _audit_logger.info(
+                                "nlp_extraction_audited",
+                                extra={
+                                    "document_id": doc_id,
+                                    "tenant_id": tenant_id,
+                                    "source_url": source_url,
+                                    "extraction_count": len(extractions),
+                                    "timestamp": _now_iso(),
+                                },
                             )
+                        except Exception as _audit_exc:
+                            logger.error("nlp_audit_logging_failed", document_id=doc_id, error=str(_audit_exc))
 
-                            # Route each extraction based on confidence
-                            for extraction in extractions:
-                                _route_extraction(
-                                    extraction,
-                                    doc_id,
-                                    doc_hash,
-                                    source_url,
-                                    producer,
-                                    tenant_id,
-                                )
+                        consumer.commit()
+                    except (ValidationError, KafkaTimeoutError) as exc:
+                        retry_key = doc_id or "unknown"
+                        _retry_counts[retry_key] = _retry_counts.get(retry_key, 0) + 1
 
-                            # Also send to legacy topic for backward compatibility
-                            legacy_out = {
-                                "event_id": str(uuid.uuid4()),
-                                "document_id": doc_id,
-                                "tenant_id": tenant_id,
-                                "source_url": source_url,
-                                "timestamp": _now_iso(),
-                                "entities": entities,
-                            }
-                            _load_schema().validate(legacy_out)
-                            producer.send(
-                                settings.topic_out,
-                                key=doc_id,
-                                value=legacy_out,
-                                headers=kafka_headers,
-                            )
-
-                            producer.flush(timeout=1.0)
-
-                            logger.info(
-                                "nlp_extraction_complete",
+                        if _retry_counts[retry_key] >= MAX_RETRIES:
+                            logger.error(
+                                "nlp_max_retries_exceeded_sending_to_dlq",
                                 document_id=doc_id,
-                                extraction_count=len(extractions),
-                                high_confidence=sum(
-                                    1
-                                    for e in extractions
-                                    if e.confidence_score >= settings.extraction_confidence_high
-                                ),
-                                needs_review=sum(
-                                    1
-                                    for e in extractions
-                                    if e.confidence_score < settings.extraction_confidence_high
-                                ),
-                            )
-                            MESSAGES_COUNTER.labels(status="success").inc()
-
-                            # Synchronous audit logging for FSMA compliance (#982)
-                            try:
-                                _audit_logger.info(
-                                    "nlp_extraction_audited",
-                                    extra={
-                                        "document_id": doc_id,
-                                        "tenant_id": tenant_id,
-                                        "source_url": source_url,
-                                        "extraction_count": len(extractions),
-                                        "timestamp": _now_iso(),
-                                    },
-                                )
-                            except Exception as _audit_exc:
-                                logger.error("nlp_audit_logging_failed", document_id=doc_id, error=str(_audit_exc))
-
-                            consumer.commit()
-                        except (ValidationError, KafkaTimeoutError) as exc:
-                            # Track retries per document
-                            retry_key = doc_id or "unknown"
-                            _retry_counts[retry_key] = _retry_counts.get(retry_key, 0) + 1
-
-                            if _retry_counts[retry_key] >= MAX_RETRIES:
-                                logger.error(
-                                    "nlp_max_retries_exceeded_sending_to_dlq",
-                                    document_id=doc_id,
-                                    retries=_retry_counts[retry_key],
-                                    error=str(exc),
-                                )
-                                _send_to_fsma_dlq(producer, evt, str(exc), doc_id, headers=kafka_headers)
-                                _retry_counts.pop(retry_key, None)
-                                consumer.commit()  # Don't re-process
-                            else:
-                                logger.warning(
-                                    "nlp_validation_or_kafka_error_will_retry",
-                                    document_id=doc_id,
-                                    retry=_retry_counts[retry_key],
-                                    error=str(exc),
-                                )
-                            MESSAGES_COUNTER.labels(status="error").inc()
-                        except Exception as exc:  # pragma: no cover - requires infra
-                            logger.exception(
-                                "nlp_processing_error_sending_to_dlq",
-                                document_id=doc_id,
+                                retries=_retry_counts[retry_key],
                                 error=str(exc),
                             )
                             _send_to_fsma_dlq(producer, evt, str(exc), doc_id, headers=kafka_headers)
-                            consumer.commit()  # Don't re-process unexpected failures
-                            MESSAGES_COUNTER.labels(status="error").inc()
+                            _retry_counts.pop(retry_key, None)
+                            consumer.commit()
+                        else:
+                            logger.warning(
+                                "nlp_validation_or_kafka_error_will_retry",
+                                document_id=doc_id,
+                                retry=_retry_counts[retry_key],
+                                error=str(exc),
+                            )
+                        MESSAGES_COUNTER.labels(status="error").inc()
+                    except Exception as exc:  # pragma: no cover - requires infra
+                        logger.exception(
+                            "nlp_processing_error_sending_to_dlq",
+                            document_id=doc_id,
+                            error=str(exc),
+                        )
+                        _send_to_fsma_dlq(producer, evt, str(exc), doc_id, headers=kafka_headers)
+                        consumer.commit()
+                        MESSAGES_COUNTER.labels(status="error").inc()
     consumer.close()
     producer.close()
