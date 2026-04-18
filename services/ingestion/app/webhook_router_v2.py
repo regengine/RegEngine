@@ -13,15 +13,17 @@ V2: Replaced in-memory storage with CTEPersistence (Postgres-backed).
 
 from __future__ import annotations
 
+import hashlib
+import hmac
 import json
 import logging
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from sqlalchemy.exc import SQLAlchemyError
 
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
 
 from app.authz import require_permission, IngestionPrincipal
 from app.subscription_gate import require_active_subscription
@@ -100,6 +102,162 @@ def _verify_api_key(
         # Production without API_KEY configured — reject all requests
         # until an operator sets the API_KEY env var.
         raise HTTPException(status_code=401, detail="Invalid or missing API key")
+
+
+# ---------------------------------------------------------------------------
+# Webhook HMAC signature verification (#1243)
+# ---------------------------------------------------------------------------
+
+
+def _webhook_hmac_secret() -> Optional[str]:
+    """Configured webhook HMAC secret, or ``None`` if unset.
+
+    Single global secret to start — per-tenant / per-integration
+    rotation is planned as follow-up (see #1243 fix description). When
+    the env is unset the dependency is a no-op, which preserves the
+    existing partner-integration ramp. Production operators MUST set
+    this before relying on webhook-ingest events.
+    """
+    secret = os.getenv("WEBHOOK_HMAC_SECRET", "").strip()
+    return secret or None
+
+
+async def _verify_webhook_signature(
+    request: Request,
+    x_webhook_signature: Optional[str] = Header(default=None, alias="X-Webhook-Signature"),
+) -> None:
+    """Enforce HMAC-SHA256(secret, raw_body) on every ingest request.
+
+    #1243: API-key auth alone makes any key leak (logs, proxies, .env)
+    sufficient to forge a tenant's supply-chain events. A signed body
+    adds proof that the sender holds the shared secret and that the
+    bytes weren't tampered with in flight.
+
+    Signature format (GitHub-style): ``X-Webhook-Signature:
+    sha256=<hex>``. A bare hex digest is also accepted so existing
+    Stripe-style senders don't need a separate code path.
+
+    Behavior:
+    - ``WEBHOOK_HMAC_SECRET`` unset → verification skipped (migration ramp).
+    - Secret set + signature missing → HTTP 401.
+    - Secret set + signature mismatch → HTTP 401 (timing-safe compare).
+    - Unknown scheme → HTTP 401.
+    """
+    secret = _webhook_hmac_secret()
+    if not secret:
+        return
+
+    if not x_webhook_signature:
+        logger.warning("webhook_signature_missing")
+        raise HTTPException(
+            status_code=401,
+            detail={
+                "error": "missing_webhook_signature",
+                "message": (
+                    "X-Webhook-Signature header is required when "
+                    "WEBHOOK_HMAC_SECRET is configured. Format: "
+                    "'sha256=<hex>' where hex = HMAC-SHA256(secret, raw_body)."
+                ),
+            },
+        )
+
+    sig = x_webhook_signature.strip()
+    if "=" in sig:
+        scheme, _, provided = sig.partition("=")
+        scheme = scheme.strip().lower()
+        provided = provided.strip().lower()
+    else:
+        scheme = "sha256"
+        provided = sig.lower()
+
+    if scheme != "sha256":
+        logger.warning("webhook_signature_unsupported_scheme scheme=%s", scheme)
+        raise HTTPException(
+            status_code=401,
+            detail={
+                "error": "unsupported_signature_scheme",
+                "scheme": scheme,
+                "message": "Only 'sha256' signatures are supported.",
+            },
+        )
+
+    raw_body = await request.body()
+    expected = hmac.new(
+        secret.encode("utf-8"), raw_body, hashlib.sha256
+    ).hexdigest()
+
+    if not hmac.compare_digest(expected, provided):
+        logger.warning(
+            "webhook_signature_mismatch body_len=%d",
+            len(raw_body),
+        )
+        raise HTTPException(
+            status_code=401,
+            detail={
+                "error": "invalid_webhook_signature",
+                "message": (
+                    "X-Webhook-Signature does not match the expected "
+                    "HMAC of the request body. Verify the shared secret "
+                    "and that the body bytes were not altered in flight."
+                ),
+            },
+        )
+
+
+# ---------------------------------------------------------------------------
+# Event-timestamp replay window (#1245)
+# ---------------------------------------------------------------------------
+
+
+def _max_event_age_days() -> int:
+    try:
+        return int(os.getenv("WEBHOOK_MAX_EVENT_AGE_DAYS", "90"))
+    except ValueError:
+        return 90
+
+
+def _max_event_future_hours() -> int:
+    try:
+        return int(os.getenv("WEBHOOK_MAX_EVENT_FUTURE_HOURS", "24"))
+    except ValueError:
+        return 24
+
+
+def _validate_event_timestamp_window(timestamp: str) -> Optional[str]:
+    """Return an error string if ``timestamp`` is outside the replay
+    window, else ``None``. Separate from signature-level replay
+    defense: this catches captured webhooks replayed months later with
+    a freshly-computed signature.
+
+    Window:
+    - floor = now - WEBHOOK_MAX_EVENT_AGE_DAYS (default 90 days)
+    - ceil  = now + WEBHOOK_MAX_EVENT_FUTURE_HOURS (default 24 h)
+    """
+    try:
+        dt = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+    except (ValueError, AttributeError):
+        return f"event.timestamp is not parseable ISO-8601: {timestamp!r}"
+
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+
+    now = datetime.now(timezone.utc)
+    age_cap_days = _max_event_age_days()
+    future_cap_hours = _max_event_future_hours()
+
+    if dt < now - timedelta(days=age_cap_days):
+        return (
+            f"event.timestamp {timestamp} is older than "
+            f"WEBHOOK_MAX_EVENT_AGE_DAYS={age_cap_days} — replay window "
+            f"exceeded"
+        )
+    if dt > now + timedelta(hours=future_cap_hours):
+        return (
+            f"event.timestamp {timestamp} is more than "
+            f"WEBHOOK_MAX_EVENT_FUTURE_HOURS={future_cap_hours} in the "
+            f"future"
+        )
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -460,6 +618,10 @@ async def ingest_events(
     principal: IngestionPrincipal = Depends(require_permission("webhooks.ingest")),
     x_regengine_api_key: Optional[str] = Header(default=None, alias="X-RegEngine-API-Key"),
     _auth: None = Depends(_verify_api_key),
+    # #1243: HMAC signature check runs in parallel with the API-key check.
+    # A leaked key alone is no longer sufficient to forge events when
+    # ``WEBHOOK_HMAC_SECRET`` is configured.
+    _signature: None = Depends(_verify_webhook_signature),
     _subscription: None = Depends(require_active_subscription),
     _idempotency_key: Optional[str] = Depends(_require_idempotency_key),
     db_session=Depends(get_db_session),
@@ -532,6 +694,25 @@ async def ingest_events(
                 rejected += 1
                 continue
             seen_in_batch.add(dedup_key)
+
+            # #1245: event-timestamp replay window. Signature-freshness
+            # defends against immediate replay; this defends against a
+            # captured payload re-ingested months later with freshly
+            # computed signature.
+            replay_error = _validate_event_timestamp_window(event.timestamp)
+            if replay_error:
+                logger.warning(
+                    "webhook_replay_window_rejected tenant=%s tlc=%s ts=%s",
+                    tenant_id, event.traceability_lot_code, event.timestamp,
+                )
+                results.append(EventResult(
+                    traceability_lot_code=event.traceability_lot_code,
+                    cte_type=event.cte_type.value,
+                    status="rejected",
+                    errors=[replay_error],
+                ))
+                rejected += 1
+                continue
 
             # Validate KDEs
             errors = _validate_event_kdes(event)
