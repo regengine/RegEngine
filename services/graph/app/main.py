@@ -28,6 +28,7 @@ from shared.logging import setup_logging
 from shared.middleware.security import add_security
 from shared.rate_limit import add_rate_limiting
 from shared.observability import add_observability
+from shared.observability.fastapi_metrics import install_metrics
 
 # Initialize standardized logging
 logger = setup_logging()
@@ -81,6 +82,9 @@ app.add_middleware(CorrelationIdMiddleware)
 # Global exception handlers (Sprint 18)
 from shared.error_handling import install_exception_handlers
 install_exception_handlers(app)
+
+# Prometheus /metrics — RED metrics for every route, auth-guarded (#1325)
+install_metrics(app, service_name="graph-service")
 
 app.include_router(graph_router, prefix="/api/v1", tags=["Graph Operations"])
 

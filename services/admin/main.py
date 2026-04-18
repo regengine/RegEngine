@@ -30,6 +30,7 @@ from contextlib import asynccontextmanager
 from typing import AsyncIterator, Optional
 from fastapi import FastAPI
 from shared.observability.correlation import CorrelationIdMiddleware
+from shared.observability.fastapi_metrics import install_metrics
 from fastapi.middleware.cors import CORSMiddleware
 
 
@@ -260,6 +261,9 @@ async def add_compliance_header(request, call_next):
 
 from shared.error_handling import install_exception_handlers
 install_exception_handlers(app)
+
+# Prometheus /metrics — RED metrics for every route, auth-guarded (#1325)
+install_metrics(app, service_name="admin-service")
 
 from shared.auth import validate_auth_config
 validate_auth_config()

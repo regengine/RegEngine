@@ -51,6 +51,7 @@ app.add_middleware(
 # Middleware stack
 from shared.middleware.request_id import RequestIDMiddleware
 from shared.observability.correlation import CorrelationIdMiddleware
+from shared.observability.fastapi_metrics import install_metrics
 from shared.tenant_rate_limiting import TenantRateLimitMiddleware
 from shared.request_safety import RequestSizeLimitMiddleware, RequestTimeoutMiddleware
 
@@ -67,6 +68,11 @@ add_rate_limiting(app)
 # Global exception handlers
 from shared.error_handling import install_exception_handlers
 install_exception_handlers(app)
+
+# Prometheus RED metrics (#1325). The scheduler's own /metrics endpoint below
+# serves the default registry via generate_latest(), so we instrument the app
+# without exposing a second endpoint to avoid a route collision.
+install_metrics(app, service_name="scheduler-service", metrics_path=None)
 
 
 @app.get("/health")
