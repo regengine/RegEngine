@@ -274,6 +274,11 @@ class TestTimestampValidation_Issue1308:
 
 
 class TestKDEJsonb_Issue1311:
+    @staticmethod
+    def _has_jsonb_cast(sql: str) -> bool:
+        """Either ``::jsonb`` shorthand or ``CAST(... AS jsonb)`` is acceptable."""
+        return "::jsonb" in sql or "AS jsonb" in sql
+
     def test_single_event_kde_insert_casts_to_jsonb(self):
         session = FakeSession()
         session.add_rule(r"SELECT id, sha256_hash", _FakeResult(rows=[]))
@@ -294,10 +299,15 @@ class TestKDEJsonb_Issue1311:
 
         kde_inserts = [c for c in session.calls if "INSERT INTO fsma.cte_kdes" in c[0]]
         assert kde_inserts, "cte_kdes INSERT expected"
-        sql, _ = kde_inserts[0]
-        assert "::jsonb" in sql, (
+        sql, params = kde_inserts[0]
+        assert self._has_jsonb_cast(sql), (
             "KDE value must be cast to jsonb so structured dicts round-trip "
             "instead of being stored as Python repr"
+        )
+        # The bound kde_value must be JSON text, NOT python repr
+        assert isinstance(params["kde_value"], str)
+        assert not params["kde_value"].startswith("{'"), (
+            "kde_value appears to be Python repr, not JSON"
         )
 
     def test_batch_event_kde_insert_casts_to_jsonb(self):
@@ -312,7 +322,7 @@ class TestKDEJsonb_Issue1311:
         kde_inserts = [c for c in session.calls if "INSERT INTO fsma.cte_kdes" in c[0]]
         assert kde_inserts, "cte_kdes INSERT expected"
         sql, params = kde_inserts[0]
-        assert "::jsonb" in sql
+        assert self._has_jsonb_cast(sql)
         # Values stored as JSON text (not Python repr)
         kv_params = [v for k, v in params.items() if k.startswith("kv_")]
         assert kv_params, "kv_* bind params expected"

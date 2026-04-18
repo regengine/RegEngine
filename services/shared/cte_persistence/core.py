@@ -27,6 +27,7 @@ Usage:
 
 from __future__ import annotations
 
+import json
 import logging
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple
@@ -103,6 +104,38 @@ def _parse_timestamp(value: Any, *, field: str) -> datetime:
             f"{dt.isoformat()} (now={now_utc.isoformat()})"
         )
     return dt
+
+
+# ---------------------------------------------------------------------------
+# KDE Value Serialization (fix #1311)
+# ---------------------------------------------------------------------------
+
+def _jsonify_kde(value: Any) -> str:
+    """Serialize a KDE value to JSON text suitable for ``::jsonb`` cast.
+
+    fsma.cte_kdes.kde_value is JSONB; storing ``str(value)`` produced
+    Python repr for dicts (``"{'gln': '...'}"``), which is not JSON
+    and cannot be round-tripped.  We emit proper JSON:
+
+        - dict / list / bool / None / int / float  → json.dumps
+        - str (already a scalar)                   → json.dumps(str)
+                                                     (so it becomes "..."
+                                                     rather than a bare
+                                                     token the parser
+                                                     would reject)
+        - anything else                            → json.dumps(str(value))
+                                                     as a best-effort
+                                                     fallback; the cast
+                                                     will fail loudly if
+                                                     the result is still
+                                                     not valid JSON.
+    """
+    if isinstance(value, (dict, list, bool, int, float)) or value is None:
+        return json.dumps(value, default=str, sort_keys=True)
+    if isinstance(value, str):
+        return json.dumps(value)
+    # Datetime and UUID instances end up here — stringify and wrap.
+    return json.dumps(str(value))
 
 
 # ---------------------------------------------------------------------------
@@ -304,7 +337,12 @@ class CTEPersistence:
             },
         )
 
-        # --- Insert KDEs ---
+        # --- Insert KDEs (fix #1311) ---
+        # The column ``fsma.cte_kdes.kde_value`` is JSONB (migration v059).
+        # Previously values were stored via ``str(kde_value)`` which
+        # produced Python repr for dicts (``"{'gln': '...'}"``), not JSON,
+        # so structured KDEs could not round-trip.  We now emit valid
+        # JSON text and cast to jsonb in SQL.
         for kde_key, kde_value in kdes.items():
             if kde_value is None:
                 continue
@@ -313,7 +351,8 @@ class CTEPersistence:
                     INSERT INTO fsma.cte_kdes (
                         tenant_id, cte_event_id, kde_key, kde_value, is_required
                     ) VALUES (
-                        :tenant_id, :cte_event_id, :kde_key, :kde_value, :is_required
+                        :tenant_id, :cte_event_id, :kde_key,
+                        CAST(:kde_value AS jsonb), :is_required
                     )
                     ON CONFLICT (cte_event_id, kde_key) DO NOTHING
                 """),
@@ -321,7 +360,7 @@ class CTEPersistence:
                     "tenant_id": tenant_id,
                     "cte_event_id": event_id,
                     "kde_key": kde_key,
-                    "kde_value": str(kde_value),
+                    "kde_value": _jsonify_kde(kde_value),
                     "is_required": False,  # caller can override
                 },
             )
@@ -590,7 +629,8 @@ class CTEPersistence:
                         "tenant_id": tenant_id,
                         "cte_event_id": event_id,
                         "kde_key": kde_key,
-                        "kde_value": str(kde_value),
+                        # fix #1311 — JSON text, cast to jsonb in the batch INSERT
+                        "kde_value": _jsonify_kde(kde_value),
                         "is_required": False,
                     })
 
@@ -659,8 +699,9 @@ class CTEPersistence:
                 values_clauses = []
                 params = {}
                 for i, row in enumerate(chunk):
+                    # fix #1311: cast kde_value param to jsonb in the VALUES tuple
                     values_clauses.append(
-                        f"(:tid_{i}, :eid_{i}, :kk_{i}, :kv_{i}, :ir_{i})"
+                        f"(:tid_{i}, :eid_{i}, :kk_{i}, CAST(:kv_{i} AS jsonb), :ir_{i})"
                     )
                     params.update({
                         f"tid_{i}": row["tenant_id"], f"eid_{i}": row["cte_event_id"],
