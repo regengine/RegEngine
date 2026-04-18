@@ -438,26 +438,163 @@ class HallucinationTracker:
         new_status: str,
         reviewer_id: str,
         notes: Optional[str] = None,
+        tenant_id: Optional[str] = None,
+        actor_user_id: Optional[str] = None,
+        actor_email: Optional[str] = None,
     ) -> Dict[str, Any]:
+        """Resolve (approve/reject) a pending review item.
+
+        Hardened against multiple tenant-isolation / review-correctness
+        issues:
+
+        - ``tenant_id`` (caller's authenticated tenant) MUST be passed
+          by callers. If the looked-up ``item.tenant_id`` does not match,
+          we raise ``LookupError`` (mapped to 404 upstream) to prevent
+          cross-tenant approvals via guessed/leaked UUIDs.
+          (Fixes #1360.)
+
+        - Idempotency: the state machine rejects a second decision on an
+          already-resolved item. Calling ``/approve`` or ``/reject`` on
+          an APPROVED / REJECTED row raises ``ValueError`` which the
+          route maps to 409 Conflict. The first reviewer's identity is
+          preserved; we do NOT silently overwrite ``reviewer_id`` or
+          ``review_notes``. (Fixes #1361.)
+
+        - Audit chain: on a successful transition we append a
+          ``review.decision`` entry to the tamper-evident ``audit_logs``
+          SHA-256 hash chain via ``AuditLogger.log_event``. The actor is
+          the human ``actor_user_id`` when available, falling back to
+          the API key id. If the audit insert raises, the whole review
+          update is rolled back -- the approval only becomes visible
+          if and only if the audit chain entry is written. (Fixes #1369.)
+
+        - Reviewer identity: callers SHOULD pass ``actor_user_id`` (the
+          human user UUID from the authenticated session) so the audit
+          row records the human rather than the bearer API key. If the
+          caller only has a key_id we still record it, but we mark the
+          provenance explicitly so auditors can see which decisions
+          lack a human binding. (Partial fix for #1367; full
+          per-human signature requires JWT + MFA step-up, tracked as
+          follow-up.)
+        """
         normalized_status = new_status.upper()
         if normalized_status not in {"APPROVED", "REJECTED"}:
             raise ValueError("Invalid status transition")
 
-        with self._session_scope() as session:
+        with self._session_scope(tenant_id=tenant_id) as session:
             item = session.get(ReviewItemModel, UUID(review_id))
             if item is None:
                 raise LookupError("review_item_not_found")
 
-            was_pending = item.status == "PENDING"
+            # --- Tenant scoping (#1360) --------------------------------
+            # If the caller passed a tenant_id, it MUST match the row.
+            # We treat mismatch as "not found" to avoid leaking that a
+            # review UUID exists in another tenant.
+            if tenant_id is not None:
+                try:
+                    caller_tenant_uuid = UUID(str(tenant_id))
+                except (ValueError, TypeError) as exc:
+                    raise LookupError("review_item_not_found") from exc
+                if item.tenant_id != caller_tenant_uuid:
+                    logger.warning(
+                        "review_cross_tenant_attempt_blocked",
+                        review_id=review_id,
+                        caller_tenant=str(caller_tenant_uuid),
+                        item_tenant=str(item.tenant_id),
+                        reviewer_id=reviewer_id,
+                    )
+                    # Raise 404 semantics -- do not acknowledge existence.
+                    raise LookupError("review_item_not_found")
+
+            # --- Idempotency (#1361) -----------------------------------
+            prior_status = item.status
+            if prior_status != "PENDING":
+                # Already resolved: reject the second write. We explicitly
+                # do not overwrite reviewer_id, review_notes, or
+                # updated_at.
+                logger.warning(
+                    "review_idempotency_conflict",
+                    review_id=review_id,
+                    prior_status=prior_status,
+                    attempted_status=normalized_status,
+                    reviewer_id=reviewer_id,
+                )
+                raise ValueError(
+                    f"Review item {review_id} is already {prior_status}; "
+                    "a review decision cannot be changed once finalized"
+                )
+
+            was_pending = True  # guaranteed by the check above
             item.status = normalized_status
             item.reviewer_id = reviewer_id
             item.updated_at = self._now()
             if notes:
                 provenance = dict(item.provenance or {})
                 provenance["review_notes"] = notes
+                # Record the identity binding so auditors can distinguish
+                # human-bound decisions from key-only decisions. (#1367)
+                provenance["reviewer_identity"] = {
+                    "api_key_id": reviewer_id,
+                    "user_id": actor_user_id,
+                    "user_email": actor_email,
+                    "human_bound": bool(actor_user_id),
+                }
                 item.provenance = provenance
             session.add(item)
             session.flush()
+
+            # --- Audit chain write (#1369) -----------------------------
+            # Emit to the tamper-evident audit_logs chain BEFORE commit.
+            # If this fails, the SessionScope rolls back the transaction
+            # so the review state change is atomic with the audit entry.
+            try:
+                from .audit import AuditLogger
+
+                audit_actor_id = None
+                if actor_user_id:
+                    try:
+                        audit_actor_id = UUID(str(actor_user_id))
+                    except (ValueError, TypeError):
+                        audit_actor_id = None
+
+                audit_metadata = {
+                    "status": normalized_status,
+                    "prior_status": prior_status,
+                    "api_key_id": reviewer_id,
+                    "human_bound": bool(actor_user_id),
+                }
+                if notes:
+                    import hashlib as _hashlib
+
+                    audit_metadata["review_notes_sha256"] = _hashlib.sha256(
+                        notes.encode("utf-8")
+                    ).hexdigest()
+
+                AuditLogger.log_event(
+                    db=session,
+                    tenant_id=item.tenant_id,
+                    event_type="review.decision",
+                    action=f"review.{normalized_status.lower()}",
+                    event_category="data",
+                    severity="info",
+                    actor_id=audit_actor_id,
+                    actor_email=actor_email,
+                    resource_type="review_item",
+                    resource_id=str(item.id),
+                    metadata=audit_metadata,
+                )
+            except Exception as audit_err:  # noqa: BLE001
+                # If audit-chain logging fails, fail the transition. The
+                # approval must not commit without the tamper-evident
+                # record being inserted.
+                logger.error(
+                    "review_audit_chain_write_failed",
+                    review_id=review_id,
+                    status=normalized_status,
+                    error=str(audit_err),
+                )
+                raise
+
             session.refresh(item)
             serialized = self._serialize(item)
             snapshot = self._snapshot(item)
@@ -472,6 +609,8 @@ class HallucinationTracker:
             review_id=review_id,
             status=normalized_status,
             reviewer_id=reviewer_id,
+            actor_user_id=actor_user_id,
+            tenant_id=str(resolved_tenant_id) if resolved_tenant_id else None,
         )
         return serialized
 

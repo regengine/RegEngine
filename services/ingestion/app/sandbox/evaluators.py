@@ -58,12 +58,13 @@ def _evaluate_event_stateless(
         evaluator = _EVALUATORS.get(eval_type)
 
         if not evaluator:
+            # #1354 — unknown eval_type must fail, not silently skip.
             result = RuleEvaluationResult(
                 rule_id=rule.rule_id,
                 rule_version=rule.rule_version,
                 rule_title=rule.title,
                 severity=rule.severity,
-                result="skip",
+                result="error",
                 why_failed=f"Unknown evaluation type: {eval_type}",
                 category=rule.category,
             )
@@ -71,13 +72,14 @@ def _evaluate_event_stateless(
             try:
                 result = evaluator(event_data, logic, rule)
             except Exception as e:
+                # #1354 — evaluator crashes must not fail-open as "skip".
                 result = RuleEvaluationResult(
                     rule_id=rule.rule_id,
                     rule_version=rule.rule_version,
                     rule_title=rule.title,
                     severity=rule.severity,
-                    result="skip",
-                    why_failed=f"Evaluation error: {str(e)}",
+                    result="error",
+                    why_failed=f"Evaluator crashed ({type(e).__name__}): {str(e)}",
                     category=rule.category,
                 )
 
@@ -90,6 +92,12 @@ def _evaluate_event_stateless(
                 summary.critical_failures.append(result)
         elif result.result == "warn":
             summary.warned += 1
+        elif result.result == "error":
+            summary.errored += 1
+            if result.severity == "critical":
+                summary.critical_failures.append(result)
+        elif result.result == "not_ftl_scoped":
+            summary.not_ftl_scoped += 1
         else:
             summary.skipped += 1
 

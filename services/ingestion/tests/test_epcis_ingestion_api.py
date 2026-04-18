@@ -64,7 +64,7 @@ def test_validate_and_ingest_epcis_event(client: TestClient) -> None:
 
     ingest_response = client.post(
         "/api/v1/epcis/events",
-        params={"tenant_id": TEST_TENANT_ID},
+        headers={"X-Tenant-ID": TEST_TENANT_ID},
         json=VALID_EPCIS_EVENT,
     )
     assert ingest_response.status_code == 201
@@ -75,7 +75,7 @@ def test_validate_and_ingest_epcis_event(client: TestClient) -> None:
 
     second_ingest = client.post(
         "/api/v1/epcis/events",
-        params={"tenant_id": TEST_TENANT_ID},
+        headers={"X-Tenant-ID": TEST_TENANT_ID},
         json=VALID_EPCIS_EVENT,
     )
     assert second_ingest.status_code == 200
@@ -86,7 +86,7 @@ def test_validate_and_ingest_epcis_event(client: TestClient) -> None:
     event_id = ingest_payload["cte_id"]
     get_response = client.get(
         f"/api/v1/epcis/events/{event_id}",
-        params={"tenant_id": TEST_TENANT_ID},
+        headers={"X-Tenant-ID": TEST_TENANT_ID},
     )
     assert get_response.status_code == 200
     event_payload = get_response.json()
@@ -101,7 +101,7 @@ def test_batch_ingest_with_mixed_validity(client: TestClient) -> None:
 
     response = client.post(
         "/api/v1/epcis/events/batch",
-        params={"tenant_id": TEST_TENANT_ID},
+        headers={"X-Tenant-ID": TEST_TENANT_ID},
         json={"events": [VALID_EPCIS_EVENT, invalid_event]},
     )
     assert response.status_code == 207
@@ -111,12 +111,12 @@ def test_batch_ingest_with_mixed_validity(client: TestClient) -> None:
 
     empty_batch_response = client.post(
         "/api/v1/epcis/events/batch",
-        params={"tenant_id": TEST_TENANT_ID},
+        headers={"X-Tenant-ID": TEST_TENANT_ID},
         json={"events": []},
     )
     assert empty_batch_response.status_code == 400
 
-    export_response = client.get("/api/v1/epcis/export", params={"tenant_id": TEST_TENANT_ID})
+    export_response = client.get("/api/v1/epcis/export", headers={"X-Tenant-ID": TEST_TENANT_ID})
     assert export_response.status_code == 200
     export_payload = export_response.json()
     assert export_payload["type"] == "EPCISDocument"
@@ -124,7 +124,8 @@ def test_batch_ingest_with_mixed_validity(client: TestClient) -> None:
 
     filtered_response = client.get(
         "/api/v1/epcis/export",
-        params={"tenant_id": TEST_TENANT_ID, "product_id": "non-existent"},
+        params={"product_id": "non-existent"},
+        headers={"X-Tenant-ID": TEST_TENANT_ID},
     )
     assert filtered_response.status_code == 200
     filtered_payload = filtered_response.json()
