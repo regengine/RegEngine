@@ -25,6 +25,7 @@ from apscheduler.schedulers.blocking import BlockingScheduler
 from apscheduler.schedulers.base import SchedulerNotRunningError
 from apscheduler.jobstores.memory import MemoryJobStore
 from apscheduler.executors.pool import ThreadPoolExecutor
+from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 from pytz import utc
 
@@ -547,11 +548,73 @@ class SchedulerService:
         )
         logger.info("job_scheduled", job_id="data_archival", interval_hours=24)
 
+        # Nightly FSMA source sync — Phase 29 (#1135).
+        # Previously defined in app/jobs.py on an orphaned BlockingScheduler
+        # that was never started; the job has been running nowhere in
+        # production. Re-home it on the real scheduler here.
+        self.scheduler.add_job(
+            self.run_fsma_nightly_sync,
+            trigger=CronTrigger(hour=2, minute=0, timezone=utc),
+            id="fsma_nightly_sync",
+            name="Nightly FSMA Source Sync (02:00 UTC)",
+            misfire_grace_time=300,  # 5-minute grace window
+            replace_existing=True,
+        )
+        logger.info("job_scheduled", job_id="fsma_nightly_sync", cron="02:00 UTC")
+
         logger.info(
             "scheduler_ready",
-            total_jobs=7,
+            total_jobs=8,
             scrapers=list(self.scrapers.keys()),
         )
+
+    def run_fsma_nightly_sync(self) -> None:
+        """Trigger a full FSMA source sync via the ingestion service.
+
+        Phase 29 / #1135. Formerly defined in ``app/jobs.py`` on a module-
+        level :class:`BlockingScheduler` that was never started. The
+        ingestion endpoint handles deduplication (ETag + SHA-256), so
+        re-running on unchanged sources is safe.
+        """
+        import httpx
+        from app.config import get_settings as _get_settings
+
+        settings = _get_settings()
+        ingestion_url = os.getenv(
+            "INGESTION_SERVICE_URL", settings.ingestion_service_url
+        )
+
+        # #1063 — fail loudly if the internal auth secret is missing or
+        # empty rather than sending a blank X-RegEngine-API-Key header
+        # that will 401 silently.
+        api_key = os.getenv("REGENGINE_INTERNAL_SECRET", "").strip()
+        if not api_key:
+            logger.error(
+                "fsma_nightly_sync_skipped_missing_secret",
+                hint="Set REGENGINE_INTERNAL_SECRET to a non-empty value",
+            )
+            return
+
+        logger.info("fsma_nightly_sync_started", ingestion_url=ingestion_url)
+        try:
+            response = httpx.post(
+                f"{ingestion_url}/v1/ingest/all-regulations",
+                headers={"X-RegEngine-API-Key": api_key},
+                timeout=120.0,
+            )
+            response.raise_for_status()
+            summary = response.json() if response.content else {}
+            logger.info(
+                "fsma_nightly_sync_complete",
+                sources_attempted=summary.get("sources_attempted"),
+                ingested=summary.get("ingested"),
+                unchanged=summary.get("unchanged"),
+                failed=summary.get("failed"),
+            )
+        except httpx.HTTPError as exc:
+            logger.error("fsma_nightly_sync_http_failed", error=str(exc))
+        except Exception as exc:
+            logger.error("fsma_nightly_sync_failed", error=str(exc))
 
     def check_request_deadlines(self) -> None:
         """Check all tenants for overdue/critical FDA request deadlines.
