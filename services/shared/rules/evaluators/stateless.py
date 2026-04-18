@@ -5,11 +5,15 @@ These evaluators check field presence and format on a single event
 without querying the database.
 """
 
-import re
 from typing import Any, Dict
 
 from shared.rules.types import RuleDefinition, RuleEvaluationResult
 from shared.rules.utils import get_nested_value
+from shared.rules.safe_regex import (
+    INVALID_PATTERN,
+    TIMEOUT,
+    safe_match,
+)
 
 
 def evaluate_field_presence(
@@ -100,15 +104,46 @@ def evaluate_field_format(
             category=rule.category,
         )
 
-    matches = bool(re.match(pattern, str(value)))
-    evidence[0]["matches_pattern"] = matches
+    # #1356 — rule patterns come from a user-writable JSON column
+    # (rule_definitions.evaluation_logic). A malicious or accidentally
+    # pathological pattern must NOT hang a worker thread. safe_match
+    # enforces: RE2 if available, catastrophic-shape rejection otherwise,
+    # and a 100ms wall-clock budget.
+    outcome = safe_match(pattern, str(value), timeout_ms=100)
+    evidence[0]["matches_pattern"] = outcome.is_match()
+    evidence[0]["regex_outcome"] = outcome.status
 
-    if matches:
+    if outcome.is_match():
         return RuleEvaluationResult(
             rule_id=rule.rule_id, rule_version=rule.rule_version,
             rule_title=rule.title, severity=rule.severity,
             result="pass", evidence_fields_inspected=evidence,
             citation_reference=rule.citation_reference, category=rule.category,
+        )
+
+    # #1356 — TIMEOUT / INVALID_PATTERN must fail-closed with a distinct
+    # reason so downstream tooling can alert on DoS-bait rules without
+    # confusing them with a legitimate format mismatch. The rule ITSELF
+    # is broken — a regulatory stamp cannot rest on a rule that does not
+    # evaluate deterministically.
+    if outcome.status in (TIMEOUT, INVALID_PATTERN):
+        return RuleEvaluationResult(
+            rule_id=rule.rule_id, rule_version=rule.rule_version,
+            rule_title=rule.title, severity=rule.severity,
+            result="error",
+            why_failed=(
+                f"Rule '{rule.title}' regex could not be evaluated safely: "
+                f"{outcome.status}"
+                + (f" ({outcome.detail})" if outcome.detail else "")
+            ),
+            evidence_fields_inspected=evidence,
+            citation_reference=rule.citation_reference,
+            remediation_suggestion=(
+                "Rewrite the rule pattern to avoid nested quantifiers "
+                "(e.g. (a+)+), or install the `re2` Python binding for "
+                "a linear-time regex backend."
+            ),
+            category=rule.category,
         )
 
     return RuleEvaluationResult(
