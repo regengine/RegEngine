@@ -83,19 +83,29 @@ async def get_current_user(
 
     # 2. Fallback to Local JWT (Legacy / Dev Path)
     # Only reached in dev, or if Supabase is not configured, or explicit opt-in
-    if not user_id:       
+    token_version_claim: Optional[int] = None
+    if not user_id:
         try:
             payload = decode_access_token(token)
-            user_id: str = payload.get("sub")
+            user_id = payload.get("sub")
             # Try new tenant_id claim first, fallback to tid for backward compat
-            tenant_id: str = payload.get("tenant_id") or payload.get("tid")
-            
+            tenant_id = payload.get("tenant_id") or payload.get("tid")
+            # #1349 / #1375 — capture the version the token was minted against.
+            # The live user row carries the current version; a mismatch means
+            # this token was invalidated by a password reset or logout-all.
+            tv_raw = payload.get("tv")
+            if tv_raw is not None:
+                try:
+                    token_version_claim = int(tv_raw)
+                except (TypeError, ValueError):
+                    token_version_claim = None
+
             if user_id is None:
                 raise credentials_exception
-                
+
         except JWTError:
             raise credentials_exception
-        
+
     # Set user_id context for RLS so the user can see themselves (PostgreSQL only)
     if db.bind and db.bind.dialect.name != "sqlite":
         db.execute(
