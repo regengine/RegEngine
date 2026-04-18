@@ -166,7 +166,7 @@ def test_get_required_ctes_for_facility_flattens_distinct_values():
     }
     sync = SupplierGraphSync(enabled=True, driver=_FakeQueryDriver(record))
 
-    result = sync.get_required_ctes_for_facility("facility-1")
+    result = sync.get_required_ctes_for_facility("facility-1", "tenant-1")
 
     assert result is not None
     assert result["source"] == "neo4j"

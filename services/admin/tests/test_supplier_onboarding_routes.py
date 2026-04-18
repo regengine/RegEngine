@@ -114,7 +114,7 @@ def client(db_session: Session, monkeypatch: pytest.MonkeyPatch) -> TestClient:
 
     monkeypatch.setattr(supplier_routes.TenantContext, "get_tenant_context", lambda _db: TEST_TENANT_ID)
     monkeypatch.setattr(supplier_routes.supplier_graph_sync, "record_facility_ftl_scoping", lambda **_kwargs: None)
-    monkeypatch.setattr(supplier_routes.supplier_graph_sync, "get_required_ctes_for_facility", lambda _facility_id: None)
+    monkeypatch.setattr(supplier_routes.supplier_graph_sync, "get_required_ctes_for_facility", lambda _facility_id, **_kwargs: None)
     monkeypatch.setattr(supplier_routes.supplier_graph_sync, "record_cte_event", lambda **_kwargs: None)
 
     with TestClient(test_app) as test_client:

@@ -50,7 +50,18 @@ class Neo4jClient:
         """Initialize Neo4j client.
 
         Args:
-            database: Database name. If None, uses default 'neo4j' database.
+            database: Database name. When ``settings.neo4j_enterprise`` is
+                True, this value selects the per-tenant database (so passing
+                ``database=Neo4jClient.get_tenant_database_name(tenant_id)``
+                yields real DB-level isolation). When False (Community
+                Edition, the default), the client is pinned to the global
+                ``neo4j`` database — isolation is property-based only.
+
+        Previously this argument was silently overridden to DB_GLOBAL on
+        every construction, which defeated the per-tenant isolation the
+        caller believed it was getting. The current behavior makes the
+        isolation contract explicit and opt-in via ``NEO4J_ENTERPRISE``.
+        See issue #1229.
         """
         self._driver = AsyncGraphDatabase.driver(
             settings.neo4j_uri,
@@ -60,9 +71,14 @@ class Neo4jClient:
             connection_acquisition_timeout=settings.neo4j_pool_timeout,
             encrypted=settings.neo4j_encrypted,
         )
-        # Force usage of default database for Community Edition support
-        # In Enterprise, we would use 'database' argument
-        self.database = self.DB_GLOBAL
+        # Honor the caller's database= argument when Enterprise is enabled so
+        # per-tenant DBs are actually used. On Community, pin to the global
+        # database — callers MUST NOT rely on DB-level isolation in that case;
+        # all queries must enforce tenant_id property predicates.
+        if getattr(settings, "neo4j_enterprise", False):
+            self.database = database or self.DB_GLOBAL
+        else:
+            self.database = self.DB_GLOBAL
 
     @staticmethod
     def get_tenant_database_name(tenant_id: UUID) -> str:

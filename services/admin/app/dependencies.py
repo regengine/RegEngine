@@ -1,4 +1,4 @@
-from fastapi import Depends, HTTPException, status, Header
+from fastapi import Depends, HTTPException, Path, status, Header
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 from sqlalchemy import select, text
@@ -54,7 +54,7 @@ async def get_current_user(
     
     user_id = None
     tenant_id = None
-    
+
     # 1. Try Supabase Auth First (Production Path)
     sb = get_supabase()
     if sb:
@@ -64,9 +64,14 @@ async def get_current_user(
             if user_response and user_response.user:
                 sb_user = user_response.user
                 user_id = sb_user.id
-                # user_metadata typically holds the tenant_id or we look it up in our DB map
-                tenant_id = sb_user.user_metadata.get("tenant_id")
-                
+                # SECURITY (#1345): tenant_id MUST come from app_metadata
+                # (service-role-only writable), NEVER from user_metadata
+                # (user-writable via supabase.auth.updateUser). Reading
+                # user_metadata lets a multi-tenant user silently switch
+                # which tenant they act as from the browser.
+                app_meta = getattr(sb_user, "app_metadata", None) or {}
+                tenant_id = app_meta.get("tenant_id")
+
                 # User existence verified at line 101 below (db.get raises if missing)
         except (OSError, TimeoutError, ConnectionError, ValueError, AttributeError) as e:
             logger.warning("supabase_auth_failed", error=str(e))
@@ -113,28 +118,37 @@ async def get_current_user(
         logger.warning("user_not_found_in_db", user_id=user_id)
         raise credentials_exception
 
-    # #1349 / #1375 — reject tokens whose embedded version is behind the user's
-    # current token_version. Tokens minted before a password reset / logout-all
-    # carry an older version and must not grant access. Legacy tokens without
-    # a `tv` claim are accepted for backward compat only when the user has
-    # never had their version bumped (token_version == 0).
-    user_tv = getattr(user, "token_version", 0) or 0
-    if token_version_claim is not None:
-        if token_version_claim < user_tv:
-            logger.warning(
-                "token_version_stale",
-                user_id=str(user.id),
-                token_tv=token_version_claim,
-                user_tv=user_tv,
-            )
-            raise credentials_exception
-    elif user_tv > 0:
-        # Token predates the version-stamping rollout; the user has since had
-        # their version bumped (e.g. password reset), so the token is stale.
-        logger.warning("legacy_token_after_version_bump", user_id=str(user.id), user_tv=user_tv)
-        raise credentials_exception
-        
     logger.info("user_authenticated", user_id=user_id)
+
+    # SECURITY (#1345): if no trusted tenant claim is present, derive from
+    # the DB — but only when there is exactly one active membership. Users
+    # who belong to multiple tenants must have tenant_id written into
+    # app_metadata (or the local JWT) by the server; we refuse to guess.
+    if not tenant_id:
+        active_memberships = db.execute(
+            select(MembershipModel).where(
+                MembershipModel.user_id == UUID(user_id),
+                MembershipModel.is_active == True,  # noqa: E712  (SQLAlchemy needs ==)
+            )
+        ).scalars().all()
+        if len(active_memberships) == 1:
+            tenant_id = str(active_memberships[0].tenant_id)
+            logger.info(
+                "tenant_derived_from_sole_membership",
+                user_id=user_id,
+                tenant_id=tenant_id,
+            )
+        elif len(active_memberships) > 1 and not user.is_sysadmin:
+            logger.warning(
+                "ambiguous_tenant_no_trusted_claim",
+                user_id=user_id,
+                membership_count=len(active_memberships),
+            )
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Tenant selection required — no app_metadata.tenant_id set",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
         
     # Store tenant context in request state or handle via DB session context
     if tenant_id:
@@ -200,6 +214,44 @@ class PermissionChecker:
             return True
             
         raise HTTPException(status_code=403, detail="Insufficient permissions")
+
+
+def verify_path_tenant_matches(
+    tenant_id: str = Path(...),
+    user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_session),
+) -> UUID:
+    """Reject a request when the URL path ``tenant_id`` does not match the
+    caller's authenticated tenant context.
+
+    Without this, routes shaped as ``/v1/compliance/{tenant_id}/...`` accept
+    any UUID in the path and pass it straight to the service layer, producing
+    a trivial IDOR: caller in tenant A supplies tenant B's UUID and reads or
+    mutates tenant B's data. See #1328.
+    """
+    try:
+        path_tenant = UUID(tenant_id)
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=400, detail="Invalid tenant_id format")
+
+    auth_tenant = TenantContext.get_tenant_context(db)
+    if auth_tenant is None:
+        if user.is_sysadmin:
+            return path_tenant
+        logger.warning("path_tenant_check_no_context", user_id=str(user.id))
+        raise HTTPException(status_code=403, detail="No tenant context active")
+
+    if path_tenant != auth_tenant and not user.is_sysadmin:
+        logger.warning(
+            "cross_tenant_path_access_denied",
+            user_id=str(user.id),
+            auth_tenant=str(auth_tenant),
+            path_tenant=str(path_tenant),
+        )
+        raise HTTPException(status_code=403, detail="Tenant mismatch")
+
+    return path_tenant
+
 
 # --- API Key Auth (Remediation Phase 1) ---
 from fastapi.security import APIKeyHeader
