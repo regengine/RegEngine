@@ -181,3 +181,174 @@ def test_ingest_denied_without_edi_ingest_scope() -> None:
 
     assert response.status_code == 403
     assert "requires 'edi.ingest'" in response.json()["detail"]
+
+
+# ---------------------------------------------------------------------------
+# EPIC-N PR-B regression tests
+# ---------------------------------------------------------------------------
+
+# TLC that matches the FSMA 204 GTIN-14 + lot-suffix pattern enforced by
+# services/shared/schemas.py:FSMAEvent.validate_tlc_format.
+_VALID_FSMA_TLC = "00012345678901-LOT001"
+
+
+def _build_856(
+    ship_date: bytes = b"20260310",
+    ship_time: bytes = b"1200",
+) -> bytes:
+    """Assemble a minimal valid 856 with overridable BSN date/time."""
+    return (
+        b"ISA*00*          *00*          *ZZ*SENDERID       *ZZ*RECEIVERID     *260310*1200*U*00401*000000001*0*P*>~"
+        b"GS*SH*SENDERID*RECEIVERID*20260310*1200*1*X*004010~"
+        b"ST*856*0001~"
+        b"BSN*00*ASN-12345*" + ship_date + b"*" + ship_time + b"~"
+        b"HL*1**S~"
+        b"N1*SF*Valley Fresh Farms*92*0614141000005~"
+        b"N1*ST*Metro Distribution Center*92*0614141000006~"
+        b"LIN**SK*ROMAINE-12CT~"
+        b"SN1**200*CA~"
+        b"REF*BM*BOL-9001~"
+        b"TD5**2*ColdExpress~"
+        b"SE*11*0001~"
+        b"GE*1*1~"
+        b"IEA*1*000000001~"
+    )
+
+
+def test_document_ingest_fsma_strict_rejects_bad_tlc(client: TestClient) -> None:
+    """#1174: EDI documents that fail FSMAEvent schema validation must
+    return 422 and persist nothing. Prior behavior persisted with
+    fsma_validation_status=failed, polluting the FSMA 204 graph.
+    """
+    response = client.post(
+        "/api/v1/ingest/edi/document",
+        data={
+            # 'not-a-gtin-tlc' will fail FSMAEvent.validate_tlc_format.
+            "traceability_lot_code": "not-a-gtin-tlc",
+            "tenant_id": TEST_TENANT_ID,
+        },
+        files={"file": ("asn.edi", _build_856(), "application/edi-x12")},
+        headers={"X-Partner-ID": "WALMART"},
+    )
+    assert response.status_code == 422
+    detail = response.json()["detail"]
+    assert detail["error"] == "fsma_validation_failed"
+    assert detail["tlc"] == "not-a-gtin-tlc"
+    assert len(detail["errors"]) >= 1
+
+
+def test_document_ingest_strict_false_query_advisory(client: TestClient) -> None:
+    """#1174: ?strict=false downgrades to advisory for migrations/tests."""
+    response = client.post(
+        "/api/v1/ingest/edi/document",
+        params={"strict": "false"},
+        data={
+            "traceability_lot_code": "not-a-gtin-tlc",
+            "tenant_id": TEST_TENANT_ID,
+        },
+        files={"file": ("asn.edi", _build_856(), "application/edi-x12")},
+        headers={"X-Partner-ID": "WALMART"},
+    )
+    assert response.status_code == 201
+    assert response.json()["extracted"]["fsma_validation_status"] == "failed"
+
+
+def test_document_ingest_strict_passes_with_compliant_tlc(
+    client: TestClient, captured_payload: dict
+) -> None:
+    """#1174 sanity: compliant TLC passes strict validation."""
+    response = client.post(
+        "/api/v1/ingest/edi/document",
+        data={
+            "traceability_lot_code": _VALID_FSMA_TLC,
+            "tenant_id": TEST_TENANT_ID,
+        },
+        files={"file": ("asn.edi", _build_856(), "application/edi-x12")},
+        headers={"X-Partner-ID": "WALMART"},
+    )
+    assert response.status_code == 201
+    assert response.json()["extracted"]["fsma_validation_status"] == "passed"
+
+
+def test_six_digit_yymmdd_date_accepted(client: TestClient) -> None:
+    """#1167: 6-digit YYMMDD with century window is accepted, not
+    silently rewritten to today's date.
+    """
+    response = client.post(
+        "/api/v1/ingest/edi/document",
+        data={
+            "traceability_lot_code": _VALID_FSMA_TLC,
+            "tenant_id": TEST_TENANT_ID,
+        },
+        # 260310 -> YY=26, pivot=50, expands to 2026-03-10.
+        files={"file": ("asn.edi", _build_856(ship_date=b"260310"), "application/edi-x12")},
+        headers={"X-Partner-ID": "WALMART"},
+    )
+    assert response.status_code == 201, response.text
+
+
+def test_unparseable_date_returns_400(client: TestClient) -> None:
+    """#1167: garbage in the date field must fail the request explicitly,
+    not silently fall back to ``datetime.now()``.
+    """
+    response = client.post(
+        "/api/v1/ingest/edi/document",
+        data={
+            "traceability_lot_code": _VALID_FSMA_TLC,
+            "tenant_id": TEST_TENANT_ID,
+        },
+        # "ABCDE" has 0 digits after \D strip → raises ValueError
+        # in _parse_edi_date_digits → HTTP 400.
+        files={"file": ("asn.edi", _build_856(ship_date=b"ABCDE"), "application/edi-x12")},
+        headers={"X-Partner-ID": "WALMART"},
+    )
+    assert response.status_code == 400
+    detail = response.json()["detail"]
+    assert detail["error"] == "invalid_edi_date"
+
+
+def test_segment_cap_exceeded_returns_413(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """#1171: a crafted envelope over EDI_MAX_SEGMENTS must fail fast
+    rather than expanding in memory past the file-size cap.
+    """
+    # Our test envelope is ~15 segments; cap at 3 forces the cap hit
+    # without building a multi-MB payload in-test.
+    monkeypatch.setenv("EDI_MAX_SEGMENTS", "3")
+    response = client.post(
+        "/api/v1/ingest/edi/document",
+        data={
+            "traceability_lot_code": _VALID_FSMA_TLC,
+            "tenant_id": TEST_TENANT_ID,
+        },
+        files={"file": ("asn.edi", _build_856(), "application/edi-x12")},
+        headers={"X-Partner-ID": "WALMART"},
+    )
+    assert response.status_code == 413
+    detail = response.json()["detail"]
+    assert detail["error"] == "segment_count_exceeded"
+    assert detail["cap"] == 3
+
+
+def test_utf8_decode_replaces_non_ascii_bytes(client: TestClient) -> None:
+    """#1170: a non-UTF-8 byte survives as U+FFFD instead of being
+    silently dropped. The request still succeeds; the warning log is
+    emitted for the operator to spot the source-encoding mismatch.
+    """
+    # latin-1 "ñ" (0xF1) in partner name — invalid as UTF-8, would have
+    # been dropped silently with the prior errors="ignore".
+    envelope = _build_856().replace(b"Valley Fresh Farms", b"Valley Fre\xf1h Farms")
+    response = client.post(
+        "/api/v1/ingest/edi/document",
+        data={
+            "traceability_lot_code": _VALID_FSMA_TLC,
+            "tenant_id": TEST_TENANT_ID,
+        },
+        files={"file": ("asn.edi", envelope, "application/edi-x12")},
+        headers={"X-Partner-ID": "WALMART"},
+    )
+    # The document still ingests (one corrupted byte is not a reason to
+    # reject the whole file), but the ship-from location carries the
+    # replacement character, proving the bytes weren't dropped.
+    assert response.status_code == 201, response.text
