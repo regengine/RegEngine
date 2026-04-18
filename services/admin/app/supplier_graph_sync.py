@@ -24,7 +24,8 @@ logger = structlog.get_logger("supplier_graph_sync")
 INVITE_CREATED_QUERY = """
 MERGE (buyer:BuyerTenant {tenant_id: $tenant_id})
 ON CREATE SET buyer.created_at = datetime()
-MERGE (invite:PendingSupplierInvite {invite_id: $invite_id})
+MERGE (invite:PendingSupplierInvite {invite_id: $invite_id, tenant_id: $tenant_id})
+ON CREATE SET invite.tenant_id = $tenant_id
 SET invite.email = $email,
     invite.role_id = $role_id,
     invite.status = 'pending',
@@ -38,14 +39,14 @@ MERGE (buyer)-[:INVITED]->(invite)
 INVITE_ACCEPTED_QUERY = """
 MERGE (buyer:BuyerTenant {tenant_id: $tenant_id})
 ON CREATE SET buyer.created_at = datetime()
-MERGE (supplier:SupplierContact {user_id: $user_id})
+MERGE (supplier:SupplierContact {user_id: $user_id, tenant_id: $tenant_id})
+ON CREATE SET supplier.tenant_id = $tenant_id
 SET supplier.email = $email,
-    supplier.tenant_id = $tenant_id,
     supplier.role_id = $role_id,
     supplier.updated_at = datetime()
 MERGE (buyer)-[:HAS_SUPPLIER_CONTACT]->(supplier)
 WITH supplier
-OPTIONAL MATCH (invite:PendingSupplierInvite {invite_id: $invite_id})
+OPTIONAL MATCH (invite:PendingSupplierInvite {invite_id: $invite_id, tenant_id: $tenant_id})
 FOREACH (_ IN CASE WHEN invite IS NULL THEN [] ELSE [1] END |
   SET invite.status = 'accepted',
       invite.accepted_at = datetime($accepted_at),
@@ -57,13 +58,13 @@ FOREACH (_ IN CASE WHEN invite IS NULL THEN [] ELSE [1] END |
 
 
 FACILITY_FTL_SCOPING_QUERY = """
-MERGE (supplier:SupplierContact {user_id: $supplier_user_id})
+MERGE (supplier:SupplierContact {user_id: $supplier_user_id, tenant_id: $tenant_id})
+ON CREATE SET supplier.tenant_id = $tenant_id
 SET supplier.email = $supplier_email,
-    supplier.tenant_id = $tenant_id,
     supplier.updated_at = datetime()
-MERGE (facility:SupplierFacility {facility_id: $facility_id})
-SET facility.tenant_id = $tenant_id,
-    facility.name = $facility_name,
+MERGE (facility:SupplierFacility {facility_id: $facility_id, tenant_id: $tenant_id})
+ON CREATE SET facility.tenant_id = $tenant_id
+SET facility.name = $facility_name,
     facility.street = $street,
     facility.city = $city,
     facility.state = $state,
@@ -78,15 +79,15 @@ DELETE old
 WITH facility
 UNWIND $categories AS category
 MERGE (ftl:FTLCategory {category_id: category.id})
-SET ftl.name = category.name,
-    ftl.required_ctes = category.ctes,
-    ftl.updated_at = datetime()
+  ON CREATE SET ftl.name = category.name,
+                ftl.required_ctes = category.ctes,
+                ftl.created_at = datetime()
 MERGE (facility)-[:HANDLES]->(ftl)
 """
 
 
 FACILITY_REQUIRED_CTES_QUERY = """
-MATCH (facility:SupplierFacility {facility_id: $facility_id})-[:HANDLES]->(ftl:FTLCategory)
+MATCH (facility:SupplierFacility {facility_id: $facility_id, tenant_id: $tenant_id})-[:HANDLES]->(ftl:FTLCategory)
 RETURN collect(DISTINCT {
   id: ftl.category_id,
   name: ftl.name,
@@ -96,9 +97,9 @@ RETURN collect(DISTINCT {
 
 
 CTE_EVENT_QUERY = """
-MERGE (facility:SupplierFacility {facility_id: $facility_id})
-SET facility.tenant_id = $tenant_id,
-    facility.name = $facility_name,
+MERGE (facility:SupplierFacility {facility_id: $facility_id, tenant_id: $tenant_id})
+ON CREATE SET facility.tenant_id = $tenant_id
+SET facility.name = $facility_name,
     facility.updated_at = datetime()
 MERGE (lot:TLC {tlc_code: $tlc_code, tenant_id: $tenant_id})
 SET lot.product_description = coalesce($product_description, lot.product_description),
@@ -121,6 +122,14 @@ MERGE (cte)-[:FOR_LOT]->(lot)
 MERGE (cte)-[:OCCURRED_AT]->(facility)
 WITH cte
 UNWIND $obligation_ids AS obligation_id
+// Obligation is a SHARED regulatory catalog (obligation_ids like
+// '21cfr_subpart_s_123' are global, not tenant-specific), so MERGEing on
+// obligation_id alone is intentional. The SATISFIES edges that land on this
+// node DO cross tenant boundaries (tenant A's CTEs and tenant B's CTEs can
+// both point to the same Obligation node). Defense-in-depth: every read that
+// traverses SATISFIES MUST filter by ``cte.tenant_id`` — the CREATE above
+// stamps tenant_id onto every CTEEvent so this predicate is always available.
+// See issue #1395.
 MERGE (obligation:Obligation {obligation_id: obligation_id})
 MERGE (cte)-[:SATISFIES]->(obligation)
 """
@@ -175,7 +184,9 @@ class SupplierGraphSync:
                 operation=params.get("operation", "unknown"),
             )
 
-    def _query_required_ctes(self, facility_id: str) -> Optional[dict[str, Any]]:
+    def _query_required_ctes(
+        self, facility_id: str, tenant_id: str
+    ) -> Optional[dict[str, Any]]:
         if not self.enabled or self._driver is None:
             return None
 
@@ -183,7 +194,7 @@ class SupplierGraphSync:
             with self._driver.session() as session:
                 record = session.run(
                     FACILITY_REQUIRED_CTES_QUERY,
-                    {"facility_id": facility_id},
+                    {"facility_id": facility_id, "tenant_id": tenant_id},
                 ).single()
         except (OSError, TimeoutError, ConnectionError, ValueError, RuntimeError) as exc:  # pragma: no cover - runtime resilience
             logger.warning(
@@ -307,8 +318,17 @@ class SupplierGraphSync:
             },
         )
 
-    def get_required_ctes_for_facility(self, facility_id: str) -> Optional[dict[str, Any]]:
-        return self._query_required_ctes(facility_id)
+    def get_required_ctes_for_facility(
+        self, facility_id: str, tenant_id: str
+    ) -> Optional[dict[str, Any]]:
+        """Read-side tenant-scoped lookup of a facility's FTL/CTE mapping.
+
+        ``tenant_id`` MUST be passed — omitting it would make the Neo4j read
+        trust facility_id alone, which would leak another tenant's categories
+        if the MERGE-key invariant (#1352) were ever violated. The predicate
+        here is defense-in-depth behind the Postgres tenant check.
+        """
+        return self._query_required_ctes(facility_id, tenant_id)
 
     def record_cte_event(
         self,
