@@ -1118,7 +1118,17 @@ class IdentityResolutionService:
         source_file: Optional[str] = None,
         created_by: Optional[str] = None,
     ) -> str:
-        """Insert an alias record. Returns the alias_id. Idempotent on conflict."""
+        """
+        Insert an alias record. Returns the alias_id.
+
+        Idempotency: the INSERT uses ON CONFLICT DO NOTHING against the
+        (entity_id, alias_type, alias_value) unique index. The
+        UNIQUE(tenant_id, alias_type, alias_value) constraint added in
+        migration v059 (#1179) is the authoritative tenant-wide dedup
+        barrier — if a concurrent transaction registered the same alias
+        under a different entity, the INSERT is a no-op and the caller
+        must re-SELECT to find the winning entity (#1190).
+        """
         alias_id = str(uuid4())
         now = datetime.now(timezone.utc)
 
@@ -1151,6 +1161,53 @@ class IdentityResolutionService:
 
         return alias_id
 
+    def _acquire_resolve_lock(
+        self,
+        tenant_id: str,
+        alias_type: str,
+        alias_value: str,
+    ) -> None:
+        """
+        Acquire a PostgreSQL advisory lock scoped to the current
+        transaction, keyed deterministically on (tenant_id, alias_type,
+        alias_value). Prevents the TOCTOU race between "lookup existing"
+        and "insert new" in :meth:`_resolve_or_register` (#1190).
+
+        pg_advisory_xact_lock(bigint) takes a signed 64-bit key; we hash
+        the triple with blake2b and fold to 63 bits so it always fits a
+        postgres BIGINT.
+
+        On non-PostgreSQL backends (sqlite in tests) the call is a
+        best-effort no-op — correctness still depends on the UNIQUE
+        constraint added in migration v059 (#1179), which is the
+        authoritative dedup barrier.
+        """
+        import hashlib
+        payload = f"{tenant_id}|{alias_type}|{alias_value}".encode("utf-8")
+        # Fold to signed bigint range (Postgres bigint = int8, 63 bits
+        # usable once we account for sign).
+        digest = hashlib.blake2b(payload, digest_size=8).digest()
+        lock_key = int.from_bytes(digest, byteorder="big", signed=False) & (
+            (1 << 63) - 1
+        )
+        try:
+            self.session.execute(
+                text("SELECT pg_advisory_xact_lock(:key)"),
+                {"key": lock_key},
+            )
+        except Exception as exc:  # pragma: no cover — non-Postgres or no tx
+            # Advisory locks only work against Postgres. If it fails,
+            # the UNIQUE constraint from migration v059 still prevents
+            # duplicate aliases; we log once and continue.
+            logger.debug(
+                "advisory_lock_unavailable",
+                extra={
+                    "tenant_id": tenant_id,
+                    "alias_type": alias_type,
+                    "error": str(exc),
+                },
+            )
+
     def _require_entity(self, tenant_id: str, entity_id: str) -> None:
         """Raise ValueError if entity doesn't exist for this tenant."""
         row = self.session.execute(
@@ -1182,7 +1239,23 @@ class IdentityResolutionService:
 
         Returns a dict with entity info and a 'resolution' key indicating
         what happened: 'existing', 'new', or 'new_with_review'.
+
+        Fix #1190: the critical section — "check existing then create" —
+        is now serialized per (tenant_id, alias_type, alias_value) using
+        a PostgreSQL advisory lock, and the _insert_alias call itself
+        relies on the UNIQUE(tenant_id, alias_type, alias_value) constraint
+        added in migration v059 (#1179) to provide ON CONFLICT DO NOTHING
+        semantics. Together these make duplicate entity creation impossible
+        across concurrent transactions.
         """
+        # 0. Acquire advisory lock keyed on the (tenant, alias_type,
+        # alias_value) triple. pg_advisory_xact_lock takes a signed int8;
+        # we hash the triple deterministically. The lock is released at
+        # transaction end. On non-PostgreSQL backends the call degrades
+        # to a no-op — the UNIQUE constraint from v059 remains the
+        # authoritative dedup barrier.
+        self._acquire_resolve_lock(tenant_id, alias_type, reference)
+
         # 1. Exact alias lookup — ALWAYS case-sensitive verbatim match.
         # Fix #1177: Identifiers (lot codes, GLNs, GTINs, TLCs) must never be
         # normalized or case-folded on the authoritative path.

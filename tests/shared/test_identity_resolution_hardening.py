@@ -267,3 +267,108 @@ class TestFuzzyDoesNotCorruptIdentifiers:
         assert "tlc" in seen_alias_types, (
             "Identifier alias_type must be persisted on resolve_or_register (#1177)"
         )
+
+
+# ---------------------------------------------------------------------------
+# #1179 / #1190 — advisory lock + UNIQUE constraint
+# ---------------------------------------------------------------------------
+
+
+class TestAdvisoryLockAndUniqueConstraint:
+    @staticmethod
+    def _extract_key(mock_session):
+        last_call = mock_session.execute.call_args
+        if last_call.kwargs.get("key") is not None:
+            return last_call.kwargs["key"]
+        if len(last_call.args) >= 2 and isinstance(last_call.args[1], dict):
+            return last_call.args[1].get("key")
+        return None
+
+    def test_resolve_acquires_advisory_lock(self, svc, mock_session):
+        """
+        _resolve_or_register must issue pg_advisory_xact_lock before the
+        exact-match SELECT to serialize the critical section per
+        (tenant, alias_type, alias_value).
+        """
+        mock_session.execute.return_value.fetchall.return_value = []
+        svc._resolve_or_register(
+            tenant_id=TENANT,
+            reference="Acme",
+            entity_type="firm",
+            source_system="test",
+            alias_type="name",
+        )
+        # Look for the advisory lock SQL string in the executed calls.
+        executed_sqls = [
+            str(c.args[0]) for c in mock_session.execute.call_args_list
+            if c.args
+        ]
+        lock_calls = [
+            s for s in executed_sqls if "pg_advisory_xact_lock" in s
+        ]
+        assert len(lock_calls) >= 1, (
+            "Expected pg_advisory_xact_lock to be issued for race-free "
+            "register (#1190)"
+        )
+
+    def test_advisory_lock_key_is_deterministic(self, svc, mock_session):
+        """The same (tenant, alias_type, alias_value) triple must map to
+        the same lock key, so concurrent workers serialize correctly."""
+        svc._acquire_resolve_lock(TENANT, "tlc", "TLC-ABC")
+        key1 = self._extract_key(mock_session)
+        mock_session.reset_mock()
+        mock_session.execute.return_value.fetchall.return_value = []
+        mock_session.execute.return_value.fetchone.return_value = (1,)
+
+        svc._acquire_resolve_lock(TENANT, "tlc", "TLC-ABC")
+        key2 = self._extract_key(mock_session)
+        assert key1 is not None and key1 == key2, \
+            "Advisory lock key must be deterministic for the same triple"
+
+    def test_advisory_lock_different_triples_different_keys(self, svc, mock_session):
+        """Different triples must produce different keys so unrelated
+        inserts never block each other."""
+        svc._acquire_resolve_lock(TENANT, "tlc", "TLC-A")
+        key_a = self._extract_key(mock_session)
+        mock_session.reset_mock()
+        mock_session.execute.return_value.fetchall.return_value = []
+        mock_session.execute.return_value.fetchone.return_value = (1,)
+
+        svc._acquire_resolve_lock(TENANT, "tlc", "TLC-B")
+        key_b = self._extract_key(mock_session)
+        assert key_a != key_b, \
+            "Distinct alias triples must hash to distinct lock keys"
+
+    def test_advisory_lock_fits_bigint_range(self, svc, mock_session):
+        """Lock key must be in Postgres BIGINT range (signed 63-bit)."""
+        svc._acquire_resolve_lock(TENANT, "tlc", "X" * 200)
+        key = self._extract_key(mock_session)
+        assert key is not None
+        assert 0 <= key < (1 << 63), "Key must fit signed BIGINT"
+
+    def test_advisory_lock_failure_is_non_fatal(self, svc, mock_session):
+        """If the advisory lock query raises (e.g. sqlite backend), the
+        service degrades to relying on the UNIQUE constraint."""
+        mock_session.execute.side_effect = [Exception("sqlite has no pg_advisory")]
+        # Must not raise.
+        svc._acquire_resolve_lock(TENANT, "tlc", "X")
+
+    def test_insert_alias_uses_on_conflict_do_nothing(self, svc, mock_session):
+        """_insert_alias SQL must include ON CONFLICT DO NOTHING so the
+        UNIQUE constraint added in migration v059 provides race-free
+        dedup without raising IntegrityError (#1179)."""
+        svc._insert_alias(
+            tenant_id=TENANT,
+            entity_id="eid-1",
+            alias_type="tlc",
+            alias_value="TLC-123",
+            source_system="test",
+        )
+        executed_sqls = [
+            str(c.args[0]) for c in mock_session.execute.call_args_list
+            if c.args
+        ]
+        assert any(
+            "ON CONFLICT" in sql and "DO NOTHING" in sql
+            for sql in executed_sqls
+        ), "_insert_alias must use ON CONFLICT DO NOTHING for race-free dedup"
