@@ -27,10 +27,10 @@ import logging
 from datetime import datetime, timezone
 from typing import Any, Literal, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 
-from app.authz import require_permission
+from app.authz import IngestionPrincipal, require_permission
 from app.export_models import ExportHistoryResponse, ExportVerifyResponse
 from app.fda_export_service import (
     _build_chain_verification_payload,
@@ -56,6 +56,7 @@ from .formatters import (
 )
 from .merkle import get_merkle_root_handler, get_merkle_proof_handler
 from .queries import (
+    AuditLogWriteError,
     build_recall_where_clause,
     build_v2_where_clause,
     fetch_export_log_history,
@@ -74,6 +75,29 @@ from .verification import verify_export_handler
 logger = logging.getLogger("fda-export")
 
 router = APIRouter(prefix="/api/v1/fda", tags=["FDA Export"])
+
+
+def _audit_identity(
+    request: Request,
+    principal: IngestionPrincipal,
+) -> dict[str, Optional[str]]:
+    """Collect FSMA-204 audit-trail identity fields from the request.
+
+    Captures the authenticated actor (``user_id``) plus request-precise
+    metadata (``request_id``, ``user_agent``, ``source_ip``) so the
+    FDA export log can answer the "who exported tenant X's trace at 3am
+    last Saturday?" question (issue #1205).
+    """
+    client_ip = request.client.host if request.client else None
+    return {
+        "user_id": getattr(principal, "key_id", None),
+        "user_email": getattr(principal, "user_email", None),
+        "request_id": request.headers.get("X-Request-ID")
+        or request.headers.get("X-Correlation-ID"),
+        "user_agent": request.headers.get("User-Agent"),
+        "source_ip": request.headers.get("X-Forwarded-For", client_ip)
+        or client_ip,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -101,6 +125,7 @@ router = APIRouter(prefix="/api/v1/fda", tags=["FDA Export"])
     },
 )
 async def export_fda_spreadsheet(
+    request: Request,
     tlc: str = Query(..., description="Traceability Lot Code to trace"),
     start_date: Optional[str] = Query(None, description="Start date filter (YYYY-MM-DD)"),
     end_date: Optional[str] = Query(None, description="End date filter (YYYY-MM-DD)"),
@@ -109,10 +134,25 @@ async def export_fda_spreadsheet(
         description="Export format: package (zip bundle), csv, or pdf",
     ),
     tenant_id: str = Query(..., description="Tenant identifier"),
-    _auth=Depends(require_permission("fda.export")),
+    principal: IngestionPrincipal = Depends(require_permission("fda.export")),
     _subscription=Depends(require_active_subscription),
 ):
     """Generate and return an FDA-compliant traceability export."""
+    # FSMA 204 §1.1455(c) requires a tamper-evident audit trail identifying
+    # WHO produced each export and WHEN (issue #1205). Identity fields must
+    # resolve from the authenticated principal — never from the request
+    # body — or the handler must refuse to produce an export.
+    identity = _audit_identity(request, principal)
+    if not identity["user_id"]:
+        raise HTTPException(
+            status_code=401,
+            detail=(
+                "FDA export requires an authenticated principal with a "
+                "resolvable key_id. Cannot generate export without an "
+                "FSMA-204 audit-trail actor."
+            ),
+        )
+
     db_session = None
     try:
         from shared.database import SessionLocal
@@ -141,17 +181,72 @@ async def export_fda_spreadsheet(
         chain_verification = persistence.verify_chain(tenant_id=tenant_id)
         completeness_summary = _build_completeness_summary(events)
 
-        # Log the export
-        persistence.log_export(
-            tenant_id=tenant_id,
-            export_hash=export_hash,
-            record_count=len(events),
-            query_tlc=tlc,
-            query_start_date=start_date,
-            query_end_date=end_date,
-            generated_by="api_package" if format == "package" else "api",
+        # Log the export. ``persistence.log_export`` writes the minimal
+        # canonical row; the structured INFO line below captures the full
+        # identity + filter context so log shippers can reconstruct the
+        # FSMA-204 chain-of-custody even if the schema hasn't been
+        # migrated to add columns for user_id/request_id yet.
+        generated_by = f"user:{identity['user_id']}" + (
+            f":request:{identity['request_id']}"
+            if identity["request_id"]
+            else ""
         )
-        db_session.commit()
+        try:
+            persistence.log_export(
+                tenant_id=tenant_id,
+                export_hash=export_hash,
+                record_count=len(events),
+                query_tlc=tlc,
+                query_start_date=start_date,
+                query_end_date=end_date,
+                generated_by=generated_by,
+            )
+            db_session.commit()
+        except Exception as exc:
+            db_session.rollback()
+            logger.error(
+                "fda_export_audit_log_failed",
+                extra={
+                    "tenant_id": tenant_id,
+                    "user_id": identity["user_id"],
+                    "request_id": identity["request_id"],
+                    "export_hash": export_hash[:16],
+                    "error": str(exc),
+                },
+                exc_info=True,
+            )
+            raise HTTPException(
+                status_code=503,
+                detail=(
+                    "FDA export halted: audit-log write failed. The "
+                    "FSMA 204 chain-of-custody requirement prevents "
+                    "returning an export without a corresponding "
+                    "audit-trail row."
+                ),
+            ) from exc
+
+        # Structured audit line — captured regardless of DB schema version.
+        logger.info(
+            "fda_export_audit",
+            extra={
+                "tenant_id": tenant_id,
+                "user_id": identity["user_id"],
+                "user_email": identity["user_email"],
+                "request_id": identity["request_id"],
+                "user_agent": identity["user_agent"],
+                "source_ip": identity["source_ip"],
+                "export_type": "fda_spreadsheet_package" if format == "package" else "fda_spreadsheet",
+                "export_hash": export_hash,
+                "record_count": len(events),
+                "filters_applied": {
+                    "tlc": tlc,
+                    "start_date": start_date,
+                    "end_date": end_date,
+                    "format": format,
+                },
+                "initiated_at_utc": datetime.now(timezone.utc).isoformat(),
+            },
+        )
 
         timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
         safe_tlc = _safe_filename_token(tlc)
@@ -269,6 +364,7 @@ async def export_fda_spreadsheet(
     },
 )
 async def export_all_events(
+    request: Request,
     start_date: Optional[str] = Query(None, description="Start date (YYYY-MM-DD)"),
     end_date: Optional[str] = Query(None, description="End date (YYYY-MM-DD)"),
     event_type: Optional[str] = Query(None, description="Filter by CTE type"),
@@ -277,10 +373,21 @@ async def export_all_events(
         description="Export format: package (zip bundle), csv, or pdf",
     ),
     tenant_id: str = Query(..., description="Tenant identifier"),
-    _auth=Depends(require_permission("fda.export")),
+    principal: IngestionPrincipal = Depends(require_permission("fda.export")),
     _subscription=Depends(require_active_subscription),
 ):
     """Export all events as FDA-format CSV."""
+    # FSMA 204 §1.1455(c) audit-trail identity (issue #1205).
+    identity = _audit_identity(request, principal)
+    if not identity["user_id"]:
+        raise HTTPException(
+            status_code=401,
+            detail=(
+                "FDA export requires an authenticated principal with a "
+                "resolvable key_id."
+            ),
+        )
+
     db_session = None
     try:
         from shared.database import SessionLocal
@@ -325,15 +432,65 @@ async def export_all_events(
         chain_verification = persistence.verify_chain(tenant_id=tenant_id)
         completeness_summary = _build_completeness_summary(deduped)
 
-        persistence.log_export(
-            tenant_id=tenant_id,
-            export_hash=export_hash,
-            record_count=len(deduped),
-            query_start_date=start_date,
-            query_end_date=end_date,
-            generated_by="api_package_all" if format == "package" else "api",
+        generated_by = f"user:{identity['user_id']}" + (
+            f":request:{identity['request_id']}"
+            if identity["request_id"]
+            else ""
         )
-        db_session.commit()
+        try:
+            persistence.log_export(
+                tenant_id=tenant_id,
+                export_hash=export_hash,
+                record_count=len(deduped),
+                query_start_date=start_date,
+                query_end_date=end_date,
+                generated_by=generated_by,
+            )
+            db_session.commit()
+        except Exception as exc:
+            db_session.rollback()
+            logger.error(
+                "fda_export_all_audit_log_failed",
+                extra={
+                    "tenant_id": tenant_id,
+                    "user_id": identity["user_id"],
+                    "request_id": identity["request_id"],
+                    "export_hash": export_hash[:16],
+                    "error": str(exc),
+                },
+                exc_info=True,
+            )
+            raise HTTPException(
+                status_code=503,
+                detail=(
+                    "FDA export halted: audit-log write failed. The "
+                    "FSMA 204 chain-of-custody requirement prevents "
+                    "returning an export without a corresponding "
+                    "audit-trail row."
+                ),
+            ) from exc
+
+        logger.info(
+            "fda_export_all_audit",
+            extra={
+                "tenant_id": tenant_id,
+                "user_id": identity["user_id"],
+                "user_email": identity["user_email"],
+                "request_id": identity["request_id"],
+                "user_agent": identity["user_agent"],
+                "source_ip": identity["source_ip"],
+                "export_type": "fda_export_all_package" if format == "package" else "fda_export_all",
+                "export_hash": export_hash,
+                "record_count": len(deduped),
+                "filters_applied": {
+                    "start_date": start_date,
+                    "end_date": end_date,
+                    "event_type": event_type,
+                    "format": format,
+                },
+                "initiated_at_utc": datetime.now(timezone.utc).isoformat(),
+            },
+        )
 
         timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
         kde_coverage = completeness_summary["required_kde_coverage_ratio"]
@@ -477,6 +634,7 @@ async def export_history(
     },
 )
 async def export_recall_filtered(
+    request: Request,
     tenant_id: str = Query(..., description="Tenant identifier"),
     product: Optional[str] = Query(None, description="Product description (partial match)"),
     location: Optional[str] = Query(None, description="Location name or GLN (partial match)"),
@@ -488,10 +646,19 @@ async def export_recall_filtered(
         default="csv",
         description="Export format: package (zip bundle) or csv",
     ),
-    _auth=Depends(require_permission("fda.export")),
+    principal: IngestionPrincipal = Depends(require_permission("fda.export")),
     _subscription=Depends(require_active_subscription),
 ):
     """Generate recall-filtered FDA export with flexible search criteria."""
+    identity = _audit_identity(request, principal)
+    if not identity["user_id"]:
+        raise HTTPException(
+            status_code=401,
+            detail=(
+                "FDA recall export requires an authenticated principal "
+                "with a resolvable key_id."
+            ),
+        )
     return await export_recall_filtered_handler(
         tenant_id=tenant_id,
         product=product,
@@ -501,6 +668,11 @@ async def export_recall_filtered(
         start_date=start_date,
         end_date=end_date,
         format=format,
+        user_id=identity["user_id"],
+        user_email=identity["user_email"],
+        request_id=identity["request_id"],
+        user_agent=identity["user_agent"],
+        source_ip=identity["source_ip"],
     )
 
 
@@ -551,6 +723,7 @@ async def verify_export(
     },
 )
 async def export_fda_spreadsheet_v2(
+    request: Request,
     tenant_id: str = Query(..., description="Tenant identifier"),
     tlc: Optional[str] = Query(None, description="Traceability Lot Code filter (exact or partial with %%)"),
     start_date: Optional[str] = Query(None, description="Start date filter (YYYY-MM-DD)"),
@@ -560,10 +733,19 @@ async def export_fda_spreadsheet_v2(
         default="csv",
         description="Export format: package (zip bundle) or csv",
     ),
-    _auth=Depends(require_permission("fda.export")),
+    principal: IngestionPrincipal = Depends(require_permission("fda.export")),
     _subscription=Depends(require_active_subscription),
 ):
     """Generate FDA-compliant traceability export from the canonical model with rule evaluation results."""
+    identity = _audit_identity(request, principal)
+    if not identity["user_id"]:
+        raise HTTPException(
+            status_code=401,
+            detail=(
+                "FDA v2 export requires an authenticated principal "
+                "with a resolvable key_id."
+            ),
+        )
     db_session = None
     try:
         from shared.database import SessionLocal
@@ -620,6 +802,8 @@ async def export_fda_spreadsheet_v2(
         events_no_rules = total_events - events_passing - events_failing
 
         # ----- Log the export to audit table -----
+        # Raises AuditLogWriteError on DB failure (caught below) so the
+        # export cannot succeed without its FSMA-204 chain-of-custody row.
         log_v2_export(
             db_session=db_session,
             tenant_id=tenant_id,
@@ -629,6 +813,11 @@ async def export_fda_spreadsheet_v2(
             tlc=tlc,
             start_date=start_date,
             end_date=end_date,
+            user_id=identity["user_id"],
+            user_email=identity["user_email"],
+            request_id=identity["request_id"],
+            user_agent=identity["user_agent"],
+            source_ip=identity["source_ip"],
         )
 
         timestamp = make_timestamp()
@@ -714,6 +903,24 @@ async def export_fda_spreadsheet_v2(
 
     except HTTPException:
         raise
+    except AuditLogWriteError as e:
+        logger.error(
+            "fda_export_v2_audit_log_blocked",
+            extra={
+                "tenant_id": tenant_id,
+                "user_id": identity["user_id"],
+                "request_id": identity["request_id"],
+                "error": str(e),
+            },
+        )
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "FDA v2 export halted: audit-log write failed. The "
+                "FSMA 204 chain-of-custody requirement prevents returning "
+                "an export without a corresponding audit-trail row."
+            ),
+        ) from e
     except (ImportError, ValueError, RuntimeError, OSError) as e:
         logger.error("fda_export_v2_failed", extra={"error": str(e), "tenant_id": tenant_id})
         raise HTTPException(status_code=500, detail="V2 export failed. Check server logs for details.")
