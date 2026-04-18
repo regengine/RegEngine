@@ -308,7 +308,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       const { data } = supabase.auth.onAuthStateChange(async (event, session) => {
         if (isAuthErrorRedirect && event !== 'SIGNED_OUT') return;
-        if (session?.access_token && session.user) {
+
+        // #1073 Scope listener reactions explicitly. Supabase replays
+        // INITIAL_SESSION and SIGNED_IN on network reconnect, sleep/wake,
+        // and internal token refresh. If we reacted to every replay we'd
+        // clobber a freshly-set re_access_token with a stale Supabase
+        // value (or null it), producing the intermittent "you got logged
+        // out" reports. Only two events should mutate auth state:
+        //   TOKEN_REFRESHED — Supabase rotated a token; sync the cookie.
+        //   SIGNED_OUT      — user (or another tab) signed out; clear state.
+        // INITIAL_SESSION and SIGNED_IN are bootstrapped by the dedicated
+        // getUser().then(...) block above; we ignore them here so replays
+        // are a no-op.
+        if (event !== 'TOKEN_REFRESHED' && event !== 'SIGNED_OUT') {
+          return;
+        }
+
+        if (event === 'TOKEN_REFRESHED' && session?.access_token && session.user) {
           // Guard: if a custom RegEngine JWT session is already established
           // (accessToken is set), do NOT overwrite re_access_token with the
           // Supabase access_token. The middleware verifies re_access_token
