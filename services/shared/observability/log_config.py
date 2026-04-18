@@ -45,7 +45,12 @@ def set_request_context(*, request_id: str = "", tenant_id: str = "") -> None:
 
 
 def _inject_context(logger: object, method: str, event_dict: dict) -> dict:
-    """Structlog processor: inject service context into every log record."""
+    """Structlog processor: inject service context into every log record.
+
+    Attaches ``service``, ``request_id``, ``tenant_id`` and ``correlation_id``
+    (when available) to every log record so aggregation tools (Datadog, Loki)
+    can group records by trace across service boundaries.
+    """
     # service name is set once at configure_logging() time via os.environ
     event_dict.setdefault("service", os.getenv("SERVICE_NAME", "regengine"))
     rid = _request_id_ctx.get("")
@@ -54,6 +59,17 @@ def _inject_context(logger: object, method: str, event_dict: dict) -> dict:
     tid = _tenant_id_ctx.get("")
     if tid:
         event_dict.setdefault("tenant_id", tid)
+    # Correlation ID — joins logs emitted across services (admin → ingestion → kafka → graph)
+    # Imported lazily to avoid a circular import at module-load time.
+    try:
+        from shared.observability.correlation import get_correlation_id
+
+        cid = get_correlation_id()
+        if cid:
+            event_dict.setdefault("correlation_id", cid)
+    except Exception:
+        # Never let logging fail because of an observability helper
+        pass
     return event_dict
 
 

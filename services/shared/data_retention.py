@@ -478,6 +478,135 @@ class DataRetentionManager:
             )
             return False
 
+    async def anonymize_audit_logs_for_user(
+        self,
+        db: Session,
+        user_id: UUID,
+        tenant_id: UUID,
+        *,
+        actor: AuditActor,
+    ) -> Tuple[int, int]:
+        """Record a GDPR Article 17 anonymization order for a single user.
+
+        GDPR #1092 — this is the per-user variant the erasure endpoint
+        needs.  The existing ``anonymize_audit_logs`` method does batch
+        retention-threshold anonymization across all old logs; it is
+        the WRONG semantic for a user-initiated right-to-erasure which
+        needs to target one specific ``user_id``.
+
+        Implementation notes (why not UPDATE audit_logs directly?):
+            ``audit_logs`` carries a ``BEFORE UPDATE`` trigger that
+            raises ``"audit_logs table is append-only"`` for *every*
+            modification (V30__audit_logs_tamper_evident.sql, ISO 27001
+            12.4.2).  We cannot rewrite historical rows without losing
+            tamper-evidence.  Instead we emit an **append-only
+            anonymization marker row** — a new audit event whose
+            metadata names the redacted user and field set.  Downstream
+            consumers that render audit trails to end users MUST honor
+            this marker and mask ``actor_email`` / PII fields on any
+            prior row authored by that user.
+
+        The count returned is the number of *historical* audit rows
+        referencing ``user_id`` (i.e., the blast radius).  The "errors"
+        component of the tuple mirrors the existing batch method's
+        contract (``anonymize_audit_logs``) so callers can uniformly
+        report anonymization stats in erasure responses.
+
+        Args:
+            db: Database session with tenant context already set
+                (``app.tenant_id``).
+            user_id: The user whose PII is being redacted.  Required.
+            tenant_id: The tenant under which the user exists.  Required
+                — prevents cross-tenant PII referencing.
+            actor: Who initiated the anonymization (kw-only, so mistakes
+                at the call site raise at function entry, not later).
+
+        Returns:
+            ``(records_affected, errors)`` — records_affected is the
+            count of pre-existing audit rows authored by ``user_id``
+            that are now considered redacted.  errors is 0 on success,
+            1 if the marker insert failed.
+        """
+        if user_id is None:
+            raise ValueError("user_id is required for per-user anonymization")
+        if tenant_id is None:
+            raise ValueError("tenant_id is required for per-user anonymization")
+
+        user_id_str = str(user_id)
+        tenant_id_str = str(tenant_id)
+
+        config = self.configs.get(RetentionPolicy.USER_ACCOUNT)
+        pii_fields = list(config.pii_fields) if config else [
+            "email", "phone", "name", "address"
+        ]
+
+        try:
+            # 1. Count the blast radius — how many audit rows reference
+            # this user as actor within the tenant.  This is a read-only
+            # query so it does not trigger the immutability guards.
+            count_row = db.execute(
+                text("""
+                    SELECT COUNT(*) FROM audit_logs
+                    WHERE tenant_id = :tenant_id
+                      AND actor_id = :actor_id
+                """),
+                {"tenant_id": tenant_id_str, "actor_id": user_id_str},
+            ).fetchone()
+            records_affected = int(count_row[0]) if count_row else 0
+
+            # 2. Emit an append-only anonymization marker via the audit
+            # logger.  This writes a fresh row (INSERT is permitted) so
+            # there is no conflict with the append-only trigger; the
+            # row serves as the authoritative redaction order.
+            await self.audit_logger.log(
+                event_type=AuditEventType.DATA_DELETE,
+                category=AuditEventCategory.DATA_MODIFICATION,
+                severity=AuditSeverity.INFO,
+                actor=actor,
+                action="gdpr_anonymize_user",
+                outcome="success",
+                resource=AuditResource(
+                    resource_type="audit_logs",
+                    resource_id=user_id_str,
+                    tenant_id=tenant_id_str,
+                ),
+                message=(
+                    f"GDPR Article 17 anonymization order for user {user_id_str} "
+                    f"({records_affected} historical audit rows marked for PII masking)"
+                ),
+                details={
+                    "gdpr_article": 17,
+                    "redacted_user_id": user_id_str,
+                    "redacted_tenant_id": tenant_id_str,
+                    "redacted_fields": pii_fields,
+                    "records_affected": records_affected,
+                    "marker_kind": "per_user_anonymization_order",
+                },
+                tags=["gdpr", "data_retention", "anonymization", "per_user"],
+            )
+
+            logger.info(
+                "anonymize_audit_logs_for_user_complete",
+                extra={
+                    "user_id": user_id_str,
+                    "tenant_id": tenant_id_str,
+                    "records_affected": records_affected,
+                },
+            )
+
+            return records_affected, 0
+
+        except Exception as e:
+            logger.error(
+                "anonymize_audit_logs_for_user_failed",
+                extra={
+                    "user_id": user_id_str,
+                    "tenant_id": tenant_id_str,
+                    "error": str(e),
+                },
+            )
+            return 0, 1
+
     async def anonymize_audit_logs(
         self,
         db: Session,

@@ -22,6 +22,7 @@ import uuid
 
 # Add parent directory to path for shared module import
 from shared.schemas import GraphEvent
+from shared.observability.kafka_propagation import extract_correlation_headers
 
 from .config import settings
 from .neo4j_utils import Neo4jClient, driver, upsert_from_entities
@@ -211,18 +212,43 @@ async def run_consumer() -> None:
             # Code structure adapts:
             
             req_id = None
+            correlation_id = None
+            tenant_id_hdr = None
             try:
-                 headers = dict(record.headers() or []) # Confluent headers() returns list of tuples
-                 # Headers are (key, value)
-                 for k, v in headers.items():
+                raw_headers = record.headers() or []  # confluent-kafka: list of tuples
+                # Legacy X-Request-ID parsing retained for backward compat.
+                for k, v in raw_headers:
                     if k == "X-Request-ID" and v:
-                        req_id = v.decode('utf-8')
+                        try:
+                            req_id = v.decode('utf-8')
+                        except UnicodeDecodeError:
+                            req_id = None
                         break
+                # Extract correlation / tenant headers via the shared helper so
+                # spans emitted by this consumer can be stitched back to the
+                # producer's originating request (#1318).
+                correlation_id, tenant_id_hdr = extract_correlation_headers(raw_headers)
             except (TypeError, ValueError, AttributeError, UnicodeDecodeError) as header_exc:
-                 logger.debug("header_parse_error", error=str(header_exc))
-            
+                logger.debug("header_parse_error", error=str(header_exc))
+
+            # Re-seed structlog contextvars so every log record emitted below
+            # inherits request_id / correlation_id / tenant_id.
+            binding: dict = {}
             if req_id:
-                bind_contextvars(request_id=req_id)
+                binding["request_id"] = req_id
+            if correlation_id:
+                binding["correlation_id"] = correlation_id
+                # Also seed the HTTP-side contextvar used by error handlers.
+                try:
+                    from shared.observability.correlation import set_correlation_id
+
+                    set_correlation_id(correlation_id)
+                except Exception:
+                    pass
+            if tenant_id_hdr:
+                binding["tenant_id"] = tenant_id_hdr
+            if binding:
+                bind_contextvars(**binding)
 
             # ... logic copy ...
             

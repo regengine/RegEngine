@@ -10,6 +10,8 @@ import structlog
 from kafka import KafkaProducer as KafkaProducerLib
 from kafka.errors import KafkaError
 
+from shared.observability.kafka_propagation import inject_correlation_headers_tuples
+
 from .config import get_settings
 from .models import AlertEvent, EnforcementItem
 
@@ -193,7 +195,10 @@ class KafkaEventProducer:
         """
         try:
             producer = self._get_producer()
-            future = producer.send(topic, key=key, value=value)
+            # Attach correlation_id / tenant_id as Kafka headers so consumers
+            # can stitch spans back to the originating request (#1318).
+            headers = inject_correlation_headers_tuples()
+            future = producer.send(topic, key=key, value=value, headers=headers)
             # Don't block here - let caller flush if needed
             return True
 
