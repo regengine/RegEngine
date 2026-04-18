@@ -27,6 +27,7 @@ import pytest
 from app.fsma_spreadsheet import (
     FDA_COLUMNS,
     FDA_HEADERS,
+    FSMATimestampError,
     generate_fda_csv,
     _parse_timestamp,
     _normalise_event,
@@ -58,9 +59,29 @@ class TestParseTimestamp:
         assert date == "2026-03-15"
 
     def test_malformed_input_falls_back_gracefully(self):
+        """Default (non-strict) mode preserves legacy best-effort
+        behavior for non-FDA callers.
+        """
         date, time = _parse_timestamp("not-a-date")
         # Should not raise — falls back to string slicing
         assert isinstance(date, str)
+
+    def test_strict_mode_raises_on_malformed_input(self):
+        """FDA-export path uses ``strict=True`` and must refuse to
+        silently truncate (issue #1108).
+        """
+        with pytest.raises(FSMATimestampError):
+            _parse_timestamp("not-a-date", strict=True)
+        with pytest.raises(FSMATimestampError):
+            _parse_timestamp("yesterday", strict=True)
+        with pytest.raises(FSMATimestampError):
+            _parse_timestamp("2025-99-99", strict=True)
+
+    def test_strict_mode_accepts_valid_iso_timestamps(self):
+        """Strict mode still round-trips valid ISO timestamps."""
+        d, t = _parse_timestamp("2026-04-17T10:00:00Z", strict=True)
+        assert d == "2026-04-17"
+        assert t == "10:00:00"
 
 
 # ─── _normalise_event ────────────────────────────────────────────────────
