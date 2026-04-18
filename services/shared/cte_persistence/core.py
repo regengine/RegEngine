@@ -435,9 +435,38 @@ class CTEPersistence:
             event_id = p["event_id"]
             kdes = p["kdes"]
 
+            # --- Quantity validation (fix #1306) ---
+            # Previous implementation silently clamped ``quantity`` to a
+            # minimum of 1.0 (both in the hash input and the row value),
+            # so a HARVESTING event for 0.25 kg was persisted and hashed
+            # as 1.0 kg.  The single-event path does NOT clamp, so the
+            # same input via two code paths produced different SHA-256
+            # hashes and different row values.  FSMA audit integrity
+            # depends on the persisted regulatory payload matching what
+            # the caller sent, so we now reject anything non-positive
+            # rather than silently rewriting it.
+            raw_qty = evt.get("quantity")
+            if raw_qty is None:
+                raise ValueError(
+                    f"quantity is required for CTE event "
+                    f"(tlc={evt.get('traceability_lot_code')}, "
+                    f"type={evt.get('event_type')})"
+                )
+            try:
+                quantity = float(raw_qty)
+            except (TypeError, ValueError) as exc:
+                raise ValueError(
+                    f"quantity must be numeric, got {raw_qty!r}"
+                ) from exc
+            if quantity <= 0:
+                raise ValueError(
+                    f"quantity must be > 0, got {quantity} "
+                    f"(tlc={evt.get('traceability_lot_code')})"
+                )
+
             sha256_hash = compute_event_hash(
                 event_id, evt["event_type"], evt["traceability_lot_code"],
-                evt.get("product_description", ""), max(float(evt.get("quantity") or 0), 1.0),
+                evt.get("product_description", ""), quantity,
                 evt.get("unit_of_measure", ""), evt.get("location_gln"),
                 evt.get("location_name"), evt["event_timestamp"], kdes,
             )
@@ -450,7 +479,7 @@ class CTEPersistence:
                 "event_type": evt["event_type"],
                 "tlc": evt["traceability_lot_code"],
                 "product_description": evt.get("product_description", ""),
-                "quantity": max(float(evt.get("quantity") or 0), 1.0),
+                "quantity": quantity,
                 "unit_of_measure": evt.get("unit_of_measure", ""),
                 "location_gln": evt.get("location_gln"),
                 "location_name": evt.get("location_name"),
