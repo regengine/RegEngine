@@ -199,33 +199,27 @@ jobs:
           cd services/${{ matrix.service }}
           flake8 app/ --max-line-length=120 --select=E9,F63,F7,F82 --count --statistics
 
-  # ── Docker Build ─────────────────────────────────────────
+  # ── Docker Build (consolidated monolith) ─────────────────
+  # Production deploys a single consolidated monolith built from the
+  # repo-root Dockerfile — see server/main.py and railway.toml. The per-
+  # service Dockerfiles under services/<svc>/ are kept only so the local
+  # docker-compose files still work; they're not built or deployed anywhere
+  # and aren't gated here. See #1429 for the full drift cleanup plan.
   docker-build:
-    name: Docker Build ${{ matrix.service }}
+    name: Docker Build (monolith)
     runs-on: ubuntu-latest
-    timeout-minutes: 10
-    strategy:
-      fail-fast: false
-      matrix:
-        # context is repo root so Dockerfiles can COPY shared/, kernel/, plugins/, etc.
-        service: [admin, compliance, graph, ingestion, nlp, scheduler]
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v6
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
 
-      - name: Build Docker image
-        # Use repo root as build context so absolute COPY paths resolve correctly.
-        # All non-scheduler Dockerfiles reference shared/, services/<svc>/, kernel/, etc.
-        run: |
-          docker build -t regengine-${{ matrix.service }}:test \
-            -f services/${{ matrix.service }}/Dockerfile .
+      - name: Build root Dockerfile
+        run: docker build -t regengine:test -f Dockerfile .
 
       - name: Verify image starts
-        run: |
-          docker run --rm regengine-${{ matrix.service }}:test \
-            python -c "print('Build OK')"
+        run: docker run --rm regengine:test python -c "print('Build OK')"
 
   # ── Security (Hard Gate) ─────────────────────────────────
   security:
