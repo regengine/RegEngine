@@ -34,7 +34,17 @@ class KafkaEventProducer:
         self._initialized = False
 
     def _get_producer(self) -> KafkaProducerLib:
-        """Get or create Kafka producer."""
+        """Get or create Kafka producer.
+
+        Hardened config (#1147):
+        - ``acks="all"``: wait for all in-sync replicas
+        - ``retries=10`` (was 3) and ``retry_backoff_ms=500`` for
+          exponential-ish backoff on transient broker errors
+        - ``max_in_flight_requests_per_connection=5`` (was 1) — with
+          retries>0 and acks=all this is still ordered per partition
+          via kafka-python's sequence-numbering
+        - ``request_timeout_ms=30000``
+        """
         if self._producer is None:
             try:
                 self._producer = KafkaProducerLib(
@@ -42,9 +52,9 @@ class KafkaEventProducer:
                     value_serializer=lambda v: json.dumps(v).encode("utf-8"),
                     key_serializer=lambda k: k.encode("utf-8") if k else None,
                     acks="all",  # Wait for all replicas
-                    retries=3,
-                    retry_backoff_ms=1000,
-                    max_in_flight_requests_per_connection=1,  # Ordering guarantee
+                    retries=10,  # #1147 — was 3, too low for transient 5xx
+                    retry_backoff_ms=500,  # #1147
+                    max_in_flight_requests_per_connection=5,  # #1147
                     request_timeout_ms=30000,
                 )
                 self._initialized = True

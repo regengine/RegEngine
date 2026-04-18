@@ -20,18 +20,66 @@ logger = logging.getLogger("stripe-billing")
 
 
 async def _handle_checkout_completed(session: dict[str, Any]) -> None:
+    """Handle a completed Stripe checkout.
+
+    #1184 fix: never trust ``metadata.tenant_id`` from the session alone.
+    The trust order is:
+      1. Server-side session lookup (``billing:session:{session_id}``) —
+         populated at checkout creation with the authenticated tenant.
+      2. Customer-id lookup (``billing:customer:{customer_id}``) — bound
+         at the time of the first successful checkout for that Stripe
+         customer.
+      3. Metadata ``tenant_id`` is used ONLY as a tie-breaker when it
+         matches one of the above lookups. A mismatch is logged and
+         rejected as a tampering attempt.
+
+    If none of the three yields a tenant (brand-new customer paying for
+    the first time) we provision a tenant via the admin service.
+    """
     metadata = session.get("metadata") or {}
     session_id = session.get("id")
-
+    customer_id = session.get("customer")
     client = _state_mod._redis_client()
 
-    tenant_id = metadata.get("tenant_id")
+    server_side_tenant: Optional[str] = None
     if session_id:
-        existing_tenant = client.get(_state_mod._session_lookup_key(session_id))
-        if existing_tenant:
-            tenant_id = existing_tenant
+        server_side_tenant = client.get(_state_mod._session_lookup_key(session_id))
+
+    customer_bound_tenant: Optional[str] = None
+    if customer_id:
+        customer_bound_tenant = client.get(_state_mod._customer_lookup_key(customer_id))
+
+    metadata_tenant = metadata.get("tenant_id")
+
+    # Authoritative tenant is whatever the server itself recorded.
+    tenant_id = server_side_tenant or customer_bound_tenant
+
+    if tenant_id and metadata_tenant and metadata_tenant != tenant_id:
+        # Attacker tried to send a checkout session claiming another
+        # tenant in metadata. Refuse rather than silently trust the
+        # server-side value — we want loud telemetry.
+        logger.error(
+            "stripe_webhook_metadata_tenant_mismatch "
+            "server_tenant=%s metadata_tenant=%s session_id=%s customer_id=%s",
+            tenant_id, metadata_tenant, session_id, customer_id,
+        )
+        raise HTTPException(
+            status_code=400,
+            detail="Checkout metadata tenant_id does not match server-side binding",
+        )
 
     if not tenant_id:
+        # No server-side binding — this is a brand-new self-serve signup.
+        # Provision a tenant via the admin service. We ignore any client-
+        # supplied ``metadata.tenant_id`` because it could collide with an
+        # existing tenant.
+        if metadata_tenant:
+            logger.warning(
+                "stripe_webhook_ignored_client_metadata_tenant_id "
+                "client_tenant=%s session_id=%s (no server binding exists)",
+                metadata_tenant, session_id,
+            )
+
         tenant_name = metadata.get("tenant_name")
         if not tenant_name:
             fallback_email = metadata.get("customer_email") or session.get("customer_email")
@@ -41,7 +89,6 @@ async def _handle_checkout_completed(session: dict[str, Any]) -> None:
         logger.info("tenant_created_from_checkout", tenant_id=tenant_id, session_id=session_id)
 
     subscription_id = session.get("subscription")
-    customer_id = session.get("customer")
 
     plan_id = _plans_mod._normalize_plan_id(str(metadata.get("plan_id", "growth")))
     billing_period = _plans_mod._normalize_billing_period(str(metadata.get("billing_period", "monthly")))

@@ -159,6 +159,8 @@ def _install_fake_dependencies(
 
 @pytest.fixture()
 def client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
+    from app.subscription_gate import require_active_subscription
+
     app = FastAPI()
     app.include_router(fda_router)
     app.dependency_overrides[get_ingestion_principal] = lambda: IngestionPrincipal(
@@ -166,6 +168,9 @@ def client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
         scopes=["*"],
         auth_mode="test",
     )
+    # #1182: the subscription gate is now fail-closed; override it in tests so
+    # we don't need a Redis stand-in just to exercise export logic.
+    app.dependency_overrides[require_active_subscription] = lambda: None
 
     _install_fake_dependencies(
         monkeypatch,
@@ -178,11 +183,14 @@ def client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
 
 
 def test_export_default_returns_verifiable_zip_package(client: TestClient) -> None:
+    # The fixture event has KDE coverage ~67%, which trips the #1222
+    # gate. Pass ``allow_incomplete=true`` to exercise the happy path.
     response = client.get(
         "/api/v1/fda/export",
         params={
             "tenant_id": "00000000-0000-0000-0000-000000000111",
             "tlc": "TLC-2026-001",
+            "allow_incomplete": "true",
         },
     )
     assert response.status_code == 200
@@ -225,6 +233,8 @@ def test_export_csv_format_still_supported(client: TestClient) -> None:
             "tenant_id": "00000000-0000-0000-0000-000000000111",
             "tlc": "TLC-2026-001",
             "format": "csv",
+            # Bypass the #1222 KDE coverage gate for this legacy test.
+            "allow_incomplete": "true",
         },
     )
     assert response.status_code == 200
@@ -248,6 +258,8 @@ def test_verify_export_recomputes_hash_for_full_export(monkeypatch: pytest.Monke
         datetime.now(timezone.utc),
     )
 
+    from app.subscription_gate import require_active_subscription
+
     app = FastAPI()
     app.include_router(fda_router)
     app.dependency_overrides[get_ingestion_principal] = lambda: IngestionPrincipal(
@@ -255,6 +267,8 @@ def test_verify_export_recomputes_hash_for_full_export(monkeypatch: pytest.Monke
         scopes=["*"],
         auth_mode="test",
     )
+    # #1182: bypass fail-closed subscription gate in tests.
+    app.dependency_overrides[require_active_subscription] = lambda: None
 
     _install_fake_dependencies(
         monkeypatch,

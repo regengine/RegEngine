@@ -1,76 +1,22 @@
-"""Password change route for authenticated users."""
+"""Password-reset / password-change router stub.
 
-from fastapi import APIRouter, Depends, HTTPException, Request
-import structlog
-from pydantic import BaseModel
-from sqlalchemy import select
-from sqlalchemy.orm import Session
+#1374 — The authoritative ``POST /auth/change-password`` implementation lives
+in :mod:`services.admin.app.auth_routes`. A second implementation used to live
+here and was silently shadowed because ``main.py`` mounts ``auth_router``
+before ``password_reset_router``, so FastAPI resolved the path to
+``auth_routes.change_password`` and this function never ran.
 
-from .database import get_session
-from .sqlalchemy_models import UserModel, MembershipModel
-from .auth_utils import get_password_hash, verify_password
-from .audit import AuditLogger
-from .password_policy import validate_password, PasswordPolicyError
-from .dependencies import get_current_user
-from shared.rate_limit import limiter
+Behavior divergences that the dead copy hid:
+  * Rate limit: 5/min (auth_routes) vs 3/min here.
+  * Audit logging: auth_routes logs ``password.change``; this copy didn't.
+  * Supabase sync: auth_routes syncs Supabase; this copy didn't.
 
+The dead implementation has been removed. The router object is kept so
+``main.py`` does not need to change, and so the module import remains a no-op.
+Future password-reset endpoints can be registered here without conflict.
+"""
+
+from fastapi import APIRouter
+
+# Empty router — intentionally registers no routes. See module docstring.
 router = APIRouter(prefix="/auth", tags=["auth"])
-logger = structlog.get_logger("password_change")
-
-
-class ChangePasswordRequest(BaseModel):
-    current_password: str
-    new_password: str
-
-
-class ChangePasswordResponse(BaseModel):
-    """Response for password change endpoint."""
-    message: str
-
-
-@router.post("/change-password", response_model=ChangePasswordResponse)
-@limiter.limit("3/minute")
-def change_password(
-    payload: ChangePasswordRequest,
-    request: Request,
-    current_user: UserModel = Depends(get_current_user),
-    db: Session = Depends(get_session),
-):
-    """Change password for the currently authenticated user.
-
-    Does NOT revoke sessions — the user is already authenticated and
-    changing their own password. Use POST /auth/logout-all to sign out
-    all devices separately.
-    """
-    if not verify_password(payload.current_password, current_user.password_hash):
-        raise HTTPException(status_code=401, detail="Current password is incorrect")
-
-    try:
-        validate_password(payload.new_password, user_context={"email": current_user.email})
-    except PasswordPolicyError as e:
-        raise HTTPException(status_code=400, detail=e.message)
-
-    current_user.password_hash = get_password_hash(payload.new_password)
-
-    # Audit log
-    membership = db.execute(
-        select(MembershipModel).where(MembershipModel.user_id == current_user.id)
-    ).scalar_one_or_none()
-
-    if membership:
-        AuditLogger.log_event(
-            db,
-            tenant_id=membership.tenant_id,
-            event_type="password.change",
-            action="password.change",
-            event_category="authentication",
-            actor_id=current_user.id,
-            resource_type="user",
-            resource_id=str(current_user.id),
-        )
-
-    db.commit()
-
-    logger.info("password_changed", user_id=str(current_user.id))
-
-    return {"message": "Password changed successfully."}

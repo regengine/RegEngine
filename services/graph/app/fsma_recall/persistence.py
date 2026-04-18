@@ -1,6 +1,23 @@
 # ============================================================
 # FSMA 204 Recall — DB persistence helpers
-# Split from monolithic fsma_recall.py — zero logic changes.
+# Split from monolithic fsma_recall.py.
+#
+# #1199: Recall drills are persisted in fsma.task_queue but they are
+# NOT background jobs to execute — they are history rows. To prevent
+# the generic task_processor worker from claiming and corrupting them:
+#
+#   1. They use a distinct `task_type='recall_drill'`, separate from
+#      the state machine key `'recall'` which may exist elsewhere.
+#   2. The task_queue column `status` is ALWAYS one of
+#      {'pending', 'processing', 'completed', 'failed', 'dead'} (CHECK
+#      constraint). The drill's own lifecycle (pending/in_progress/
+#      completed/failed/cancelled) lives inside the JSONB payload under
+#      `payload->>'status'`. The task_queue status on a recall_drill
+#      row is ALWAYS `'completed'` so the task_processor never claims
+#      it: the worker only claims rows with task_queue status 'pending'.
+#   3. task_processor enforces a task_type allow-list and sends any
+#      unknown task_type to the dead queue — but because recall_drill
+#      rows are written as 'completed' they never reach the worker.
 # ============================================================
 from __future__ import annotations
 
@@ -13,6 +30,18 @@ from .models import (
     RecallStatus,
     RecallType,
 )
+
+
+# task_queue CHECK constraint values. See
+# alembic/versions/20260329_task_queue_v050.py
+_TASK_QUEUE_ALLOWED_STATUSES = {
+    "pending", "processing", "completed", "failed", "dead"
+}
+
+# All recall_drill rows use this as their task_queue.status so the
+# generic task_processor never claims them.  The drill's real status
+# lives in payload->>'status'.
+_RECALL_DRILL_TASK_QUEUE_STATUS = "completed"
 
 
 def _get_db_engine():
@@ -32,7 +61,12 @@ def _get_db_engine():
 
 
 def _upsert_drill_row(engine, drill: "RecallDrill") -> None:
-    """Insert or update a recall drill row in fsma.task_queue."""
+    """Insert or update a recall drill row in fsma.task_queue.
+
+    #1199: the row's task_queue.status is ALWAYS 'completed' so the
+    generic task_processor never claims and corrupts the row. The real
+    drill status lives in payload->>'status'.
+    """
     import json as _json
     try:
         from sqlalchemy import text as _text
@@ -44,13 +78,17 @@ def _upsert_drill_row(engine, drill: "RecallDrill") -> None:
                         (task_type, payload, status, tenant_id, created_at,
                          started_at, completed_at)
                     VALUES
-                        ('recall_drill', :payload::jsonb, :status, :tenant_id,
-                         :created_at, :started_at, :completed_at)
+                        ('recall_drill', :payload::jsonb, :queue_status,
+                         :tenant_id, :created_at, :started_at, :completed_at)
                     ON CONFLICT DO NOTHING
                 """),
                 {
                     "payload": payload,
-                    "status": drill.status.value,
+                    # #1199: Never write drill status (in_progress, cancelled)
+                    # into the task_queue status column — those values violate
+                    # the CHECK constraint.  Use the sentinel completed status
+                    # so the worker skips this row.
+                    "queue_status": _RECALL_DRILL_TASK_QUEUE_STATUS,
                     "tenant_id": drill.tenant_id,
                     "created_at": drill.created_at,
                     "started_at": drill.started_at,
@@ -64,7 +102,10 @@ def _upsert_drill_row(engine, drill: "RecallDrill") -> None:
 
 
 def _update_drill_row(engine, drill: "RecallDrill") -> None:
-    """Update an existing recall drill row by drill_id stored in payload."""
+    """Update an existing recall drill row by drill_id stored in payload.
+
+    #1199: task_queue.status stays 'completed' regardless of drill status.
+    """
     import json as _json
     try:
         from sqlalchemy import text as _text
@@ -74,7 +115,7 @@ def _update_drill_row(engine, drill: "RecallDrill") -> None:
                 _text("""
                     UPDATE fsma.task_queue
                     SET payload       = :payload::jsonb,
-                        status        = :status,
+                        status        = :queue_status,
                         started_at    = :started_at,
                         completed_at  = :completed_at
                     WHERE task_type = 'recall_drill'
@@ -83,7 +124,7 @@ def _update_drill_row(engine, drill: "RecallDrill") -> None:
                 """),
                 {
                     "payload": payload,
-                    "status": drill.status.value,
+                    "queue_status": _RECALL_DRILL_TASK_QUEUE_STATUS,
                     "tenant_id": drill.tenant_id,
                     "started_at": drill.started_at,
                     "completed_at": drill.completed_at,

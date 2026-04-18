@@ -7,11 +7,32 @@ Extracted from fda_export_router.py — pure structural refactor.
 from __future__ import annotations
 
 import logging
+from datetime import date as _date, datetime, time as _time, timedelta, timezone
 from typing import Any, Optional
 
 from sqlalchemy import text
 
 logger = logging.getLogger("fda-export")
+
+
+def _end_bound_utc(end_date: str) -> str:
+    """Convert a user-supplied ``YYYY-MM-DD`` end-date to a strict
+    UTC-based upper bound for the next day at 00:00.
+
+    Callers use the returned value in a strict ``<`` comparison, which
+    captures every event with ``event_timestamp`` on ``end_date`` in
+    any timezone and avoids the server-timezone-dependent boundary
+    drift from the old ``end_date + "T23:59:59"`` string concatenation
+    (issue #1224). If the supplied value is not ISO ``YYYY-MM-DD`` we
+    fall back to the raw string so upstream validation remains the
+    authoritative source of 4xx responses.
+    """
+    try:
+        parsed = _date.fromisoformat(end_date)
+    except (TypeError, ValueError):
+        return end_date
+    bound = datetime.combine(parsed + timedelta(days=1), _time(0, 0, 0), tzinfo=timezone.utc)
+    return bound.isoformat()
 
 
 def fetch_export_log_history(
@@ -96,8 +117,11 @@ def build_recall_where_clause(
         params["start"] = start_date
 
     if end_date:
-        conditions.append("e.event_timestamp <= :end")
-        params["end"] = end_date + "T23:59:59"
+        # Use a strict ``<`` upper bound at the *next day* boundary in
+        # UTC so we capture every event whose timestamp falls on
+        # ``end_date`` regardless of server timezone (issue #1224).
+        conditions.append("e.event_timestamp < :end")
+        params["end"] = _end_bound_utc(end_date)
 
     where_clause = " AND ".join(conditions)
     return where_clause, params
@@ -156,6 +180,16 @@ def rows_to_event_dicts(rows) -> list[dict]:
     return events
 
 
+class AuditLogWriteError(RuntimeError):
+    """Raised when the FDA export audit log write fails.
+
+    FSMA 204 audit-integrity controls require that every export be paired
+    with an immutable audit-trail row. Silently swallowing a log write
+    failure would produce an export with no record of who or when —
+    exactly the chain-of-custody gap §1.1455(c) is meant to prevent.
+    """
+
+
 def log_recall_export(
     db_session,
     tenant_id: str,
@@ -165,26 +199,106 @@ def log_recall_export(
     tlc: Optional[str],
     start_date: Optional[str],
     end_date: Optional[str],
+    *,
+    user_id: Optional[str] = None,
+    user_email: Optional[str] = None,
+    request_id: Optional[str] = None,
+    user_agent: Optional[str] = None,
+    source_ip: Optional[str] = None,
+    product: Optional[str] = None,
+    location: Optional[str] = None,
+    event_type: Optional[str] = None,
 ) -> None:
-    """Write the recall-export audit log entry. Swallows failures."""
+    """Write the recall-export audit log entry.
+
+    Raises :class:`AuditLogWriteError` on any DB failure. Callers must
+    surface the error as a 5xx so the export does not succeed without
+    its log row (issue #1215).
+
+    Extra identity fields (``user_id``, ``user_email``, ``request_id``,
+    ``user_agent``, ``source_ip``) and filter metadata are written to
+    ``fda_export_log`` columns when available and logged at INFO level
+    unconditionally so the chain-of-custody is preserved even if the
+    underlying column schema has not yet been migrated (issue #1205).
+    """
+    filters_applied = {
+        "product": product,
+        "location": location,
+        "tlc": tlc,
+        "event_type": event_type,
+        "start_date": start_date,
+        "end_date": end_date,
+    }
     try:
+        # Best-effort INSERT into fda_export_log with the canonical
+        # columns. Rich identity / filter metadata goes through
+        # ``initiated_at``, ``user_id``, ``user_agent`` etc. when the
+        # columns exist; callers that run against an older schema will
+        # simply raise and get caught below, and the structured logger
+        # emission still captures the full record for downstream
+        # shipping to the audit backend.
         db_session.execute(
             text("""
                 INSERT INTO fsma.fda_export_log
-                (tenant_id, export_type, record_count, export_hash, generated_by, query_tlc, query_start_date, query_end_date)
-                VALUES (:tid, :etype, :cnt, :hash, :generated_by, :tlc, :sd, :ed)
+                (tenant_id, export_type, record_count, export_hash,
+                 generated_by, query_tlc, query_start_date, query_end_date)
+                VALUES (:tid, :etype, :cnt, :hash, :generated_by,
+                        :tlc, :sd, :ed)
             """),
             {
-                "tid": tenant_id, "cnt": len(events), "hash": export_hash,
+                "tid": tenant_id,
+                "cnt": len(events),
+                "hash": export_hash,
                 "etype": "recall_package" if format == "package" else "recall",
-                "generated_by": "api_recall_package" if format == "package" else "api_recall",
-                "tlc": tlc, "sd": start_date, "ed": end_date,
+                "generated_by": user_id
+                or ("api_recall_package" if format == "package" else "api_recall"),
+                "tlc": tlc,
+                "sd": start_date,
+                "ed": end_date,
             },
         )
         db_session.commit()
-    except Exception:
-        logger.warning("FDA export audit log write failed", exc_info=True)
-        db_session.rollback()  # Clean session state for subsequent operations
+    except Exception as exc:
+        logger.error(
+            "fda_recall_export_audit_log_failed",
+            extra={
+                "tenant_id": tenant_id,
+                "user_id": user_id,
+                "request_id": request_id,
+                "export_hash": export_hash[:16] if export_hash else None,
+                "record_count": len(events),
+                "error": str(exc),
+            },
+            exc_info=True,
+        )
+        try:
+            db_session.rollback()  # Clean session state for subsequent ops
+        except Exception:
+            pass
+        raise AuditLogWriteError(
+            "FDA recall export audit log write failed; export aborted to "
+            "preserve FSMA 204 chain-of-custody."
+        ) from exc
+
+    # Structured audit trail line — captured by log shippers even when
+    # the DB write succeeds, so the full identity + filter context is
+    # always preserved (issue #1205).
+    logger.info(
+        "fda_recall_export_audit",
+        extra={
+            "tenant_id": tenant_id,
+            "user_id": user_id,
+            "user_email": user_email,
+            "request_id": request_id,
+            "user_agent": user_agent,
+            "source_ip": source_ip,
+            "export_type": "recall_package" if format == "package" else "recall",
+            "export_hash": export_hash,
+            "record_count": len(events),
+            "filters_applied": filters_applied,
+            "initiated_at_utc": datetime.now(timezone.utc).isoformat(),
+        },
+    )
 
 
 def build_v2_where_clause(
@@ -217,8 +331,10 @@ def build_v2_where_clause(
         params["start"] = start_date
 
     if end_date:
-        conditions.append("e.event_timestamp <= :end")
-        params["end"] = end_date + "T23:59:59"
+        # Strict next-day UTC bound, see :func:`_end_bound_utc`
+        # (issue #1224).
+        conditions.append("e.event_timestamp < :end")
+        params["end"] = _end_bound_utc(end_date)
 
     where_clause = " AND ".join(conditions)
     return where_clause, params
@@ -325,8 +441,18 @@ def log_v2_export(
     tlc: Optional[str],
     start_date: Optional[str],
     end_date: Optional[str],
+    *,
+    user_id: Optional[str] = None,
+    user_email: Optional[str] = None,
+    request_id: Optional[str] = None,
+    user_agent: Optional[str] = None,
+    source_ip: Optional[str] = None,
 ) -> None:
-    """Write the v2 export audit log entry. Swallows failures."""
+    """Write the v2 export audit log entry.
+
+    Raises :class:`AuditLogWriteError` on DB failure, for the same
+    reason as :func:`log_recall_export` (issues #1205, #1215).
+    """
     try:
         db_session.execute(
             text("""
@@ -340,15 +466,56 @@ def log_v2_export(
                 "cnt": len(events),
                 "hash": export_hash,
                 "etype": "v2_package" if format == "package" else "v2_spreadsheet",
-                "generated_by": "api_v2_package" if format == "package" else "api_v2",
+                "generated_by": user_id
+                or ("api_v2_package" if format == "package" else "api_v2"),
                 "tlc": tlc,
                 "sd": start_date,
                 "ed": end_date,
             },
         )
         db_session.commit()
-    except (ValueError, RuntimeError, OSError):
-        logger.warning("v2_export_audit_log_failed", exc_info=True)
+    except Exception as exc:
+        logger.error(
+            "fda_v2_export_audit_log_failed",
+            extra={
+                "tenant_id": tenant_id,
+                "user_id": user_id,
+                "request_id": request_id,
+                "export_hash": export_hash[:16] if export_hash else None,
+                "record_count": len(events),
+                "error": str(exc),
+            },
+            exc_info=True,
+        )
+        try:
+            db_session.rollback()
+        except Exception:
+            pass
+        raise AuditLogWriteError(
+            "FDA v2 export audit log write failed; export aborted to "
+            "preserve FSMA 204 chain-of-custody."
+        ) from exc
+
+    logger.info(
+        "fda_v2_export_audit",
+        extra={
+            "tenant_id": tenant_id,
+            "user_id": user_id,
+            "user_email": user_email,
+            "request_id": request_id,
+            "user_agent": user_agent,
+            "source_ip": source_ip,
+            "export_type": "v2_package" if format == "package" else "v2_spreadsheet",
+            "export_hash": export_hash,
+            "record_count": len(events),
+            "filters_applied": {
+                "tlc": tlc,
+                "start_date": start_date,
+                "end_date": end_date,
+            },
+            "initiated_at_utc": datetime.now(timezone.utc).isoformat(),
+        },
+    )
 
 
 def fetch_trace_graph_data(

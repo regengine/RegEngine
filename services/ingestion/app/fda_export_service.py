@@ -17,6 +17,7 @@ from datetime import datetime, timezone
 from typing import Any, Optional
 from uuid import uuid4
 
+from app.shared.csv_safety import sanitize_cell
 from app.webhook_models import REQUIRED_KDES_BY_CTE, WebhookCTEType
 
 
@@ -93,7 +94,15 @@ FDA_COLUMNS_V2 = FDA_COLUMNS + [
 
 
 def _event_to_fda_row(event: dict) -> dict:
-    """Convert a persisted CTE event to an FDA spreadsheet row."""
+    """Convert a persisted CTE event to an FDA spreadsheet row.
+
+    Every string-valued cell passes through :func:`sanitize_cell` before
+    being written so that any tenant-controlled free-text field (e.g.
+    ``product_description``, ``ship_from_location``) cannot carry a
+    spreadsheet formula into the FDA auditor's workstation. Hash fields
+    are SHA-256 hex digests and cannot start with a formula prefix, but
+    we sanitize them defensively for symmetry (issue #1081).
+    """
     kdes = event.get("kdes", {})
     timestamp = event.get("event_timestamp", "")
 
@@ -110,47 +119,56 @@ def _event_to_fda_row(event: dict) -> dict:
             event_date = str(timestamp)[:10]
 
     row = {
-        "Traceability Lot Code (TLC)": event.get("traceability_lot_code", ""),
-        "Product Description": event.get("product_description", ""),
-        "Quantity": event.get("quantity", ""),
-        "Unit of Measure": event.get("unit_of_measure", ""),
-        "Event Type (CTE)": event.get("event_type", ""),
-        "Event Date": event_date,
-        "Event Time": event_time,
-        "Location GLN": event.get("location_gln", "") or "",
-        "Location Name": event.get("location_name", "") or "",
-        "Ship From GLN": kdes.get("ship_from_gln", "") or "",
-        "Ship From Name": kdes.get("ship_from_location", "") or "",
-        "Ship To GLN": kdes.get("ship_to_gln", "") or "",
-        "Ship To Name": kdes.get("ship_to_location", kdes.get("receiving_location", "")) or "",
-        "Immediate Previous Source": kdes.get("immediate_previous_source", "") or "",
-        "TLC Source GLN": kdes.get("tlc_source_gln", "") or "",
-        "TLC Source FDA Registration": kdes.get("tlc_source_fda_reg", "") or "",
-        "Source Document": event.get("source", ""),
-        "Record Hash (SHA-256)": event.get("sha256_hash", ""),
-        "Chain Hash": event.get("chain_hash", ""),
+        "Traceability Lot Code (TLC)": sanitize_cell(event.get("traceability_lot_code", "")),
+        "Product Description": sanitize_cell(event.get("product_description", "")),
+        "Quantity": sanitize_cell(event.get("quantity", "")),
+        "Unit of Measure": sanitize_cell(event.get("unit_of_measure", "")),
+        "Event Type (CTE)": sanitize_cell(event.get("event_type", "")),
+        "Event Date": sanitize_cell(event_date),
+        "Event Time": sanitize_cell(event_time),
+        "Location GLN": sanitize_cell(event.get("location_gln", "") or ""),
+        "Location Name": sanitize_cell(event.get("location_name", "") or ""),
+        "Ship From GLN": sanitize_cell(kdes.get("ship_from_gln", "") or ""),
+        "Ship From Name": sanitize_cell(kdes.get("ship_from_location", "") or ""),
+        "Ship To GLN": sanitize_cell(kdes.get("ship_to_gln", "") or ""),
+        "Ship To Name": sanitize_cell(kdes.get("ship_to_location", kdes.get("receiving_location", "")) or ""),
+        "Immediate Previous Source": sanitize_cell(kdes.get("immediate_previous_source", "") or ""),
+        "TLC Source GLN": sanitize_cell(kdes.get("tlc_source_gln", "") or ""),
+        "TLC Source FDA Registration": sanitize_cell(kdes.get("tlc_source_fda_reg", "") or ""),
+        "Source Document": sanitize_cell(event.get("source", "")),
+        "Record Hash (SHA-256)": sanitize_cell(event.get("sha256_hash", "")),
+        "Chain Hash": sanitize_cell(event.get("chain_hash", "")),
     }
 
     # Map named KDE columns
     for kde_key, col_name in _NAMED_KDE_COLUMNS.items():
-        row[col_name] = str(kdes.get(kde_key, "")) if kdes.get(kde_key) else ""
+        raw = kdes.get(kde_key)
+        row[col_name] = sanitize_cell(raw) if raw else ""
 
-    # Remaining KDEs not in named columns → JSON blob
+    # Remaining KDEs not in named columns → JSON blob.
+    # A JSON-encoded string can still begin with ``=`` once a spreadsheet
+    # renders it into a cell, so sanitize the whole blob as well.
     extra_kdes = {k: v for k, v in kdes.items() if k not in _NAMED_KDE_COLUMNS}
-    row["Additional KDEs (JSON)"] = json.dumps(extra_kdes) if extra_kdes else ""
+    row["Additional KDEs (JSON)"] = sanitize_cell(json.dumps(extra_kdes)) if extra_kdes else ""
 
     # FSMA 204 requires "system entry timestamp" — when the record was entered
     # into the traceability system (distinct from when the physical event occurred).
     # This maps to the ingested_at column which defaults to NOW() on INSERT.
-    row["System Entry Timestamp"] = event.get("ingested_at", "") or ""
+    row["System Entry Timestamp"] = sanitize_cell(event.get("ingested_at", "") or "")
 
     return row
 
 
 def _generate_csv(events: list[dict]) -> str:
-    """Generate FDA-compliant CSV from a list of CTE events."""
+    """Generate FDA-compliant CSV from a list of CTE events.
+
+    Uses ``csv.QUOTE_ALL`` so every cell is wrapped in double quotes —
+    a defense-in-depth measure on top of :func:`sanitize_cell` that
+    neutralizes cells containing newlines, quotes, or commas regardless
+    of the reader's field-splitting heuristics (issue #1081).
+    """
     output = io.StringIO()
-    writer = csv.DictWriter(output, fieldnames=FDA_COLUMNS)
+    writer = csv.DictWriter(output, fieldnames=FDA_COLUMNS, quoting=csv.QUOTE_ALL)
     writer.writeheader()
 
     for event in events:
@@ -540,18 +558,26 @@ def _event_to_fda_row_v2(event: dict) -> dict:
                 failure_descriptions.append(f"{name}: {reason}")
             rule_failures_text = "; ".join(failure_descriptions)
 
-    base_row["Compliance Status"] = compliance_status
-    base_row["Rule Failures"] = rule_failures_text
+    # Sanitize compliance fields — ``why_failed`` reasons can include
+    # tenant-controlled KDE values that reach the auditor's spreadsheet.
+    base_row["Compliance Status"] = sanitize_cell(compliance_status)
+    base_row["Rule Failures"] = sanitize_cell(rule_failures_text)
     # Transformation trace metadata (present when query_events_by_tlc expanded via links)
-    base_row["Trace Relationship"] = event.get("trace_relationship", "queried")
-    base_row["Trace Seed TLC"] = event.get("trace_seed_tlc", event.get("traceability_lot_code", ""))
+    base_row["Trace Relationship"] = sanitize_cell(event.get("trace_relationship", "queried"))
+    base_row["Trace Seed TLC"] = sanitize_cell(
+        event.get("trace_seed_tlc", event.get("traceability_lot_code", ""))
+    )
     return base_row
 
 
 def _generate_csv_v2(events: list[dict]) -> str:
-    """Generate FDA-compliant CSV from canonical model events (with compliance columns)."""
+    """Generate FDA-compliant CSV from canonical model events (with compliance columns).
+
+    ``csv.QUOTE_ALL`` is used for the same reason as :func:`_generate_csv`
+    (issue #1081).
+    """
     output = io.StringIO()
-    writer = csv.DictWriter(output, fieldnames=FDA_COLUMNS_V2)
+    writer = csv.DictWriter(output, fieldnames=FDA_COLUMNS_V2, quoting=csv.QUOTE_ALL)
     writer.writeheader()
 
     for event in events:

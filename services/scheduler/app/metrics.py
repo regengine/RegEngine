@@ -66,6 +66,15 @@ if PROMETHEUS_AVAILABLE:
         ["topic", "status"],
     )
 
+    # #1147 — observability for the Kafka emit failure path. Partial
+    # failures (success_count + failure_count in the same batch) are
+    # silent in the logs but visible here; alert on sustained nonzero.
+    KAFKA_EMIT_FAILURES = Counter(
+        "scheduler_kafka_emit_failures_total",
+        "Kafka emission failures (hard exceptions or per-item failures)",
+        ["source_type", "failure_mode"],
+    )
+
     # Circuit breaker metrics
     CIRCUIT_STATE = Gauge(
         "scheduler_circuit_breaker_state",
@@ -145,6 +154,25 @@ class MetricsCollector:
 
         status = "success" if success else "failure"
         KAFKA_EVENTS.labels(topic=topic, status=status).inc()
+
+    def record_kafka_emit_failure(
+        self, source_type: str, failure_mode: str, count: int = 1
+    ) -> None:
+        """Record a Kafka emit failure for alerting (#1147).
+
+        failure_mode values:
+          - "hard_exception" — emit_batch raised ConnectionError / Timeout.
+          - "partial_batch"  — emit_batch returned failures > 0.
+
+        Downstream alerts should fire on rate > 0 sustained for >5min.
+        """
+        if not self.enabled:
+            return
+        if count <= 0:
+            return
+        KAFKA_EMIT_FAILURES.labels(
+            source_type=source_type, failure_mode=failure_mode
+        ).inc(count)
 
     def record_circuit_state(self, name: str, state: str) -> None:
         """Record circuit breaker state.

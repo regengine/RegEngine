@@ -152,7 +152,7 @@ class {vertical_name}SnapshotAdapter:
                     LIMIT 50
                     \"\"\"
                 )
-models = [dict(record['m']) for record in result]
+                models = [dict(record['m']) for record in result]
                 logger.debug(f"Fetched {{len(models)}} models from graph")
                 return models
         except Exception as e:

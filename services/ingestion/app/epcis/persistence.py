@@ -54,6 +54,25 @@ def _allow_in_memory_fallback() -> bool:
     return not _is_production()
 
 
+def _fsma_strict_mode() -> bool:
+    """Return True when FSMA schema validation MUST block persistence (#1239).
+
+    Default: strict in production, strict outside production. This is the
+    regulatory-correctness default — events that fail FSMAEvent schema
+    validation are refused with HTTP 422 rather than silently persisted
+    with only a warning.
+
+    Set ``FSMA_STRICT_MODE=false`` during staging migrations if you
+    absolutely need the legacy advisory behaviour. Even then, failed
+    events are marked ``fsma_validation_status=failed`` so the FDA
+    24-hour export can filter them out.
+    """
+    explicit = os.getenv("FSMA_STRICT_MODE")
+    if explicit is None:
+        return True
+    return explicit.strip().lower() in {"1", "true", "yes", "on", "strict"}
+
+
 def _safe_iso(value: Any) -> str:
     if isinstance(value, datetime):
         if value.tzinfo is None:
@@ -390,16 +409,39 @@ def _ingest_single_event_fallback(event: dict) -> tuple[dict, int]:
     alerts = _compliance_alerts(normalized, kdes)
     alerts.extend(_validate_epcis_glns(normalized))
 
-    # Validate against FSMAEvent Pydantic model before storing
+    # Validate against FSMAEvent Pydantic model before storing.
+    # #1239: in strict mode (default), validation failure is a hard 422 —
+    # the event is NOT persisted. In advisory mode we persist with an
+    # error-severity alert so FDA exports can filter it out.
     fsma_validated = _validate_as_fsma_event(normalized)
     if fsma_validated:
         normalized["fsma_validation_status"] = "passed"
     else:
+        if _fsma_strict_mode():
+            logger.warning(
+                "epcis_fsma_validation_rejected tlc=%s event=%s",
+                normalized.get("tlc"),
+                normalized.get("event_time"),
+            )
+            raise HTTPException(
+                status_code=422,
+                detail={
+                    "error": "fsma_validation_failed",
+                    "message": (
+                        "Event failed FSMAEvent schema validation and was "
+                        "not persisted. Set FSMA_STRICT_MODE=false only for "
+                        "temporary migration windows."
+                    ),
+                },
+            )
         normalized["fsma_validation_status"] = "failed"
         alerts.append({
-            "severity": "warning",
+            "severity": "error",
             "alert_type": "fsma_validation",
-            "message": "Event did not pass FSMAEvent schema validation",
+            "message": (
+                "Event did not pass FSMAEvent schema validation. Excluded "
+                "from FSMA compliance exports by default."
+            ),
         })
 
     stored = {
@@ -442,16 +484,38 @@ def _ingest_single_event_db(tenant_id: str, event: dict) -> tuple[dict, int]:
     alerts.extend(_validate_epcis_glns(normalized))
     kde_map = _build_kde_map(event, normalized, idempotency_key)
 
-    # Validate against FSMAEvent Pydantic model before DB persistence
+    # Validate against FSMAEvent Pydantic model before DB persistence.
+    # #1239: strict mode (default) — raise 422 rather than store a
+    # known-bad event. Advisory mode still stores but with an
+    # error-severity alert so FDA exports can filter it out.
     fsma_validated = _validate_as_fsma_event(normalized, tenant_id)
     if fsma_validated:
         kde_map["fsma_validation_status"] = "passed"
     else:
+        if _fsma_strict_mode():
+            logger.warning(
+                "epcis_fsma_validation_rejected_db tenant=%s tlc=%s",
+                tenant_id, normalized.get("tlc"),
+            )
+            raise HTTPException(
+                status_code=422,
+                detail={
+                    "error": "fsma_validation_failed",
+                    "message": (
+                        "Event failed FSMAEvent schema validation and was "
+                        "not persisted. Set FSMA_STRICT_MODE=false only for "
+                        "temporary migration windows."
+                    ),
+                },
+            )
         kde_map["fsma_validation_status"] = "failed"
         alerts.append({
-            "severity": "warning",
+            "severity": "error",
             "alert_type": "fsma_validation",
-            "message": "Event did not pass FSMAEvent schema validation",
+            "message": (
+                "Event did not pass FSMAEvent schema validation. Excluded "
+                "from FSMA compliance exports by default."
+            ),
         })
 
     event_time = normalized.get("event_time") or datetime.now(timezone.utc).isoformat()

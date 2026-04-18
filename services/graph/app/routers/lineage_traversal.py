@@ -57,12 +57,20 @@ class FactLineageResponse(BaseModel):
 
 # ── Cypher Queries ───────────────────────────────────────────────────────────
 
-# Query to find a fact and all its previous versions via SUPERSEDES chain
+# Query to find a fact and all its previous versions via SUPERSEDES chain.
+# SECURITY (#1256): the variable-length `[:SUPERSEDES*0..50]` traversal
+# must filter tenant on *every* node in the path, not just the start.
+# Without the `ALL(n IN nodes(path) WHERE n.tenant_id = $tenant_id)`
+# predicate, an attacker could reach another tenant's RegulatoryFact
+# via a shared SUPERSEDES chain and read its version history.
 LINEAGE_QUERY = """
 MATCH (current:RegulatoryFact {tlc: $tlc, tenant_id: $tenant_id})
 OPTIONAL MATCH path = (current)-[:SUPERSEDES*0..50]->(older:RegulatoryFact)
+WHERE path IS NULL OR ALL(n IN nodes(path) WHERE n.tenant_id = $tenant_id)
 WITH collect(DISTINCT older) AS all_versions, current
 UNWIND all_versions AS v
+WITH v, current
+WHERE v IS NULL OR v.tenant_id = $tenant_id
 RETURN
     v.tlc AS tlc,
     v.version AS version,
@@ -150,8 +158,27 @@ async def get_fact_lineage(
         # Build version list
         versions = []
         max_version = 0
+        tenant_str = str(tenant_id)
         for record in records:
             props = record.get("all_props", {}) if record.get("all_props") else {}
+
+            # SECURITY (#1256): invariant check — every returned record
+            # must belong to the caller's tenant. If a cross-tenant row
+            # somehow slipped past the Cypher filter, fail loudly rather
+            # than leak.
+            record_tenant = props.get("tenant_id") if props else None
+            if record_tenant not in (None, "", tenant_str):
+                logger.error(
+                    "lineage_tenant_invariant_violation",
+                    tlc=tlc,
+                    expected_tenant=tenant_str,
+                    record_tenant=record_tenant,
+                )
+                raise HTTPException(
+                    status_code=500,
+                    detail="lineage invariant violation: cross-tenant record",
+                )
+
             # Remove internal properties from the properties dict
             display_props = {
                 k: v for k, v in props.items()

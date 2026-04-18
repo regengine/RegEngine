@@ -74,30 +74,9 @@ export interface Industry {
     checklist_count?: number;
 }
 
-// Validation
-export interface ValidationRequest {
-    config: Record<string, unknown>;
-    framework?: string;
-    strict?: boolean;
-}
-
-export interface ValidationResult {
-    valid: boolean;
-    errors: ValidationError[];
-    warnings: ValidationWarning[];
-}
-
-export interface ValidationError {
-    path: string;
-    message: string;
-    code?: string;
-}
-
-export interface ValidationWarning {
-    path: string;
-    message: string;
-    suggestion?: string;
-}
+// The ValidationRequest / ValidationResult / ValidationError /
+// ValidationWarning types were removed on 2026-04-17 (#1203) along with
+// the orphaned compliance POST /validate endpoint.
 
 // Opportunities
 export interface OpportunityArbitrage {
