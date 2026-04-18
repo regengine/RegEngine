@@ -248,16 +248,15 @@ jobs:
           fi
 
   # ──────────────────────────────────────────────
-  # 7. Container Scan (Trivy)
+  # 7. Container Scan (Trivy) — consolidated monolith image
   # ──────────────────────────────────────────────
+  # Scans the single image Railway actually deploys (repo-root Dockerfile).
+  # The per-service images under services/<svc>/ aren't deployed and were
+  # dropping fail-open on the ecosystem's Trivy DB churn. See #1429.
   container-scan:
-    name: Container Scan (Trivy) — ${{ matrix.service }}
+    name: Container Scan (Trivy)
     runs-on: ubuntu-latest
     needs: [secrets, sast, deps]
-    strategy:
-      fail-fast: false
-      matrix:
-        service: [admin, compliance, graph, ingestion, nlp, scheduler]
     steps:
       - uses: actions/checkout@v6
 
@@ -265,16 +264,14 @@ jobs:
         uses: docker/setup-buildx-action@v4
 
       - name: Build image
-        run: |
-          docker build -t regengine-${{ matrix.service }}:ci \
-            -f services/${{ matrix.service }}/Dockerfile .
+        run: docker build -t regengine:ci -f Dockerfile .
 
       - name: Run Trivy
         uses: aquasecurity/trivy-action@0.35.0
         with:
-          image-ref: "regengine-${{ matrix.service }}:ci"
+          image-ref: "regengine:ci"
           format: "json"
-          output: "trivy-${{ matrix.service }}.json"
+          output: "trivy.json"
           severity: "CRITICAL,HIGH"
           exit-code: "1"
 
@@ -282,8 +279,8 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: trivy-${{ matrix.service }}
-          path: trivy-${{ matrix.service }}.json
+          name: trivy
+          path: trivy.json
           retention-days: 90
 
   # ──────────────────────────────────────────────
