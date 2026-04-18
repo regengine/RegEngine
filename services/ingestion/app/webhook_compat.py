@@ -93,25 +93,16 @@ async def ingest_events(
     results: list[EventResult] = []
     accepted = 0
     rejected = 0
-    seen_in_batch: set[str] = set()
+
+    # #1248: in-memory dedup removed. Its key was strictly narrower
+    # than ``compute_idempotency_key`` (no source, no kdes) so it
+    # rejected events the DB would accept, AND it could not catch
+    # cross-request races. Dedup now lives at the DB layer — see
+    # the composite ``(tenant_id, idempotency_key)`` UNIQUE added by
+    # migration v068 and surfaced here via ``store_result.idempotent``.
 
     try:
         for event in payload.events:
-            dedup_key = (
-                f"{event.cte_type.value}|{event.traceability_lot_code}"
-                f"|{event.timestamp}|{event.location_gln or event.location_name or ''}"
-            )
-            if dedup_key in seen_in_batch:
-                results.append(EventResult(
-                    traceability_lot_code=event.traceability_lot_code,
-                    cte_type=event.cte_type.value,
-                    status="rejected",
-                    errors=["Duplicate event in batch"],
-                ))
-                rejected += 1
-                continue
-            seen_in_batch.add(dedup_key)
-
             errors = _validate_event_kdes(event)
             if errors:
                 results.append(EventResult(
@@ -146,10 +137,14 @@ async def ingest_events(
                 )
                 savepoint.commit()
 
+                # #1248: ``idempotent=True`` is a success with distinct
+                # client-observable status. Existing row's hashes are
+                # returned so retry-safety is a first-class signal.
+                event_status = "idempotent" if store_result.idempotent else "accepted"
                 results.append(EventResult(
                     traceability_lot_code=event.traceability_lot_code,
                     cte_type=event.cte_type.value,
-                    status="accepted",
+                    status=event_status,
                     event_id=store_result.event_id,
                     sha256_hash=store_result.sha256_hash,
                     chain_hash=store_result.chain_hash,
