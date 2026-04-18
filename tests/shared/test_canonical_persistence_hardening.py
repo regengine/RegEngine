@@ -302,8 +302,11 @@ class TestParameterizedSQL_Issue1254:
         session.add_rule(r"FROM fsma\.hash_chain", _FakeResult(rows=[]))
 
         store = CanonicalEventStore(session=session, dual_write=False, skip_chain_write=True)
-        evt_a = _make_event(idemp_key="a")
-        evt_b = _make_event(idemp_key="b")
+        # Single-tenant batch invariant (#1265): both events must carry
+        # the same tenant_id, else the writer raises by design.
+        shared_tid = uuid4()
+        evt_a = _make_event(tenant_id=shared_tid, idemp_key="a")
+        evt_b = _make_event(tenant_id=shared_tid, idemp_key="b")
         store.persist_events_batch([evt_a, evt_b])
 
         idemp_calls = [
