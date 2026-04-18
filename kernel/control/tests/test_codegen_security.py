@@ -312,6 +312,46 @@ class TestTestScaffoldsAreAlsoProtected:
 # ---------------------------------------------------------------------------
 
 
+class TestSiblingGeneratorsAreParseable:
+    """graph_adapter + snapshot_adapter_generator had indentation bugs in
+    their emitted source (#1295-style). Regression guard: every generator
+    in ``kernel/control/`` must produce Python that parses."""
+
+    def _meta_for_siblings(self) -> SimpleNamespace:
+        return SimpleNamespace(
+            name="finance",
+            decision_types=["credit_denial"],
+            regulators=["FDA"],
+            regulatory_domains=["FSMA"],
+            scoring_weights={
+                "bias": 0.25,
+                "drift": 0.25,
+                "documentation": 0.25,
+                "regulatory_mapping": 0.25,
+            },
+        )
+
+    def test_graph_nodes_parses(self):
+        from kernel.control.graph_adapter import generate_graph_nodes
+
+        source = generate_graph_nodes(self._meta_for_siblings(), [])
+        ast.parse(source)
+
+    def test_graph_relationships_parses(self):
+        from kernel.control.graph_adapter import generate_graph_relationships
+
+        source = generate_graph_relationships(self._meta_for_siblings(), [])
+        ast.parse(source)
+
+    def test_snapshot_adapter_parses(self):
+        from kernel.control.snapshot_adapter_generator import (
+            generate_snapshot_adapter,
+        )
+
+        source = generate_snapshot_adapter(self._meta_for_siblings(), [])
+        ast.parse(source)
+
+
 class TestCodegenOutputContainsNoUserInjection:
     """Even on the *accepting* path, no user-supplied string should appear
     unquoted in the emitted source at a position that would execute it."""
