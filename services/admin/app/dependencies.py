@@ -54,7 +54,7 @@ async def get_current_user(
     
     user_id = None
     tenant_id = None
-    
+
     # 1. Try Supabase Auth First (Production Path)
     sb = get_supabase()
     if sb:
@@ -64,9 +64,14 @@ async def get_current_user(
             if user_response and user_response.user:
                 sb_user = user_response.user
                 user_id = sb_user.id
-                # user_metadata typically holds the tenant_id or we look it up in our DB map
-                tenant_id = sb_user.user_metadata.get("tenant_id")
-                
+                # SECURITY (#1345): tenant_id MUST come from app_metadata
+                # (service-role-only writable), NEVER from user_metadata
+                # (user-writable via supabase.auth.updateUser). Reading
+                # user_metadata lets a multi-tenant user silently switch
+                # which tenant they act as from the browser.
+                app_meta = getattr(sb_user, "app_metadata", None) or {}
+                tenant_id = app_meta.get("tenant_id")
+
                 # User existence verified at line 101 below (db.get raises if missing)
         except (OSError, TimeoutError, ConnectionError, ValueError, AttributeError) as e:
             logger.warning("supabase_auth_failed", error=str(e))
@@ -97,13 +102,43 @@ async def get_current_user(
             text("SELECT set_config('regengine.user_id', :uid, false)"),
             {"uid": str(user_id)}
         )
-    
+
     user = db.get(UserModel, UUID(user_id))
     if user is None:
         logger.warning("user_not_found_in_db", user_id=user_id)
         raise credentials_exception
-        
+
     logger.info("user_authenticated", user_id=user_id)
+
+    # SECURITY (#1345): if no trusted tenant claim is present, derive from
+    # the DB — but only when there is exactly one active membership. Users
+    # who belong to multiple tenants must have tenant_id written into
+    # app_metadata (or the local JWT) by the server; we refuse to guess.
+    if not tenant_id:
+        active_memberships = db.execute(
+            select(MembershipModel).where(
+                MembershipModel.user_id == UUID(user_id),
+                MembershipModel.is_active == True,  # noqa: E712  (SQLAlchemy needs ==)
+            )
+        ).scalars().all()
+        if len(active_memberships) == 1:
+            tenant_id = str(active_memberships[0].tenant_id)
+            logger.info(
+                "tenant_derived_from_sole_membership",
+                user_id=user_id,
+                tenant_id=tenant_id,
+            )
+        elif len(active_memberships) > 1 and not user.is_sysadmin:
+            logger.warning(
+                "ambiguous_tenant_no_trusted_claim",
+                user_id=user_id,
+                membership_count=len(active_memberships),
+            )
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Tenant selection required — no app_metadata.tenant_id set",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
         
     # Store tenant context in request state or handle via DB session context
     if tenant_id:
