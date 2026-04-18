@@ -49,6 +49,30 @@ class CanonicalEventStore:
         )
 
     # ------------------------------------------------------------------
+    # Per-tenant Chain Serialization (fix #1251)
+    # ------------------------------------------------------------------
+
+    def _acquire_chain_lock(self, tenant_id: str) -> None:
+        """Acquire a per-tenant transaction-scoped advisory lock.
+
+        Two writers inserting events for the same tenant concurrently
+        would otherwise both read the same chain head and compute the
+        same ``next_sequence``, producing duplicate sequence numbers
+        (or a UNIQUE violation if a defense-in-depth constraint is
+        added).  pg_advisory_xact_lock serializes the chain-growth
+        critical section per tenant; the lock is released automatically
+        at COMMIT / ROLLBACK.
+
+        hashtext() returns an int4 which is what pg_advisory_xact_lock
+        expects.  Collisions across tenants are harmless — they just
+        serialize unrelated tenants occasionally, never cross-write.
+        """
+        self.session.execute(
+            text("SELECT pg_advisory_xact_lock(hashtext(:tid))"),
+            {"tid": tenant_id},
+        )
+
+    # ------------------------------------------------------------------
     # Ingestion Run Management
     # ------------------------------------------------------------------
 
@@ -123,7 +147,20 @@ class CanonicalEventStore:
         if not event.sha256_hash:
             event.prepare_for_persistence()
 
-        # --- Idempotency check ---
+        # --- Serialize chain growth per-tenant (fix #1251) ---
+        # A transaction-scoped advisory lock keyed on the tenant_id hash
+        # prevents concurrent persist_event calls from reading the same
+        # chain head and producing duplicate sequence_num entries.  The
+        # lock is released automatically at COMMIT / ROLLBACK.
+        self._acquire_chain_lock(tenant_id)
+
+        # --- Idempotency check (fix #1252) ---
+        # We moved the check into the INSERT via ON CONFLICT .. DO NOTHING
+        # RETURNING event_id so a losing writer in a race does not abort
+        # the transaction with a UNIQUE violation.  If the INSERT returns
+        # zero rows we re-SELECT the existing row and return idempotent.
+        # However we still short-circuit on an obvious pre-existing key
+        # to avoid computing a pointless chain hash when idempotent.
         if event.idempotency_key:
             existing = self.session.execute(
                 text("""
@@ -236,6 +273,9 @@ class CanonicalEventStore:
             return []
 
         tenant_id = str(events[0].tenant_id)
+
+        # --- Serialize chain growth per-tenant (fix #1251) ---
+        self._acquire_chain_lock(tenant_id)
 
         for evt in events:
             if not evt.sha256_hash:
