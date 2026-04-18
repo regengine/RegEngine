@@ -21,12 +21,24 @@ HITL_CONFIDENCE_THRESHOLD = 0.85
 
 
 class CTEType(str, Enum):
-    """Critical Tracking Event Types per FSMA 204."""
+    """Critical Tracking Event Types per FSMA 204.
 
-    SHIPPING = "SHIPPING"
-    RECEIVING = "RECEIVING"
-    TRANSFORMATION = "TRANSFORMATION"
-    CREATION = "CREATION"
+    The seven FDA-defined CTE types from 21 CFR §1.1310 plus CREATION
+    (an internal origin marker for synthesized events). HARVESTING,
+    COOLING, INITIAL_PACKING, and FIRST_LAND_BASED_RECEIVER were
+    missing from this enum before #1103 — which meant the extractor
+    silently fell back to SHIPPING for harvest logs, cooling records,
+    and packing slips, breaking "one step back to the farm".
+    """
+
+    HARVESTING = "HARVESTING"                        # §1.1325 origin
+    COOLING = "COOLING"                              # §1.1330
+    INITIAL_PACKING = "INITIAL_PACKING"              # §1.1335
+    FIRST_LAND_BASED_RECEIVER = "FIRST_LAND_BASED_RECEIVER"  # §1.1325(c)
+    SHIPPING = "SHIPPING"                            # §1.1340
+    RECEIVING = "RECEIVING"                          # §1.1345
+    TRANSFORMATION = "TRANSFORMATION"                # §1.1350
+    CREATION = "CREATION"                            # internal origin
 
 
 class DocumentType(str, Enum):
@@ -35,6 +47,12 @@ class DocumentType(str, Enum):
     BILL_OF_LADING = "BOL"
     INVOICE = "INVOICE"
     PRODUCTION_LOG = "PRODUCTION_LOG"
+    # Added for #1103 — origin-side documents that were previously
+    # classified UNKNOWN and fell back to SHIPPING.
+    HARVEST_LOG = "HARVEST_LOG"
+    COOLING_LOG = "COOLING_LOG"
+    PACKING_SLIP = "PACKING_SLIP"
+    LANDING_REPORT = "LANDING_REPORT"  # first land-based receiver (marine catch)
     UNKNOWN = "UNKNOWN"
 
 
@@ -98,6 +116,31 @@ class KDE:
     tlc_source_fda_reg: Optional[str] = None
     ship_from_gln: Optional[str] = None
     ship_to_gln: Optional[str] = None
+    # #1104 — GTIN is stored separately instead of being glued into
+    # the TLC. The originator-assigned TLC (21 CFR §1.1320) is
+    # preserved verbatim. Same-row pairing is handled by LineItem.gtin.
+    gtin: Optional[str] = None
+    # #1103 — origin-side KDEs for the CTE types that were previously
+    # missing from the extractor pipeline.
+    harvester_identifier: Optional[str] = None
+    field_identifier: Optional[str] = None
+    harvest_date: Optional[str] = None
+    cooling_location: Optional[str] = None
+    cooling_temperature: Optional[str] = None
+    packing_location: Optional[str] = None
+    harvest_location_ref: Optional[str] = None
+    entry_point: Optional[str] = None
+    source_vessel_name: Optional[str] = None
+    # #1123 — when a BOL is split into SHIPPING + RECEIVING, the
+    # RECEIVING half carries a pointer back to the SHIPPING event's
+    # TLC so the two legs of the chain are linkable.
+    prior_source_tlc: Optional[str] = None
+    # #1116 — FTL scoping. ``True`` = product is on the FDA Food
+    # Traceability List; ``False`` = verified non-FTL; ``None`` =
+    # classifier could not decide (caller should surface as gap, not
+    # stamp compliant).
+    is_ftl_covered: Optional[bool] = None
+    ftl_category: Optional[str] = None
 
 
 @dataclass
