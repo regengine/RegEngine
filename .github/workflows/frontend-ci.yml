@@ -177,6 +177,11 @@ jobs:
 
       - name: Preflight — verify secrets and backend are ready
         env:
+          # Production is a single consolidated monolith at this URL
+          # (Dockerfile at repo root → server/main.py, mounts all 6 former
+          # microservice routers). Point the preflight + tests at it so the
+          # health curl actually reaches something instead of localhost:8001.
+          ADMIN_SERVICE_URL: https://regengine-production.up.railway.app
           TEST_USER_EMAIL: ${{ secrets.TEST_USER_EMAIL }}
           TEST_PASSWORD: ${{ secrets.TEST_PASSWORD }}
           JWT_SIGNING_KEY: ${{ secrets.JWT_SIGNING_KEY }}
@@ -190,11 +195,11 @@ jobs:
             echo "::error::Set these in Settings → Secrets → Actions before E2E can pass."
             exit 1
           fi
-          echo "Checking admin service health..."
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 ${ADMIN_SERVICE_URL:-http://localhost:8001}/health || echo "000")
+          echo "Checking admin service health at $ADMIN_SERVICE_URL..."
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "$ADMIN_SERVICE_URL/health" || echo "000")
           if [[ "$STATUS" != "200" ]]; then
             echo "::error::Admin service is unreachable (HTTP $STATUS)."
-            echo "::error::Fix the Railway deployment before E2E can pass: ${ADMIN_SERVICE_URL:-http://localhost:8001}"
+            echo "::error::Fix the Railway deployment before E2E can pass: $ADMIN_SERVICE_URL"
             exit 1
           fi
           echo "All preflight checks passed. Proceeding with E2E tests."
@@ -216,9 +221,14 @@ jobs:
           # causes the browser to make cross-origin requests (CORS blocked) instead
           # of routing through the Next.js proxy rewrites. Individual service URLs
           # are still set so next.config.js rewrites route correctly server-side.
-          INGESTION_SERVICE_URL: http://localhost:8002
-          COMPLIANCE_SERVICE_URL: http://localhost:8003
-          ADMIN_SERVICE_URL: http://localhost:8001
+          #
+          # All three point to the same Railway monolith (root Dockerfile +
+          # server/main.py mounts every former microservice's routers). The
+          # earlier localhost:* defaults required a docker-compose step that
+          # never existed — preflight curled a dead port and bailed with 000.
+          INGESTION_SERVICE_URL: https://regengine-production.up.railway.app
+          COMPLIANCE_SERVICE_URL: https://regengine-production.up.railway.app
+          ADMIN_SERVICE_URL: https://regengine-production.up.railway.app
           TEST_USER_EMAIL: ${{ secrets.TEST_USER_EMAIL }}
           TEST_PASSWORD: ${{ secrets.TEST_PASSWORD }}
           # Supabase env vars intentionally NOT set here.
