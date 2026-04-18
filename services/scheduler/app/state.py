@@ -119,13 +119,27 @@ class StateManager:
         return hashlib.sha256(content.encode("utf-8")).hexdigest()
 
     def is_new(self, source_id: str, content: str) -> bool:
-        """Check if an item is new or has changed.
+        """Check if an item has been seen before.
 
-        Returns True if:
-        - Item has never been seen
-        - Item content has changed since last seen
+        Identity model (as of #1158): an item is identified by its
+        ``source_id`` only. Once an item has been marked seen, it is
+        never treated as new again — even if FDA edits the title,
+        summary, or classification of the recall, the same
+        ``source_id`` (e.g. ``fda_recall:D-0123-2026``) is a
+        duplicate.
+
+        The previous implementation hashed ``title|summary|url`` and
+        treated any change as a new event, which caused duplicate
+        alerts every time FDA corrected a firm name, upgraded a
+        classification (II → I), or edited the product description.
+
+        The ``content`` argument is retained for backwards compatibility
+        with callers that still compute and pass a hash; it is ignored
+        for the has-been-seen determination but still used to refresh
+        ``last_seen_at`` so the cleanup cursor moves forward.
+
+        Returns True only when the source_id has never been stored.
         """
-        content_hash = self.compute_hash(content)
         session = self._get_session()
 
         try:
@@ -134,11 +148,8 @@ class StateManager:
             if existing is None:
                 return True
 
-            if existing.content_hash != content_hash:
-                # Content has changed
-                return True
-
-            # Update last_seen_at even if unchanged
+            # Seen before. Refresh last_seen_at so we track that the
+            # item is still live (keeps retention cleanup honest).
             existing.last_seen_at = datetime.now(timezone.utc)
             session.commit()
             return False
