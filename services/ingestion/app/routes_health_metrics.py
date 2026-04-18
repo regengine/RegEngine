@@ -1,6 +1,13 @@
-"""Health and metrics routes — extracted from routes.py god file.
+"""Health-check route — extracted from routes.py god file.
 
 Part of the routes.py decomposition effort (Finding #8, Ingestion Debug Audit 2026-03-19).
+
+NOTE: ``/metrics`` exposition is installed via
+``shared.observability.fastapi_metrics.install_metrics`` in ``main.py`` —
+don't re-register it here. The shared installer uses
+``prometheus-fastapi-instrumentator`` which adds proper RED metrics and the
+``X-Metrics-Key`` auth guard; the previous hand-rolled endpoint returned 403
+in production, which silenced scraping and broke SLO dashboards (#1325).
 """
 
 from __future__ import annotations
@@ -8,10 +15,7 @@ from __future__ import annotations
 import logging
 import os as _os
 
-from fastapi import APIRouter, Depends, HTTPException
-from shared.metrics_auth import require_metrics_key
-from fastapi.responses import PlainTextResponse
-from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
+from fastapi import APIRouter
 
 from shared.kafka_consumer_base import kafka_health_check
 
@@ -54,15 +58,3 @@ def health() -> dict[str, str]:
         "service": "ingestion-service",
         "kafka": kafka_status,
     }
-
-
-@router.get("/metrics", include_in_schema=False, dependencies=[Depends(require_metrics_key)])
-def metrics() -> PlainTextResponse:
-    """Expose Prometheus metrics (disabled in production)."""
-    _prod = (
-        _os.getenv("ENV", "").lower() == "production"
-        or "pooler.supabase.com" in _os.getenv("DATABASE_URL", "")
-    )
-    if _prod:
-        raise HTTPException(status_code=403, detail="Metrics disabled in production")
-    return PlainTextResponse(generate_latest(), media_type=CONTENT_TYPE_LATEST)

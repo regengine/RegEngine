@@ -27,6 +27,7 @@ from shared.logging_config import configure_logging  # (#556) shared structured 
 from shared.middleware.security import add_security
 from shared.rate_limit import add_rate_limiting
 from shared.observability import add_observability
+from shared.observability.fastapi_metrics import install_metrics
 
 # Initialize standardized logging early — all subsequent log calls are JSON
 configure_logging(service_name="ingestion-service")
@@ -76,6 +77,7 @@ add_observability(app, service_name="ingestion-service")
 from fastapi.middleware.cors import CORSMiddleware
 from shared.cors import get_allowed_origins, should_allow_credentials
 from shared.middleware import TenantContextMiddleware, RequestIDMiddleware
+from shared.observability.correlation import CorrelationIdMiddleware
 from shared.tenant_rate_limiting import TenantRateLimitMiddleware
 
 app.add_middleware(
@@ -83,7 +85,7 @@ app.add_middleware(
     allow_origins=get_allowed_origins(),
     allow_credentials=should_allow_credentials(),
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type", "X-RegEngine-API-Key", "X-Request-ID", "X-Tenant-ID"],
+    allow_headers=["Authorization", "Content-Type", "X-RegEngine-API-Key", "X-Request-ID", "X-Tenant-ID", "X-Correlation-ID"],
 )
 app.add_middleware(RequestIDMiddleware)
 app.add_middleware(TenantContextMiddleware)
@@ -104,6 +106,9 @@ app.add_middleware(IdempotencyMiddleware)
 # Global exception handlers (Sprint 18)
 from shared.error_handling import install_exception_handlers
 install_exception_handlers(app)
+
+# Prometheus /metrics — RED metrics for every route, auth-guarded (#1325)
+install_metrics(app, service_name="ingestion-service")
 
 from shared.auth import validate_auth_config
 validate_auth_config()
