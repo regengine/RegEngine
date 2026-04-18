@@ -178,11 +178,14 @@ def client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
 
 
 def test_export_default_returns_verifiable_zip_package(client: TestClient) -> None:
+    # The fixture event has KDE coverage ~67%, which trips the #1222
+    # gate. Pass ``allow_incomplete=true`` to exercise the happy path.
     response = client.get(
         "/api/v1/fda/export",
         params={
             "tenant_id": "00000000-0000-0000-0000-000000000111",
             "tlc": "TLC-2026-001",
+            "allow_incomplete": "true",
         },
     )
     assert response.status_code == 200
@@ -225,6 +228,8 @@ def test_export_csv_format_still_supported(client: TestClient) -> None:
             "tenant_id": "00000000-0000-0000-0000-000000000111",
             "tlc": "TLC-2026-001",
             "format": "csv",
+            # Bypass the #1222 KDE coverage gate for this legacy test.
+            "allow_incomplete": "true",
         },
     )
     assert response.status_code == 200

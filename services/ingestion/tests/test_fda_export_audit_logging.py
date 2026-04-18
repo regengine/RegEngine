@@ -198,6 +198,9 @@ def test_1205_export_captures_user_id_in_log_export_call(authed_client):
             "tenant_id": "00000000-0000-0000-0000-000000000111",
             "tlc": "TLC-2026-001",
             "format": "csv",
+            # Fixture KDE coverage is below 80% — bypass #1222 gate so
+            # this test keeps exercising the audit-log path.
+            "allow_incomplete": "true",
         },
         headers={"X-Request-ID": "req-42"},
     )
@@ -236,6 +239,7 @@ def test_1205_emits_structured_audit_log_line(authed_client, caplog):
             "tenant_id": "00000000-0000-0000-0000-000000000111",
             "tlc": "TLC-2026-001",
             "format": "csv",
+            "allow_incomplete": "true",
         },
         headers={"X-Request-ID": "req-42", "User-Agent": "pytest-test/1.0"},
     )
@@ -335,6 +339,57 @@ def test_1209_recall_export_accepts_identifier_plus_date_range(authed_client):
     # so the handler returns 404 — not 400. That's still proof that
     # filter validation passed.
     assert resp.status_code in (200, 404)
+
+
+# ---------------------------------------------------------------------------
+# #1222 — KDE coverage gate
+# ---------------------------------------------------------------------------
+
+def test_1222_coverage_below_threshold_returns_409_without_bypass(authed_client):
+    """The fixtures' sample event has ship_to_location missing, which
+    puts KDE coverage below the 80% threshold. A request without
+    ``allow_incomplete=true`` must 409.
+    """
+    resp = authed_client.get(
+        "/api/v1/fda/export",
+        params={
+            "tenant_id": "00000000-0000-0000-0000-000000000111",
+            "tlc": "TLC-2026-001",
+            "format": "csv",
+        },
+    )
+    assert resp.status_code == 409
+    body = resp.json()
+    assert body["detail"]["error"] == "kde_coverage_below_threshold"
+    assert body["detail"]["threshold"] == 0.80
+    # Most importantly: no log_export call was made, so no audit row
+    # was created for a non-compliant export.
+    assert _FakePersistence.captured_calls == []
+
+
+def test_1222_coverage_bypass_allowed_with_explicit_flag(authed_client, caplog):
+    """``allow_incomplete=true`` lets the export proceed, but the
+    bypass is logged at WARNING for ops visibility.
+    """
+    caplog.set_level(logging.WARNING, logger="fda-export")
+    resp = authed_client.get(
+        "/api/v1/fda/export",
+        params={
+            "tenant_id": "00000000-0000-0000-0000-000000000111",
+            "tlc": "TLC-2026-001",
+            "format": "csv",
+            "allow_incomplete": "true",
+        },
+    )
+    assert resp.status_code == 200
+    bypass_records = [
+        r for r in caplog.records
+        if r.name == "fda-export" and r.msg == "fda_export_coverage_gate_bypass"
+    ]
+    assert bypass_records, "expected a coverage_gate_bypass WARNING"
+    rec = bypass_records[0]
+    assert getattr(rec, "user_id", None) == "test-user-key-abc123"
+    assert getattr(rec, "kde_coverage_ratio", 1.0) < 0.80
 
 
 # ---------------------------------------------------------------------------
