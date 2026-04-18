@@ -122,6 +122,14 @@ MERGE (cte)-[:FOR_LOT]->(lot)
 MERGE (cte)-[:OCCURRED_AT]->(facility)
 WITH cte
 UNWIND $obligation_ids AS obligation_id
+// Obligation is a SHARED regulatory catalog (obligation_ids like
+// '21cfr_subpart_s_123' are global, not tenant-specific), so MERGEing on
+// obligation_id alone is intentional. The SATISFIES edges that land on this
+// node DO cross tenant boundaries (tenant A's CTEs and tenant B's CTEs can
+// both point to the same Obligation node). Defense-in-depth: every read that
+// traverses SATISFIES MUST filter by ``cte.tenant_id`` — the CREATE above
+// stamps tenant_id onto every CTEEvent so this predicate is always available.
+// See issue #1395.
 MERGE (obligation:Obligation {obligation_id: obligation_id})
 MERGE (cte)-[:SATISFIES]->(obligation)
 """

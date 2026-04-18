@@ -239,6 +239,35 @@ def test_obligation_shared_catalog_edges_anchored_on_tenant_scoped_cte():
     ), "CTEEvent must be created with tenant_id so downstream SATISFIES traversals can filter by tenant."
 
 
+def test_every_query_with_satisfies_edge_has_tenant_scoped_cte():
+    """CI-style guard for #1395: if any module-level query constant in this
+    file uses the SATISFIES edge, the query MUST also carry a ``tenant_id``
+    reference on the cte side (either in the MATCH pattern as
+    ``{tenant_id: $tenant_id}`` or an explicit ``WHERE cte.tenant_id = ...``).
+
+    Obligation nodes are a shared catalog and cannot enforce tenant isolation
+    themselves; the guarantee is maintained on the cte side.
+    """
+    from app import supplier_graph_sync as module
+
+    for attr_name in dir(module):
+        if not attr_name.endswith("_QUERY"):
+            continue
+        query = getattr(module, attr_name)
+        if not isinstance(query, str) or "SATISFIES" not in query:
+            continue
+        # Either (a) the cte node pattern carries tenant_id, or
+        # (b) a WHERE clause filters cte.tenant_id.
+        cte_has_tenant = bool(
+            re.search(r"(cte|CTEEvent)[^{]*\{[^}]*tenant_id", query)
+            or re.search(r"cte\.tenant_id", query)
+        )
+        assert cte_has_tenant, (
+            f"{attr_name} contains SATISFIES but lacks a tenant_id predicate "
+            f"on the cte side. See issue #1395."
+        )
+
+
 # -----
 # Belt-and-suspenders static scan — every MERGE/MATCH on a tenant-owned label
 # in any of the module-level query constants MUST include tenant_id in its
