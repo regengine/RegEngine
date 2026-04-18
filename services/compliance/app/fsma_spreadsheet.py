@@ -20,6 +20,8 @@ import json
 from datetime import datetime, timezone
 from typing import Any
 
+from .csv_safety import sanitize_cell, sanitize_sequence
+
 # Mandatory FDA 204 spreadsheet columns in required sort order
 FDA_COLUMNS = [
     "event_type",
@@ -116,22 +118,29 @@ def _parse_timestamp(raw: str) -> tuple[str, str]:
 
 
 def _normalise_event(event: dict[str, Any]) -> dict[str, str]:
-    """Map a graph-service event dict to FDA column values."""
+    """Map a graph-service event dict to FDA column values.
+
+    Every returned string passes through :func:`sanitize_cell` so a
+    tenant-controlled free-text KDE cannot carry a spreadsheet formula
+    into the FDA auditor's CSV (issue #1272). This mirrors the
+    ingestion-side fix (issue #1081).
+    """
 
     kdes = event.get("kdes", {})
     event_date_raw = kdes.get("event_date") or event.get("event_date") or ""
     event_date, event_time = _parse_timestamp(event_date_raw)
     if kdes.get("event_time"):
-        event_time = kdes["event_time"]
+        event_time = str(kdes["event_time"])
 
     # Collect named KDE values
     kde_vals = {k: str(kdes.get(k, "")) for k in _NAMED_KDE_KEYS if kdes.get(k)}
 
-    # Extra KDEs -> JSON
+    # Extra KDEs -> JSON. Even a JSON-encoded string can begin with ``=``
+    # once a spreadsheet renders it, so sanitize the serialized blob too.
     extra = {k: v for k, v in kdes.items() if k not in _SKIP_KDE_KEYS and v}
     extra_json = json.dumps(extra, default=str) if extra else ""
 
-    return {
+    row = {
         "event_type": (event.get("type") or event.get("event_type") or "").upper(),
         "event_date": event_date,
         "event_time": event_time,
@@ -162,6 +171,8 @@ def _normalise_event(event: dict[str, Any]) -> dict[str, str]:
         "additional_kdes_json": extra_json,
         "risk_flag": event.get("risk_flag") or "",
     }
+    # Apply CSV-injection sanitization across the board.
+    return {k: sanitize_cell(v) for k, v in row.items()}
 
 
 def generate_fda_csv(
@@ -190,22 +201,38 @@ def generate_fda_csv(
         Complete CSV content ready for streaming to the client.
     """
     buf = io.StringIO()
-    writer = csv.writer(buf)
+    # QUOTE_ALL wraps every cell in double quotes. Combined with the
+    # :func:`sanitize_cell` pass inside :func:`_normalise_event`, this
+    # is a defense-in-depth posture against formula injection and
+    # quoting-heuristic bypass (issue #1272).
+    writer = csv.writer(buf, quoting=csv.QUOTE_ALL)
 
     # --- Metadata header rows ---
-    writer.writerow(["FSMA Section 204 - Sortable Spreadsheet"])
-    writer.writerow(["Generated", datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")])
+    # ``requesting_entity`` is a user-supplied URL query parameter and
+    # ``start_date`` / ``end_date`` are also user-supplied; sanitize
+    # each value before it lands in a spreadsheet cell.
+    writer.writerow(sanitize_sequence(["FSMA Section 204 - Sortable Spreadsheet"]))
+    writer.writerow(sanitize_sequence([
+        "Generated",
+        datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC"),
+    ]))
     if start_date or end_date:
-        writer.writerow(["Date Range", f"{start_date} to {end_date}"])
+        writer.writerow(sanitize_sequence([
+            "Date Range", f"{start_date} to {end_date}",
+        ]))
     if requesting_entity:
-        writer.writerow(["Requesting Entity", requesting_entity])
-    writer.writerow(["Record Count", str(len(events))])
+        writer.writerow(sanitize_sequence([
+            "Requesting Entity", requesting_entity,
+        ]))
+    writer.writerow(sanitize_sequence(["Record Count", str(len(events))]))
     writer.writerow([])  # blank separator
 
-    # --- Column headers ---
-    writer.writerow(FDA_HEADERS)
+    # --- Column headers --- (static strings, but sanitize for symmetry)
+    writer.writerow(sanitize_sequence(FDA_HEADERS))
 
     # --- Data rows (sorted by event_date then event_time) ---
+    # ``_normalise_event`` already applies :func:`sanitize_cell` to every
+    # value, so the column-ordered list here inherits the sanitization.
     normalised = [_normalise_event(e) for e in events]
     normalised.sort(key=lambda r: (r.get("event_date") or "", r.get("event_time") or ""))
 
