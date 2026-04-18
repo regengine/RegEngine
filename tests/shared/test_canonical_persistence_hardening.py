@@ -175,7 +175,61 @@ class TestAdvisoryLock_Issue1251:
         assert params["tid"] == str(evt.tenant_id)
 
 
-# Note: #1262 tests added alongside the supersede fix in the next commit.
+# ---------------------------------------------------------------------------
+# #1262 — supersede uses a single UPDATE (no pre-check race window)
+# ---------------------------------------------------------------------------
+
+
+class TestSupersedeNoPreCheck_Issue1262:
+    def test_supersede_does_not_issue_separate_status_select(self):
+        """No pre-flight ``SELECT status`` on traceability_events: the UPDATE
+        itself filters ``status='active'`` and returning zero rows is the
+        idempotent signal."""
+        session = FakeSession()
+        session.add_rule(r"SELECT event_id, sha256_hash, chain_hash", _FakeResult(rows=[]))
+        session.add_rule(r"FROM fsma\.hash_chain", _FakeResult(rows=[]))
+
+        # Fake the supersede UPDATE returning one row (success)
+        session.add_rule(
+            r"UPDATE fsma\.traceability_events\s+SET status = 'superseded'",
+            _FakeResult(rows=[("active",)]),
+        )
+
+        store = CanonicalEventStore(session=session, dual_write=False, skip_chain_write=True)
+        evt = _make_event()
+        evt.supersedes_event_id = uuid4()
+        store.persist_event(evt)
+
+        # The new code must not issue a `SELECT status FROM fsma.traceability_events`
+        # — that check-then-update pattern is the race this fixes.
+        preselects = [
+            c for c in session.calls
+            if "SELECT status FROM fsma.traceability_events" in c[0].replace("\n", " ")
+        ]
+        assert not preselects, (
+            "race-prone pre-check SELECT must be removed — the UPDATE RETURNING is the source of truth"
+        )
+
+    def test_supersede_already_superseded_is_idempotent(self):
+        """When the UPDATE returns zero rows (target already superseded or
+        missing), persist_event must not raise ValueError — the race-loser
+        simply proceeds without mutating the target row."""
+        session = FakeSession()
+        session.add_rule(r"SELECT event_id, sha256_hash, chain_hash", _FakeResult(rows=[]))
+        session.add_rule(r"FROM fsma\.hash_chain", _FakeResult(rows=[]))
+        # UPDATE RETURNING returns no rows — the row was already superseded
+        session.add_rule(
+            r"UPDATE fsma\.traceability_events\s+SET status = 'superseded'",
+            _FakeResult(rows=[]),
+        )
+
+        store = CanonicalEventStore(session=session, dual_write=False, skip_chain_write=True)
+        evt = _make_event()
+        evt.supersedes_event_id = uuid4()
+
+        # Must not raise
+        result = store.persist_event(evt)
+        assert result.success is True
 
 
 # ---------------------------------------------------------------------------

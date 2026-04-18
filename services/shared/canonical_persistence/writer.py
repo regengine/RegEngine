@@ -219,21 +219,18 @@ class CanonicalEventStore:
                     idempotent=True, errors=[],
                 )
 
-        # --- Mark superseded event ---
+        # --- Mark superseded event (fix #1262) ---
+        # The previous implementation was check-then-update:
+        #   SELECT status ...  then  UPDATE ... WHERE status='active'
+        # Between the SELECT and UPDATE another writer could supersede the
+        # same row, producing a spurious "already superseded" ValueError
+        # for the race-loser even though the intended state change had
+        # already been applied.  We collapse to a single authoritative
+        # UPDATE ... RETURNING; an empty result (target already superseded
+        # or absent for this tenant) is treated as idempotent, not an error.
         if event.supersedes_event_id:
             if event.supersedes_event_id == event.event_id:
                 raise ValueError("Event cannot supersede itself")
-            target_status = self.session.execute(
-                text("""
-                    SELECT status FROM fsma.traceability_events
-                    WHERE event_id = :superseded_id AND tenant_id = :tid
-                """),
-                {"superseded_id": str(event.supersedes_event_id), "tid": tenant_id},
-            ).scalar()
-            if target_status == "superseded":
-                raise ValueError(
-                    f"Cannot supersede event {event.supersedes_event_id}: already superseded"
-                )
             self.session.execute(
                 text("""
                     UPDATE fsma.traceability_events
@@ -241,9 +238,12 @@ class CanonicalEventStore:
                     WHERE event_id = :superseded_id
                       AND tenant_id = :tid
                       AND status = 'active'
+                    RETURNING event_id
                 """),
                 {"superseded_id": str(event.supersedes_event_id), "tid": tenant_id},
-            )
+            ).fetchone()
+            # No rows => target was already superseded (or does not belong
+            # to this tenant).  Both are safe / idempotent outcomes.
 
         # --- Insert hash chain entry ---
         if not self.skip_chain_write:
