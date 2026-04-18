@@ -108,7 +108,14 @@ def test_ingest_events_emits_first_ingest_funnel_event(monkeypatch) -> None:
     }
 
     with TestClient(app) as client:
-        response = client.post("/api/v1/webhooks/ingest", json=payload)
+        # Idempotency-Key header is required by IdempotencyMiddleware on
+        # the ingest endpoint; the funnel test doesn't care about its
+        # value but needs a well-formed request.
+        response = client.post(
+            "/api/v1/webhooks/ingest",
+            json=payload,
+            headers={"Idempotency-Key": "funnel-test"},
+        )
 
     assert response.status_code == 200
     body = response.json()

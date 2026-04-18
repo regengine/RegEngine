@@ -496,8 +496,18 @@ async def ingest_events(
     accepted = 0
     rejected = 0
 
-    # Batch deduplication — detect identical events within the same payload
-    seen_in_batch: set[str] = set()
+    # #1248: in-memory ``seen_in_batch`` removed. It used a strictly
+    # narrower dedup key (omitted ``source`` and ``kdes``) than
+    # ``compute_idempotency_key``, so it rejected events that the DB
+    # dedup would accept, AND it could not catch cross-request races
+    # (two concurrent requests with overlapping events both passed each
+    # other's local set). Dedup now relies on the composite
+    # ``(tenant_id, idempotency_key)`` UNIQUE index + ``ON CONFLICT
+    # DO NOTHING`` in the persistence layer — a single source of truth
+    # that catches both within-request and cross-request duplicates.
+    # Events that match an existing row come back as ``idempotent=True``
+    # from ``store_events_batch`` and are surfaced to the caller as
+    # ``status="idempotent"`` rather than ``"rejected"``.
 
     # Get persistence layer from injected db_session (Depends(get_db_session))
     persistence = None
@@ -520,19 +530,6 @@ async def ingest_events(
         # --- Phase 1: Validate all events, collect valid ones for batch persist ---
         valid_events: list = []  # (event, alerts) tuples
         for event in payload.events:
-            # Batch deduplication — skip identical events in same request
-            dedup_key = f"{event.cte_type.value}|{event.traceability_lot_code}|{event.timestamp}|{event.location_gln or event.location_name or ''}"
-            if dedup_key in seen_in_batch:
-                results.append(EventResult(
-                    traceability_lot_code=event.traceability_lot_code,
-                    cte_type=event.cte_type.value,
-                    status="rejected",
-                    errors=["Duplicate event in batch — same CTE type, TLC, timestamp, and location"],
-                ))
-                rejected += 1
-                continue
-            seen_in_batch.add(dedup_key)
-
             # Validate KDEs
             errors = _validate_event_kdes(event)
 
@@ -576,10 +573,16 @@ async def ingest_events(
                 )
 
                 for store_result, event in zip(store_results, event_objs):
+                    # #1248: an event whose content matched an existing
+                    # row (``idempotent=True``) is a success, not a
+                    # reject. The caller sees ``status="idempotent"``
+                    # and the existing row's hashes — retrying the same
+                    # payload is now safe and observable.
+                    event_status = "idempotent" if store_result.idempotent else "accepted"
                     results.append(EventResult(
                         traceability_lot_code=event.traceability_lot_code,
                         cte_type=event.cte_type.value,
-                        status="accepted",
+                        status=event_status,
                         event_id=store_result.event_id,
                         sha256_hash=store_result.sha256_hash,
                         chain_hash=store_result.chain_hash,

@@ -242,11 +242,21 @@ class WebhookPayload(BaseModel):
 
 
 class EventResult(BaseModel):
-    """Result for a single ingested event."""
+    """Result for a single ingested event.
+
+    status values:
+      - ``"accepted"``   — event was new and has been persisted
+      - ``"idempotent"`` — event's content matched a previously-persisted
+                           event (same ``idempotency_key``); the returned
+                           ``event_id`` / ``sha256_hash`` / ``chain_hash``
+                           are the existing row's values. Clients should
+                           treat this as a success (#1248)
+      - ``"rejected"``   — validation failed; see ``errors``
+    """
 
     traceability_lot_code: str
     cte_type: str
-    status: str  # "accepted" or "rejected"
+    status: str  # "accepted" | "idempotent" | "rejected"
     event_id: Optional[str] = None
     sha256_hash: Optional[str] = None
     chain_hash: Optional[str] = None
