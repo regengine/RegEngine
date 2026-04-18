@@ -19,13 +19,22 @@ The demo dataset includes regulatory documents from three jurisdictions:
 
 ### 1. Ensure RegEngine is running
 
-```bash
-# For local development
-docker-compose up -d
+Production uses the hosted Railway monolith at
+`https://regengine-production.up.railway.app`. For local development:
 
-# Wait for services to be healthy
+```bash
+# Start local Postgres (only infra dep for local dev)
+docker compose -f docker-compose.dev.yml up -d
+
+# Start the consolidated backend monolith
+uvicorn server.main:app --reload --port 8000
+
+# Seed demo API keys
 bash scripts/init-demo-keys.sh
 ```
+
+See [`docs/architecture/CONSOLIDATION.md`](../docs/architecture/CONSOLIDATION.md)
+for the one-process architecture context.
 
 ### 2. Load demo data
 

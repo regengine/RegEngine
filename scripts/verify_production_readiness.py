@@ -7,7 +7,6 @@ This script verifies that all critical production-ready fixes are in place:
 2. Correlation ID middleware is implemented
 3. Rate limiting enforces Redis in production
 4. Railway deployment workflow is configured
-5. Production Docker Compose configuration exists
 
 Usage:
     python scripts/verify_production_readiness.py
@@ -69,7 +68,9 @@ class ProductionReadinessVerifier:
             self.check_correlation_middleware,
             self.check_rate_limit_security,
             self.check_railway_deployment_workflow,
-            self.check_docker_compose_prod,
+            # docker-compose.prod.yml check removed — prod runs as a
+            # consolidated Railway monolith built from the root Dockerfile,
+            # not a docker-compose deploy. See CONSOLIDATION.md / #1429.
         ]
 
         for check in checks:
@@ -321,64 +322,11 @@ class ProductionReadinessVerifier:
                 f"Error reading deployment workflow: {e}",
             )
 
-    def check_docker_compose_prod(self) -> VerificationResult:
-        """Verify production Docker Compose configuration exists."""
-        name = "Production Docker Compose Configuration"
-        file_path = self.repo_root / "docker-compose.prod.yml"
-
-        if not file_path.exists():
-            return VerificationResult(
-                name,
-                False,
-                "Production Docker Compose file not found",
-                f"Expected: {file_path}",
-            )
-
-        try:
-            with open(file_path, "r") as f:
-                content = f.read()
-
-            # Check for critical production features
-            required_features = [
-                ("REGENGINE_ENV.*production", "Production environment flag"),
-                ("resources:", "Resource limits"),
-                ("limits:", "CPU/Memory limits"),
-                (r"\$\{.*:\?error\}", "Required environment variables"),
-                ("REDIS_URL", "Redis configuration"),
-            ]
-
-            missing = []
-            found_features = []
-            for pattern, description in required_features:
-                if re.search(pattern, content):
-                    found_features.append(description)
-                else:
-                    missing.append(description)
-
-            if len(found_features) >= 4:
-                # Count services with resource limits
-                services_with_limits = len(re.findall(r'limits:\s*\n\s*cpus:', content))
-
-                return VerificationResult(
-                    name,
-                    True,
-                    f"Production Docker Compose is properly configured",
-                    f"{services_with_limits} services with resource limits, all secrets required",
-                )
-            else:
-                return VerificationResult(
-                    name,
-                    False,
-                    "Incomplete production Docker Compose configuration",
-                    f"Missing features: {', '.join(missing)}",
-                )
-
-        except Exception as e:
-            return VerificationResult(
-                name,
-                False,
-                f"Error reading Docker Compose config: {e}",
-            )
+    # check_docker_compose_prod removed — production no longer uses a
+    # docker-compose.prod.yml. It's a consolidated Railway monolith built
+    # from the root Dockerfile (see CONSOLIDATION.md, railway.toml,
+    # server/main.py). Any future "is this deploy ready" check should run
+    # against the root Dockerfile or the Railway API, not a compose file.
 
 
 def main():
