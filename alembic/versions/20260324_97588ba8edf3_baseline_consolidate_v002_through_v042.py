@@ -30,8 +30,12 @@ down_revision: Union[str, Sequence[str], None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
-# Path to the legacy Flyway-style migration files
-_MIGRATIONS_DIR = Path(__file__).resolve().parents[2] / "migrations"
+# Path to the legacy Flyway-style migration files.
+# Previously these lived in the top-level /migrations/ directory, which was
+# removed in commit f3f385bf. The files were relocated to alembic/sql/ so a
+# fresh `alembic upgrade head` can bootstrap without a missing-file error
+# (see issue #1187). The files themselves are unchanged.
+_MIGRATIONS_DIR = Path(__file__).resolve().parents[1] / "sql"
 
 # Ordered list of legacy SQL files to apply
 _SQL_FILES = [

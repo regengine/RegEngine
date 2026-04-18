@@ -30,8 +30,10 @@ down_revision: Union[str, Sequence[str], None] = '97588ba8edf3'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
-# Path to the migration files
-_MIGRATIONS_DIR = Path(__file__).resolve().parents[2] / "migrations"
+# Path to the migration files.
+# Previously /migrations/ (top-level); moved to alembic/sql/ after removal
+# in commit f3f385bf (see issue #1187). SQL content unchanged.
+_MIGRATIONS_DIR = Path(__file__).resolve().parents[1] / "sql"
 
 # Ordered list of SQL files to apply
 _SQL_FILES = [
