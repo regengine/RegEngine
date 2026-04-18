@@ -151,6 +151,12 @@ export default function LoginPage() {
         setIsLoading(true);
         setError(null);
 
+        // #1077 Snapshot the error param that was present when this attempt
+        // started. Rapid retries can cause a late success-handler to fire
+        // after the URL has been re-decorated with a newer ?error= -- only
+        // strip the param we saw, not whatever is currently there.
+        const attemptErrorParam = searchParams.get('error');
+
         try {
             const response = await apiClient.login(email, password);
 
@@ -205,13 +211,22 @@ export default function LoginPage() {
                 return;
             }
 
-            // Clear any error params (e.g. ?error=session_expired) left by
-            // middleware so the redirect useEffect doesn't block navigation
-            // after a successful re-login.
-            const url = new URL(window.location.href);
-            if (url.searchParams.has('error')) {
-                url.searchParams.delete('error');
-                router.replace(url.pathname + url.search);
+            // Clear the specific error param that was present when this
+            // attempt started (e.g. ?error=session_expired from middleware)
+            // so the redirect useEffect doesn't block navigation after a
+            // successful re-login.
+            //
+            // #1077: Only strip the snapshotted value, not whatever is
+            // currently on the URL. In a rapid retry scenario, attempt #1's
+            // success handler firing after attempt #2 wrote a fresh
+            // ?error=... would otherwise erase the new error and leave the
+            // user staring at a blank form with no feedback.
+            if (attemptErrorParam) {
+                const url = new URL(window.location.href);
+                if (url.searchParams.get('error') === attemptErrorParam) {
+                    url.searchParams.delete('error');
+                    router.replace(url.pathname + url.search);
+                }
             }
 
             // Ensure the middleware picks up the newly-set cookie before
