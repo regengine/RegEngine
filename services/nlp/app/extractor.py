@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 import regex as re
 
@@ -33,6 +33,21 @@ UNIT_NORMALIZATION = {
 
 
 def extract_entities(text: str) -> List[Dict]:
+    """Extract entities from raw text.
+
+    Args:
+        text: Document text. ``None`` is rejected with a ``TypeError`` so the
+            caller cannot silently treat a missing document as "processed OK,
+            nothing to extract" (see #1274).
+    """
+
+    if text is None:
+        raise TypeError("extract_entities received None; caller must pass a str")
+    if not isinstance(text, str):
+        raise TypeError(
+            f"extract_entities requires str, got {type(text).__name__}"
+        )
+
     ents: List[Dict] = []
     for match in OBLIGATION_PATTERN.finditer(text):
         start_sentence = max(text.rfind(".", 0, match.start()) + 1, 0)
@@ -125,8 +140,20 @@ def extract_fsma_facts(text: str) -> List[Dict]:
         start = max(0, match.start() - context_window_size)
         end = min(len(text), match.end() + context_window_size)
         context = text[start:end].lower()
-        
-        if "compliance date" in context or "enforcement" in context:
+
+        cue_distance: Optional[int] = None
+        for cue in ("compliance date", "enforcement"):
+            cue_idx = context.find(cue)
+            if cue_idx != -1:
+                abs_cue = start + cue_idx
+                # Minimum distance from the cue to either end of the match
+                dist = min(
+                    abs(match.start() - abs_cue),
+                    abs(match.end() - abs_cue),
+                )
+                cue_distance = dist if cue_distance is None else min(cue_distance, dist)
+
+        if cue_distance is not None:
             facts.append({
                 "type": "REGULATORY_DATE",
                 "text": match.group(0),
@@ -136,8 +163,15 @@ def extract_fsma_facts(text: str) -> List[Dict]:
                     "key": "Compliance Date",
                     "value": match.group(0),
                     "context": "FDA enforcement posture",
-                    "provenance": "FSMA Rule Text"
+                    # Provenance is hint-only; downstream scoring must not
+                    # trust this label unless the ingestion pipeline signed
+                    # the document (#1206).
+                    "provenance": "FSMA Rule Text",
+                    # Record the proximity distance so the scorer can reward
+                    # tighter matches. Previously all matches were rewarded
+                    # equally (100-char window).
+                    "context_distance": cue_distance,
                 }
             })
-            
+
     return facts
