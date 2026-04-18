@@ -62,7 +62,7 @@ describe('LoginPage', () => {
     const mockSearchParamGet = vi.fn();
 
     // Track the current auth state so mockLogin can trigger user update
-    let authState: { user: any; login: any; isHydrated: boolean };
+    let authState: { user: any; login: any; isHydrated: boolean; clearCredentials?: any };
     const mockLogin = vi.fn().mockImplementation(async (_token: string, user: any, _tenantId?: string) => {
         // Simulate what the real login does: update user state
         authState.user = user;
