@@ -124,6 +124,15 @@ class RegulatoryEngine:
             (ObligationEvaluation)-[:FOR_DECISION]->(Decision)
             (ObligationEvaluation)-[:AGAINST_OBLIGATION]->(RegulatoryObligation)
 
+        Hardening (#1326):
+
+        * Single ``UNWIND``-based Cypher inside a managed
+          ``session.execute_write`` transaction — O(1) round-trips instead of
+          O(3N), atomic on connection failure.
+        * Both the Decision and RegulatoryObligation MATCH clauses now
+          filter on ``tenant_id`` so a cross-tenant id collision cannot
+          stitch an evaluation into the wrong subgraph.
+
         Args:
             result: The evaluation result to persist.
             tenant_id: Tenant identifier for cross-tenant isolation.
@@ -132,76 +141,74 @@ class RegulatoryEngine:
             logger.warning("No graph client configured, skipping persistence")
             return
 
+        if not result.obligation_matches:
+            # Nothing to persist; avoid an empty UNWIND round-trip.
+            return
+
+        matches_payload = [
+            {
+                "obligation_id": m.obligation_id,
+                "met": m.met,
+                "missing_evidence": list(m.missing_evidence),
+                "risk_score": m.risk_score,
+            }
+            for m in result.obligation_matches
+        ]
+
+        cypher = """
+        UNWIND $matches AS m
+        CREATE (oe:ObligationEvaluation {
+            evaluation_id: $evaluation_id,
+            tenant_id: $tenant_id,
+            vertical: $vertical,
+            decision_id: $decision_id,
+            obligation_id: m.obligation_id,
+            met: m.met,
+            missing_evidence: m.missing_evidence,
+            evaluated_at: datetime($evaluated_at),
+            risk_score: m.risk_score
+        })
+        WITH oe, m
+        OPTIONAL MATCH (d:Decision {decision_id: $decision_id, tenant_id: $tenant_id})
+        FOREACH (_ IN CASE WHEN d IS NOT NULL THEN [1] ELSE [] END |
+            MERGE (oe)-[:FOR_DECISION]->(d)
+        )
+        WITH oe, m
+        OPTIONAL MATCH (o:RegulatoryObligation {obligation_id: m.obligation_id, tenant_id: $tenant_id})
+        FOREACH (_ IN CASE WHEN o IS NOT NULL THEN [1] ELSE [] END |
+            MERGE (oe)-[:AGAINST_OBLIGATION]->(o)
+        )
+        """
+
+        params = {
+            "matches": matches_payload,
+            "evaluation_id": result.evaluation_id,
+            "tenant_id": tenant_id,
+            "vertical": result.vertical,
+            "decision_id": result.decision_id,
+            "evaluated_at": result.timestamp.isoformat(),
+        }
+
+        def _write(tx):
+            tx.run(cypher, **params)
+
         try:
             with self.graph.session() as session:
-                for match in result.obligation_matches:
-                    # One node per obligation match — each carries its own
-                    # obligation_id, met status, risk score and missing evidence.
-                    session.run(
-                        """
-                        CREATE (oe:ObligationEvaluation {
-                            evaluation_id: $evaluation_id,
-                            tenant_id: $tenant_id,
-                            vertical: $vertical,
-                            decision_id: $decision_id,
-                            obligation_id: $obligation_id,
-                            met: $met,
-                            missing_evidence: $missing_evidence,
-                            evaluated_at: datetime($evaluated_at),
-                            risk_score: $risk_score
-                        })
-                        """,
-                        evaluation_id=result.evaluation_id,
-                        tenant_id=tenant_id,
-                        vertical=result.vertical,
-                        decision_id=result.decision_id,
-                        obligation_id=match.obligation_id,
-                        met=match.met,
-                        missing_evidence=match.missing_evidence,
-                        evaluated_at=result.timestamp.isoformat(),
-                        risk_score=match.risk_score,
-                    )
-
-                    # Link to Decision node if it exists in the graph
-                    if result.decision_id:
-                        session.run(
-                            """
-                            MATCH (oe:ObligationEvaluation {
-                                evaluation_id: $evaluation_id,
-                                tenant_id: $tenant_id,
-                                obligation_id: $obligation_id
-                            })
-                            MATCH (d:Decision {decision_id: $decision_id})
-                            MERGE (oe)-[:FOR_DECISION]->(d)
-                            """,
-                            evaluation_id=result.evaluation_id,
-                            tenant_id=tenant_id,
-                            obligation_id=match.obligation_id,
-                            decision_id=result.decision_id,
-                        )
-
-                    # Link to the canonical RegulatoryObligation node if present
-                    session.run(
-                        """
-                        MATCH (oe:ObligationEvaluation {
-                            evaluation_id: $evaluation_id,
-                            tenant_id: $tenant_id,
-                            obligation_id: $obligation_id
-                        })
-                        MATCH (o:RegulatoryObligation {obligation_id: $obligation_id})
-                        MERGE (oe)-[:AGAINST_OBLIGATION]->(o)
-                        """,
-                        evaluation_id=result.evaluation_id,
-                        tenant_id=tenant_id,
-                        obligation_id=match.obligation_id,
-                    )
+                # ``execute_write`` wraps the body in a managed transaction
+                # with automatic retry on transient errors — so a mid-batch
+                # connection drop either lands everything or nothing.
+                if hasattr(session, "execute_write"):
+                    session.execute_write(_write)
+                else:  # pragma: no cover - test doubles
+                    session.run(cypher, **params)
 
                 logger.info(
-                    f"Persisted evaluation {result.evaluation_id} to Neo4j "
-                    f"({len(result.obligation_matches)} obligation nodes)"
+                    "persisted evaluation %s to Neo4j (%d obligation nodes)",
+                    result.evaluation_id,
+                    len(result.obligation_matches),
                 )
         except Exception as e:
-            logger.error(f"Failed to persist evaluation to graph: {e}")
+            logger.error("Failed to persist evaluation to graph: %s", e)
     
     def get_coverage_report(self, vertical: str = "food_beverage", tenant_id: str = "") -> Dict[str, Any]:
         """
