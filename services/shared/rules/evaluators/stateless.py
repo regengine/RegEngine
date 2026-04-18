@@ -9,6 +9,7 @@ from typing import Any, Dict
 
 from shared.rules.types import RuleDefinition, RuleEvaluationResult
 from shared.rules.utils import get_nested_value
+from shared.rules.identifiers import is_valid_gln, is_valid_gtin
 from shared.rules.safe_regex import (
     INVALID_PATTERN,
     TIMEOUT,
@@ -206,9 +207,118 @@ def evaluate_multi_field_presence(
     )
 
 
+def evaluate_gs1_identifier(
+    event_data: Dict[str, Any],
+    logic: Dict[str, Any],
+    rule: RuleDefinition,
+) -> RuleEvaluationResult:
+    """Validate a GS1 identifier (GLN or GTIN) with a proper mod-10 check.
+
+    The legacy ``field_format`` path validated GLNs with a regex
+    ``^\\d{13}$|^[^0-9].*$|^$`` that passed empty strings and any
+    non-numeric value (#1357). This evaluator enforces:
+
+      - exactly 13 (GLN) or 8/12/13/14 (GTIN) numeric digits,
+      - a matching GS1 mod-10 check digit.
+
+    Presence semantics are controlled via ``params.condition``:
+
+        required         — field MUST be present AND valid (default).
+        required_if_present — missing field is a pass; if present, must be valid.
+
+    Identifier kind is selected via ``params.kind`` (``"gln"`` | ``"gtin"``).
+    Default is ``"gln"`` to match existing rule definitions.
+    """
+    field_path = logic.get("field", "")
+    params = logic.get("params", {}) or {}
+    kind = str(params.get("kind", "gln")).lower()
+    condition = str(params.get("condition", "required")).lower()
+    value = get_nested_value(event_data, field_path)
+
+    evidence = [{
+        "field": field_path,
+        "value": str(value)[:200] if value is not None else None,
+        "expected_identifier": kind,
+        "condition": condition,
+    }]
+
+    # Presence gate. required_if_present treats missing as a pass; the
+    # "field must be present" constraint belongs in a separate
+    # field_presence rule so the two concerns don't tangle.
+    is_missing = value is None or (isinstance(value, str) and value.strip() == "")
+    if is_missing:
+        if condition == "required_if_present":
+            evidence[0]["check"] = "absent_ok"
+            return RuleEvaluationResult(
+                rule_id=rule.rule_id, rule_version=rule.rule_version,
+                rule_title=rule.title, severity=rule.severity,
+                result="pass", evidence_fields_inspected=evidence,
+                citation_reference=rule.citation_reference, category=rule.category,
+            )
+        # required — missing is a fail.
+        return RuleEvaluationResult(
+            rule_id=rule.rule_id, rule_version=rule.rule_version,
+            rule_title=rule.title, severity=rule.severity,
+            result="fail",
+            why_failed=rule.failure_reason_template.format(
+                field_name=field_path.split(".")[-1],
+                field_path=field_path,
+                citation=rule.citation_reference or "GS1 General Specifications §3.4.2",
+                event_type=event_data.get("event_type", "unknown"),
+            ),
+            evidence_fields_inspected=evidence,
+            citation_reference=rule.citation_reference,
+            remediation_suggestion=rule.remediation_suggestion,
+            category=rule.category,
+        )
+
+    validator = is_valid_gln if kind == "gln" else is_valid_gtin
+    valid = validator(str(value))
+    evidence[0]["valid"] = valid
+
+    if valid:
+        return RuleEvaluationResult(
+            rule_id=rule.rule_id, rule_version=rule.rule_version,
+            rule_title=rule.title, severity=rule.severity,
+            result="pass", evidence_fields_inspected=evidence,
+            citation_reference=rule.citation_reference, category=rule.category,
+        )
+
+    # Identify the specific reason for the fail message — "not 13 digits"
+    # vs "check digit mismatch" is useful for tenants debugging bad data.
+    s = str(value)
+    expected_len = 13 if kind == "gln" else "8/12/13/14"
+    if kind == "gln":
+        length_ok = len(s) == 13
+    else:
+        length_ok = len(s) in {8, 12, 13, 14}
+    if not s.isdigit():
+        reason_detail = "value is not numeric"
+    elif not length_ok:
+        reason_detail = f"expected {expected_len} digits, got {len(s)}"
+    else:
+        reason_detail = "check digit mismatch"
+
+    return RuleEvaluationResult(
+        rule_id=rule.rule_id, rule_version=rule.rule_version,
+        rule_title=rule.title, severity=rule.severity,
+        result="fail",
+        why_failed=(
+            f"{field_path.split('.')[-1]} value '{s[:50]}' is not a valid "
+            f"{kind.upper()} — {reason_detail} "
+            f"({rule.citation_reference or 'GS1 General Specifications §3.4.2'})."
+        ),
+        evidence_fields_inspected=evidence,
+        citation_reference=rule.citation_reference,
+        remediation_suggestion=rule.remediation_suggestion,
+        category=rule.category,
+    )
+
+
 # Evaluator dispatch — stateless (3-arg: event_data, logic, rule)
 EVALUATORS = {
     "field_presence": evaluate_field_presence,
     "field_format": evaluate_field_format,
     "multi_field_presence": evaluate_multi_field_presence,
+    "gs1_identifier": evaluate_gs1_identifier,
 }

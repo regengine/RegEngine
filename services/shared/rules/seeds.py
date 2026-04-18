@@ -254,20 +254,23 @@ FSMA_RULE_SEEDS: List[Dict[str, Any]] = [
     },
     # --- Identifier Format Rules ---
     {
+        # #1357 — the legacy regex `^\d{13}$|^[^0-9].*$|^$` accepted empty
+        # strings and any non-numeric value. Replaced with the
+        # `gs1_identifier` evaluator which enforces 13 digits AND the
+        # GS1 mod-10 check digit per ISO/IEC 15420.
         "title": "GLN Format Validation",
-        "description": "If a GLN is provided, it must be exactly 13 digits with valid check digit",
+        "description": "If a GLN is provided, it must be exactly 13 digits with a valid GS1 check digit",
         "severity": "warning",
         "category": "identifier_format",
         "applicability_conditions": {"cte_types": [], "ftl_scope": ["ALL"]},
         "citation_reference": "GS1 General Specifications \u00a73.4.2",
         "evaluation_logic": {
-            "type": "field_format",
+            "type": "gs1_identifier",
             "field": "from_facility_reference",
-            "condition": "regex_if_present",
-            "params": {"pattern": r"^\d{13}$|^[^0-9].*$|^$"},
+            "params": {"kind": "gln", "condition": "required_if_present"},
         },
-        "failure_reason_template": "Facility GLN '{field_name}' is not a valid 13-digit GS1 identifier",
-        "remediation_suggestion": "Verify the GLN is exactly 13 digits with a valid GS1 check digit",
+        "failure_reason_template": "Facility GLN '{field_name}' is not a valid 13-digit GS1 identifier with correct mod-10 check digit",
+        "remediation_suggestion": "Verify the GLN is exactly 13 digits and the 13th digit matches the GS1 mod-10 checksum of the first 12",
     },
     # --- Lot Linkage Rules ---
     {
