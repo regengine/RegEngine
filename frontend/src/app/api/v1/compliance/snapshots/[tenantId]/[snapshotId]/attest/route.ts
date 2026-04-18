@@ -1,4 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
+import {
+    requireProxyAuth,
+    validateProxySession,
+    getServerApiKey,
+    getAdminMasterKey,
+    validateUuid,
+} from '@/lib/api-proxy';
 
 function getComplianceUrl(): string {
     const url = process.env.COMPLIANCE_SERVICE_URL || process.env.NEXT_PUBLIC_API_BASE_URL;
@@ -22,6 +29,14 @@ export async function POST(
     request: NextRequest,
     { params }: Props
 ) {
+    // Defense-in-depth: reject requests with no auth credentials before proxying
+    const authError = requireProxyAuth(request);
+    if (authError) return authError;
+
+    // Validate Supabase session tokens (expired/revoked sessions get 401)
+    const sessionError = await validateProxySession(request);
+    if (sessionError) return sessionError;
+
     if (!COMPLIANCE_URL) {
         return NextResponse.json(
             { error: 'COMPLIANCE_SERVICE_URL not configured' },
@@ -29,18 +44,35 @@ export async function POST(
         );
     }
 
-    const { tenantId, snapshotId } = await params;
+    const { tenantId: rawTenantId, snapshotId: rawSnapshotId } = await params;
+    // Validate UUIDs before interpolating into the upstream URL.
+    const tenantId = validateUuid(rawTenantId);
+    const snapshotId = validateUuid(rawSnapshotId);
+    if (!tenantId || !snapshotId) {
+        return NextResponse.json(
+            { error: 'Invalid tenant or snapshot identifier' },
+            { status: 400 },
+        );
+    }
     const body = await request.json();
+
+    // Build auth headers. Prefer the server-side REGENGINE_API_KEY (see
+    // getServerApiKey). Fall back to ADMIN_MASTER_KEY when present. The
+    // previous `|| 'admin'` literal was a hardcoded credential that would
+    // leak in logs and could match a default backend config — never send
+    // a literal placeholder as an API key.
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    const apiKey = getServerApiKey() ?? getAdminMasterKey();
+    if (apiKey) {
+        headers['X-RegEngine-API-Key'] = apiKey;
+    }
 
     try {
         const response = await fetch(
             `${COMPLIANCE_URL}/v1/compliance/snapshots/${tenantId}/${snapshotId}/attest`,
             {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-RegEngine-API-Key': process.env.ADMIN_MASTER_KEY || 'admin',
-                },
+                headers,
                 body: JSON.stringify(body),
             }
         );

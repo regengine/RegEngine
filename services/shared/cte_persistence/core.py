@@ -27,8 +27,9 @@ Usage:
 
 from __future__ import annotations
 
+import json
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple
 from uuid import uuid4
 
@@ -39,6 +40,102 @@ from .models import StoreResult, ChainVerification, MerkleVerification
 from .hashing import compute_event_hash, compute_chain_hash, compute_idempotency_key
 
 logger = logging.getLogger("cte-persistence")
+
+
+# ---------------------------------------------------------------------------
+# Timestamp Validation (fix #1308)
+# ---------------------------------------------------------------------------
+
+# Clock-skew tolerance for "future" events: small positive offsets can legitimately
+# occur across machines whose clocks aren't perfectly in sync (NTP drift, laptop
+# sleep, etc.).  Anything beyond this is rejected as a data-quality error.
+_FUTURE_SKEW_TOLERANCE = timedelta(minutes=5)
+
+
+def _parse_timestamp(value: Any, *, field: str) -> datetime:
+    """Parse an ISO-8601 timestamp into a timezone-aware UTC datetime.
+
+    Rejects:
+        * None, empty strings, non-string inputs
+        * Unparseable formats
+        * Naive (no-timezone) datetimes — FSMA records must be
+          timezone-unambiguous to support the 24-hour notification rule.
+        * Timestamps more than _FUTURE_SKEW_TOLERANCE in the future —
+          these almost always indicate caller bugs or data exfiltration
+          attempts rather than legitimate forward-dated events.
+
+    Does NOT reject very-old timestamps — legacy backfill is a legitimate
+    use case and the regulatory 2-year retention lower bound is enforced
+    at query time, not at ingest.
+
+    Returns a datetime normalized to UTC.
+    """
+    if value is None or (isinstance(value, str) and not value.strip()):
+        raise ValueError(f"{field} is required and must be an ISO-8601 timestamp")
+
+    if isinstance(value, datetime):
+        dt = value
+    elif isinstance(value, str):
+        # Accept trailing "Z" for UTC by normalizing to +00:00 first.
+        candidate = value.strip().replace("Z", "+00:00")
+        try:
+            dt = datetime.fromisoformat(candidate)
+        except ValueError as exc:
+            raise ValueError(
+                f"{field} is not a valid ISO-8601 timestamp: {value!r}"
+            ) from exc
+    else:
+        raise ValueError(
+            f"{field} must be a string or datetime, got {type(value).__name__}"
+        )
+
+    if dt.tzinfo is None:
+        raise ValueError(
+            f"{field} must be timezone-aware (got naive datetime: {value!r}). "
+            "FSMA records require an unambiguous UTC offset."
+        )
+
+    dt = dt.astimezone(timezone.utc)
+
+    now_utc = datetime.now(timezone.utc)
+    if dt > now_utc + _FUTURE_SKEW_TOLERANCE:
+        raise ValueError(
+            f"{field} is in the future beyond the allowed skew tolerance: "
+            f"{dt.isoformat()} (now={now_utc.isoformat()})"
+        )
+    return dt
+
+
+# ---------------------------------------------------------------------------
+# KDE Value Serialization (fix #1311)
+# ---------------------------------------------------------------------------
+
+def _jsonify_kde(value: Any) -> str:
+    """Serialize a KDE value to JSON text suitable for ``::jsonb`` cast.
+
+    fsma.cte_kdes.kde_value is JSONB; storing ``str(value)`` produced
+    Python repr for dicts (``"{'gln': '...'}"``), which is not JSON
+    and cannot be round-tripped.  We emit proper JSON:
+
+        - dict / list / bool / None / int / float  → json.dumps
+        - str (already a scalar)                   → json.dumps(str)
+                                                     (so it becomes "..."
+                                                     rather than a bare
+                                                     token the parser
+                                                     would reject)
+        - anything else                            → json.dumps(str(value))
+                                                     as a best-effort
+                                                     fallback; the cast
+                                                     will fail loudly if
+                                                     the result is still
+                                                     not valid JSON.
+    """
+    if isinstance(value, (dict, list, bool, int, float)) or value is None:
+        return json.dumps(value, default=str, sort_keys=True)
+    if isinstance(value, str):
+        return json.dumps(value)
+    # Datetime and UUID instances end up here — stringify and wrap.
+    return json.dumps(str(value))
 
 
 # ---------------------------------------------------------------------------
@@ -113,6 +210,20 @@ class CTEPersistence:
         kdes = kdes or {}
         alerts = alerts or []
         event_id = str(uuid4())
+
+        # --- Timestamp validation (fix #1308) ---
+        # Parse + normalize to UTC + reject naive/future/garbage inputs.
+        # We keep ``event_timestamp`` as the canonical ISO-8601 string
+        # for hashing (compute_event_hash is string-based) but the
+        # parsed datetime is what goes into the DB — no more opaque
+        # passthroughs.
+        event_dt = _parse_timestamp(event_timestamp, field="event_timestamp")
+        event_timestamp = event_dt.isoformat()
+        if event_entry_timestamp is not None:
+            entry_dt = _parse_timestamp(
+                event_entry_timestamp, field="event_entry_timestamp"
+            )
+            event_entry_timestamp = entry_dt.isoformat()
 
         # --- Idempotency check ---
         idempotency_key = compute_idempotency_key(
@@ -226,7 +337,12 @@ class CTEPersistence:
             },
         )
 
-        # --- Insert KDEs ---
+        # --- Insert KDEs (fix #1311) ---
+        # The column ``fsma.cte_kdes.kde_value`` is JSONB (migration v059).
+        # Previously values were stored via ``str(kde_value)`` which
+        # produced Python repr for dicts (``"{'gln': '...'}"``), not JSON,
+        # so structured KDEs could not round-trip.  We now emit valid
+        # JSON text and cast to jsonb in SQL.
         for kde_key, kde_value in kdes.items():
             if kde_value is None:
                 continue
@@ -235,7 +351,8 @@ class CTEPersistence:
                     INSERT INTO fsma.cte_kdes (
                         tenant_id, cte_event_id, kde_key, kde_value, is_required
                     ) VALUES (
-                        :tenant_id, :cte_event_id, :kde_key, :kde_value, :is_required
+                        :tenant_id, :cte_event_id, :kde_key,
+                        CAST(:kde_value AS jsonb), :is_required
                     )
                     ON CONFLICT (cte_event_id, kde_key) DO NOTHING
                 """),
@@ -243,7 +360,7 @@ class CTEPersistence:
                     "tenant_id": tenant_id,
                     "cte_event_id": event_id,
                     "kde_key": kde_key,
-                    "kde_value": str(kde_value),
+                    "kde_value": _jsonify_kde(kde_value),
                     "is_required": False,  # caller can override
                 },
             )
@@ -360,11 +477,22 @@ class CTEPersistence:
         if not events:
             return []
 
-        # --- Step 1: Pre-compute idempotency keys ---
+        # --- Step 1: Pre-compute idempotency keys (+ validate ts; fix #1308) ---
         prepared = []
         for evt in events:
             event_id = str(uuid4())
             kdes = evt.get("kdes") or {}
+            # Parse + validate timestamps, normalize to UTC ISO-8601.
+            event_dt = _parse_timestamp(
+                evt.get("event_timestamp"), field="event_timestamp"
+            )
+            evt = dict(evt)  # don't mutate caller input
+            evt["event_timestamp"] = event_dt.isoformat()
+            if evt.get("event_entry_timestamp") is not None:
+                entry_dt = _parse_timestamp(
+                    evt["event_entry_timestamp"], field="event_entry_timestamp"
+                )
+                evt["event_entry_timestamp"] = entry_dt.isoformat()
             idemp_key = compute_idempotency_key(
                 evt["event_type"], evt["traceability_lot_code"],
                 evt["event_timestamp"], source, kdes,
@@ -435,9 +563,38 @@ class CTEPersistence:
             event_id = p["event_id"]
             kdes = p["kdes"]
 
+            # --- Quantity validation (fix #1306) ---
+            # Previous implementation silently clamped ``quantity`` to a
+            # minimum of 1.0 (both in the hash input and the row value),
+            # so a HARVESTING event for 0.25 kg was persisted and hashed
+            # as 1.0 kg.  The single-event path does NOT clamp, so the
+            # same input via two code paths produced different SHA-256
+            # hashes and different row values.  FSMA audit integrity
+            # depends on the persisted regulatory payload matching what
+            # the caller sent, so we now reject anything non-positive
+            # rather than silently rewriting it.
+            raw_qty = evt.get("quantity")
+            if raw_qty is None:
+                raise ValueError(
+                    f"quantity is required for CTE event "
+                    f"(tlc={evt.get('traceability_lot_code')}, "
+                    f"type={evt.get('event_type')})"
+                )
+            try:
+                quantity = float(raw_qty)
+            except (TypeError, ValueError) as exc:
+                raise ValueError(
+                    f"quantity must be numeric, got {raw_qty!r}"
+                ) from exc
+            if quantity <= 0:
+                raise ValueError(
+                    f"quantity must be > 0, got {quantity} "
+                    f"(tlc={evt.get('traceability_lot_code')})"
+                )
+
             sha256_hash = compute_event_hash(
                 event_id, evt["event_type"], evt["traceability_lot_code"],
-                evt.get("product_description", ""), max(float(evt.get("quantity") or 0), 1.0),
+                evt.get("product_description", ""), quantity,
                 evt.get("unit_of_measure", ""), evt.get("location_gln"),
                 evt.get("location_name"), evt["event_timestamp"], kdes,
             )
@@ -450,7 +607,7 @@ class CTEPersistence:
                 "event_type": evt["event_type"],
                 "tlc": evt["traceability_lot_code"],
                 "product_description": evt.get("product_description", ""),
-                "quantity": max(float(evt.get("quantity") or 0), 1.0),
+                "quantity": quantity,
                 "unit_of_measure": evt.get("unit_of_measure", ""),
                 "location_gln": evt.get("location_gln"),
                 "location_name": evt.get("location_name"),
@@ -472,7 +629,8 @@ class CTEPersistence:
                         "tenant_id": tenant_id,
                         "cte_event_id": event_id,
                         "kde_key": kde_key,
-                        "kde_value": str(kde_value),
+                        # fix #1311 — JSON text, cast to jsonb in the batch INSERT
+                        "kde_value": _jsonify_kde(kde_value),
                         "is_required": False,
                     })
 
@@ -541,8 +699,9 @@ class CTEPersistence:
                 values_clauses = []
                 params = {}
                 for i, row in enumerate(chunk):
+                    # fix #1311: cast kde_value param to jsonb in the VALUES tuple
                     values_clauses.append(
-                        f"(:tid_{i}, :eid_{i}, :kk_{i}, :kv_{i}, :ir_{i})"
+                        f"(:tid_{i}, :eid_{i}, :kk_{i}, CAST(:kv_{i} AS jsonb), :ir_{i})"
                     )
                     params.update({
                         f"tid_{i}": row["tenant_id"], f"eid_{i}": row["cte_event_id"],
@@ -558,26 +717,36 @@ class CTEPersistence:
                 self.session.execute(text(sql), params)
 
         if chain_rows:
-            for chunk_start in range(0, len(chain_rows), 100):
-                chunk = chain_rows[chunk_start:chunk_start + 100]
-                values_clauses = []
-                params = {}
-                for i, row in enumerate(chunk):
-                    values_clauses.append(
-                        f"(:tid_{i}, :eid_{i}, :seq_{i}, :eh_{i}, :pch_{i}, :ch_{i})"
-                    )
-                    params.update({
-                        f"tid_{i}": row["tenant_id"], f"eid_{i}": row["cte_event_id"],
-                        f"seq_{i}": row["sequence_num"], f"eh_{i}": row["event_hash"],
-                        f"pch_{i}": row["previous_chain_hash"], f"ch_{i}": row["chain_hash"],
-                    })
-                sql = f"""
-                    INSERT INTO fsma.hash_chain (
-                        tenant_id, cte_event_id, sequence_num,
-                        event_hash, previous_chain_hash, chain_hash
-                    ) VALUES {', '.join(values_clauses)}
-                """
-                self.session.execute(text(sql), params)
+            # --- fix #1307 ---
+            # Previous implementation blindly INSERTed every chain row,
+            # but the companion cte_events INSERT above uses ON CONFLICT
+            # DO NOTHING — when a batch lost the idempotency race for one
+            # of its events, the chain still wrote and produced an orphan
+            # row pointing at a non-existent cte_event_id, which breaks
+            # verify_chain's expected_seq = i+1 check.
+            #
+            # We now mirror the single-event path: each chain row is
+            # inserted via INSERT ... SELECT guarded by a WHERE EXISTS
+            # check against fsma.cte_events, so orphan rows cannot occur.
+            # Rows are issued one at a time to keep the guarded form
+            # simple and avoid VALUES-expansion footguns.
+            for row in chain_rows:
+                self.session.execute(
+                    text("""
+                        INSERT INTO fsma.hash_chain (
+                            tenant_id, cte_event_id, sequence_num,
+                            event_hash, previous_chain_hash, chain_hash
+                        )
+                        SELECT :tenant_id, :cte_event_id, :sequence_num,
+                               :event_hash, :previous_chain_hash, :chain_hash
+                        WHERE EXISTS (
+                            SELECT 1 FROM fsma.cte_events
+                            WHERE id = :cte_event_id
+                              AND tenant_id = :tenant_id
+                        )
+                    """),
+                    row,
+                )
 
         logger.info(
             "batch_events_persisted",

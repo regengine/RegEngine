@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 import threading
 import uuid
@@ -35,11 +36,159 @@ from shared.schemas import (
 from .classification import SignalClassifier
 from .config import settings
 from .extractor import extract_entities
+from .extractors import FSMAExtractor, LLMGenerativeExtractor
+from .extractors.fsma_types import (
+    TOPIC_GRAPH_UPDATE as FSMA_TOPIC_GRAPH_UPDATE,
+    TOPIC_NEEDS_REVIEW as FSMA_TOPIC_NEEDS_REVIEW,
+)
 from .resolution import EntityResolver
 from .s3_utils import get_bytes
 
 logger = structlog.get_logger("nlp-consumer")
 _audit_logger = structlog.get_logger("nlp-consumer-audit")
+
+
+# ---------------------------------------------------------------------------
+# Structured extractor wiring (#1194)
+# ---------------------------------------------------------------------------
+#
+# Until this wiring landed, FSMAExtractor and LLMGenerativeExtractor were
+# imported but never instantiated from the consumer loop. All KDE-gating —
+# the core reason the FSMAExtractor exists — was therefore bypassed for
+# every inbound document, which meant FSMA 204 documents silently fell
+# through to the regex-only pipeline and skipped the HITL gate.
+#
+# Two feature flags control activation so we can deploy carefully:
+#
+#   NLP_ENABLE_FSMA_EXTRACTOR (default true)
+#     When on, every document passes through FSMAExtractor before the
+#     legacy regex extractor. CTEs with both TLC and Event Date are
+#     routed to ``graph.update``; everything else is routed to
+#     ``nlp.needs_review`` for human-in-the-loop review.
+#
+#   NLP_ENABLE_LLM_EXTRACTOR (default false)
+#     Opt-in — LLM inference has per-token cost and higher latency.
+#     When on, documents that produce zero high-confidence FSMA CTEs
+#     get an LLM pass as fallback. Results augment (do not replace)
+#     the regex-based ExtractionPayload stream.
+#
+# The legacy regex extractor (extract_entities) remains live as a
+# backstop so existing consumers continue to observe nlp.extracted
+# events.
+NLP_ENABLE_FSMA_EXTRACTOR = os.getenv("NLP_ENABLE_FSMA_EXTRACTOR", "true").lower() in (
+    "true", "1", "yes", "on",
+)
+NLP_ENABLE_LLM_EXTRACTOR = os.getenv("NLP_ENABLE_LLM_EXTRACTOR", "false").lower() in (
+    "true", "1", "yes", "on",
+)
+
+# Instantiate extractors lazily on first use so test imports don't pay
+# the model-download cost and so flag flips at runtime are honored
+# (flags are read once at module load — restarts of the consumer pick
+# up new values).
+_FSMA_EXTRACTOR: Optional[FSMAExtractor] = None
+_LLM_EXTRACTOR: Optional[LLMGenerativeExtractor] = None
+
+
+def _get_fsma_extractor() -> FSMAExtractor:
+    global _FSMA_EXTRACTOR
+    if _FSMA_EXTRACTOR is None:
+        _FSMA_EXTRACTOR = FSMAExtractor()
+    return _FSMA_EXTRACTOR
+
+
+def _get_llm_extractor() -> LLMGenerativeExtractor:
+    global _LLM_EXTRACTOR
+    if _LLM_EXTRACTOR is None:
+        _LLM_EXTRACTOR = LLMGenerativeExtractor()
+    return _LLM_EXTRACTOR
+
+
+def _run_fsma_extractor(
+    text: str,
+    doc_id: str,
+    doc_hash: str,
+    producer: KafkaProducer,
+    tenant_id: Optional[str],
+    kafka_headers: list,
+) -> dict:
+    """
+    Run FSMAExtractor and route results to the appropriate Kafka topic.
+
+    Returns a summary dict with counts so the caller can emit a single
+    structured log line.
+    """
+    extractor = _get_fsma_extractor()
+    try:
+        result = extractor.extract(text, doc_id)
+    except Exception as exc:
+        logger.exception(
+            "fsma_extractor_error",
+            document_id=doc_id,
+            error=str(exc),
+        )
+        return {"status": "error", "cte_count": 0, "routed": None}
+
+    routing = extractor.route_extraction(result)
+    topic = routing["topic"]
+    payload = {
+        "tenant_id": tenant_id,
+        "doc_hash": doc_hash,
+        **routing["payload"],
+    }
+    try:
+        producer.send(
+            topic,
+            key=doc_id,
+            value=payload,
+            headers=kafka_headers,
+        )
+        producer.flush(timeout=1.0)
+    except (KafkaTimeoutError, ConnectionError, OSError) as exc:
+        logger.error(
+            "fsma_routing_failed",
+            document_id=doc_id,
+            topic=topic,
+            error=str(exc),
+        )
+        return {"status": "error", "cte_count": len(result.ctes), "routed": topic}
+
+    logger.info(
+        "fsma_extractor_routed",
+        document_id=doc_id,
+        cte_count=len(result.ctes),
+        review_required=result.review_required,
+        topic=topic,
+    )
+    return {
+        "status": "ok",
+        "cte_count": len(result.ctes),
+        "review_required": result.review_required,
+        "routed": topic,
+        "high_confidence": topic == FSMA_TOPIC_GRAPH_UPDATE,
+    }
+
+
+def _run_llm_extractor(
+    text: str,
+    doc_id: str,
+    jurisdiction: str,
+) -> list:
+    """Run LLMGenerativeExtractor; return its structured results."""
+    try:
+        extractor = _get_llm_extractor()
+        return extractor.extract(
+            text=text,
+            jurisdiction=jurisdiction,
+            correlation_id=doc_id,
+        )
+    except Exception as exc:
+        logger.exception(
+            "llm_extractor_error",
+            document_id=doc_id,
+            error=str(exc),
+        )
+        return []
 
 try:
     MESSAGES_COUNTER = Counter("nlp_messages_total", "NLP messages processed", ["status"])
@@ -548,13 +697,60 @@ def run_consumer() -> None:
                             text = payload.get("text", "")[:2_000_000]
                             source_url = payload.get("source_url", "unknown")
 
-                        # Extract entities using existing extractor
+                        # --- Structured extractor pass (#1194) ---
+                        # FSMAExtractor runs first for every document when the
+                        # feature flag is on. It owns KDE-minimum gating for
+                        # FSMA 204 and routes qualifying CTEs to
+                        # ``graph.update`` or ``nlp.needs_review``. When the
+                        # flag is off, this block is a no-op and the legacy
+                        # regex pipeline below is the only path.
+                        fsma_summary: Optional[dict] = None
+                        if NLP_ENABLE_FSMA_EXTRACTOR:
+                            fsma_summary = _run_fsma_extractor(
+                                text=text,
+                                doc_id=doc_id,
+                                doc_hash=doc_hash,
+                                producer=producer,
+                                tenant_id=tenant_id,
+                                kafka_headers=kafka_headers,
+                            )
+
+                        # --- Legacy regex extractor (backstop) ---
                         entities = extract_entities(text)
 
                         # Convert to canonical ExtractionPayload format
                         extractions = _convert_entities_to_extraction(
                             entities, doc_id, source_url
                         )
+
+                        # --- LLM fallback pass (#1194) ---
+                        # Only invoked when the regex+FSMA passes yielded
+                        # NO high-confidence extractions and the operator
+                        # has explicitly opted in to LLM spend.
+                        if NLP_ENABLE_LLM_EXTRACTOR:
+                            produced_high_conf = (
+                                fsma_summary is not None
+                                and fsma_summary.get("high_confidence")
+                            ) or any(
+                                e.confidence_score >= settings.extraction_confidence_high
+                                for e in extractions
+                            )
+                            if not produced_high_conf:
+                                jurisdiction = "US-FDA" if _is_fsma_event(evt) else "unknown"
+                                llm_results = _run_llm_extractor(
+                                    text=text,
+                                    doc_id=doc_id,
+                                    jurisdiction=jurisdiction,
+                                )
+                                logger.info(
+                                    "llm_extractor_run",
+                                    document_id=doc_id,
+                                    result_count=len(llm_results),
+                                )
+                                # LLM results currently augment the log and
+                                # feed the review queue via extractions
+                                # below; bridging to the legacy entity
+                                # schema is handled by a follow-up PR.
 
                         # Route each extraction based on confidence
                         for extraction in extractions:

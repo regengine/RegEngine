@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
-import type { IngestURLRequest, ValidationRequest } from '@/types/api';
+import type { IngestURLRequest } from '@/types/api';
 import type { LabelBatchInitRequest } from '@/types/labels';
 import type { SystemStatusResponse, SystemMetricsResponse } from '@/lib/api-client';
 import { POLL_HEALTH_MS as POLL_HEALTH, POLL_METRICS_MS as POLL_METRICS } from '@/lib/polling-config';
@@ -209,11 +209,10 @@ export const useChecklist = (checklistId: string, enabled = true) => {
   });
 };
 
-export const useValidateConfig = () => {
-  return useMutation({
-    mutationFn: (request: ValidationRequest) => apiClient.validateConfig(request),
-  });
-};
+// useValidateConfig() was removed on 2026-04-17 (#1203). The corresponding
+// backend endpoint (POST /validate on the compliance service) was orphaned
+// and is gone. For real compliance evaluation, call the ingestion service's
+// /api/v1/rules/evaluate endpoint (served by the RulesEngine).
 
 // Labels
 export const useInitializeLabelBatch = () => {

@@ -26,13 +26,17 @@ permissions:
   checks: write
 
 jobs:
-  # ── Root test suite collection guard ────────────────────
-  # Catches broken imports / missing modules before they silently zero-out the suite.
-  root-test-collection:
-    name: Root tests collect (min 500)
+  # ── Full-suite collection guard (#1435) ─────────────────
+  # Runs ``pytest --collect-only`` across the whole repo. Any collection
+  # ERROR fails the build — this is the single check that prevents another
+  # round of "9 test files silently fail to import". The root conftest.py
+  # handles the multi-service ``app/`` path switching; per-service
+  # pythonpath entries are no longer required.
+  full-suite-collection:
+    name: Full suite collects without errors
     runs-on: ubuntu-latest
     env:
-      PYTHONPATH: ${{ github.workspace }}:${{ github.workspace }}/services:${{ github.workspace }}/services/ingestion:${{ github.workspace }}/services/nlp:${{ github.workspace }}/services/admin
+      PYTHONPATH: ${{ github.workspace }}:${{ github.workspace }}/services
     steps:
       - uses: actions/checkout@v6
 
@@ -43,43 +47,42 @@ jobs:
 
       - name: Install test dependencies
         run: |
-          # Install the full runtime requirements so test modules that import
-          # real libraries (httpx, fastapi, sqlalchemy, etc.) can be collected.
-          # Without this step, any test that imports a third-party library
-          # errors at pytest --collect-only and the suite count drops to 0.
+          # Install the full runtime requirements so test modules that
+          # import real libraries (httpx, fastapi, sqlalchemy, pydantic[email],
+          # scipy, etc.) can be collected. Without this step, collection
+          # breaks on the first third-party import.
           if [ -f requirements.txt ]; then
             pip install -r requirements.txt
           fi
-          pip install pytest pytest-asyncio
+          pip install pytest pytest-asyncio email-validator scipy
 
-      - name: Collect root tests and enforce minimum count
+      - name: Collect whole suite and fail on any error
         run: |
-          # Why --continue-on-collection-errors: without it, pytest stops at
-          # "!!! Interrupted: N errors !!!" and never prints the summary.
-          # Why no -q: with -q pytest suppresses the "X tests collected, Y
-          # errors" summary line; without it, that's the LAST line, which is
-          # what we parse.
-          OUTPUT=$(python3 -m pytest tests/ --collect-only --continue-on-collection-errors 2>&1 || true)
+          # --continue-on-collection-errors: pytest otherwise aborts at the
+          # first ERROR and the summary line is never printed.
+          # No -q so the "N tests collected, M errors" line survives.
+          set +e
+          OUTPUT=$(python3 -m pytest --collect-only --continue-on-collection-errors 2>&1)
+          STATUS=$?
+          set -e
           echo "--- pytest output (tail) ---"
-          echo "$OUTPUT" | tail -15
-          # Summary line format: "980 tests collected, 9 errors in 1.16s"
+          echo "$OUTPUT" | tail -30
           SUMMARY=$(echo "$OUTPUT" | grep -E '[0-9]+ tests? collected' | tail -1)
           COUNT=$(echo "$SUMMARY" | grep -oE '[0-9]+ tests? collected' | grep -oE '[0-9]+' || echo "0")
           ERRORS=$(echo "$SUMMARY" | grep -oE '[0-9]+ errors?' | grep -oE '[0-9]+' || echo "0")
           echo ""
           echo "Collected $COUNT tests ($ERRORS collection errors)"
-          if [ "$COUNT" -lt 500 ]; then
-            echo "::error::Root test collection fell below 500 (got $COUNT). This likely means a broken import or missing module."
+          if [ "$ERRORS" -gt 0 ]; then
+            echo "::error::$ERRORS test files failed to collect. Fix the imports — see ERROR lines above. Re-run locally with:  python3 -m pytest --collect-only"
+            echo "--- ERROR list ---"
             echo "$OUTPUT" | grep "^ERROR " || true
             exit 1
           fi
-          # Collection errors are surfaced as warnings but do not fail the
-          # gate. The gate enforces a suite-size floor; individual stale
-          # tests are cleanup work tracked separately.
-          if [ "$ERRORS" -gt 0 ]; then
-            echo "::warning::$ERRORS test files failed to collect. See pytest ERROR lines above."
+          if [ "$COUNT" -lt 1500 ]; then
+            echo "::error::Collected tests fell below floor of 1500 (got $COUNT). Did a whole directory get skipped?"
+            exit 1
           fi
-          echo "✓ $COUNT root tests collected (minimum: 500)"
+          echo "✓ $COUNT tests collected, 0 collection errors"
 
   # ── Per-service collection checks ───────────────────────
   test-environment-check:

@@ -1,12 +1,21 @@
-// Safe wrapper around gtag that handles consent and missing gtag
+// Safe wrapper around gtag that handles consent and missing gtag.
+//
+// The gtag/dataLayer contract is intentionally heterogeneous — Google
+// Analytics accepts (command: string, ...) tuples where the third+ args
+// depend on the command. Use `unknown` (not `any`) so that every call
+// site either narrows or uses the typed helpers below; this removes
+// the silent-bug surface of `any` while preserving the flexibility
+// the real gtag API requires.
+type GtagParams = Record<string, unknown>;
+
 declare global {
   interface Window {
-    gtag?: (...args: any[]) => void;
-    dataLayer?: any[];
+    gtag?: (command: string, eventName: string, params?: GtagParams) => void;
+    dataLayer?: unknown[];
   }
 }
 
-export function trackEvent(eventName: string, params?: Record<string, any>) {
+export function trackEvent(eventName: string, params?: GtagParams) {
   if (typeof window !== 'undefined' && window.gtag) {
     window.gtag('event', eventName, params);
   }
