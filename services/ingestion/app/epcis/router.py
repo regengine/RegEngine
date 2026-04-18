@@ -21,7 +21,8 @@ from services.ingestion.app.epcis.normalization import (
 )
 from services.ingestion.app.epcis.persistence import (
     _allow_in_memory_fallback,
-    _epcis_store,
+    _fallback_store_for,
+    _ingest_batch_events_db_atomic,
     _fetch_event_from_db,
     _ingest_single_event,
     _list_events_from_db,
@@ -100,6 +101,16 @@ async def ingest_epcis_event(
 async def ingest_epcis_batch(
     request: Request,
     body: BatchIngestRequest,
+    mode: str = Query(
+        default="atomic",
+        description=(
+            "Batch semantics. ``atomic`` (default, #1156) validates every "
+            "event first and persists all under a single transaction — any "
+            "failure rolls back the whole batch and returns 400. "
+            "``partial`` restores the legacy per-event loop that returns "
+            "207 on mixed success/failure."
+        ),
+    ),
     x_tenant_id: Optional[str] = Header(default=None, alias="X-Tenant-ID"),
     x_regengine_api_key: Optional[str] = Header(default=None, alias="X-RegEngine-API-Key"),
     _: None = Depends(_verify_api_key),
@@ -107,7 +118,32 @@ async def ingest_epcis_batch(
     if not body.events:
         raise HTTPException(status_code=400, detail="Batch ingest requires at least one event")
 
+    if mode not in {"atomic", "partial"}:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid mode '{mode}'. Expected 'atomic' or 'partial'.",
+        )
+
     resolved_tenant = _resolve_authenticated_tenant(request, x_tenant_id, x_regengine_api_key)
+
+    if mode == "atomic":
+        results = _ingest_batch_events_db_atomic(resolved_tenant, body.events)
+        processed = [
+            {"index": idx, "status_code": status_code, **payload}
+            for idx, (payload, status_code) in enumerate(results)
+        ]
+        created = [payload for payload, status_code in results if status_code == 201]
+        return JSONResponse(
+            content={
+                "total": len(body.events),
+                "created": len(created),
+                "failed": 0,
+                "results": processed,
+                "errors": [],
+                "mode": "atomic",
+            },
+            status_code=201,
+        )
 
     created: list[dict] = []
     failed: list[dict] = []
@@ -128,6 +164,7 @@ async def ingest_epcis_batch(
         "failed": len(failed),
         "results": processed,
         "errors": failed,
+        "mode": "partial",
     }
 
     successful = len(processed)
@@ -159,7 +196,9 @@ async def get_epcis_event(
         logger.warning("epcis_get_db_failed_using_fallback error=%s", str(exc))
 
     if event is None and _allow_in_memory_fallback():
-        event = _epcis_store.get(event_id)
+        # #1148: fallback store is now tenant-scoped — an event_id from
+        # another tenant must not surface here.
+        event = _fallback_store_for(resolved_tenant).get(event_id)
 
     if not event:
         raise HTTPException(status_code=404, detail=f"EPCIS event '{event_id}' not found")
@@ -199,7 +238,8 @@ async def export_epcis_events(
         end_dt = _parse_iso(end_date)
 
         filtered_records: list[dict] = []
-        for entry in _epcis_store.values():
+        # #1148: iterate only this tenant's partition of the fallback store.
+        for entry in _fallback_store_for(resolved_tenant).values():
             normalized = entry.get("normalized_cte", {})
             event_time = normalized.get("event_time")
             if event_time:
@@ -248,6 +288,15 @@ async def validate_epcis_event(
 @router.post("/events/xml", status_code=201, summary="Ingest EPCIS 2.0 XML document")
 async def ingest_epcis_xml(
     request: Request,
+    mode: str = Query(
+        default="atomic",
+        description=(
+            "Document semantics. ``atomic`` (default, #1151) validates "
+            "every parsed event first and persists all under a single "
+            "transaction — any failure rolls back and returns 400. "
+            "``partial`` restores legacy per-event 207 semantics."
+        ),
+    ),
     x_tenant_id: Optional[str] = Header(default=None, alias="X-Tenant-ID"),
     x_regengine_api_key: Optional[str] = Header(default=None, alias="X-RegEngine-API-Key"),
     _: None = Depends(_verify_api_key),
@@ -258,6 +307,12 @@ async def ingest_epcis_xml(
     and TransformationEvent elements, then ingests each through the standard
     EPCIS pipeline with FSMAEvent validation.
     """
+    if mode not in {"atomic", "partial"}:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid mode '{mode}'. Expected 'atomic' or 'partial'.",
+        )
+
     resolved_tenant = _resolve_authenticated_tenant(request, x_tenant_id, x_regengine_api_key)
 
     raw_body = await request.body()
@@ -272,6 +327,26 @@ async def ingest_epcis_xml(
         raise HTTPException(
             status_code=422,
             detail="No EPCIS events found in XML document",
+        )
+
+    if mode == "atomic":
+        results = _ingest_batch_events_db_atomic(resolved_tenant, events)
+        processed = [
+            {"index": idx, "status_code": status_code, **payload}
+            for idx, (payload, status_code) in enumerate(results)
+        ]
+        created = [payload for payload, status_code in results if status_code == 201]
+        return JSONResponse(
+            content={
+                "total": len(events),
+                "created": len(created),
+                "failed": 0,
+                "results": processed,
+                "errors": [],
+                "format": "EPCIS_XML_2.0",
+                "mode": "atomic",
+            },
+            status_code=201,
         )
 
     created: list[dict] = []
@@ -294,6 +369,7 @@ async def ingest_epcis_xml(
         "results": processed,
         "errors": failed,
         "format": "EPCIS_XML_2.0",
+        "mode": "partial",
     }
 
     successful = len(processed)
