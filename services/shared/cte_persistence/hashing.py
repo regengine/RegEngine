@@ -68,12 +68,15 @@ def compute_idempotency_key(
     location as critical to event identity — the same product shipped from two
     different warehouses at the same time are distinct events.
 
-    NOTE: This formula differs from TraceabilityEvent.compute_idempotency_key()
-    in canonical_event.py. The canonical version uses from_facility/to_facility
-    instead of location_gln/location_name, producing different keys for the same
-    real-world event. During dual-write, each table deduplicates independently
-    with its own formula — this is intentional and safe because idempotency keys
-    are scoped per-table (cte_events vs traceability_events).
+    NOTE: This formula differs from ``TraceabilityEvent.compute_idempotency_key``
+    in ``canonical_event.py``. The canonical version uses
+    ``from_facility`` / ``to_facility``; this version uses
+    ``location_gln`` / ``location_name``. The same real-world event
+    dual-written through both paths therefore produces DIFFERENT keys
+    in each table. Scope: intentional — each table dedups independently
+    with its own formula; idempotency keys are scoped per-table. Cross-
+    table reconciliation must use ``sha256_hash``, not idempotency_key.
+    Tracked for unification with the cte_persistence retirement (#1335).
     """
     # ``default=str`` matches compute_event_hash above. Without it, a KDE
     # carrying a datetime or Decimal raises TypeError mid-insert and loses
