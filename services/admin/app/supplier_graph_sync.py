@@ -24,7 +24,8 @@ logger = structlog.get_logger("supplier_graph_sync")
 INVITE_CREATED_QUERY = """
 MERGE (buyer:BuyerTenant {tenant_id: $tenant_id})
 ON CREATE SET buyer.created_at = datetime()
-MERGE (invite:PendingSupplierInvite {invite_id: $invite_id})
+MERGE (invite:PendingSupplierInvite {invite_id: $invite_id, tenant_id: $tenant_id})
+ON CREATE SET invite.tenant_id = $tenant_id
 SET invite.email = $email,
     invite.role_id = $role_id,
     invite.status = 'pending',
@@ -38,14 +39,14 @@ MERGE (buyer)-[:INVITED]->(invite)
 INVITE_ACCEPTED_QUERY = """
 MERGE (buyer:BuyerTenant {tenant_id: $tenant_id})
 ON CREATE SET buyer.created_at = datetime()
-MERGE (supplier:SupplierContact {user_id: $user_id})
+MERGE (supplier:SupplierContact {user_id: $user_id, tenant_id: $tenant_id})
+ON CREATE SET supplier.tenant_id = $tenant_id
 SET supplier.email = $email,
-    supplier.tenant_id = $tenant_id,
     supplier.role_id = $role_id,
     supplier.updated_at = datetime()
 MERGE (buyer)-[:HAS_SUPPLIER_CONTACT]->(supplier)
 WITH supplier
-OPTIONAL MATCH (invite:PendingSupplierInvite {invite_id: $invite_id})
+OPTIONAL MATCH (invite:PendingSupplierInvite {invite_id: $invite_id, tenant_id: $tenant_id})
 FOREACH (_ IN CASE WHEN invite IS NULL THEN [] ELSE [1] END |
   SET invite.status = 'accepted',
       invite.accepted_at = datetime($accepted_at),
