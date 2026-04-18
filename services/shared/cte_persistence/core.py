@@ -28,7 +28,7 @@ Usage:
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple
 from uuid import uuid4
 
@@ -39,6 +39,70 @@ from .models import StoreResult, ChainVerification, MerkleVerification
 from .hashing import compute_event_hash, compute_chain_hash, compute_idempotency_key
 
 logger = logging.getLogger("cte-persistence")
+
+
+# ---------------------------------------------------------------------------
+# Timestamp Validation (fix #1308)
+# ---------------------------------------------------------------------------
+
+# Clock-skew tolerance for "future" events: small positive offsets can legitimately
+# occur across machines whose clocks aren't perfectly in sync (NTP drift, laptop
+# sleep, etc.).  Anything beyond this is rejected as a data-quality error.
+_FUTURE_SKEW_TOLERANCE = timedelta(minutes=5)
+
+
+def _parse_timestamp(value: Any, *, field: str) -> datetime:
+    """Parse an ISO-8601 timestamp into a timezone-aware UTC datetime.
+
+    Rejects:
+        * None, empty strings, non-string inputs
+        * Unparseable formats
+        * Naive (no-timezone) datetimes — FSMA records must be
+          timezone-unambiguous to support the 24-hour notification rule.
+        * Timestamps more than _FUTURE_SKEW_TOLERANCE in the future —
+          these almost always indicate caller bugs or data exfiltration
+          attempts rather than legitimate forward-dated events.
+
+    Does NOT reject very-old timestamps — legacy backfill is a legitimate
+    use case and the regulatory 2-year retention lower bound is enforced
+    at query time, not at ingest.
+
+    Returns a datetime normalized to UTC.
+    """
+    if value is None or (isinstance(value, str) and not value.strip()):
+        raise ValueError(f"{field} is required and must be an ISO-8601 timestamp")
+
+    if isinstance(value, datetime):
+        dt = value
+    elif isinstance(value, str):
+        # Accept trailing "Z" for UTC by normalizing to +00:00 first.
+        candidate = value.strip().replace("Z", "+00:00")
+        try:
+            dt = datetime.fromisoformat(candidate)
+        except ValueError as exc:
+            raise ValueError(
+                f"{field} is not a valid ISO-8601 timestamp: {value!r}"
+            ) from exc
+    else:
+        raise ValueError(
+            f"{field} must be a string or datetime, got {type(value).__name__}"
+        )
+
+    if dt.tzinfo is None:
+        raise ValueError(
+            f"{field} must be timezone-aware (got naive datetime: {value!r}). "
+            "FSMA records require an unambiguous UTC offset."
+        )
+
+    dt = dt.astimezone(timezone.utc)
+
+    now_utc = datetime.now(timezone.utc)
+    if dt > now_utc + _FUTURE_SKEW_TOLERANCE:
+        raise ValueError(
+            f"{field} is in the future beyond the allowed skew tolerance: "
+            f"{dt.isoformat()} (now={now_utc.isoformat()})"
+        )
+    return dt
 
 
 # ---------------------------------------------------------------------------
@@ -113,6 +177,20 @@ class CTEPersistence:
         kdes = kdes or {}
         alerts = alerts or []
         event_id = str(uuid4())
+
+        # --- Timestamp validation (fix #1308) ---
+        # Parse + normalize to UTC + reject naive/future/garbage inputs.
+        # We keep ``event_timestamp`` as the canonical ISO-8601 string
+        # for hashing (compute_event_hash is string-based) but the
+        # parsed datetime is what goes into the DB — no more opaque
+        # passthroughs.
+        event_dt = _parse_timestamp(event_timestamp, field="event_timestamp")
+        event_timestamp = event_dt.isoformat()
+        if event_entry_timestamp is not None:
+            entry_dt = _parse_timestamp(
+                event_entry_timestamp, field="event_entry_timestamp"
+            )
+            event_entry_timestamp = entry_dt.isoformat()
 
         # --- Idempotency check ---
         idempotency_key = compute_idempotency_key(
@@ -360,11 +438,22 @@ class CTEPersistence:
         if not events:
             return []
 
-        # --- Step 1: Pre-compute idempotency keys ---
+        # --- Step 1: Pre-compute idempotency keys (+ validate ts; fix #1308) ---
         prepared = []
         for evt in events:
             event_id = str(uuid4())
             kdes = evt.get("kdes") or {}
+            # Parse + validate timestamps, normalize to UTC ISO-8601.
+            event_dt = _parse_timestamp(
+                evt.get("event_timestamp"), field="event_timestamp"
+            )
+            evt = dict(evt)  # don't mutate caller input
+            evt["event_timestamp"] = event_dt.isoformat()
+            if evt.get("event_entry_timestamp") is not None:
+                entry_dt = _parse_timestamp(
+                    evt["event_entry_timestamp"], field="event_entry_timestamp"
+                )
+                evt["event_entry_timestamp"] = entry_dt.isoformat()
             idemp_key = compute_idempotency_key(
                 evt["event_type"], evt["traceability_lot_code"],
                 evt["event_timestamp"], source, kdes,
