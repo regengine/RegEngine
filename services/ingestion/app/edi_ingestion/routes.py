@@ -22,9 +22,11 @@ relevant to FSMA Critical Tracking Events.
 from __future__ import annotations
 
 import logging
+import os
 from typing import Any, Optional
 
-from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, Query, UploadFile
+from pydantic import ValidationError
 
 from app.authz import require_permission
 from app.format_extractors import is_edi_content
@@ -57,6 +59,42 @@ from .utils import (
 from .validation import _validate_edi_as_fsma_event
 
 logger = logging.getLogger("edi-ingestion")
+
+
+def _decode_edi_bytes(raw_bytes: bytes) -> str:
+    """Decode an EDI upload as UTF-8 with replacement + warn on loss.
+
+    #1170: previously used ``errors="ignore"`` which silently dropped
+    non-ASCII characters — "Distribuidora Española" became
+    "Distribuidora Espaola" with no signal, breaking partner-name
+    matching. Replacement characters (U+FFFD) preserve byte count so
+    the operator can spot the mismatch and fix the encoding at the
+    source.
+    """
+    text = raw_bytes.decode("utf-8", errors="replace")
+    replacement_count = text.count("\ufffd")
+    if replacement_count:
+        logger.warning(
+            "edi_utf8_decode_replacements count=%d bytes=%d — source may "
+            "be latin-1 or have corrupt encoding; check partner config",
+            replacement_count, len(raw_bytes),
+        )
+    return text
+
+
+def _edi_strict_mode() -> bool:
+    """Return True when EDI FSMA validation failure MUST block persistence.
+
+    #1174: default strict. EDI documents that fail FSMAEvent schema
+    validation are refused with HTTP 422 rather than persisted with a
+    ``failed`` flag that still pollutes the traceability graph. Set
+    ``EDI_STRICT_MODE=false`` only during migrations. The per-request
+    ``?strict=false`` query param follows the same convention.
+    """
+    explicit = os.getenv("EDI_STRICT_MODE")
+    if explicit is None:
+        return True
+    return explicit.strip().lower() in {"1", "true", "yes", "on", "strict"}
 
 router = APIRouter(prefix="/api/v1/ingest/edi", tags=["EDI Import"])
 
@@ -189,7 +227,7 @@ async def ingest_edi_856(
     if not is_edi_content(raw_bytes):
         raise HTTPException(status_code=400, detail="Unsupported EDI payload format")
 
-    raw_text = raw_bytes.decode("utf-8", errors="ignore")
+    raw_text = _decode_edi_bytes(raw_bytes)
     segments = _parse_x12_segments(raw_text)
     if not segments:
         raise HTTPException(status_code=400, detail="Unable to parse EDI segments")
@@ -441,6 +479,17 @@ async def ingest_edi_document(
     quantity_override: Optional[float] = Form(None, gt=0, description="Optional quantity override"),
     unit_of_measure_override: Optional[str] = Form(None, description="Optional unit override"),
     location_override: Optional[str] = Form(None, description="Optional location name override"),
+    strict: bool = Query(
+        default=True,
+        description=(
+            "FSMA validation mode (#1174). ``true`` (default): schema "
+            "failures return HTTP 422 and nothing is persisted. "
+            "``false``: advisory — event is persisted with "
+            "``fsma_validation_status=failed``. Set only for test or "
+            "migration scenarios. Global env default "
+            "``EDI_STRICT_MODE=false`` also disables strict mode."
+        ),
+    ),
     x_tenant_id: Optional[str] = Header(default=None, alias="X-Tenant-ID"),
     x_partner_id: Optional[str] = Header(default=None, alias="X-Partner-ID"),
     x_regengine_api_key: Optional[str] = Header(default=None, alias="X-RegEngine-API-Key"),
@@ -460,7 +509,7 @@ async def ingest_edi_document(
     if not is_edi_content(raw_bytes):
         raise HTTPException(status_code=400, detail="Unsupported EDI payload format")
 
-    raw_text = raw_bytes.decode("utf-8", errors="ignore")
+    raw_text = _decode_edi_bytes(raw_bytes)
     segments = _parse_x12_segments(raw_text)
     if not segments:
         raise HTTPException(status_code=400, detail="Unable to parse EDI segments")
@@ -489,18 +538,48 @@ async def ingest_edi_document(
     # #1160 + #1165: envelope mismatch / allowlist / ISA13 dedup.
     _enforce_envelope_integrity(extracted, sender_tenant_id, transaction_set)
 
-    # Validate against FSMAEvent model
-    fsma_validated = _validate_edi_as_fsma_event(
-        extracted, transaction_set, traceability_lot_code, sender_tenant_id,
-    )
-    if fsma_validated:
+    # #1174: FSMA validation is fail-closed by default. A schema failure
+    # returns HTTP 422 with per-field errors and nothing is persisted.
+    # ``?strict=false`` and ``EDI_STRICT_MODE=false`` (env) both down-
+    # grade to the legacy advisory behaviour for test/migration
+    # scenarios, in which case the event is persisted with
+    # ``fsma_validation_status=failed``.
+    try:
+        _validate_edi_as_fsma_event(
+            extracted, transaction_set, traceability_lot_code, sender_tenant_id,
+        )
         extracted["fsma_validation_status"] = "passed"
-    else:
+    except ValidationError as ve:
+        strict_effective = strict and _edi_strict_mode()
+        if strict_effective:
+            logger.warning(
+                "edi_fsma_validation_rejected set=%s tlc=%s errors=%d",
+                transaction_set, traceability_lot_code, len(ve.errors()),
+            )
+            raise HTTPException(
+                status_code=422,
+                detail={
+                    "error": "fsma_validation_failed",
+                    "transaction_set": transaction_set,
+                    "tlc": traceability_lot_code,
+                    "message": (
+                        "EDI document failed FSMAEvent schema validation. "
+                        "No events were persisted. Pass ?strict=false or "
+                        "set EDI_STRICT_MODE=false only for migration "
+                        "windows — failed rows still pollute FSMA 204 "
+                        "exports if you opt in."
+                    ),
+                    "errors": ve.errors(),
+                },
+            )
         extracted["fsma_validation_status"] = "failed"
         logger.warning(
-            "edi_fsma_validation_warning set=%s tlc=%s",
-            transaction_set, traceability_lot_code,
+            "edi_fsma_validation_advisory set=%s tlc=%s errors=%d",
+            transaction_set, traceability_lot_code, len(ve.errors()),
         )
+    except ImportError:
+        logger.debug("shared.schemas not available — skipping FSMA validation")
+        extracted["fsma_validation_status"] = "unknown"
 
     event = _build_ingest_event_for_set(
         transaction_set=transaction_set,
