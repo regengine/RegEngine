@@ -140,8 +140,13 @@ line_length = 120
 
 [tool.pytest.ini_options]
 minversion = "6.0"
-addopts = "-ra -q --asyncio-mode=auto"
-pythonpath = [".", "services", "services/ingestion", "services/nlp", "services/admin"]
+addopts = "-ra -q --asyncio-mode=auto --import-mode=importlib"
+# Only the repo root + services package dir are globally on pythonpath.
+# Per-service ``app/`` resolution is handled by the root conftest.py hook
+# which switches sys.path to the active service before each test collector
+# runs. Listing multiple ``services/<svc>`` here would cause ``app`` to
+# permanently resolve against whichever service sorted first.
+pythonpath = [".", "services"]
 testpaths = [
     "tests",
     "kernel/obligation/tests",

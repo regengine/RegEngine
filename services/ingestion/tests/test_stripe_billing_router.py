@@ -66,6 +66,8 @@ async def test_create_checkout_uses_stripe_and_normalizes_plan(monkeypatch):
         lambda **kwargs: captured_funnel.update(kwargs) or True,
     )
 
+    # #1184: tenant must come from authenticated principal, not request body.
+    principal = IngestionPrincipal(tenant_id="tenant-1", scopes=["billing.read"], key_id="k1")
     response = await stripe_billing.create_checkout(
         stripe_billing.CheckoutRequest(
             plan_id="starter",  # legacy alias
@@ -73,7 +75,9 @@ async def test_create_checkout_uses_stripe_and_normalizes_plan(monkeypatch):
             tenant_id="tenant-1",
             tenant_name="Acme Foods",
             customer_email="ops@example.com",
-        )
+        ),
+        x_tenant_id=None,
+        principal=principal,
     )
 
     assert response.session_id == "cs_test_123"
@@ -121,13 +125,17 @@ async def test_create_checkout_reuses_existing_customer_id_and_records_session(m
 
     monkeypatch.setattr(stripe_billing.stripe.checkout.Session, "create", _fake_create)
 
+    # #1184: tenant resolved from principal — the request body tenant_id is ignored.
+    principal = IngestionPrincipal(tenant_id=tenant_id, scopes=["billing.read"], key_id="k2")
     response = await stripe_billing.create_checkout(
         stripe_billing.CheckoutRequest(
             plan_id="growth",
             billing_period="monthly",
             tenant_id=tenant_id,
             customer_email="billing@acme.example",
-        )
+        ),
+        x_tenant_id=None,
+        principal=principal,
     )
 
     assert response.session_id == "cs_existing_customer"

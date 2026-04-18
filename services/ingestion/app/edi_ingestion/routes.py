@@ -43,6 +43,7 @@ from .constants import (
     _REQUIRED_SEGMENTS_BY_SET,
     _SUPPORTED_TRANSACTION_SETS,
 )
+from .dedup import check_and_record_interchange, verify_trading_partner_allowed
 from .extractors import _extract_856_fields, _extract_fields_for_set
 from .models import EDIIngestResponse
 from .parser import _first_segment, _parse_x12_segments, _segment_id_set, _detect_transaction_set
@@ -60,6 +61,93 @@ logger = logging.getLogger("edi-ingestion")
 router = APIRouter(prefix="/api/v1/ingest/edi", tags=["EDI Import"])
 
 _resolve_tenant_id = resolve_tenant_id
+
+
+def _enforce_envelope_integrity(
+    extracted: dict[str, Any],
+    sender_tenant_id: str,
+    transaction_set: str,
+) -> None:
+    """Apply #1160 + #1165 envelope validation.
+
+    - Reject on ISA/GS sender/receiver mismatch (X12 tenant-smuggling).
+    - Reject on GS sender not in tenant's allowed trading-partner list.
+    - Check ISA13 against the interchange dedup cache and return 409
+      idempotent-replay on retransmission.
+    """
+    # #1160: envelope mismatch between ISA and GS — caller tried to
+    # smuggle a different trading-partner identity.
+    if extracted.get("envelope_mismatch"):
+        logger.warning(
+            "edi_envelope_mismatch tenant=%s isa_sender=%s gs_sender=%s "
+            "isa_receiver=%s gs_receiver=%s",
+            sender_tenant_id,
+            extracted.get("isa_sender_id"),
+            extracted.get("gs_sender_id"),
+            extracted.get("isa_receiver_id"),
+            extracted.get("gs_receiver_id"),
+        )
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "error": "edi_envelope_mismatch",
+                "message": (
+                    "ISA and GS envelope sender/receiver IDs disagree. "
+                    "This interchange is rejected to prevent tenant smuggling."
+                ),
+                "isa_sender_id": extracted.get("isa_sender_id"),
+                "gs_sender_id": extracted.get("gs_sender_id"),
+            },
+        )
+
+    # #1160: enforce trading-partner allowlist per tenant (permissive
+    # if the env var is unset — no-op until explicitly configured).
+    if not verify_trading_partner_allowed(
+        tenant_id=sender_tenant_id,
+        gs_sender_id=extracted.get("gs_sender_id"),
+    ):
+        logger.warning(
+            "edi_trading_partner_denied tenant=%s gs_sender=%s",
+            sender_tenant_id, extracted.get("gs_sender_id"),
+        )
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "error": "trading_partner_not_allowed",
+                "message": (
+                    "GS sender id is not in the tenant's allowed trading "
+                    "partner list."
+                ),
+                "gs_sender_id": extracted.get("gs_sender_id"),
+            },
+        )
+
+    # #1165: retransmission dedup on ISA13.
+    is_duplicate, _prev = check_and_record_interchange(
+        sender_id=extracted.get("sender_id"),
+        receiver_id=extracted.get("receiver_id"),
+        isa13=extracted.get("isa13"),
+    )
+    if is_duplicate:
+        logger.info(
+            "edi_retransmission_detected tenant=%s sender=%s isa13=%s set=%s",
+            sender_tenant_id,
+            extracted.get("sender_id"),
+            extracted.get("isa13"),
+            transaction_set,
+        )
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "error": "duplicate_interchange",
+                "message": (
+                    "Interchange control number (ISA13) already processed. "
+                    "This is an idempotent replay — no events were ingested."
+                ),
+                "isa13": extracted.get("isa13"),
+                "idempotent_replay": True,
+            },
+        )
 
 
 @router.post(
@@ -122,6 +210,10 @@ async def ingest_edi_856(
         )
 
     extracted = _extract_856_fields(segments)
+
+    # #1160 + #1165: envelope mismatch / allowlist / ISA13 dedup.
+    _enforce_envelope_integrity(extracted, sender_tenant_id, "856")
+
     timestamp, ship_date = _ship_timestamp_and_date(
         extracted.get("ship_date_raw"),
         extracted.get("ship_time_raw"),
@@ -164,8 +256,14 @@ async def ingest_edi_856(
         "asn_number": extracted.get("asn_number"),
         "edi_transaction_set": "856",
         "edi_control_number": extracted.get("control_number"),
+        # Canonical trading-partner id (GS first, ISA fallback) per #1160.
         "edi_sender_id": extracted.get("sender_id"),
         "edi_receiver_id": extracted.get("receiver_id"),
+        # Raw envelope values for audit traceability.
+        "edi_isa_sender_id": extracted.get("isa_sender_id"),
+        "edi_gs_sender_id": extracted.get("gs_sender_id"),
+        "edi_isa13": extracted.get("isa13"),
+        "edi_gs_control_number": extracted.get("gs_control_number"),
         "partner_id": x_partner_id,
         "immediate_previous_source": ship_from_name,
     }
@@ -262,8 +360,14 @@ def _build_ingest_event_for_set(
     kdes: dict[str, Any] = {
         "edi_transaction_set": transaction_set,
         "edi_control_number": extracted.get("control_number"),
+        # Canonical trading-partner id (GS first, ISA fallback) per #1160.
         "edi_sender_id": extracted.get("sender_id"),
         "edi_receiver_id": extracted.get("receiver_id"),
+        # Raw envelope values for audit / forensic traceability.
+        "edi_isa_sender_id": extracted.get("isa_sender_id"),
+        "edi_gs_sender_id": extracted.get("gs_sender_id"),
+        "edi_isa13": extracted.get("isa13"),
+        "edi_gs_control_number": extracted.get("gs_control_number"),
         "reference_document_number": extracted.get("reference_document_number"),
         "event_date": event_date,
     }
@@ -381,6 +485,9 @@ async def ingest_edi_document(
         )
 
     extracted = _extract_fields_for_set(transaction_set, segments)
+
+    # #1160 + #1165: envelope mismatch / allowlist / ISA13 dedup.
+    _enforce_envelope_integrity(extracted, sender_tenant_id, transaction_set)
 
     # Validate against FSMAEvent model
     fsma_validated = _validate_edi_as_fsma_event(

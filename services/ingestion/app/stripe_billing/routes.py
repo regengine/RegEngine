@@ -72,30 +72,79 @@ async def list_plans() -> dict[str, list[dict[str, Any]]]:
         "a URL for redirecting the customer to Stripe Checkout."
     ),
 )
-async def create_checkout(request: CheckoutRequest) -> CheckoutResponse:
-    """Create a Stripe checkout session."""
+async def create_checkout(
+    request: CheckoutRequest,
+    x_tenant_id: Optional[str] = Header(default=None, alias="X-Tenant-ID"),
+    principal: Optional[IngestionPrincipal] = Depends(get_ingestion_principal),
+) -> CheckoutResponse:
+    """Create a Stripe checkout session.
+
+    #1184 fix: the tenant is derived from the authenticated principal /
+    ``X-Tenant-ID`` header. The client-supplied ``request.tenant_id`` is
+    ignored — honoring it would let an attacker bind another tenant's
+    billing record to their Stripe customer. Unauthenticated callers may
+    still trigger a new-tenant-at-checkout flow (no principal => no
+    ``tenant_id`` placed in metadata, and the webhook will provision a
+    fresh tenant when Stripe fires ``checkout.session.completed``).
+    """
     _helpers_mod._configure_stripe()
 
     billing_period = _plans_mod._normalize_billing_period(request.billing_period)
     plan, price_id, amount = _plans_mod._resolve_price_id(request.plan_id, billing_period)
     existing_customer_id: Optional[str] = None
 
+    # Resolve tenant ONLY from authenticated context — ignore request body.
+    # Note: when this function is called directly (outside FastAPI DI, e.g.
+    # in unit tests) the `x_tenant_id` / `principal` parameters may still
+    # hold their FastAPI param defaults (Header/Depends objects). We coerce
+    # them to a string/principal before use.
+    safe_x_tenant_id = x_tenant_id if isinstance(x_tenant_id, str) else None
+    safe_principal = principal if isinstance(principal, IngestionPrincipal) else None
+
+    authenticated_tenant_id: Optional[str] = None
+    try:
+        authenticated_tenant_id = _helpers_mod._resolve_tenant_context(
+            explicit_tenant_id=None,
+            x_tenant_id=safe_x_tenant_id,
+            principal=safe_principal,
+        )
+    except HTTPException:
+        # Unauthenticated checkout creation (self-serve signup flow): the
+        # webhook will call the admin service to provision a fresh tenant
+        # after payment. We therefore allow the session to proceed without
+        # binding to an existing tenant.
+        authenticated_tenant_id = None
+
+    if request.tenant_id and request.tenant_id != authenticated_tenant_id:
+        logger.warning(
+            "checkout_ignored_client_tenant_id auth_tenant=%s client_tenant=%s",
+            authenticated_tenant_id,
+            request.tenant_id,
+        )
+
     metadata = {
         "plan_id": plan["id"],
         "billing_period": billing_period,
     }
-    if request.tenant_id:
-        metadata["tenant_id"] = request.tenant_id
+    if authenticated_tenant_id:
+        metadata["tenant_id"] = authenticated_tenant_id
     if request.tenant_name:
         metadata["tenant_name"] = request.tenant_name
     if request.customer_email:
         metadata["customer_email"] = request.customer_email
+    # Attach issuing API-key id for webhook cross-check / audit trail.
+    principal_key_id = getattr(safe_principal, "key_id", None) if safe_principal else None
+    if principal_key_id:
+        metadata["issued_by_key_id"] = str(principal_key_id)
 
-    if request.tenant_id:
+    if authenticated_tenant_id:
         try:
-            existing_customer_id = _customers_mod._get_existing_customer_id(request.tenant_id)
+            existing_customer_id = _customers_mod._get_existing_customer_id(authenticated_tenant_id)
         except redis.RedisError as exc:
-            logger.warning("checkout_customer_lookup_failed tenant_id=%s error=%s", request.tenant_id, str(exc))
+            logger.warning(
+                "checkout_customer_lookup_failed tenant_id=%s error=%s",
+                authenticated_tenant_id, str(exc),
+            )
 
     checkout_kwargs: dict[str, Any] = {
         "mode": "subscription",
@@ -117,10 +166,10 @@ async def create_checkout(request: CheckoutRequest) -> CheckoutResponse:
         logger.error("checkout_create_failed", error=str(exc), plan=plan["id"])
         raise HTTPException(status_code=502, detail=f"Stripe checkout creation failed: {exc.user_message or str(exc)}") from exc
 
-    if request.tenant_id:
+    if authenticated_tenant_id:
         try:
             _customers_mod._record_checkout_session_hint(
-                tenant_id=request.tenant_id,
+                tenant_id=authenticated_tenant_id,
                 session_id=str(session.id),
                 plan_id=plan["id"],
                 billing_period=billing_period,
@@ -129,10 +178,13 @@ async def create_checkout(request: CheckoutRequest) -> CheckoutResponse:
             )
         except redis.RedisError as exc:
             # Don't block checkout redirect if Redis is briefly unavailable.
-            logger.warning("checkout_hint_store_failed tenant_id=%s error=%s", request.tenant_id, str(exc))
+            logger.warning(
+                "checkout_hint_store_failed tenant_id=%s error=%s",
+                authenticated_tenant_id, str(exc),
+            )
 
     _funnel_mod.emit_funnel_event(
-        tenant_id=request.tenant_id,
+        tenant_id=authenticated_tenant_id,
         event_name="checkout_started",
         metadata={
             "plan_id": plan["id"],
@@ -144,7 +196,7 @@ async def create_checkout(request: CheckoutRequest) -> CheckoutResponse:
     logger.info(
         "checkout_created",
         extra={
-            "tenant_id": request.tenant_id,
+            "tenant_id": authenticated_tenant_id,
             "plan": plan["id"],
             "amount": amount,
             "billing_period": billing_period,

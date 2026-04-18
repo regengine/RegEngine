@@ -96,8 +96,12 @@ from shared.request_safety import RequestSizeLimitMiddleware, RequestTimeoutMidd
 app.add_middleware(RequestSizeLimitMiddleware, max_bytes=10 * 1024 * 1024)
 app.add_middleware(RequestTimeoutMiddleware, timeout_seconds=120)
 
-# Correlation-ID middleware — registered last so it runs first (outermost). (#1316)
-app.add_middleware(CorrelationIdMiddleware)
+# #1232 — wire the shared IdempotencyMiddleware so webhook_router_v2
+# (and every other POST endpoint) de-duplicates retried requests via the
+# ``Idempotency-Key`` header. Cache keys are tenant-scoped (#1237) so
+# two tenants can safely pick the same key.
+from shared.idempotency import IdempotencyMiddleware
+app.add_middleware(IdempotencyMiddleware)
 
 # Global exception handlers (Sprint 18)
 from shared.error_handling import install_exception_handlers

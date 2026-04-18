@@ -10,6 +10,7 @@ This module provides:
 
 import os
 import secrets
+import string
 import logging
 from typing import TYPE_CHECKING, Optional
 from datetime import datetime, timezone
@@ -31,6 +32,88 @@ from sqlalchemy.orm import Session
 from pydantic import BaseModel
 
 _logger = logging.getLogger("mfa")
+
+
+# ──────────────────────────────────────────────────────────────
+# Encryption at rest for TOTP secrets (#1376)
+# ──────────────────────────────────────────────────────────────
+# MFA_ENCRYPTION_KEY must be a urlsafe base64-encoded Fernet key, e.g. generated
+# with: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+#
+# If the env var is unset, new enrollments fall back to plaintext storage with a
+# loud warning. This keeps local dev working but is rejected in production via
+# the configuration check below (caller responsibility).
+
+_MFA_KEY_ENV = "MFA_ENCRYPTION_KEY"
+
+
+def _get_fernet():
+    """Return a ``cryptography.fernet.Fernet`` instance, or ``None`` if no key is configured.
+
+    Lazy-imported so environments without cryptography installed still import
+    the module; MFA just falls back to plaintext storage in that case.
+    """
+    key = os.getenv(_MFA_KEY_ENV)
+    if not key:
+        return None
+    try:
+        from cryptography.fernet import Fernet
+    except ImportError:
+        _logger.error("mfa_encryption_unavailable_cryptography_not_installed")
+        return None
+    try:
+        return Fernet(key.encode() if isinstance(key, str) else key)
+    except Exception as exc:
+        _logger.error(f"MFA_ENCRYPTION_KEY is set but invalid (Fernet key required): {exc}")
+        return None
+
+
+def encrypt_mfa_secret(plaintext_secret: str) -> Optional[str]:
+    """Fernet-encrypt a base32 TOTP seed for at-rest storage (#1376).
+
+    Returns the ciphertext as a string on success, or ``None`` if encryption
+    is unavailable (caller must fall back to plaintext, with a warning).
+    """
+    f = _get_fernet()
+    if f is None:
+        return None
+    return f.encrypt(plaintext_secret.encode("utf-8")).decode("ascii")
+
+
+def decrypt_mfa_secret(ciphertext: str) -> str:
+    """Fernet-decrypt a ciphertext produced by :func:`encrypt_mfa_secret`.
+
+    Raises ``RuntimeError`` if the encryption key is not configured.
+    Raises ``cryptography.fernet.InvalidToken`` if the ciphertext is corrupt
+    or encrypted with a different key.
+    """
+    f = _get_fernet()
+    if f is None:
+        raise RuntimeError(
+            f"Cannot decrypt MFA secret: {_MFA_KEY_ENV} is not set or invalid."
+        )
+    return f.decrypt(ciphertext.encode("ascii")).decode("utf-8")
+
+
+def resolve_user_mfa_secret(user: "UserModel") -> Optional[str]:
+    """Return the plaintext base32 TOTP seed for a user, or ``None`` if not enrolled.
+
+    Prefers the encrypted column when available (#1376) and falls back to the
+    legacy plaintext column for rows not yet migrated. Errors during decryption
+    are logged and treated as "not enrolled" rather than surfaced, so a rotated
+    key never silently flips existing users to "MFA disabled".
+    """
+    ciphertext = getattr(user, "mfa_secret_ciphertext", None)
+    if ciphertext:
+        try:
+            return decrypt_mfa_secret(ciphertext)
+        except Exception as exc:
+            _logger.error(
+                f"mfa_decrypt_failed user_id={getattr(user, 'id', '?')} error={exc}"
+            )
+            # Fall through: if legacy plaintext also present we can still verify.
+    plaintext = getattr(user, "mfa_secret", None)
+    return plaintext or None
 
 # ──────────────────────────────────────────────────────────────
 # Configuration
@@ -92,6 +175,29 @@ def generate_mfa_secret() -> str:
     return secret
 
 
+def store_mfa_secret_on_user(user: "UserModel", secret: str) -> None:
+    """Persist a newly-enrolled TOTP seed onto a user row (#1376).
+
+    Writes the Fernet-encrypted seed to ``mfa_secret_ciphertext`` when an
+    encryption key is available; otherwise falls back to ``mfa_secret`` with
+    a loud warning. Clears the legacy plaintext column once we have ciphertext
+    so a DB snapshot can never leak both versions.
+    """
+    ciphertext = encrypt_mfa_secret(secret)
+    if ciphertext is not None:
+        user.mfa_secret_ciphertext = ciphertext
+        # Blank the legacy column so a backup of this row doesn't carry
+        # plaintext forward.
+        user.mfa_secret = None
+    else:
+        _logger.warning(
+            "MFA_ENCRYPTION_KEY not set — storing TOTP secret in plaintext. "
+            "This path is intended for local dev only."
+        )
+        user.mfa_secret = secret
+        user.mfa_secret_ciphertext = None
+
+
 def create_provisioning_uri(secret: str, email: str, issuer: str = "RegEngine") -> str:
     """
     Create a provisioning URI for TOTP setup in authenticator apps.
@@ -144,65 +250,71 @@ def verify_totp(secret: str, token: str, window: int = TOTP_WINDOW) -> bool:
 
 
 # ──────────────────────────────────────────────────────────────
-# Recovery Codes
+# Recovery Codes (#1377)
 # ──────────────────────────────────────────────────────────────
-def generate_recovery_codes(count: int = RECOVERY_CODE_COUNT) -> list[str]:
+# Fixed alphabet so generated codes never contain '-' or '_' from urlsafe
+# base64. Matches the normalization applied in ``normalize_recovery_code``.
+_RECOVERY_CODE_ALPHABET = string.ascii_uppercase + string.digits  # 36 chars
+
+
+def normalize_recovery_code(raw: str) -> str:
+    """Canonicalize a recovery code supplied by the user (#1377).
+
+    Uppercases, strips whitespace/dashes/underscores, and returns the result.
+    Empty string is returned for unparseable input; callers should treat that
+    as "invalid".
     """
-    Generate one-time-use recovery codes for MFA account recovery.
+    if not raw:
+        return ""
+    cleaned = []
+    for ch in raw:
+        if ch.isalnum():
+            cleaned.append(ch.upper())
+    return "".join(cleaned)
 
-    Each code is a random URL-safe string that should be stored securely
-    by the user and the admin system. They bypass TOTP verification for
-    account recovery if the user loses their authenticator device.
 
-    Args:
-        count: Number of recovery codes to generate (default 8)
+def generate_recovery_codes(count: int = RECOVERY_CODE_COUNT) -> list[str]:
+    """Generate one-time-use recovery codes for MFA account recovery.
 
-    Returns:
-        list[str]: List of recovery codes in format "XXXX-XXXX"
+    Codes are drawn from ``A-Z0-9`` so the redeem-side format check can be a
+    simple ``isalnum`` + length assertion without rejecting URL-safe base64
+    characters like ``-`` / ``_`` (old bug — #1377 — rejected ~12% of codes).
+
+    Returns codes in the user-facing format ``XXXX-XXXX`` (8 alnum chars
+    with a single dash for readability). The dash is optional when
+    redeeming; normalization strips it before hashing.
     """
     codes = []
     for _ in range(count):
-        # Generate urlsafe random bytes, encoded as base32-like (alphanumeric + dash)
-        code_part1 = secrets.token_urlsafe(RECOVERY_CODE_LENGTH // 2)[:4]
-        code_part2 = secrets.token_urlsafe(RECOVERY_CODE_LENGTH // 2)[:4]
-        code = f"{code_part1}-{code_part2}".upper()
-        codes.append(code)
+        first = "".join(secrets.choice(_RECOVERY_CODE_ALPHABET) for _ in range(4))
+        second = "".join(secrets.choice(_RECOVERY_CODE_ALPHABET) for _ in range(4))
+        codes.append(f"{first}-{second}")
 
     _logger.debug(f"Generated {count} recovery codes")
     return codes
 
 
 def hash_recovery_code(code: str) -> str:
-    """
-    Hash a recovery code for secure storage in the database.
+    """Hash a recovery code for secure storage in the database.
 
-    Recovery codes should never be stored in plaintext. Hash them like passwords
-    before storing in the admin_mfa_recovery_codes table.
-
-    Args:
-        code: Recovery code (e.g., "ABCD-EFGH")
-
-    Returns:
-        str: SHA256 hex digest of the code
+    Normalizes the code (uppercase, strip non-alnum) before hashing so that
+    dashes/casing differences between generation and redemption don't produce
+    different hashes.
     """
     import hashlib
 
-    hashed = hashlib.sha256(code.encode()).hexdigest()
-    return hashed
+    canonical = normalize_recovery_code(code)
+    return hashlib.sha256(canonical.encode()).hexdigest()
 
 
 def verify_recovery_code(code: str, hashed_code: str) -> bool:
-    """
-    Verify a recovery code against its hash.
+    """Verify a recovery code against its hash.
 
-    Args:
-        code: Recovery code provided by user
-        hashed_code: Stored hash from database
-
-    Returns:
-        bool: True if code matches hash, False otherwise
+    Uses constant-time comparison to avoid timing side-channels.
     """
-    return hash_recovery_code(code) == hashed_code
+    import hmac
+
+    return hmac.compare_digest(hash_recovery_code(code), hashed_code)
 
 
 # ──────────────────────────────────────────────────────────────
@@ -242,21 +354,28 @@ async def require_mfa(
             detail="MFA token required (X-MFA-Token header)",
         )
 
-    if not current_user or not current_user.mfa_secret:
+    # Resolve the TOTP secret via the encryption-aware helper (#1376). This
+    # transparently reads mfa_secret_ciphertext when populated, falling back
+    # to the legacy plaintext column during the encryption migration.
+    if not current_user:
+        _logger.warning("MFA required but no current_user in scope")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="MFA not enrolled for this account",
+        )
+    user_secret = resolve_user_mfa_secret(current_user)
+    if not user_secret:
         _logger.warning("MFA required but user has no MFA secret enrolled")
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="MFA not enrolled for this account",
         )
 
-    # Classify token format
+    # Classify token format. TOTP = 6 digits. Recovery = normalized 8 alnum
+    # chars (after stripping dash/space/etc).
     is_totp = len(x_mfa_token) == 6 and x_mfa_token.isdigit()
-    is_recovery = (
-        len(x_mfa_token) == 9
-        and x_mfa_token[4] == "-"
-        and x_mfa_token[:4].isalnum()
-        and x_mfa_token[5:].isalnum()
-    )
+    normalized_recovery = normalize_recovery_code(x_mfa_token)
+    is_recovery = len(normalized_recovery) == 8 and normalized_recovery.isalnum()
 
     if not (is_totp or is_recovery):
         _logger.warning("Invalid MFA token format")
@@ -267,7 +386,7 @@ async def require_mfa(
 
     # TOTP verification
     if is_totp:
-        if not verify_totp(secret=current_user.mfa_secret, token=x_mfa_token):
+        if not verify_totp(secret=user_secret, token=x_mfa_token):
             _logger.warning(f"TOTP verification failed for user {current_user.id}")
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
@@ -275,8 +394,10 @@ async def require_mfa(
             )
         return x_mfa_token
 
-    # Recovery code verification
-    code_hash = hash_recovery_code(x_mfa_token.upper())
+    # Recovery code verification — hash_recovery_code now normalizes, so the
+    # same code accepts "ABCD-EFGH", "abcd-efgh", "abcdefgh", " ABCD-EFGH ",
+    # etc. (#1377).
+    code_hash = hash_recovery_code(x_mfa_token)
     recovery = db.execute(
         select(MFARecoveryCodeModel).where(
             MFARecoveryCodeModel.user_id == current_user.id,

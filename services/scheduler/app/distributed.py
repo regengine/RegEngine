@@ -107,25 +107,37 @@ class DistributedContext:
                 self._is_leader = False
 
     def wait_for_leadership(self, callback, poll_interval: int = 5):
-        """Blocking call that waits for leadership then runs callback."""
+        """Blocking call that waits for leadership then runs callback.
+
+        Sets ``self._is_leader`` to True for the duration of ``callback``
+        and clears it in the ``finally`` block, so ``app.leadership.is_leader()``
+        (which reads the same flag) returns accurate values from inside
+        callback-driven jobs. Without this (#1162), every ``is_leader()``
+        guard in the module-level scheduled jobs silently skipped because
+        the flag was only ever set by :meth:`leadership_claim`.
+        """
         logger.info("entering_leadership_election_loop")
-        
+
         # We need a dedicated connection that stays open
         while True:
             conn = None
             try:
                 conn = self.engine.connect()
                 conn.execution_options(isolation_level="AUTOCOMMIT")
-                
+
                 while True:
                     # Try to get lock
                     got_lock = conn.execute(
                         text("SELECT pg_try_advisory_lock(:lock_id)"),
                         {"lock_id": SCHEDULER_LEADER_LOCK_ID}
                     ).scalar()
-                    
+
                     if got_lock:
                         logger.info("leadership_acquired_running_scheduler")
+                        # #1162 — publish our leader state BEFORE running the
+                        # callback so any is_leader() gates inside the
+                        # callback see True.
+                        self._is_leader = True
                         try:
                             # Run the actual scheduler workload
                             # This callback should block (e.g. valid for BlockingScheduler)
@@ -135,21 +147,34 @@ class DistributedContext:
                             logger.error("scheduler_crashed", error=str(e))
                             raise e
                         finally:
+                            # Clear the flag first — even if unlock fails or
+                            # raises, no subsequent is_leader() call should
+                            # incorrectly report True.
+                            self._is_leader = False
                             # If callback finishes, we unlock
-                            conn.execute(
-                                text("SELECT pg_advisory_unlock(:lock_id)"),
-                                {"lock_id": SCHEDULER_LEADER_LOCK_ID}
-                            )
-                            logger.info("leadership_released_callback_finished")
-                            return # Exit loop if callback finishes intentionally
+                            try:
+                                conn.execute(
+                                    text("SELECT pg_advisory_unlock(:lock_id)"),
+                                    {"lock_id": SCHEDULER_LEADER_LOCK_ID}
+                                )
+                                logger.info("leadership_released_callback_finished")
+                            except Exception as unlock_err:
+                                logger.error(
+                                    "leadership_unlock_failed",
+                                    error=str(unlock_err),
+                                )
+                            return  # Exit loop if callback finishes intentionally
 
                     else:
                         logger.info("standby_mode_waiting_for_lock")
+                        # Keep _is_leader honest even during poll periods.
+                        self._is_leader = False
                         time.sleep(poll_interval)
                         # Connection is still open, we loop and retry
 
             except SQLAlchemyError as e:
                 logger.error("db_connection_lost_retrying", error=str(e))
+                self._is_leader = False
                 if conn:
                     try:
                         conn.close()
@@ -159,5 +184,6 @@ class DistributedContext:
                 time.sleep(poll_interval)
             except Exception as e:
                 logger.exception("unexpected_error_in_election", error=str(e))
+                self._is_leader = False
                 # Avoid tight loop on crash
                 time.sleep(poll_interval)

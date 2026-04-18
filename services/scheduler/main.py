@@ -21,10 +21,16 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import Dict, List, Optional
 
 import structlog
+from apscheduler.events import (
+    EVENT_JOB_EXECUTED,
+    EVENT_JOB_ERROR,
+    EVENT_JOB_MISSED,
+)
 from apscheduler.schedulers.blocking import BlockingScheduler
 from apscheduler.schedulers.base import SchedulerNotRunningError
 from apscheduler.jobstores.memory import MemoryJobStore
 from apscheduler.executors.pool import ThreadPoolExecutor
+from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 from pytz import utc
 
@@ -274,6 +280,11 @@ class SchedulerService:
     ) -> List[EnforcementItem]:
         """Filter out previously seen items.
 
+        NOTE: This method INTENTIONALLY does not call ``mark_seen``. Marking an
+        item as seen before it has been successfully emitted downstream causes
+        permanent data loss on a broker outage (issue #1136). Call
+        :meth:`_mark_items_seen` only after successful emission.
+
         Args:
             items: List of enforcement items
             source_type: Source type for state tracking
@@ -290,7 +301,21 @@ class SchedulerService:
             if self.state_manager.is_new(item.source_id, content):
                 new_items.append(item)
 
-                # Mark as seen
+        return new_items
+
+    def _mark_items_seen(
+        self, items: List[EnforcementItem], source_type: SourceType
+    ) -> None:
+        """Persist the ``seen`` mark for items that have been emitted.
+
+        Used as the second half of an at-least-once emit-then-ack flow
+        (see #1136). If ``mark_seen`` itself fails mid-loop, the remaining
+        items stay un-marked and will be retried on the next scheduler tick
+        (downstream consumers must be idempotent on ``source_id``).
+        """
+        for item in items:
+            content = f"{item.title}|{item.summary or ''}|{item.url}"
+            try:
                 self.state_manager.mark_seen(
                     source_id=item.source_id,
                     source_type=source_type.value,
@@ -298,13 +323,26 @@ class SchedulerService:
                     title=item.title,
                     url=item.url,
                 )
-
-        return new_items
+            except Exception as e:  # pragma: no cover — logged, retried next tick
+                logger.error(
+                    "mark_seen_failed",
+                    source_id=item.source_id,
+                    source_type=source_type.value,
+                    error=str(e),
+                )
+                # Stop marking; remaining items will be re-attempted next run.
+                return
 
     def _process_new_items(
         self, items: List[EnforcementItem], source_type: SourceType
     ) -> None:
         """Process newly detected enforcement items.
+
+        Emits first, then marks items as seen only if the primary emission
+        succeeded without exception. This is the at-least-once path that
+        closes issue #1136: a Kafka outage leaves items un-seen so they
+        are re-attempted on the next tick rather than silently dropped.
+        Downstream consumers must be idempotent on ``source_id``.
 
         Args:
             items: List of new enforcement items
@@ -316,22 +354,45 @@ class SchedulerService:
             count=len(items),
         )
 
-        # Emit to Kafka (enforcement events)
+        # Emit to Kafka (enforcement events). This is the authoritative
+        # emission: if it raises, items stay un-marked and will be retried.
+        primary_emit_succeeded = False
         try:
             success, failures = self.kafka_producer.emit_batch(items)
             logger.info(
                 "kafka_events_emitted",
+                source_type=source_type.value,
                 success=success,
                 failures=failures,
             )
+            # Any hard failure means "not safe to mark seen" — retry next tick.
+            # (Partial per-item failures from emit_batch() are tracked by its
+            # own retry/DLQ; see #1147 follow-up.)
+            primary_emit_succeeded = failures == 0
+            if failures > 0:
+                metrics.record_kafka_emit_failure(
+                    source_type=source_type.value,
+                    failure_mode="partial_batch",
+                    count=failures,
+                )
         except (ConnectionError, TimeoutError, OSError, RuntimeError) as e:
-            logger.error("kafka_emission_failed", error=str(e))
+            logger.error(
+                "kafka_emission_failed",
+                source_type=source_type.value,
+                count=len(items),
+                error=str(e),
+            )
+            metrics.record_kafka_emit_failure(
+                source_type=source_type.value,
+                failure_mode="hard_exception",
+                count=len(items),
+            )
 
         # Transform FDA recalls to FSMA events and emit to graph consumer
         try:
             transformer = get_fsma_transformer()
             fsma_events = transformer.transform_batch(items)
-            
+
             if fsma_events:
                 fsma_success, fsma_failures = self.kafka_producer.emit_fsma_batch(fsma_events)
                 logger.info(
@@ -376,6 +437,19 @@ class SchedulerService:
                     title=item.title,
                     url=item.url,
                 )
+
+        # FINAL: mark items seen only if the primary emission succeeded
+        # cleanly. If Kafka was down the items stay un-marked and the next
+        # scheduler tick will re-discover and re-emit them (#1136).
+        if primary_emit_succeeded:
+            self._mark_items_seen(items, source_type)
+        else:
+            logger.warning(
+                "items_not_marked_seen_will_retry",
+                source_type=source_type.value,
+                count=len(items),
+                reason="primary_emission_failed_or_partial",
+            )
 
     def schedule_jobs(self) -> None:
         """Schedule all scraping jobs."""
@@ -490,11 +564,119 @@ class SchedulerService:
         )
         logger.info("job_scheduled", job_id="data_archival", interval_hours=24)
 
+        # Task queue retention — purge completed/dead rows (#1382)
+        self.scheduler.add_job(
+            self.purge_old_tasks,
+            trigger=IntervalTrigger(hours=24),
+            id="task_queue_purge",
+            name="Task Queue Retention (30-day purge)",
+            replace_existing=True,
+        )
+        logger.info("job_scheduled", job_id="task_queue_purge", interval_hours=24)
+
+        # Nightly FSMA source sync — Phase 29 (#1135).
+        # Previously defined in app/jobs.py on an orphaned BlockingScheduler
+        # that was never started; the job has been running nowhere in
+        # production. Re-home it on the real scheduler here.
+        self.scheduler.add_job(
+            self.run_fsma_nightly_sync,
+            trigger=CronTrigger(hour=2, minute=0, timezone=utc),
+            id="fsma_nightly_sync",
+            name="Nightly FSMA Source Sync (02:00 UTC)",
+            misfire_grace_time=300,  # 5-minute grace window
+            replace_existing=True,
+        )
+        logger.info("job_scheduled", job_id="fsma_nightly_sync", cron="02:00 UTC")
+
         logger.info(
             "scheduler_ready",
-            total_jobs=7,
+            total_jobs=9,
             scrapers=list(self.scrapers.keys()),
         )
+
+    def purge_old_tasks(self) -> None:
+        """Purge completed/dead ``fsma.task_queue`` rows older than 30 days.
+
+        Closes #1382. Without this, completed and dead rows accumulate
+        forever: index bloat on ``idx_task_queue_tenant``, slower ad-hoc
+        observability queries, and ever-growing storage cost on Railway
+        Postgres.
+        """
+        try:
+            from shared.database import SessionLocal
+            from sqlalchemy import text as _sqltext
+
+            db = SessionLocal()
+            try:
+                result = db.execute(
+                    _sqltext(
+                        """
+                        DELETE FROM fsma.task_queue
+                        WHERE status IN ('completed', 'dead')
+                          AND COALESCE(completed_at, created_at)
+                              < NOW() - INTERVAL '30 days'
+                        RETURNING id
+                        """
+                    )
+                )
+                rows = result.fetchall()
+                db.commit()
+                if rows:
+                    logger.info("task_queue_purged", rows=len(rows))
+                else:
+                    logger.debug("task_queue_purge_noop")
+            finally:
+                db.close()
+        except (ImportError, RuntimeError, ConnectionError, ValueError) as e:
+            logger.error("task_queue_purge_failed", error=str(e))
+
+    def run_fsma_nightly_sync(self) -> None:
+        """Trigger a full FSMA source sync via the ingestion service.
+
+        Phase 29 / #1135. Formerly defined in ``app/jobs.py`` on a module-
+        level :class:`BlockingScheduler` that was never started. The
+        ingestion endpoint handles deduplication (ETag + SHA-256), so
+        re-running on unchanged sources is safe.
+        """
+        import httpx
+        from app.config import get_settings as _get_settings
+
+        settings = _get_settings()
+        ingestion_url = os.getenv(
+            "INGESTION_SERVICE_URL", settings.ingestion_service_url
+        )
+
+        # #1063 — fail loudly if the internal auth secret is missing or
+        # empty rather than sending a blank X-RegEngine-API-Key header
+        # that will 401 silently.
+        api_key = os.getenv("REGENGINE_INTERNAL_SECRET", "").strip()
+        if not api_key:
+            logger.error(
+                "fsma_nightly_sync_skipped_missing_secret",
+                hint="Set REGENGINE_INTERNAL_SECRET to a non-empty value",
+            )
+            return
+
+        logger.info("fsma_nightly_sync_started", ingestion_url=ingestion_url)
+        try:
+            response = httpx.post(
+                f"{ingestion_url}/v1/ingest/all-regulations",
+                headers={"X-RegEngine-API-Key": api_key},
+                timeout=120.0,
+            )
+            response.raise_for_status()
+            summary = response.json() if response.content else {}
+            logger.info(
+                "fsma_nightly_sync_complete",
+                sources_attempted=summary.get("sources_attempted"),
+                ingested=summary.get("ingested"),
+                unchanged=summary.get("unchanged"),
+                failed=summary.get("failed"),
+            )
+        except httpx.HTTPError as exc:
+            logger.error("fsma_nightly_sync_http_failed", error=str(exc))
+        except Exception as exc:
+            logger.error("fsma_nightly_sync_failed", error=str(exc))
 
     def check_request_deadlines(self) -> None:
         """Check all tenants for overdue/critical FDA request deadlines.
@@ -738,7 +920,12 @@ class SchedulerService:
     def _run_scheduler_workload(self) -> None:
         """The workload to run when this instance is the Leader."""
         logger.info("leadership_acquired_initializing_workload")
-        
+
+        # #1144 — persisted last-run tracking + missed-run alerting.
+        # Install the APScheduler event listener BEFORE scheduling jobs so
+        # the very first execution is recorded.
+        self._install_job_run_listener()
+
         # We only schedule/update jobs if we are the leader
         self.schedule_jobs()
 
@@ -758,6 +945,51 @@ class SchedulerService:
     def cleanup_state(self) -> None:
         """Wrapper for state cleanup to avoid lambda serialization issues."""
         self.state_manager.cleanup_old_items(days=90)
+
+    def _install_job_run_listener(self) -> None:
+        """Attach APScheduler listeners for EXECUTED / ERROR / MISSED (#1144).
+
+        Persists ``(job_id, last_run_at, last_success_at, last_status)``
+        to ``scheduler_job_runs`` on every run and logs `job_missed` at
+        ERROR on misfire — the old code silently dropped missed runs if
+        they were older than ``misfire_grace_time=3600``.
+        """
+        try:
+            state_manager = self.state_manager
+        except AttributeError:  # pragma: no cover
+            return
+
+        def _listener(event):
+            try:
+                if event.code == EVENT_JOB_EXECUTED:
+                    state_manager.record_job_run(event.job_id, success=True)
+                elif event.code == EVENT_JOB_ERROR:
+                    state_manager.record_job_run(
+                        event.job_id,
+                        success=False,
+                        error=str(getattr(event, "exception", "")),
+                    )
+                elif event.code == EVENT_JOB_MISSED:
+                    logger.error(
+                        "scheduler_job_missed",
+                        job_id=event.job_id,
+                        scheduled_run_time=str(
+                            getattr(event, "scheduled_run_time", "unknown")
+                        ),
+                    )
+                    state_manager.record_job_run(
+                        event.job_id,
+                        success=False,
+                        error="MISSED",
+                    )
+            except Exception:  # pragma: no cover — telemetry must not crash
+                logger.exception("job_run_listener_error", job_id=getattr(event, "job_id", "?"))
+
+        self.scheduler.add_listener(
+            _listener,
+            EVENT_JOB_EXECUTED | EVENT_JOB_ERROR | EVENT_JOB_MISSED,
+        )
+        logger.info("job_run_listener_installed")
 
     def shutdown(self) -> None:
         """Gracefully shutdown the scheduler."""
@@ -854,8 +1086,40 @@ def start_health_server(port: int) -> None:
         logger.error("health_server_failed", error=str(e))
 
 
+def _install_graceful_shutdown_handlers() -> None:
+    """Translate SIGTERM / SIGINT to :class:`KeyboardInterrupt` on the main thread.
+
+    Railway and Kubernetes send **SIGTERM** (not SIGINT) when rolling a
+    deploy. Python's default SIGTERM disposition terminates the process
+    without unwinding — `SchedulerService.shutdown()` never runs,
+    `BlockingScheduler.shutdown(wait=True)` never gets to cancel
+    in-flight jobs, and `kafka_producer.close()` never flushes. Any
+    Kafka producer buffer at the moment of the kill is lost (#1255).
+
+    By raising :class:`KeyboardInterrupt` from our SIGTERM handler we
+    hit the existing ``try/except (KeyboardInterrupt, SystemExit):``
+    block in ``SchedulerService.start`` which cleanly shuts the
+    BlockingScheduler and the Kafka producer.
+    """
+    import signal
+
+    def _sigterm_handler(signum, frame):
+        logger.info("scheduler_received_signal", signum=int(signum))
+        raise KeyboardInterrupt()
+
+    # Only install in the main thread (signal.signal is a main-thread-only API).
+    if threading.current_thread() is threading.main_thread():
+        signal.signal(signal.SIGTERM, _sigterm_handler)
+        signal.signal(signal.SIGINT, _sigterm_handler)
+        logger.info("sigterm_handler_installed")
+
+
 def main() -> None:
     """Main entry point."""
+    # #1255 — translate SIGTERM/SIGINT into KeyboardInterrupt so our
+    # existing shutdown path runs on Railway rolling deploys.
+    _install_graceful_shutdown_handlers()
+
     settings = get_settings()
 
     # Start health server in background thread

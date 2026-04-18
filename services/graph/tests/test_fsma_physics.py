@@ -350,12 +350,19 @@ class TestRiskFlagTagging:
         mock_result.single = AsyncMock(return_value={"tagged_id": "evt-001"})
         mock_neo4j_session.run.return_value = mock_result
 
-        success = await _tag_event_risk_flag(mock_neo4j_client, "evt-001", "BROKEN_CHAIN")
+        success = await _tag_event_risk_flag(
+            mock_neo4j_client,
+            "evt-001",
+            "BROKEN_CHAIN",
+            tenant_id="00000000-0000-0000-0000-000000000001",
+        )
 
         assert success is True
         mock_neo4j_session.run.assert_called_once()
         call_args = mock_neo4j_session.run.call_args
         assert "SET e.risk_flag" in call_args[0][0]
+        # Tenant scoping: the Cypher MATCH must include tenant_id
+        assert "tenant_id: $tenant_id" in call_args[0][0]
 
 
 # ============================================================================

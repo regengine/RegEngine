@@ -79,9 +79,15 @@ class TestIsNew:
         state_manager.mark_seen("src-001", "fda_recall", "some content")
         assert state_manager.is_new("src-001", "some content") is False
 
-    def test_seen_item_with_changed_content_is_new(self, state_manager):
+    def test_seen_item_with_changed_content_is_not_new(self, state_manager):
+        """#1158 — identity is by source_id only.
+
+        FDA regularly edits recall metadata (classification upgrades,
+        firm-name corrections, product-description edits). Those
+        edits must NOT re-emit the same recall as a new event.
+        """
         state_manager.mark_seen("src-001", "fda_recall", "original content")
-        assert state_manager.is_new("src-001", "updated content") is True
+        assert state_manager.is_new("src-001", "updated content") is False
 
     def test_different_source_ids_are_independent(self, state_manager):
         state_manager.mark_seen("src-001", "fda_recall", "content")

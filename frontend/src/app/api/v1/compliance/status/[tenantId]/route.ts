@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerServiceURL } from '@/lib/api-config';
-import { requireProxyAuth, validateProxySession, getServerApiKey } from '@/lib/api-proxy';
+import {
+    requireProxyAuth,
+    validateProxySession,
+    getServerApiKey,
+    validateUuid,
+} from '@/lib/api-proxy';
 
 function getComplianceUrl(): string {
     const url = process.env.COMPLIANCE_SERVICE_URL || getServerServiceURL('compliance');
@@ -26,7 +31,15 @@ export async function GET(
     const sessionError = await validateProxySession(request);
     if (sessionError) return sessionError;
 
-    const { tenantId } = await params;
+    const { tenantId: rawTenantId } = await params;
+    // Validate UUID before interpolating into the upstream URL.
+    const tenantId = validateUuid(rawTenantId);
+    if (!tenantId) {
+        return NextResponse.json(
+            { error: 'invalid_tenant_identifier' },
+            { status: 400 },
+        );
+    }
     const searchParams = request.nextUrl.searchParams;
     const detailed = searchParams.get('detailed') === 'true';
 

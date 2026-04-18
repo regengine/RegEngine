@@ -41,7 +41,7 @@ class {vertical_name}Decision(StructuredNode):
     
     decision_id = UniqueIdProperty()
     decision_type = StringProperty(required=True, choices={vertical_meta.decision_types})
-   timestamp = DateTimeProperty(default_now=True)
+    timestamp = DateTimeProperty(default_now=True)
     customer_id = StringProperty(required=True, index=True)
     model_version_id = StringProperty(required=True, index=True)
     decision_outcome = StringProperty(required=True)
@@ -85,8 +85,8 @@ class RegulatoryObligation(StructuredNode):
     description = StringProperty(required=True)
     triggering_conditions = JSONProperty()
     required_evidence = JSONProperty()
-    
-   # Relationships
+
+    # Relationships
     violations = RelationshipFrom('{vertical_name}Decision', 'VIOLATES')
     evaluations = RelationshipFrom('ObligationEvaluation', 'AGAINST_OBLIGATION')
 
@@ -171,7 +171,7 @@ class EvidenceEnvelope(StructuredNode):
 
 class ObligationEvaluation(StructuredNode):
     """Result of evaluating decision against obligations."""
-   
+
     evaluation_id = UniqueIdProperty()
     timestamp = DateTimeProperty(default_now=True)
     decision_id = StringProperty(required=True)

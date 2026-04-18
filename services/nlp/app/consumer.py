@@ -1,12 +1,22 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 import threading
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
+
+
+def _env_flag(name: str, default: bool = False) -> bool:
+    """Parse a boolean env flag ('1', 'true', 'yes' = True)."""
+
+    val = os.getenv(name)
+    if val is None:
+        return default
+    return val.strip().lower() in {"1", "true", "yes", "on"}
 
 import structlog
 from jsonschema import Draft7Validator, ValidationError
@@ -39,11 +49,159 @@ from shared.observability.kafka_propagation import (
 from .classification import SignalClassifier
 from .config import settings
 from .extractor import extract_entities
+from .extractors import FSMAExtractor, LLMGenerativeExtractor
+from .extractors.fsma_types import (
+    TOPIC_GRAPH_UPDATE as FSMA_TOPIC_GRAPH_UPDATE,
+    TOPIC_NEEDS_REVIEW as FSMA_TOPIC_NEEDS_REVIEW,
+)
 from .resolution import EntityResolver
 from .s3_utils import get_bytes
 
 logger = structlog.get_logger("nlp-consumer")
 _audit_logger = structlog.get_logger("nlp-consumer-audit")
+
+
+# ---------------------------------------------------------------------------
+# Structured extractor wiring (#1194)
+# ---------------------------------------------------------------------------
+#
+# Until this wiring landed, FSMAExtractor and LLMGenerativeExtractor were
+# imported but never instantiated from the consumer loop. All KDE-gating —
+# the core reason the FSMAExtractor exists — was therefore bypassed for
+# every inbound document, which meant FSMA 204 documents silently fell
+# through to the regex-only pipeline and skipped the HITL gate.
+#
+# Two feature flags control activation so we can deploy carefully:
+#
+#   NLP_ENABLE_FSMA_EXTRACTOR (default true)
+#     When on, every document passes through FSMAExtractor before the
+#     legacy regex extractor. CTEs with both TLC and Event Date are
+#     routed to ``graph.update``; everything else is routed to
+#     ``nlp.needs_review`` for human-in-the-loop review.
+#
+#   NLP_ENABLE_LLM_EXTRACTOR (default false)
+#     Opt-in — LLM inference has per-token cost and higher latency.
+#     When on, documents that produce zero high-confidence FSMA CTEs
+#     get an LLM pass as fallback. Results augment (do not replace)
+#     the regex-based ExtractionPayload stream.
+#
+# The legacy regex extractor (extract_entities) remains live as a
+# backstop so existing consumers continue to observe nlp.extracted
+# events.
+NLP_ENABLE_FSMA_EXTRACTOR = os.getenv("NLP_ENABLE_FSMA_EXTRACTOR", "true").lower() in (
+    "true", "1", "yes", "on",
+)
+NLP_ENABLE_LLM_EXTRACTOR = os.getenv("NLP_ENABLE_LLM_EXTRACTOR", "false").lower() in (
+    "true", "1", "yes", "on",
+)
+
+# Instantiate extractors lazily on first use so test imports don't pay
+# the model-download cost and so flag flips at runtime are honored
+# (flags are read once at module load — restarts of the consumer pick
+# up new values).
+_FSMA_EXTRACTOR: Optional[FSMAExtractor] = None
+_LLM_EXTRACTOR: Optional[LLMGenerativeExtractor] = None
+
+
+def _get_fsma_extractor() -> FSMAExtractor:
+    global _FSMA_EXTRACTOR
+    if _FSMA_EXTRACTOR is None:
+        _FSMA_EXTRACTOR = FSMAExtractor()
+    return _FSMA_EXTRACTOR
+
+
+def _get_llm_extractor() -> LLMGenerativeExtractor:
+    global _LLM_EXTRACTOR
+    if _LLM_EXTRACTOR is None:
+        _LLM_EXTRACTOR = LLMGenerativeExtractor()
+    return _LLM_EXTRACTOR
+
+
+def _run_fsma_extractor(
+    text: str,
+    doc_id: str,
+    doc_hash: str,
+    producer: KafkaProducer,
+    tenant_id: Optional[str],
+    kafka_headers: list,
+) -> dict:
+    """
+    Run FSMAExtractor and route results to the appropriate Kafka topic.
+
+    Returns a summary dict with counts so the caller can emit a single
+    structured log line.
+    """
+    extractor = _get_fsma_extractor()
+    try:
+        result = extractor.extract(text, doc_id)
+    except Exception as exc:
+        logger.exception(
+            "fsma_extractor_error",
+            document_id=doc_id,
+            error=str(exc),
+        )
+        return {"status": "error", "cte_count": 0, "routed": None}
+
+    routing = extractor.route_extraction(result)
+    topic = routing["topic"]
+    payload = {
+        "tenant_id": tenant_id,
+        "doc_hash": doc_hash,
+        **routing["payload"],
+    }
+    try:
+        producer.send(
+            topic,
+            key=doc_id,
+            value=payload,
+            headers=kafka_headers,
+        )
+        producer.flush(timeout=1.0)
+    except (KafkaTimeoutError, ConnectionError, OSError) as exc:
+        logger.error(
+            "fsma_routing_failed",
+            document_id=doc_id,
+            topic=topic,
+            error=str(exc),
+        )
+        return {"status": "error", "cte_count": len(result.ctes), "routed": topic}
+
+    logger.info(
+        "fsma_extractor_routed",
+        document_id=doc_id,
+        cte_count=len(result.ctes),
+        review_required=result.review_required,
+        topic=topic,
+    )
+    return {
+        "status": "ok",
+        "cte_count": len(result.ctes),
+        "review_required": result.review_required,
+        "routed": topic,
+        "high_confidence": topic == FSMA_TOPIC_GRAPH_UPDATE,
+    }
+
+
+def _run_llm_extractor(
+    text: str,
+    doc_id: str,
+    jurisdiction: str,
+) -> list:
+    """Run LLMGenerativeExtractor; return its structured results."""
+    try:
+        extractor = _get_llm_extractor()
+        return extractor.extract(
+            text=text,
+            jurisdiction=jurisdiction,
+            correlation_id=doc_id,
+        )
+    except Exception as exc:
+        logger.exception(
+            "llm_extractor_error",
+            document_id=doc_id,
+            error=str(exc),
+        )
+        return []
 
 try:
     MESSAGES_COUNTER = Counter("nlp_messages_total", "NLP messages processed", ["status"])
@@ -56,15 +214,103 @@ except ValueError:
 
 _shutdown_event = threading.Event()
 
-# Confidence threshold for automatic approval
-# Using settings.extraction_confidence_high (SRP 11-7) with fallback
-CONFIDENCE_THRESHOLD = getattr(settings, 'extraction_confidence_high', 0.85) if settings else 0.85
+# NOTE: Confidence thresholds are read live from `settings` inside
+# ``_route_extraction`` (see issue #1260). A module-level constant captured at
+# import time would silently desync from ``config.py`` if settings loading fails
+# or if operators rotate env vars at runtime. Always call
+# ``_current_thresholds()`` instead.
+
+
+def _current_thresholds() -> tuple[float, float]:
+    """Return the live (high, medium) confidence thresholds from settings.
+
+    Reading per-call (rather than snapshotting at import) ensures:
+    - A silent settings-load failure surfaces as a configuration error in logs,
+      not a 0.85 fallback that disagrees with the 0.95 production default.
+    - Operators can rotate thresholds by restarting the process (or in future,
+      via a TTL cache) without editing source constants.
+    """
+
+    high_default = 0.95  # Must match config.py extraction_confidence_high default
+    medium_default = 0.85  # Must match config.py extraction_confidence_medium default
+    if settings is None:
+        logger.warning(
+            "confidence_thresholds_using_fallback",
+            reason="settings_none",
+            high=high_default,
+            medium=medium_default,
+        )
+        return high_default, medium_default
+    high = getattr(settings, "extraction_confidence_high", high_default)
+    medium = getattr(settings, "extraction_confidence_medium", medium_default)
+    return float(high), float(medium)
+
+
+class _ThresholdProxy:
+    """Shim that preserves the import name ``CONFIDENCE_THRESHOLD`` while
+    still reading the threshold live (#1260).
+
+    Callers that do numeric comparisons (``extraction.confidence_score >=
+    CONFIDENCE_THRESHOLD``) see the current value each time because arithmetic
+    ops call ``__float__`` / ``__ge__``. Callers that read it as a module
+    attribute (``from ... import CONFIDENCE_THRESHOLD``) see the live value via
+    ``__float__`` at comparison time. Binding to a name (``x =
+    CONFIDENCE_THRESHOLD``) then comparing still works because Python evaluates
+    ``__ge__`` with this object as the operand.
+    """
+
+    def _value(self) -> float:
+        return _current_thresholds()[0]
+
+    def __float__(self) -> float:
+        return self._value()
+
+    def __repr__(self) -> str:
+        return f"{self._value()}"
+
+    def __eq__(self, other: object) -> bool:
+        try:
+            return float(other) == self._value()
+        except (TypeError, ValueError):
+            return NotImplemented
+
+    def __ne__(self, other: object) -> bool:
+        result = self.__eq__(other)
+        if result is NotImplemented:
+            return result
+        return not result
+
+    def __lt__(self, other: object) -> bool:
+        return self._value() < float(other)
+
+    def __le__(self, other: object) -> bool:
+        return self._value() <= float(other)
+
+    def __gt__(self, other: object) -> bool:
+        return self._value() > float(other)
+
+    def __ge__(self, other: object) -> bool:
+        return self._value() >= float(other)
+
+    def __hash__(self) -> int:
+        return hash(self._value())
+
+
+# Backward-compatible export for tests & legacy callers — live-read (#1260).
+CONFIDENCE_THRESHOLD = _ThresholdProxy()
 
 # Topic names for routing
 TOPIC_GRAPH_UPDATE = "graph.update"
 TOPIC_NEEDS_REVIEW = "nlp.needs_review"
 TOPIC_DLQ = "nlp.extracted.dlq"
 TOPIC_FSMA_DLQ = "fsma.dead_letter"
+
+# Legacy ``nlp.extracted`` topic feature flag (#1218).
+# The legacy publish sent the raw ``entities`` list with no confidence filtering,
+# defeating the gating at the ``graph.update`` / ``nlp.needs_review`` boundary.
+# Default: OFF. Any operator who flips this on MUST accept that downstream
+# subscribers see ungated data.
+EMIT_LEGACY_EXTRACTED_TOPIC = _env_flag("NLP_EMIT_LEGACY_TOPIC", default=False)
 
 # Max retries before sending to DLQ
 MAX_RETRIES = 3
@@ -83,10 +329,24 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+# Heuristic confidence cap for the legacy regex path (#1202).
+# The regex pipeline has no calibrated model — every confidence score is an
+# invented number. Cap it below the auto-approval gate so nothing from this path
+# can bypass HITL. Only the FSMA extractor (calibrated from KDE completeness)
+# may exceed this ceiling.
+_LEGACY_HEURISTIC_CONFIDENCE_CAP = 0.60
+
+
 def _convert_entities_to_extraction(
     entities: list, doc_id: str, source_url: str
 ) -> list[ExtractionPayload]:
-    """Convert legacy entity format to canonical ExtractionPayload format."""
+    """Convert legacy entity format to canonical ExtractionPayload format.
+
+    Confidence scores from this path are capped at
+    :data:`_LEGACY_HEURISTIC_CONFIDENCE_CAP` (#1202) so routed extractions
+    cannot clear the auto-approval gate; they always enter HITL.
+    """
+
     extractions = []
 
     # Group entities to form complete extractions
@@ -99,7 +359,6 @@ def _convert_entities_to_extraction(
         start_offset = obl.get("start", 0)
 
         # Simple subject/action parsing from text
-        # In production, this would use more sophisticated NLP
         parts = text.split()
         subject = " ".join(parts[: min(3, len(parts))])
         action_words = ["shall", "must", "required to", "has to", "should", "may"]
@@ -139,17 +398,21 @@ def _convert_entities_to_extraction(
                 jurisdiction = jur.get("attrs", {}).get("name")
                 break
 
-        # Calculate simple confidence score
-        # In production, this would use ML model confidence
-        base_confidence = 0.75
+        # Heuristic confidence — capped below auto-approval gate (#1202).
+        # Every weight here is an uncalibrated guess; the cap ensures this path
+        # can never auto-approve, regardless of magic-number drift.
+        base_confidence = 0.55
         if associated_thresholds:
-            base_confidence += 0.1
+            base_confidence += 0.03
         if jurisdiction:
-            base_confidence += 0.05
+            base_confidence += 0.02
         if len(text) > 50:
-            base_confidence += 0.05
+            base_confidence += 0.02
 
-        # Check for related Organizations and resolve them
+        # Check for related Organizations and resolve them. Entity resolution
+        # is recorded but does NOT boost confidence (#1269 — substring
+        # matching previously let an attacker launder confidence with
+        # lookalike names).
         organizations = [e for e in entities if e.get("type") == "ORGANIZATION"]
         resolved_entities = []
         for org in organizations:
@@ -157,33 +420,38 @@ def _convert_entities_to_extraction(
             if abs(org.get("start", 0) - start_offset) < 500:
                 raw_name = org.get("attrs", {}).get("name")
                 resolution = RESOLVER.resolve_organization(raw_name)
-                
+
                 entity_info = {
-                     "raw_name": raw_name,
-                     "type": "ORGANIZATION",
-                     "start": org.get("start"),
-                     "end": org.get("end")
+                    "raw_name": raw_name,
+                    "type": "ORGANIZATION",
+                    "start": org.get("start"),
+                    "end": org.get("end"),
                 }
-                
+
                 if resolution:
                     entity_info["entity_id"] = resolution["id"]
                     entity_info["normalized_name"] = resolution["name"]
                     entity_info["entity_type"] = resolution["type"]
-                    # Boost confidence if we found a known entity
-                    base_confidence += 0.15
-                    
+                    entity_info["match_strategy"] = resolution.get(
+                        "match_strategy", "unknown"
+                    )
+                    entity_info["match_score"] = resolution.get("match_score")
+
                 resolved_entities.append(entity_info)
 
-        confidence = min(base_confidence, 0.99)
-        
+        # Apply cap BEFORE emitting so downstream cannot see >0.60
+        confidence = min(base_confidence, _LEGACY_HEURISTIC_CONFIDENCE_CAP)
+
         # Categorize Signal
         category, risk, risk_conf = CLASSIFIER.classify_signal(text)
-        
+
         attributes = {
-            "document_id": doc_id, 
+            "document_id": doc_id,
             "source_url": source_url,
             "signal_category": category,
-            "risk_level": risk
+            "risk_level": risk,
+            "extractor": "legacy_regex_v1",
+            "confidence_capped_at": _LEGACY_HEURISTIC_CONFIDENCE_CAP,
         }
         if resolved_entities:
             attributes["resolved_entities"] = resolved_entities
@@ -202,34 +470,92 @@ def _convert_entities_to_extraction(
         )
         extractions.append(extraction)
 
-    # Handle FSMA Regulatory Dates (User Request)
+    # Handle FSMA Regulatory Dates (#1206): no more 0.99 hardcode.
+    # Score based on regex-group quality signals; route to HITL below the
+    # medium threshold by default so a supplier-controlled date cannot
+    # auto-approve into the calendar.
     reg_dates = [e for e in entities if e.get("type") == "REGULATORY_DATE"]
     for rd in reg_dates:
         attrs = rd.get("attrs", {})
         date_value = attrs.get("value")
-        
+        date_text = rd.get("text", "")
+
+        reg_date_confidence = _score_regulatory_date(date_value, attrs)
+
         extraction = ExtractionPayload(
             subject="covered entities",
             action="must comply by",
             object="FSMA 204 requirements",
             obligation_type=ObligationType.MUST,
             effective_date=date_value,
-            confidence_score=0.99, # High confidence for explicit date matches
-            source_text=rd.get("text"),
-            source_offset=rd.get("start"),
+            confidence_score=reg_date_confidence,
+            source_text=date_text,
+            source_offset=rd.get("start", 0),
             attributes={
                 "document_id": doc_id,
                 "source_url": source_url,
                 "fact_type": "compliance_date",
                 "provenance": attrs.get("provenance"),
                 "signal_category": "regulatory_change",
-                "risk_level": "high", # Compliance Date changes are high impact
-                "entities": [rd],  # DEBT-023 fix: route via attributes dict, not non-existent field
+                "risk_level": "high",
+                "entities": [rd],
+                "extractor": "regulatory_date_regex_v2",
+                "context_window_chars": attrs.get("context_distance"),
             },
         )
         extractions.append(extraction)
 
     return extractions
+
+
+def _score_regulatory_date(date_value: Optional[str], attrs: dict) -> float:
+    """Score a REGULATORY_DATE match by signal quality (#1206).
+
+    Previously hardcoded to 0.99, letting adversarial documents auto-approve
+    regulatory-date changes. Now the score reflects ISO parseability,
+    proximity to the 'compliance'/'enforcement' cue, and whether the source
+    provenance is from trusted metadata.
+
+    All scores are capped at :data:`_LEGACY_HEURISTIC_CONFIDENCE_CAP` —
+    regulatory dates must go through HITL regardless of regex quality because
+    of their high compliance impact.
+    """
+
+    # Start low; each positive signal contributes.
+    score = 0.30
+
+    # Signal: date is ISO-parseable
+    if date_value:
+        try:
+            from datetime import datetime as _dt
+
+            # Try several common formats
+            parsed = None
+            for fmt in ("%B %d, %Y", "%Y-%m-%d", "%m/%d/%Y"):
+                try:
+                    parsed = _dt.strptime(date_value, fmt)
+                    break
+                except ValueError:
+                    continue
+            if parsed is not None:
+                score += 0.10
+                # Signal: date is within a plausible range for FSMA compliance
+                if 2020 <= parsed.year <= 2040:
+                    score += 0.05
+        except (TypeError, ValueError):
+            pass
+
+    # Signal: narrow context match (within 20 chars vs previously 100)
+    ctx_dist = attrs.get("context_distance")
+    if isinstance(ctx_dist, (int, float)) and ctx_dist < 20:
+        score += 0.05
+
+    # Signal: trusted provenance tag
+    if attrs.get("provenance") in {"FSMA Rule Text", "FDA Official Publication"}:
+        score += 0.05
+
+    # Cap: even "perfect" regex matches never auto-approve regulatory dates.
+    return min(score, _LEGACY_HEURISTIC_CONFIDENCE_CAP)
 
 
 def _load_schema() -> Draft7Validator:
@@ -290,6 +616,55 @@ def _ensure_topic(topic: str) -> None:
                 pass
 
 
+def _build_review_reasons(extraction: ExtractionPayload, tier: str) -> list[dict]:
+    """Build structured review-reason codes for the ReviewItem envelope (#1368).
+
+    Reviewers need to know WHY an item landed in the queue, not just its raw
+    confidence. Each reason is a ``{reason_code, description, severity}`` tuple
+    that the UI can surface and analytics can aggregate.
+    """
+
+    reasons: list[dict] = []
+    reasons.append(
+        {
+            "reason_code": f"confidence_tier_{tier}",
+            "description": (
+                f"Extraction confidence {extraction.confidence_score:.2f} "
+                f"falls in the {tier} tier"
+            ),
+            "severity": "info" if tier == "medium" else "warning",
+        }
+    )
+    attributes = extraction.attributes or {}
+    if attributes.get("hallucination_demoted"):
+        reasons.append(
+            {
+                "reason_code": "hallucination_demoted",
+                "description": "LLM output contained text not found in source document",
+                "severity": "error",
+            }
+        )
+    if attributes.get("fact_type") == "compliance_date":
+        reasons.append(
+            {
+                "reason_code": "regulatory_date_needs_review",
+                "description": (
+                    "Regulatory date extractions are high-impact and default to HITL"
+                ),
+                "severity": "warning",
+            }
+        )
+    if not extraction.source_text:
+        reasons.append(
+            {
+                "reason_code": "missing_source_span",
+                "description": "Extraction missing provenance span (source_text empty)",
+                "severity": "error",
+            }
+        )
+    return reasons
+
+
 def _route_extraction(
     extraction: ExtractionPayload,
     doc_id: str,
@@ -299,28 +674,48 @@ def _route_extraction(
     tenant_id: Optional[str],
     reviewer_id: str = "nlp_model_v1",
 ) -> None:
-    """Route extraction to appropriate topic based on confidence score.
+    """Route extraction using a three-tier confidence model (#1258).
 
-    Propagates request_id + correlation_id via Kafka headers so downstream
-    consumers (graph, admin review) can stitch their spans back (#1318).
+    - ``>= high`` (default 0.95): auto-approve to ``graph.update``.
+    - ``>= medium`` (default 0.85) and ``< high``: ``nlp.needs_review``
+      with ``priority=low`` — reviewer confirms, no re-extraction.
+    - ``< medium``: ``nlp.needs_review`` with ``priority=high`` — treat as
+      a possible extractor failure, flag for policy review.
+
+    Provenance contract (#1368): every emitted payload carries
+    ``source_document_id``, ``source_offset``, and ``confidence`` so the
+    KDE→span link survives through Kafka boundaries.
     """
+
     # Capture correlation id from structured logging context if present
     ctx = get_contextvars()
     request_id = ctx.get("request_id")
 
-    # Build outbound headers with correlation_id / tenant_id propagation.
-    # Request ID is retained as an extra header for legacy consumers.
-    existing = [("X-Request-ID", str(request_id or "").encode("utf-8"))]
-    outbound_headers = inject_correlation_headers_tuples(existing=existing)
+    high_threshold, medium_threshold = _current_thresholds()
+    confidence = extraction.confidence_score
 
-    # Use configurable high confidence threshold for auto-approval
-    threshold = CONFIDENCE_THRESHOLD
+    # Determine tier
+    if confidence >= high_threshold:
+        tier = "high"
+        priority = None  # N/A for auto-approved
+    elif confidence >= medium_threshold:
+        tier = "medium"
+        priority = "low"
+    else:
+        tier = "low"
+        priority = "high"
 
-    if extraction.confidence_score >= threshold:
-        # High confidence: send directly to graph
+    base_headers = [
+        ("X-Request-ID", str(request_id or "").encode("utf-8")),
+        ("X-Tenant-ID", str(tenant_id or "").encode("utf-8")),
+        ("X-Confidence-Tier", tier.encode("utf-8")),
+    ]
+
+    if tier == "high":
+        # Auto-approved path: straight to graph
         graph_event = GraphEvent(
             event_type="create_provision",
-            tenant_id=tenant_id,  # Phase 2 will add tenant routing
+            tenant_id=tenant_id,
             doc_hash=doc_hash,
             document_id=doc_id,
             text_clean=extraction.source_text,
@@ -328,47 +723,69 @@ def _route_extraction(
             provenance={
                 "source_url": source_url,
                 "offset": extraction.source_offset,
+                "source_document_id": doc_id,
+                "confidence": confidence,
+                "confidence_tier": tier,
                 "request_id": request_id,
             },
-            embedding=None,  # Phase 2+ will add embeddings
+            embedding=None,
             status="APPROVED",
             reviewer_id=reviewer_id,
         )
-        # Send to graph update topic
         payload = graph_event.model_dump(mode="json")
-        logger.info(f"Producing Graph Event with {len(payload.get('extraction', {}).get('entities', []))} entities")
+        logger.info(
+            "producing_graph_event",
+            entity_count=len(payload.get("extraction", {}).get("entities", [])),
+            document_id=doc_id,
+        )
         producer.send(
             TOPIC_GRAPH_UPDATE,
-            key=doc_id, # Ensure key is string
+            key=doc_id,
             value=payload,
-            headers=outbound_headers,
+            headers=base_headers,
         )
         logger.info(
             "high_confidence_extraction",
             document_id=doc_id,
-            confidence=extraction.confidence_score,
+            confidence=confidence,
+            tier=tier,
             routed_to="graph",
         )
-    else:
-        # Low confidence: send to review queue
-        review_item = ReviewItem(
-            tenant_id=tenant_id,
-            document_id=doc_id,
-            extraction=extraction,
-            status="pending",
-        )
-        producer.send(
-            TOPIC_NEEDS_REVIEW,
-            key=doc_id,
-            value=review_item.model_dump(mode="json"),
-            headers=outbound_headers,
-        )
-        logger.info(
-            "low_confidence_extraction",
-            document_id=doc_id,
-            confidence=extraction.confidence_score,
-            routed_to="review_queue",
-        )
+        return
+
+    # Medium or low tier → review queue with priority + reason codes (#1368)
+    reasons = _build_review_reasons(extraction, tier)
+    review_payload = {
+        "id": None,  # filled downstream on persist
+        "tenant_id": str(tenant_id) if tenant_id else None,
+        "document_id": doc_id,
+        "extraction": extraction.model_dump(mode="json"),
+        "status": "pending",
+        "priority": priority,
+        "confidence_tier": tier,
+        "review_reasons": reasons,
+        "provenance": {
+            "source_url": source_url,
+            "source_document_id": doc_id,
+            "source_offset": extraction.source_offset,
+            "confidence": confidence,
+        },
+    }
+    producer.send(
+        TOPIC_NEEDS_REVIEW,
+        key=doc_id,
+        value=review_payload,
+        headers=base_headers + [("X-Review-Priority", priority.encode("utf-8"))],
+    )
+    logger.info(
+        "low_or_medium_confidence_extraction",
+        document_id=doc_id,
+        confidence=confidence,
+        tier=tier,
+        priority=priority,
+        reasons=[r["reason_code"] for r in reasons],
+        routed_to="review_queue",
+    )
 
 
 def _send_to_dlq(
@@ -548,12 +965,192 @@ def run_consumer() -> None:
                             consumer.commit()
                             continue
 
-                        if not doc_id or (not norm_path and not inline_text):
-                            logger.warning("skipping_event_missing_keys", event=evt)
-                            MESSAGES_COUNTER.labels(status="skipped").inc()
-                            consumer.commit()
-                            continue
+                    try:
+                        doc_hash = evt.get("document_hash") or evt.get("content_hash") or doc_id
+                        norm_path = evt.get("normalized_s3_path")
+                        inline_text = evt.get("text_clean")
+                        tenant_id = evt.get("tenant_id")
+                        provenance = evt.get("provenance") or {}
+                    except (KeyError, TypeError, ValueError, AttributeError) as field_exc:
+                        logger.error(
+                            "malformed_event_fields",
+                            error=str(field_exc),
+                            offset=record.offset,
+                        )
+                        _send_to_fsma_dlq(
+                            producer, evt, f"Field extraction failed: {field_exc}",
+                            doc_id, kafka_headers,
+                        )
+                        MESSAGES_COUNTER.labels(status="error").inc()
+                        consumer.commit()
+                        continue
 
+                    if not doc_id or (not norm_path and not inline_text):
+                        logger.warning("skipping_event_missing_keys", event=evt)
+                        MESSAGES_COUNTER.labels(status="skipped").inc()
+                        consumer.commit()
+                        continue
+
+                    try:
+                        if inline_text:
+                            text = str(inline_text)[:2_000_000]
+                            source_url = provenance.get(
+                                "source_url", evt.get("source_url", "unknown")
+                            )
+                        else:
+                            _, _, bucket_key = norm_path.partition("s3://")
+                            bucket, _, key = bucket_key.partition("/")
+                            payload = json.loads(get_bytes(bucket, key))
+                            text = payload.get("text", "")[:2_000_000]
+                            source_url = payload.get("source_url", "unknown")
+
+                        # --- Structured extractor pass (#1194) ---
+                        # FSMAExtractor runs first for every document when the
+                        # feature flag is on. It owns KDE-minimum gating for
+                        # FSMA 204 and routes qualifying CTEs to
+                        # ``graph.update`` or ``nlp.needs_review``. When the
+                        # flag is off, this block is a no-op and the legacy
+                        # regex pipeline below is the only path.
+                        fsma_summary: Optional[dict] = None
+                        if NLP_ENABLE_FSMA_EXTRACTOR:
+                            fsma_summary = _run_fsma_extractor(
+                                text=text,
+                                doc_id=doc_id,
+                                doc_hash=doc_hash,
+                                producer=producer,
+                                tenant_id=tenant_id,
+                                kafka_headers=kafka_headers,
+                            )
+
+                        # --- Legacy regex extractor (backstop) ---
+                        entities = extract_entities(text)
+
+                        # Convert to canonical ExtractionPayload format
+                        extractions = _convert_entities_to_extraction(
+                            entities, doc_id, source_url
+                        )
+
+                        # --- LLM fallback pass (#1194) ---
+                        # Only invoked when the regex+FSMA passes yielded
+                        # NO high-confidence extractions and the operator
+                        # has explicitly opted in to LLM spend.
+                        if NLP_ENABLE_LLM_EXTRACTOR:
+                            produced_high_conf = (
+                                fsma_summary is not None
+                                and fsma_summary.get("high_confidence")
+                            ) or any(
+                                e.confidence_score >= settings.extraction_confidence_high
+                                for e in extractions
+                            )
+                            if not produced_high_conf:
+                                jurisdiction = "US-FDA" if _is_fsma_event(evt) else "unknown"
+                                llm_results = _run_llm_extractor(
+                                    text=text,
+                                    doc_id=doc_id,
+                                    jurisdiction=jurisdiction,
+                                )
+                                logger.info(
+                                    "llm_extractor_run",
+                                    document_id=doc_id,
+                                    result_count=len(llm_results),
+                                )
+                                # LLM results currently augment the log and
+                                # feed the review queue via extractions
+                                # below; bridging to the legacy entity
+                                # schema is handled by a follow-up PR.
+
+                        # Route each extraction based on confidence
+                        for extraction in extractions:
+                            _route_extraction(
+                                extraction,
+                                doc_id,
+                                doc_hash,
+                                source_url,
+                                producer,
+                                tenant_id,
+                            )
+
+                        # Legacy ``nlp.extracted`` topic — OFF by default (#1218).
+                        # The legacy publish sent the raw ``entities`` list with
+                        # zero confidence filtering, defeating the gating at the
+                        # Kafka boundary. Operators may re-enable via env
+                        # ``NLP_EMIT_LEGACY_TOPIC=1`` during a migration window;
+                        # each emit logs a deprecation warning so migration
+                        # progress is observable.
+                        if EMIT_LEGACY_EXTRACTED_TOPIC:
+                            # Annotate each entity with its (capped) confidence
+                            # so downstream subscribers at minimum see the tier.
+                            high_t, medium_t = _current_thresholds()
+                            annotated_entities = []
+                            for ent in entities:
+                                # Attach a placeholder confidence if absent;
+                                # the regex path has no per-entity score.
+                                annotated = dict(ent)
+                                annotated.setdefault(
+                                    "confidence_score",
+                                    min(0.50, _LEGACY_HEURISTIC_CONFIDENCE_CAP),
+                                )
+                                annotated_entities.append(annotated)
+                            legacy_out = {
+                                "event_id": str(uuid.uuid4()),
+                                "document_id": doc_id,
+                                "tenant_id": tenant_id,
+                                "source_url": source_url,
+                                "timestamp": _now_iso(),
+                                "entities": annotated_entities,
+                                "deprecated": True,
+                                "deprecation_notice": (
+                                    "nlp.extracted is deprecated; migrate to "
+                                    "graph.update / nlp.needs_review. Set "
+                                    "NLP_EMIT_LEGACY_TOPIC=0 to disable."
+                                ),
+                            }
+                            try:
+                                _load_schema().validate(legacy_out)
+                                producer.send(
+                                    settings.topic_out,
+                                    key=doc_id,
+                                    value=legacy_out,
+                                )
+                                logger.warning(
+                                    "nlp_legacy_topic_emitted",
+                                    document_id=doc_id,
+                                    topic=settings.topic_out,
+                                    reason="NLP_EMIT_LEGACY_TOPIC=1 set",
+                                )
+                            except ValidationError as legacy_exc:
+                                logger.error(
+                                    "nlp_legacy_topic_schema_invalid",
+                                    document_id=doc_id,
+                                    error=str(legacy_exc),
+                                )
+
+                        producer.flush(timeout=1.0)
+
+                        # Use live thresholds for logging counts so metrics
+                        # agree with _route_extraction behavior (#1260).
+                        high_t_log, medium_t_log = _current_thresholds()
+                        logger.info(
+                            "nlp_extraction_complete",
+                            document_id=doc_id,
+                            tenant_id=tenant_id,
+                            extraction_count=len(extractions),
+                            high_confidence=sum(
+                                1 for e in extractions
+                                if e.confidence_score >= high_t_log
+                            ),
+                            medium_confidence=sum(
+                                1 for e in extractions
+                                if medium_t_log <= e.confidence_score < high_t_log
+                            ),
+                            low_confidence=sum(
+                                1 for e in extractions
+                                if e.confidence_score < medium_t_log
+                            ),
+                        )
+                        MESSAGES_COUNTER.labels(status="success").inc()
+
+                        # Synchronous audit logging for FSMA compliance (#982)
                         try:
                             if inline_text:
                                 text = str(inline_text)[:2_000_000]

@@ -49,9 +49,11 @@ class TestLLMAgent:
 
         # Should have called twice (initial + retry)
         assert mock_client.generate.call_count == 2
-        # Second call should include error feedback
+        # Second call should include error feedback (#1238 — retry feedback
+        # is now appended as a separate suffix, sanitized, not mutated into
+        # the original prompt).
         args, _ = mock_client.generate.call_args_list[1]
-        assert "not valid JSON" in args[0]
+        assert "NOT VALID JSON" in args[0]
 
     def test_self_correction_schema_error(self, mock_client):
         """Agent should retry if Schema validation fails."""
@@ -69,9 +71,9 @@ class TestLLMAgent:
         extractor.extract("Must report data within 24 hours.", "US-NY")
 
         assert mock_client.generate.call_count == 2
-        # Feedback should mention the schema issue
+        # Feedback should mention the schema issue (hardened wording).
         args, _ = mock_client.generate.call_args_list[1]
-        assert "validation failed" in args[0]
+        assert "SCHEMA VALIDATION FAILED" in args[0]
 
     def test_exhausted_retries_returns_empty(self, mock_client):
         """After max retries, should return empty list gracefully."""
@@ -88,8 +90,8 @@ class TestLLMAgent:
         assert results == []
         assert mock_client.generate.call_count == 4  # 1 initial + 3 retries
 
-    def test_hallucination_detection_penalizes_confidence(self, mock_client):
-        """Provision text not in source should have confidence penalized."""
+    def test_hallucination_drops_fabricated_item(self, mock_client):
+        """Hallucinated provisions are DROPPED, not kept at 0.5 (#1117)."""
         mock_client.generate.return_value = json.dumps({
             "results": [
                 {"provision_text": "hallucinated quote", "obligation_type": "REQUIREMENT", "confidence": 0.95}
@@ -99,9 +101,9 @@ class TestLLMAgent:
         extractor = LLMGenerativeExtractor()
         results = extractor.extract("actual source text with different content", "US-NY")
 
-        assert len(results) == 1
-        # Confidence should be capped at 0.5 for hallucinated quotes
-        assert results[0].confidence == 0.5
+        # Fabricated items no longer survive with confidence=0.5 — they're
+        # dropped entirely so downstream can never receive them.
+        assert results == []
 
     def test_provision_text_present_keeps_confidence(self, mock_client):
         """Provision text in source should keep original confidence."""
@@ -213,12 +215,17 @@ class TestLLMExtraction:
                 confidence=1.5
             )
 
-    def test_extra_fields_allowed(self):
-        """Extra fields should be allowed via model config."""
-        extraction = LLMExtraction(
-            provision_text="test",
-            obligation_type="REQUIREMENT",
-            confidence=0.5,
-            extra_field="allowed"
-        )
-        assert extraction.model_dump().get("extra_field") == "allowed"
+    def test_extra_fields_forbidden(self):
+        """Extra fields must be REJECTED (#1280).
+
+        Previously ``extra: 'allow'`` let prompt-induced fields pass through
+        to downstream processing — an attacker-controlled webhook URL could
+        land on the graph. Now extras raise ValidationError.
+        """
+        with pytest.raises(Exception):  # pydantic ValidationError
+            LLMExtraction(
+                provision_text="testing minimum length",
+                obligation_type="REQUIREMENT",
+                confidence=0.5,
+                extra_field="should-be-rejected",
+            )
