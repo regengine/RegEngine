@@ -313,6 +313,7 @@ class IdentityResolutionService:
         entity_type: Optional[str] = None,
         threshold: float = 0.6,
         limit: int = 20,
+        case_sensitive: bool = False,
     ) -> List[Dict[str, Any]]:
         """
         Confidence-scored fuzzy matching by name similarity.
@@ -320,6 +321,14 @@ class IdentityResolutionService:
         Uses SequenceMatcher (Ratcliff/Obershelp) from difflib on all
         name-type aliases for the tenant. Results are sorted by
         descending confidence.
+
+        Fix #1177: fuzzy matching defaults to case-insensitive because
+        names are frequently formatted inconsistently ("Acme Foods" vs
+        "ACME FOODS"). But case-insensitive matching MUST NEVER be the
+        authoritative path for lot codes or other identifiers — those
+        must use :meth:`find_entity_by_alias` (exact, case-sensitive).
+        For callers that do want strict comparison (e.g., an alternate
+        lot-code suggestion path), pass ``case_sensitive=True``.
         """
         params: Dict[str, Any] = {"tenant_id": tenant_id}
         type_filter = ""
@@ -345,16 +354,24 @@ class IdentityResolutionService:
             params,
         ).fetchall()
 
-        search_lower = search_name.lower().strip()
+        # Only normalize when case_sensitive=False. The raw alias_value is
+        # always returned verbatim so callers never see a mutated identifier.
+        if case_sensitive:
+            search_norm = search_name
+        else:
+            search_norm = search_name.lower().strip()
+
         scored: List[Dict[str, Any]] = []
         seen_entities: set = set()
 
         for r in rows:
             entity_id = str(r[0])
             alias_value = r[7] or ""
-            ratio = SequenceMatcher(
-                None, search_lower, alias_value.lower().strip()
-            ).ratio()
+            if case_sensitive:
+                comparand = alias_value
+            else:
+                comparand = alias_value.lower().strip()
+            ratio = SequenceMatcher(None, search_norm, comparand).ratio()
 
             if ratio < threshold:
                 continue
@@ -1166,8 +1183,10 @@ class IdentityResolutionService:
         Returns a dict with entity info and a 'resolution' key indicating
         what happened: 'existing', 'new', or 'new_with_review'.
         """
-        # 1. Exact alias lookup
-        # Check across common alias types for exact match
+        # 1. Exact alias lookup — ALWAYS case-sensitive verbatim match.
+        # Fix #1177: Identifiers (lot codes, GLNs, GTINs, TLCs) must never be
+        # normalized or case-folded on the authoritative path.
+        # find_entity_by_alias compares alias_value verbatim in SQL.
         search_types = [alias_type]
         if alias_type == "name":
             search_types.extend(["trade_name", "abbreviation"])
@@ -1184,10 +1203,20 @@ class IdentityResolutionService:
             if active_matches:
                 return {**active_matches[0], "resolution": "existing"}
 
-        # 2. Fuzzy matching for potential duplicates
-        fuzzy_matches = self.find_potential_matches(
-            tenant_id, reference, entity_type=entity_type, threshold=AMBIGUOUS_THRESHOLD_LOW,
-        )
+        # 2. Fuzzy matching for potential duplicates — ONLY for name-type
+        # references. For identifier aliases (tlc, tlc_prefix, gln, gtin,
+        # fda_registration, internal_code, duns), fuzzy name matching would
+        # silently collide unrelated lot codes (issue #1177). Identifiers
+        # are resolved strictly by exact alias match above; if no exact
+        # match, we register a new entity with no review queue.
+        _NAME_LIKE_ALIAS_TYPES = {"name", "trade_name", "abbreviation"}
+        if alias_type in _NAME_LIKE_ALIAS_TYPES:
+            fuzzy_matches = self.find_potential_matches(
+                tenant_id, reference, entity_type=entity_type,
+                threshold=AMBIGUOUS_THRESHOLD_LOW,
+            )
+        else:
+            fuzzy_matches = []
 
         # 3. Register new entity
         new_entity = self.register_entity(
@@ -1199,6 +1228,32 @@ class IdentityResolutionService:
             confidence_score=0.8,
             created_by=created_by,
         )
+
+        # Fix #1175/#1177: when the caller passed a non-'name' alias_type
+        # (e.g. 'tlc', 'gln'), register_entity only seeded the 'name' alias.
+        # We must also persist the alias under its caller-supplied alias_type
+        # so subsequent exact lookups succeed.
+        if alias_type != "name":
+            try:
+                self._insert_alias(
+                    tenant_id=tenant_id,
+                    entity_id=new_entity["entity_id"],
+                    alias_type=alias_type,
+                    alias_value=reference,
+                    source_system=source_system,
+                    confidence=1.0,
+                    created_by=created_by,
+                )
+            except (ValueError, RuntimeError) as exc:
+                logger.warning(
+                    "resolve_or_register_alias_insert_failed",
+                    extra={
+                        "entity_id": new_entity["entity_id"],
+                        "alias_type": alias_type,
+                        "alias_value": reference,
+                        "error": str(exc),
+                    },
+                )
 
         resolution = "new"
 

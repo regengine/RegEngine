@@ -146,3 +146,124 @@ class TestTLCVerbatimStorage:
             "GTIN-14 prefixed TLC should emit exactly one tlc_prefix alias"
         assert prefix_aliases[0]["alias_value"] == "00012345678901", \
             "tlc_prefix alias value must be the verbatim first-14-digit GTIN-14"
+
+
+# ---------------------------------------------------------------------------
+# #1177 — fuzzy matching must not corrupt identifier paths
+# ---------------------------------------------------------------------------
+
+
+class TestFuzzyDoesNotCorruptIdentifiers:
+    def test_case_sensitive_flag_preserves_case(self, svc, mock_session):
+        """
+        case_sensitive=True must compare raw values without normalization,
+        so identifier-shaped fuzzy matching (if callers ever opt in) does
+        not silently collide unrelated lot codes.
+        """
+        mock_session.execute.return_value.fetchall.return_value = [
+            ("eid-1", "lot", "LOT-abc", None, None, "unverified", 1.0, "LOT-abc"),
+        ]
+        # Case-sensitive comparison of "LOT-ABC" vs "LOT-abc" should NOT
+        # produce a perfect-score match — they differ in case.
+        results = svc.find_potential_matches(
+            TENANT, "LOT-ABC", case_sensitive=True, threshold=0.0,
+        )
+        # A match may still appear (they share most characters) but the
+        # score must be strictly less than 1.0 — a perfect score would
+        # have meant case was folded.
+        assert len(results) == 1
+        assert results[0]["confidence"] < 1.0, \
+            "case_sensitive=True must not fold case in the similarity score"
+
+    def test_case_insensitive_still_default(self, svc, mock_session):
+        """Default fuzzy path (for names) is still case-insensitive."""
+        mock_session.execute.return_value.fetchall.return_value = [
+            ("eid-1", "facility", "Acme", None, None, "unverified", 1.0, "ACME FOODS"),
+        ]
+        results = svc.find_potential_matches(TENANT, "acme foods")
+        assert len(results) == 1
+        assert results[0]["confidence"] == 1.0
+
+    def test_resolve_or_register_skips_fuzzy_for_identifiers(
+        self, svc, mock_session
+    ):
+        """
+        _resolve_or_register must NOT invoke find_potential_matches for
+        identifier alias_types (tlc, gln, gtin, fda_registration, etc.),
+        because fuzzy name matching over identifiers silently collides
+        unrelated lot codes (#1177).
+        """
+        # No exact match found
+        mock_session.execute.return_value.fetchall.return_value = []
+        fuzzy_calls = []
+        real_fuzzy = svc.find_potential_matches
+
+        def _fuzzy_spy(*args, **kwargs):
+            fuzzy_calls.append((args, kwargs))
+            return []
+
+        svc.find_potential_matches = _fuzzy_spy  # type: ignore[assignment]
+        svc._resolve_or_register(
+            tenant_id=TENANT,
+            reference="00012345678901-Lot-ABC-7",
+            entity_type="lot",
+            source_system="test",
+            alias_type="tlc",
+        )
+
+        assert fuzzy_calls == [], \
+            "find_potential_matches must not be called for alias_type='tlc' (#1177)"
+        svc.find_potential_matches = real_fuzzy  # type: ignore[assignment]
+
+    def test_resolve_or_register_uses_fuzzy_for_names(
+        self, svc, mock_session
+    ):
+        """Name-type refs still use fuzzy matching (that IS the correct path)."""
+        mock_session.execute.return_value.fetchall.return_value = []
+        fuzzy_calls = []
+
+        def _fuzzy_spy(*args, **kwargs):
+            fuzzy_calls.append((args, kwargs))
+            return []
+
+        svc.find_potential_matches = _fuzzy_spy  # type: ignore[assignment]
+        svc._resolve_or_register(
+            tenant_id=TENANT,
+            reference="Acme Foods",
+            entity_type="firm",
+            source_system="test",
+            alias_type="name",
+        )
+        assert len(fuzzy_calls) == 1, \
+            "find_potential_matches must still be invoked for alias_type='name'"
+
+    def test_resolve_or_register_persists_identifier_alias(
+        self, svc, mock_session
+    ):
+        """
+        After registering a new entity for an identifier reference (e.g. tlc,
+        gln), _resolve_or_register must persist the alias under the caller's
+        alias_type so subsequent find_entity_by_alias(..., 'tlc', ...) matches
+        succeed.
+        """
+        mock_session.execute.return_value.fetchall.return_value = []
+        seen_alias_types = []
+        real_insert = svc._insert_alias
+
+        def _insert_tracker(**kwargs):
+            seen_alias_types.append(kwargs.get("alias_type"))
+            return "alias-id"
+
+        svc._insert_alias = _insert_tracker  # type: ignore[assignment]
+        svc._resolve_or_register(
+            tenant_id=TENANT,
+            reference="00012345678901",
+            entity_type="lot",
+            source_system="test",
+            alias_type="tlc",
+        )
+        svc._insert_alias = real_insert  # type: ignore[assignment]
+
+        assert "tlc" in seen_alias_types, (
+            "Identifier alias_type must be persisted on resolve_or_register (#1177)"
+        )
