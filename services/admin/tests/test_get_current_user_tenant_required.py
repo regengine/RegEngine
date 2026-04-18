@@ -30,9 +30,6 @@ from unittest.mock import MagicMock
 
 import pytest
 from fastapi import HTTPException
-from sqlalchemy import create_engine, text
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import StaticPool
 
 
 # ---------------------------------------------------------------------------
@@ -93,7 +90,13 @@ def _make_db(dialect_name="sqlite", memberships=None, user_exists=True, is_sysad
 
 
 def _invoke_get_current_user(token, db, monkeypatch):
-    """Call get_current_user() with a stubbed Supabase + JWT decode."""
+    """Call get_current_user() with a stubbed Supabase + JWT decode.
+
+    We drive the async function synchronously using ``asyncio.run`` which
+    creates a fresh event loop each time, avoiding loop-reuse warnings
+    on Python 3.12 and test-order-pollution where a prior test closed
+    the default loop.
+    """
     from services.admin.app import dependencies
 
     # Disable Supabase so we hit the local-JWT branch.
@@ -101,7 +104,7 @@ def _invoke_get_current_user(token, db, monkeypatch):
     # Decode returns whatever ``token`` (a dict) is.
     monkeypatch.setattr(dependencies, "decode_access_token", lambda t: t)
 
-    return asyncio.get_event_loop().run_until_complete(
+    return asyncio.run(
         dependencies.get_current_user(token=token, db=db)  # type: ignore[arg-type]
     )
 
