@@ -378,21 +378,92 @@ class CanonicalEventStore:
             previous_chain_hash = chain_hash
             next_sequence += 1
 
-        # --- Batch INSERT ---
+        # --- Batch INSERT with ON CONFLICT tolerance (#1266) ---
+        # _batch_insert_canonical_events returns the set of event_ids
+        # that actually landed; anything missing from that set is a row
+        # that lost the idempotency race to a concurrent writer between
+        # our pre-flight check at line ~310 and this INSERT. Those rows
+        # must be reconciled: re-select the existing row and mark our
+        # per-event result as idempotent so the caller sees accurate
+        # sha256_hash / chain_hash values for them (#1266).
+        inserted_event_ids: set[str] = set()
         for chunk_start in range(0, len(new_events), 50):
             chunk = new_events[chunk_start:chunk_start + 50]
-            self._batch_insert_canonical_events(chunk)
+            inserted_event_ids |= self._batch_insert_canonical_events(chunk)
 
-        for chunk_start in range(0, len(chain_entries), 100):
-            chunk = chain_entries[chunk_start:chunk_start + 100]
+        lost_race_events = [
+            evt for evt in new_events
+            if str(evt.event_id) not in inserted_event_ids
+        ]
+
+        if lost_race_events:
+            # Re-select the winning rows (by idempotency_key) and patch
+            # the per-event result from the matching entry in ``results``.
+            # Build a lookup from idempotency_key -> result index so we
+            # can update in place.
+            idemp_to_result_idx: Dict[str, int] = {}
+            for idx, evt in enumerate(events):
+                if evt.idempotency_key:
+                    idemp_to_result_idx[evt.idempotency_key] = idx
+            idemp_keys = [
+                evt.idempotency_key for evt in lost_race_events
+                if evt.idempotency_key
+            ]
+            if idemp_keys:
+                _winner_select = text(
+                    """
+                    SELECT idempotency_key, event_id, sha256_hash, chain_hash
+                    FROM fsma.traceability_events
+                    WHERE tenant_id = :tid AND idempotency_key IN :keys
+                    """
+                ).bindparams(bindparam("keys", expanding=True))
+                for chunk_start in range(0, len(idemp_keys), 100):
+                    chunk_keys = idemp_keys[chunk_start:chunk_start + 100]
+                    rows = self.session.execute(
+                        _winner_select,
+                        {"tid": tenant_id, "keys": chunk_keys},
+                    ).fetchall()
+                    for idemp_key, winner_event_id, sha256, chain_h in rows:
+                        result_idx = idemp_to_result_idx.get(idemp_key)
+                        if result_idx is None:
+                            continue
+                        results[result_idx] = CanonicalStoreResult(
+                            success=True,
+                            event_id=str(winner_event_id),
+                            sha256_hash=sha256,
+                            chain_hash=chain_h,
+                            idempotent=True,
+                            errors=[],
+                        )
+            logger.info(
+                "canonical_batch_reconciled_lost_race",
+                extra={"tenant_id": tenant_id, "lost_race": len(lost_race_events)},
+            )
+
+        # Only write chain entries for events we actually inserted. A
+        # row we lost to a concurrent writer already has its chain entry
+        # written by the winner, so emitting another would double-grow
+        # the chain.
+        chain_entries_to_write = [
+            ce for ce in chain_entries
+            if str(ce["cte_event_id"]) in inserted_event_ids
+        ]
+        for chunk_start in range(0, len(chain_entries_to_write), 100):
+            chunk = chain_entries_to_write[chunk_start:chunk_start + 100]
             self._batch_insert_chain_entries(chunk)
 
-        for evt in new_events:
+        inserted_events = [
+            evt for evt in new_events if str(evt.event_id) in inserted_event_ids
+        ]
+        for evt in inserted_events:
             self._create_transformation_links(evt)
 
         # --- Dual-write legacy (TEMPORARY — see migration.py) ---
-        if self.dual_write and new_events:
-            for evt in new_events:
+        # Only dual-write events that actually inserted here; an event
+        # we lost to a concurrent writer was (presumably) dual-written
+        # by that winner and re-writing would just duplicate in legacy.
+        if self.dual_write and inserted_events:
+            for evt in inserted_events:
                 try:
                     migration.dual_write_legacy(self.session, evt)
                 except Exception as e:
@@ -406,8 +477,9 @@ class CanonicalEventStore:
             extra={
                 "tenant_id": tenant_id,
                 "total": len(events),
-                "new": len(new_events),
-                "idempotent": len(events) - len(new_events),
+                "new_inserted": len(inserted_events),
+                "lost_race": len(new_events) - len(inserted_events),
+                "idempotent_preflight": len(events) - len(new_events),
             },
         )
 
@@ -773,8 +845,21 @@ class CanonicalEventStore:
             "epcis_biz_step": event.epcis_biz_step,
         }
 
-    def _batch_insert_canonical_events(self, events: List[TraceabilityEvent]) -> None:
-        """Batch insert canonical events."""
+    def _batch_insert_canonical_events(
+        self, events: List[TraceabilityEvent]
+    ) -> set[str]:
+        """Batch insert canonical events, tolerant of idempotency races.
+
+        Appends ``ON CONFLICT (tenant_id, idempotency_key) DO NOTHING`` so
+        that if a concurrent writer won the idempotency race for any
+        event in this chunk, the whole chunk does not abort with a
+        UNIQUE violation — the other 49 rows still land (#1266).
+
+        Returns the set of ``event_id`` strings that were actually
+        inserted (the complement of that set are the duplicates, which
+        the caller may re-select to obtain the existing row's
+        ``sha256_hash`` / ``chain_hash`` for the per-event result).
+        """
         values_clauses = []
         params: Dict[str, Any] = {}
         for i, evt in enumerate(events):
@@ -788,8 +873,11 @@ class CanonicalEventStore:
         sql = f"""
             INSERT INTO fsma.traceability_events ({', '.join(col_names)})
             VALUES {', '.join(values_clauses)}
+            ON CONFLICT (tenant_id, idempotency_key) DO NOTHING
+            RETURNING event_id
         """
-        self.session.execute(text(sql), params)
+        rows = self.session.execute(text(sql), params).fetchall()
+        return {str(r[0]) for r in rows}
 
     def _insert_chain_entry(
         self, tenant_id: str, event_id: str, sequence_num: int,
