@@ -1020,8 +1020,40 @@ def start_health_server(port: int) -> None:
         logger.error("health_server_failed", error=str(e))
 
 
+def _install_graceful_shutdown_handlers() -> None:
+    """Translate SIGTERM / SIGINT to :class:`KeyboardInterrupt` on the main thread.
+
+    Railway and Kubernetes send **SIGTERM** (not SIGINT) when rolling a
+    deploy. Python's default SIGTERM disposition terminates the process
+    without unwinding — `SchedulerService.shutdown()` never runs,
+    `BlockingScheduler.shutdown(wait=True)` never gets to cancel
+    in-flight jobs, and `kafka_producer.close()` never flushes. Any
+    Kafka producer buffer at the moment of the kill is lost (#1255).
+
+    By raising :class:`KeyboardInterrupt` from our SIGTERM handler we
+    hit the existing ``try/except (KeyboardInterrupt, SystemExit):``
+    block in ``SchedulerService.start`` which cleanly shuts the
+    BlockingScheduler and the Kafka producer.
+    """
+    import signal
+
+    def _sigterm_handler(signum, frame):
+        logger.info("scheduler_received_signal", signum=int(signum))
+        raise KeyboardInterrupt()
+
+    # Only install in the main thread (signal.signal is a main-thread-only API).
+    if threading.current_thread() is threading.main_thread():
+        signal.signal(signal.SIGTERM, _sigterm_handler)
+        signal.signal(signal.SIGINT, _sigterm_handler)
+        logger.info("sigterm_handler_installed")
+
+
 def main() -> None:
     """Main entry point."""
+    # #1255 — translate SIGTERM/SIGINT into KeyboardInterrupt so our
+    # existing shutdown path runs on Railway rolling deploys.
+    _install_graceful_shutdown_handlers()
+
     settings = get_settings()
 
     # Start health server in background thread
