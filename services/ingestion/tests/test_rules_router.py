@@ -63,10 +63,14 @@ class _FakeEvalSummary:
     def __init__(self, **kwargs):
         self.event_id = kwargs.get("event_id", "EVT-001")
         self.compliant = kwargs.get("compliant", True)
+        self.no_verdict_reason = kwargs.get("no_verdict_reason", None)
         self.total_rules = kwargs.get("total_rules", 2)
         self.passed = kwargs.get("passed", 2)
         self.failed = kwargs.get("failed", 0)
         self.warned = kwargs.get("warned", 0)
+        self.errored = kwargs.get("errored", 0)
+        self.not_ftl_scoped = kwargs.get("not_ftl_scoped", 0)
+        self.skipped = kwargs.get("skipped", 0)
         self.critical_failures: list = kwargs.get("critical_failures", [])
         self.results: list = kwargs.get("results", [])
 

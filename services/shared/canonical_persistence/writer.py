@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 from uuid import UUID, uuid4
 
-from sqlalchemy import text
+from sqlalchemy import bindparam, text
 from sqlalchemy.orm import Session
 
 from shared.canonical_event import (
@@ -45,6 +45,30 @@ class CanonicalEventStore:
         """Set the RLS tenant context for this session."""
         self.session.execute(
             text("SET LOCAL app.tenant_id = :tid"),
+            {"tid": tenant_id},
+        )
+
+    # ------------------------------------------------------------------
+    # Per-tenant Chain Serialization (fix #1251)
+    # ------------------------------------------------------------------
+
+    def _acquire_chain_lock(self, tenant_id: str) -> None:
+        """Acquire a per-tenant transaction-scoped advisory lock.
+
+        Two writers inserting events for the same tenant concurrently
+        would otherwise both read the same chain head and compute the
+        same ``next_sequence``, producing duplicate sequence numbers
+        (or a UNIQUE violation if a defense-in-depth constraint is
+        added).  pg_advisory_xact_lock serializes the chain-growth
+        critical section per tenant; the lock is released automatically
+        at COMMIT / ROLLBACK.
+
+        hashtext() returns an int4 which is what pg_advisory_xact_lock
+        expects.  Collisions across tenants are harmless — they just
+        serialize unrelated tenants occasionally, never cross-write.
+        """
+        self.session.execute(
+            text("SELECT pg_advisory_xact_lock(hashtext(:tid))"),
             {"tid": tenant_id},
         )
 
@@ -123,7 +147,20 @@ class CanonicalEventStore:
         if not event.sha256_hash:
             event.prepare_for_persistence()
 
-        # --- Idempotency check ---
+        # --- Serialize chain growth per-tenant (fix #1251) ---
+        # A transaction-scoped advisory lock keyed on the tenant_id hash
+        # prevents concurrent persist_event calls from reading the same
+        # chain head and producing duplicate sequence_num entries.  The
+        # lock is released automatically at COMMIT / ROLLBACK.
+        self._acquire_chain_lock(tenant_id)
+
+        # --- Idempotency check (fix #1252) ---
+        # We moved the check into the INSERT via ON CONFLICT .. DO NOTHING
+        # RETURNING event_id so a losing writer in a race does not abort
+        # the transaction with a UNIQUE violation.  If the INSERT returns
+        # zero rows we re-SELECT the existing row and return idempotent.
+        # However we still short-circuit on an obvious pre-existing key
+        # to avoid computing a pointless chain hash when idempotent.
         if event.idempotency_key:
             existing = self.session.execute(
                 text("""
@@ -160,24 +197,40 @@ class CanonicalEventStore:
         chain_hash = compute_chain_hash(event.sha256_hash, previous_chain_hash)
         event.chain_hash = chain_hash
 
-        # --- Insert canonical event ---
-        self._insert_canonical_event(event)
+        # --- Insert canonical event (fix #1252: ON CONFLICT DO NOTHING) ---
+        # Returns the inserted event_id, sha256_hash, chain_hash on success,
+        # or None when a concurrent writer won the idempotency race.  In
+        # that case we re-SELECT the winner's row and return idempotent
+        # without aborting the surrounding transaction.
+        inserted = self._insert_canonical_event(event)
+        if inserted is None and event.idempotency_key:
+            existing = self.session.execute(
+                text("""
+                    SELECT event_id, sha256_hash, chain_hash
+                    FROM fsma.traceability_events
+                    WHERE idempotency_key = :key AND tenant_id = :tid
+                """),
+                {"key": event.idempotency_key, "tid": tenant_id},
+            ).fetchone()
+            if existing:
+                return CanonicalStoreResult(
+                    success=True, event_id=str(existing[0]),
+                    sha256_hash=existing[1], chain_hash=existing[2],
+                    idempotent=True, errors=[],
+                )
 
-        # --- Mark superseded event ---
+        # --- Mark superseded event (fix #1262) ---
+        # The previous implementation was check-then-update:
+        #   SELECT status ...  then  UPDATE ... WHERE status='active'
+        # Between the SELECT and UPDATE another writer could supersede the
+        # same row, producing a spurious "already superseded" ValueError
+        # for the race-loser even though the intended state change had
+        # already been applied.  We collapse to a single authoritative
+        # UPDATE ... RETURNING; an empty result (target already superseded
+        # or absent for this tenant) is treated as idempotent, not an error.
         if event.supersedes_event_id:
             if event.supersedes_event_id == event.event_id:
                 raise ValueError("Event cannot supersede itself")
-            target_status = self.session.execute(
-                text("""
-                    SELECT status FROM fsma.traceability_events
-                    WHERE event_id = :superseded_id AND tenant_id = :tid
-                """),
-                {"superseded_id": str(event.supersedes_event_id), "tid": tenant_id},
-            ).scalar()
-            if target_status == "superseded":
-                raise ValueError(
-                    f"Cannot supersede event {event.supersedes_event_id}: already superseded"
-                )
             self.session.execute(
                 text("""
                     UPDATE fsma.traceability_events
@@ -185,9 +238,12 @@ class CanonicalEventStore:
                     WHERE event_id = :superseded_id
                       AND tenant_id = :tid
                       AND status = 'active'
+                    RETURNING event_id
                 """),
                 {"superseded_id": str(event.supersedes_event_id), "tid": tenant_id},
-            )
+            ).fetchone()
+            # No rows => target was already superseded (or does not belong
+            # to this tenant).  Both are safe / idempotent outcomes.
 
         # --- Insert hash chain entry ---
         if not self.skip_chain_write:
@@ -237,27 +293,35 @@ class CanonicalEventStore:
 
         tenant_id = str(events[0].tenant_id)
 
+        # --- Serialize chain growth per-tenant (fix #1251) ---
+        self._acquire_chain_lock(tenant_id)
+
         for evt in events:
             if not evt.sha256_hash:
                 evt.prepare_for_persistence()
 
-        # --- Batch idempotency check ---
+        # --- Batch idempotency check (fix #1254) ---
+        # Previous implementation built placeholder names via f-string
+        # (``:k0, :k1, ...``). The names themselves were not user input,
+        # but the pattern normalizes dynamic SQL assembly in this module.
+        # We replace it with SQLAlchemy's expanding bind parameter which
+        # generates the IN (...) list safely at prepare time.
         idemp_keys = [e.idempotency_key for e in events if e.idempotency_key]
         existing_map: Dict[str, Tuple[str, str, str]] = {}
+        _idemp_select = text(
+            """
+            SELECT idempotency_key, event_id, sha256_hash, chain_hash
+            FROM fsma.traceability_events
+            WHERE tenant_id = :tid AND idempotency_key IN :keys
+            """
+        ).bindparams(bindparam("keys", expanding=True))
         for chunk_start in range(0, len(idemp_keys), 100):
             chunk = idemp_keys[chunk_start:chunk_start + 100]
             if not chunk:
                 continue
-            placeholders = ", ".join(f":k{i}" for i in range(len(chunk)))
-            params = {f"k{i}": k for i, k in enumerate(chunk)}
-            params["tid"] = tenant_id
             rows = self.session.execute(
-                text(f"""
-                    SELECT idempotency_key, event_id, sha256_hash, chain_hash
-                    FROM fsma.traceability_events
-                    WHERE tenant_id = :tid AND idempotency_key IN ({placeholders})
-                """),
-                params,
+                _idemp_select,
+                {"tid": tenant_id, "keys": chunk},
             ).fetchall()
             for row in rows:
                 existing_map[row[0]] = (str(row[1]), row[2], row[3])
@@ -566,23 +630,23 @@ class CanonicalEventStore:
         self, tenant_id: str, tlc: str,
         start_date: Optional[str] = None, end_date: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
-        """Query canonical events for a TLC within a date range."""
-        params: Dict[str, Any] = {"tid": tenant_id, "tlc": tlc}
-        where_clauses = [
-            "tenant_id = :tid", "traceability_lot_code = :tlc", "status = 'active'",
-        ]
+        """Query canonical events for a TLC within a date range.
 
-        if start_date:
-            where_clauses.append("event_timestamp >= :start_date")
-            params["start_date"] = start_date
-        if end_date:
-            where_clauses.append("event_timestamp <= :end_date")
-            params["end_date"] = end_date
-
-        where = " AND ".join(where_clauses)
+        Fix #1254: no f-string interpolation of predicate text.  Date
+        filters are toggled via nullable bind parameters in the WHERE
+        clause (``:start_date IS NULL OR event_timestamp >= :start_date``).
+        This shape is constant SQL text regardless of inputs, so there
+        is no dynamic predicate assembly and no injection vector.
+        """
+        params: Dict[str, Any] = {
+            "tid": tenant_id,
+            "tlc": tlc,
+            "start_date": start_date,
+            "end_date": end_date,
+        }
 
         rows = self.session.execute(
-            text(f"""
+            text("""
                 SELECT event_id, event_type, traceability_lot_code,
                        product_reference, quantity, unit_of_measure,
                        from_facility_reference, to_facility_reference,
@@ -590,7 +654,13 @@ class CanonicalEventStore:
                        source_system, status, kdes, provenance_metadata,
                        confidence_score, created_at
                 FROM fsma.traceability_events
-                WHERE {where}
+                WHERE tenant_id = :tid
+                  AND traceability_lot_code = :tlc
+                  AND status = 'active'
+                  AND (CAST(:start_date AS timestamptz) IS NULL
+                       OR event_timestamp >= CAST(:start_date AS timestamptz))
+                  AND (CAST(:end_date AS timestamptz) IS NULL
+                       OR event_timestamp <= CAST(:end_date AS timestamptz))
                 ORDER BY event_timestamp ASC
             """),
             params,
@@ -617,9 +687,17 @@ class CanonicalEventStore:
     # Internal Write Helpers
     # ------------------------------------------------------------------
 
-    def _insert_canonical_event(self, event: TraceabilityEvent) -> None:
-        """Insert a single canonical event."""
-        self.session.execute(
+    def _insert_canonical_event(self, event: TraceabilityEvent) -> Optional[Tuple[str, str, str]]:
+        """Insert a single canonical event.
+
+        Uses ``ON CONFLICT (tenant_id, idempotency_key) DO NOTHING RETURNING``
+        so a concurrent writer winning the idempotency race does not abort
+        the surrounding transaction with a UNIQUE violation (fix #1252).
+
+        Returns the inserted (event_id, sha256_hash, chain_hash) tuple on
+        success, or None when the row already existed.
+        """
+        row = self.session.execute(
             text("""
                 INSERT INTO fsma.traceability_events (
                     event_id, tenant_id, source_system, source_record_id,
@@ -648,9 +726,14 @@ class CanonicalEventStore:
                     :sha256_hash, :chain_hash, :idempotency_key,
                     :epcis_event_type, :epcis_action, :epcis_biz_step
                 )
+                ON CONFLICT (tenant_id, idempotency_key) DO NOTHING
+                RETURNING event_id, sha256_hash, chain_hash
             """),
             self._event_to_params(event),
-        )
+        ).fetchone()
+        if row is None:
+            return None
+        return (str(row[0]), row[1], row[2])
 
     def _event_to_params(self, event: TraceabilityEvent) -> Dict[str, Any]:
         """Convert a TraceabilityEvent to SQL parameter dict."""
