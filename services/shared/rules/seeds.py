@@ -227,15 +227,22 @@ FSMA_RULE_SEEDS: List[Dict[str, Any]] = [
         "remediation_suggestion": "Record the commodity and variety of the food (e.g., 'Romaine Lettuce, Whole Head')",
     },
     {
+        # #1358 — the legacy rule used `field_presence` on `quantity`
+        # alone, so an event with quantity=100 but no unit_of_measure
+        # silently passed "Quantity and UoM Required". Fail-closed: both
+        # fields must be present.
         "title": "Quantity and Unit of Measure Required",
-        "description": "Every CTE must include the quantity and unit of measure",
+        "description": "Every CTE must include the quantity AND unit of measure",
         "severity": "critical",
         "category": "kde_presence",
         "applicability_conditions": {"cte_types": [], "ftl_scope": ["ALL"]},
         "citation_reference": "21 CFR \u00a71.1310(b)(2)",
-        "evaluation_logic": {"type": "field_presence", "field": "quantity"},
-        "failure_reason_template": "Event missing quantity and unit of measure ({citation})",
-        "remediation_suggestion": "Record the quantity and unit of measure for this event",
+        "evaluation_logic": {
+            "type": "all_field_presence",
+            "params": {"fields": ["quantity", "unit_of_measure"]},
+        },
+        "failure_reason_template": "Event missing {field_name} required by {citation}",
+        "remediation_suggestion": "Record both the quantity and the unit of measure (e.g., 100 cases, 2000 lbs)",
     },
     {
         "title": "Location Identifier Required",

@@ -207,6 +207,89 @@ def evaluate_multi_field_presence(
     )
 
 
+def evaluate_all_field_presence(
+    event_data: Dict[str, Any],
+    logic: Dict[str, Any],
+    rule: RuleDefinition,
+) -> RuleEvaluationResult:
+    """Evaluate that EVERY listed field is present and non-empty (AND logic).
+
+    Companion to ``multi_field_presence`` (which uses OR logic). Required
+    for rules that name more than one KDE — e.g. #1358's
+    "Quantity AND Unit of Measure Required" rule, which previously only
+    checked quantity and let unit_of_measure slip past. Fail-closed: if
+    ANY field is missing, the rule fails and the list of missing fields
+    is included in ``why_failed`` so tenants know exactly what to add.
+    """
+    fields = logic.get("params", {}).get("fields", [])
+    if not fields:
+        # An empty all-of list would vacuously pass — treat that as a
+        # misconfigured rule rather than a silent green stamp.
+        return RuleEvaluationResult(
+            rule_id=rule.rule_id, rule_version=rule.rule_version,
+            rule_title=rule.title, severity=rule.severity,
+            result="error",
+            why_failed=(
+                f"Rule '{rule.title}' uses all_field_presence with no fields "
+                "configured — rule is misconfigured."
+            ),
+            category=rule.category,
+        )
+
+    evidence = []
+    missing = []
+
+    for fp in fields:
+        value = get_nested_value(event_data, fp)
+        is_present = value is not None and (
+            not isinstance(value, str) or value.strip() != ""
+        )
+        evidence.append({
+            "field": fp,
+            "value": str(value)[:200] if value is not None else None,
+            "present": is_present,
+        })
+        if not is_present:
+            missing.append(fp)
+
+    if not missing:
+        return RuleEvaluationResult(
+            rule_id=rule.rule_id, rule_version=rule.rule_version,
+            rule_title=rule.title, severity=rule.severity,
+            result="pass", evidence_fields_inspected=evidence,
+            citation_reference=rule.citation_reference, category=rule.category,
+        )
+
+    missing_names = ", ".join(
+        fp.split(".")[-1].replace("_", " ") for fp in missing
+    )
+    try:
+        why_failed = rule.failure_reason_template.format(
+            field_name=missing_names,
+            field_path=", ".join(missing),
+            citation=rule.citation_reference or "FSMA 204",
+            event_type=event_data.get("event_type", "unknown"),
+        )
+    except KeyError:
+        # Template didn't expect a placeholder we tried to fill — fall
+        # back to a deterministic reason so the rule still produces a
+        # usable why_failed.
+        why_failed = (
+            f"Event missing required field(s): {missing_names} "
+            f"({rule.citation_reference or 'FSMA 204'})"
+        )
+
+    return RuleEvaluationResult(
+        rule_id=rule.rule_id, rule_version=rule.rule_version,
+        rule_title=rule.title, severity=rule.severity,
+        result="fail", why_failed=why_failed,
+        evidence_fields_inspected=evidence,
+        citation_reference=rule.citation_reference,
+        remediation_suggestion=rule.remediation_suggestion,
+        category=rule.category,
+    )
+
+
 def evaluate_gs1_identifier(
     event_data: Dict[str, Any],
     logic: Dict[str, Any],
@@ -320,5 +403,6 @@ EVALUATORS = {
     "field_presence": evaluate_field_presence,
     "field_format": evaluate_field_format,
     "multi_field_presence": evaluate_multi_field_presence,
+    "all_field_presence": evaluate_all_field_presence,
     "gs1_identifier": evaluate_gs1_identifier,
 }
