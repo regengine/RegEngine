@@ -12,7 +12,15 @@ VALID_ENTITY_TYPES = frozenset({
 
 VALID_ALIAS_TYPES = frozenset({
     "name", "gln", "gtin", "fda_registration", "internal_code",
-    "duns", "tlc_prefix", "address_variant", "abbreviation", "trade_name",
+    "duns",
+    # TLC aliases (#1175):
+    #   - "tlc":        verbatim Traceability Lot Code, the CANONICAL storage
+    #                   form for FSMA 204 traceability. Must never be
+    #                   truncated or normalized.
+    #   - "tlc_prefix": the GTIN-14 prefix of a TLC, used strictly for
+    #                   secondary fuzzy LOOKUP. Never the primary alias.
+    "tlc", "tlc_prefix",
+    "address_variant", "abbreviation", "trade_name",
 })
 
 VALID_REVIEW_STATUSES = frozenset({
