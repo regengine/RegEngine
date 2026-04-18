@@ -19,7 +19,7 @@ from shared.resilient_http import resilient_client
 from shared.circuit_breaker import CircuitOpenError
 from .config import settings
 from .csv_safety import sanitize_cell
-from .fsma_spreadsheet import generate_fda_csv
+from .fsma_spreadsheet import FSMATimestampError, generate_fda_csv
 
 
 # ---------------------------------------------------------------------------
@@ -434,12 +434,29 @@ async def fsma_audit_spreadsheet(
             ),
         )
 
-    csv_content = generate_fda_csv(
-        events,
-        start_date=start.isoformat(),
-        end_date=end.isoformat(),
-        requesting_entity=requesting_entity or "",
-    )
+    try:
+        csv_content = generate_fda_csv(
+            events,
+            start_date=start.isoformat(),
+            end_date=end.isoformat(),
+            requesting_entity=requesting_entity or "",
+        )
+    except FSMATimestampError as exc:
+        # A malformed event_date in the graph response is not a 5xx —
+        # it's a data-quality problem the caller needs to resolve
+        # before a submission is valid (issue #1108).
+        _logger.warning(
+            "fda_export_malformed_event_date",
+            extra={"error": str(exc), "tenant_id": tenant_id},
+        )
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "FDA export aborted: at least one event carried a "
+                "malformed event_date that cannot be truncated into an "
+                f"FSMA-204 submission. {exc}"
+            ),
+        ) from exc
 
     # Audit log the FDA export (#988), now including ``initiated_at_utc``
     # for FSMA-204 chain-of-custody (#1205 mirror).

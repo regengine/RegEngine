@@ -106,29 +106,68 @@ _SKIP_KDE_KEYS = _NAMED_KDE_KEYS | {
 }
 
 
-def _parse_timestamp(raw: str) -> tuple[str, str]:
-    """Split an ISO timestamp into (date, time)."""
-    if not raw:
+class FSMATimestampError(ValueError):
+    """Raised when a required FSMA 204 timestamp is unparseable.
+
+    An FDA Sortable Spreadsheet cannot use a truncated string as a
+    substitute for a real date — the auditor-facing export must either
+    carry a valid ISO-8601 date or fail loudly at export time. This is
+    the regulator's contractual requirement, not a soft preference
+    (issue #1108).
+    """
+
+
+def _parse_timestamp(raw: str, *, strict: bool = False) -> tuple[str, str]:
+    """Split an ISO timestamp into ``(date, time)``.
+
+    Parameters
+    ----------
+    raw:
+        An ISO-8601 string, possibly with a trailing ``Z``.
+    strict:
+        When ``True`` (the FDA-export path), a malformed ``raw`` raises
+        :class:`FSMATimestampError` so the caller can return a 400
+        rather than silently truncating to ``raw[:10]`` (issue #1108).
+        When ``False`` (default, for non-regulatory code paths), the
+        legacy graceful fallback is preserved so existing callers do
+        not regress.
+    """
+    if raw is None or raw == "":
         return ("", "")
     try:
         dt = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
         return (dt.strftime("%Y-%m-%d"), dt.strftime("%H:%M:%S"))
-    except (ValueError, AttributeError):
+    except (ValueError, AttributeError) as exc:
+        if strict:
+            raise FSMATimestampError(
+                f"event_date {raw!r} is not ISO-8601; refusing to "
+                "truncate into an FDA submission"
+            ) from exc
+        # Legacy, non-strict behavior: return raw[:10] for non-FDA
+        # callers that only need a best-effort display value.
         return (str(raw)[:10], "")
 
 
-def _normalise_event(event: dict[str, Any]) -> dict[str, str]:
+def _normalise_event(
+    event: dict[str, Any],
+    *,
+    strict_dates: bool = False,
+) -> dict[str, str]:
     """Map a graph-service event dict to FDA column values.
 
     Every returned string passes through :func:`sanitize_cell` so a
     tenant-controlled free-text KDE cannot carry a spreadsheet formula
     into the FDA auditor's CSV (issue #1272). This mirrors the
     ingestion-side fix (issue #1081).
+
+    When ``strict_dates`` is True, a malformed ``event_date`` raises
+    :class:`FSMATimestampError` rather than silently truncating into
+    the CSV (issue #1108). FDA-export call paths must pass ``True``.
     """
 
     kdes = event.get("kdes", {})
     event_date_raw = kdes.get("event_date") or event.get("event_date") or ""
-    event_date, event_time = _parse_timestamp(event_date_raw)
+    event_date, event_time = _parse_timestamp(event_date_raw, strict=strict_dates)
     if kdes.get("event_time"):
         event_time = str(kdes["event_time"])
 
@@ -233,7 +272,9 @@ def generate_fda_csv(
     # --- Data rows (sorted by event_date then event_time) ---
     # ``_normalise_event`` already applies :func:`sanitize_cell` to every
     # value, so the column-ordered list here inherits the sanitization.
-    normalised = [_normalise_event(e) for e in events]
+    # ``strict_dates=True`` refuses to truncate malformed event_dates
+    # into the FDA submission (issue #1108).
+    normalised = [_normalise_event(e, strict_dates=True) for e in events]
     normalised.sort(key=lambda r: (r.get("event_date") or "", r.get("event_time") or ""))
 
     for row in normalised:

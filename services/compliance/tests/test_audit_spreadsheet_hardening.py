@@ -236,6 +236,36 @@ def test_1291_zero_events_still_records_empty_audit_line(client, caplog):
 
 
 # ---------------------------------------------------------------------------
+# #1108 — malformed event_date in graph response must 400, not truncate
+# ---------------------------------------------------------------------------
+
+
+def test_1108_malformed_event_date_in_graph_response_returns_400(client):
+    """When the graph service returns an event with a non-ISO-8601
+    ``event_date``, the handler must 400 rather than emit an FDA
+    submission with a truncated 8-char string in the date column.
+    """
+    bad_events = [
+        {
+            "type": "SHIPPING",
+            "tlc": "TLC-001",
+            "product_description": "Romaine",
+            "quantity": 100,
+            "uom": "cases",
+            "kdes": {"event_date": "yesterday"},  # unparseable
+        }
+    ]
+    with _patch_graph(client, bad_events):
+        r = client.get(
+            "/v1/fsma/audit/spreadsheet",
+            params={"start_date": "2026-04-01", "end_date": "2026-04-17"},
+        )
+    assert r.status_code == 400
+    detail = r.json()["detail"]
+    assert "malformed event_date" in detail or "event_date" in detail
+
+
+# ---------------------------------------------------------------------------
 # Positive case: valid inputs still produce a CSV
 # ---------------------------------------------------------------------------
 
