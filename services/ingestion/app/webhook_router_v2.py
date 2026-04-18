@@ -41,6 +41,11 @@ from app.webhook_models import (
 )
 from shared.canonical_event import normalize_webhook_event
 
+# Backwards-compat alias: tests override this private name via
+# ``app.dependency_overrides[_get_db_session]``. Point it at the canonical
+# shared helper so the override matches the Depends() callable.
+_get_db_session = get_db_session
+
 logger = logging.getLogger("webhook-ingestion")
 
 router = APIRouter(prefix="/api/v1/webhooks", tags=["Webhook Ingestion"])

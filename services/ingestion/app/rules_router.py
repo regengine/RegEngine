@@ -27,6 +27,11 @@ from app.tenant_validation import validate_tenant_id, resolve_tenant
 from shared.pagination import PaginationParams
 from shared.database import get_db_session
 
+# Backwards-compat alias: tests and older callers override this private name
+# via ``app.dependency_overrides[_get_db_session]``. Keep it pointing at the
+# canonical shared helper so dependency overrides work on either import path.
+_get_db_session = get_db_session
+
 logger = logging.getLogger("rules-router")
 
 router = APIRouter(prefix="/api/v1/rules", tags=["Rules Engine"])
