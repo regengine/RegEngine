@@ -29,9 +29,9 @@ from kernel.obligation.models import (
 def _make_match(obligation_id: str, met: bool, missing: list[str] | None = None) -> ObligationMatch:
     return ObligationMatch(
         obligation_id=obligation_id,
-        citation="12 CFR 1002.9",
-        regulator=Regulator.CFPB,
-        domain=RegulatoryDomain.ECOA,
+        citation="21 CFR 1.1320",
+        regulator=Regulator.FDA,
+        domain=RegulatoryDomain.FSMA,
         met=met,
         missing_evidence=missing or [],
         risk_score=0.0 if met else 0.75,
