@@ -109,13 +109,22 @@ class TestLotCodeExtraction:
         assert result.ctes[0].kdes.traceability_lot_code is not None
         assert "BATCH-2025-1105-B" in result.ctes[0].kdes.traceability_lot_code
 
-    def test_gtin_prepended_to_lot(self, extractor):
-        """Test that GTIN is prepended to lot code when both exist."""
+    def test_gtin_not_prepended_to_lot(self, extractor):
+        """Regression guard for #1104 — the TLC must be preserved
+        verbatim from the document. Pre-fix, any 14-digit number in
+        the document was concatenated in front of the lot code,
+        mutating the originator-assigned TLC and breaking traceability
+        (21 CFR §1.1320 defines the TLC as assigned by the originator).
+        GTIN is now stored separately in ``KDE.gtin``."""
         result = extractor.extract(SAMPLE_BOL_TEXT, "test-doc-003")
 
         tlc = result.ctes[0].kdes.traceability_lot_code
-        # GTIN should be prepended
-        assert tlc.startswith("00012345678901")
+        assert tlc is not None
+        assert not tlc.startswith("00012345678901"), (
+            f"TLC was mutated by GTIN prepend: {tlc!r} — #1104 regression"
+        )
+        # GTIN is now stored on its own KDE field.
+        assert result.ctes[0].kdes.gtin == "00012345678901"
 
 
 class TestQuantityExtraction:

@@ -29,6 +29,19 @@ from .fsma_types import (
     HITL_CONFIDENCE_THRESHOLD,
 )
 
+# #1116 — Food Traceability List scoping. The rules engine already
+# owns the authoritative catalog; the extractor classifies each
+# product against it so non-FTL foods can be marked up-front and
+# skipped downstream instead of generating spurious "missing TLC"
+# warnings. The import is lazy-tolerant: a missing FTL module should
+# not fail extraction (we degrade to ``is_ftl_covered=None`` which
+# the downstream pipeline treats as a classification gap, not a
+# positive compliance stamp — see #1346).
+try:
+    from shared.rules.ftl import FTL_CATEGORIES  # type: ignore[import]
+except Exception:  # pragma: no cover - defense-in-depth for import paths
+    FTL_CATEGORIES = frozenset()
+
 logger = structlog.get_logger("fsma-extractor")
 
 
@@ -69,9 +82,29 @@ class FSMAExtractor:
             r"(?:SKU|Stock\s*Keeping\s*Unit|Item\s*#?|Part\s*#?)\s*[:#]?\s*([A-Z0-9\-\.]{3,20})",
             r"(?:Product\s*Code|Code)\s*[:#]?\s*([A-Z0-9\-\.]{3,20})",
         ],
+        # #1129 — quantity is required as a (value, unit) PAIR per 21
+        # CFR §1.1325(c). The unit was previously optional in the
+        # "QTY: <n>" variant which dropped the unit silently. Both
+        # patterns now REQUIRE a unit match; units extended beyond the
+        # original 5 to cover the common aliases (oz, g/gram, ton,
+        # bushel, CT/BX/CS).
+        #
+        # The "units?" token carried the English word "units" — kept.
+        # Short-form "UN" could be confused with prefix characters so
+        # it is intentionally absent.
         "quantity": [
-            r"(?:QTY|Quantity|Qty\.?)\s*[:#]?\s*(\d+(?:\.\d+)?)\s*(cases?|units?|lbs?|kg|pallets?)?",
-            r"(\d+(?:\.\d+)?)\s*(cases?|units?|lbs?|kg|pallets?)",
+            r"(?:QTY|Quantity|Qty\.?)\s*[:#]?\s*"
+            r"(\d+(?:\.\d+)?)\s*"
+            r"(cases?|units?|lbs?|kg|pallets?|oz|ounces?|gram?s?|g|tons?|bushels?|ct|bx|box(?:es)?|cs|cartons?|crates?|bins?|totes?)",
+            r"(\d+(?:\.\d+)?)\s*"
+            r"(cases?|units?|lbs?|kg|pallets?|oz|ounces?|gram?s?|g|tons?|bushels?|ct|bx|box(?:es)?|cs|cartons?|crates?|bins?|totes?)",
+        ],
+        # Fallback — matches a bare number after QTY/Quantity with NO
+        # unit. We use this to detect the "found a number but no unit"
+        # case and emit a warning instead of silently storing the
+        # quantity without a unit (#1129).
+        "quantity_unitless": [
+            r"(?:QTY|Quantity|Qty\.?)\s*[:#]?\s*(\d+(?:\.\d+)?)(?!\s*(?:cases?|units?|lbs?|kg|pallets?|oz|ounces?|gram?s?|g|tons?|bushels?|ct|bx|box|cs|cartons?|crates?|bins?|totes?))\b",
         ],
         "gln": [
             r"(?:GLN|Location\s*ID)\s*[:#]?\s*(\d{13})",
@@ -135,6 +168,59 @@ class FSMAExtractor:
             "qc",
             "kill step",
         ],
+        # #1103 — origin-side documents. Order matters: these are
+        # checked BEFORE BOL in ``_classify_document`` so that a
+        # harvest log which happens to mention "shipper" is not
+        # misclassified as a BOL and silently routed to SHIPPING.
+        DocumentType.HARVEST_LOG: [
+            "harvest log",
+            "harvest record",
+            "harvester",
+            "field id",
+            "field identifier",
+            "picked by",
+            "growing area",
+        ],
+        DocumentType.COOLING_LOG: [
+            "cooling log",
+            "cooling record",
+            "hydro-cooler",
+            "forced air cool",
+            "pulp temp",
+            "cooling temperature",
+            "cooling location",
+        ],
+        DocumentType.PACKING_SLIP: [
+            "packing slip",
+            "packing list",
+            "packed by",
+            "packer",
+            "initial packing",
+            "packing date",
+            "pack location",
+        ],
+        DocumentType.LANDING_REPORT: [
+            "landing report",
+            "catch report",
+            "source vessel",
+            "fishing vessel",
+            "port of landing",
+            "first land-based receiver",
+            "first landing",
+        ],
+    }
+
+    #: #1103 — document type → CTE type mapping. Missing entries mean
+    #: the CTE type must be inferred from content or the default falls
+    #: back to SHIPPING (the original behavior this mapping replaces).
+    DOC_TO_CTE: Dict[DocumentType, CTEType] = {
+        DocumentType.HARVEST_LOG: CTEType.HARVESTING,
+        DocumentType.COOLING_LOG: CTEType.COOLING,
+        DocumentType.PACKING_SLIP: CTEType.INITIAL_PACKING,
+        DocumentType.LANDING_REPORT: CTEType.FIRST_LAND_BASED_RECEIVER,
+        DocumentType.PRODUCTION_LOG: CTEType.TRANSFORMATION,
+        # BILL_OF_LADING is handled specially — see #1123 split logic
+        # in ``_extract_ctes`` (emits both SHIPPING and RECEIVING).
     }
 
     def __init__(
@@ -580,13 +666,30 @@ class FSMAExtractor:
         """
         ctes = []
 
-        # Determine CTE type based on document
+        # #1103 — determine CTE type(s) from the document type.
+        # Previously every non-PRODUCTION_LOG document fell back to
+        # SHIPPING, which meant harvest logs, cooling records, and
+        # packing slips were misclassified. Origin-side documents now
+        # route to their correct FDA CTE type.
+        #
+        # #1123 — a BOL documents both a SHIPPING CTE (at the
+        # shipper) and a RECEIVING CTE (at the receiver). Emitting
+        # only SHIPPING loses the downstream half of the chain, so
+        # recall-tracing cannot walk forward. BOL is therefore
+        # expanded later in this method into two CTEs linked via
+        # ``prior_source_tlc``.
         if doc_type == DocumentType.BILL_OF_LADING:
+            # Split is handled below — use SHIPPING as the "primary"
+            # CTE for the tabular / single-KDE paths, then clone the
+            # emitted CTE into a RECEIVING partner.
             cte_type = CTEType.SHIPPING
-        elif doc_type == DocumentType.PRODUCTION_LOG:
-            cte_type = CTEType.TRANSFORMATION
+            split_bol_into_shipping_plus_receiving = True
+        elif doc_type in self.DOC_TO_CTE:
+            cte_type = self.DOC_TO_CTE[doc_type]
+            split_bol_into_shipping_plus_receiving = False
         else:
-            cte_type = CTEType.SHIPPING  # Default
+            cte_type = CTEType.SHIPPING  # legacy default for UNKNOWN
+            split_bol_into_shipping_plus_receiving = False
 
         # If we have line items with sufficient data, create CTEs from them
         # Otherwise fall back to global extraction
@@ -603,6 +706,16 @@ class FSMAExtractor:
                     product_description=item.description,
                     quantity=item.quantity,
                     unit_of_measure=item.unit_of_measure,
+                    # #1104 — GTIN stored separately. Same-row pairing
+                    # is preserved because the LineItem already scoped
+                    # the GTIN to the row, unlike the old global
+                    # _extract_kdes concat.
+                    gtin=item.gtin,
+                )
+                # #1116 — FTL classification from the line item's
+                # description (the most-specific signal available).
+                kde.is_ftl_covered, kde.ftl_category = self._classify_ftl(
+                    item.description
                 )
                 # Extract common fields from full text
                 self._populate_shared_kdes(kde, text)
@@ -618,6 +731,8 @@ class FSMAExtractor:
                 )
                 ctes.append(cte)
 
+            if split_bol_into_shipping_plus_receiving:
+                ctes = self._split_bol_into_shipping_and_receiving(ctes)
             return ctes
 
         # Fallback: Extract KDEs from full text (original behavior)
@@ -632,6 +747,14 @@ class FSMAExtractor:
         )
 
         if has_meaningful_kde:
+            # #1116 — FTL classification from the extracted product
+            # description. Upgraded callers can route non-FTL events
+            # away from the FSMA path instead of letting them fill
+            # the review queue with false-positive "missing TLC"
+            # warnings.
+            kdes.is_ftl_covered, kdes.ftl_category = self._classify_ftl(
+                kdes.product_description
+            )
             # Calculate confidence based on completeness
             confidence = self._calculate_confidence(kdes, cte_type)
 
@@ -643,13 +766,125 @@ class FSMAExtractor:
             )
             ctes.append(cte)
 
+        if split_bol_into_shipping_plus_receiving:
+            ctes = self._split_bol_into_shipping_and_receiving(ctes)
         return ctes
 
+    def _split_bol_into_shipping_and_receiving(
+        self, ctes: List[CTE]
+    ) -> List[CTE]:
+        """For each SHIPPING CTE extracted from a BOL, emit a matching
+        RECEIVING CTE at the ship-to party — #1123.
+
+        A Bill of Lading documents both sides of a handoff:
+
+            SHIPPING   at the shipper (ship_from_*)
+            RECEIVING  at the receiver (ship_to_*)
+
+        Pre-fix the extractor emitted only the SHIPPING half, leaving
+        the downstream node missing from the traceability graph so
+        recall traces could walk backward but not forward. The
+        RECEIVING CTE's ``prior_source_tlc`` points back to the
+        SHIPPING CTE's TLC so the two legs are linkable.
+
+        The original SHIPPING CTEs are preserved verbatim and kept
+        first in the list (callers that loop in order see shipping
+        events before their paired receiving events).
+        """
+        paired: List[CTE] = []
+        for cte in ctes:
+            paired.append(cte)
+            if cte.type != CTEType.SHIPPING:
+                continue
+            rx_kde = KDE(
+                traceability_lot_code=cte.kdes.traceability_lot_code,
+                product_description=cte.kdes.product_description,
+                quantity=cte.kdes.quantity,
+                unit_of_measure=cte.kdes.unit_of_measure,
+                # Scope location to the ship-to side.
+                location_identifier=(
+                    cte.kdes.ship_to_gln or cte.kdes.location_identifier
+                ),
+                event_date=cte.kdes.event_date,
+                event_time=cte.kdes.event_time,
+                ship_from_location=cte.kdes.ship_from_location,
+                ship_to_location=cte.kdes.ship_to_location,
+                ship_from_gln=cte.kdes.ship_from_gln,
+                ship_to_gln=cte.kdes.ship_to_gln,
+                tlc_source_gln=cte.kdes.tlc_source_gln,
+                tlc_source_fda_reg=cte.kdes.tlc_source_fda_reg,
+                gtin=cte.kdes.gtin,
+                # Link the two events: RECEIVING.prior_source_tlc ==
+                # SHIPPING.traceability_lot_code.
+                prior_source_tlc=cte.kdes.traceability_lot_code,
+                is_ftl_covered=cte.kdes.is_ftl_covered,
+                ftl_category=cte.kdes.ftl_category,
+            )
+            paired.append(
+                CTE(
+                    type=CTEType.RECEIVING,
+                    kdes=rx_kde,
+                    confidence=cte.confidence,
+                    source_text=cte.source_text,
+                    bounding_box=cte.bounding_box,
+                )
+            )
+        return paired
+
+    def _classify_ftl(self, product_description: Optional[str]) -> Tuple[Optional[bool], Optional[str]]:
+        """Classify a free-text product description against the FDA FTL.
+
+        Returns ``(is_ftl_covered, ftl_category)``:
+
+          - ``(True, category)``  — product matches an FTL category; the
+            matching category name is returned for downstream consumers.
+          - ``(False, None)``     — a non-empty description was supplied
+            but no FTL category matched. Treat as non-FTL and route
+            accordingly (#1116).
+          - ``(None, None)``      — no description supplied, or the FTL
+            catalog import failed. Caller should surface as a
+            classification gap, not a compliance verdict (#1346).
+        """
+        if not product_description or not product_description.strip():
+            return None, None
+        if not FTL_CATEGORIES:
+            return None, None
+        desc = product_description.lower()
+        # Match is substring-based so "fresh romaine lettuce" maps to
+        # "leafy greens" via the rules catalog's entries. Order is
+        # deterministic (sorted) so unit tests are stable.
+        for category in sorted(FTL_CATEGORIES):
+            # Each catalog category is already lower-cased.
+            for token in category.split():
+                # Avoid spurious single-letter matches by requiring
+                # tokens of at least 4 chars. Still handles "nuts" /
+                # "eggs" / "fish" but excludes unhelpful prefixes.
+                if len(token) < 4:
+                    continue
+                if token in desc:
+                    return True, category
+        return False, None
+
     def _build_tlc(self, gtin: Optional[str], lot_code: Optional[str]) -> Optional[str]:
-        """Build Traceability Lot Code from GTIN and lot code."""
-        if gtin and lot_code:
-            return f"{gtin}-{lot_code}"
-        return lot_code or gtin
+        """Return the originator-assigned Traceability Lot Code verbatim.
+
+        Pre-#1104 this method synthesized a TLC by concatenating the
+        GTIN and the lot code (``f"{gtin}-{lot_code}"``). That was
+        non-compliant with FSMA §1.1320 — the TLC is the identifier
+        the originator assigned, not one we fabricate downstream. Two
+        facilities handling the same real-world lot would report
+        different "TLCs" and recall matching would break.
+
+        Callers that want to capture the GTIN should store it in
+        ``KDE.gtin`` (or ``LineItem.gtin`` for tabular extraction).
+        """
+        if lot_code:
+            return lot_code
+        # If ONLY a GTIN was supplied (no lot code at all), we return
+        # None rather than masquerading the GTIN as a TLC — same
+        # reason as above. Missing TLC surfaces as a visible KDE
+        # warning; a fake TLC silently breaks traceability.
+        return None
 
     def _extract_gln_roles(self, text: str) -> Dict[str, str]:
         """Extract GLNs and map them to roles based on document context."""
@@ -771,24 +1006,39 @@ class FSMAExtractor:
                 kde.traceability_lot_code = match.group(1).strip()
                 break
 
-        # Extract GTIN (append to TLC if found)
+        # Extract GTIN — stored SEPARATELY from TLC (#1104). The prior
+        # unconditional concat ``f"{gtin}-{tlc}"`` mutated the
+        # originator-assigned TLC even when the GTIN came from a
+        # completely unrelated line of the document (another SKU, a
+        # serial number, even a credit-card fragment that happens to
+        # be 14 digits). FSMA §1.1320 defines the TLC as assigned by
+        # the originator — synthesizing a new one is non-compliant.
+        #
+        # If no explicit lot code was found but a GTIN was, we DO NOT
+        # fall back to using the GTIN AS the TLC either — that
+        # produced the same incorrect downstream behavior under a
+        # different guise (two facilities reporting different "TLCs"
+        # for the same lot). The TLC stays ``None`` in that case and
+        # the missing-KDE warning fires correctly.
         for pattern in self.PATTERNS["gtin"]:
             match = re.search(pattern, text, re.IGNORECASE)
             if match:
-                gtin = match.group(1).strip()
-                if kde.traceability_lot_code:
-                    kde.traceability_lot_code = f"{gtin}-{kde.traceability_lot_code}"
-                else:
-                    kde.traceability_lot_code = gtin
+                kde.gtin = match.group(1).strip()
                 break
 
-        # Extract Quantity
+        # Extract Quantity — (value, unit) PAIR required per §1.1325(c).
+        # The previous pattern made the unit optional and silently
+        # stored ``quantity=50`` with ``unit_of_measure=None`` when a
+        # caller wrote "Quantity: 50" without a unit (#1129). We now
+        # populate ``kde.quantity`` ONLY when a unit was found in the
+        # same match. The downstream completeness check in
+        # ``_validate_extraction`` turns the missing pair into a
+        # visible KDE warning.
         for pattern in self.PATTERNS["quantity"]:
             match = re.search(pattern, text, re.IGNORECASE)
-            if match:
+            if match and len(match.groups()) >= 2 and match.group(2):
                 kde.quantity = float(match.group(1))
-                if len(match.groups()) > 1 and match.group(2):
-                    kde.unit_of_measure = match.group(2).lower()
+                kde.unit_of_measure = match.group(2).lower()
                 break
 
         # Extract GLN
