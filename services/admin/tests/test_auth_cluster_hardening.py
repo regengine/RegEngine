@@ -804,9 +804,13 @@ async def test_get_current_user_accepts_matching_tv(monkeypatch):
     from services.admin.app import dependencies
 
     user_id = uuid.uuid4()
+    tenant_id = uuid.uuid4()
     monkeypatch.setattr(dependencies, "get_supabase", lambda: None)
 
-    tok = create_access_token({"sub": str(user_id), "tv": 3})
+    # tv=3 in the token matches the user's token_version -> tv check OK.
+    # Include tenant_id in the claim so we don't hit the #1383 fail-closed
+    # path (which rejects tokens with no claim AND no memberships).
+    tok = create_access_token({"sub": str(user_id), "tv": 3, "tenant_id": str(tenant_id)})
     user = SimpleNamespace(
         id=user_id,
         email="u@e",
@@ -817,6 +821,11 @@ async def test_get_current_user_accepts_matching_tv(monkeypatch):
     db = MagicMock()
     db.bind = None
     db.get.return_value = user
+    # Simulate an active membership for the tenant_id in the token so
+    # the final membership check passes.
+    membership = SimpleNamespace(is_active=True)
+    db.execute.return_value.scalar_one_or_none.return_value = membership
+    db.execute.return_value.scalars.return_value.all.return_value = [membership]
 
     out = await dependencies.get_current_user(token=tok, db=db)
     assert out is user
