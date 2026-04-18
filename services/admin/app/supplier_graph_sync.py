@@ -97,9 +97,9 @@ RETURN collect(DISTINCT {
 
 
 CTE_EVENT_QUERY = """
-MERGE (facility:SupplierFacility {facility_id: $facility_id})
-SET facility.tenant_id = $tenant_id,
-    facility.name = $facility_name,
+MERGE (facility:SupplierFacility {facility_id: $facility_id, tenant_id: $tenant_id})
+ON CREATE SET facility.tenant_id = $tenant_id
+SET facility.name = $facility_name,
     facility.updated_at = datetime()
 MERGE (lot:TLC {tlc_code: $tlc_code, tenant_id: $tenant_id})
 SET lot.product_description = coalesce($product_description, lot.product_description),
