@@ -14,6 +14,7 @@ preserves the audit trail's integrity while removing PII.
 from __future__ import annotations
 
 import logging
+import uuid
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -97,17 +98,38 @@ async def request_erasure(
         with get_db() as db:
             manager = DataRetentionManager()
 
+            # ``AuditActor`` exposes ``email`` (not ``actor_email``).
+            # The previous attribute name raised TypeError on every
+            # erasure call and silently kept GDPR Article 17 broken
+            # even after #1441 realigned the downstream method
+            # signatures.  This is fix #1092.
             actor = AuditActor(
                 actor_type="user",
                 actor_id=user_id,
-                actor_email=mask_email(email),
+                email=mask_email(email),
+                tenant_id=str(tenant_id) if tenant_id else None,
             )
 
             # The DeletionRequest enum uses USER_INITIATED in this codebase
             # (not USER_REQUEST, which was the wrong identifier previously).
             deletion_request = DeletionRequest.USER_INITIATED
 
-            # 1. Soft-delete the user account record
+            # Parse tenant/user as UUID when possible (both the shared
+            # retention layer and the audit-log INSERT require UUIDs).
+            # If parsing fails the erasure still proceeds for the
+            # soft-delete side; the per-user anonymization then
+            # degrades to a logged no-op.
+            try:
+                user_uuid = uuid.UUID(str(user_id))
+            except (TypeError, ValueError):
+                user_uuid = None
+            try:
+                tenant_uuid = uuid.UUID(str(tenant_id)) if tenant_id else None
+            except (TypeError, ValueError):
+                tenant_uuid = None
+
+            # 1. Soft-delete the user account record (global resource,
+            # no tenant_id required — see _GLOBAL_RESOURCES).
             result = await manager.process_deletion_request(
                 db=db,
                 resource_type="user_account",
@@ -118,40 +140,40 @@ async def request_erasure(
                 reason=body.reason or "GDPR Article 17 right-to-erasure request",
             )
 
-            # 2. Anonymize audit logs (mask email, preserve trail).
-            #
-            # The ``anonymize_audit_logs`` API in services/shared/data_retention.py
-            # takes ``(db, retention_policy, actor)`` and returns
-            # ``(records_anonymized, errors)``. The prior call passed
-            # ``resource_type`` and ``record_id`` which do not exist on the
-            # method -- causing a runtime TypeError that silently broke
-            # GDPR Article 17 erasure. This is now aligned with the
-            # actual signature.
-            #
-            # NOTE: the method performs a batch anonymization of audit
-            # rows older than the retention threshold; it does not
-            # target a specific user_id. For per-user anonymization (the
-            # intended GDPR semantics here) see follow-up ticket
-            # documented below. The call is kept so that the erasure
-            # response still surfaces whether any anonymization ran --
-            # today it will typically be 0 records touched unless there
-            # are old rows past the retention threshold.
-            try:
-                anonymized_count, anonymize_errors = await manager.anonymize_audit_logs(
-                    db=db,
-                    retention_policy=RetentionPolicy.USER_ACCOUNT,
-                    actor=actor,
-                )
-            except Exception as anon_err:  # noqa: BLE001
-                # Do not fail the whole erasure if batch anonymization
-                # errors; the soft-delete is the primary action.
+            # 2. Emit a per-user GDPR anonymization order for the
+            # tenant's audit trail.  Uses the new
+            # ``anonymize_audit_logs_for_user`` method introduced for
+            # #1092 — the previous batch ``anonymize_audit_logs``
+            # targeted the retention threshold (24-month-old rows) and
+            # had the wrong semantics for a right-to-erasure request.
+            anonymized_count = 0
+            anonymize_errors = 0
+            if user_uuid is not None and tenant_uuid is not None:
+                try:
+                    anonymized_count, anonymize_errors = (
+                        await manager.anonymize_audit_logs_for_user(
+                            db=db,
+                            user_id=user_uuid,
+                            tenant_id=tenant_uuid,
+                            actor=actor,
+                        )
+                    )
+                except Exception as anon_err:  # noqa: BLE001
+                    # Do not fail the whole erasure if anonymization
+                    # errors; the soft-delete is the primary action.
+                    logger.warning(
+                        "erasure_anonymize_audit_logs_failed",
+                        user_id=user_id,
+                        error=str(anon_err),
+                    )
+                    anonymized_count = 0
+                    anonymize_errors = 1
+            else:
                 logger.warning(
-                    "erasure_anonymize_audit_logs_failed",
+                    "erasure_anonymize_audit_logs_skipped_non_uuid",
                     user_id=user_id,
-                    error=str(anon_err),
+                    tenant_id=tenant_id,
                 )
-                anonymized_count = 0
-                anonymize_errors = 1
 
             db.commit()
 
