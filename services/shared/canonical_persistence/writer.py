@@ -78,6 +78,10 @@ class CanonicalEventStore:
 
     def create_ingestion_run(self, run: IngestionRun) -> str:
         """Create an ingestion run record. Returns the run ID."""
+        # --- Set RLS tenant context (fix #1265) ---
+        # INSERTs on fsma.ingestion_runs are governed by tenant_isolation
+        # policies; set the GUC so the INSERT is not silently rejected.
+        self.set_tenant_context(str(run.tenant_id))
         self.session.execute(
             text("""
                 INSERT INTO fsma.ingestion_runs (
@@ -143,6 +147,14 @@ class CanonicalEventStore:
         dual-write (legacy), hash chain entry, transformation links.
         """
         tenant_id = str(event.tenant_id)
+
+        # --- Set RLS tenant context (fix #1265) ---
+        # Every SQL this method runs depends on RLS policies resolving
+        # ``get_tenant_context()`` correctly. Call sites can forget to
+        # pre-set the GUC, in which case fail-hard policies raise
+        # `insufficient_privilege`. Bind it here idempotently so the
+        # RLS posture is defence-in-depth, not callsite-discipline.
+        self.set_tenant_context(tenant_id)
 
         if not event.sha256_hash:
             event.prepare_for_persistence()
@@ -292,6 +304,22 @@ class CanonicalEventStore:
             return []
 
         tenant_id = str(events[0].tenant_id)
+
+        # --- Enforce single-tenant batch invariant (fix #1265) ---
+        # A batch that mixes tenants would set the GUC for one tenant
+        # and then write rows for another — with RLS forced, writes for
+        # the "wrong" tenant are silently rejected; without FORCE the
+        # owner connection would succeed and cross-tenant leak. Fail
+        # loud instead.
+        for evt in events[1:]:
+            if str(evt.tenant_id) != tenant_id:
+                raise ValueError(
+                    "persist_events_batch requires a single-tenant batch; "
+                    f"got tenant_id={tenant_id!r} and {evt.tenant_id!r}"
+                )
+
+        # --- Set RLS tenant context (fix #1265) ---
+        self.set_tenant_context(tenant_id)
 
         # --- Serialize chain growth per-tenant (fix #1251) ---
         self._acquire_chain_lock(tenant_id)
