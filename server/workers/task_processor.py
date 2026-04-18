@@ -1,15 +1,25 @@
 """PostgreSQL-backed task processor — replaces Kafka consumers.
 
-Polls the fsma.task_queue table and optionally listens via pg_notify
-for real-time wakeups. Handles three task types that previously
-required separate Kafka consumers:
+Polls the ``fsma.task_queue`` table for new work. Handles three task
+types that previously required separate Kafka consumers:
 
   1. nlp_extraction — extract entities from ingested documents
   2. graph_update   — upsert extracted entities into the knowledge graph
   3. review_item    — record low-confidence extractions for human review
 
+Delivery mechanism
+------------------
+This worker is **polling-only** by design (#1185). An earlier revision
+of the migration added a ``fsma.notify_new_task()`` trigger that fired
+``pg_notify('task_queue', ...)`` on INSERT and the docstring here
+claimed the worker "optionally listens" for real-time wakeups — but
+nothing ever issued ``LISTEN task_queue`` and the NOTIFYs were
+broadcast to nobody. We removed the trigger (migration v059) and
+reduced ``POLL_INTERVAL`` default to 500ms so enqueue latency is in
+the hundreds of ms rather than seconds.
+
 Usage:
-    from app.workers.task_processor import start_task_worker, stop_task_worker
+    from server.workers.task_processor import start_task_worker, stop_task_worker
     start_task_worker()   # call in FastAPI lifespan startup
     stop_task_worker()    # call in FastAPI lifespan shutdown
 """
@@ -28,8 +38,12 @@ logger = structlog.get_logger("task-processor")
 _worker_thread: Optional[threading.Thread] = None
 _shutdown_event = threading.Event()
 
-# How often to poll when pg_notify is unavailable (seconds)
-POLL_INTERVAL = float(os.getenv("TASK_POLL_INTERVAL", "2.0"))
+# How often to poll the task_queue table (seconds). 500ms default balances
+# enqueue latency (worst-case ~500ms) against idle-queue database traffic.
+# The previous default of 2.0s combined with the never-consumed pg_notify
+# trigger gave us the worst of both worlds: the delay of polling plus the
+# overhead of the trigger (#1185).
+POLL_INTERVAL = float(os.getenv("TASK_POLL_INTERVAL", "0.5"))
 
 # How long a task can be locked before it's considered abandoned.
 # Kept for backwards-compat: the new per-task-type map below is authoritative

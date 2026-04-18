@@ -178,3 +178,23 @@ class TestHeartbeatExtension:
         assert any(
             "update" in s and "locked_until" in s and "locked_by" in s for s in sql
         ), "_heartbeat_extend must UPDATE locked_until for the task id"
+
+
+# ---------------------------------------------------------------------------
+# #1185 — polling-only, sub-second default
+# ---------------------------------------------------------------------------
+
+
+class TestPollInterval:
+    def test_poll_interval_default_is_sub_second(self):
+        """Polling-only worker must default to a sub-second interval.
+
+        The old default of 2.0s gave us enqueue-to-pickup latency of up
+        to 2s, which is visible in UX when kicking an NLP extraction
+        from a web request. 500ms keeps us snappy without thrashing the
+        DB in idle windows.
+        """
+        assert task_processor.POLL_INTERVAL <= 1.0, (
+            f"#1185: POLL_INTERVAL default must be sub-second; "
+            f"got {task_processor.POLL_INTERVAL}"
+        )
