@@ -73,7 +73,7 @@ export default function LoginPage() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const nextParam = searchParams.get('next');
-    const { login, user, isHydrated } = useAuth();
+    const { login, user, isHydrated, clearCredentials } = useAuth();
 
     // Receives an email string from QALoginPresets (dynamically loaded chunk).
     // The email→preset mapping lives exclusively in that chunk so test addresses
@@ -176,13 +176,33 @@ export default function LoginPage() {
             const supabase = createSupabaseBrowserClient();
             const { error: sbError } = await supabase.auth.signInWithPassword({ email, password });
             if (sbError) {
-                // Supabase auth failed — this means the user exists in RegEngine
-                // but not in Supabase, or passwords are out of sync. Log it and
-                // surface the issue rather than silently breaking middleware.
-                console.error('[login] Supabase session sync failed:', sbError.message);
-                // Don't throw — the RegEngine JWT is set and the user can still
-                // reach public/free-tool routes. But protected routes will fail
-                // until Supabase session is established.
+                // #1072 Supabase auth failed — RegEngine credentials matched
+                // but Supabase did not (out-of-sync passwords, Supabase flaky,
+                // user absent in Supabase). The RegEngine JWT cookie is set,
+                // so the user thinks login "worked" — but middleware enforces
+                // cross-auth (#538) and will bounce any protected nav to
+                // /login?error=session_expired, producing the classic
+                // "login is broken" redirect loop.
+                //
+                // Surface the failure in the form rather than silently
+                // proceeding. Structured log so support can correlate in
+                // telemetry.
+                console.error('[login] Supabase session sync failed', {
+                    message: sbError.message,
+                    status: sbError.status,
+                    code: sbError.code,
+                });
+                setError(
+                    "We signed you in, but couldn't establish your secure " +
+                    'session. Please try again — if the problem persists, ' +
+                    'reset your password or contact support.',
+                );
+                // Clear the half-set cookies so the retry is clean and the
+                // user isn't stuck in a half-authenticated state that the
+                // middleware will reject on the next nav.
+                clearCredentials();
+                setIsLoading(false);
+                return;
             }
 
             // Clear any error params (e.g. ?error=session_expired) left by
