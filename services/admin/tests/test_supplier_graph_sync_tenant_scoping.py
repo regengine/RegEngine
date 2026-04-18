@@ -173,6 +173,25 @@ def test_facility_required_ctes_query_keys_supplier_facility_on_tenant():
     )
 
 
+def test_get_required_ctes_for_facility_passes_tenant_id_to_driver():
+    """Read-side defense-in-depth: Postgres pre-check is the primary gate,
+    but the Neo4j query itself must also filter by tenant_id so a future
+    refactor that skips the Postgres gate cannot leak cross-tenant categories.
+    """
+    driver = _FakeDriver(record={"categories": []})
+    sync = SupplierGraphSync(enabled=True, driver=driver)
+
+    sync.get_required_ctes_for_facility("facility-1", "tenant-A")
+
+    assert len(driver.calls) == 1
+    query, params = driver.calls[0]
+    assert params["tenant_id"] == "tenant-A"
+    assert params["facility_id"] == "facility-1"
+    assert (
+        "{facility_id: $facility_id, tenant_id: $tenant_id}" in query
+    ), "Neo4j MATCH pattern must include tenant_id for defense-in-depth."
+
+
 # -----
 # #1394 (FTLCategory should be a shared read-only catalog — not mutated on MATCH)
 # -----

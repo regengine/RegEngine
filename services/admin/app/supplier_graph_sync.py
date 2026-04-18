@@ -87,7 +87,7 @@ MERGE (facility)-[:HANDLES]->(ftl)
 
 
 FACILITY_REQUIRED_CTES_QUERY = """
-MATCH (facility:SupplierFacility {facility_id: $facility_id})-[:HANDLES]->(ftl:FTLCategory)
+MATCH (facility:SupplierFacility {facility_id: $facility_id, tenant_id: $tenant_id})-[:HANDLES]->(ftl:FTLCategory)
 RETURN collect(DISTINCT {
   id: ftl.category_id,
   name: ftl.name,
@@ -176,7 +176,9 @@ class SupplierGraphSync:
                 operation=params.get("operation", "unknown"),
             )
 
-    def _query_required_ctes(self, facility_id: str) -> Optional[dict[str, Any]]:
+    def _query_required_ctes(
+        self, facility_id: str, tenant_id: str
+    ) -> Optional[dict[str, Any]]:
         if not self.enabled or self._driver is None:
             return None
 
@@ -184,7 +186,7 @@ class SupplierGraphSync:
             with self._driver.session() as session:
                 record = session.run(
                     FACILITY_REQUIRED_CTES_QUERY,
-                    {"facility_id": facility_id},
+                    {"facility_id": facility_id, "tenant_id": tenant_id},
                 ).single()
         except (OSError, TimeoutError, ConnectionError, ValueError, RuntimeError) as exc:  # pragma: no cover - runtime resilience
             logger.warning(
@@ -308,8 +310,17 @@ class SupplierGraphSync:
             },
         )
 
-    def get_required_ctes_for_facility(self, facility_id: str) -> Optional[dict[str, Any]]:
-        return self._query_required_ctes(facility_id)
+    def get_required_ctes_for_facility(
+        self, facility_id: str, tenant_id: str
+    ) -> Optional[dict[str, Any]]:
+        """Read-side tenant-scoped lookup of a facility's FTL/CTE mapping.
+
+        ``tenant_id`` MUST be passed — omitting it would make the Neo4j read
+        trust facility_id alone, which would leak another tenant's categories
+        if the MERGE-key invariant (#1352) were ever violated. The predicate
+        here is defense-in-depth behind the Postgres tenant check.
+        """
+        return self._query_required_ctes(facility_id, tenant_id)
 
     def record_cte_event(
         self,
