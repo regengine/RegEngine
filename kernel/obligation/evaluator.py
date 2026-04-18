@@ -21,6 +21,89 @@ from .models import (
 logger = structlog.get_logger("obligation.evaluator")
 
 
+# Heuristic ReDoS detector. This does not replace a real regex engine with
+# guaranteed-linear matching (``re2`` would), but it catches the textbook
+# patterns flagged in #1339 (nested unbounded quantifiers, repeated
+# alternations that expand ambiguously).
+_REDOS_NESTED_QUANT = re.compile(
+    r"""
+    \(                 # open group
+    [^()]*             # inside the group, no more groups
+    (?:[+*]|\{\d+,\})  # unbounded or open-ended quantifier
+    [^()]*
+    \)                 # close group
+    (?:[+*]|\{\d+,\})  # another unbounded quantifier applied to the group
+    """,
+    re.VERBOSE,
+)
+
+_REDOS_ALTERNATION_REPEAT = re.compile(
+    r"""
+    \(                           # open group
+    [^()|]*                      # optional leading chars inside group, no |
+    (\w+)                        # first alt
+    \|                           # alternation
+    \1                           # same alt repeated
+    [^()]*                       # optional trailing chars inside group
+    \)
+    [+*]                         # applied with +/*
+    """,
+    re.VERBOSE,
+)
+
+
+def _looks_redos_prone(pattern: str) -> bool:
+    """Cheap heuristic for catastrophic-backtracking patterns.
+
+    Returns True on patterns that match either known anti-pattern:
+    * ``(...+)+``, ``(...*)+``, ``(...+){n,}`` — nested unbounded
+      quantifiers over a quantified body.
+    * ``(a|a)*`` / ``(a|a)+`` — alternation of identical literals with a
+      repeated wrapper.
+
+    False negatives are acceptable — this is belt-and-braces on top of
+    curating who authors ``obligations.yaml``. False positives are very
+    rare in the ids + CFR-style citations we expect; rejecting a borderline
+    pattern at load time is the safer direction.
+    """
+    if _REDOS_NESTED_QUANT.search(pattern):
+        return True
+    if _REDOS_ALTERNATION_REPEAT.search(pattern):
+        return True
+    return False
+
+
+def _is_present(value: Any) -> bool:
+    """Return True only if ``value`` represents substantive evidence.
+
+    An FSMA 204 KDE with an empty string, whitespace-only string, empty
+    list, or empty dict is **not** satisfied — the regulator expects a real
+    value on every Key Data Element. Previously the evaluator treated
+    anything other than ``None`` or absent keys as present, producing false
+    ``met=True, risk_score=0.0`` compliance states for clearly-incomplete
+    records (#1330).
+
+    This helper is intentionally conservative:
+
+    * ``None`` → missing
+    * ``""`` / whitespace-only string → missing
+    * ``[]`` / ``()`` / ``{}`` / ``set()`` → missing
+    * Everything else (including ``0``, ``False``) → present
+
+    The ``0``/``False`` carve-out preserves valid evidence like
+    ``quantity=0`` or ``spoiled=False``; those are substantive facts.
+    """
+    if value is None:
+        return False
+    if isinstance(value, str):
+        return value.strip() != ""
+    # Containers: empty means missing evidence.
+    if isinstance(value, (list, tuple, set, frozenset, dict)):
+        return len(value) > 0
+    # Numbers / booleans / everything else — presence.
+    return True
+
+
 class ObligationEvaluator:
     """
     Evaluates decisions against regulatory obligations.
@@ -36,13 +119,56 @@ class ObligationEvaluator:
     def __init__(self, obligations: List[ObligationDefinition]):
         """
         Initialize evaluator with obligation definitions.
-        
+
+        Pre-compiles every regex triggering condition so that patterns with
+        syntax errors fail loudly at load time (not silently at evaluation
+        time) and per-evaluation calls don't hit the ``re`` cache for
+        already-known patterns (#1339).
+
         Args:
             obligations: List of ObligationDefinition from obligations.yaml
+
+        Raises:
+            ValueError: If any regex pattern is syntactically invalid, or
+                looks suspiciously ReDoS-prone (nested unbounded quantifiers).
         """
         self.obligations = obligations
         self.obligations_by_id = {o.id: o for o in obligations}
+        self._compiled_regex: Dict[Tuple[str, str], "re.Pattern[str]"] = {}
+        self._compile_all_regex_conditions()
         logger.info("evaluator_initialized", obligation_count=len(obligations))
+
+    def _compile_all_regex_conditions(self) -> None:
+        """Walk every obligation's triggering conditions and pre-compile
+        regex patterns.
+
+        Fails loudly on ``re.error`` or obviously-dangerous patterns so
+        authoring bugs don't degrade to silent non-triggering (#1339).
+        """
+        for obligation in self.obligations:
+            for key, value in obligation.triggering_conditions.items():
+                if not (isinstance(value, dict) and value.get("op") == "regex"):
+                    continue
+                pattern = value.get("pattern", "")
+                if not isinstance(pattern, str) or not pattern:
+                    raise ValueError(
+                        f"Obligation {obligation.id!r} has regex condition on "
+                        f"{key!r} with empty/missing pattern"
+                    )
+                if _looks_redos_prone(pattern):
+                    raise ValueError(
+                        f"Obligation {obligation.id!r} regex pattern for "
+                        f"{key!r} looks ReDoS-prone (nested unbounded "
+                        f"quantifiers): {pattern!r}"
+                    )
+                try:
+                    compiled = re.compile(pattern)
+                except re.error as exc:
+                    raise ValueError(
+                        f"Obligation {obligation.id!r} regex pattern for "
+                        f"{key!r} is invalid: {exc} (pattern={pattern!r})"
+                    ) from exc
+                self._compiled_regex[(obligation.id, key)] = compiled
     
     def evaluate_decision(
         self,
@@ -145,18 +271,16 @@ class ObligationEvaluator:
         Triggering conditions are AND-ed together.
         """
         conditions = obligation.triggering_conditions
-        
-        # Check decision_type match
-        if "decision_type" in conditions:
-            if conditions["decision_type"] != decision_type:
-                return False
-        
-        # Check other conditions
+
+        # Iterate every condition. ``decision_type`` is a special-case key
+        # because it's not stored inside ``decision_data`` — it arrives as a
+        # separate argument — but it still supports the dict-with-op extended
+        # operators (range/regex).
         for key, expected_value in conditions.items():
             if key == "decision_type":
-                continue  # Already checked
-
-            actual_value = decision_data.get(key)
+                actual_value: Any = decision_type
+            else:
+                actual_value = decision_data.get(key)
 
             # Extended condition operators: dict with "op" key triggers structured evaluation.
             if isinstance(expected_value, dict) and "op" in expected_value:
@@ -177,19 +301,21 @@ class ObligationEvaluator:
                 elif op == "regex":
                     # {"op": "regex", "pattern": "<pattern>"}
                     # Passes when the string value matches the regex pattern.
-                    pattern = expected_value.get("pattern", "")
                     if not isinstance(actual_value, str):
                         return False
-                    try:
-                        if not re.search(pattern, actual_value):
-                            return False
-                    except re.error as exc:
-                        logger.warning(
-                            "triggering_condition_invalid_regex",
+                    compiled = self._compiled_regex.get((obligation.id, key))
+                    if compiled is None:
+                        # Patterns are compiled eagerly at __init__. If we
+                        # reach this branch the author bypassed the loader —
+                        # fail closed loudly rather than silently letting an
+                        # obligation never trigger (#1339).
+                        logger.error(
+                            "triggering_condition_uncompiled_regex",
+                            obligation_id=obligation.id,
                             key=key,
-                            pattern=pattern,
-                            error=str(exc),
                         )
+                        return False
+                    if not compiled.search(actual_value):
                         return False
                 else:
                     logger.warning("triggering_condition_unknown_op", key=key, op=op)
@@ -212,11 +338,13 @@ class ObligationEvaluator:
         Checks if all required evidence fields are present.
         """
         missing_evidence = []
-        
+
         for required_field in obligation.required_evidence:
             if required_field not in decision_data:
                 missing_evidence.append(required_field)
-            elif decision_data[required_field] is None:
+            elif not _is_present(decision_data[required_field]):
+                # Empty strings, whitespace-only strings, empty containers —
+                # all count as missing per FSMA 204 KDE requirements (#1330).
                 missing_evidence.append(required_field)
         
         met = len(missing_evidence) == 0
