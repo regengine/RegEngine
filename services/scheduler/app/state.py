@@ -85,7 +85,7 @@ class StateManager:
                 conn.execute(
                     text(
                         """
-                    CREATE INDEX IF NOT EXISTS idx_seen_items_source_type 
+                    CREATE INDEX IF NOT EXISTS idx_seen_items_source_type
                     ON scheduler_seen_items(source_type)
                 """
                     )
@@ -93,9 +93,26 @@ class StateManager:
                 conn.execute(
                     text(
                         """
-                    CREATE INDEX IF NOT EXISTS idx_seen_items_last_seen 
+                    CREATE INDEX IF NOT EXISTS idx_seen_items_last_seen
                     ON scheduler_seen_items(last_seen_at)
                 """
+                    )
+                )
+
+                # #1144 — persistent per-job last-run tracking. Held as
+                # CREATE IF NOT EXISTS so this initializer is safe to call
+                # repeatedly and survives a fresh DB / rolling deploy.
+                conn.execute(
+                    text(
+                        """
+                    CREATE TABLE IF NOT EXISTS scheduler_job_runs (
+                        job_id         VARCHAR(128) PRIMARY KEY,
+                        last_run_at    TIMESTAMP WITH TIME ZONE,
+                        last_success_at TIMESTAMP WITH TIME ZONE,
+                        last_status    VARCHAR(32),
+                        last_error     TEXT
+                    )
+                    """
                     )
                 )
                 conn.commit()
@@ -242,6 +259,61 @@ class StateManager:
             session.rollback()
             logger.error("cleanup_failed", error=str(e))
             raise
+        finally:
+            session.close()
+
+    def record_job_run(
+        self,
+        job_id: str,
+        success: bool,
+        error: Optional[str] = None,
+    ) -> None:
+        """Record the outcome of a scheduler job run to scheduler_job_runs.
+
+        Writes (or upserts) a single row keyed on ``job_id``:
+
+        * ``last_run_at``      — bumped on every call
+        * ``last_success_at``  — bumped only on success=True
+        * ``last_status``      — ``"ok"`` or ``"error"``
+        * ``last_error``       — truncated to 2000 chars on error
+
+        Used by the APScheduler event listener (#1144) so drift can be
+        detected across process restarts.
+        """
+        session = self._get_session()
+        status = "ok" if success else "error"
+        err = (error or "")[:2000] if not success else None
+        try:
+            session.execute(
+                text(
+                    """
+                    INSERT INTO scheduler_job_runs
+                        (job_id, last_run_at, last_success_at, last_status, last_error)
+                    VALUES
+                        (:job_id, NOW(),
+                         CASE WHEN :success THEN NOW() ELSE NULL END,
+                         :status, :err)
+                    ON CONFLICT (job_id) DO UPDATE SET
+                        last_run_at = NOW(),
+                        last_success_at = CASE
+                            WHEN :success THEN NOW()
+                            ELSE scheduler_job_runs.last_success_at
+                        END,
+                        last_status = :status,
+                        last_error = :err
+                    """
+                ),
+                {
+                    "job_id": job_id,
+                    "success": success,
+                    "status": status,
+                    "err": err,
+                },
+            )
+            session.commit()
+        except Exception as exc:  # pragma: no cover — best-effort telemetry
+            session.rollback()
+            logger.error("record_job_run_failed", job_id=job_id, error=str(exc))
         finally:
             session.close()
 

@@ -21,6 +21,11 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import Dict, List, Optional
 
 import structlog
+from apscheduler.events import (
+    EVENT_JOB_EXECUTED,
+    EVENT_JOB_ERROR,
+    EVENT_JOB_MISSED,
+)
 from apscheduler.schedulers.blocking import BlockingScheduler
 from apscheduler.schedulers.base import SchedulerNotRunningError
 from apscheduler.jobstores.memory import MemoryJobStore
@@ -915,7 +920,12 @@ class SchedulerService:
     def _run_scheduler_workload(self) -> None:
         """The workload to run when this instance is the Leader."""
         logger.info("leadership_acquired_initializing_workload")
-        
+
+        # #1144 — persisted last-run tracking + missed-run alerting.
+        # Install the APScheduler event listener BEFORE scheduling jobs so
+        # the very first execution is recorded.
+        self._install_job_run_listener()
+
         # We only schedule/update jobs if we are the leader
         self.schedule_jobs()
 
@@ -935,6 +945,51 @@ class SchedulerService:
     def cleanup_state(self) -> None:
         """Wrapper for state cleanup to avoid lambda serialization issues."""
         self.state_manager.cleanup_old_items(days=90)
+
+    def _install_job_run_listener(self) -> None:
+        """Attach APScheduler listeners for EXECUTED / ERROR / MISSED (#1144).
+
+        Persists ``(job_id, last_run_at, last_success_at, last_status)``
+        to ``scheduler_job_runs`` on every run and logs `job_missed` at
+        ERROR on misfire — the old code silently dropped missed runs if
+        they were older than ``misfire_grace_time=3600``.
+        """
+        try:
+            state_manager = self.state_manager
+        except AttributeError:  # pragma: no cover
+            return
+
+        def _listener(event):
+            try:
+                if event.code == EVENT_JOB_EXECUTED:
+                    state_manager.record_job_run(event.job_id, success=True)
+                elif event.code == EVENT_JOB_ERROR:
+                    state_manager.record_job_run(
+                        event.job_id,
+                        success=False,
+                        error=str(getattr(event, "exception", "")),
+                    )
+                elif event.code == EVENT_JOB_MISSED:
+                    logger.error(
+                        "scheduler_job_missed",
+                        job_id=event.job_id,
+                        scheduled_run_time=str(
+                            getattr(event, "scheduled_run_time", "unknown")
+                        ),
+                    )
+                    state_manager.record_job_run(
+                        event.job_id,
+                        success=False,
+                        error="MISSED",
+                    )
+            except Exception:  # pragma: no cover — telemetry must not crash
+                logger.exception("job_run_listener_error", job_id=getattr(event, "job_id", "?"))
+
+        self.scheduler.add_listener(
+            _listener,
+            EVENT_JOB_EXECUTED | EVENT_JOB_ERROR | EVENT_JOB_MISSED,
+        )
+        logger.info("job_run_listener_installed")
 
     def shutdown(self) -> None:
         """Gracefully shutdown the scheduler."""
