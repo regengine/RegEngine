@@ -14,21 +14,32 @@ Usage:
 
 import yaml
 import json
+from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Any, Optional
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel
 import logging
 
 from .schema_validator import validate_vertical_schema, validate_obligations_schema
 from .codegen import (
     generate_fastapi_routes,
     generate_pydantic_models,
-    generate_test_scaffolds
+    generate_test_scaffolds,
 )
 from .graph_adapter import generate_graph_nodes, generate_graph_relationships
 from .snapshot_adapter_generator import generate_snapshot_adapter
 
 logger = logging.getLogger(__name__)
+
+
+class SchemaValidationError(ValueError):
+    """Raised when a vertical or obligations schema fails validation.
+
+    Deliberately a ``ValueError`` subclass rather than ``pydantic.ValidationError``:
+    the latter's constructor requires a ``line_errors`` positional argument in
+    Pydantic v2 and raises ``TypeError`` when instantiated with a bare string.
+    (#1302)
+    """
 
 
 class VerticalMetadata(BaseModel):
@@ -184,30 +195,43 @@ class VerticalCompiler:
         return vertical_meta, obligations
     
     def _validate_schemas(self, vertical_meta: VerticalMetadata, obligations: List[ObligationDefinition]):
-        """Validate schemas against JSON Schema definitions"""
+        """Validate schemas against JSON Schema definitions.
+
+        Raises :class:`SchemaValidationError` (a ``ValueError``) on any failure
+        so the outer ``except Exception`` handler produces a readable error
+        string in ``CompilationResult.errors`` (#1302).
+        """
         # Validate vertical schema
-        vertical_errors = validate_vertical_schema(vertical_meta.dict())
+        vertical_errors = validate_vertical_schema(vertical_meta.model_dump())
         if vertical_errors:
-            raise ValidationError(f"Vertical schema validation failed: {vertical_errors}")
-        
+            raise SchemaValidationError(
+                f"Vertical schema validation failed: {vertical_errors}"
+            )
+
         # Validate obligations schema
-        obligations_errors = validate_obligations_schema([o.dict() for o in obligations])
+        obligations_errors = validate_obligations_schema(
+            [o.model_dump() for o in obligations]
+        )
         if obligations_errors:
-            raise ValidationError(f"Obligations schema validation failed: {obligations_errors}")
-        
+            raise SchemaValidationError(
+                f"Obligations schema validation failed: {obligations_errors}"
+            )
+
         # Cross-validation: check evidence_contract references decision_types
         for decision_type in vertical_meta.evidence_contract.keys():
             if decision_type not in vertical_meta.decision_types:
                 self.warnings.append(
                     f"Evidence contract references unknown decision_type: {decision_type}"
                 )
-        
+
         # Cross-validation: check scoring_weights sum to 1.0
         total_weight = sum(vertical_meta.scoring_weights.values())
         if abs(total_weight - 1.0) > 0.01:
-            raise ValidationError(f"Scoring weights must sum to 1.0, got {total_weight}")
-        
-        logger.info("✅ Schema validation passed")
+            raise SchemaValidationError(
+                f"Scoring weights must sum to 1.0, got {total_weight}"
+            )
+
+        logger.info("Schema validation passed")
     
     def _generate_routes(self, vertical_meta: VerticalMetadata, obligations: List[ObligationDefinition]) -> Path:
         """Generate FastAPI routes file"""
@@ -344,14 +368,23 @@ class VerticalCompiler:
             self.warnings.append(f"OpenAPI spec update failed: {e}")
     
     def _register_vertical(self, vertical_name: str, vertical_meta: VerticalMetadata):
-        """Register vertical in database."""
+        """Register vertical in database.
+
+        Registration is currently a stub — there is no ``VerticalRegistration``
+        SQLAlchemy model yet. Until that lands, this method builds the record
+        that *would* be persisted and surfaces a clear warning so callers do
+        not assume the vertical is queryable. Previously this method crashed
+        with ``NameError`` because ``datetime`` was not imported (#1305) and
+        the crash was swallowed into a ``warnings`` entry while the outer
+        ``compile_vertical`` still returned ``status="success"``. Both bugs
+        are fixed together: ``datetime`` is now imported module-wide, and the
+        stub emits an explicit warning so ``CompilationResult.warnings``
+        carries the truth.
+        """
         try:
-            from shared.database import get_db_session
-            
-            # Get database session
-            session = get_db_session()
-            
-            # Register vertical metadata
+            # Build the record we *would* persist. Kept as a local variable
+            # so it is visible in debug logs but never fabricates a
+            # "registered" state.
             vertical_record = {
                 "name": vertical_name,
                 "version": vertical_meta.version,
@@ -361,20 +394,26 @@ class VerticalCompiler:
                 "risk_dimensions": vertical_meta.risk_dimensions,
                 "scoring_weights": vertical_meta.scoring_weights,
                 "is_active": True,
-                "compiled_at": datetime.utcnow().isoformat()
+                "compiled_at": datetime.utcnow().isoformat(),
             }
-            
-            # Upsert vertical registration (insert or update)
-            # This would use the actual DB model when implemented
-            logger.info(f"Registered vertical: {vertical_name} v{vertical_meta.version}")
-            logger.debug(f"Vertical registration data: {vertical_record}")
-            
-            # Note: Actual DB insertion would happen here
-            # e.g., session.merge(VerticalRegistration(**vertical_record))
-            # session.commit()
-            
-        except Exception as e:
-            logger.error(f"Failed to register vertical {vertical_name}: {e}")
+
+            logger.info(
+                "Vertical registration is a stub — no DB row persisted for %s v%s",
+                vertical_name,
+                vertical_meta.version,
+            )
+            logger.debug("Pending vertical registration payload: %s", vertical_record)
+
+            # Surface the truth at the API level so operators don't assume the
+            # vertical is queryable from the DB.
+            self.warnings.append(
+                f"Vertical registration is a stub: '{vertical_name}' was "
+                "compiled and written to disk but no VerticalRegistration "
+                "row was persisted (no model implemented yet). Hook this up "
+                "when shared.database.VerticalRegistration is added."
+            )
+        except Exception as e:  # pragma: no cover - safety net
+            logger.error("Failed to register vertical %s: %s", vertical_name, e)
             self.warnings.append(f"Vertical registration failed: {e}")
 
 
