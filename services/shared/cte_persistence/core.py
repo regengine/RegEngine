@@ -180,6 +180,34 @@ class CTEPersistence:
         )
 
     # ------------------------------------------------------------------
+    # Per-tenant Chain Serialization (fix #1332)
+    # ------------------------------------------------------------------
+
+    def _acquire_chain_lock(self, tenant_id: str) -> None:
+        """Acquire a per-tenant transaction-scoped advisory lock.
+
+        The chain-head read uses ``SELECT ... FOR UPDATE LIMIT 1``,
+        which **locks the returned row, not the next slot**. On a
+        tenant's first event the SELECT returns zero rows and locks
+        nothing; two concurrent first-event writers both see
+        ``chain_head=None`` and both compute ``sequence_num=1``. Adding
+        a UNIQUE ``(tenant_id, sequence_num)`` surfaces the race as an
+        IntegrityError after the CTE event row has already succeeded —
+        leaving an event with no chain membership.
+
+        ``pg_advisory_xact_lock(hashtext(tenant_id))`` serializes the
+        chain-growth critical section per tenant. The lock is
+        transaction-scoped and released automatically on COMMIT or
+        ROLLBACK. ``hashtext()`` collisions across tenants are harmless
+        — they just serialize unrelated tenants occasionally. Mirrors
+        the pattern in ``canonical_persistence.writer`` (#1251).
+        """
+        self.session.execute(
+            text("SELECT pg_advisory_xact_lock(hashtext(:tid))"),
+            {"tid": tenant_id},
+        )
+
+    # ------------------------------------------------------------------
     # Write Path
     # ------------------------------------------------------------------
 
@@ -229,6 +257,13 @@ class CTEPersistence:
                 event_entry_timestamp, field="event_entry_timestamp"
             )
             event_entry_timestamp = entry_dt.isoformat()
+
+        # --- Serialize chain growth per-tenant (fix #1332) ---
+        # Must precede both the idempotency SELECT and the chain-head
+        # SELECT so two concurrent first-event writers cannot both see
+        # ``chain_head=None`` and compute sequence_num=1. Released
+        # automatically at COMMIT / ROLLBACK.
+        self._acquire_chain_lock(tenant_id)
 
         # --- Idempotency check ---
         idempotency_key = compute_idempotency_key(
@@ -481,6 +516,12 @@ class CTEPersistence:
         """
         if not events:
             return []
+
+        # --- Serialize chain growth per-tenant (fix #1332) ---
+        # Mirrors the single-write path above. Taken before any chain
+        # read so two concurrent first-event batches serialize on the
+        # same tenant rather than both producing sequence_num=1.
+        self._acquire_chain_lock(tenant_id)
 
         # --- Step 1: Pre-compute idempotency keys (+ validate ts; fix #1308) ---
         prepared = []

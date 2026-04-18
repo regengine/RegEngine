@@ -75,6 +75,11 @@ def compute_idempotency_key(
     with its own formula — this is intentional and safe because idempotency keys
     are scoped per-table (cte_events vs traceability_events).
     """
+    # ``default=str`` matches compute_event_hash above. Without it, a KDE
+    # carrying a datetime or Decimal raises TypeError mid-insert and loses
+    # the event (#1313). str() coercion is locale/version-fragile and a
+    # long-term fix should normalize KDE values to JSON-safe primitives
+    # before hashing — tracked for the cte_persistence retirement work.
     canonical = json.dumps(
         {
             "event_type": event_type,
@@ -87,5 +92,6 @@ def compute_idempotency_key(
         },
         sort_keys=True,
         separators=(",", ":"),
+        default=str,
     )
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
