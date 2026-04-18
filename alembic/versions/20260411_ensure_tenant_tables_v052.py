@@ -16,7 +16,9 @@ down_revision: Union[str, None] = "e5f6a7b8c9d0"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
-_MIGRATIONS_DIR = Path(__file__).resolve().parents[2] / "migrations"
+# Previously /migrations/ (top-level); moved to alembic/sql/ after removal
+# in commit f3f385bf (see issue #1187). SQL content unchanged.
+_MIGRATIONS_DIR = Path(__file__).resolve().parents[1] / "sql"
 
 
 def upgrade() -> None:
