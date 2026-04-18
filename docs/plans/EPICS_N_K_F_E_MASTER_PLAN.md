@@ -36,15 +36,16 @@ change needed.
 **Tracker:** [#1459](https://github.com/PetrefiedThunder/RegEngine/issues/1459)
 **Scope after ghost-closure:** 2 real open issues.
 
-### Open children
-- **#1102** — rules engine returns `compliant=True` on empty rule set. Lives at `services/shared/rules/engine.py:_evaluate_rules` (~line 200-250).
-- **#1371** — rules cache not invalidated across processes. In-process dict at `services/shared/rules/engine.py:57`; no Redis pubsub / no TTL.
+### Open children (corrected after reading actual issue bodies)
+- **#1102** — actual title: "only RECEIVING CTE enforces KDE requirements — 6/7 CTEs accept missing fields as 'compliant'". NOT about empty rule sets (the empty-rule case was already fixed by #1347's work in `services/shared/rules/engine.py` which now returns tri-state `compliant=None` on `total_rules=0`). This issue is about the OLDER `/v1/validate` endpoint at `services/compliance/app/routes.py:192-219` which only branches on `cte_type == "RECEIVING"`, and `services/compliance/app/fsma_rules.json:307-318` which only defines `receiving_required_fields`. Needs per-CTE field maps for HARVESTING / COOLING / INITIAL_PACKING / FIRST_LAND_BASED_RECEIVING / SHIPPING / TRANSFORMATION per 21 CFR 1.1320-1.1350.
+- **#1371** — `RulesEngine._rules_cache` stale-until-restart when a worker holds an engine across requests. Fix options: TTL (30-300s), `rule_definitions_version` bump, or Redis pub/sub. Blocker: depends on whether any long-lived engine instances exist — per-request instantiation in `webhook_router_v2` suggests cache is de-facto short-lived, but a grep for callers is needed during implementation.
 
-### Plan — 1 PR (~0.5 day)
-**`fix(rules-engine): fail-closed empty rules + Redis-pubsub cache invalidation`**
-1. `engine.py` — empty `rules` list returns `compliant=None` (new tri-state) or explicit `FAILED` with code `E_NO_RULES`. Wire the new state into callers that currently branch on `compliant=True`.
-2. `engine.py:_rules_cache` — add Redis-pubsub subscribe in a lifespan hook; invalidate on `RULES_UPDATED:{tenant_id}` message. Admin edit routes publish the message.
-3. Tests: empty-rules-returns-failed, pubsub-clears-cache.
+### Plan — 1 PR (~1 day)
+**`fix(compliance): per-CTE KDE enforcement + rules cache lifecycle`**
+1. `services/compliance/app/fsma_rules.json` — rename `receiving_required_fields` to `cte_required_fields` keyed by CTE type. Populate all 7 CTEs per 21 CFR.
+2. `services/compliance/app/routes.py:192-219` — iterate the map in the validator instead of branching on RECEIVING.
+3. Grep for all `RulesEngine(` instantiation sites; if any are long-lived, add TTL cache (simplest path, no pubsub infra needed).
+4. Tests: table-driven parametrize across all 7 CTE types, each with a KDE-missing payload → assert rejected.
 
 ---
 
