@@ -15,7 +15,12 @@ import { buildCsp } from '@/lib/csp';
 // Sysadmin status cache — avoids a DB query on every /sysadmin/* request.
 // In-memory LRU with a 60-second TTL, keyed by auth_user_id.
 // ---------------------------------------------------------------------------
-const SYSADMIN_CACHE_TTL_MS = 5 * 1000; // 5 seconds — minimizes window for privilege revocation delay (#967)
+// #1180: raised from 5 sec → 10 min. user_metadata.is_sysadmin is the
+// primary path now; this cache is only hit on legacy accounts missing the
+// claim. The previous 5-sec TTL fanned out a DB query every 5 sec per
+// sysadmin on edge cold starts; revocation freshness is now bounded by
+// the access-token TTL anyway (logout forces re-auth within 60 min).
+const SYSADMIN_CACHE_TTL_MS = 10 * 60 * 1000;
 const SYSADMIN_CACHE_MAX_SIZE = 256;
 
 interface SysadminCacheEntry {
@@ -29,7 +34,11 @@ const sysadminCache = new Map<string, SysadminCacheEntry>();
 // Tenant status cache — avoids a DB query on every Supabase-path request.
 // In-memory LRU with a 2-minute TTL, keyed by tenant_id.
 // ---------------------------------------------------------------------------
-const TENANT_STATUS_CACHE_TTL_MS = 2 * 60 * 1000; // 2 minutes
+// #1180: raised from 2 min → 10 min. user_metadata.tenant_status is the
+// primary path; this cache is only hit on legacy accounts missing the
+// field. Tenant suspensions are rare enough that a 10-min staleness window
+// is acceptable, and the access-token TTL already bounds freshness.
+const TENANT_STATUS_CACHE_TTL_MS = 10 * 60 * 1000;
 const TENANT_STATUS_CACHE_MAX_SIZE = 256;
 
 interface TenantStatusCacheEntry {
@@ -302,6 +311,18 @@ async function requireAppAuth(request: NextRequest, requestHeaders?: Headers): P
                 return NextResponse.redirect(url);
             }
 
+            // #1180 Sysadmin check on the JWT path — read the claim directly
+            // instead of a DB query. Backend embeds is_sysadmin into the
+            // custom JWT at mint time (see services/admin auth). When the
+            // claim is absent (older tokens pre-rollout), fall through to
+            // the Supabase path which has its own check.
+            if (pathname.startsWith('/sysadmin')) {
+                const isSysadminClaim = payload.is_sysadmin === true;
+                if (!isSysadminClaim) {
+                    return NextResponse.redirect(new URL('/dashboard', request.url));
+                }
+            }
+
             // #538 Cross-validate: require Supabase session alongside the custom JWT.
             // Both auth systems must be live. A missing Supabase cookie while a valid
             // custom JWT exists indicates a desync — e.g. the user signed out on
@@ -344,9 +365,16 @@ async function requireAppAuth(request: NextRequest, requestHeaders?: Headers): P
         // (if synced) or fall back to a DB query (cached) via the tenants table.
         const supabaseUser = user as {
             id: string;
-            user_metadata?: { tenant_id?: string; tenant_status?: string };
+            user_metadata?: { tenant_id?: string; tenant_status?: string; is_sysadmin?: boolean };
         };
         const tenantId = supabaseUser.user_metadata?.tenant_id;
+        // #1180 Prefer user_metadata for tenant_status. The DB fallback
+        // previously queried the tenants table on cache miss for every
+        // first-hit-per-instance request. user_metadata is the canonical
+        // place for this — the backend mirrors status updates there.
+        // We still keep a cache-based DB fallback for older accounts that
+        // haven't been resynced, but the fallback TTL is raised to 10 min
+        // (was 2 min) so fan-out on cold deploys stops beating the DB.
         let resolvedTenantStatus: string | undefined = supabaseUser.user_metadata?.tenant_status;
 
         if (tenantId && !resolvedTenantStatus) {
@@ -386,31 +414,46 @@ async function requireAppAuth(request: NextRequest, requestHeaders?: Headers): P
             return NextResponse.redirect(url);
         }
 
-        // Sysadmin check for /sysadmin routes (with in-memory LRU cache)
+        // Sysadmin check for /sysadmin routes.
+        // #1180 Prefer user_metadata.is_sysadmin (synced at login / invite
+        // acceptance) over the developer_profiles DB lookup. The DB
+        // fallback remains for older accounts missing the claim but now
+        // caches for 10 min instead of 5 sec — the 5-sec TTL was a
+        // revocation-freshness trade-off that burned a query every 5 sec
+        // per sysadmin, which is a low-volume concern relative to the
+        // edge-cold-start fan-out it caused.
         if (pathname.startsWith('/sysadmin')) {
             const userId = supabaseUser.id;
-            let isSysadmin = getSysadminCached(userId);
+            const claimedSysadmin = supabaseUser.user_metadata?.is_sysadmin;
 
-            if (isSysadmin === null) {
-                // Cache miss — query the database
-                const supabase = createServerClient(
-                    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-                    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-                    {
-                        cookies: {
-                            getAll() { return request.cookies.getAll(); },
-                            setAll() { /* read-only for this check */ },
-                        },
-                    }
-                );
-                const { data: profile } = await supabase
-                    .from('developer_profiles')
-                    .select('is_sysadmin')
-                    .eq('auth_user_id', userId)
-                    .maybeSingle();
+            let isSysadmin: boolean;
+            if (typeof claimedSysadmin === 'boolean') {
+                isSysadmin = claimedSysadmin;
+            } else {
+                const cached = getSysadminCached(userId);
+                if (cached === null) {
+                    // Cache miss — query the database
+                    const supabase = createServerClient(
+                        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+                        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+                        {
+                            cookies: {
+                                getAll() { return request.cookies.getAll(); },
+                                setAll() { /* read-only for this check */ },
+                            },
+                        }
+                    );
+                    const { data: profile } = await supabase
+                        .from('developer_profiles')
+                        .select('is_sysadmin')
+                        .eq('auth_user_id', userId)
+                        .maybeSingle();
 
-                isSysadmin = !!profile?.is_sysadmin;
-                setSysadminCached(userId, isSysadmin);
+                    isSysadmin = !!profile?.is_sysadmin;
+                    setSysadminCached(userId, isSysadmin);
+                } else {
+                    isSysadmin = cached;
+                }
             }
 
             if (!isSysadmin) {
