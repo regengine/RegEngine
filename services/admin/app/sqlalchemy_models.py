@@ -349,12 +349,18 @@ class SupplierFunnelEventModel(Base):
 
 
 class ReviewItemModel(Base):
-    """Database model for review queue items with tenant isolation."""
+    """Database model for review queue items with tenant isolation.
+
+    tenant_id is NOT NULL as of migration v059 (fix for #1389) -- rows
+    without a tenant would otherwise leak across every tenant in
+    ``list_hallucinations`` when the caller's API key has no tenant
+    binding. See `20260417_review_items_tenant_not_null_v059.py`.
+    """
 
     __tablename__ = "review_items"
 
     id = Column(GUID(), primary_key=True, default=uuid_module.uuid4)
-    tenant_id = Column(GUID(), nullable=True)
+    tenant_id = Column(GUID(), nullable=False)
     doc_hash = Column(String, nullable=False)
     text_raw = Column(Text, nullable=False)
     extraction = Column(JSONType(), nullable=False)
