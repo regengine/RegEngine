@@ -835,7 +835,19 @@ class CTEPersistence:
 
         Set follow_transformations=False for point queries that should not
         expand the result set (e.g. internal dedup checks).
+
+        SECURITY (#1321): Previously this method did not call
+        ``set_tenant_context``; it relied on the caller having set the
+        RLS context and on the explicit ``tenant_id = :tid`` predicate
+        in the WHERE.  A caller that forgot to set the context — or who
+        passed an attacker-influenced ``tenant_id`` — could cross
+        tenant boundaries when the RLS fail-closed default is not
+        installed.  We now set the context unconditionally (matching
+        ``query_all_events``) and keep the explicit predicate as
+        defense-in-depth.
         """
+        self.set_tenant_context(tenant_id)
+
         # Resolve the full set of TLCs to query
         if follow_transformations:
             tlc_set = self._expand_tlcs_via_transformation_links(tenant_id, tlc)
