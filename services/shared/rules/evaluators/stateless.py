@@ -15,6 +15,7 @@ from shared.rules.safe_regex import (
     TIMEOUT,
     safe_match,
 )
+from shared.rules.uom import UnitConversionError, convert_temperature
 
 
 def evaluate_field_presence(
@@ -204,6 +205,166 @@ def evaluate_multi_field_presence(
         citation_reference=rule.citation_reference,
         remediation_suggestion=rule.remediation_suggestion,
         category=rule.category,
+    )
+
+
+def evaluate_temperature_threshold(
+    event_data: Dict[str, Any],
+    logic: Dict[str, Any],
+    rule: RuleDefinition,
+) -> RuleEvaluationResult:
+    """Validate a recorded temperature against a max/min threshold (#1364).
+
+    Before this evaluator existed, the COOLING CTE rule only checked that
+    ``kdes.cooling_date`` was present; it never looked at whether the
+    recorded temperature was within the FDA's 41°F (5°C) cold-chain
+    limit (21 CFR §1.1330(b)(6)).
+
+    Logic configuration (``evaluation_logic.params``)::
+
+        temperature_field   str  (required) dot-path to the numeric temp,
+                                 e.g. "kdes.cooling_temperature"
+        temperature_unit_field str (optional) dot-path to the unit
+                                 string ("C" / "F" / "K"); defaults to
+                                 params.default_unit.
+        default_unit        str  (optional, default "F") unit used when
+                                 the event omits a unit field.
+        max_temperature     num  (optional) maximum allowed temperature
+        min_temperature     num  (optional) minimum allowed temperature
+        threshold_unit      str  (optional, default "F") unit for the
+                                 max/min values in the rule definition.
+
+    Missing temperature value → fail (temperature is a mandatory KDE
+    when this rule is configured). Unknown unit → error (rule cannot
+    evaluate). Value outside the [min, max] band → fail.
+    """
+    params = logic.get("params", {}) or {}
+    temp_field = params.get("temperature_field")
+    unit_field = params.get("temperature_unit_field")
+    default_unit = str(params.get("default_unit", "F"))
+    max_temp = params.get("max_temperature")
+    min_temp = params.get("min_temperature")
+    threshold_unit = str(params.get("threshold_unit", "F"))
+
+    if not temp_field:
+        return RuleEvaluationResult(
+            rule_id=rule.rule_id, rule_version=rule.rule_version,
+            rule_title=rule.title, severity=rule.severity,
+            result="error",
+            why_failed=(
+                f"Rule '{rule.title}' (temperature_threshold) missing "
+                "required params.temperature_field"
+            ),
+            category=rule.category,
+        )
+
+    raw_value = get_nested_value(event_data, temp_field)
+    raw_unit = (
+        get_nested_value(event_data, unit_field) if unit_field else None
+    ) or default_unit
+
+    if raw_value is None or (isinstance(raw_value, str) and not raw_value.strip()):
+        return RuleEvaluationResult(
+            rule_id=rule.rule_id, rule_version=rule.rule_version,
+            rule_title=rule.title, severity=rule.severity,
+            result="fail",
+            why_failed=(
+                f"Event missing required temperature field "
+                f"'{temp_field}' ({rule.citation_reference or 'FSMA 204'})."
+            ),
+            evidence_fields_inspected=[{
+                "temperature_field": temp_field,
+                "value": None,
+            }],
+            citation_reference=rule.citation_reference,
+            remediation_suggestion=rule.remediation_suggestion,
+            category=rule.category,
+        )
+
+    try:
+        value_num = float(raw_value)
+    except (TypeError, ValueError):
+        return RuleEvaluationResult(
+            rule_id=rule.rule_id, rule_version=rule.rule_version,
+            rule_title=rule.title, severity=rule.severity,
+            result="fail",
+            why_failed=(
+                f"Temperature value {raw_value!r} is not numeric "
+                f"({rule.citation_reference or 'FSMA 204'})."
+            ),
+            evidence_fields_inspected=[{
+                "temperature_field": temp_field,
+                "value": raw_value,
+            }],
+            citation_reference=rule.citation_reference,
+            category=rule.category,
+        )
+
+    evidence = [{
+        "temperature_field": temp_field,
+        "recorded_value": value_num,
+        "recorded_unit": raw_unit,
+        "threshold_unit": threshold_unit,
+        "max_temperature": max_temp,
+        "min_temperature": min_temp,
+    }]
+
+    # Normalize the recorded value AND the thresholds to Celsius so we
+    # don't compare apples (F) to oranges (C).
+    try:
+        recorded_c = convert_temperature(value_num, str(raw_unit), "C")
+        max_c = (
+            convert_temperature(float(max_temp), threshold_unit, "C")
+            if max_temp is not None else None
+        )
+        min_c = (
+            convert_temperature(float(min_temp), threshold_unit, "C")
+            if min_temp is not None else None
+        )
+    except UnitConversionError as exc:
+        return RuleEvaluationResult(
+            rule_id=rule.rule_id, rule_version=rule.rule_version,
+            rule_title=rule.title, severity=rule.severity,
+            result="error",
+            why_failed=(
+                f"Rule '{rule.title}' could not interpret temperature unit: "
+                f"{exc.reason}"
+            ),
+            evidence_fields_inspected=evidence,
+            category=rule.category,
+        )
+
+    evidence[0]["recorded_value_c"] = recorded_c
+    if max_c is not None:
+        evidence[0]["max_temperature_c"] = max_c
+    if min_c is not None:
+        evidence[0]["min_temperature_c"] = min_c
+
+    over_max = max_c is not None and recorded_c > max_c
+    under_min = min_c is not None and recorded_c < min_c
+    if over_max or under_min:
+        bound = "above maximum" if over_max else "below minimum"
+        threshold_display = f"{max_temp}°{threshold_unit}" if over_max else f"{min_temp}°{threshold_unit}"
+        why = (
+            f"Recorded temperature {value_num}°{raw_unit} ({recorded_c:.1f}°C) "
+            f"is {bound} threshold of {threshold_display} for this CTE "
+            f"({rule.citation_reference or 'FSMA 204'})."
+        )
+        return RuleEvaluationResult(
+            rule_id=rule.rule_id, rule_version=rule.rule_version,
+            rule_title=rule.title, severity=rule.severity,
+            result="fail", why_failed=why,
+            evidence_fields_inspected=evidence,
+            citation_reference=rule.citation_reference,
+            remediation_suggestion=rule.remediation_suggestion,
+            category=rule.category,
+        )
+
+    return RuleEvaluationResult(
+        rule_id=rule.rule_id, rule_version=rule.rule_version,
+        rule_title=rule.title, severity=rule.severity,
+        result="pass", evidence_fields_inspected=evidence,
+        citation_reference=rule.citation_reference, category=rule.category,
     )
 
 
@@ -405,4 +566,5 @@ EVALUATORS = {
     "multi_field_presence": evaluate_multi_field_presence,
     "all_field_presence": evaluate_all_field_presence,
     "gs1_identifier": evaluate_gs1_identifier,
+    "temperature_threshold": evaluate_temperature_threshold,
 }

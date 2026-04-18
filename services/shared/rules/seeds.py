@@ -185,6 +185,39 @@ FSMA_RULE_SEEDS: List[Dict[str, Any]] = [
         "remediation_suggestion": "Record the date of transformation",
     },
     {
+        # #1364 — COOLING CTE rule had no temperature validation. FDA 21
+        # CFR §1.1330(b)(6) requires the cold-chain limit be observed
+        # (≤41°F / 5°C for most produce). The temperature_threshold
+        # evaluator wires services/shared/rules/uom.convert_temperature
+        # so the field can be recorded in C / F / K with equal trust.
+        "title": "Cooling: Temperature Within Cold-Chain Limit",
+        "description": (
+            "Cooling events must record a temperature at or below the "
+            "cold-chain limit (41°F / 5°C)."
+        ),
+        "severity": "critical",
+        "category": "kde_value",
+        "applicability_conditions": {"cte_types": ["cooling"], "ftl_scope": ["ALL"]},
+        "citation_reference": "21 CFR \u00a71.1330(b)(6)",
+        "evaluation_logic": {
+            "type": "temperature_threshold",
+            "params": {
+                "temperature_field": "kdes.cooling_temperature",
+                "temperature_unit_field": "kdes.cooling_temperature_unit",
+                "default_unit": "F",
+                "max_temperature": 41,
+                "threshold_unit": "F",
+            },
+        },
+        "failure_reason_template": (
+            "Cooling event recorded temperature exceeds 41°F cold-chain limit ({citation})"
+        ),
+        "remediation_suggestion": (
+            "Record the cooling temperature (in °F, °C, or K) and ensure it is at or below "
+            "41°F / 5°C for FTL-covered produce"
+        ),
+    },
+    {
         "title": "Cooling: Cooling Date Required",
         "description": "Cooling events must include the date of cooling",
         "severity": "critical",
