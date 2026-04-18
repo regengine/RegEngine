@@ -90,7 +90,10 @@ def _membership(tenant_id: uuid.UUID, *, is_active: bool = True):
 
 
 def _run(coro):
-    return asyncio.get_event_loop().run_until_complete(coro)
+    # asyncio.run creates a fresh loop each call, avoiding Python 3.12's
+    # deprecation of implicit loop creation and "no current event loop"
+    # failures when a prior test closed the default loop.
+    return asyncio.run(coro)
 
 
 @pytest.fixture(autouse=True)

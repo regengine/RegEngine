@@ -106,6 +106,19 @@ async def get_current_user(
         except JWTError:
             raise credentials_exception
 
+    # SECURITY (#1383): clear any stale tenant context that may be lingering
+    # on this pooled connection from a prior request. If this request's JWT
+    # has no resolvable tenant and the user is not a sysadmin, we want RLS
+    # to fail closed, not inherit the previous caller's scope.
+    if db.bind and db.bind.dialect.name != "sqlite":
+        try:
+            TenantContext.clear_tenant_context(db)
+        except (RuntimeError, OSError, AttributeError):  # pragma: no cover
+            # If the clear call itself fails we still proceed — the
+            # subsequent set_tenant_context (or, absent that, the RLS
+            # fail-closed default from #1091) is the primary guard.
+            pass
+
     # Set user_id context for RLS so the user can see themselves (PostgreSQL only)
     if db.bind and db.bind.dialect.name != "sqlite":
         db.execute(
@@ -149,7 +162,23 @@ async def get_current_user(
                 detail="Tenant selection required — no app_metadata.tenant_id set",
                 headers={"WWW-Authenticate": "Bearer"},
             )
-        
+        elif not user.is_sysadmin:
+            # SECURITY (#1383): zero memberships AND not a sysadmin AND no
+            # tenant claim means this token cannot be bound to any tenant
+            # scope. Previously we returned the user with tenant_context
+            # unset, which — combined with fail-open RLS on pooled
+            # connections — could leak data across tenants. Reject at the
+            # auth layer so tenant-scoped routes never see this request.
+            logger.warning(
+                "tenant_required_no_membership",
+                user_id=user_id,
+            )
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Tenant required — no tenant claim and no active memberships",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+
     # Store tenant context in request state or handle via DB session context
     if tenant_id:
         try:
@@ -163,11 +192,11 @@ async def get_current_user(
                     MembershipModel.tenant_id == UUID(tenant_id)
                 )
             ).scalar_one_or_none()
-            
+
             if not membership:
                  logger.warning("invalid_tenant_context", user_id=user_id, tenant_id=tenant_id)
                  raise credentials_exception
-            
+
             if not membership.is_active:
                  logger.warning("deactivated_user_access_attempt", user_id=user_id, tenant_id=tenant_id)
                  raise credentials_exception

@@ -27,6 +27,7 @@ from .dependencies import (
     PermissionChecker,
     verify_path_tenant_matches,
 )
+from .sqlalchemy_models import UserModel
 
 logger = structlog.get_logger("compliance.routes")
 
@@ -84,9 +85,16 @@ class AlertResponse(BaseModel):
 
 
 class AlertActionRequest(BaseModel):
-    """Request for alert actions (acknowledge/resolve)."""
+    """Request for alert actions (acknowledge/resolve).
 
-    user_id: str = Field(..., description="ID of user performing action")
+    SECURITY (#1384): ``user_id`` was previously accepted from the request body
+    and stamped onto ``acknowledged_by`` / ``resolved_by``, letting any
+    authenticated caller blame any other user (including real FDA auditors)
+    for acknowledging or resolving critical FSMA alerts. The actor is now
+    derived server-side from ``Depends(get_current_user)`` — see the route
+    handlers below.
+    """
+
     notes: Optional[str] = Field(None, description="Optional notes")
 
 
@@ -218,12 +226,17 @@ def acknowledge_alert(
     tenant_id: str,
     alert_id: str,
     request: AlertActionRequest,
+    current_user: UserModel = Depends(get_current_user),
     session=Depends(get_session),
 ) -> AlertResponse:
-    """Mark an alert as acknowledged."""
+    """Mark an alert as acknowledged.
+
+    SECURITY (#1384): the acknowledging actor is the authenticated user,
+    never a client-supplied ``user_id``.
+    """
     try:
         service = ComplianceServiceSync(session)
-        alert = service.acknowledge_alert(UUID(alert_id), request.user_id)
+        alert = service.acknowledge_alert(UUID(alert_id), str(current_user.id))
         if not alert:
             raise HTTPException(status_code=404, detail="Alert not found")
         return AlertResponse(**alert.to_dict())
@@ -246,14 +259,19 @@ def resolve_alert(
     tenant_id: str,
     alert_id: str,
     request: AlertActionRequest,
+    current_user: UserModel = Depends(get_current_user),
     session=Depends(get_session),
 ) -> AlertResponse:
-    """Resolve an alert."""
+    """Resolve an alert.
+
+    SECURITY (#1384): the resolving actor is the authenticated user,
+    never a client-supplied ``user_id``.
+    """
     try:
         service = ComplianceServiceSync(session)
         alert = service.resolve_alert(
             UUID(alert_id),
-            request.user_id,
+            str(current_user.id),
             request.notes,
         )
         if not alert:
