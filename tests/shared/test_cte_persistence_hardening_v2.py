@@ -254,3 +254,137 @@ class TestTraversalDepth_Issue1322:
             )
 
 
+# ---------------------------------------------------------------------------
+# Shared-kernel #1336 — gaps in prior hardening test coverage
+# ---------------------------------------------------------------------------
+
+
+def _base_batch_event(**overrides):
+    evt = {
+        "event_type": "harvesting",
+        "traceability_lot_code": "TLC-1",
+        "product_description": "Lettuce",
+        "quantity": 10.0,
+        "unit_of_measure": "kg",
+        "event_timestamp": "2026-04-15T12:00:00Z",
+        "kdes": {"farm_name": "Acme"},
+    }
+    evt.update(overrides)
+    return evt
+
+
+class TestBatchQuantityClamp_Issue1336:
+    def test_batch_tiny_sub_unit_quantity_preserved(self):
+        """Even values < 0.01 (e.g., kilogram-level loss accounting)
+        must be preserved — no silent clamp to 1.0 for the batch
+        path.  Locking in that sub-unit measurements keep their
+        precision through hash and storage."""
+        session = FakeSession()
+        session.add_rule(r"SELECT idempotency_key", _FakeResult(rows=[]))
+        session.add_rule(r"FROM fsma\.hash_chain", _FakeResult(rows=[]))
+
+        p = CTEPersistence(session=session)
+        evt = _base_batch_event(quantity=0.001)
+        results = p.store_events_batch(tenant_id="t-1", events=[evt])
+
+        assert results and results[0].success
+        cte_inserts = [c for c in session.calls if "INSERT INTO fsma.cte_events" in c[0]]
+        assert cte_inserts
+        _, params = cte_inserts[0]
+        qty_params = [v for k, v in params.items() if k.startswith("qty_")]
+        assert qty_params, "quantity bind parameters must be present"
+        assert all(v == 0.001 for v in qty_params)
+
+    def test_batch_negative_quantity_rejected(self):
+        """Negative quantities are nonsensical for food traceability —
+        batch path must reject them same as the single-event path."""
+        session = FakeSession()
+        session.add_rule(r"SELECT idempotency_key", _FakeResult(rows=[]))
+        session.add_rule(r"FROM fsma\.hash_chain", _FakeResult(rows=[]))
+
+        p = CTEPersistence(session=session)
+        evt = _base_batch_event(quantity=-1.0)
+        with pytest.raises(ValueError, match="quantity must be > 0"):
+            p.store_events_batch(tenant_id="t-1", events=[evt])
+
+
+class TestOrphanChain_Issue1336:
+    def test_chain_insert_guarded_by_where_exists(self):
+        """If a batch event was idempotent (ON CONFLICT DO NOTHING
+        skipped the INSERT), its chain row must ALSO be skipped — the
+        WHERE EXISTS guard enforces this.  We assert that every
+        hash_chain INSERT the batch path emits carries the guard,
+        which is the #1307 fix extended to cover the batch-orphan
+        intersection (#1336)."""
+        session = FakeSession()
+        session.add_rule(r"SELECT idempotency_key", _FakeResult(rows=[]))
+        session.add_rule(r"FROM fsma\.hash_chain", _FakeResult(rows=[]))
+
+        p = CTEPersistence(session=session)
+        evt = _base_batch_event()
+        p.store_events_batch(tenant_id="t-1", events=[evt])
+
+        chain_inserts = [c for c in session.calls if "INSERT INTO fsma.hash_chain" in c[0]]
+        for sql, _ in chain_inserts:
+            normalized = " ".join(sql.split()).upper()
+            assert "WHERE EXISTS" in normalized
+
+
+class TestFutureDate_Issue1336:
+    def test_batch_far_future_event_timestamp_rejected(self):
+        """The batch path must reject timestamps more than the
+        allowed drift window into the future — a poisoned input
+        should not be able to claim "ingested at 2100-01-01" and
+        distort trace queries or retention math."""
+        session = FakeSession()
+        session.add_rule(r"SELECT idempotency_key", _FakeResult(rows=[]))
+        session.add_rule(r"FROM fsma\.hash_chain", _FakeResult(rows=[]))
+
+        p = CTEPersistence(session=session)
+        future = (datetime.now(timezone.utc) + timedelta(days=365 * 5)).isoformat()
+        with pytest.raises(ValueError, match="future"):
+            p.store_events_batch(
+                tenant_id="t-1", events=[_base_batch_event(event_timestamp=future)]
+            )
+
+
+class TestBatchKdeJsonb_Issue1336:
+    @staticmethod
+    def _has_jsonb_cast(sql: str) -> bool:
+        return "::jsonb" in sql or "AS jsonb" in sql
+
+    def test_batch_list_kde_round_trips_as_jsonb(self):
+        """A list-typed KDE value (e.g., input_lot_codes=["TLC-A",
+        "TLC-B"]) must be stored as JSON text cast to jsonb, NOT as
+        "['TLC-A', 'TLC-B']" (the Python repr).  The single-event
+        path was covered by #1311; this locks in the batch path
+        (#1336)."""
+        session = FakeSession()
+        session.add_rule(r"SELECT idempotency_key", _FakeResult(rows=[]))
+        session.add_rule(r"FROM fsma\.hash_chain", _FakeResult(rows=[]))
+
+        p = CTEPersistence(session=session)
+        evt = _base_batch_event(
+            event_type="transformation",
+            kdes={"input_lot_codes": ["TLC-A", "TLC-B"], "process_type": "cut"},
+        )
+        p.store_events_batch(tenant_id="t-1", events=[evt])
+
+        kde_inserts = [c for c in session.calls if "INSERT INTO fsma.cte_kdes" in c[0]]
+        assert kde_inserts
+        sql, params = kde_inserts[0]
+        assert self._has_jsonb_cast(sql)
+
+        # Find the bound kde_value params and assert they are JSON
+        # text (not Python repr).  Python repr would start with "[" +
+        # single quotes.
+        kv_params = [v for k, v in params.items() if k.startswith("kv_")]
+        assert kv_params
+        for v in kv_params:
+            assert isinstance(v, str)
+            # JSON text uses double-quotes for strings; python repr
+            # uses single-quotes.  A bare ``["TLC-A","TLC-B"]`` is
+            # valid JSON; ``['TLC-A', 'TLC-B']`` is not.
+            assert "'TLC-A'" not in v, (
+                f"KDE value should be JSON text, got python repr: {v!r}"
+            )
