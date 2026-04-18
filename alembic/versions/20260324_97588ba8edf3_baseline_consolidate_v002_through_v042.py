@@ -19,6 +19,7 @@ Revises:
 Create Date: 2026-03-24 18:06:50.080590
 
 """
+import os
 from typing import Sequence, Union
 from pathlib import Path
 
@@ -65,7 +66,35 @@ def downgrade() -> None:
 
     WARNING: This destroys all data. Only use in development.
     Order matters — drop dependent tables first.
+
+    Guard (issue #1264): refuse to execute unless the operator has explicitly
+    set both ``REGENGINE_ENV=development`` AND
+    ``REGENGINE_ALLOW_BASELINE_DOWNGRADE=1``. In production or staging, the
+    recovery path is to restore from snapshot rather than run a destructive
+    downgrade chain.
+
+    To override (dev only):
+        REGENGINE_ENV=development \\
+        REGENGINE_ALLOW_BASELINE_DOWNGRADE=1 \\
+        alembic downgrade base
     """
+    env = os.environ.get("REGENGINE_ENV", "unset").lower()
+    ack = os.environ.get("REGENGINE_ALLOW_BASELINE_DOWNGRADE", "0")
+    if env not in {"development", "dev", "test", "ci"} or ack != "1":
+        raise RuntimeError(
+            "Baseline downgrade blocked (#1264). This migration drops every "
+            "table in schemas fsma, public, ingestion, audit created by "
+            "V002-V042 — running it in production will destroy all FSMA data, "
+            "audit trails, and tenant records.\n\n"
+            "To proceed in a development environment, set BOTH:\n"
+            "  REGENGINE_ENV=development\n"
+            "  REGENGINE_ALLOW_BASELINE_DOWNGRADE=1\n\n"
+            "For production rollback, restore from a database snapshot rather "
+            "than running `alembic downgrade base`.\n\n"
+            f"Current: REGENGINE_ENV={env!r}, "
+            f"REGENGINE_ALLOW_BASELINE_DOWNGRADE={ack!r}"
+        )
+
     # --- V042: Tenant feature data tables ---
     op.execute("DROP TABLE IF EXISTS fsma.tenant_portal_links CASCADE")
     op.execute("DROP TABLE IF EXISTS fsma.tenant_exchanges CASCADE")
