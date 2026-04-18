@@ -90,15 +90,16 @@ async def test_trialing_subscription_allowed(client, fresh_circuit):
 
 
 @pytest.mark.asyncio
-async def test_missing_key_allows_through(client, fresh_circuit):
-    """When Redis key doesn't exist (None), request is allowed through."""
+async def test_missing_key_fails_closed_402(client, fresh_circuit):
+    """#1182: When Redis key is missing, deny with 402 — no fail-open grant."""
     with patch("app.subscription_gate.os.getenv", return_value="redis://localhost:6379"), \
          patch("app.subscription_gate.redis_circuit", fresh_circuit):
         mock_redis = MagicMock()
         mock_redis.hget.return_value = None
         with patch("redis.from_url", return_value=mock_redis):
             resp = await client.get("/protected", params={"tenant_id": "t1"})
-    assert resp.status_code == 200
+    assert resp.status_code == 402
+    assert "subscription" in resp.json()["detail"].lower()
 
 
 # ---------------------------------------------------------------------------
@@ -107,8 +108,13 @@ async def test_missing_key_allows_through(client, fresh_circuit):
 
 
 @pytest.mark.asyncio
-async def test_circuit_opens_after_threshold_failures(client, fresh_circuit):
-    """After enough Redis failures the circuit opens and returns 503."""
+async def test_redis_failure_fails_closed_503(client, fresh_circuit):
+    """#1182: Any Redis error (even before the breaker trips) returns 503.
+
+    Previously the gate returned 200 until the circuit opened; the fix
+    denies every request while Redis is erroring because we cannot confirm
+    subscription state.
+    """
     import redis as redis_lib
 
     with patch("app.subscription_gate.os.getenv", return_value="redis://localhost:6379"), \
@@ -117,18 +123,19 @@ async def test_circuit_opens_after_threshold_failures(client, fresh_circuit):
         mock_redis.hget.side_effect = redis_lib.ConnectionError("Connection refused")
 
         with patch("redis.from_url", return_value=mock_redis):
-            # Drive failures up to the threshold (redis_circuit threshold=10)
-            for _ in range(fresh_circuit.failure_threshold):
-                resp = await client.get("/protected", params={"tenant_id": "t1"})
-                # Individual failures still fail open (return 200) because
-                # the circuit is not yet open — they return None from the
-                # except branch.
-                assert resp.status_code == 200
-
-            # Next request should hit the open circuit -> 503
+            # Even the very first Redis error should 503 now.
             resp = await client.get("/protected", params={"tenant_id": "t1"})
             assert resp.status_code == 503
-            assert "temporarily unavailable" in resp.json()["detail"].lower()
+
+            # Drive failures up to the threshold so the circuit opens too.
+            for _ in range(fresh_circuit.failure_threshold):
+                resp = await client.get("/protected", params={"tenant_id": "t1"})
+                assert resp.status_code == 503
+
+            # Once the circuit is open, still 503 via a faster path.
+            resp = await client.get("/protected", params={"tenant_id": "t1"})
+            assert resp.status_code == 503
+            assert "unavailable" in resp.json()["detail"].lower()
 
 
 @pytest.mark.asyncio

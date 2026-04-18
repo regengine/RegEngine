@@ -17,7 +17,7 @@ FSMA_RULE_SEEDS: List[Dict[str, Any]] = [
         "description": "Receiving events must include the traceability lot code source reference identifying the entity that assigned the TLC",
         "severity": "critical",
         "category": "kde_presence",
-        "applicability_conditions": {"cte_types": ["receiving"]},
+        "applicability_conditions": {"cte_types": ["receiving"], "ftl_scope": ["ALL"]},
         "citation_reference": "21 CFR \u00a71.1345(b)(7)",
         "evaluation_logic": {
             "type": "multi_field_presence",
@@ -32,7 +32,7 @@ FSMA_RULE_SEEDS: List[Dict[str, Any]] = [
         "description": "Receiving events must identify the immediate previous source of the food",
         "severity": "critical",
         "category": "kde_presence",
-        "applicability_conditions": {"cte_types": ["receiving"]},
+        "applicability_conditions": {"cte_types": ["receiving"], "ftl_scope": ["ALL"]},
         "citation_reference": "21 CFR \u00a71.1345(b)(5)",
         "evaluation_logic": {
             "type": "multi_field_presence",
@@ -47,7 +47,7 @@ FSMA_RULE_SEEDS: List[Dict[str, Any]] = [
         "description": "Receiving events must include a reference document number (BOL, invoice, etc.)",
         "severity": "warning",
         "category": "source_reference",
-        "applicability_conditions": {"cte_types": ["receiving"]},
+        "applicability_conditions": {"cte_types": ["receiving"], "ftl_scope": ["ALL"]},
         "citation_reference": "21 CFR \u00a71.1345(b)(6)",
         "evaluation_logic": {"type": "field_presence", "field": "kdes.reference_document"},
         "failure_reason_template": "Receiving event missing {field_name} (BOL, invoice, or purchase order number) required by {citation}",
@@ -58,7 +58,7 @@ FSMA_RULE_SEEDS: List[Dict[str, Any]] = [
         "description": "Receiving events must include the date the food was received",
         "severity": "critical",
         "category": "kde_presence",
-        "applicability_conditions": {"cte_types": ["receiving"]},
+        "applicability_conditions": {"cte_types": ["receiving"], "ftl_scope": ["ALL"]},
         "citation_reference": "21 CFR \u00a71.1345(b)(2)",
         "evaluation_logic": {
             "type": "multi_field_presence",
@@ -73,7 +73,7 @@ FSMA_RULE_SEEDS: List[Dict[str, Any]] = [
         "description": "Shipping events must identify the location the food was shipped from",
         "severity": "critical",
         "category": "kde_presence",
-        "applicability_conditions": {"cte_types": ["shipping"]},
+        "applicability_conditions": {"cte_types": ["shipping"], "ftl_scope": ["ALL"]},
         "citation_reference": "21 CFR \u00a71.1340(b)(3)",
         "evaluation_logic": {
             "type": "multi_field_presence",
@@ -88,7 +88,7 @@ FSMA_RULE_SEEDS: List[Dict[str, Any]] = [
         "description": "Shipping events must identify the location the food was shipped to",
         "severity": "critical",
         "category": "kde_presence",
-        "applicability_conditions": {"cte_types": ["shipping"]},
+        "applicability_conditions": {"cte_types": ["shipping"], "ftl_scope": ["ALL"]},
         "citation_reference": "21 CFR \u00a71.1340(b)(4)",
         "evaluation_logic": {
             "type": "multi_field_presence",
@@ -103,7 +103,7 @@ FSMA_RULE_SEEDS: List[Dict[str, Any]] = [
         "description": "Shipping events must include the date the food was shipped",
         "severity": "critical",
         "category": "kde_presence",
-        "applicability_conditions": {"cte_types": ["shipping"]},
+        "applicability_conditions": {"cte_types": ["shipping"], "ftl_scope": ["ALL"]},
         "citation_reference": "21 CFR \u00a71.1340(b)(2)",
         "evaluation_logic": {
             "type": "multi_field_presence",
@@ -118,7 +118,7 @@ FSMA_RULE_SEEDS: List[Dict[str, Any]] = [
         "description": "Shipping events must include a reference document number",
         "severity": "warning",
         "category": "source_reference",
-        "applicability_conditions": {"cte_types": ["shipping"]},
+        "applicability_conditions": {"cte_types": ["shipping"], "ftl_scope": ["ALL"]},
         "citation_reference": "21 CFR \u00a71.1340(b)(6)",
         "evaluation_logic": {"type": "field_presence", "field": "kdes.reference_document"},
         "failure_reason_template": "Shipping event missing {field_name} ({citation})",
@@ -129,7 +129,7 @@ FSMA_RULE_SEEDS: List[Dict[str, Any]] = [
         "description": "Harvesting events must include the date of harvest",
         "severity": "critical",
         "category": "kde_presence",
-        "applicability_conditions": {"cte_types": ["harvesting"]},
+        "applicability_conditions": {"cte_types": ["harvesting"], "ftl_scope": ["ALL"]},
         "citation_reference": "21 CFR \u00a71.1327(b)(2)",
         "evaluation_logic": {
             "type": "multi_field_presence",
@@ -144,7 +144,7 @@ FSMA_RULE_SEEDS: List[Dict[str, Any]] = [
         "description": "Harvesting events must identify the farm or growing area location",
         "severity": "critical",
         "category": "kde_presence",
-        "applicability_conditions": {"cte_types": ["harvesting"]},
+        "applicability_conditions": {"cte_types": ["harvesting"], "ftl_scope": ["ALL"]},
         "citation_reference": "21 CFR \u00a71.1327(b)(3)",
         "evaluation_logic": {
             "type": "multi_field_presence",
@@ -159,7 +159,7 @@ FSMA_RULE_SEEDS: List[Dict[str, Any]] = [
         "description": "Initial packing events must include the date of packing",
         "severity": "critical",
         "category": "kde_presence",
-        "applicability_conditions": {"cte_types": ["initial_packing"]},
+        "applicability_conditions": {"cte_types": ["initial_packing"], "ftl_scope": ["ALL"]},
         "citation_reference": "21 CFR \u00a71.1335(b)(4)",
         "evaluation_logic": {
             "type": "multi_field_presence",
@@ -174,7 +174,7 @@ FSMA_RULE_SEEDS: List[Dict[str, Any]] = [
         "description": "Transformation events must include the date of transformation",
         "severity": "critical",
         "category": "kde_presence",
-        "applicability_conditions": {"cte_types": ["transformation"]},
+        "applicability_conditions": {"cte_types": ["transformation"], "ftl_scope": ["ALL"]},
         "citation_reference": "21 CFR \u00a71.1350(b)(4)",
         "evaluation_logic": {
             "type": "multi_field_presence",
@@ -189,7 +189,7 @@ FSMA_RULE_SEEDS: List[Dict[str, Any]] = [
         "description": "Cooling events must include the date of cooling",
         "severity": "critical",
         "category": "kde_presence",
-        "applicability_conditions": {"cte_types": ["cooling"]},
+        "applicability_conditions": {"cte_types": ["cooling"], "ftl_scope": ["ALL"]},
         "citation_reference": "21 CFR \u00a71.1330(b)(3)",
         "evaluation_logic": {
             "type": "multi_field_presence",
@@ -205,7 +205,7 @@ FSMA_RULE_SEEDS: List[Dict[str, Any]] = [
         "description": "Every CTE must have a traceability lot code",
         "severity": "critical",
         "category": "kde_presence",
-        "applicability_conditions": {"cte_types": []},
+        "applicability_conditions": {"cte_types": [], "ftl_scope": ["ALL"]},
         "citation_reference": "21 CFR \u00a71.1310",
         "evaluation_logic": {"type": "field_presence", "field": "traceability_lot_code"},
         "failure_reason_template": "Event missing traceability lot code ({citation})",
@@ -216,7 +216,7 @@ FSMA_RULE_SEEDS: List[Dict[str, Any]] = [
         "description": "Every CTE must include a product description (commodity and variety)",
         "severity": "critical",
         "category": "kde_presence",
-        "applicability_conditions": {"cte_types": []},
+        "applicability_conditions": {"cte_types": [], "ftl_scope": ["ALL"]},
         "citation_reference": "21 CFR \u00a71.1310(b)(1)",
         "evaluation_logic": {
             "type": "multi_field_presence",
@@ -231,7 +231,7 @@ FSMA_RULE_SEEDS: List[Dict[str, Any]] = [
         "description": "Every CTE must include the quantity and unit of measure",
         "severity": "critical",
         "category": "kde_presence",
-        "applicability_conditions": {"cte_types": []},
+        "applicability_conditions": {"cte_types": [], "ftl_scope": ["ALL"]},
         "citation_reference": "21 CFR \u00a71.1310(b)(2)",
         "evaluation_logic": {"type": "field_presence", "field": "quantity"},
         "failure_reason_template": "Event missing quantity and unit of measure ({citation})",
@@ -242,7 +242,7 @@ FSMA_RULE_SEEDS: List[Dict[str, Any]] = [
         "description": "Every CTE must identify at least one facility location (GLN or description)",
         "severity": "critical",
         "category": "kde_presence",
-        "applicability_conditions": {"cte_types": []},
+        "applicability_conditions": {"cte_types": [], "ftl_scope": ["ALL"]},
         "citation_reference": "21 CFR \u00a71.1310(b)(3)",
         "evaluation_logic": {
             "type": "multi_field_presence",
@@ -258,7 +258,7 @@ FSMA_RULE_SEEDS: List[Dict[str, Any]] = [
         "description": "If a GLN is provided, it must be exactly 13 digits with valid check digit",
         "severity": "warning",
         "category": "identifier_format",
-        "applicability_conditions": {"cte_types": []},
+        "applicability_conditions": {"cte_types": [], "ftl_scope": ["ALL"]},
         "citation_reference": "GS1 General Specifications \u00a73.4.2",
         "evaluation_logic": {
             "type": "field_format",
@@ -275,7 +275,7 @@ FSMA_RULE_SEEDS: List[Dict[str, Any]] = [
         "description": "Shipping events must include TLC source reference identifying who assigned the lot code",
         "severity": "warning",
         "category": "lot_linkage",
-        "applicability_conditions": {"cte_types": ["shipping"]},
+        "applicability_conditions": {"cte_types": ["shipping"], "ftl_scope": ["ALL"]},
         "citation_reference": "21 CFR \u00a71.1340(b)(7)",
         "evaluation_logic": {
             "type": "multi_field_presence",
@@ -290,7 +290,7 @@ FSMA_RULE_SEEDS: List[Dict[str, Any]] = [
         "description": "Transformation events must list all input traceability lot codes that were transformed",
         "severity": "critical",
         "category": "lot_linkage",
-        "applicability_conditions": {"cte_types": ["transformation"]},
+        "applicability_conditions": {"cte_types": ["transformation"], "ftl_scope": ["ALL"]},
         "citation_reference": "21 CFR \u00a71.1350(a)(4)",
         "evaluation_logic": {
             "type": "multi_field_presence",
@@ -306,7 +306,7 @@ FSMA_RULE_SEEDS: List[Dict[str, Any]] = [
         "description": "All CTE types require at least one reference document (BOL, invoice, PO, production record)",
         "severity": "warning",
         "category": "source_reference",
-        "applicability_conditions": {"cte_types": []},
+        "applicability_conditions": {"cte_types": [], "ftl_scope": ["ALL"]},
         "citation_reference": "21 CFR \u00a71.1310(c)",
         "evaluation_logic": {
             "type": "multi_field_presence",
@@ -321,7 +321,7 @@ FSMA_RULE_SEEDS: List[Dict[str, Any]] = [
         "description": "First land-based receiving events for seafood must include the landing date",
         "severity": "critical",
         "category": "kde_presence",
-        "applicability_conditions": {"cte_types": ["first_land_based_receiving"]},
+        "applicability_conditions": {"cte_types": ["first_land_based_receiving"], "ftl_scope": ["ALL"]},
         "citation_reference": "21 CFR \u00a71.1325(b)(4)",
         "evaluation_logic": {
             "type": "multi_field_presence",
@@ -336,7 +336,7 @@ FSMA_RULE_SEEDS: List[Dict[str, Any]] = [
         "description": "Harvesting events must identify the commodity and variety of food harvested",
         "severity": "critical",
         "category": "kde_presence",
-        "applicability_conditions": {"cte_types": ["harvesting"]},
+        "applicability_conditions": {"cte_types": ["harvesting"], "ftl_scope": ["ALL"]},
         "citation_reference": "21 CFR \u00a71.1327(b)(1)",
         "evaluation_logic": {
             "type": "multi_field_presence",
@@ -351,7 +351,7 @@ FSMA_RULE_SEEDS: List[Dict[str, Any]] = [
         "description": "Receiving events must identify the location where food was received",
         "severity": "critical",
         "category": "kde_presence",
-        "applicability_conditions": {"cte_types": ["receiving"]},
+        "applicability_conditions": {"cte_types": ["receiving"], "ftl_scope": ["ALL"]},
         "citation_reference": "21 CFR \u00a71.1345(b)(4)",
         "evaluation_logic": {
             "type": "multi_field_presence",
@@ -366,7 +366,7 @@ FSMA_RULE_SEEDS: List[Dict[str, Any]] = [
         "description": "Initial packing events must identify the harvester business name and phone number",
         "severity": "warning",
         "category": "kde_presence",
-        "applicability_conditions": {"cte_types": ["initial_packing"]},
+        "applicability_conditions": {"cte_types": ["initial_packing"], "ftl_scope": ["ALL"]},
         "citation_reference": "21 CFR \u00a71.1335(b)(8)",
         "evaluation_logic": {
             "type": "multi_field_presence",
@@ -382,7 +382,10 @@ FSMA_RULE_SEEDS: List[Dict[str, Any]] = [
         "description": "CTE events for the same TLC must follow supply chain lifecycle order \u2014 harvesting before cooling before packing before shipping before receiving",
         "severity": "critical",
         "category": "temporal_ordering",
-        "applicability_conditions": {"cte_types": ["shipping", "receiving", "transformation", "initial_packing", "cooling"]},
+        "applicability_conditions": {
+            "cte_types": ["shipping", "receiving", "transformation", "initial_packing", "cooling"],
+            "ftl_scope": ["ALL"],
+        },
         "citation_reference": "21 CFR \u00a71.1310",
         "evaluation_logic": {"type": "temporal_order"},
         "failure_reason_template": "Chronology paradox: {event_type} event timestamp violates supply chain lifecycle order for this TLC ({citation})",
@@ -393,7 +396,10 @@ FSMA_RULE_SEEDS: List[Dict[str, Any]] = [
         "description": "The product description must remain consistent across all CTEs for the same traceability lot code (excluding transformation, which legitimately creates new products)",
         "severity": "warning",
         "category": "lot_linkage",
-        "applicability_conditions": {"cte_types": ["harvesting", "cooling", "initial_packing", "first_land_based_receiving", "shipping", "receiving"]},
+        "applicability_conditions": {
+            "cte_types": ["harvesting", "cooling", "initial_packing", "first_land_based_receiving", "shipping", "receiving"],
+            "ftl_scope": ["ALL"],
+        },
         "citation_reference": "21 CFR \u00a71.1310(a)",
         "evaluation_logic": {"type": "identity_consistency"},
         "failure_reason_template": "Product identity changed for TLC: {event_type} event has a different product than prior events ({citation})",
@@ -404,7 +410,7 @@ FSMA_RULE_SEEDS: List[Dict[str, Any]] = [
         "description": "Total shipped/output quantity for a TLC cannot exceed total received/input quantity (within tolerance)",
         "severity": "critical",
         "category": "quantity_consistency",
-        "applicability_conditions": {"cte_types": ["shipping", "transformation"]},
+        "applicability_conditions": {"cte_types": ["shipping", "transformation"], "ftl_scope": ["ALL"]},
         "citation_reference": "21 CFR \u00a71.1310",
         "evaluation_logic": {
             "type": "mass_balance",
@@ -412,6 +418,35 @@ FSMA_RULE_SEEDS: List[Dict[str, Any]] = [
         },
         "failure_reason_template": "Mass balance violation: output quantity exceeds input quantity for this TLC ({citation})",
         "remediation_suggestion": "Verify quantities \u2014 you cannot ship more than was received/harvested for the same traceability lot code. Check for data entry errors or missing input events",
+    },
+    # --- FTL Classification Rules (#1346) ---
+    # This rule is intentionally scoped to NON_FTL so it fires on events
+    # whose product is NOT on the FTL — ensuring we surface the gap
+    # rather than silently stamp non-FTL events compliant.
+    {
+        "title": "FTL Classification: Product Must Be Classified",
+        "description": (
+            "Every event must carry an FTL classification signal "
+            "(ftl_covered flag or ftl_category/product.category string) so "
+            "the rules engine can determine whether FSMA 204 requirements apply"
+        ),
+        "severity": "critical",
+        "category": "ftl_scoping",
+        "applicability_conditions": {"cte_types": [], "ftl_scope": ["NON_FTL"]},
+        "citation_reference": "21 CFR \u00a71.1300",
+        "evaluation_logic": {
+            "type": "multi_field_presence",
+            "field": "ftl_covered",
+            "params": {"fields": ["ftl_covered", "kdes.ftl_covered", "kdes.ftl_category", "product.category", "product_category"]},
+        },
+        "failure_reason_template": (
+            "Event missing FTL classification \u2014 cannot determine whether "
+            "FSMA 204 recordkeeping rules apply to this product ({citation})"
+        ),
+        "remediation_suggestion": (
+            "Record ftl_covered (true/false) or the product's FTL category "
+            "on every CTE so the compliance stamp only applies where required"
+        ),
     },
 ]
 

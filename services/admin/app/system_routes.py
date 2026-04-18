@@ -138,15 +138,51 @@ async def check_service_health(client, name: str, url: str) -> ServiceHealth:
 
 
 def _resolve_tenant(db: Session) -> str:
-    """Resolve tenant UUID from the RLS context set by get_current_user."""
+    """Resolve tenant UUID from the RLS context set by get_current_user.
+
+    Raises HTTP 500 on any failure rather than silently substituting
+    the demo tenant UUID -- previously a connection bounce, RLS setup
+    error, or missing tenant context caused this function to return
+    a hardcoded demo-tenant UUID ("5946c58f-ddf9-4db0-9baa-acb11c6fce91")
+    and every downstream query ran against the demo tenant. A real
+    customer could see the demo tenant's compliance score / alert counts
+    on their dashboard. (#1391)
+
+    Fail closed: if the RLS context is missing or the read fails, raise
+    500 so ops notices rather than a silent cross-tenant leak.
+    """
     try:
-        row = db.execute(text("SELECT current_setting('app.tenant_id', true)")).fetchone()
+        row = db.execute(
+            text("SELECT current_setting('app.tenant_id', true)")
+        ).fetchone()
         tid = row[0] if row else None
-        if tid:
-            return tid
-    except (RuntimeError, OSError, ValueError, KeyError):
-        pass
-    return "5946c58f-ddf9-4db0-9baa-acb11c6fce91"  # fallback: demo tenant
+    except (RuntimeError, OSError, ValueError, KeyError) as exc:
+        logger.error("resolve_tenant_lookup_failed", error=str(exc))
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "Tenant context could not be resolved. This request has "
+                "been rejected to prevent cross-tenant data exposure. "
+                "Please re-authenticate or retry."
+            ),
+        ) from exc
+
+    if not tid:
+        # RLS context missing: the get_current_user dependency normally
+        # sets this; if we land here, either the JWT lacked tenant_id,
+        # the auth path short-circuited, or the pool handed out a
+        # freshly-cleared connection. Fail closed.
+        logger.error("resolve_tenant_no_context_set")
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "Tenant context is not set on this session. This "
+                "request has been rejected to prevent cross-tenant "
+                "data exposure."
+            ),
+        )
+
+    return tid
 
 
 @router.get("/metrics", response_model=SystemMetricsResponse)

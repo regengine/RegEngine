@@ -39,6 +39,45 @@ router = APIRouter(prefix="/api/v1/epcis", tags=["EPCIS 2.0 Ingestion"])
 _resolve_tenant_id = resolve_tenant_id
 
 
+def _reject_tenant_query_override(request: Request) -> None:
+    """Reject any request that supplies tenant_id as a query parameter.
+
+    Closes the #1146 cross-tenant bypass: previously a caller with any valid
+    API key could ingest into (or read from) a different tenant by appending
+    ``?tenant_id=<other>``. Tenant context must come exclusively from
+    ``X-Tenant-ID`` + ``X-RegEngine-API-Key`` (validated by
+    ``resolve_tenant_id``).
+    """
+    if "tenant_id" in request.query_params:
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                "tenant_id query parameter is not accepted. "
+                "Tenant context is derived from the authenticated API key "
+                "and the X-Tenant-ID header."
+            ),
+        )
+
+
+def _resolve_authenticated_tenant(
+    request: Request,
+    x_tenant_id: Optional[str],
+    x_regengine_api_key: Optional[str],
+) -> str:
+    """Resolve tenant from auth headers only — forbid query-string override.
+
+    The resolved tenant must match the API-key's tenant if both are
+    provided; mismatch yields HTTP 401.
+    """
+    _reject_tenant_query_override(request)
+    # Pass explicit_tenant_id=None unconditionally so the query param can
+    # never influence resolution, even if the guard above is bypassed.
+    resolved_tenant = _resolve_tenant_id(None, x_tenant_id, x_regengine_api_key)
+    if not resolved_tenant:
+        raise HTTPException(status_code=400, detail="Tenant context required")
+    return resolved_tenant
+
+
 class BatchIngestRequest(BaseModel):
     events: list[dict] = Field(default_factory=list)
 
@@ -46,14 +85,12 @@ class BatchIngestRequest(BaseModel):
 @router.post("/events", status_code=201, summary="Ingest EPCIS 2.0 event")
 async def ingest_epcis_event(
     event: dict,
-    tenant_id: Optional[str] = Query(default=None, description="Optional tenant override"),
+    request: Request,
     x_tenant_id: Optional[str] = Header(default=None, alias="X-Tenant-ID"),
     x_regengine_api_key: Optional[str] = Header(default=None, alias="X-RegEngine-API-Key"),
     _: None = Depends(_verify_api_key),
 ):
-    resolved_tenant = _resolve_tenant_id(tenant_id, x_tenant_id, x_regengine_api_key)
-    if not resolved_tenant:
-        raise HTTPException(status_code=400, detail="Tenant context required")
+    resolved_tenant = _resolve_authenticated_tenant(request, x_tenant_id, x_regengine_api_key)
 
     payload, status_code = _ingest_single_event(resolved_tenant, event)
     return JSONResponse(content=payload, status_code=status_code)
@@ -61,24 +98,22 @@ async def ingest_epcis_event(
 
 @router.post("/events/batch", summary="Batch ingest EPCIS events")
 async def ingest_epcis_batch(
-    request: BatchIngestRequest,
-    tenant_id: Optional[str] = Query(default=None, description="Optional tenant override"),
+    request: Request,
+    body: BatchIngestRequest,
     x_tenant_id: Optional[str] = Header(default=None, alias="X-Tenant-ID"),
     x_regengine_api_key: Optional[str] = Header(default=None, alias="X-RegEngine-API-Key"),
     _: None = Depends(_verify_api_key),
 ):
-    if not request.events:
+    if not body.events:
         raise HTTPException(status_code=400, detail="Batch ingest requires at least one event")
 
-    resolved_tenant = _resolve_tenant_id(tenant_id, x_tenant_id, x_regengine_api_key)
-    if not resolved_tenant:
-        raise HTTPException(status_code=400, detail="Tenant context required")
+    resolved_tenant = _resolve_authenticated_tenant(request, x_tenant_id, x_regengine_api_key)
 
     created: list[dict] = []
     failed: list[dict] = []
     processed: list[dict] = []
 
-    for idx, event in enumerate(request.events):
+    for idx, event in enumerate(body.events):
         try:
             payload, status_code = _ingest_single_event(resolved_tenant, event)
             processed.append({"index": idx, "status_code": status_code, **payload})
@@ -88,7 +123,7 @@ async def ingest_epcis_batch(
             failed.append({"index": idx, "detail": exc.detail})
 
     response_payload = {
-        "total": len(request.events),
+        "total": len(body.events),
         "created": len(created),
         "failed": len(failed),
         "results": processed,
@@ -106,14 +141,12 @@ async def ingest_epcis_batch(
 @router.get("/events/{event_id}", summary="Get EPCIS event by id")
 async def get_epcis_event(
     event_id: str,
-    tenant_id: Optional[str] = Query(default=None, description="Optional tenant override"),
+    request: Request,
     x_tenant_id: Optional[str] = Header(default=None, alias="X-Tenant-ID"),
     x_regengine_api_key: Optional[str] = Header(default=None, alias="X-RegEngine-API-Key"),
     _: None = Depends(_verify_api_key),
 ):
-    resolved_tenant = _resolve_tenant_id(tenant_id, x_tenant_id, x_regengine_api_key)
-    if not resolved_tenant:
-        raise HTTPException(status_code=400, detail="Tenant context required")
+    resolved_tenant = _resolve_authenticated_tenant(request, x_tenant_id, x_regengine_api_key)
 
     event = None
     try:
@@ -135,17 +168,15 @@ async def get_epcis_event(
 
 @router.get("/export", summary="Export all ingested events as EPCIS 2.0")
 async def export_epcis_events(
+    request: Request,
     start_date: str | None = Query(default=None, description="Filter events at or after this ISO timestamp"),
     end_date: str | None = Query(default=None, description="Filter events before this ISO timestamp"),
     product_id: str | None = Query(default=None, description="Filter by EPC product identifier"),
-    tenant_id: Optional[str] = Query(default=None, description="Optional tenant override"),
     x_tenant_id: Optional[str] = Header(default=None, alias="X-Tenant-ID"),
     x_regengine_api_key: Optional[str] = Header(default=None, alias="X-RegEngine-API-Key"),
     _: None = Depends(_verify_api_key),
 ):
-    resolved_tenant = _resolve_tenant_id(tenant_id, x_tenant_id, x_regengine_api_key)
-    if not resolved_tenant:
-        raise HTTPException(status_code=400, detail="Tenant context required")
+    resolved_tenant = _resolve_authenticated_tenant(request, x_tenant_id, x_regengine_api_key)
 
     events: list[dict] = []
     try:
@@ -217,7 +248,6 @@ async def validate_epcis_event(
 @router.post("/events/xml", status_code=201, summary="Ingest EPCIS 2.0 XML document")
 async def ingest_epcis_xml(
     request: Request,
-    tenant_id: Optional[str] = Query(default=None, description="Optional tenant override"),
     x_tenant_id: Optional[str] = Header(default=None, alias="X-Tenant-ID"),
     x_regengine_api_key: Optional[str] = Header(default=None, alias="X-RegEngine-API-Key"),
     _: None = Depends(_verify_api_key),
@@ -228,9 +258,7 @@ async def ingest_epcis_xml(
     and TransformationEvent elements, then ingests each through the standard
     EPCIS pipeline with FSMAEvent validation.
     """
-    resolved_tenant = _resolve_tenant_id(tenant_id, x_tenant_id, x_regengine_api_key)
-    if not resolved_tenant:
-        raise HTTPException(status_code=400, detail="Tenant context required")
+    resolved_tenant = _resolve_authenticated_tenant(request, x_tenant_id, x_regengine_api_key)
 
     raw_body = await request.body()
     if not raw_body:
