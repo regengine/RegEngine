@@ -1,20 +1,35 @@
 # ============================================================
-# UNSAFE ZONE: This file (1298 lines) is LEGACY — it writes to
-# fsma.cte_events + fsma.cte_kdes (the old schema). New ingestion
-# paths should use canonical_persistence.py (fsma.traceability_events).
-# This module mixes event storage, hash chain management, batch
-# operations, query building, and export queries.
-# Refactoring target — see PHASE 3 in REGENGINE_CODEBASE_REMEDIATION_PRD.md
-# Changes here risk breaking export, hash chain integrity, and graph sync.
+# LEGACY — do NOT add new callers.
+#
+# This module writes to the old schema (fsma.cte_events + fsma.cte_kdes)
+# alongside the canonical writer (canonical_persistence.writer, which
+# writes to fsma.traceability_events). The canonical writer is the
+# forward path; this module stays only to serve the 11+ live callers
+# in services/ingestion/app/ (webhook_router_v2, epcis/persistence,
+# fda_export/*, etc.) that have not yet been migrated. Retirement is
+# tracked as #1335 and is a multi-sprint effort — each caller's tests
+# must stay green at every step.
+#
+# Divergence from canonical — intentional, documented:
+#   - idempotency_key formula uses (location_gln, location_name) while
+#     canonical_event.TraceabilityEvent.compute_idempotency_key uses
+#     (from_facility, to_facility). The same real-world event dual-
+#     written through both paths produces DIFFERENT keys in each
+#     table. Cross-table reconciliation must therefore use sha256_hash,
+#     not idempotency_key.
+#
+# Changes here risk breaking FDA export, hash chain integrity, and
+# graph sync. Prefer fixing the canonical path when both paths have
+# the same bug.
 # ============================================================
 """
-FSMA 204 CTE Persistence Layer.
+FSMA 204 CTE Persistence Layer — LEGACY dual-write path.
 
-Provides database-backed storage for Critical Tracking Events, replacing
-the in-memory dicts that previously lost data on every restart.
-
-This module is the single source of truth for CTE persistence. Both the
-webhook router and EPCIS ingestion module write through this layer.
+Provides database-backed storage for Critical Tracking Events to the
+older ``fsma.cte_events`` + ``fsma.cte_kdes`` schema. New ingestion
+paths should use ``shared.canonical_persistence`` which writes to
+``fsma.traceability_events``. Both paths coexist during the in-progress
+migration; see the ``UNSAFE ZONE`` comment block above.
 
 Usage:
     from services.shared.cte_persistence import CTEPersistence
@@ -149,14 +164,20 @@ def _jsonify_kde(value: Any) -> str:
 
 class CTEPersistence:
     """
-    Database-backed persistence for FSMA 204 CTE events.
+    LEGACY database-backed persistence for FSMA 204 CTE events.
+
+    New callers should prefer
+    ``shared.canonical_persistence.CanonicalEventStore`` which writes
+    to ``fsma.traceability_events``. This class exists to serve the
+    in-ingestion-service callers that have not yet migrated. Retirement
+    is tracked by #1335.
 
     All methods expect a SQLAlchemy session that has already set
-    the tenant context via: SET LOCAL app.tenant_id = '<uuid>';
-
-    The RLS policies on the fsma.* tables enforce tenant isolation
-    automatically — this module never needs to filter by tenant_id
-    in WHERE clauses for read queries.
+    the tenant context via ``SET LOCAL app.tenant_id = '<uuid>'``, or
+    a caller that invokes ``set_tenant_context`` before writing. The
+    RLS policies on the ``fsma.*`` tables enforce tenant isolation
+    automatically — this module does not filter by ``tenant_id`` in
+    read-query ``WHERE`` clauses.
     """
 
     def __init__(self, session: Session):
