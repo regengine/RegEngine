@@ -230,7 +230,9 @@ async def get_required_ctes(
         facility_id=facility_uuid,
     )
 
-    graph_payload = supplier_graph_sync.get_required_ctes_for_facility(str(facility.id))
+    graph_payload = supplier_graph_sync.get_required_ctes_for_facility(
+        str(facility.id), tenant_id=str(tenant_id)
+    )
     if graph_payload is not None:
         return FacilityFTLScopingResponse(
             facility_id=str(facility.id),

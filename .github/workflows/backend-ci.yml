@@ -204,6 +204,25 @@ jobs:
           cd services/${{ matrix.service }}
           flake8 app/ --max-line-length=120 --select=E9,F63,F7,F82 --count --statistics
 
+  # ── RLS fallback-UUID guard (hard gate) ──────────────────
+  # Scans migrations for the fail-open RLS pattern that #1091 fixed.
+  # Any new migration that reintroduces `COALESCE(..., <fallback-UUID>)`
+  # or `COALESCE(current_setting(...), tenant_id)` will fail CI.
+  rls-fallback-check:
+    name: RLS fail-open migration guard
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Check for fail-open RLS fallbacks in migrations
+        run: python scripts/check_rls_fallback.py
+
   # ── Docker Build (consolidated monolith) ─────────────────
   # Production deploys a single consolidated monolith built from the
   # repo-root Dockerfile — see server/main.py and railway.toml. The per-
@@ -253,17 +272,18 @@ jobs:
   ci-status:
     name: CI Status Gate
     if: always()
-    needs: [test, lint, docker-build, security]
+    needs: [test, lint, docker-build, security, rls-fallback-check]
     runs-on: ubuntu-latest
     steps:
       - name: Check results
         run: |
-          echo "Test:     ${{ needs.test.result }}"
-          echo "Lint:     ${{ needs.lint.result }}"
-          echo "Docker:   ${{ needs.docker-build.result }}"
-          echo "Security: ${{ needs.security.result }}"
-          if [[ "${{ needs.test.result }}" == "failure" || "${{ needs.security.result }}" == "failure" ]]; then
-            echo "::error::Test suite or Security Audit failed"
+          echo "Test:              ${{ needs.test.result }}"
+          echo "Lint:              ${{ needs.lint.result }}"
+          echo "Docker:            ${{ needs.docker-build.result }}"
+          echo "Security:          ${{ needs.security.result }}"
+          echo "RLS fallback:      ${{ needs.rls-fallback-check.result }}"
+          if [[ "${{ needs.test.result }}" == "failure" || "${{ needs.security.result }}" == "failure" || "${{ needs.rls-fallback-check.result }}" == "failure" ]]; then
+            echo "::error::Test suite, Security Audit, or RLS fallback guard failed"
             exit 1
           fi
-          echo "✅ All checks passed"
+          echo "All checks passed"

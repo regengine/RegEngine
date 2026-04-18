@@ -7,8 +7,6 @@ import type {
   IngestURLRequest,
   IngestURLResponse,
   ComplianceChecklist,
-  ValidationRequest,
-  ValidationResult,
   Industry,
   TenantResponse,
   LoginResponse,
@@ -355,10 +353,11 @@ class APIClient {
     return data;
   }
 
-  async validateConfig(request: ValidationRequest): Promise<ValidationResult> {
-    const { data } = await this.complianceClient.post('/validate', request);
-    return data;
-  }
+  // validateConfig() was removed on 2026-04-17 (#1203). The compliance
+  // service's POST /validate endpoint was orphaned — no component ever
+  // invoked the hook, and the real compliance evaluation lives in the
+  // ingestion service's /api/v1/rules/evaluate route via the versioned
+  // RulesEngine.
 
   async getDocumentAnalysis(documentId: string, apiKey: string): Promise<AnalysisSummary> {
     const { data } = await this.ingestionClient.get(`/v1/ingest/documents/${documentId}/analysis`, {

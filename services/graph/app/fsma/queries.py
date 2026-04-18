@@ -190,27 +190,54 @@ async def _tag_event_risk_flag(
     client: Neo4jClient,
     event_id: str,
     risk_flag: str,
+    *,
+    tenant_id: str,
 ) -> bool:
     """
     Tag a TraceEvent node with a risk_flag property.
+
+    Tenant-scoped: the MATCH clause restricts mutation to the caller's
+    tenant, preventing cross-tenant writes for colliding ``event_id``
+    values. The composite uniqueness constraint on TraceEvent is
+    ``(event_id, tenant_id)`` meaning two tenants can legitimately
+    share an ``event_id``; requiring ``tenant_id`` in the MATCH ensures
+    we only mutate the caller's row.
 
     Args:
         client: Neo4j client
         event_id: The event to tag
         risk_flag: The risk flag value (e.g., "BROKEN_CHAIN", "TIME_ARROW")
+        tenant_id: Tenant UUID (required; keyword-only). A TypeError is
+            raised if omitted. Pass the tenant context the caller is
+            authenticated against -- never a user-controllable value.
 
     Returns:
-        True if tag was set, False otherwise
+        True if tag was set on a TraceEvent owned by ``tenant_id``,
+        False if no matching event was found (either because the event
+        does not exist OR it belongs to a different tenant).
     """
+    if not tenant_id:
+        # Fail closed -- an empty/None tenant_id would degrade to a
+        # cross-tenant MATCH. Raise so callers notice at dev time.
+        raise ValueError(
+            "_tag_event_risk_flag requires a non-empty tenant_id to prevent "
+            "cross-tenant writes"
+        )
+
     query = """
-    MATCH (e:TraceEvent {event_id: $event_id})
+    MATCH (e:TraceEvent {event_id: $event_id, tenant_id: $tenant_id})
     SET e.risk_flag = $risk_flag
     RETURN e.event_id as tagged_id
     """
 
     try:
         async with client.session() as session:
-            result = await session.run(query, event_id=event_id, risk_flag=risk_flag)
+            result = await session.run(
+                query,
+                event_id=event_id,
+                risk_flag=risk_flag,
+                tenant_id=tenant_id,
+            )
             record = await result.single()
 
             if record:
@@ -218,6 +245,7 @@ async def _tag_event_risk_flag(
                     "event_risk_flag_tagged",
                     event_id=event_id,
                     risk_flag=risk_flag,
+                    tenant_id=tenant_id,
                 )
                 return True
             return False
@@ -226,6 +254,7 @@ async def _tag_event_risk_flag(
             "event_risk_flag_tag_failed",
             event_id=event_id,
             risk_flag=risk_flag,
+            tenant_id=tenant_id,
             error=str(e),
         )
         return False

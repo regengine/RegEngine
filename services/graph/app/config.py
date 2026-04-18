@@ -30,6 +30,13 @@ class Settings(BaseServiceSettings):
     # bolt+ssc:// enables TLS with self-signed cert acceptance (dev only).
     # bolt:// disables TLS (set NEO4J_URI=bolt://neo4j:7687 for local dev).
     neo4j_encrypted: bool = Field(default=True, alias="NEO4J_ENCRYPTED")
+    # Per-tenant database isolation requires Neo4j Enterprise (Community
+    # supports only a single user database). When true, ``Neo4jClient`` honors
+    # the ``database=`` constructor argument. When false (Community / default),
+    # the client is pinned to the global database and tenant isolation is
+    # property-based (``tenant_id`` predicates on every MATCH/MERGE). See
+    # issue #1229.
+    neo4j_enterprise: bool = Field(default=False, alias="NEO4J_ENTERPRISE")
 
     # Security & Compliance Patterns
     redaction_patterns: list[str] = Field(
