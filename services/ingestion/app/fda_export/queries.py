@@ -7,12 +7,32 @@ Extracted from fda_export_router.py — pure structural refactor.
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import date as _date, datetime, time as _time, timedelta, timezone
 from typing import Any, Optional
 
 from sqlalchemy import text
 
 logger = logging.getLogger("fda-export")
+
+
+def _end_bound_utc(end_date: str) -> str:
+    """Convert a user-supplied ``YYYY-MM-DD`` end-date to a strict
+    UTC-based upper bound for the next day at 00:00.
+
+    Callers use the returned value in a strict ``<`` comparison, which
+    captures every event with ``event_timestamp`` on ``end_date`` in
+    any timezone and avoids the server-timezone-dependent boundary
+    drift from the old ``end_date + "T23:59:59"`` string concatenation
+    (issue #1224). If the supplied value is not ISO ``YYYY-MM-DD`` we
+    fall back to the raw string so upstream validation remains the
+    authoritative source of 4xx responses.
+    """
+    try:
+        parsed = _date.fromisoformat(end_date)
+    except (TypeError, ValueError):
+        return end_date
+    bound = datetime.combine(parsed + timedelta(days=1), _time(0, 0, 0), tzinfo=timezone.utc)
+    return bound.isoformat()
 
 
 def fetch_export_log_history(
@@ -97,8 +117,11 @@ def build_recall_where_clause(
         params["start"] = start_date
 
     if end_date:
-        conditions.append("e.event_timestamp <= :end")
-        params["end"] = end_date + "T23:59:59"
+        # Use a strict ``<`` upper bound at the *next day* boundary in
+        # UTC so we capture every event whose timestamp falls on
+        # ``end_date`` regardless of server timezone (issue #1224).
+        conditions.append("e.event_timestamp < :end")
+        params["end"] = _end_bound_utc(end_date)
 
     where_clause = " AND ".join(conditions)
     return where_clause, params
@@ -308,8 +331,10 @@ def build_v2_where_clause(
         params["start"] = start_date
 
     if end_date:
-        conditions.append("e.event_timestamp <= :end")
-        params["end"] = end_date + "T23:59:59"
+        # Strict next-day UTC bound, see :func:`_end_bound_utc`
+        # (issue #1224).
+        conditions.append("e.event_timestamp < :end")
+        params["end"] = _end_bound_utc(end_date)
 
     where_clause = " AND ".join(conditions)
     return where_clause, params
