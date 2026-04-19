@@ -46,10 +46,70 @@ class IdentityResolutionService:
 
     All methods are tenant-scoped. The caller must supply ``tenant_id``
     explicitly; this service never infers it.
+
+    #1230 tenant lock: when constructed with ``principal_tenant_id``,
+    every write method verifies that the caller-supplied ``tenant_id``
+    matches the principal's tenant. This blocks cross-tenant writes
+    even if a router bug — e.g. the pattern seen in #1106 where an
+    ``X-Tenant-ID`` header is forwarded without cross-check — lets
+    a mismatched tenant_id reach the service. Callers that legitimately
+    need cross-tenant access (admin tooling, platform jobs) construct
+    the service without ``principal_tenant_id`` OR set
+    ``allow_cross_tenant=True`` on construction.
     """
 
-    def __init__(self, session: Session):
+    def __init__(
+        self,
+        session: Session,
+        *,
+        principal_tenant_id: Optional[str] = None,
+        allow_cross_tenant: bool = False,
+    ):
         self.session = session
+        # Keyword-only to prevent positional-arg drift from accidentally
+        # disabling the lock in a new call site.
+        self._principal_tenant_id = principal_tenant_id
+        self._allow_cross_tenant = allow_cross_tenant
+
+    # ------------------------------------------------------------------
+    # Tenant-access guard (#1230)
+    # ------------------------------------------------------------------
+
+    def _verify_tenant_access(self, tenant_id: str) -> None:
+        """Raise PermissionError if the caller-supplied ``tenant_id``
+        doesn't match the principal the service was constructed with.
+
+        No-op when:
+        - ``principal_tenant_id`` is None (backwards-compatible path
+          for background jobs / ingestion consumers that run with a
+          service account not bound to a tenant).
+        - ``allow_cross_tenant=True`` (admin tooling explicitly
+          opting out of the lock).
+
+        The service cannot enforce the "is this user entitled to this
+        tenant" question by itself — that's the router's job. But it
+        CAN enforce that whatever tenant the router handed in matches
+        the principal's tenant. That's defense-in-depth against
+        router-level bugs like #1106.
+        """
+        if self._allow_cross_tenant:
+            return
+        if self._principal_tenant_id is None:
+            return
+        if not tenant_id:
+            raise PermissionError(
+                "identity_resolution: tenant_id is required"
+            )
+        if tenant_id != self._principal_tenant_id:
+            logger.warning(
+                "identity_tenant_mismatch principal=%s requested=%s",
+                self._principal_tenant_id, tenant_id,
+            )
+            raise PermissionError(
+                "identity_resolution: tenant_id does not match the "
+                "authenticated principal's tenant. Cross-tenant writes "
+                "require an explicit platform-admin grant; see #1230."
+            )
 
     # ------------------------------------------------------------------
     # 1. Register Entity
@@ -80,6 +140,9 @@ class IdentityResolutionService:
 
         Returns the newly created entity as a dict.
         """
+        # #1230: verify the tenant before any side effects
+        self._verify_tenant_access(tenant_id)
+
         if entity_type not in VALID_ENTITY_TYPES:
             raise ValueError(f"Invalid entity_type '{entity_type}'. Must be one of {sorted(VALID_ENTITY_TYPES)}")
 
@@ -203,6 +266,9 @@ class IdentityResolutionService:
         The (entity_id, alias_type, alias_value) combination must be unique.
         Returns the created alias record.
         """
+        # #1230: verify the tenant before any side effects
+        self._verify_tenant_access(tenant_id)
+
         if alias_type not in VALID_ALIAS_TYPES:
             raise ValueError(f"Invalid alias_type '{alias_type}'. Must be one of {sorted(VALID_ALIAS_TYPES)}")
 
@@ -433,6 +499,9 @@ class IdentityResolutionService:
 
         Returns the merge history record.
         """
+        # #1230: verify the tenant before any side effects
+        self._verify_tenant_access(tenant_id)
+
         if source_entity_id == target_entity_id:
             raise ValueError("Cannot merge an entity with itself")
 
@@ -572,6 +641,9 @@ class IdentityResolutionService:
         reconstructed; those remain on the target. A full undo would
         require an alias snapshot table (future enhancement).
         """
+        # #1230: verify the tenant before any side effects
+        self._verify_tenant_access(tenant_id)
+
         merge_row = self.session.execute(
             text("""
                 SELECT merge_id, source_entity_ids, target_entity_id,
@@ -715,6 +787,9 @@ class IdentityResolutionService:
         Idempotent: if the pair already exists (in either direction) and
         is still pending, the existing record is returned unchanged.
         """
+        # #1230: verify the tenant before any side effects
+        self._verify_tenant_access(tenant_id)
+
         valid_match_types = {"exact", "likely", "ambiguous", "unresolved"}
         if match_type not in valid_match_types:
             raise ValueError(f"Invalid match_type '{match_type}'. Must be one of {sorted(valid_match_types)}")
@@ -816,6 +891,9 @@ class IdentityResolutionService:
 
         Returns the updated review record (and merge result if applicable).
         """
+        # #1230: verify the tenant before any side effects
+        self._verify_tenant_access(tenant_id)
+
         if resolution not in VALID_REVIEW_STATUSES:
             raise ValueError(
                 f"Invalid resolution '{resolution}'. Must be one of {sorted(VALID_REVIEW_STATUSES)}"
@@ -1002,6 +1080,11 @@ class IdentityResolutionService:
                 "firms": [...],
             }
         """
+        # #1230: verify the tenant before any side effects. This is the
+        # hot path — every ingested canonical event goes through here —
+        # so the guard has to stay O(1).
+        self._verify_tenant_access(tenant_id)
+
         results: Dict[str, List[Dict[str, Any]]] = {
             "facilities": [],
             "products": [],
