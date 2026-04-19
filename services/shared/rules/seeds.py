@@ -247,6 +247,91 @@ FSMA_RULE_SEEDS: List[Dict[str, Any]] = [
         "failure_reason_template": "Cooling event missing {field_name} \u2014 temperature reading required for cold-chain audit ({citation})",
         "remediation_suggestion": "Record the temperature achieved during cooling in \u00b0F or \u00b0C",
     },
+    # #1364 — presence alone is a checkbox. Validate that the recorded
+    # temperature actually sits in the cold-chain window. FDA guidance for
+    # FTL-covered leafy greens / cut melons / fresh-cut produce and the
+    # broader HACCP cold-chain doctrine use 41\u00b0F (5\u00b0C) as the hard
+    # ceiling: above that you are in the microbial danger zone. The
+    # practical floor is 32\u00b0F (0\u00b0C) \u2014 below it is freezer territory
+    # and the operator should be filing a freezing record instead of a
+    # cooling record. The numeric_range evaluator normalizes to \u00b0C before
+    # comparing, so °F readings (the US default) pass through unchanged.
+    {
+        "title": "Cooling: Temperature Within Cold-Chain Window",
+        "description": (
+            "Cooling events must record a temperature in the cold-chain window "
+            "(approximately 0\u20135\u00b0C / 32\u201341\u00b0F). Presence alone is a checkbox; "
+            "an out-of-range reading indicates the lot was NOT brought into a "
+            "safe thermal regime and is a compliance failure under 21 CFR "
+            "\u00a71.1330(b)(5)."
+        ),
+        "severity": "critical",
+        "category": "kde_presence",
+        "applicability_conditions": {"cte_types": ["cooling"], "ftl_scope": ["ALL"]},
+        "citation_reference": "21 CFR \u00a71.1330(b)(5)",
+        "evaluation_logic": {
+            "type": "numeric_range",
+            "params": {
+                "source": "temperature",
+                "root": "kdes",
+                # 0\u00b0C = 32\u00b0F floor (anything colder is freezing, not cooling).
+                "min": 0.0,
+                # 5\u00b0C = 41\u00b0F ceiling \u2014 FDA cold-chain danger-zone threshold.
+                "max": 5.0,
+                "unit": "C",
+            },
+        },
+        "failure_reason_template": (
+            "Cooling temperature {value} {unit} is outside the cold-chain "
+            "window [{min}, {max}] {unit} \u2014 lot was not brought into a safe "
+            "thermal regime ({citation})"
+        ),
+        "remediation_suggestion": (
+            "Re-cool the lot to between 0\u00b0C (32\u00b0F) and 5\u00b0C (41\u00b0F) before "
+            "releasing for downstream handling. If the reading is correct but "
+            "outside the window, document the deviation and any corrective "
+            "action taken."
+        ),
+    },
+    # #1364 \u2014 cooling_duration is the other half of a cold-chain record:
+    # a cold reading that took 12h to achieve tells a very different story
+    # from one achieved in 30min. 21 CFR \u00a71.1330(b)(5) requires the
+    # "temperature-time combination" for each cooling step; duration alone
+    # must be on record so an auditor can reconstruct the combination.
+    {
+        "title": "Cooling: Duration Required",
+        "description": (
+            "Cooling events must record the duration of the cooling step "
+            "(time from start to reaching target temperature). Temperature "
+            "alone is insufficient \u2014 the temperature-time combination is "
+            "what FDA inspectors reconstruct during an outbreak trace."
+        ),
+        "severity": "critical",
+        "category": "kde_presence",
+        "applicability_conditions": {"cte_types": ["cooling"], "ftl_scope": ["ALL"]},
+        "citation_reference": "21 CFR \u00a71.1330(b)(5)",
+        "evaluation_logic": {
+            "type": "multi_field_presence",
+            "field": "kdes.cooling_duration",
+            "params": {
+                "fields": [
+                    "kdes.cooling_duration",
+                    "kdes.cooling_duration_hours",
+                    "kdes.cooling_duration_minutes",
+                    "kdes.cooling_start_time",  # start + event_time = duration
+                ]
+            },
+        },
+        "failure_reason_template": (
+            "Cooling event missing duration \u2014 the temperature-time combination "
+            "cannot be reconstructed without it ({citation})"
+        ),
+        "remediation_suggestion": (
+            "Record either the cooling duration (hours or minutes) or the "
+            "cooling start time so the duration can be derived from the event "
+            "timestamp."
+        ),
+    },
     {
         "title": "Initial Packing: Packing Location Required",
         "description": "Initial-packing events must identify the location description of the packing facility",
