@@ -502,36 +502,95 @@ class IdentityResolutionService:
         performed_by: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
-        Merge source entity into target entity.
+        Merge a single source entity into a target entity.
 
-        - All aliases from the source are re-pointed to the target.
-        - The source entity is deactivated (is_active = FALSE).
-        - A merge_history record is created for auditability.
-        - Any pending review-queue items involving the source are closed.
+        Thin wrapper over :meth:`merge_entities_bulk` that preserves the
+        original 1:1 API. Existing callers continue to work unchanged.
+        For N-way merges (the resolver's "three duplicate 'Organic Apples'
+        SKUs — merge all into the canonical one" case) use
+        :meth:`merge_entities_bulk` directly — it writes a single audit
+        row with all source IDs, which :meth:`split_entity` can then
+        reverse atomically.
+        """
+        # #1230: verify the tenant before any side effects. The call is
+        # redundant with the one in ``merge_entities_bulk``, but keeping
+        # it here preserves the source-level static guard that every
+        # public write method carries its own tenant check.
+        self._verify_tenant_access(tenant_id)
+        return self.merge_entities_bulk(
+            tenant_id=tenant_id,
+            source_entity_ids=[source_entity_id],
+            target_entity_id=target_entity_id,
+            reason=reason,
+            performed_by=performed_by,
+        )
 
-        Returns the merge history record.
+    def merge_entities_bulk(
+        self,
+        tenant_id: str,
+        source_entity_ids: List[str],
+        target_entity_id: str,
+        *,
+        reason: Optional[str] = None,
+        performed_by: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        Merge N source entities into a single target entity atomically.
+
+        - Every alias on any source is re-pointed to the target (duplicates
+          silently dropped).
+        - All source entities are deactivated (is_active = FALSE).
+        - **Exactly one** ``entity_merge_history`` row is written with
+          ``source_entity_ids = ARRAY[source_1, source_2, ...]::uuid[]``,
+          which :meth:`split_entity` can reverse in one call.
+        - Pending review-queue items touching any source are auto-resolved.
+
+        Issue #1195: the underlying schema (V047) stored
+        ``source_entity_ids`` as ``UUID[]``, but the public API forced
+        one-at-a-time merges. A 3-way merge therefore wrote 3 history
+        rows, 2 of which referenced entities that were already inactive
+        by the time they ran — making ``split_entity`` unable to cleanly
+        reverse the merge. This method fixes that by writing one history
+        row per logical merge operation.
+
+        Validation (all raise ``ValueError``):
+        - ``source_entity_ids`` must be non-empty.
+        - No duplicates within ``source_entity_ids``.
+        - ``target_entity_id`` must not appear in ``source_entity_ids``.
+        - Every source and the target must exist for this tenant.
         """
         # #1230: verify the tenant before any side effects
         self._verify_tenant_access(tenant_id)
 
-        if source_entity_id == target_entity_id:
+        if not source_entity_ids:
+            raise ValueError("source_entity_ids must not be empty")
+
+        if len(set(source_entity_ids)) != len(source_entity_ids):
+            raise ValueError("source_entity_ids must not contain duplicates")
+
+        if target_entity_id in source_entity_ids:
             raise ValueError("Cannot merge an entity with itself")
 
-        self._require_entity(tenant_id, source_entity_id)
+        # Validate every participant before any side effects — partial
+        # failures here would leave the DB in a half-merged state that
+        # split_entity can't cleanly reverse.
+        for source_entity_id in source_entity_ids:
+            self._require_entity(tenant_id, source_entity_id)
         self._require_entity(tenant_id, target_entity_id)
 
         merge_id = str(uuid4())
         now = datetime.now(timezone.utc)
 
-        # Re-point aliases from source to target (skip duplicates)
+        # Re-point aliases from any source to the target (skip duplicates).
+        # ANY(:source_entity_ids) matches each source in one pass.
         self.session.execute(
             text("""
                 UPDATE fsma.entity_aliases
                 SET entity_id = :target_entity_id
                 WHERE tenant_id = :tenant_id
-                  AND entity_id = :source_entity_id
-                  AND (entity_id, alias_type, alias_value) NOT IN (
-                      SELECT entity_id, alias_type, alias_value
+                  AND entity_id = ANY(:source_entity_ids)
+                  AND (alias_type, alias_value) NOT IN (
+                      SELECT alias_type, alias_value
                       FROM fsma.entity_aliases
                       WHERE tenant_id = :tenant_id
                         AND entity_id = :target_entity_id
@@ -539,31 +598,39 @@ class IdentityResolutionService:
             """),
             {
                 "tenant_id": tenant_id,
-                "source_entity_id": source_entity_id,
+                "source_entity_ids": source_entity_ids,
                 "target_entity_id": target_entity_id,
             },
         )
 
-        # Remove any remaining aliases on the source (duplicates that couldn't move)
+        # Remove any remaining aliases on the sources (duplicates that
+        # couldn't move because the target already has that alias).
         self.session.execute(
             text("""
                 DELETE FROM fsma.entity_aliases
-                WHERE tenant_id = :tenant_id AND entity_id = :source_entity_id
+                WHERE tenant_id = :tenant_id
+                  AND entity_id = ANY(:source_entity_ids)
             """),
-            {"tenant_id": tenant_id, "source_entity_id": source_entity_id},
+            {"tenant_id": tenant_id, "source_entity_ids": source_entity_ids},
         )
 
-        # Deactivate source entity
+        # Deactivate all source entities in one statement.
         self.session.execute(
             text("""
                 UPDATE fsma.canonical_entities
                 SET is_active = FALSE, updated_at = :now
-                WHERE tenant_id = :tenant_id AND entity_id = :source_entity_id
+                WHERE tenant_id = :tenant_id
+                  AND entity_id = ANY(:source_entity_ids)
             """),
-            {"tenant_id": tenant_id, "source_entity_id": source_entity_id, "now": now},
+            {
+                "tenant_id": tenant_id,
+                "source_entity_ids": source_entity_ids,
+                "now": now,
+            },
         )
 
-        # Record merge history
+        # Record a SINGLE merge history row with all sources — critical
+        # for split_entity to reverse the operation atomically.
         self.session.execute(
             text("""
                 INSERT INTO fsma.entity_merge_history (
@@ -571,7 +638,8 @@ class IdentityResolutionService:
                     target_entity_id, reason, performed_by, performed_at,
                     is_reversed
                 ) VALUES (
-                    :merge_id, :tenant_id, 'merge', ARRAY[:source_entity_id]::uuid[],
+                    :merge_id, :tenant_id, 'merge',
+                    CAST(:source_entity_ids AS uuid[]),
                     :target_entity_id, :reason, :performed_by, :now,
                     FALSE
                 )
@@ -579,7 +647,7 @@ class IdentityResolutionService:
             {
                 "merge_id": merge_id,
                 "tenant_id": tenant_id,
-                "source_entity_id": source_entity_id,
+                "source_entity_ids": source_entity_ids,
                 "target_entity_id": target_entity_id,
                 "reason": reason,
                 "performed_by": performed_by,
@@ -587,7 +655,7 @@ class IdentityResolutionService:
             },
         )
 
-        # Close any pending review-queue items involving the merged source
+        # Close any pending review-queue items touching any merged source.
         self.session.execute(
             text("""
                 UPDATE fsma.identity_review_queue
@@ -597,11 +665,14 @@ class IdentityResolutionService:
                     resolution_notes = 'Auto-resolved by merge operation'
                 WHERE tenant_id = :tenant_id
                   AND status = 'pending'
-                  AND (entity_a_id = :source_entity_id OR entity_b_id = :source_entity_id)
+                  AND (
+                      entity_a_id = ANY(:source_entity_ids)
+                      OR entity_b_id = ANY(:source_entity_ids)
+                  )
             """),
             {
                 "tenant_id": tenant_id,
-                "source_entity_id": source_entity_id,
+                "source_entity_ids": source_entity_ids,
                 "performed_by": performed_by,
                 "now": now,
             },
@@ -611,7 +682,8 @@ class IdentityResolutionService:
             "entities_merged",
             extra={
                 "merge_id": merge_id,
-                "source_entity_id": source_entity_id,
+                "source_entity_ids": source_entity_ids,
+                "source_count": len(source_entity_ids),
                 "target_entity_id": target_entity_id,
                 "tenant_id": tenant_id,
             },
@@ -620,7 +692,7 @@ class IdentityResolutionService:
         return {
             "merge_id": merge_id,
             "action": "merge",
-            "source_entity_ids": [source_entity_id],
+            "source_entity_ids": list(source_entity_ids),
             "target_entity_id": target_entity_id,
             "reason": reason,
             "performed_by": performed_by,
