@@ -146,11 +146,21 @@ async def create_checkout(
                 authenticated_tenant_id, str(exc),
             )
 
+    # #1186: validate redirect URLs against the allowlist BEFORE handing
+    # them to Stripe. An unvalidated ``success_url`` lets an attacker
+    # chain Stripe-branded trust into an arbitrary-host redirect.
+    safe_success_url = _helpers_mod._validate_redirect_url(
+        request.success_url, field="success_url"
+    )
+    safe_cancel_url = _helpers_mod._validate_redirect_url(
+        request.cancel_url, field="cancel_url"
+    )
+
     checkout_kwargs: dict[str, Any] = {
         "mode": "subscription",
         "line_items": [{"price": price_id, "quantity": 1}],
-        "success_url": request.success_url,
-        "cancel_url": request.cancel_url,
+        "success_url": safe_success_url,
+        "cancel_url": safe_cancel_url,
         "allow_promotion_codes": True,
         "metadata": metadata,
         "subscription_data": {"metadata": metadata},
@@ -319,7 +329,20 @@ async def create_portal_session_for_tenant(
     _helpers_mod._configure_stripe()
 
     tenant_id = _helpers_mod._resolve_tenant_context(request.tenant_id, x_tenant_id, principal)
-    return_url = request.return_url or os.getenv("STRIPE_PORTAL_RETURN_URL", DEFAULT_PORTAL_RETURN_URL)
+
+    # #1186: validate the client-supplied return_url against the allowlist.
+    # When the client omits return_url, fall through to the server-configured
+    # default (still validated so misconfigured env vars fail loudly instead
+    # of shipping a stray open redirect).
+    if request.return_url:
+        return_url = _helpers_mod._validate_redirect_url(
+            request.return_url, field="return_url"
+        )
+    else:
+        server_default = os.getenv("STRIPE_PORTAL_RETURN_URL", DEFAULT_PORTAL_RETURN_URL)
+        return_url = _helpers_mod._validate_redirect_url(
+            server_default, field="return_url"
+        )
 
     try:
         customer_id = _customers_mod._ensure_customer_mapping(
@@ -499,7 +522,14 @@ async def create_portal_session_legacy(
     """Create Stripe customer portal session for self-service billing management."""
     _helpers_mod._configure_stripe()
 
-    return_url = os.getenv("STRIPE_PORTAL_RETURN_URL", DEFAULT_PORTAL_RETURN_URL)
+    # #1186: validate the server-configured return_url. This endpoint
+    # doesn't accept a client override, but the env-var value is still
+    # run through the allowlist so a misconfigured STRIPE_PORTAL_RETURN_URL
+    # fails at request time rather than silently redirecting.
+    server_default = os.getenv("STRIPE_PORTAL_RETURN_URL", DEFAULT_PORTAL_RETURN_URL)
+    return_url = _helpers_mod._validate_redirect_url(
+        server_default, field="return_url"
+    )
 
     try:
         customer_id = _customers_mod._ensure_customer_mapping(
