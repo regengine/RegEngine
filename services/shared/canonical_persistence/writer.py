@@ -20,6 +20,8 @@ from shared.canonical_event import (
     TraceabilityEvent,
     IngestionRun,
     IngestionRunStatus,
+    RawPayloadTooLargeError,
+    _raw_payload_max_bytes,
 )
 from shared.cte_persistence import compute_chain_hash
 from shared.canonical_persistence.models import CanonicalStoreResult
@@ -901,7 +903,21 @@ class CanonicalEventStore:
         return (str(row[0]), row[1], row[2])
 
     def _event_to_params(self, event: TraceabilityEvent) -> Dict[str, Any]:
-        """Convert a TraceabilityEvent to SQL parameter dict."""
+        """Convert a TraceabilityEvent to SQL parameter dict.
+
+        #1290: enforce the raw_payload size cap HERE as defense-in-depth.
+        ``prepare_for_persistence`` already checks the size, but that
+        only runs when ``sha256_hash`` is unset — a developer who
+        mutates ``raw_payload`` after prepping (e.g. in tests or a
+        custom ingestion pipeline) would otherwise slip past the check.
+        Serializing once and measuring the bytes we're about to write
+        makes the check authoritative.
+        """
+        raw_payload_serialized = json.dumps(event.raw_payload, default=str)
+        max_bytes = _raw_payload_max_bytes()
+        raw_size = len(raw_payload_serialized.encode("utf-8"))
+        if raw_size > max_bytes:
+            raise RawPayloadTooLargeError(raw_size, max_bytes)
         return {
             "event_id": str(event.event_id),
             "tenant_id": str(event.tenant_id),
@@ -923,7 +939,7 @@ class CanonicalEventStore:
             "to_facility_reference": event.to_facility_reference,
             "transport_reference": event.transport_reference,
             "kdes": json.dumps(event.kdes, default=str),
-            "raw_payload": json.dumps(event.raw_payload, default=str),
+            "raw_payload": raw_payload_serialized,
             "normalized_payload": json.dumps(event.normalized_payload, default=str),
             "provenance_metadata": json.dumps(event.provenance_metadata.to_dict(), default=str),
             "confidence_score": event.confidence_score,

@@ -252,6 +252,30 @@ async def _process_stripe_webhook(
         logger.warning("stripe_webhook_signature_invalid: %s", exc)
         raise HTTPException(status_code=401, detail="Invalid Stripe signature") from exc
 
+    # #1076: Stripe retries any webhook that doesn't ack within a few seconds
+    # (and for up to 3 days on 5xx/timeouts), so the same real-world event
+    # can arrive multiple times. Without dedup this would re-provision
+    # tenants in ``checkout.session.completed``, re-emit ``payment_completed``
+    # funnel events on every ``invoice.paid`` retry, and re-flip subscription
+    # status on retries of ``customer.subscription.updated``.
+    #
+    # The gate runs AFTER signature verification: we don't want to consume
+    # dedup slots for forged signatures (which would let an attacker burn
+    # event IDs), but we need to dedup BEFORE any handler side effect.
+    event_id = event.get("id")
+    event_type = event.get("type")
+    if not _state_mod._mark_event_seen(event_id or ""):
+        logger.info(
+            "stripe_webhook_duplicate_ignored event_id=%s event_type=%s",
+            event_id,
+            event_type,
+        )
+        return {
+            "received": True,
+            "event_type": event_type,
+            "duplicate": True,
+        }
+
     await _handle_stripe_event(event)
-    logger.info("stripe_webhook_processed", event_type=event.get("type"))
-    return {"received": True, "event_type": event.get("type")}
+    logger.info("stripe_webhook_processed", event_type=event_type)
+    return {"received": True, "event_type": event_type}
