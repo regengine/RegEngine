@@ -20,8 +20,11 @@ from pydantic import BaseModel, EmailStr
 import redis.asyncio as aioredis
 
 from shared.blocked_email_domains import is_personal_email, extract_domain
+from shared.env import is_production
 from shared.pii import mask_email
 from shared.rate_limit import limiter
+
+from app.auth_utils import SESSION_ISSUER, TOOL_ACCESS_AUDIENCE
 
 logger = structlog.get_logger("tool_verification")
 
@@ -33,10 +36,41 @@ router = APIRouter(prefix="/api/v1/tools", tags=["tool-verification"])
 RESEND_API_KEY = os.environ.get("RESEND_API_KEY")
 VERIFICATION_CODE_TTL = 600  # 10 minutes
 MAX_VERIFICATION_ATTEMPTS = 3
-TOOL_ACCESS_SECRET = os.environ.get(
-    "TOOL_ACCESS_SECRET",
-    os.environ.get("JWT_SIGNING_KEY", os.environ.get("AUTH_SECRET_KEY", "")),
-)
+
+# ---------------------------------------------------------------------------
+# Tool-access JWT signing secret — MUST be separate from the session key (#1060)
+#
+# Prior revisions fell back through JWT_SIGNING_KEY → AUTH_SECRET_KEY, so a
+# tool-access token signed during lead capture shared a signing secret with
+# the admin session token. That made the two token types forgeable into each
+# other: any future endpoint trusting a valid-signature tool_access cookie
+# could be handed a session JWT and vice-versa.
+#
+# Rules:
+#   • Production: TOOL_ACCESS_SECRET must be set explicitly — no fallbacks.
+#   • Non-production: if unset, we derive a deterministic-per-process random
+#     secret. Dev tokens won't survive restarts, but they're never trusted by
+#     any production-grade consumer. We still refuse to re-use AUTH_SECRET_KEY.
+# ---------------------------------------------------------------------------
+_tool_access_secret_env = os.environ.get("TOOL_ACCESS_SECRET", "").strip()
+if not _tool_access_secret_env:
+    if is_production():
+        raise RuntimeError(
+            "TOOL_ACCESS_SECRET must be set in production. "
+            "This key signs the tool-access cookie for free compliance tools "
+            "and MUST be distinct from AUTH_SECRET_KEY / JWT_SIGNING_KEY "
+            "(see issue #1060). "
+            "Generate one with: python -c 'import secrets; print(secrets.token_urlsafe(64))'"
+        )
+    _tool_access_secret_env = secrets.token_urlsafe(48)
+    logger.warning(
+        "tool_access_secret_ephemeral",
+        message=(
+            "TOOL_ACCESS_SECRET not set — using ephemeral dev key. "
+            "Tool-access cookies will NOT survive process restarts."
+        ),
+    )
+TOOL_ACCESS_SECRET = _tool_access_secret_env
 
 # ---------------------------------------------------------------------------
 # Redis — reuse the pattern from bulk_upload/session_store.py
@@ -226,7 +260,8 @@ async def confirm_code(payload: ConfirmCodeRequest, request: Request):
     except Exception as exc:
         logger.error("lead_save_failed", email=mask_email(email), error=str(exc))
 
-    # Sign a JWT for the cookie
+    # Sign a JWT for the cookie — aud/iss pin this to the tool-access domain
+    # so it cannot be swapped in as a session token (#1060).
     import jwt
 
     token = jwt.encode(
@@ -235,6 +270,8 @@ async def confirm_code(payload: ConfirmCodeRequest, request: Request):
             "domain": domain,
             "verified_at": datetime.now(timezone.utc).isoformat(),
             "type": "tool_access",
+            "aud": TOOL_ACCESS_AUDIENCE,
+            "iss": SESSION_ISSUER,
         },
         TOOL_ACCESS_SECRET,
         algorithm="HS256",
@@ -242,6 +279,39 @@ async def confirm_code(payload: ConfirmCodeRequest, request: Request):
 
     logger.info("tool_lead_verified", email=mask_email(email), domain=domain, tool=payload.tool_name)
     return ConfirmCodeResponse(status="verified", token=token)
+
+
+def decode_tool_access_token(token: str) -> dict:
+    """Verify a tool-access cookie JWT.
+
+    Signed with the dedicated ``TOOL_ACCESS_SECRET`` and required to carry
+    ``aud=TOOL_ACCESS_AUDIENCE`` — a session JWT cannot pass this check
+    even if the attacker controls the signing key, because its aud is
+    ``regengine-api`` (see #1060).
+
+    During the transitional rollout legacy tokens (minted before aud was
+    added) have no ``aud`` claim; we accept those so existing cookies keep
+    working until they expire. A token with the *wrong* aud — e.g. an
+    attacker pasting a session token — raises ``InvalidAudienceError``.
+    """
+    import jwt as _jwt
+
+    try:
+        return _jwt.decode(
+            token,
+            TOOL_ACCESS_SECRET,
+            algorithms=["HS256"],
+            audience=TOOL_ACCESS_AUDIENCE,
+            issuer=SESSION_ISSUER,
+        )
+    except _jwt.exceptions.MissingRequiredClaimError:
+        # Legacy token predates aud/iss — verify signature only.
+        return _jwt.decode(
+            token,
+            TOOL_ACCESS_SECRET,
+            algorithms=["HS256"],
+            options={"verify_aud": False, "verify_iss": False},
+        )
 
 
 # ---------------------------------------------------------------------------
