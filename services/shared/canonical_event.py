@@ -24,12 +24,103 @@ Usage:
 
 import hashlib
 import json
+import logging
+import os
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field, field_validator
+
+logger = logging.getLogger("canonical-event")
+
+# ---------------------------------------------------------------------------
+# Raw-payload size limits (#1290)
+# ---------------------------------------------------------------------------
+#
+# ``raw_payload`` preserves the supplier record verbatim for evidentiary
+# chain. But "verbatim" must not mean "unbounded": a 10 MB supplier JSON
+# would block the persist transaction, bloat backups, and — combined
+# with any downstream template that renders ``raw_payload`` fields
+# without escaping — open a stored-XSS vector.
+#
+# Two knobs:
+#
+# - ``RAW_PAYLOAD_DEFAULT_MAX_BYTES`` (256 KiB): the default soft cap.
+#   Real FSMA 204 records are a few KB each — a 256 KiB envelope is
+#   already 10× the 95th-percentile observed record in staging. Can be
+#   overridden per deployment via ``REGENGINE_RAW_PAYLOAD_MAX_BYTES``
+#   (e.g. for a tenant with unusually verbose EPCIS extensions).
+#
+# - ``RAW_PAYLOAD_HARD_CEILING_BYTES`` (1 MiB): the absolute maximum.
+#   Environment overrides larger than this are clamped. Meant as a
+#   backstop against an operator accidentally setting the env var to
+#   a value large enough to re-open the DoS/resource-exhaustion risk.
+#
+# Oversized payloads raise ``ValueError`` at ``prepare_for_persistence``
+# time. We deliberately do NOT silently truncate — the whole point of
+# ``raw_payload`` is that it's the unmodified source-of-truth; a
+# truncated copy is worse than no copy (audit would think it has
+# the original but doesn't).
+
+RAW_PAYLOAD_DEFAULT_MAX_BYTES = 256 * 1024          # 256 KiB
+RAW_PAYLOAD_HARD_CEILING_BYTES = 1024 * 1024        # 1 MiB
+
+
+def _raw_payload_max_bytes() -> int:
+    """Resolve the effective raw_payload size cap.
+
+    Reads ``REGENGINE_RAW_PAYLOAD_MAX_BYTES`` once per call (so tests and
+    hot-reload operators can adjust at runtime). Invalid values fall back
+    to the default with a warning; operator overrides above the hard
+    ceiling are clamped, also with a warning — we'd rather log noise
+    than let a typo (e.g. ``100000000`` meant as ``100_000`` bytes) open
+    a DoS vector.
+    """
+    raw = os.environ.get("REGENGINE_RAW_PAYLOAD_MAX_BYTES")
+    if raw is None:
+        return RAW_PAYLOAD_DEFAULT_MAX_BYTES
+    try:
+        value = int(raw)
+    except ValueError:
+        logger.warning(
+            "raw_payload_max_bytes_invalid env=%r; falling back to default %d",
+            raw, RAW_PAYLOAD_DEFAULT_MAX_BYTES,
+        )
+        return RAW_PAYLOAD_DEFAULT_MAX_BYTES
+    if value <= 0:
+        logger.warning(
+            "raw_payload_max_bytes_non_positive env=%r; falling back to default %d",
+            raw, RAW_PAYLOAD_DEFAULT_MAX_BYTES,
+        )
+        return RAW_PAYLOAD_DEFAULT_MAX_BYTES
+    if value > RAW_PAYLOAD_HARD_CEILING_BYTES:
+        logger.warning(
+            "raw_payload_max_bytes_clamped env=%d ceiling=%d",
+            value, RAW_PAYLOAD_HARD_CEILING_BYTES,
+        )
+        return RAW_PAYLOAD_HARD_CEILING_BYTES
+    return value
+
+
+class RawPayloadTooLargeError(ValueError):
+    """Raised when ``raw_payload`` exceeds the configured size cap (#1290).
+
+    A ``ValueError`` subclass so existing ``except ValueError`` branches
+    in ingestion keep working — but recognisable to tests and logs as
+    the specific size-cap rejection.
+    """
+
+    def __init__(self, size_bytes: int, max_bytes: int):
+        self.size_bytes = size_bytes
+        self.max_bytes = max_bytes
+        super().__init__(
+            f"raw_payload serialized size {size_bytes} bytes exceeds "
+            f"max {max_bytes} bytes (#1290). Set "
+            f"REGENGINE_RAW_PAYLOAD_MAX_BYTES to override, up to "
+            f"{RAW_PAYLOAD_HARD_CEILING_BYTES} bytes."
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -351,11 +442,39 @@ class TraceabilityEvent(BaseModel):
         Finalize the event for storage: compute hashes, build normalized payload.
 
         Call this after normalization but before writing to the database.
+
+        #1290: enforces the raw_payload size cap BEFORE hashing so an
+        oversized event is rejected at prep time rather than wasting
+        chain-hash computation and a per-tenant advisory lock. The
+        check is a measure against (a) DoS via 10 MB supplier JSONs
+        blocking the persist transaction, and (b) stored XSS in any
+        audit UI that renders raw_payload fields — a bounded payload
+        bounds the attacker's blast radius.
         """
+        self._enforce_raw_payload_size()
         self.sha256_hash = self.compute_sha256_hash()
         self.idempotency_key = self.compute_idempotency_key()
         self.normalized_payload = self.build_normalized_payload()
         return self
+
+    def _enforce_raw_payload_size(self) -> None:
+        """Reject oversized ``raw_payload`` (#1290).
+
+        Serializes once with the same ``default=str`` that the writer
+        uses, so the size we check is the size we'd actually persist.
+        Silent truncation is explicitly rejected: the whole point of
+        ``raw_payload`` is an unmodified source-of-truth; a truncated
+        copy is worse than none because auditors would assume fidelity.
+        """
+        if not self.raw_payload:
+            return
+        max_bytes = _raw_payload_max_bytes()
+        # Matches the writer's serialization exactly so the bytes we
+        # measure are the bytes we'd write.
+        serialized = json.dumps(self.raw_payload, default=str)
+        size = len(serialized.encode("utf-8"))
+        if size > max_bytes:
+            raise RawPayloadTooLargeError(size, max_bytes)
 
 
 # ---------------------------------------------------------------------------
