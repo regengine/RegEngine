@@ -63,6 +63,63 @@ logger = logging.getLogger("cte-persistence")
 
 
 # ---------------------------------------------------------------------------
+# CTE Event Type Validation (fix #1312)
+# ---------------------------------------------------------------------------
+
+# The seven Critical Tracking Events enumerated in FSMA 204 §1.1310. The
+# canonical source of truth is ``shared.canonical_event.CTEType``; this
+# frozenset mirrors those values as plain strings so the persistence
+# layer can validate *at entry* without forcing every caller (and every
+# test) through the Pydantic model. Kept case-exact — trailing
+# whitespace, uppercase, or camelCase are all rejected.
+#
+# Before this guard was added, ``event_type`` was a free-form ``str``;
+# a caller could write ``"HARVESTING "``, ``"harvest"``, ``"XFORM"``,
+# or ``"[object Object]"`` and the value was hashed, chained, and
+# persisted as a valid CTE. Downstream FDA export and graph-sync
+# code then had to guess which spellings were "real", masking real
+# miscategorization bugs. See #1312.
+FSMA_204_CTE_TYPES: frozenset[str] = frozenset({
+    "harvesting",
+    "cooling",
+    "initial_packing",
+    "first_land_based_receiving",
+    "shipping",
+    "receiving",
+    "transformation",
+})
+
+
+def _validate_cte_event_type(value: Any, *, field: str = "event_type") -> str:
+    """Strict allowlist check against the 7 FSMA 204 CTE types (#1312).
+
+    Rejects:
+        * None / empty / non-string inputs
+        * Anything not exactly in ``FSMA_204_CTE_TYPES`` — no trimming,
+          no case-folding. A silent ``.strip().lower()`` here would mask
+          real upstream bugs (e.g. a parser that produced
+          ``"HARVESTING "`` because it copied bytes from a CSV cell).
+
+    The companion DB-level ``CHECK`` constraint is the defense-in-depth
+    counterpart; this Python gate ensures the bad value never even
+    reaches the INSERT and that the error message tells the caller
+    exactly which value was rejected (the DB error would not).
+    """
+    if not isinstance(value, str) or not value:
+        raise ValueError(
+            f"{field} is required and must be one of the 7 FSMA 204 CTE types: "
+            f"{sorted(FSMA_204_CTE_TYPES)}; got {value!r}"
+        )
+    if value not in FSMA_204_CTE_TYPES:
+        raise ValueError(
+            f"{field}={value!r} is not a valid FSMA 204 CTE type. "
+            f"Expected one of {sorted(FSMA_204_CTE_TYPES)} "
+            f"(case-exact, no trailing whitespace)."
+        )
+    return value
+
+
+# ---------------------------------------------------------------------------
 # Timestamp Validation (fix #1308)
 # ---------------------------------------------------------------------------
 
@@ -264,6 +321,12 @@ class CTEPersistence:
         kdes = kdes or {}
         alerts = alerts or []
         event_id = str(uuid4())
+
+        # --- CTE event type validation (fix #1312) ---
+        # Reject anything outside the 7 FSMA 204 CTE types. Strict,
+        # case-exact — trailing whitespace or casing errors are caller
+        # bugs and must not be silently coerced.
+        event_type = _validate_cte_event_type(event_type)
 
         # --- Timestamp validation (fix #1308) ---
         # Parse + normalize to UTC + reject naive/future/garbage inputs.
@@ -549,11 +612,15 @@ class CTEPersistence:
         for evt in events:
             event_id = str(uuid4())
             kdes = evt.get("kdes") or {}
+            # --- CTE event type validation (fix #1312) ---
+            # Validate BEFORE building the idempotency key so a bad type
+            # is rejected fast and never contributes to a hash.
+            evt = dict(evt)  # don't mutate caller input
+            evt["event_type"] = _validate_cte_event_type(evt.get("event_type"))
             # Parse + validate timestamps, normalize to UTC ISO-8601.
             event_dt = _parse_timestamp(
                 evt.get("event_timestamp"), field="event_timestamp"
             )
-            evt = dict(evt)  # don't mutate caller input
             evt["event_timestamp"] = event_dt.isoformat()
             if evt.get("event_entry_timestamp") is not None:
                 entry_dt = _parse_timestamp(
