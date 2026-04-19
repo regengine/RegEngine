@@ -68,7 +68,9 @@ from .extractors.fsma_types import (
     TOPIC_NEEDS_REVIEW as FSMA_TOPIC_NEEDS_REVIEW,
 )
 from .resolution import EntityResolver
+from .s3_loader import parse_s3_uri
 from .s3_utils import get_bytes
+from shared.url_validation import PathTraversalError
 
 logger = structlog.get_logger("nlp-consumer")
 _audit_logger = structlog.get_logger("nlp-consumer-audit")
@@ -1248,8 +1250,22 @@ def run_consumer() -> None:
                                 "source_url", evt.get("source_url", "unknown")
                             )
                         else:
-                            _, _, bucket_key = norm_path.partition("s3://")
-                            bucket, _, key = bucket_key.partition("/")
+                            # #1127 — use validated parse instead of inline
+                            # partition(). parse_s3_uri() → validate_s3_uri()
+                            # rejects path traversal and malformed URIs.
+                            try:
+                                bucket, key = parse_s3_uri(norm_path)
+                            except (ValueError, PathTraversalError) as parse_err:
+                                logger.warning(
+                                    "s3_uri_rejected",
+                                    norm_path=norm_path,
+                                    doc_id=doc_id,
+                                    tenant_id=tenant_id,
+                                    err=str(parse_err),
+                                )
+                                MESSAGES_COUNTER.labels(status="skipped").inc()
+                                consumer.commit()
+                                continue
                             payload = json.loads(get_bytes(bucket, key))
                             text = payload.get("text", "")[:2_000_000]
                             source_url = payload.get("source_url", "unknown")
