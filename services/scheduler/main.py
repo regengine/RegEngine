@@ -913,10 +913,43 @@ class SchedulerService:
         
         try:
             # This blocks until leadership is acquired, then runs local scheduler
-            self.distributed_context.wait_for_leadership(self._run_scheduler_workload)
+            # #1142 — register a leadership-lost handler. When the heartbeat
+            # thread detects the advisory lock has been released server-side
+            # (network partition, DB failover, proxy reset), this callback
+            # gracefully shuts the BlockingScheduler so control returns to
+            # the main thread and the orchestrator can restart us. Without
+            # this hook, a zombie leader keeps running scrapers after a
+            # standby has already taken over — duplicate emissions.
+            self.distributed_context.wait_for_leadership(
+                self._run_scheduler_workload,
+                on_leadership_lost=self._on_leadership_lost,
+            )
         except (KeyboardInterrupt, SystemExit):
             logger.info("scheduler_shutdown_signal_received")
             self.shutdown()
+
+    def _on_leadership_lost(self) -> None:
+        """Heartbeat-thread shutdown hook (#1142).
+
+        Called from the leader-heartbeat thread when we've lost the
+        advisory lock. MUST be safe to call from a non-main thread — all
+        it does is request the BlockingScheduler to shut down so the
+        main thread's ``scheduler.start()`` returns. The process then
+        exits with a non-zero status (handled by the orchestrator, which
+        restarts us).
+        """
+        logger.error(
+            "leadership_lost_initiating_shutdown",
+            note="heartbeat detected lost advisory lock; asking scheduler to shut down",
+        )
+        try:
+            if getattr(self, "scheduler", None) is not None:
+                # wait=False: don't block the heartbeat thread on in-flight
+                # jobs; the BlockingScheduler's start() will return as soon
+                # as the event loop notices the shutdown flag.
+                self.scheduler.shutdown(wait=False)
+        except Exception as exc:  # noqa: BLE001
+            logger.error("leadership_lost_shutdown_failed", error=str(exc))
 
     def _run_scheduler_workload(self) -> None:
         """The workload to run when this instance is the Leader."""
