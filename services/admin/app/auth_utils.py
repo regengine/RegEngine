@@ -36,6 +36,16 @@ ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60")
 REFRESH_TOKEN_EXPIRE_DAYS = int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", "7"))
 SESSION_IDLE_TIMEOUT_MINUTES = int(os.getenv("SESSION_IDLE_TIMEOUT_MINUTES", "60"))
 
+# #1069 — reject JWTs without a ``jti`` claim. ``revoke_token()`` can only
+# flag tokens by jti, so a pre-jti (legacy) token is un-revocable for its
+# full natural TTL. Forcing re-auth on these tokens closes the gap. Set
+# AUTH_ALLOW_LEGACY_JTI_FREE=true ONLY as a short-term rollback lever if
+# production traffic still contains pre-jti tokens (all tokens minted by
+# create_access_token now carry a jti, so the natural access-token TTL
+# bounds the rollback window).
+def _require_jti_default() -> bool:
+    return os.getenv("AUTH_ALLOW_LEGACY_JTI_FREE", "").lower() not in ("true", "1", "yes")
+
 pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
@@ -142,10 +152,26 @@ def decode_access_token(token: str) -> dict:
 
 
 def _check_revoked(payload: dict) -> dict:
-    """Raise if the token's jti has been revoked. Returns payload if ok."""
+    """Raise if the token's jti has been revoked. Returns payload if ok.
+
+    #1069: a token with no ``jti`` claim is un-revocable — ``revoke_token``
+    keys on jti. Before this fix, such tokens returned early here with no
+    revocation check, so any pre-jti token remained valid for its full
+    natural TTL (default 60 min for access tokens). We now reject them
+    outright, forcing a one-time re-login that returns a jti-bearing
+    token from the current minting code. The escape hatch
+    ``AUTH_ALLOW_LEGACY_JTI_FREE=true`` exists purely as a rollback
+    lever for the transition window; once production traffic is
+    jti-only (bounded by the natural access-token TTL), the flag can
+    be removed.
+    """
     jti = payload.get("jti")
     if not jti:
-        return payload  # legacy token without jti — cannot be individually revoked
+        if _require_jti_default():
+            raise jwt.exceptions.InvalidTokenError(
+                "Token missing jti claim — please re-authenticate"
+            )
+        return payload  # rollback path — legacy tokens still pass through
 
     # Check in-memory set first (fast path)
     if jti in _revoked_jtis:
