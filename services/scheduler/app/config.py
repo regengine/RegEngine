@@ -96,6 +96,25 @@ class SchedulerSettings(BaseServiceSettings):
         default=3,
         description="Maximum webhook delivery retries",
     )
+    # #1150 — path to on-disk JSONL outbox for persisted failed
+    # deliveries. Leave empty to disable persistence (dead-letter stays
+    # in-memory only and is lost on restart — the legacy behavior).
+    # In production this should point to a mounted volume so retries
+    # survive container restarts.
+    webhook_outbox_path: str = Field(
+        default="",
+        description=(
+            "Filesystem path for the persistent webhook outbox (JSONL). "
+            "Empty disables persistence (legacy behavior)."
+        ),
+    )
+    # #1150 — how often to drain the outbox. 60s is a good default: long
+    # enough that transient issues resolve between passes, short enough
+    # that delivery latency stays modest once the endpoint recovers.
+    webhook_outbox_drain_interval_seconds: int = Field(
+        default=60,
+        description="Interval (seconds) between outbox drain passes",
+    )
 
     # Circuit breaker
     circuit_breaker_failure_threshold: int = Field(

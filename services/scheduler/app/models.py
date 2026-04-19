@@ -59,6 +59,12 @@ class ScrapeResult(BaseModel):
     error_message: Optional[str] = None
     duration_ms: float = 0
     scraped_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    # #1140: soft-failure signals — the scrape didn't fail outright but
+    # something looks off (e.g. parser_mismatch_suspected when the scraper
+    # returns zero items from a page that clearly should have had some).
+    # Alert/metrics code should treat non-empty ``warnings`` as a signal
+    # alongside ``success=False``.
+    warnings: List[str] = Field(default_factory=list)
 
 
 class JobExecution(BaseModel):

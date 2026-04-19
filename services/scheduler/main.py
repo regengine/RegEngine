@@ -94,7 +94,11 @@ class SchedulerService:
     def __init__(self):
         self.settings = get_settings()
         self.state_manager = StateManager()
-        self.notifier = WebhookNotifier()
+        # #1150 — pass the on-disk outbox path so failed deliveries
+        # survive restart. Empty string → legacy in-memory-only behavior.
+        self.notifier = WebhookNotifier(
+            outbox_path=self.settings.webhook_outbox_path or None,
+        )
         self.kafka_producer = get_kafka_producer()
         self.distributed_context = DistributedContext()
         
@@ -589,11 +593,48 @@ class SchedulerService:
         )
         logger.info("job_scheduled", job_id="fsma_nightly_sync", cron="02:00 UTC")
 
+        # #1150 — drain the persistent webhook outbox periodically. Only
+        # register the job when an outbox path is actually configured, so
+        # a scheduler with legacy (in-memory-only) delivery doesn't pay
+        # the cost of a no-op tick every minute.
+        if self.settings.webhook_outbox_path:
+            self.scheduler.add_job(
+                self.drain_webhook_outbox,
+                trigger=IntervalTrigger(
+                    seconds=self.settings.webhook_outbox_drain_interval_seconds,
+                ),
+                id="webhook_outbox_drain",
+                name="Webhook Outbox Drain (#1150)",
+                replace_existing=True,
+                max_instances=1,  # Never run two drain passes concurrently.
+            )
+            logger.info(
+                "job_scheduled",
+                job_id="webhook_outbox_drain",
+                interval_seconds=self.settings.webhook_outbox_drain_interval_seconds,
+                outbox_path=self.settings.webhook_outbox_path,
+            )
+
         logger.info(
             "scheduler_ready",
-            total_jobs=9,
+            total_jobs=10 if self.settings.webhook_outbox_path else 9,
             scrapers=list(self.scrapers.keys()),
         )
+
+    def drain_webhook_outbox(self) -> None:
+        """Drain the persistent webhook outbox once (#1150).
+
+        Invoked by APScheduler on the interval configured by
+        ``webhook_outbox_drain_interval_seconds``. Tolerant of per-entry
+        failures; counters are emitted via ``webhook_outbox_drain`` log.
+        """
+        try:
+            counter = self.notifier.retry_outbox_once()
+        except Exception as exc:  # pragma: no cover — telemetry must not crash
+            logger.exception("webhook_outbox_drain_failed", error=str(exc))
+            return
+        if counter["attempted"]:
+            logger.info("webhook_outbox_drain_tick", **counter)
 
     def purge_old_tasks(self) -> None:
         """Purge completed/dead ``fsma.task_queue`` rows older than 30 days.
@@ -913,10 +954,43 @@ class SchedulerService:
         
         try:
             # This blocks until leadership is acquired, then runs local scheduler
-            self.distributed_context.wait_for_leadership(self._run_scheduler_workload)
+            # #1142 — register a leadership-lost handler. When the heartbeat
+            # thread detects the advisory lock has been released server-side
+            # (network partition, DB failover, proxy reset), this callback
+            # gracefully shuts the BlockingScheduler so control returns to
+            # the main thread and the orchestrator can restart us. Without
+            # this hook, a zombie leader keeps running scrapers after a
+            # standby has already taken over — duplicate emissions.
+            self.distributed_context.wait_for_leadership(
+                self._run_scheduler_workload,
+                on_leadership_lost=self._on_leadership_lost,
+            )
         except (KeyboardInterrupt, SystemExit):
             logger.info("scheduler_shutdown_signal_received")
             self.shutdown()
+
+    def _on_leadership_lost(self) -> None:
+        """Heartbeat-thread shutdown hook (#1142).
+
+        Called from the leader-heartbeat thread when we've lost the
+        advisory lock. MUST be safe to call from a non-main thread — all
+        it does is request the BlockingScheduler to shut down so the
+        main thread's ``scheduler.start()`` returns. The process then
+        exits with a non-zero status (handled by the orchestrator, which
+        restarts us).
+        """
+        logger.error(
+            "leadership_lost_initiating_shutdown",
+            note="heartbeat detected lost advisory lock; asking scheduler to shut down",
+        )
+        try:
+            if getattr(self, "scheduler", None) is not None:
+                # wait=False: don't block the heartbeat thread on in-flight
+                # jobs; the BlockingScheduler's start() will return as soon
+                # as the event loop notices the shutdown flag.
+                self.scheduler.shutdown(wait=False)
+        except Exception as exc:  # noqa: BLE001
+            logger.error("leadership_lost_shutdown_failed", error=str(exc))
 
     def _run_scheduler_workload(self) -> None:
         """The workload to run when this instance is the Leader."""
@@ -1006,6 +1080,13 @@ class SchedulerService:
         except (RuntimeError, ConnectionError, OSError) as e:
             logger.error("kafka_close_failed", error=str(e))
 
+        # #1150 — release webhook HTTP session cleanly so open sockets
+        # don't block the process exit.
+        try:
+            self.notifier.close()
+        except (RuntimeError, OSError) as e:
+            logger.warning("webhook_notifier_close_failed", error=str(e))
+
         logger.info("scheduler_stopped")
 
 
@@ -1061,7 +1142,11 @@ class HealthHandler(BaseHTTPRequestHandler):
                     "success": r.success,
                     "count": r.items_found,
                     "scraped_at": r.scraped_at.isoformat(),
-                    "error": r.error_message if not r.success else None
+                    "error": r.error_message if not r.success else None,
+                    # #1140: surface soft-failure warnings (e.g.
+                    # parser_mismatch_suspected) to ops dashboards even
+                    # when success=True.
+                    "warnings": list(getattr(r, "warnings", []) or []),
                 }
                 for st, r in self.scheduler_service.last_results.items()
             } if self.scheduler_service else {}

@@ -152,6 +152,7 @@ WRITE_METHODS = [
     "register_entity",
     "add_alias",
     "merge_entities",
+    "merge_entities_bulk",  # #1195: N-way merge — same tenant guard required
     "split_entity",
     "queue_for_review",
     "resolve_review",
