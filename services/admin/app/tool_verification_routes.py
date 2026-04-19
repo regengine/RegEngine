@@ -243,6 +243,7 @@ async def verify_email(payload: VerifyEmailRequest, request: Request):
 
 
 @router.post("/confirm-code", response_model=ConfirmCodeResponse)
+@limiter.limit("10/minute")
 async def confirm_code(payload: ConfirmCodeRequest, request: Request):
     """Step 2 — submit the 6-digit code. Returns a signed JWT for the cookie."""
     email = payload.email.strip().lower()
