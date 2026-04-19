@@ -724,35 +724,77 @@ class IdentityResolutionService:
         """
         Add an ambiguous entity pair to the identity review queue.
 
-        Idempotent: if the pair already exists (in either direction) and
-        is still pending, the existing record is returned unchanged.
+        Idempotency (#1211) is STATUS-AWARE: the check only treats rows
+        in ``('pending', 'deferred')`` — the active review states — as
+        duplicates. A prior ``confirmed_distinct`` or
+        ``confirmed_match`` resolution does NOT block a fresh review
+        when new evidence comes in; a new row is inserted instead, with
+        ``previous_review_id`` pointing at the most-recent closed row
+        so the reopen cycle is auditable.
+
+        The schema backs this semantic: v068 replaces the full-table
+        ``UNIQUE(entity_a_id, entity_b_id)`` with a partial unique
+        index scoped to ``status IN ('pending', 'deferred')``.
+
+        Before #1211 the existing-row check returned any existing row,
+        including closed ``confirmed_distinct`` rows, which silently
+        no-op'd the re-queue and denied operators the chance to
+        re-examine stale distinct verdicts.
         """
         valid_match_types = {"exact", "likely", "ambiguous", "unresolved"}
         if match_type not in valid_match_types:
             raise ValueError(f"Invalid match_type '{match_type}'. Must be one of {sorted(valid_match_types)}")
 
-        # Normalize ordering so (A,B) == (B,A)
+        # Normalize ordering so (A,B) == (B,A).
         a_id, b_id = sorted([entity_a_id, entity_b_id])
 
-        # Idempotency check
-        existing = self.session.execute(
+        # #1211 — status-aware idempotency. An OPEN review (pending or
+        # deferred) short-circuits. A CLOSED review (confirmed_match /
+        # confirmed_distinct) does NOT; the closed row's id is captured
+        # for previous_review_id linkage below.
+        open_existing = self.session.execute(
             text("""
                 SELECT review_id, status, match_confidence
                 FROM fsma.identity_review_queue
                 WHERE tenant_id = :tenant_id
                   AND entity_a_id = :a_id
                   AND entity_b_id = :b_id
+                  AND status IN ('pending', 'deferred')
+                ORDER BY created_at DESC
+                LIMIT 1
             """),
             {"tenant_id": tenant_id, "a_id": a_id, "b_id": b_id},
         ).fetchone()
 
-        if existing:
+        if open_existing:
             return {
-                "review_id": str(existing[0]),
-                "status": existing[1],
-                "match_confidence": float(existing[2]) if existing[2] is not None else None,
+                "review_id": str(open_existing[0]),
+                "status": open_existing[1],
+                "match_confidence": (
+                    float(open_existing[2]) if open_existing[2] is not None else None
+                ),
                 "idempotent": True,
             }
+
+        # No open row. Look for the most-recent CLOSED row so we can
+        # thread previous_review_id and preserve the audit trail
+        # across a reopen cycle. ORDER BY resolved_at (NULLS LAST so a
+        # row that was closed without resolved_at still lands in a
+        # deterministic position).
+        prior_closed = self.session.execute(
+            text("""
+                SELECT review_id
+                FROM fsma.identity_review_queue
+                WHERE tenant_id = :tenant_id
+                  AND entity_a_id = :a_id
+                  AND entity_b_id = :b_id
+                  AND status IN ('confirmed_match', 'confirmed_distinct')
+                ORDER BY resolved_at DESC NULLS LAST, created_at DESC
+                LIMIT 1
+            """),
+            {"tenant_id": tenant_id, "a_id": a_id, "b_id": b_id},
+        ).fetchone()
+        previous_review_id = str(prior_closed[0]) if prior_closed else None
 
         review_id = str(uuid4())
         now = datetime.now(timezone.utc)
@@ -762,11 +804,11 @@ class IdentityResolutionService:
                 INSERT INTO fsma.identity_review_queue (
                     review_id, tenant_id, entity_a_id, entity_b_id,
                     match_type, match_confidence, matching_fields,
-                    status, created_at
+                    status, created_at, previous_review_id
                 ) VALUES (
                     :review_id, :tenant_id, :a_id, :b_id,
                     :match_type, :match_confidence, :matching_fields,
-                    'pending', :now
+                    'pending', :now, :previous_review_id
                 )
             """),
             {
@@ -778,6 +820,7 @@ class IdentityResolutionService:
                 "match_confidence": match_confidence,
                 "matching_fields": json.dumps(matching_fields or {}),
                 "now": now,
+                "previous_review_id": previous_review_id,
             },
         )
 
@@ -790,6 +833,10 @@ class IdentityResolutionService:
                 "match_type": match_type,
                 "match_confidence": match_confidence,
                 "tenant_id": tenant_id,
+                # Present when this is a reopen after a prior closed
+                # verdict. None on a first-time queueing.
+                "previous_review_id": previous_review_id,
+                "is_reopen": previous_review_id is not None,
             },
         )
 
@@ -801,6 +848,10 @@ class IdentityResolutionService:
             "match_confidence": match_confidence,
             "status": "pending",
             "idempotent": False,
+            # Surface reopen semantics to callers so dashboards and
+            # alerting can flag "this pair has been reviewed before".
+            "previous_review_id": previous_review_id,
+            "is_reopen": previous_review_id is not None,
         }
 
     # ------------------------------------------------------------------
