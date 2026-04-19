@@ -143,3 +143,45 @@ def _find_tenant_id(subscription_id: Optional[str], customer_id: Optional[str]) 
             return tenant_id
 
     return None
+
+
+def _clear_customer_lookup(customer_id: str) -> None:
+    """Remove the ``billing:customer:{customer_id}`` → tenant binding.
+
+    Used when Stripe notifies us of a ``customer.deleted`` event (#1189).
+    We intentionally do NOT delete the per-tenant subscription hash —
+    that hash is the audit trail for the tenant's past billing state and
+    must survive the customer being deleted in Stripe. Clearing the
+    lookup key prevents a subsequent (out-of-order) webhook for the
+    stale customer_id from silently re-binding to the same tenant.
+    """
+    if not customer_id:
+        return
+    client = _redis_client()
+    try:
+        client.delete(_customer_lookup_key(customer_id))
+    except redis.RedisError as exc:  # pragma: no cover - logged for ops
+        logger.warning(
+            "stripe_customer_lookup_clear_redis_error customer_id=%s error=%s",
+            customer_id, exc,
+        )
+
+
+def _clear_subscription_lookup(subscription_id: str) -> None:
+    """Remove the ``billing:subscription:{subscription_id}`` → tenant binding.
+
+    Companion to ``_clear_customer_lookup`` for cases where a subscription
+    reference becomes stale (e.g. after ``customer.deleted`` we also drop
+    the subscription mapping because the customer can no longer be billed
+    under that ID).
+    """
+    if not subscription_id:
+        return
+    client = _redis_client()
+    try:
+        client.delete(_subscription_lookup_key(subscription_id))
+    except redis.RedisError as exc:  # pragma: no cover - logged for ops
+        logger.warning(
+            "stripe_subscription_lookup_clear_redis_error subscription_id=%s error=%s",
+            subscription_id, exc,
+        )
