@@ -422,30 +422,105 @@ class IdentityResolutionService:
             "entity_type": entity_type,  # None is bound explicitly to NULL
         }
 
-        rows = self.session.execute(
-            text(
-                """
-                SELECT ce.entity_id, ce.entity_type, ce.canonical_name,
-                       ce.gln, ce.gtin, ce.verification_status,
-                       ce.confidence_score, ea.alias_value
-                FROM fsma.entity_aliases ea
-                JOIN fsma.canonical_entities ce
-                    ON ce.entity_id = ea.entity_id AND ce.tenant_id = ea.tenant_id
-                WHERE ea.tenant_id = :tenant_id
-                  AND ea.alias_type IN ('name', 'trade_name', 'abbreviation')
-                  AND ce.is_active = TRUE
-                  AND (:entity_type IS NULL OR ce.entity_type = :entity_type)
-                """
-            ),
-            params,
-        ).fetchall()
-
-        # Only normalize when case_sensitive=False. The raw alias_value is
-        # always returned verbatim so callers never see a mutated identifier.
+        # Pre-normalize the search term — we need it for both the
+        # Python re-score and the SQL-side trigram filter (lowered).
         if case_sensitive:
             search_norm = search_name
         else:
             search_norm = search_name.lower().strip()
+
+        # #1208 — SQL-side pg_trgm pre-filter.
+        #
+        # Before: this method pulled every tenant alias into Python
+        # (``O(N)`` wire + ``O(N)`` SequenceMatcher) — multi-second at
+        # 100K aliases and directly on the ingestion hot path.
+        #
+        # After: a ``similarity(lower(alias_value), :q) >= :sim_floor``
+        # predicate (backed by the GIN/pg_trgm index added in v070
+        # migration) shrinks the candidate set to ``candidate_pool``
+        # rows before Python re-scores them with the authoritative
+        # Ratcliff/Obershelp ratio that callers depend on.
+        #
+        # Fallback: when pg_trgm isn't present (stripped-down test PG,
+        # or the migration hasn't run), the SQL raises ``UndefinedFunction``
+        # which we catch and re-issue the pre-#1208 full-scan query.
+        # Correctness stays identical — only the perf win is lost.
+        #
+        # The trigram path only runs when we have a normalized search
+        # term and we're not in case-sensitive mode; case_sensitive
+        # paths are non-fuzzy comparisons typically used for
+        # authoritative lookups where a full-scan match matters more
+        # than speed.
+        candidate_pool = max(limit * 20, 100)
+        rows = None
+        if not case_sensitive and search_norm:
+            try:
+                rows = self.session.execute(
+                    text(
+                        """
+                        SELECT ce.entity_id, ce.entity_type, ce.canonical_name,
+                               ce.gln, ce.gtin, ce.verification_status,
+                               ce.confidence_score, ea.alias_value
+                        FROM fsma.entity_aliases ea
+                        JOIN fsma.canonical_entities ce
+                            ON ce.entity_id = ea.entity_id
+                           AND ce.tenant_id = ea.tenant_id
+                        WHERE ea.tenant_id = :tenant_id
+                          AND ea.alias_type IN ('name', 'trade_name', 'abbreviation')
+                          AND ce.is_active = TRUE
+                          AND (:entity_type IS NULL OR ce.entity_type = :entity_type)
+                          AND similarity(lower(ea.alias_value), :q) >= :sim_floor
+                        ORDER BY similarity(lower(ea.alias_value), :q) DESC
+                        LIMIT :cand_limit
+                        """
+                    ),
+                    {
+                        **params,
+                        "q": search_norm,
+                        # Lenient floor — the authoritative cutoff is
+                        # the Python-side ``threshold``. Use ``0.2`` as
+                        # the absolute minimum (roughly "shares at
+                        # least one meaningful trigram") and raise it
+                        # toward the caller's threshold up to 0.8 so
+                        # the caller's stricter threshold translates
+                        # into a smaller candidate pool.
+                        "sim_floor": max(0.2, min(threshold * 0.7, 0.8)),
+                        "cand_limit": candidate_pool,
+                    },
+                ).fetchall()
+            except Exception as exc:
+                logger.debug(
+                    "find_potential_matches_trgm_unavailable",
+                    exc_info=True,
+                    error=str(exc)[:200],
+                )
+                rows = None
+
+        if rows is None:
+            # Fallback path — pre-#1208 behavior, preserved for
+            # environments without pg_trgm and for ``case_sensitive=True``
+            # callers.
+            rows = self.session.execute(
+                text(
+                    """
+                    SELECT ce.entity_id, ce.entity_type, ce.canonical_name,
+                           ce.gln, ce.gtin, ce.verification_status,
+                           ce.confidence_score, ea.alias_value
+                    FROM fsma.entity_aliases ea
+                    JOIN fsma.canonical_entities ce
+                        ON ce.entity_id = ea.entity_id AND ce.tenant_id = ea.tenant_id
+                    WHERE ea.tenant_id = :tenant_id
+                      AND ea.alias_type IN ('name', 'trade_name', 'abbreviation')
+                      AND ce.is_active = TRUE
+                      AND (:entity_type IS NULL OR ce.entity_type = :entity_type)
+                    """
+                ),
+                params,
+            ).fetchall()
+
+        # ``search_norm`` is already computed above (pre-#1208 it was
+        # computed here). The raw alias_value is still returned verbatim
+        # so callers never see a mutated identifier.
 
         scored: List[Dict[str, Any]] = []
         seen_entities: set = set()
@@ -523,6 +598,33 @@ class IdentityResolutionService:
         merge_id = str(uuid4())
         now = datetime.now(timezone.utc)
 
+        # #1207 — snapshot the source entity's aliases BEFORE re-pointing
+        # them to the target. Without this, split_entity can only restore
+        # the canonical-name alias by string match; GLN/GTIN/FDA registration
+        # aliases are irrecoverable, giving a false sense of rollback.
+        #
+        # Shape: {"<source_entity_uuid>": [
+        #     {"alias_type": "gln", "alias_value": "..."},
+        #     {"alias_type": "gtin", "alias_value": "..."},
+        #     ...
+        # ]}
+        source_aliases_rows = self.session.execute(
+            text("""
+                SELECT alias_type, alias_value
+                FROM fsma.entity_aliases
+                WHERE tenant_id = :tenant_id
+                  AND entity_id = :source_entity_id
+                ORDER BY alias_type, alias_value
+            """),
+            {"tenant_id": tenant_id, "source_entity_id": source_entity_id},
+        ).fetchall()
+        alias_snapshot = {
+            source_entity_id: [
+                {"alias_type": r[0], "alias_value": r[1]}
+                for r in source_aliases_rows
+            ]
+        }
+
         # Re-point aliases from source to target (skip duplicates)
         self.session.execute(
             text("""
@@ -563,17 +665,17 @@ class IdentityResolutionService:
             {"tenant_id": tenant_id, "source_entity_id": source_entity_id, "now": now},
         )
 
-        # Record merge history
+        # Record merge history WITH alias snapshot (#1207)
         self.session.execute(
             text("""
                 INSERT INTO fsma.entity_merge_history (
                     merge_id, tenant_id, action, source_entity_ids,
                     target_entity_id, reason, performed_by, performed_at,
-                    is_reversed
+                    is_reversed, alias_snapshot
                 ) VALUES (
                     :merge_id, :tenant_id, 'merge', ARRAY[:source_entity_id]::uuid[],
                     :target_entity_id, :reason, :performed_by, :now,
-                    FALSE
+                    FALSE, CAST(:alias_snapshot AS jsonb)
                 )
             """),
             {
@@ -584,6 +686,7 @@ class IdentityResolutionService:
                 "reason": reason,
                 "performed_by": performed_by,
                 "now": now,
+                "alias_snapshot": json.dumps(alias_snapshot),
             },
         )
 
@@ -643,15 +746,20 @@ class IdentityResolutionService:
 
         - Looks up the original merge record.
         - Re-activates the source entity.
-        - Restores aliases that originally belonged to the source entity
-          (aliases added *after* the merge stay with the target).
+        - Restores aliases from ``entity_merge_history.alias_snapshot``
+          (#1207) — every alias that was on the source at merge time
+          is moved back to the source. Aliases added to the target
+          AFTER the merge stay with the target.
         - Records the reversal in merge_history.
 
-        Note: only the alias snapshot at merge time can be inferred from
-        the source_system='identity_resolution' seed alias. Additional
-        aliases that were on the source before merge cannot be perfectly
-        reconstructed; those remain on the target. A full undo would
-        require an alias snapshot table (future enhancement).
+        #1207 — pre-v069 merges lack an ``alias_snapshot``. Those
+        merges cannot be safely reversed: the canonical-name alias
+        alone came back, and every GLN/GTIN/FDA identifier silently
+        stayed on the target. Rather than perpetuate the lossy
+        behavior, this method now RAISES when the snapshot is NULL.
+        Operators can either manually reconstruct aliases and flip
+        ``is_reversed`` themselves, or accept that pre-v069 merges
+        are non-reversible through this API.
         """
         # #1230: verify the tenant before any side effects
         self._verify_tenant_access(tenant_id)
@@ -659,7 +767,7 @@ class IdentityResolutionService:
         merge_row = self.session.execute(
             text("""
                 SELECT merge_id, source_entity_ids, target_entity_id,
-                       action, is_reversed
+                       action, is_reversed, alias_snapshot
                 FROM fsma.entity_merge_history
                 WHERE tenant_id = :tenant_id AND merge_id = :merge_id
             """),
@@ -675,9 +783,29 @@ class IdentityResolutionService:
 
         source_entity_ids = merge_row[1]  # UUID[]
         target_entity_id = str(merge_row[2])
+        alias_snapshot_raw = merge_row[5]  # JSONB -> dict or None
+
+        # #1207 — refuse to reverse a pre-v069 merge. Silent alias loss
+        # is a false-audit surface we no longer tolerate.
+        if alias_snapshot_raw is None:
+            raise ValueError(
+                f"Merge '{merge_id}' was recorded before v069 and has no "
+                "alias_snapshot. Split is refused to prevent silent loss "
+                "of GLN/GTIN/FDA aliases that would otherwise stay on the "
+                "target entity. Reconstruct aliases manually if reversal "
+                "is required (#1207)."
+            )
+
+        # JSONB may arrive as a dict (SQLAlchemy + psycopg2) or as a
+        # string (SQLite or some driver configs). Normalize.
+        if isinstance(alias_snapshot_raw, str):
+            alias_snapshot = json.loads(alias_snapshot_raw)
+        else:
+            alias_snapshot = alias_snapshot_raw
+
         now = datetime.now(timezone.utc)
 
-        # Re-activate source entities
+        # Re-activate source entities and replay each one's alias snapshot.
         for src_id in source_entity_ids:
             src_id_str = str(src_id)
             self.session.execute(
@@ -689,32 +817,30 @@ class IdentityResolutionService:
                 {"tenant_id": tenant_id, "entity_id": src_id_str, "now": now},
             )
 
-            # Restore the canonical-name alias back to the source entity
-            source_entity = self.session.execute(
-                text("""
-                    SELECT canonical_name
-                    FROM fsma.canonical_entities
-                    WHERE tenant_id = :tenant_id AND entity_id = :entity_id
-                """),
-                {"tenant_id": tenant_id, "entity_id": src_id_str},
-            ).fetchone()
-
-            if source_entity and source_entity[0]:
-                # Move the canonical name alias back if it's on the target
+            # Move the snapshot aliases back from target to source. Each
+            # (alias_type, alias_value) is a unique key within a tenant,
+            # so UPDATE suffices — there will be at most one row to flip.
+            snapshot_aliases = alias_snapshot.get(src_id_str, [])
+            for alias in snapshot_aliases:
+                alias_type = alias.get("alias_type")
+                alias_value = alias.get("alias_value")
+                if not alias_type or not alias_value:
+                    continue
                 self.session.execute(
                     text("""
                         UPDATE fsma.entity_aliases
                         SET entity_id = :source_entity_id
                         WHERE tenant_id = :tenant_id
                           AND entity_id = :target_entity_id
-                          AND alias_type = 'name'
-                          AND alias_value = :canonical_name
+                          AND alias_type = :alias_type
+                          AND alias_value = :alias_value
                     """),
                     {
                         "tenant_id": tenant_id,
                         "source_entity_id": src_id_str,
                         "target_entity_id": target_entity_id,
-                        "canonical_name": source_entity[0],
+                        "alias_type": alias_type,
+                        "alias_value": alias_value,
                     },
                 )
 
@@ -796,8 +922,22 @@ class IdentityResolutionService:
         """
         Add an ambiguous entity pair to the identity review queue.
 
-        Idempotent: if the pair already exists (in either direction) and
-        is still pending, the existing record is returned unchanged.
+        Idempotency (#1211) is STATUS-AWARE: the check only treats rows
+        in ``('pending', 'deferred')`` — the active review states — as
+        duplicates. A prior ``confirmed_distinct`` or
+        ``confirmed_match`` resolution does NOT block a fresh review
+        when new evidence comes in; a new row is inserted instead, with
+        ``previous_review_id`` pointing at the most-recent closed row
+        so the reopen cycle is auditable.
+
+        The schema backs this semantic: v068 replaces the full-table
+        ``UNIQUE(entity_a_id, entity_b_id)`` with a partial unique
+        index scoped to ``status IN ('pending', 'deferred')``.
+
+        Before #1211 the existing-row check returned any existing row,
+        including closed ``confirmed_distinct`` rows, which silently
+        no-op'd the re-queue and denied operators the chance to
+        re-examine stale distinct verdicts.
         """
         # #1230: verify the tenant before any side effects
         self._verify_tenant_access(tenant_id)
@@ -806,28 +946,56 @@ class IdentityResolutionService:
         if match_type not in valid_match_types:
             raise ValueError(f"Invalid match_type '{match_type}'. Must be one of {sorted(valid_match_types)}")
 
-        # Normalize ordering so (A,B) == (B,A)
+        # Normalize ordering so (A,B) == (B,A).
         a_id, b_id = sorted([entity_a_id, entity_b_id])
 
-        # Idempotency check
-        existing = self.session.execute(
+        # #1211 — status-aware idempotency. An OPEN review (pending or
+        # deferred) short-circuits. A CLOSED review (confirmed_match /
+        # confirmed_distinct) does NOT; the closed row's id is captured
+        # for previous_review_id linkage below.
+        open_existing = self.session.execute(
             text("""
                 SELECT review_id, status, match_confidence
                 FROM fsma.identity_review_queue
                 WHERE tenant_id = :tenant_id
                   AND entity_a_id = :a_id
                   AND entity_b_id = :b_id
+                  AND status IN ('pending', 'deferred')
+                ORDER BY created_at DESC
+                LIMIT 1
             """),
             {"tenant_id": tenant_id, "a_id": a_id, "b_id": b_id},
         ).fetchone()
 
-        if existing:
+        if open_existing:
             return {
-                "review_id": str(existing[0]),
-                "status": existing[1],
-                "match_confidence": float(existing[2]) if existing[2] is not None else None,
+                "review_id": str(open_existing[0]),
+                "status": open_existing[1],
+                "match_confidence": (
+                    float(open_existing[2]) if open_existing[2] is not None else None
+                ),
                 "idempotent": True,
             }
+
+        # No open row. Look for the most-recent CLOSED row so we can
+        # thread previous_review_id and preserve the audit trail
+        # across a reopen cycle. ORDER BY resolved_at (NULLS LAST so a
+        # row that was closed without resolved_at still lands in a
+        # deterministic position).
+        prior_closed = self.session.execute(
+            text("""
+                SELECT review_id
+                FROM fsma.identity_review_queue
+                WHERE tenant_id = :tenant_id
+                  AND entity_a_id = :a_id
+                  AND entity_b_id = :b_id
+                  AND status IN ('confirmed_match', 'confirmed_distinct')
+                ORDER BY resolved_at DESC NULLS LAST, created_at DESC
+                LIMIT 1
+            """),
+            {"tenant_id": tenant_id, "a_id": a_id, "b_id": b_id},
+        ).fetchone()
+        previous_review_id = str(prior_closed[0]) if prior_closed else None
 
         review_id = str(uuid4())
         now = datetime.now(timezone.utc)
@@ -837,11 +1005,11 @@ class IdentityResolutionService:
                 INSERT INTO fsma.identity_review_queue (
                     review_id, tenant_id, entity_a_id, entity_b_id,
                     match_type, match_confidence, matching_fields,
-                    status, created_at
+                    status, created_at, previous_review_id
                 ) VALUES (
                     :review_id, :tenant_id, :a_id, :b_id,
                     :match_type, :match_confidence, :matching_fields,
-                    'pending', :now
+                    'pending', :now, :previous_review_id
                 )
             """),
             {
@@ -853,6 +1021,7 @@ class IdentityResolutionService:
                 "match_confidence": match_confidence,
                 "matching_fields": json.dumps(matching_fields or {}),
                 "now": now,
+                "previous_review_id": previous_review_id,
             },
         )
 
@@ -865,6 +1034,10 @@ class IdentityResolutionService:
                 "match_type": match_type,
                 "match_confidence": match_confidence,
                 "tenant_id": tenant_id,
+                # Present when this is a reopen after a prior closed
+                # verdict. None on a first-time queueing.
+                "previous_review_id": previous_review_id,
+                "is_reopen": previous_review_id is not None,
             },
         )
 
@@ -876,6 +1049,10 @@ class IdentityResolutionService:
             "match_confidence": match_confidence,
             "status": "pending",
             "idempotent": False,
+            # Surface reopen semantics to callers so dashboards and
+            # alerting can flag "this pair has been reviewed before".
+            "previous_review_id": previous_review_id,
+            "is_reopen": previous_review_id is not None,
         }
 
     # ------------------------------------------------------------------
