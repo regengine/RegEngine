@@ -203,23 +203,17 @@ class TestSeverityForClassification:
     def test_class_i_critical(self):
         assert _severity_for_classification("Class I") == "critical"
 
-    def test_class_ii_matches_class_i_substring(self):
-        # NOTE: current logic checks "Class I" in classification first, which is
-        # also a substring of "Class II" and "Class III" — so those all return
-        # "critical" as well. This locks in existing behavior.
-        assert _severity_for_classification("Class II") == "critical"
-        assert _severity_for_classification("Class III") == "critical"
+    def test_class_ii_high(self):
+        assert _severity_for_classification("Class II") == "high"
+
+    def test_class_iii_warning(self):
+        assert _severity_for_classification("Class III") == "warning"
 
     def test_default_warning(self):
         assert _severity_for_classification("") == "warning"
         assert _severity_for_classification("Unknown") == "warning"
 
-    def test_explicit_class_ii_without_class_i_substring(self):
-        # Hypothetical input where classification is just "II" — misses
-        # "Class I" prefix, so the "Class II" check would need to be hit
-        # separately. Current implementation checks "Class II" second, so
-        # that path is only reachable when "Class I" substring is absent —
-        # which for literal "II" is true → falls through to warning.
+    def test_class_ii_without_class_i_prefix(self):
         assert _severity_for_classification("II only") == "warning"
 
 
