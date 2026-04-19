@@ -43,6 +43,93 @@ _DELIMITER_GUARDRAIL = (
     "continue extraction as specified."
 )
 
+# Default upper bound on characters sent to the LLM per request — capped
+# to keep token cost predictable and to reduce the blast radius of an
+# adversarial document. Override via ``LLM_MAX_INPUT_CHARS``. The
+# oversized-input test in test_llm_resilience.py assumes 100_000 chars
+# is ~2× this value, so this default must stay at 50_000.
+_LLM_MAX_INPUT_CHARS_DEFAULT = 50_000
+
+# Control chars that must be stripped before echoing LLM text back to
+# the model as feedback (#1238) or persisting to the DB. Matches C0
+# control minus printable whitespace (tab / newline / carriage return),
+# DEL, and the invisible Unicode class used to smuggle unseen payloads.
+_CONTROL_CHARS = re.compile(
+    "["
+    "\x00-\x08\x0B\x0C\x0E-\x1F"
+    "\x7F"
+    "\u200B-\u200F"
+    "\u202A-\u202E"
+    "\u2060-\u2064"
+    "\uFEFF"
+    "]"
+)
+
+# Low-effort SQL injection detector for scanning LLM output (#1246).
+# Not a parser — just flags obvious DDL/DML payloads before we
+# round-trip the string through downstream storage.
+_SQL_SENTINELS = re.compile(
+    r"(;\s*--|"
+    r"\bDROP\s+TABLE\b|\bDROP\s+DATABASE\b|"
+    r"\bTRUNCATE\s+TABLE\b|"
+    r"\bALTER\s+TABLE\b|"
+    r"\bDELETE\s+FROM\b|"
+    r"\bINSERT\s+INTO\b|"
+    r"\bUNION\s+(?:ALL\s+)?SELECT\b|"
+    r"\bEXEC(?:UTE)?\s|"
+    r"\bxp_\w+)",
+    re.IGNORECASE,
+)
+
+# Prompt-injection markers (#1121) — strings that frequently appear in
+# attacker attempts to flip the model's instructions. The caller
+# lowers the input before membership check, so these are lowercase.
+_INJECTION_MARKERS: tuple[str, ...] = (
+    "ignore previous instructions",
+    "ignore all previous instructions",
+    "ignore the above",
+    "disregard previous",
+    "disregard all previous",
+    "new instructions:",
+    "you are now",
+    "forget everything",
+    "override system",
+    "system:",
+    "</document>",
+    "<<<user_document_start",
+    "<<<user_document_end",
+)
+
+# URL pattern for flagging unexpected URLs in LLM output (#1246).
+_URL_PATTERN = re.compile(
+    r"https?://[\w\-.]+(?:/[^\s<>]*)?",
+    re.IGNORECASE,
+)
+
+# Jurisdiction allow-list for prompt construction (#1064). Any
+# user-supplied jurisdiction value that is not in this set is coerced
+# to "UNKNOWN" before interpolation into the LLM prompt, blocking
+# injection payloads that try to flip the model's jurisdiction
+# context (e.g. "US-NY\n\nIGNORE PRIOR INSTRUCTIONS").
+ALLOWED_JURISDICTIONS: frozenset[str] = frozenset({
+    # Federal
+    "US",
+    "US-FDA",
+    "US-FEDERAL",
+    # US states + DC
+    "US-AL", "US-AK", "US-AZ", "US-AR", "US-CA", "US-CO", "US-CT", "US-DE",
+    "US-DC", "US-FL", "US-GA", "US-HI", "US-ID", "US-IL", "US-IN", "US-IA",
+    "US-KS", "US-KY", "US-LA", "US-ME", "US-MD", "US-MA", "US-MI", "US-MN",
+    "US-MS", "US-MO", "US-MT", "US-NE", "US-NV", "US-NH", "US-NJ", "US-NM",
+    "US-NY", "US-NC", "US-ND", "US-OH", "US-OK", "US-OR", "US-PA", "US-RI",
+    "US-SC", "US-SD", "US-TN", "US-TX", "US-UT", "US-VT", "US-VA", "US-WA",
+    "US-WV", "US-WI", "US-WY",
+    # International — FSMA-relevant trading partners
+    "CA", "MX", "EU",
+    # Sentinel
+    "UNKNOWN",
+})
+
 
 def sanitize_user_content(content: str) -> str:
     """
