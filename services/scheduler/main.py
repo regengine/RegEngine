@@ -71,6 +71,7 @@ from app.scrapers import (
     FDAWarningLettersScraper,
     InternalDiscoveryScraper,
 )
+from app.scrapers.base import BaseScraper
 from app.state import StateManager
 from app.fda_fsma_transformer import get_fsma_transformer
 from app.distributed import DistributedContext
