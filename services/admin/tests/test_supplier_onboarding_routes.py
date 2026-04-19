@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.sqlalchemy_models import (
+    AuditLogModel,
     SupplierCTEEventModel,
     SupplierFacilityFTLCategoryModel,
     SupplierFacilityModel,
@@ -43,6 +44,8 @@ def db_session() -> Session:
         SupplierTraceabilityLotModel.__table__,
         SupplierCTEEventModel.__table__,
         SupplierFunnelEventModel.__table__,
+        # #1407: demo reset now writes an audit entry before the delete.
+        AuditLogModel.__table__,
     ]
     for table in table_bindings:
         table.create(bind=engine)
@@ -62,7 +65,10 @@ def db_session() -> Session:
             name="Test Tenant",
             slug="test-tenant",
             status="active",
-            settings={},
+            # #1407: demo reset is now gated on settings.is_demo; the
+            # test tenant is explicitly a demo tenant so the reset
+            # endpoint is exercisable here.
+            settings={"is_demo": True},
         )
     )
     session.add(
@@ -107,10 +113,25 @@ def client(db_session: Session, monkeypatch: pytest.MonkeyPatch) -> TestClient:
         assert current_user is not None
         return current_user
 
+    from fastapi import Depends
     from app.database import get_session
-    from app.dependencies import get_current_user
+    from app.dependencies import PermissionChecker, get_current_user
     test_app.dependency_overrides[get_session] = override_get_session
     test_app.dependency_overrides[get_current_user] = override_get_current_user
+
+    # #1407: the demo reset endpoint runs PermissionChecker
+    # ("supplier.demo.reset"). Replace the class-level __call__ with a
+    # signature-compatible stub that FastAPI can still introspect (must
+    # have the same user/db Depends params the original declared, or
+    # FastAPI will interpret *args/**kwargs as query params and 422).
+    def _permission_stub(
+        self,
+        user=Depends(get_current_user),
+        db=Depends(get_session),
+    ):
+        return True
+
+    monkeypatch.setattr(PermissionChecker, "__call__", _permission_stub)
 
     monkeypatch.setattr(supplier_routes.TenantContext, "get_tenant_context", lambda _db: TEST_TENANT_ID)
     monkeypatch.setattr(supplier_routes.supplier_graph_sync, "record_facility_ftl_scoping", lambda **_kwargs: None)
@@ -432,9 +453,13 @@ def test_fda_export_xlsx_returns_spreadsheet_payload(client: TestClient):
 
 
 def test_demo_reset_seeds_chain_and_focus_gap(client: TestClient):
-    response = client.post("/v1/supplier/demo/reset")
+    # #1407: demo reset now requires an explicit confirmation phrase
+    # in addition to the demo-tenant gate + RBAC.
+    response = client.post(
+        "/v1/supplier/demo/reset?confirm=reset-supplier-demo-data"
+    )
 
-    assert response.status_code == 200
+    assert response.status_code == 200, response.text
     payload = response.json()
     assert payload["seeded_facilities"] == 4
     assert payload["seeded_tlcs"] >= 3

@@ -166,9 +166,11 @@ def test_acknowledge_alert_stamps_authenticated_user_not_request_user(monkeypatc
         def __init__(self, session):
             pass
 
-        def acknowledge_alert(self, aid, actor_id):
+        # #1405: signature now includes tenant_id for defense-in-depth.
+        def acknowledge_alert(self, aid, tid, actor_id):
             captured["actor_id"] = actor_id
             captured["alert_id"] = aid
+            captured["tenant_id"] = tid
             alert = _FakeAlert(tenant_id)
             alert.acknowledged_by = actor_id
             return alert
@@ -210,9 +212,11 @@ def test_resolve_alert_stamps_authenticated_user_not_request_user(monkeypatch):
         def __init__(self, session):
             pass
 
-        def resolve_alert(self, aid, actor_id, notes):
+        # #1405: signature now includes tenant_id for defense-in-depth.
+        def resolve_alert(self, aid, tid, actor_id, notes):
             captured["actor_id"] = actor_id
             captured["notes"] = notes
+            captured["tenant_id"] = tid
             alert = _FakeAlert(tenant_id)
             alert.status = "RESOLVED"
             alert.resolved_by = actor_id
@@ -268,8 +272,9 @@ def test_service_layer_still_stamps_acknowledged_by_from_caller_arg():
         def add(self_inner, obj):
             captured["added"] = obj
 
+    alert_tenant = uuid.uuid4()
     alert = ComplianceAlertModel(
-        tenant_id=uuid.uuid4(),
+        tenant_id=alert_tenant,
         source_type="MANUAL",
         source_id="x",
         title="x",
@@ -284,7 +289,8 @@ def test_service_layer_still_stamps_acknowledged_by_from_caller_arg():
 
     service = ComplianceServiceSync(FakeSession())
     actor_id = str(uuid.uuid4())
-    out = service.acknowledge_alert(uuid.uuid4(), actor_id)
+    # #1405: service signature requires (alert_id, tenant_id, actor_id).
+    out = service.acknowledge_alert(uuid.uuid4(), alert_tenant, actor_id)
 
     assert out is alert
     assert alert.acknowledged_by == actor_id

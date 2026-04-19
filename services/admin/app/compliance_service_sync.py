@@ -97,20 +97,36 @@ class ComplianceServiceSync:
         result = self.session.execute(query)
         return result.scalars().all()
 
-    def get_alert(self, alert_id: UUID) -> Optional[ComplianceAlertModel]:
-        """Get a single alert by ID."""
+    def get_alert(
+        self, alert_id: UUID, tenant_id: UUID
+    ) -> Optional[ComplianceAlertModel]:
+        """Get a single alert by ID, scoped to ``tenant_id``.
+
+        #1405: defense-in-depth against the compliance-IDOR class of
+        bugs. Route-level ``verify_path_tenant_matches`` catches the
+        common case; this service-layer filter also catches any future
+        caller that forgets to verify the path tenant. Mismatched
+        alerts are indistinguishable from "not found" so we don't leak
+        the existence of another tenant's alert id.
+        """
         result = self.session.execute(
-            select(ComplianceAlertModel).where(ComplianceAlertModel.id == alert_id)
+            select(ComplianceAlertModel).where(
+                and_(
+                    ComplianceAlertModel.id == alert_id,
+                    ComplianceAlertModel.tenant_id == tenant_id,
+                )
+            )
         )
         return result.scalar_one_or_none()
 
     def acknowledge_alert(
         self,
         alert_id: UUID,
+        tenant_id: UUID,
         user_id: str,
     ) -> Optional[ComplianceAlertModel]:
-        """Mark an alert as acknowledged."""
-        alert = self.get_alert(alert_id)
+        """Mark an alert as acknowledged. Tenant-scoped per #1405."""
+        alert = self.get_alert(alert_id, tenant_id)
         if not alert:
             return None
 
@@ -125,11 +141,12 @@ class ComplianceServiceSync:
     def resolve_alert(
         self,
         alert_id: UUID,
+        tenant_id: UUID,
         user_id: str,
         notes: Optional[str] = None,
     ) -> Optional[ComplianceAlertModel]:
-        """Mark an alert as resolved."""
-        alert = self.get_alert(alert_id)
+        """Mark an alert as resolved. Tenant-scoped per #1405."""
+        alert = self.get_alert(alert_id, tenant_id)
         if not alert:
             return None
 

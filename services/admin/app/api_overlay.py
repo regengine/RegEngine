@@ -151,7 +151,7 @@ async def create_control(
         logger.exception("control_creation_failed", tenant_id=str(tenant_id), error=str(exc))
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to create control: {str(exc)}",
+            detail={"error": "internal_error", "message": "Failed to create control."},
         )
 
 
@@ -188,7 +188,7 @@ async def list_controls(
         logger.exception("list_controls_failed", tenant_id=str(tenant_id), error=str(exc))
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to list controls: {str(exc)}",
+            detail={"error": "internal_error", "message": "Failed to list controls."},
         )
 
 
@@ -222,7 +222,7 @@ async def get_control_details(
         logger.exception("get_control_details_failed", control_id=str(control_id), error=str(exc))
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to get control details: {str(exc)}",
+            detail={"error": "internal_error", "message": "Failed to get control details."},
         )
 
 
@@ -275,7 +275,7 @@ async def update_control(
         logger.exception("control_update_failed", control_id=str(control_id), error=str(exc))
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to update control: {str(exc)}",
+            detail={"error": "internal_error", "message": "Failed to update control."},
         )
 
 
@@ -313,7 +313,7 @@ async def delete_control(
         logger.exception("control_deletion_failed", control_id=str(control_id), error=str(exc))
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to delete control: {str(exc)}",
+            detail={"error": "internal_error", "message": "Failed to delete control."},
         )
 
 
@@ -361,7 +361,7 @@ async def create_product(
         logger.exception("product_creation_failed", tenant_id=str(tenant_id), error=str(exc))
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to create product: {str(exc)}",
+            detail={"error": "internal_error", "message": "Failed to create product."},
         )
 
 
@@ -398,7 +398,7 @@ async def list_products(
         logger.exception("list_products_failed", tenant_id=str(tenant_id), error=str(exc))
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to list products: {str(exc)}",
+            detail={"error": "internal_error", "message": "Failed to list products."},
         )
 
 
@@ -434,7 +434,7 @@ async def get_product_requirements(
         logger.exception("get_product_requirements_failed", product_id=str(product_id), error=str(exc))
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to get product requirements: {str(exc)}",
+            detail={"error": "internal_error", "message": "Failed to get product requirements."},
         )
 
 
@@ -469,7 +469,7 @@ async def get_compliance_gaps(
         )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to get compliance gaps: {str(exc)}",
+            detail={"error": "internal_error", "message": "Failed to get compliance gaps."},
         )
 
 
@@ -507,7 +507,7 @@ async def delete_product(
         logger.exception("product_deletion_failed", product_id=str(product_id), error=str(exc))
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to delete product: {str(exc)}",
+            detail={"error": "internal_error", "message": "Failed to delete product."},
         )
 
 
@@ -564,7 +564,7 @@ async def create_mapping(
         logger.exception("mapping_creation_failed", tenant_id=str(tenant_id), error=str(exc))
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to create mapping: {str(exc)}",
+            detail={"error": "internal_error", "message": "Failed to create mapping."},
         )
 
 
@@ -607,7 +607,7 @@ async def link_control_to_product(
         logger.exception("link_creation_failed", tenant_id=str(tenant_id), error=str(exc))
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to link control to product: {str(exc)}",
+            detail={"error": "internal_error", "message": "Failed to link control to product."},
         )
 
 
@@ -645,7 +645,7 @@ async def delete_mapping(
         logger.exception("mapping_deletion_failed", mapping_id=str(mapping_id), error=str(exc))
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to delete mapping: {str(exc)}",
+            detail={"error": "internal_error", "message": "Failed to delete mapping."},
         )
 
 
@@ -682,5 +682,5 @@ async def get_provision_overlays(
         logger.exception("get_provision_overlays_failed", provision_hash=provision_hash, error=str(exc))
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to get provision overlays: {str(exc)}",
+            detail={"error": "internal_error", "message": "Failed to get provision overlays."},
         )

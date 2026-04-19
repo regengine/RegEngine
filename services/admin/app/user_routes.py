@@ -97,39 +97,44 @@ async def update_user_role(
     tenant_id = TenantContext.get_tenant_context(db)
     if not tenant_id:
         raise HTTPException(status_code=400, detail="Tenant context required")
-    
-    # Invariant: Cannot remove last Owner
+
+    # #1083: lock the target membership AND all Owner memberships for
+    # this tenant in the same transaction. Two concurrent demotion
+    # requests used to each observe the other Owner still present,
+    # each pass the "last Owner" check, and each commit — leaving the
+    # tenant with zero Owners. SELECT ... FOR UPDATE serializes them.
     membership = db.execute(
-        select(MembershipModel).where(
+        select(MembershipModel)
+        .where(
             MembershipModel.user_id == user_id,
-            MembershipModel.tenant_id == tenant_id
+            MembershipModel.tenant_id == tenant_id,
         )
+        .with_for_update()
     ).scalar_one_or_none()
-    
+
     if not membership:
         raise HTTPException(status_code=404, detail="User not found in this tenant")
-        
+
     target_role = db.get(RoleModel, update.role_id)
     if not target_role:
         raise HTTPException(status_code=400, detail="Role not found")
-        
-    # Check "Last Owner" invariant
-    # 1. Get current role of user
+
     current_role = db.get(RoleModel, membership.role_id)
     if current_role.name == "Owner" and target_role.name != "Owner":
-        # Check count of OTHER owners
-        owner_subquery = (
-            select(MembershipModel.user_id)
+        # Lock every Owner membership for this tenant so another
+        # concurrent demotion can't commit in parallel.
+        locked_owners = db.execute(
+            select(MembershipModel)
             .join(RoleModel)
             .where(
                 MembershipModel.tenant_id == tenant_id,
                 RoleModel.name == "Owner",
-                MembershipModel.user_id != user_id
+                MembershipModel.user_id != user_id,
             )
-        )
-        other_owners = db.execute(owner_subquery).all()
-        if not other_owners:
-             raise HTTPException(status_code=400, detail="Cannot remove the last Owner")
+            .with_for_update()
+        ).all()
+        if not locked_owners:
+            raise HTTPException(status_code=400, detail="Cannot remove the last Owner")
 
     # Update
     old_role_id = membership.role_id
@@ -163,35 +168,37 @@ async def deactivate_user(
     if not tenant_id:
         raise HTTPException(status_code=400, detail="Tenant context required")
     
+    # #1083: lock target membership + Owner rows. Same race as
+    # update_user_role — concurrent deactivations of two Owners could
+    # zero out the tenant before the invariant check fires.
     membership = db.execute(
-        select(MembershipModel).where(
+        select(MembershipModel)
+        .where(
             MembershipModel.user_id == user_id,
-            MembershipModel.tenant_id == tenant_id
+            MembershipModel.tenant_id == tenant_id,
         )
+        .with_for_update()
     ).scalar_one_or_none()
-    
+
     if not membership:
         raise HTTPException(status_code=404, detail="User not found")
-        
-    # Deactivate = delete membership (tenant-scoped, not global user disable).
-    # Check "Last Owner" invariant before removing.
+
     current_role = db.get(RoleModel, membership.role_id)
     if current_role.name == "Owner":
-         owner_subquery = (
-            select(MembershipModel.user_id)
+        locked_owners = db.execute(
+            select(MembershipModel)
             .join(RoleModel)
             .where(
                 MembershipModel.tenant_id == tenant_id,
                 RoleModel.name == "Owner",
-                MembershipModel.user_id != user_id
+                MembershipModel.user_id != user_id,
             )
-        )
-         other_owners = db.execute(owner_subquery).all()
-         if not other_owners:
-             raise HTTPException(status_code=400, detail="Cannot remove the last Owner")
-             
-    # Perform Removal (Deactivate)
-    # Changed to Soft Delete (Deactivate)
+            .with_for_update()
+        ).all()
+        if not locked_owners:
+            raise HTTPException(status_code=400, detail="Cannot remove the last Owner")
+
+    # Soft delete (tenant-scoped deactivation, not global user disable).
     membership.is_active = False
     
     AuditLogger.log_event(
@@ -218,19 +225,52 @@ async def reactivate_user(
     tenant_id = TenantContext.get_tenant_context(db)
     if not tenant_id:
         raise HTTPException(status_code=400, detail="Tenant context required")
-    
+
     membership = db.execute(
         select(MembershipModel).where(
             MembershipModel.user_id == user_id,
-            MembershipModel.tenant_id == tenant_id
+            MembershipModel.tenant_id == tenant_id,
         )
     ).scalar_one_or_none()
-    
+
     if not membership:
         raise HTTPException(status_code=404, detail="User not found")
-        
+
+    # #1406: block reactivation of a sysadmin's dormant membership by a
+    # tenant Owner. An engineer who debugged the tenant months ago
+    # should not have cross-tenant access resurrected by a customer.
+    target_user = db.get(UserModel, user_id)
+    if (
+        target_user is not None
+        and getattr(target_user, "is_sysadmin", False)
+        and not getattr(current_user, "is_sysadmin", False)
+    ):
+        logger.warning(
+            "sysadmin_reactivation_blocked",
+            target_user_id=str(user_id),
+            actor_id=str(current_user.id),
+            tenant_id=str(tenant_id),
+        )
+        AuditLogger.log_event(
+            db,
+            tenant_id=tenant_id,
+            event_type="membership.reactivate_blocked",
+            event_category="identity_access",
+            severity="warning",
+            actor_id=current_user.id,
+            action="membership.reactivate_blocked",
+            resource_type="membership",
+            resource_id=str(user_id),
+            metadata={"reason": "target_is_sysadmin"},
+        )
+        db.commit()
+        raise HTTPException(
+            status_code=403,
+            detail="Cannot reactivate sysadmin membership without sysadmin privileges",
+        )
+
     membership.is_active = True
-    
+
     AuditLogger.log_event(
         db,
         tenant_id=tenant_id,
@@ -242,7 +282,7 @@ async def reactivate_user(
         resource_id=str(user_id),
         metadata={"is_active": True}
     )
-    
+
     db.commit()
     return {"status": "reactivated"}
 

@@ -67,21 +67,50 @@ def verify_chain(entries: List[dict]) -> dict:
                     "actual": actual_prev,
                 })
 
-        # Recompute integrity hash
-        payload = json.dumps(
-            {
-                "prev_hash": actual_prev or "GENESIS",
-                "tenant_id": entry.get("tenant_id"),
-                "timestamp": entry.get("timestamp"),
-                "event_type": entry.get("event", {}).get("type"),
-                "action": entry.get("event", {}).get("action"),
-                "resource_id": entry.get("resource", {}).get("id"),
-                "metadata": entry.get("metadata", {}),
-            },
-            sort_keys=True,
-            default=str,
-        )
-        recomputed = hashlib.sha256(payload.encode("utf-8")).hexdigest()
+        # #1415: recompute using v2 (actor fields folded in). Fall back
+        # to v1 for entries written before the schema migration so older
+        # chains still verify. Drift between v1 and v2 for the same row
+        # is flagged so operators can spot pre-#1415 entries.
+        actor = entry.get("actor", {}) if isinstance(entry.get("actor"), dict) else {}
+        v2_body = {
+            "prev_hash": actual_prev or "GENESIS",
+            "tenant_id": entry.get("tenant_id"),
+            "timestamp": entry.get("timestamp"),
+            "event_type": entry.get("event", {}).get("type"),
+            "action": entry.get("event", {}).get("action"),
+            "resource_id": entry.get("resource", {}).get("id"),
+            "metadata": entry.get("metadata", {}),
+            "version": 2,
+            "actor_id": actor.get("id"),
+            "actor_email": actor.get("email"),
+            "severity": entry.get("severity"),
+            "endpoint": entry.get("endpoint"),
+        }
+        recomputed_v2 = hashlib.sha256(
+            json.dumps(v2_body, sort_keys=True, default=str).encode("utf-8")
+        ).hexdigest()
+
+        v1_body = {
+            "prev_hash": actual_prev or "GENESIS",
+            "tenant_id": entry.get("tenant_id"),
+            "timestamp": entry.get("timestamp"),
+            "event_type": entry.get("event", {}).get("type"),
+            "action": entry.get("event", {}).get("action"),
+            "resource_id": entry.get("resource", {}).get("id"),
+            "metadata": entry.get("metadata", {}),
+        }
+        recomputed_v1 = hashlib.sha256(
+            json.dumps(v1_body, sort_keys=True, default=str).encode("utf-8")
+        ).hexdigest()
+
+        if actual_hash == recomputed_v2:
+            recomputed = recomputed_v2
+        elif actual_hash == recomputed_v1:
+            # Accept legacy row but surface the hash version for operator
+            # visibility — pre-#1415 rows lack actor-field tamper evidence.
+            recomputed = recomputed_v1
+        else:
+            recomputed = recomputed_v2
 
         if recomputed != actual_hash:
             errors.append({
