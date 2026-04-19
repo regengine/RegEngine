@@ -520,8 +520,20 @@ async def log_traceability_event(
             await session.run(Facility.merge_cypher(), gln=payload.location_identifier, properties=facility.node_properties)
 
             # Link Relationships
-            await session.run(FSMARelationships.LOT_UNDERWENT_EVENT, tlc=payload.tlc, event_id=event_id)
-            await session.run(FSMARelationships.EVENT_OCCURRED_AT, event_id=event_id, gln=payload.location_identifier)
+            # #1284: pass tenant_id so the MATCH clauses don't walk cross-tenant
+            # nodes that happen to share a TLC/event_id/GLN with the caller.
+            await session.run(
+                FSMARelationships.LOT_UNDERWENT_EVENT,
+                tlc=payload.tlc,
+                event_id=event_id,
+                tenant_id=str(tenant_id),
+            )
+            await session.run(
+                FSMARelationships.EVENT_OCCURRED_AT,
+                event_id=event_id,
+                gln=payload.location_identifier,
+                tenant_id=str(tenant_id),
+            )
 
             # 3. Handle Evidence (BOL Photo)
             if payload.image_data:
@@ -537,8 +549,14 @@ async def log_traceability_event(
                     tenant_id=str(tenant_id)
                 )
                 await session.run(Document.merge_cypher(), document_id=doc_id, properties=document.node_properties)
-                # Link Document to Event
-                await session.run(FSMARelationships.DOCUMENT_EVIDENCES, document_id=doc_id, event_id=event_id)
+                # Link Document to Event — tenant-scoped to prevent cross-tenant
+                # edges when a document_id or event_id collides across tenants (#1284).
+                await session.run(
+                    FSMARelationships.DOCUMENT_EVIDENCES,
+                    document_id=doc_id,
+                    event_id=event_id,
+                    tenant_id=str(tenant_id),
+                )
                 logger.info("secured_evidence_payload", doc_id=doc_id, event_id=event_id)
 
         await client.close()
