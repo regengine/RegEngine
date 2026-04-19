@@ -512,74 +512,90 @@ class Document:
 
 
 class FSMARelationships:
-    """Cypher templates for FSMA relationship creation."""
+    """Cypher templates for FSMA relationship creation.
+
+    # SECURITY: All MATCH clauses require ``$tenant_id`` (#1284).
+    #
+    # Uniqueness constraints are ``(tlc, tenant_id)`` and ``(event_id,
+    # tenant_id)``, meaning two tenants CAN share the same TLC or event_id.
+    # Without a tenant_id predicate the planner picks whichever node it
+    # finds first, and the resulting MERGE creates a cross-tenant edge
+    # between tenant A's event and tenant B's lot — corrupting B's graph
+    # and leaking B's nodes into A's trace queries via variable-length
+    # path traversal (see the chain_integrity / overlay_resolver audits).
+    #
+    # Every caller MUST pass a ``tenant_id`` kwarg. If the graph planner
+    # cannot find a matching node *within the caller's tenant*, the MERGE
+    # becomes a no-op, which is the correct fail-safe: better to drop a
+    # write than fabricate a cross-tenant edge.
+    """
 
     # Lot underwent a TraceEvent
     LOT_UNDERWENT_EVENT = """
-    MATCH (l:Lot {tlc: $tlc})
-    MATCH (e:TraceEvent {event_id: $event_id})
+    MATCH (l:Lot {tlc: $tlc, tenant_id: $tenant_id})
+    MATCH (e:TraceEvent {event_id: $event_id, tenant_id: $tenant_id})
     MERGE (l)-[:UNDERWENT]->(e)
     """
 
     # TraceEvent produced a Lot (transformation output)
     EVENT_PRODUCED_LOT = """
-    MATCH (e:TraceEvent {event_id: $event_id})
-    MATCH (l:Lot {tlc: $tlc})
+    MATCH (e:TraceEvent {event_id: $event_id, tenant_id: $tenant_id})
+    MATCH (l:Lot {tlc: $tlc, tenant_id: $tenant_id})
     MERGE (e)-[:PRODUCED]->(l)
     """
 
     # TraceEvent consumed a Lot (transformation input)
     EVENT_CONSUMED_LOT = """
-    MATCH (e:TraceEvent {event_id: $event_id})
-    MATCH (l:Lot {tlc: $tlc})
+    MATCH (e:TraceEvent {event_id: $event_id, tenant_id: $tenant_id})
+    MATCH (l:Lot {tlc: $tlc, tenant_id: $tenant_id})
     MERGE (e)-[:CONSUMED]->(l)
     """
 
     # TraceEvent occurred at a Facility
     EVENT_OCCURRED_AT = """
-    MATCH (e:TraceEvent {event_id: $event_id})
-    MATCH (f:Facility {gln: $gln})
+    MATCH (e:TraceEvent {event_id: $event_id, tenant_id: $tenant_id})
+    MATCH (f:Facility {gln: $gln, tenant_id: $tenant_id})
     MERGE (e)-[:OCCURRED_AT]->(f)
     """
 
     # Shipping: From facility shipped to event, event shipped to destination
     SHIPPED_FROM = """
-    MATCH (f:Facility {gln: $from_gln})
-    MATCH (e:TraceEvent {event_id: $event_id})
+    MATCH (f:Facility {gln: $from_gln, tenant_id: $tenant_id})
+    MATCH (e:TraceEvent {event_id: $event_id, tenant_id: $tenant_id})
     MERGE (f)-[:SHIPPED]->(e)
     """
 
     SHIPPED_TO = """
-    MATCH (e:TraceEvent {event_id: $event_id})
-    MATCH (f:Facility {gln: $to_gln})
+    MATCH (e:TraceEvent {event_id: $event_id, tenant_id: $tenant_id})
+    MATCH (f:Facility {gln: $to_gln, tenant_id: $tenant_id})
     MERGE (e)-[:SHIPPED_TO]->(f)
     """
 
     # Lot is an instance of FoodItem
     LOT_IS_PRODUCT = """
-    MATCH (l:Lot {tlc: $tlc})
-    MATCH (p:FoodItem {name: $product_name})
+    MATCH (l:Lot {tlc: $tlc, tenant_id: $tenant_id})
+    MATCH (p:FoodItem {name: $product_name, tenant_id: $tenant_id})
     MERGE (l)-[:IS_PRODUCT]->(p)
     """
 
     # Document evidences TraceEvent
     DOCUMENT_EVIDENCES = """
-    MATCH (d:Document {document_id: $document_id})
-    MATCH (e:TraceEvent {event_id: $event_id})
+    MATCH (d:Document {document_id: $document_id, tenant_id: $tenant_id})
+    MATCH (e:TraceEvent {event_id: $event_id, tenant_id: $tenant_id})
     MERGE (d)-[:EVIDENCES]->(e)
     """
 
     # Lot assigned by Facility (TLC Source relationship)
     # Links a Lot to the Facility that assigned its Traceability Lot Code
     LOT_ASSIGNED_BY_GLN = """
-    MATCH (l:Lot {tlc: $tlc})
-    MATCH (f:Facility {gln: $gln})
+    MATCH (l:Lot {tlc: $tlc, tenant_id: $tenant_id})
+    MATCH (f:Facility {gln: $gln, tenant_id: $tenant_id})
     MERGE (l)-[:ASSIGNED_BY]->(f)
     """
 
     LOT_ASSIGNED_BY_FDA_REG = """
-    MATCH (l:Lot {tlc: $tlc})
-    MATCH (f:Facility {fda_registration: $fda_reg})
+    MATCH (l:Lot {tlc: $tlc, tenant_id: $tenant_id})
+    MATCH (f:Facility {fda_registration: $fda_reg, tenant_id: $tenant_id})
     MERGE (l)-[:ASSIGNED_BY]->(f)
     """
 
