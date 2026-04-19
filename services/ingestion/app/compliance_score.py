@@ -423,10 +423,7 @@ def _compute_scores(data: dict) -> dict:
         scores["obligation_coverage"] = (50, "Obligation rules not loaded — seed regulatory data")
     else:
         # Base score from CTE type coverage of obligations
-        if total_rules > 0:
-            coverage_ratio = applicable_rules / total_rules
-        else:
-            coverage_ratio = 0
+        coverage_ratio = applicable_rules / total_rules
         obl_score = int(coverage_ratio * 80)  # Up to 80 points for CTE coverage
 
         # Deduct for open obligation alerts
