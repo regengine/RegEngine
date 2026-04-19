@@ -19,7 +19,11 @@ from . import state as _state_mod
 logger = logging.getLogger("stripe-billing")
 
 
-async def _handle_checkout_completed(session: dict[str, Any]) -> None:
+async def _handle_checkout_completed(
+    session: dict[str, Any],
+    *,
+    event_created: Optional[int] = None,
+) -> None:
     """Handle a completed Stripe checkout.
 
     #1184 fix: never trust ``metadata.tenant_id`` from the session alone.
@@ -103,24 +107,72 @@ async def _handle_checkout_completed(session: dict[str, Any]) -> None:
         except stripe.error.StripeError as exc:  # pragma: no cover - network/API errors
             logger.warning("subscription_lookup_failed", subscription_id=subscription_id, error=str(exc))
 
-    _state_mod._store_subscription_mapping(
-        tenant_id,
-        {
-            "tenant_id": tenant_id,
-            "session_id": session_id or "",
-            "customer_id": customer_id or "",
-            "subscription_id": subscription_id or "",
-            "plan_id": plan_id,
-            "billing_period": billing_period,
-            "status": subscription_status,
-            "customer_email": (
-                (session.get("customer_details") or {}).get("email")
-                or session.get("customer_email")
-                or str(metadata.get("customer_email", ""))
-            ),
-            "current_period_end": current_period_end or "",
-        },
-    )
+    # #1196: the checkout event itself is the first write that establishes
+    # a tenant ↔ subscription mapping. Stamp its ``event_created`` as the
+    # watermark so subsequent reordered updates with older timestamps are
+    # rejected by the reorder guard in ``_update_subscription_status``.
+    initial_mapping: dict[str, str] = {
+        "tenant_id": tenant_id,
+        "session_id": session_id or "",
+        "customer_id": customer_id or "",
+        "subscription_id": subscription_id or "",
+        "plan_id": plan_id,
+        "billing_period": billing_period,
+        "status": subscription_status,
+        "customer_email": (
+            (session.get("customer_details") or {}).get("email")
+            or session.get("customer_email")
+            or str(metadata.get("customer_email", ""))
+        ),
+        "current_period_end": current_period_end or "",
+    }
+    if event_created is not None:
+        initial_mapping["last_event_created"] = str(int(event_created))
+
+    _state_mod._store_subscription_mapping(tenant_id, initial_mapping)
+
+    # #1196: drain any pending subscription.updated/.deleted that arrived
+    # out of order (before this checkout event). Apply it on top of the
+    # initial mapping only if its ``event_created`` is strictly newer than
+    # the checkout event's — otherwise the checkout's synchronous
+    # ``stripe.Subscription.retrieve`` above already reflects a later state.
+    if subscription_id:
+        pending = _state_mod._pop_pending_subscription_update(subscription_id)
+        if pending:
+            pending_event_created = int(pending.get("event_created") or 0)
+            checkout_event_created = int(event_created or 0)
+            if pending_event_created > checkout_event_created:
+                existing = _state_mod._get_subscription_mapping(tenant_id)
+                # Merge pending-update fields into the just-written mapping.
+                pending_status = pending.get("status")
+                if pending_status:
+                    existing["status"] = pending_status
+                for key in (
+                    "current_period_end",
+                    "last_invoice_id",
+                    "last_payment_at",
+                    "last_payment_failure_at",
+                ):
+                    value = pending.get(key)
+                    if value is not None:
+                        existing[key] = value
+                existing["last_event_created"] = str(pending_event_created)
+                _state_mod._store_subscription_mapping(tenant_id, existing)
+                logger.info(
+                    "stripe_pending_update_applied "
+                    "subscription_id=%s tenant_id=%s pending_event_created=%s "
+                    "checkout_event_created=%s status=%s",
+                    subscription_id, tenant_id, pending_event_created,
+                    checkout_event_created, pending_status,
+                )
+            else:
+                logger.info(
+                    "stripe_pending_update_superseded_by_checkout "
+                    "subscription_id=%s tenant_id=%s pending_event_created=%s "
+                    "checkout_event_created=%s",
+                    subscription_id, tenant_id, pending_event_created,
+                    checkout_event_created,
+                )
 
 
 def _update_subscription_status(
@@ -132,18 +184,76 @@ def _update_subscription_status(
     last_invoice_id: Optional[str] = None,
     last_payment_at: Optional[str] = None,
     last_payment_failure_at: Optional[str] = None,
+    event_created: Optional[int] = None,
 ) -> None:
+    """Apply a subscription-state change from a webhook event.
+
+    #1196: Stripe does not guarantee event ordering. Two safeguards:
+
+    1. *Missing-mapping recovery*: if no tenant mapping exists yet (e.g.
+       ``customer.subscription.updated`` arrived before
+       ``checkout.session.completed``), we buffer the update keyed by
+       subscription_id and let ``_handle_checkout_completed`` drain it
+       once the mapping is created. The previous behavior silently
+       dropped the event.
+
+    2. *Reorder guard*: if a mapping exists but has a ``last_event_created``
+       watermark newer than this event's ``event_created``, we skip the
+       write. This prevents an older webhook from overwriting a newer
+       status that already landed (e.g. ``canceled`` followed in Stripe-
+       time by a retry of an earlier ``active``).
+    """
     tenant_id = _state_mod._find_tenant_id(subscription_id, customer_id)
     if not tenant_id:
-        logger.warning(
-            "billing_mapping_not_found",
-            subscription_id=subscription_id,
-            customer_id=customer_id,
-            status=status,
-        )
+        # #1196: buffer the update so checkout processing can recover it.
+        # Before the fix this return silently dropped the event; the
+        # subscription would stay stuck on its initial status even after
+        # a successful payment and status flip.
+        if subscription_id:
+            buffered = _state_mod._buffer_pending_subscription_update(
+                subscription_id,
+                {
+                    "status": status,
+                    "event_created": int(event_created or 0),
+                    "current_period_end": current_period_end,
+                    "last_invoice_id": last_invoice_id,
+                    "last_payment_at": last_payment_at,
+                    "last_payment_failure_at": last_payment_failure_at,
+                    "customer_id": customer_id or "",
+                },
+            )
+            logger.warning(
+                "billing_mapping_not_found_update_buffered "
+                "subscription_id=%s customer_id=%s status=%s "
+                "event_created=%s buffered=%s",
+                subscription_id, customer_id, status,
+                event_created, buffered,
+            )
+        else:
+            logger.warning(
+                "billing_mapping_not_found "
+                "subscription_id=%s customer_id=%s status=%s",
+                subscription_id, customer_id, status,
+            )
         return
 
     existing = _state_mod._get_subscription_mapping(tenant_id)
+
+    # #1196 reorder guard: refuse stale events.
+    if event_created is not None:
+        try:
+            last_seen = int(existing.get("last_event_created") or 0)
+        except (ValueError, TypeError):
+            last_seen = 0
+        if int(event_created) < last_seen:
+            logger.info(
+                "stripe_webhook_event_out_of_order_ignored "
+                "tenant_id=%s subscription_id=%s "
+                "event_created=%s last_event_created=%s status=%s",
+                tenant_id, subscription_id, event_created, last_seen, status,
+            )
+            return
+
     existing.update(
         {
             "status": status,
@@ -159,15 +269,22 @@ def _update_subscription_status(
         existing["last_payment_at"] = last_payment_at
     if last_payment_failure_at is not None:
         existing["last_payment_failure_at"] = last_payment_failure_at
+    if event_created is not None:
+        existing["last_event_created"] = str(int(event_created))
     _state_mod._store_subscription_mapping(tenant_id, existing)
 
 
 async def _handle_stripe_event(event: dict[str, Any]) -> None:
     event_type = event.get("type")
     data_object = (event.get("data") or {}).get("object") or {}
+    # #1196: Stripe event envelopes always carry ``created`` (unix seconds).
+    # Missing / unparseable → 0, which disables the reorder guard for this
+    # event (safe default: we apply it like pre-fix behavior). This matches
+    # how we treat legacy events that existed in the queue before the fix.
+    event_created = _helpers_mod._coerce_int(event.get("created"), default=0) or None
 
     if event_type == "checkout.session.completed":
-        await _handle_checkout_completed(data_object)
+        await _handle_checkout_completed(data_object, event_created=event_created)
         return
 
     if event_type == "invoice.payment_failed":
@@ -177,6 +294,7 @@ async def _handle_stripe_event(event: dict[str, Any]) -> None:
             status="past_due",
             last_invoice_id=str(data_object.get("id", "") or ""),
             last_payment_failure_at=_helpers_mod._format_period_end(_helpers_mod._coerce_int(data_object.get("created"))),
+            event_created=event_created,
         )
         return
 
@@ -192,6 +310,7 @@ async def _handle_stripe_event(event: dict[str, Any]) -> None:
             current_period_end=period_end,
             last_invoice_id=str(data_object.get("id", "") or ""),
             last_payment_at=paid_at,
+            event_created=event_created,
         )
         payment_tenant_id = _state_mod._find_tenant_id(subscription_id, customer_id)
         _funnel_mod.emit_funnel_event(
@@ -212,14 +331,23 @@ async def _handle_stripe_event(event: dict[str, Any]) -> None:
             subscription_id=data_object.get("id"),
             customer_id=data_object.get("customer"),
             status=status,
+            event_created=event_created,
         )
 
-        # Persist period end when available.
+        # Persist period end when available — but only if the reorder guard
+        # above actually accepted the update. We re-check the watermark to
+        # stay consistent: if ``last_event_created`` moved past this event,
+        # we already logged out-of-order and must not clobber period_end.
         tenant_id = _state_mod._find_tenant_id(data_object.get("id"), data_object.get("customer"))
         if tenant_id:
             existing = _state_mod._get_subscription_mapping(tenant_id)
-            existing["current_period_end"] = _helpers_mod._format_period_end(data_object.get("current_period_end")) or ""
-            _state_mod._store_subscription_mapping(tenant_id, existing)
+            try:
+                last_seen = int(existing.get("last_event_created") or 0)
+            except (ValueError, TypeError):
+                last_seen = 0
+            if event_created is None or int(event_created) >= last_seen:
+                existing["current_period_end"] = _helpers_mod._format_period_end(data_object.get("current_period_end")) or ""
+                _state_mod._store_subscription_mapping(tenant_id, existing)
         return
 
     logger.info("stripe_webhook_ignored", event_type=event_type)
