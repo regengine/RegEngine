@@ -36,8 +36,9 @@ from services.shared.rules.seeds import FSMA_RULE_SEEDS
 _CTE_KDE_FLOORS: dict[str, int] = {
     # 21 CFR §1.1327 — Harvest Date, Farm Location, Commodity+Variety
     "harvesting": 3,
-    # §1.1330 — Cooling Date, Cooling Location (new), Temperature (new)
-    "cooling": 3,
+    # §1.1330 — Cooling Date, Cooling Location, Temperature Reading,
+    # Temperature Within Cold-Chain Window (new, #1364), Duration (new, #1364)
+    "cooling": 5,
     # §1.1335 — Packing Date, Harvester Business Name, Packing Location
     # (new), Harvest Location Ref (new)
     "initial_packing": 4,
