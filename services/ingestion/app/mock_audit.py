@@ -353,9 +353,6 @@ async def submit_drill_response(
     _active_drills[drill_id]["grade"] = grade
     _active_drills[drill_id]["score"] = total
 
-    if not feedback:
-        feedback.append("Perfect score. You're audit-ready.")
-
     logger.info("drill_completed", extra={"drill_id": drill_id, "grade": grade, "score": total})
 
     return DrillGrade(
