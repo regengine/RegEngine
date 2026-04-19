@@ -58,8 +58,10 @@ from .plans import (
 )
 from .state import (
     _customer_lookup_key,
+    _event_dedup_key,
     _find_tenant_id,
     _get_subscription_mapping,
+    _mark_event_seen,
     _redis_client,
     _session_lookup_key,
     _store_subscription_mapping,
@@ -124,8 +126,10 @@ __all__ = [
     "PLAN_ALIASES",
     # State
     "_customer_lookup_key",
+    "_event_dedup_key",
     "_find_tenant_id",
     "_get_subscription_mapping",
+    "_mark_event_seen",
     "_redis_client",
     "_session_lookup_key",
     "_store_subscription_mapping",
@@ -185,9 +189,11 @@ _ATTR_TO_SUBMODULE = {
     "_subscription_lookup_key": _state_mod,
     "_customer_lookup_key": _state_mod,
     "_session_lookup_key": _state_mod,
+    "_event_dedup_key": _state_mod,
     "_store_subscription_mapping": _state_mod,
     "_get_subscription_mapping": _state_mod,
     "_find_tenant_id": _state_mod,
+    "_mark_event_seen": _state_mod,
     # helpers.py
     "_configure_stripe": _helpers_mod,
     "_format_period_end": _helpers_mod,

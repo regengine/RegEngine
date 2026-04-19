@@ -127,6 +127,69 @@ def _parse_timestamp(value: Any, *, field: str) -> datetime:
 
 
 # ---------------------------------------------------------------------------
+# CTE event_type Validation (fix #1312)
+# ---------------------------------------------------------------------------
+
+# The 7 FSMA 204 §1.1310 Critical Tracking Event types, in the SAME
+# lowercase form the ``fsma.cte_events_event_type_check`` DB constraint
+# accepts (see V037__obligation_cte_rules.sql). The schema already
+# rejects bad values at INSERT time — but the app-level guard here
+# fails EARLIER (before we hash and chain-lock), with a clearer
+# message, and protects against the more subtle typo cases the DB
+# constraint also rejects but opaquely (e.g. trailing whitespace, wrong
+# case). Keeping the two in sync is load-bearing: if a new CTE type
+# lands in the schema, this set must be updated in the same PR or
+# valid inputs will be rejected.
+#
+# Note: canonical_persistence has its own, parallel ``CTEType`` enum
+# (services/shared/canonical_event.py) which also includes 'growing'.
+# The cte_events schema does NOT currently accept 'growing', so this
+# module must not either — the two paths intentionally differ until
+# #1335 retires this module.
+_ALLOWED_CTE_TYPES = frozenset({
+    "harvesting",
+    "cooling",
+    "initial_packing",
+    "first_land_based_receiving",
+    "shipping",
+    "receiving",
+    "transformation",
+})
+
+
+def _validate_event_type(value: Any) -> str:
+    """Enforce that ``event_type`` is one of the 7 FSMA 204 CTE types.
+
+    Rejects (with a clear message):
+      * ``None``, non-strings, empty / whitespace-only strings
+      * Values with leading/trailing whitespace (strict equality, not
+        ``.strip()`` — a caller passing ``"HARVESTING "`` has a bug;
+        silently normalizing would mask it)
+      * Wrong case (``"HARVESTING"``, ``"Shipping"``)
+      * Non-FSMA tokens (``"XFORM"``, ``"harvest"``, ``"[object Object]"``)
+
+    The DB's CHECK constraint is the ultimate authority and would also
+    reject these — but Postgres rejects them AFTER we've hashed, chain-
+    locked, and written KDEs, surfacing as a confusing IntegrityError.
+    This guard fails fast with the list of valid types so calling code
+    can react meaningfully.
+    """
+    if not isinstance(value, str) or not value:
+        raise ValueError(
+            f"event_type is required and must be a non-empty string, "
+            f"got {type(value).__name__}: {value!r}"
+        )
+    if value not in _ALLOWED_CTE_TYPES:
+        raise ValueError(
+            f"event_type {value!r} is not a recognized FSMA 204 CTE type. "
+            f"Allowed: {sorted(_ALLOWED_CTE_TYPES)}. "
+            f"Note: values are case-sensitive and must have no surrounding "
+            f"whitespace."
+        )
+    return value
+
+
+# ---------------------------------------------------------------------------
 # KDE Value Serialization (fix #1311)
 # ---------------------------------------------------------------------------
 
@@ -264,6 +327,15 @@ class CTEPersistence:
         kdes = kdes or {}
         alerts = alerts or []
         event_id = str(uuid4())
+
+        # --- event_type validation (fix #1312) ---
+        # Fail fast on free-form strings (trailing whitespace, wrong
+        # case, typos, garbage) BEFORE we hash, chain-lock, or write
+        # KDEs. The DB CHECK constraint would also reject bad values,
+        # but only after a round-trip that leaves a confusing
+        # IntegrityError; this surfaces a clear ValueError with the
+        # allowed list.
+        event_type = _validate_event_type(event_type)
 
         # --- Timestamp validation (fix #1308) ---
         # Parse + normalize to UTC + reject naive/future/garbage inputs.
@@ -549,11 +621,17 @@ class CTEPersistence:
         for evt in events:
             event_id = str(uuid4())
             kdes = evt.get("kdes") or {}
+            # event_type guard (fix #1312) — reject free-form strings
+            # before doing any hashing/insert work for this row. Runs
+            # per-row so one malformed event in a batch fails loudly
+            # rather than corrupting the other N-1 rows' chain or
+            # polluting the idempotency cache.
+            evt = dict(evt)  # don't mutate caller input
+            evt["event_type"] = _validate_event_type(evt.get("event_type"))
             # Parse + validate timestamps, normalize to UTC ISO-8601.
             event_dt = _parse_timestamp(
                 evt.get("event_timestamp"), field="event_timestamp"
             )
-            evt = dict(evt)  # don't mutate caller input
             evt["event_timestamp"] = event_dt.isoformat()
             if evt.get("event_entry_timestamp") is not None:
                 entry_dt = _parse_timestamp(

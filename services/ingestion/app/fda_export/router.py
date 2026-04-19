@@ -32,6 +32,7 @@ from fastapi.responses import StreamingResponse
 
 from app.authz import IngestionPrincipal, require_permission
 from app.export_models import ExportHistoryResponse, ExportVerifyResponse
+from shared.permissions import has_permission as _has_permission
 from app.fda_export_service import (
     _build_chain_verification_payload,
     _build_completeness_summary,
@@ -140,6 +141,81 @@ def _enforce_kde_coverage_gate(
     )
 
 
+# ---------------------------------------------------------------------------
+# PII Redaction (issue #1219)
+# ---------------------------------------------------------------------------
+
+# Permission required to opt in to ``include_pii=true`` on an FDA export.
+# This is a strictly narrower scope than ``fda.export`` — every caller who
+# can generate exports can get a redacted CSV, but only callers who carry
+# ``fda.export.pii`` can get facility names / shipping addresses.
+_PII_PERMISSION = "fda.export.pii"
+
+
+def _authorize_pii_access(
+    *,
+    include_pii: bool,
+    principal: IngestionPrincipal,
+    identity: dict,
+    tenant_id: str,
+    export_scope: str,
+) -> None:
+    """Authorize ``include_pii=true`` and emit an audit line.
+
+    Contract (issue #1219):
+      • ``include_pii=False`` (the default): no-op; PII is redacted.
+      • ``include_pii=True`` + principal has ``fda.export.pii`` or ``*``:
+        allowed. An explicit audit line is logged so every PII-bearing
+        export appears in the ops dashboard even when downstream audit
+        tables don't yet have a column for the flag.
+      • ``include_pii=True`` + principal lacks the permission:
+        raises ``HTTPException(403)``. We log the refused attempt at
+        WARNING so repeated refusals surface as a security signal.
+    """
+    if not include_pii:
+        return
+
+    scopes = principal.scopes or []
+    if not _has_permission(scopes, _PII_PERMISSION):
+        logger.warning(
+            "fda_export_pii_access_denied",
+            extra={
+                "tenant_id": tenant_id,
+                "user_id": identity["user_id"],
+                "request_id": identity["request_id"],
+                "export_scope": export_scope,
+                "required_permission": _PII_PERMISSION,
+            },
+        )
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                f"include_pii=true requires the '{_PII_PERMISSION}' "
+                "permission. Facility names and shipping locations are "
+                "redacted by default; contact your tenant admin if you "
+                "need the un-redacted export."
+            ),
+        )
+
+    # Audit line for every allowed PII export. This is INFO-level because
+    # legitimate auditors will exercise this path; the existing audit
+    # table will pick up user_id/request_id already, but we want the
+    # structured line to join easily on ``pii_included=true``.
+    logger.info(
+        "fda_export_pii_included",
+        extra={
+            "tenant_id": tenant_id,
+            "user_id": identity["user_id"],
+            "user_email": identity["user_email"],
+            "request_id": identity["request_id"],
+            "user_agent": identity["user_agent"],
+            "source_ip": identity["source_ip"],
+            "export_scope": export_scope,
+            "pii_included": True,
+        },
+    )
+
+
 def _audit_identity(
     request: Request,
     principal: IngestionPrincipal,
@@ -205,6 +281,16 @@ async def export_fda_spreadsheet(
             "is recorded in the audit trail."
         ),
     ),
+    include_pii: bool = Query(
+        default=False,
+        description=(
+            "Include facility names and shipping locations in the export. "
+            "Defaults to false: these columns are redacted to '[REDACTED]' "
+            "and GLNs / FDA registration numbers are used as the regulatory "
+            "entity keys. Setting this to true requires the 'fda.export.pii' "
+            "permission and is recorded in the audit trail (issue #1219)."
+        ),
+    ),
     principal: IngestionPrincipal = Depends(require_permission("fda.export")),
     _subscription=Depends(require_active_subscription),
 ):
@@ -223,6 +309,16 @@ async def export_fda_spreadsheet(
                 "FSMA-204 audit-trail actor."
             ),
         )
+
+    # Authorize PII access BEFORE any DB work (issue #1219). Callers
+    # without ``fda.export.pii`` get a 403 fast; no query/audit cost.
+    _authorize_pii_access(
+        include_pii=include_pii,
+        principal=principal,
+        identity=identity,
+        tenant_id=tenant_id,
+        export_scope=f"tlc:{tlc}",
+    )
 
     db_session = None
     try:
@@ -246,8 +342,11 @@ async def export_fda_spreadsheet(
                 detail=f"No traceability records found for TLC '{tlc}'"
             )
 
-        # Generate CSV as canonical export evidence.
-        csv_content = _generate_csv(events)
+        # Generate CSV as canonical export evidence. The ``include_pii``
+        # flag flows from the query string → authorization gate → CSV
+        # generator; the generated hash covers the redacted (or full)
+        # content exactly, so ``verify_export`` can reproduce it.
+        csv_content = _generate_csv(events, include_pii=include_pii)
         export_hash = hashlib.sha256(csv_content.encode("utf-8")).hexdigest()
         chain_verification = persistence.verify_chain(tenant_id=tenant_id)
         completeness_summary = _build_completeness_summary(events)
@@ -325,6 +424,7 @@ async def export_fda_spreadsheet(
                     "end_date": end_date,
                     "format": format,
                 },
+                "pii_included": include_pii,
                 "initiated_at_utc": datetime.now(timezone.utc).isoformat(),
             },
         )
@@ -340,6 +440,7 @@ async def export_fda_spreadsheet(
                 "export_hash": export_hash[:16],
                 "tenant_id": tenant_id,
                 "format": format,
+                "pii_included": include_pii,
             },
         )
 
@@ -348,6 +449,7 @@ async def export_fda_spreadsheet(
         compliance_headers: dict[str, str] = {
             "X-KDE-Coverage": str(kde_coverage),
             "X-KDE-Warnings": str(kde_warnings),
+            "X-PII-Redacted": "false" if include_pii else "true",
         }
         if kde_coverage < 0.80:
             compliance_headers["X-Compliance-Warning"] = "KDE coverage below 80% threshold"
@@ -360,6 +462,7 @@ async def export_fda_spreadsheet(
                 csv_hash=export_hash,
                 chain_verification=chain_verification,
                 completeness_summary=completeness_summary,
+                include_pii=include_pii,
             )
             package_bytes, package_meta = _build_fda_package(
                 events=events,
@@ -371,6 +474,7 @@ async def export_fda_spreadsheet(
                 tlc=tlc,
                 query_start_date=start_date,
                 query_end_date=end_date,
+                include_pii=include_pii,
             )
             filename = f"fda_traceability_package_{safe_tlc}_{timestamp}.zip"
             return StreamingResponse(
@@ -387,12 +491,16 @@ async def export_fda_spreadsheet(
             )
 
         if format == "pdf":
-            pdf_bytes = _generate_pdf(events, metadata={
-                "tlc": tlc,
-                "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC"),
-                "start_date": start_date,
-                "end_date": end_date,
-            })
+            pdf_bytes = _generate_pdf(
+                events,
+                metadata={
+                    "tlc": tlc,
+                    "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC"),
+                    "start_date": start_date,
+                    "end_date": end_date,
+                },
+                include_pii=include_pii,
+            )
             filename = f"fda_export_{safe_tlc}_{timestamp}.pdf"
             return StreamingResponse(
                 io.BytesIO(pdf_bytes),
@@ -461,6 +569,13 @@ async def export_all_events(
             "recorded in the audit trail."
         ),
     ),
+    include_pii: bool = Query(
+        default=False,
+        description=(
+            "Include facility names and shipping locations in the export. "
+            "Requires 'fda.export.pii' permission; defaults to false (issue #1219)."
+        ),
+    ),
     principal: IngestionPrincipal = Depends(require_permission("fda.export")),
     _subscription=Depends(require_active_subscription),
 ):
@@ -475,6 +590,15 @@ async def export_all_events(
                 "resolvable key_id."
             ),
         )
+
+    # Authorize PII access (issue #1219).
+    _authorize_pii_access(
+        include_pii=include_pii,
+        principal=principal,
+        identity=identity,
+        tenant_id=tenant_id,
+        export_scope="all_events",
+    )
 
     db_session = None
     try:
@@ -515,7 +639,7 @@ async def export_all_events(
                 seen.add(e["id"])
                 deduped.append(e)
 
-        csv_content = _generate_csv(deduped)
+        csv_content = _generate_csv(deduped, include_pii=include_pii)
         export_hash = hashlib.sha256(csv_content.encode("utf-8")).hexdigest()
         chain_verification = persistence.verify_chain(tenant_id=tenant_id)
         completeness_summary = _build_completeness_summary(deduped)
@@ -585,6 +709,7 @@ async def export_all_events(
                     "event_type": event_type,
                     "format": format,
                 },
+                "pii_included": include_pii,
                 "initiated_at_utc": datetime.now(timezone.utc).isoformat(),
             },
         )
@@ -596,6 +721,7 @@ async def export_all_events(
             "X-KDE-Coverage": str(kde_coverage),
             "X-KDE-Warnings": str(kde_warnings),
             "X-Total-Count": str(total),
+            "X-PII-Redacted": "false" if include_pii else "true",
         }
         if total > _EXPORT_LIMIT:
             compliance_headers["X-Truncated"] = (
@@ -613,6 +739,7 @@ async def export_all_events(
                 csv_hash=export_hash,
                 chain_verification=chain_verification,
                 completeness_summary=completeness_summary,
+                include_pii=include_pii,
             )
             package_bytes, package_meta = _build_fda_package(
                 events=deduped,
@@ -624,6 +751,7 @@ async def export_all_events(
                 tlc=None,
                 query_start_date=start_date,
                 query_end_date=end_date,
+                include_pii=include_pii,
             )
             filename = f"fda_export_all_{timestamp}.zip"
             return StreamingResponse(
@@ -640,11 +768,15 @@ async def export_all_events(
             )
 
         if format == "pdf":
-            pdf_bytes = _generate_pdf(deduped, metadata={
-                "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC"),
-                "start_date": start_date,
-                "end_date": end_date,
-            })
+            pdf_bytes = _generate_pdf(
+                deduped,
+                metadata={
+                    "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC"),
+                    "start_date": start_date,
+                    "end_date": end_date,
+                },
+                include_pii=include_pii,
+            )
             filename = f"fda_export_all_{timestamp}.pdf"
             return StreamingResponse(
                 io.BytesIO(pdf_bytes),
@@ -743,6 +875,13 @@ async def export_recall_filtered(
         default="csv",
         description="Export format: package (zip bundle) or csv",
     ),
+    include_pii: bool = Query(
+        default=False,
+        description=(
+            "Include facility names and shipping locations. Requires "
+            "'fda.export.pii' permission; defaults to false (issue #1219)."
+        ),
+    ),
     principal: IngestionPrincipal = Depends(require_permission("fda.export")),
     _subscription=Depends(require_active_subscription),
 ):
@@ -756,6 +895,18 @@ async def export_recall_filtered(
                 "with a resolvable key_id."
             ),
         )
+
+    # Authorize PII access (issue #1219). Recall exports are especially
+    # sensitive: they get shared outside the regulated entity, so the
+    # PII-inclusion permission check runs here too.
+    _authorize_pii_access(
+        include_pii=include_pii,
+        principal=principal,
+        identity=identity,
+        tenant_id=tenant_id,
+        export_scope="recall",
+    )
+
     return await export_recall_filtered_handler(
         tenant_id=tenant_id,
         product=product,
@@ -770,6 +921,7 @@ async def export_recall_filtered(
         request_id=identity["request_id"],
         user_agent=identity["user_agent"],
         source_ip=identity["source_ip"],
+        include_pii=include_pii,
     )
 
 
@@ -830,6 +982,13 @@ async def export_fda_spreadsheet_v2(
         default="csv",
         description="Export format: package (zip bundle) or csv",
     ),
+    include_pii: bool = Query(
+        default=False,
+        description=(
+            "Include facility names and shipping locations in the export. "
+            "Requires 'fda.export.pii' permission; defaults to false (issue #1219)."
+        ),
+    ),
     principal: IngestionPrincipal = Depends(require_permission("fda.export")),
     _subscription=Depends(require_active_subscription),
 ):
@@ -843,6 +1002,15 @@ async def export_fda_spreadsheet_v2(
                 "with a resolvable key_id."
             ),
         )
+
+    # Authorize PII access (issue #1219).
+    _authorize_pii_access(
+        include_pii=include_pii,
+        principal=principal,
+        identity=identity,
+        tenant_id=tenant_id,
+        export_scope=f"v2:{tlc or 'all'}",
+    )
     db_session = None
     try:
         from shared.database import SessionLocal
@@ -882,7 +1050,7 @@ async def export_fda_spreadsheet_v2(
         events = v2_rows_to_event_dicts(rows)
 
         # ----- Generate CSV with compliance columns -----
-        csv_content, export_hash = generate_csv_v2_and_hash(events)
+        csv_content, export_hash = generate_csv_v2_and_hash(events, include_pii=include_pii)
         chain_verification = persistence.verify_chain(tenant_id=tenant_id)
         completeness_summary = _build_completeness_summary(events)
 
@@ -931,6 +1099,7 @@ async def export_fda_spreadsheet_v2(
                 "compliance_pass": events_passing,
                 "compliance_fail": events_failing,
                 "compliance_no_rules": events_no_rules,
+                "pii_included": include_pii,
             },
         )
 
@@ -979,6 +1148,7 @@ async def export_fda_spreadsheet_v2(
                     ),
                 },
                 chain_payload_extras=chain_payload_extras,
+                include_pii=include_pii,
             )
 
         # CSV-only response
@@ -996,6 +1166,7 @@ async def export_fda_spreadsheet_v2(
                     round(events_passing / total_events, 4) if total_events else 0
                 ),
             },
+            include_pii=include_pii,
         )
 
     except HTTPException:
