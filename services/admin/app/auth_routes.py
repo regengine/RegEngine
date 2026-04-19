@@ -71,15 +71,59 @@ async def _clear_email_rate_limit(session_store: RedisSessionStore, email: str) 
 _LOCKOUT_THRESHOLD = 10
 _LOCKOUT_DURATION = 86400  # 24 hours
 _PROGRESSIVE_DELAY_START = 3  # start delays after 3rd cumulative failure
+# #1070 — raise the cap so the exponential stays meaningful past ~8
+# failures. At the old cap of 30s a patient attacker could drive
+# ~2,880 attempts/day against a single account before lockout. With
+# this cap the effective rate drops by an order of magnitude well
+# before the 10-attempt threshold.
+_PROGRESSIVE_DELAY_CAP_SECONDS = 300
 
 
 def _lockout_key(email: str) -> str:
     return f"login_lockout:{email}"
 
 
+def _lockout_delay_key(email: str) -> str:
+    """Redis key whose TTL encodes the cool-down window for the email.
+
+    #1070: the old implementation enforced the progressive delay via
+    ``await asyncio.sleep(delay)`` inside ``_record_lockout_attempt``,
+    which holds the server worker open but does NOT throttle the
+    attacker — they can run N concurrent connections to defeat the
+    serial sleep. Persisting the deadline in Redis and gating the
+    endpoint on it makes the cool-down stateful across all
+    connections: every parallel attempt sees the same TTL and is
+    rejected with 429 / Retry-After until it elapses.
+    """
+    return f"login_lockout_delay:{email}"
+
+
+def _progressive_delay_seconds(count: int) -> int:
+    """Return the cool-down seconds a failing request should impose.
+
+    Returns 0 when we're below ``_PROGRESSIVE_DELAY_START`` (no
+    throttle yet). Otherwise exponential backoff, capped. Split out
+    of ``_record_lockout_attempt`` so tests can pin the table
+    directly — easier to reason about than observing via
+    ``asyncio.sleep`` timings.
+    """
+    if count < _PROGRESSIVE_DELAY_START:
+        return 0
+    return min(2 ** (count - _PROGRESSIVE_DELAY_START), _PROGRESSIVE_DELAY_CAP_SECONDS)
+
+
 async def _check_account_lockout(session_store: RedisSessionStore, email: str) -> None:
-    """Raise 423 if account is locked due to cumulative login failures."""
+    """Raise 423 if account is locked; raise 429 if still in cool-down.
+
+    Order matters: the 24-hour lockout is a harder stop than the
+    per-email progressive delay, and we want an attacker who crosses
+    the threshold to get the unambiguous 423 response rather than a
+    cycle of 429 Retry-After responses that could mislead them into
+    waiting for the short delay window to elapse.
+    """
     client = await session_store._get_client()
+
+    # Hard lockout (threshold reached).
     count_str = await client.get(_lockout_key(email))
     if count_str and int(count_str) >= _LOCKOUT_THRESHOLD:
         raise HTTPException(
@@ -88,9 +132,28 @@ async def _check_account_lockout(session_store: RedisSessionStore, email: str) -
             headers={"Retry-After": str(_LOCKOUT_DURATION)},
         )
 
+    # Progressive-delay cool-down — stateful across concurrent
+    # connections so parallel attempts cannot bypass it (#1070).
+    delay_ttl = await client.ttl(_lockout_delay_key(email))
+    if delay_ttl and delay_ttl > 0:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many failed login attempts. Please wait before trying again.",
+            headers={"Retry-After": str(delay_ttl)},
+        )
+
 
 async def _record_lockout_attempt(session_store: RedisSessionStore, email: str) -> int:
-    """Increment cumulative failure counter. Returns new count."""
+    """Increment the cumulative failure counter and arm the
+    progressive cool-down. Returns the new count.
+
+    #1070: the cool-down is now persisted as a Redis TTL rather than
+    enforced via ``asyncio.sleep`` on the failing worker. That swap
+    makes the delay apply to every connection that targets the same
+    email — serial or parallel — instead of only the one that tripped
+    it. The next call to ``_check_account_lockout`` observes the TTL
+    and raises 429 / Retry-After without any further DB work.
+    """
     client = await session_store._get_client()
     key = _lockout_key(email)
     async with client.pipeline(transaction=False) as pipe:
@@ -99,10 +162,11 @@ async def _record_lockout_attempt(session_store: RedisSessionStore, email: str) 
         results = await pipe.execute()
     count = results[0]
 
-    # Progressive delay after Nth failure
-    if count >= _PROGRESSIVE_DELAY_START:
-        delay = min(2 ** (count - _PROGRESSIVE_DELAY_START), 30)
-        await asyncio.sleep(delay)
+    # Arm the progressive delay via TTL — concurrent connections all
+    # see it, no asyncio.sleep to bypass by spawning more sockets.
+    delay = _progressive_delay_seconds(count)
+    if delay > 0:
+        await client.setex(_lockout_delay_key(email), delay, "1")
 
     if count == _LOCKOUT_THRESHOLD:
         logger.warning("account_locked", email=mask_email(email), cumulative_failures=count)
@@ -112,7 +176,10 @@ async def _record_lockout_attempt(session_store: RedisSessionStore, email: str) 
 
 async def _clear_lockout(session_store: RedisSessionStore, email: str) -> None:
     client = await session_store._get_client()
-    await client.delete(_lockout_key(email))
+    # Clear both the counter and the cool-down so a legitimate user
+    # who succeeds after a run of failures does not keep seeing 429
+    # for the remainder of the delay window.
+    await client.delete(_lockout_key(email), _lockout_delay_key(email))
 
 
 async def _persist_session(
