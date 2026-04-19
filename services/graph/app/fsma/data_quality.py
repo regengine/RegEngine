@@ -54,17 +54,41 @@ async def find_orphaned_lots(
     # Find lots with inbound events but no outbound events
     # Inbound: RECEIVING, CREATION, or PRODUCED by transformation
     # Outbound: SHIPPING, CONSUMED by transformation
+    #
+    # #1270 — the inbound-event OR is wrapped in parentheses. Cypher's
+    # `AND` binds tighter than `OR`, so the prior shape
+    #
+    #     WHERE tenant_ok
+    #       AND EXISTS { inbound_a } OR EXISTS { inbound_b }
+    #       AND NOT EXISTS { outbound_a }
+    #       AND NOT EXISTS { outbound_b }
+    #
+    # parses as
+    #
+    #     (tenant_ok AND EXISTS a)
+    #     OR
+    #     (EXISTS b AND NOT EXISTS outbound_a AND NOT EXISTS outbound_b)
+    #
+    # — leaving the `PRODUCED` branch of the query with no tenant filter.
+    # Every lot produced by a transformation in ANY tenant matched, and
+    # `GET /fsma/compliance/gaps/orphans` streamed those to the caller.
+    # Parenthesizing the inbound OR restores the intended
+    #   tenant_ok AND (inbound_a OR inbound_b) AND NOT ...
+    # shape.
     query = """
     MATCH (l:Lot)
     WHERE ($tenant_id IS NULL OR l.tenant_id = $tenant_id)
 
     // Must have at least one inbound event
-    AND EXISTS {
-        MATCH (l)-[:UNDERWENT]->(e:TraceEvent)
-        WHERE e.type IN ['RECEIVING', 'CREATION']
-    } OR EXISTS {
-        MATCH (trans:TraceEvent)-[:PRODUCED]->(l)
-    }
+    AND (
+        EXISTS {
+            MATCH (l)-[:UNDERWENT]->(e:TraceEvent)
+            WHERE e.type IN ['RECEIVING', 'CREATION']
+        }
+        OR EXISTS {
+            MATCH (trans:TraceEvent)-[:PRODUCED]->(l)
+        }
+    )
 
     // Must NOT have any outbound events
     AND NOT EXISTS {
