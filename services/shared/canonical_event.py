@@ -187,7 +187,15 @@ class TraceabilityEvent(BaseModel):
     product_reference: Optional[str] = None
     lot_reference: Optional[str] = None
     traceability_lot_code: str = Field(..., min_length=3)
-    quantity: float = Field(..., gt=0)
+    # #1249: ge=0 (not gt=0). A zero quantity is a legitimate FSMA value —
+    # empty-pallet receipt, full-recall correction, zero-loss inspection —
+    # and must round-trip through the canonical store. The old gt=0
+    # constraint caused silent divergence between ``fsma.cte_events``
+    # (which stored the true zero) and ``traceability_events`` (where
+    # the validator raised and the write was swallowed by a best-effort
+    # try/except). FDA exports run off the canonical store, so a zero
+    # event that vanished from canonical was a regulator-visible gap.
+    quantity: float = Field(..., ge=0)
     unit_of_measure: str
 
     # Entity + Facility references
@@ -472,6 +480,67 @@ def normalize_webhook_event(
     return canonical.prepare_for_persistence()
 
 
+def _extract_epcis_quantity(
+    epcis_data: Dict[str, Any],
+) -> tuple[Optional[float], Optional[str]]:
+    """Extract (quantity, uom) from an EPCIS event.
+
+    Handles both the real EPCIS 2.0 shape —
+    ``extension.quantityList[0].quantity`` — and the flattened
+    ``quantity.value`` shape used by some test harnesses and legacy
+    webhook shims. Returns ``(None, None)`` when no quantity is present
+    so the caller can decide how to respond (reject vs. preserve vs.
+    default). #1249: this function must never fabricate a value — the
+    whole point of the fix is that silent 1.0 defaulting falsified FDA
+    traceability records.
+    """
+    # Real EPCIS 2.0 shape — quantityList is nested under extension
+    # (some shims put it at the top level, handle both).
+    quantity_list = (
+        epcis_data.get("extension", {}).get("quantityList")
+        or epcis_data.get("quantityList")
+        or []
+    )
+    if quantity_list and isinstance(quantity_list, list) and isinstance(quantity_list[0], dict):
+        raw = quantity_list[0].get("quantity")
+        uom = quantity_list[0].get("uom")
+        if raw is not None:
+            try:
+                return float(raw), uom
+            except (TypeError, ValueError):
+                return None, uom
+
+    # Flattened legacy / test shape — quantity.value
+    flat = epcis_data.get("quantity")
+    if isinstance(flat, dict):
+        raw = flat.get("value")
+        uom = flat.get("uom")
+        if raw is not None:
+            try:
+                return float(raw), uom
+            except (TypeError, ValueError):
+                return None, uom
+
+    return None, None
+
+
+def _require_epcis_quantity(epcis_data: Dict[str, Any]) -> float:
+    """Return the EPCIS quantity or raise :class:`ValueError`.
+
+    Callers that need a definitive numeric quantity (the canonical
+    store, FDA export, rules engine) use this wrapper so a missing or
+    non-numeric value is loud rather than silently defaulted. #1249.
+    """
+    value, _uom = _extract_epcis_quantity(epcis_data)
+    if value is None:
+        raise ValueError(
+            "EPCIS event has no numeric quantity — cannot emit canonical "
+            "TraceabilityEvent. Supply quantity via extension.quantityList "
+            "or reject the event before normalization (#1249)."
+        )
+    return value
+
+
 def normalize_epcis_event(
     epcis_data: Dict[str, Any],
     tenant_id: str,
@@ -481,6 +550,16 @@ def normalize_epcis_event(
     Normalize an EPCIS 2.0 event dict into a canonical TraceabilityEvent.
 
     Maps EPCIS vocabulary (bizStep, readPoint, bizLocation) to canonical fields.
+
+    #1249 — quantity handling:
+      * Extracts quantity from ``extension.quantityList[0]`` (real EPCIS
+        shape) OR ``quantity.value`` (flattened shape). Either path can
+        carry the value; whichever is present wins.
+      * If no quantity is present or the value is non-numeric, raises
+        :class:`ValueError`. We no longer default to 1 — the old default
+        silently fabricated FDA traceability records.
+      * Zero is preserved (consistent with FSMAEvent ``ge=0`` and the
+        updated canonical constraint).
     """
     # Map EPCIS bizStep to CTE type
     biz_step = epcis_data.get("bizStep", "")
@@ -544,8 +623,11 @@ def normalize_epcis_event(
         product_reference=epcis_data.get("productDescription", kdes.get("gtin", "")),
         lot_reference=tlc,
         traceability_lot_code=tlc if len(tlc) >= 3 else f"EPCIS-{tlc or 'UNKNOWN'}",
-        quantity=float(epcis_data.get("quantity", {}).get("value", 1)),
-        unit_of_measure=epcis_data.get("quantity", {}).get("uom", "each"),
+        # #1249: extract from real EPCIS shape; do NOT fabricate on missing.
+        # Raising here forces ingestion code to surface the problem rather
+        # than silently producing a 1.0-quantity canonical row.
+        quantity=_require_epcis_quantity(epcis_data),
+        unit_of_measure=_extract_epcis_quantity(epcis_data)[1] or "each",
 
         from_facility_reference=epcis_data.get("readPoint", {}).get("id") if isinstance(epcis_data.get("readPoint"), dict) else epcis_data.get("readPoint"),
         to_facility_reference=epcis_data.get("bizLocation", {}).get("id") if isinstance(epcis_data.get("bizLocation"), dict) else epcis_data.get("bizLocation"),
