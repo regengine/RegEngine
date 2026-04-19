@@ -52,6 +52,7 @@ async def export_recall_filtered_handler(
     request_id: Optional[str] = None,
     user_agent: Optional[str] = None,
     source_ip: Optional[str] = None,
+    include_pii: bool = False,
 ):
     """Generate recall-filtered FDA export with flexible search criteria.
 
@@ -60,6 +61,11 @@ async def export_recall_filtered_handler(
     audit-log row records WHO produced the export and WHEN, satisfying
     FSMA 204 §1.1455(c) chain-of-custody requirements (issues #1205,
     #1209, #1215).
+
+    ``include_pii=False`` (default) redacts facility names and shipping
+    location strings in the generated CSV/package; the router gates the
+    flag on ``fda.export.pii`` permission and logs every true value to
+    the audit trail (issue #1219).
     """
     # Full-tenant recall dumps are regulatorily invalid and a
     # competitive-intelligence leak vector. A real recall is scoped to
@@ -136,7 +142,7 @@ async def export_recall_filtered_handler(
         # Convert to FDA export format
         events = rows_to_event_dicts(rows)
 
-        csv_content, export_hash = generate_csv_and_hash(events)
+        csv_content, export_hash = generate_csv_and_hash(events, include_pii=include_pii)
         chain_verification = persistence.verify_chain(tenant_id=tenant_id)
         completeness_summary = _build_completeness_summary(events)
 
@@ -181,6 +187,7 @@ async def export_recall_filtered_handler(
                     "X-Export-Type": "recall_package",
                     "X-KDE-Coverage": str(completeness_summary["required_kde_coverage_ratio"]),
                 },
+                include_pii=include_pii,
             )
 
         filename = f"fda_recall_export_{timestamp}.csv"
@@ -193,6 +200,7 @@ async def export_recall_filtered_handler(
                 "export_hash": export_hash[:16],
                 "tenant_id": tenant_id,
                 "format": format,
+                "pii_redacted": not include_pii,
             },
         )
 
@@ -206,6 +214,7 @@ async def export_recall_filtered_handler(
                 "X-Export-Type": "recall",
                 "X-KDE-Coverage": str(completeness_summary["required_kde_coverage_ratio"]),
             },
+            include_pii=include_pii,
         )
 
     except HTTPException:

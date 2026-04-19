@@ -214,27 +214,65 @@ async def commit_bulk_upload(
     db: Session = Depends(get_session),
 ) -> BulkUploadCommitResponse:
     tenant_id, user = _tenant_and_user(db, current_user)
-    session_data = await session_store.get_session(str(tenant_id), str(user.id), session_id)
-    if session_data is None:
-        raise HTTPException(status_code=404, detail="Session expired or not found")
+    tenant_key = str(tenant_id)
+    user_key = str(user.id)
 
-    current_status = str(session_data.get("status") or "")
-    if current_status == "completed":
-        summary_payload = _coerce_commit_summary(session_data.get("commit_summary"))
+    # Fast idempotency: a commit that already ran returns its cached
+    # summary without taking the commit lock. This MUST stay outside
+    # ``try_claim_commit`` — the CAS enforces ``status==validated`` and
+    # we want ``status==completed`` to short-circuit cheaply.
+    existing = await session_store.get_session(tenant_key, user_key, session_id)
+    if existing is None:
+        raise HTTPException(status_code=404, detail="Session expired or not found")
+    existing_status = str(existing.get("status") or "")
+    if existing_status == "completed":
         return BulkUploadCommitResponse(
             session_id=session_id,
             status="completed",
-            summary=summary_payload,
+            summary=_coerce_commit_summary(existing.get("commit_summary")),
         )
-    if current_status == "processing":
-        raise HTTPException(status_code=409, detail="Commit already in progress")
-    if current_status != "validated":
-        raise HTTPException(status_code=400, detail="Session must be validated before commit")
 
-    session_data["status"] = "processing"
-    session_data["error"] = None
-    session_data["updated_at"] = _iso_utc_now()
-    await session_store.update_session(str(tenant_id), str(user.id), session_id, session_data)
+    # Atomic check-and-transition: claim the commit lock by flipping
+    # ``status`` from ``validated`` to ``processing`` in a single CAS
+    # operation. Without this, two concurrent commit requests both
+    # observe ``status=validated``, both pass the guard, and both call
+    # ``execute_bulk_commit`` — producing duplicate FSMA rows and
+    # Merkle-hash divergence in the audit chain (issue #1074).
+    #
+    # On failure ``try_claim_commit`` returns ``None``; we look at the
+    # *current* persisted status to decide what HTTP error to surface.
+    session_data = await session_store.try_claim_commit(
+        tenant_key,
+        user_key,
+        session_id,
+        from_status="validated",
+        to_status="processing",
+        mutations={"error": None, "updated_at": _iso_utc_now()},
+    )
+    if session_data is None:
+        # Re-read to build a precise error. Another request may have
+        # raced ahead and the session could now be in any state.
+        refreshed = await session_store.get_session(tenant_key, user_key, session_id)
+        if refreshed is None:
+            raise HTTPException(status_code=404, detail="Session expired or not found")
+        refreshed_status = str(refreshed.get("status") or "")
+        if refreshed_status == "completed":
+            # A concurrent commit finished between our idempotency check
+            # and the CAS — return its summary.
+            return BulkUploadCommitResponse(
+                session_id=session_id,
+                status="completed",
+                summary=_coerce_commit_summary(refreshed.get("commit_summary")),
+            )
+        if refreshed_status == "processing":
+            raise HTTPException(
+                status_code=409,
+                detail="Commit already in progress",
+            )
+        raise HTTPException(
+            status_code=400,
+            detail="Session must be validated before commit",
+        )
 
     try:
         summary = execute_bulk_commit(
@@ -247,14 +285,14 @@ async def commit_bulk_upload(
         session_data["status"] = "failed"
         session_data["error"] = str(exc)
         session_data["updated_at"] = _iso_utc_now()
-        await session_store.update_session(str(tenant_id), str(user.id), session_id, session_data)
+        await session_store.update_session(tenant_key, user_key, session_id, session_data)
         raise HTTPException(status_code=400, detail=f"Bulk commit failed: {exc}") from exc
 
     summary_payload = _coerce_commit_summary(summary).model_dump()
     session_data["status"] = "completed"
     session_data["commit_summary"] = summary_payload
     session_data["updated_at"] = _iso_utc_now()
-    await session_store.update_session(str(tenant_id), str(user.id), session_id, session_data)
+    await session_store.update_session(tenant_key, user_key, session_id, session_data)
 
     return BulkUploadCommitResponse(
         session_id=session_id,

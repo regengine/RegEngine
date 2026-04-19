@@ -11,7 +11,7 @@ import os
 from .database import get_session
 from .sqlalchemy_models import UserModel, MembershipModel, RoleModel
 from .models import TenantContext
-from .auth_utils import decode_access_token
+from .auth_utils import check_revoked_async, decode_access_token
 # Supabase Integration
 from shared.supabase_client import get_supabase
 from shared.permissions import has_permission
@@ -101,6 +101,23 @@ async def get_current_user(
                     token_version_claim = None
 
             if user_id is None:
+                raise credentials_exception
+
+            # SECURITY (#1071): async Redis revocation check. The sync
+            # `_check_revoked` inside `decode_access_token` only looks at
+            # this worker's in-memory set — it cannot see a revocation
+            # written by another worker because it is a sync function
+            # called under a running event loop. We must re-check here
+            # on the async path so a /logout on worker A immediately
+            # blocks subsequent requests on every other worker, not just
+            # A itself.
+            jti = payload.get("jti")
+            if jti and await check_revoked_async(jti):
+                logger.warning(
+                    "revoked_jti_rejected",
+                    user_id=user_id,
+                    jti=jti,
+                )
                 raise credentials_exception
 
         except JWTError:
