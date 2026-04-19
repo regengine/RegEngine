@@ -330,16 +330,23 @@ class IdentityResolutionService:
         For callers that do want strict comparison (e.g., an alternate
         lot-code suggestion path), pass ``case_sensitive=True``.
         """
-        params: Dict[str, Any] = {"tenant_id": tenant_id}
-        type_filter = ""
-        if entity_type:
-            if entity_type not in VALID_ENTITY_TYPES:
-                raise ValueError(f"Invalid entity_type '{entity_type}'")
-            type_filter = "AND ce.entity_type = :entity_type"
-            params["entity_type"] = entity_type
+        # #1191: keep the SQL string 100% static — no f-string
+        # interpolation, even for whitelisted values. A future edit that
+        # inlines an unvetted string would turn a static query into a
+        # SQL-injection vector. The type filter is expressed as a
+        # nullable parameter (`:entity_type IS NULL OR ...`) so the
+        # planner can optimise it away when the filter is unused.
+        if entity_type is not None and entity_type not in VALID_ENTITY_TYPES:
+            raise ValueError(f"Invalid entity_type '{entity_type}'")
+
+        params: Dict[str, Any] = {
+            "tenant_id": tenant_id,
+            "entity_type": entity_type,  # None is bound explicitly to NULL
+        }
 
         rows = self.session.execute(
-            text(f"""
+            text(
+                """
                 SELECT ce.entity_id, ce.entity_type, ce.canonical_name,
                        ce.gln, ce.gtin, ce.verification_status,
                        ce.confidence_score, ea.alias_value
@@ -349,8 +356,9 @@ class IdentityResolutionService:
                 WHERE ea.tenant_id = :tenant_id
                   AND ea.alias_type IN ('name', 'trade_name', 'abbreviation')
                   AND ce.is_active = TRUE
-                  {type_filter}
-            """),
+                  AND (:entity_type IS NULL OR ce.entity_type = :entity_type)
+                """
+            ),
             params,
         ).fetchall()
 
