@@ -94,95 +94,107 @@ def _neo4j_sync_max_queue() -> int:
         return 100_000
 
 
-def dual_write_legacy(session: Session, event: TraceabilityEvent) -> Optional[str]:
+def dual_write_legacy(session: Session, event: TraceabilityEvent) -> str:
     """
     Write to legacy fsma.cte_events for backward compatibility.
 
     During the migration period, both tables receive writes so that
     existing export and graph sync code continues to work.
 
-    Returns the legacy event ID, or None on failure.
+    Returns the legacy event ID.
+
+    Raises on failure. #1277: a swallowed dual-write meant the canonical
+    row landed in ``fsma.traceability_events`` but NOT in
+    ``fsma.cte_events`` — since existing FDA-export paths still read
+    from the legacy table, the regulator-facing audit output would
+    silently diverge from the canonical source of truth. Letting the
+    exception propagate aborts the outer transaction so the canonical
+    row is rolled back too, restoring the "both tables or neither"
+    invariant until the legacy table is retired.
+
+    Callers that genuinely don't need legacy write (e.g. some ingestion
+    sub-paths, test fixtures) must opt out via
+    ``CanonicalEventStore(..., dual_write=False)`` — silence via
+    exception swallowing is no longer available.
     """
-    try:
-        legacy_id = str(event.event_id)
-        session.execute(
-            text("""
-                INSERT INTO fsma.cte_events (
-                    id, tenant_id, event_type, traceability_lot_code,
-                    product_description, quantity, unit_of_measure,
-                    location_gln, location_name, event_timestamp,
-                    source, source_event_id, idempotency_key,
-                    sha256_hash, chain_hash,
-                    epcis_event_type, epcis_action, epcis_biz_step,
-                    validation_status
-                ) VALUES (
-                    :id, :tenant_id, :event_type, :tlc,
-                    :product_description, :quantity, :unit_of_measure,
-                    :location_gln, :location_name, :event_timestamp,
-                    :source, :source_event_id, :idempotency_key,
-                    :sha256_hash, :chain_hash,
-                    :epcis_event_type, :epcis_action, :epcis_biz_step,
-                    :validation_status
-                )
-                ON CONFLICT (tenant_id, idempotency_key) DO NOTHING
-            """),
-            {
-                "id": legacy_id,
-                "tenant_id": str(event.tenant_id),
-                "event_type": event.event_type.value,
-                "tlc": event.traceability_lot_code,
-                "product_description": event.product_reference or "",
-                "quantity": event.quantity,
-                "unit_of_measure": event.unit_of_measure,
-                "location_gln": event.from_facility_reference if event.from_facility_reference and len(event.from_facility_reference) == 13 else None,
-                "location_name": event.from_facility_reference or event.to_facility_reference,
-                "event_timestamp": event.event_timestamp.isoformat(),
-                "source": event.source_system.value,
-                "source_event_id": event.source_record_id,
-                "idempotency_key": event.idempotency_key,
-                "sha256_hash": event.sha256_hash,
-                "chain_hash": event.chain_hash,
-                "epcis_event_type": event.epcis_event_type,
-                "epcis_action": event.epcis_action,
-                "epcis_biz_step": event.epcis_biz_step,
-                "validation_status": "valid" if event.status.value == "active" else event.status.value,
-            },
-        )
+    legacy_id = str(event.event_id)
+    session.execute(
+        text("""
+            INSERT INTO fsma.cte_events (
+                id, tenant_id, event_type, traceability_lot_code,
+                product_description, quantity, unit_of_measure,
+                location_gln, location_name, event_timestamp,
+                source, source_event_id, idempotency_key,
+                sha256_hash, chain_hash,
+                epcis_event_type, epcis_action, epcis_biz_step,
+                validation_status
+            ) VALUES (
+                :id, :tenant_id, :event_type, :tlc,
+                :product_description, :quantity, :unit_of_measure,
+                :location_gln, :location_name, :event_timestamp,
+                :source, :source_event_id, :idempotency_key,
+                :sha256_hash, :chain_hash,
+                :epcis_event_type, :epcis_action, :epcis_biz_step,
+                :validation_status
+            )
+            ON CONFLICT (tenant_id, idempotency_key) DO NOTHING
+        """),
+        {
+            "id": legacy_id,
+            "tenant_id": str(event.tenant_id),
+            "event_type": event.event_type.value,
+            "tlc": event.traceability_lot_code,
+            "product_description": event.product_reference or "",
+            "quantity": event.quantity,
+            "unit_of_measure": event.unit_of_measure,
+            "location_gln": event.from_facility_reference if event.from_facility_reference and len(event.from_facility_reference) == 13 else None,
+            "location_name": event.from_facility_reference or event.to_facility_reference,
+            "event_timestamp": event.event_timestamp.isoformat(),
+            "source": event.source_system.value,
+            "source_event_id": event.source_record_id,
+            "idempotency_key": event.idempotency_key,
+            "sha256_hash": event.sha256_hash,
+            "chain_hash": event.chain_hash,
+            "epcis_event_type": event.epcis_event_type,
+            "epcis_action": event.epcis_action,
+            "epcis_biz_step": event.epcis_biz_step,
+            "validation_status": "valid" if event.status.value == "active" else event.status.value,
+        },
+    )
 
-        # Write KDEs to legacy table
-        for kde_key, kde_value in event.kdes.items():
-            if kde_value is None:
-                continue
-            nested = session.begin_nested()
-            try:
-                session.execute(
-                    text("""
-                        INSERT INTO fsma.cte_kdes (
-                            tenant_id, cte_event_id, kde_key, kde_value, is_required
-                        ) VALUES (
-                            :tenant_id, :cte_event_id, :kde_key, :kde_value, :is_required
-                        )
-                        ON CONFLICT (cte_event_id, kde_key) DO NOTHING
-                    """),
-                    {
-                        "tenant_id": str(event.tenant_id),
-                        "cte_event_id": legacy_id,
-                        "kde_key": kde_key,
-                        "kde_value": str(kde_value),
-                        "is_required": False,
-                    },
-                )
-            except Exception:
-                logger.debug("KDE insert failed, rolling back savepoint", exc_info=True)
-                nested.rollback()
+    # Write KDEs to legacy table. The inner savepoint is intentionally
+    # preserved: KDEs are metadata annotations, and a single malformed
+    # KDE row should not invalidate the whole CTE event. ON CONFLICT
+    # handles the common race; the savepoint protects against anything
+    # else the legacy schema throws (type mismatches in free-form
+    # kde_value strings, for instance).
+    for kde_key, kde_value in event.kdes.items():
+        if kde_value is None:
+            continue
+        nested = session.begin_nested()
+        try:
+            session.execute(
+                text("""
+                    INSERT INTO fsma.cte_kdes (
+                        tenant_id, cte_event_id, kde_key, kde_value, is_required
+                    ) VALUES (
+                        :tenant_id, :cte_event_id, :kde_key, :kde_value, :is_required
+                    )
+                    ON CONFLICT (cte_event_id, kde_key) DO NOTHING
+                """),
+                {
+                    "tenant_id": str(event.tenant_id),
+                    "cte_event_id": legacy_id,
+                    "kde_key": kde_key,
+                    "kde_value": str(kde_value),
+                    "is_required": False,
+                },
+            )
+        except Exception:
+            logger.debug("KDE insert failed, rolling back savepoint", exc_info=True)
+            nested.rollback()
 
-        return legacy_id
-    except Exception as e:
-        logger.warning(
-            "legacy_dual_write_failed",
-            extra={"event_id": str(event.event_id), "error": str(e)},
-        )
-        return None
+    return legacy_id
 
 
 def publish_graph_sync(event: TraceabilityEvent) -> None:

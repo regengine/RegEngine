@@ -292,6 +292,14 @@ class CanonicalEventStore:
             )
 
         # --- Dual-write to legacy table (TEMPORARY — see migration.py) ---
+        # #1277: dual_write_legacy now raises on failure instead of
+        # silently returning None. That's intentional — the FDA-export
+        # path still reads from the legacy table during migration, so
+        # a swallowed failure would silently desync the export from
+        # canonical. Letting the exception propagate rolls the
+        # surrounding transaction back, so either BOTH tables have
+        # the event or NEITHER does. Callers that don't want legacy
+        # writes at all must opt out via ``dual_write=False``.
         legacy_id = None
         if self.dual_write:
             legacy_id = migration.dual_write_legacy(self.session, event)
@@ -516,15 +524,19 @@ class CanonicalEventStore:
         # Only dual-write events that actually inserted here; an event
         # we lost to a concurrent writer was (presumably) dual-written
         # by that winner and re-writing would just duplicate in legacy.
+        #
+        # #1277: previously this loop wrapped dual_write_legacy in a
+        # try/except and logged-and-continued on failure. That swallowed
+        # the invariant "canonical row landed → legacy row landed",
+        # which in turn meant the FDA-export path (still reading from
+        # the legacy table during migration) silently diverged from the
+        # canonical source of truth. The fix is to let the exception
+        # propagate — the surrounding transaction rolls back, the
+        # canonical INSERTs are reverted, and the caller gets a loud
+        # failure instead of a silent data-integrity violation.
         if self.dual_write and inserted_events:
             for evt in inserted_events:
-                try:
-                    migration.dual_write_legacy(self.session, evt)
-                except Exception as e:
-                    logger.warning(
-                        "legacy_dual_write_failed",
-                        extra={"event_id": str(evt.event_id), "error": str(e)},
-                    )
+                migration.dual_write_legacy(self.session, evt)
 
         logger.info(
             "canonical_batch_persisted",
