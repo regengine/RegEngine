@@ -9,6 +9,9 @@ os.environ.setdefault("ADMIN_SERVICE_URL", "http://localhost:8000")
 os.environ.setdefault("NLP_SERVICE_URL", "http://localhost:8002")  
 os.environ.setdefault("DATABASE_URL", "sqlite:///:memory:")
 os.environ.setdefault("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092")
+# Fixed HMAC key so the signing path in kafka_utils.send() works in
+# unit tests without hitting a real KMS / secret store (#1078).
+os.environ.setdefault("KAFKA_EVENT_SIGNING_KEY", "test-nlp-kafka-signing-key-ci-only")
 os.environ.setdefault("S3_BUCKET", "test-ingestion-bucket")
 os.environ.setdefault("OBJECT_STORAGE_ACCESS_KEY_ID", "test-key")
 os.environ.setdefault("OBJECT_STORAGE_SECRET_ACCESS_KEY", "test-secret")
