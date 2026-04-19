@@ -2,14 +2,15 @@
 
 from __future__ import annotations
 
-import json
 from typing import List
 
 import redis
 import structlog
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from shared.auth import APIKey, require_api_key
+from shared.database import SessionLocal
+from shared.task_queue import enqueue_task
 
 from .config import get_settings
 from .models import (
@@ -17,7 +18,6 @@ from .models import (
     DiscoveryApprovalResponse, DiscoveryRejectionResponse,
     BulkDiscoveryApprovalResponse, BulkDiscoveryRejectionResponse
 )
-from kernel.discovery import discovery
 
 logger = structlog.get_logger("ingestion.discovery")
 router = APIRouter(include_in_schema=False)
@@ -89,7 +89,6 @@ async def get_manual_queue(
 @router.post("/v1/ingest/discovery/approve", response_model=DiscoveryApprovalResponse)
 async def approve_discovery(
     index: int,
-    background_tasks: BackgroundTasks,
     api_key: APIKey = Depends(require_api_key),
 ):
     """Approve a discovery item and trigger a scrape."""
@@ -103,7 +102,18 @@ async def approve_discovery(
     val = item.decode("utf-8")
     body, url = val.split(":", 1)
     r.lrem("manual_upload_queue", 1, item)
-    background_tasks.add_task(discovery.scrape, body, url)
+
+    db = SessionLocal()
+    try:
+        enqueue_task(
+            db,
+            task_type="discovery_scrape",
+            payload={"body": body, "url": url},
+            tenant_id=api_key.tenant_id,
+        )
+        db.commit()
+    finally:
+        db.close()
 
     logger.info("discovery_approved", body=body, url=url, tenant_id=api_key.tenant_id)
     return {"status": "approved", "body": body, "url": url}
@@ -130,7 +140,6 @@ async def reject_discovery(
 @router.post("/v1/ingest/discovery/bulk-approve", response_model=BulkDiscoveryApprovalResponse)
 async def bulk_approve_discovery(
     payload: BulkDiscoveryRequest,
-    background_tasks: BackgroundTasks,
     api_key: APIKey = Depends(require_api_key),
 ):
     """Approve multiple discovery items and trigger scrapes."""
@@ -144,12 +153,22 @@ async def bulk_approve_discovery(
         if item:
             items_to_process.append(item)
 
-    for item in items_to_process:
-        val = item.decode("utf-8")
-        body, url = val.split(":", 1)
-        r.lrem("manual_upload_queue", 1, item)
-        background_tasks.add_task(discovery.scrape, body, url)
-        approved.append({"body": body, "url": url})
+    db = SessionLocal()
+    try:
+        for item in items_to_process:
+            val = item.decode("utf-8")
+            body, url = val.split(":", 1)
+            r.lrem("manual_upload_queue", 1, item)
+            enqueue_task(
+                db,
+                task_type="discovery_scrape",
+                payload={"body": body, "url": url},
+                tenant_id=api_key.tenant_id,
+            )
+            approved.append({"body": body, "url": url})
+        db.commit()
+    finally:
+        db.close()
 
     logger.info("bulk_discovery_approved", count=len(approved), tenant_id=api_key.tenant_id)
     return {"status": "approved", "count": len(approved), "items": approved}
