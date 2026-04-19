@@ -1059,6 +1059,98 @@ class IdentityResolutionService:
     # 8. Resolve Review
     # ------------------------------------------------------------------
 
+    # Ranking for deterministic merge target (#1193). Higher is better.
+    # queue_for_review normalizes entity_a_id < entity_b_id lexicographically
+    # for idempotency, which meant resolve_review silently picked the lex-
+    # lower UUID as "source" (the deactivated side) regardless of which
+    # entity was authoritative. The reviewer can now opt to specify
+    # ``target_entity_id`` explicitly, or we fall back to a deterministic
+    # rank: verified > pending_review > unverified, then higher
+    # confidence_score, then earlier created_at, then lex-lower entity_id
+    # as a last-resort tiebreaker so the outcome is fully reproducible.
+    _VERIFICATION_RANK = {
+        "verified": 2,
+        "pending_review": 1,
+        "unverified": 0,
+    }
+
+    def _pick_merge_target(
+        self,
+        tenant_id: str,
+        entity_a_id: str,
+        entity_b_id: str,
+    ) -> Tuple[str, str, Dict[str, Any]]:
+        """Return (source_entity_id, target_entity_id, rationale) for a
+        merge pair.  The target is the entity with the higher rank.
+
+        Rationale is logged so auditors can reconstruct why a given
+        entity was deactivated rather than the other.
+        """
+        rows = self.session.execute(
+            text("""
+                SELECT entity_id, verification_status, confidence_score,
+                       created_at
+                FROM fsma.canonical_entities
+                WHERE tenant_id = :tenant_id
+                  AND entity_id IN (:a_id, :b_id)
+            """),
+            {"tenant_id": tenant_id, "a_id": entity_a_id, "b_id": entity_b_id},
+        ).fetchall()
+
+        by_id = {str(r[0]): r for r in rows}
+        a_row = by_id.get(entity_a_id)
+        b_row = by_id.get(entity_b_id)
+
+        def _rank(row):
+            if row is None:
+                # Missing entity sorts last so the surviving one wins.
+                return (-1, -1.0, datetime.max.replace(tzinfo=timezone.utc))
+            v_rank = self._VERIFICATION_RANK.get(row[1], 0)
+            conf = float(row[2]) if row[2] is not None else 0.0
+            created = row[3] or datetime.max.replace(tzinfo=timezone.utc)
+            # Higher rank + higher confidence + earlier created_at wins,
+            # so we negate created_at's sort direction by using a wrapper.
+            return (v_rank, conf, created)
+
+        a_key = _rank(a_row)
+        b_key = _rank(b_row)
+
+        # Compare: higher verification, higher confidence, EARLIER created_at.
+        # Tuple sort is natural on verification + confidence (higher wins),
+        # but created_at should be earlier-wins — so flip the comparison
+        # piece-by-piece.
+        if a_key[0] != b_key[0]:
+            a_wins = a_key[0] > b_key[0]
+            tiebreaker = "verification_status"
+        elif a_key[1] != b_key[1]:
+            a_wins = a_key[1] > b_key[1]
+            tiebreaker = "confidence_score"
+        elif a_key[2] != b_key[2]:
+            # Earlier created_at wins — more established record.
+            a_wins = a_key[2] < b_key[2]
+            tiebreaker = "created_at"
+        else:
+            # Fully tied — fall back to lex order so the outcome is
+            # reproducible rather than depending on row insertion order.
+            a_wins = entity_a_id < entity_b_id
+            tiebreaker = "entity_id_lex"
+
+        if a_wins:
+            target, source = entity_a_id, entity_b_id
+        else:
+            target, source = entity_b_id, entity_a_id
+
+        rationale = {
+            "tiebreaker": tiebreaker,
+            "target_entity_id": target,
+            "source_entity_id": source,
+            "a_verification_status": a_row[1] if a_row else None,
+            "b_verification_status": b_row[1] if b_row else None,
+            "a_confidence_score": float(a_row[2]) if a_row and a_row[2] is not None else None,
+            "b_confidence_score": float(b_row[2]) if b_row and b_row[2] is not None else None,
+        }
+        return source, target, rationale
+
     def resolve_review(
         self,
         tenant_id: str,
@@ -1068,6 +1160,7 @@ class IdentityResolutionService:
         resolved_by: Optional[str] = None,
         resolution_notes: Optional[str] = None,
         auto_merge: bool = True,
+        target_entity_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Resolve a pending identity review item.
@@ -1077,6 +1170,14 @@ class IdentityResolutionService:
               auto-merge them (if auto_merge=True).
             - confirmed_distinct: the two entities are different; no action.
             - deferred: postpone the decision.
+
+        ``target_entity_id`` (#1193): if provided, must equal the review's
+        ``entity_a_id`` or ``entity_b_id`` and becomes the merge target
+        (the entity that SURVIVES; the other is deactivated). When not
+        provided, the target is chosen deterministically from the pair
+        based on ``verification_status`` → ``confidence_score`` →
+        ``created_at`` (earliest) — NOT on the lexicographic ordering
+        that ``queue_for_review`` uses for its idempotency key.
 
         Returns the updated review record (and merge result if applicable).
         """
@@ -1102,6 +1203,21 @@ class IdentityResolutionService:
         if review[3] != "pending" and review[3] != "deferred":
             raise ValueError(f"Review '{review_id}' is already resolved with status '{review[3]}'")
 
+        entity_a_id = str(review[1])
+        entity_b_id = str(review[2])
+
+        # Validate caller-supplied target up front — reject before any
+        # side effect if it's not one of the two entities on this review.
+        if (
+            target_entity_id is not None
+            and target_entity_id not in (entity_a_id, entity_b_id)
+        ):
+            raise ValueError(
+                f"target_entity_id '{target_entity_id}' is not part of review "
+                f"'{review_id}' (expected one of '{entity_a_id}' or "
+                f"'{entity_b_id}')"
+            )
+
         now = datetime.now(timezone.utc)
 
         self.session.execute(
@@ -1125,8 +1241,8 @@ class IdentityResolutionService:
 
         result: Dict[str, Any] = {
             "review_id": review_id,
-            "entity_a_id": str(review[1]),
-            "entity_b_id": str(review[2]),
+            "entity_a_id": entity_a_id,
+            "entity_b_id": entity_b_id,
             "resolution": resolution,
             "resolved_by": resolved_by,
             "resolved_at": now.isoformat(),
@@ -1134,14 +1250,40 @@ class IdentityResolutionService:
 
         # Auto-merge if confirmed match
         if resolution == "confirmed_match" and auto_merge:
+            # #1193: pick the merge direction explicitly rather than
+            # silently deactivating the lex-lower entity.
+            if target_entity_id is not None:
+                target = target_entity_id
+                source = entity_b_id if target == entity_a_id else entity_a_id
+                rationale: Dict[str, Any] = {
+                    "tiebreaker": "explicit_override",
+                    "target_entity_id": target,
+                    "source_entity_id": source,
+                }
+            else:
+                source, target, rationale = self._pick_merge_target(
+                    tenant_id, entity_a_id, entity_b_id,
+                )
+            logger.info(
+                "review_merge_target_selected",
+                extra={
+                    "review_id": review_id,
+                    "tenant_id": tenant_id,
+                    **rationale,
+                },
+            )
             merge_result = self.merge_entities(
                 tenant_id=tenant_id,
-                source_entity_id=str(review[1]),
-                target_entity_id=str(review[2]),
-                reason=f"Confirmed match via review {review_id}",
+                source_entity_id=source,
+                target_entity_id=target,
+                reason=(
+                    f"Confirmed match via review {review_id} "
+                    f"(target selected by {rationale['tiebreaker']})"
+                ),
                 performed_by=resolved_by,
             )
             result["merge"] = merge_result
+            result["merge_target_rationale"] = rationale
 
         logger.info(
             "review_resolved",
