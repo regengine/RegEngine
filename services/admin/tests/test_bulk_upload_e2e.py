@@ -42,6 +42,33 @@ class _InMemorySessionStore:
     async def update_session(self, tenant_id: str, user_id: str, session_id: str, payload: dict):
         self._store[f"{tenant_id}:{user_id}:{session_id}"] = payload
 
+    async def try_claim_commit(
+        self,
+        tenant_id: str,
+        user_id: str,
+        session_id: str,
+        *,
+        from_status: str = "validated",
+        to_status: str = "processing",
+        mutations: dict | None = None,
+    ):
+        """Synchronous CAS stub — the test runs in a single event loop so
+        a non-atomic check/set is sufficient to mirror production
+        semantics for the happy-path e2e tests. The dedicated TOCTOU
+        concurrency tests use the real :class:`BulkUploadSessionStore`
+        against its in-memory fallback to exercise the asyncio-lock
+        code path.
+        """
+        key = f"{tenant_id}:{user_id}:{session_id}"
+        payload = self._store.get(key)
+        if payload is None or payload.get("status") != from_status:
+            return None
+        payload["status"] = to_status
+        if mutations:
+            payload.update(mutations)
+        self._store[key] = payload
+        return payload
+
 
 @pytest.fixture
 def db_session() -> Session:

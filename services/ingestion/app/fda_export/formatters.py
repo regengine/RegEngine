@@ -23,16 +23,33 @@ from app.fda_export_service import (
 )
 
 
-def generate_csv_and_hash(events: list[dict]) -> tuple[str, str]:
-    """Generate FDA-compliant CSV content and its SHA-256 hash."""
-    csv_content = _generate_csv(events)
+def generate_csv_and_hash(
+    events: list[dict],
+    *,
+    include_pii: bool = False,
+) -> tuple[str, str]:
+    """Generate FDA-compliant CSV content and its SHA-256 hash.
+
+    ``include_pii=False`` (default) redacts facility-name/location
+    columns (issue #1219). The caller must pass the same flag to the
+    downstream package builder so manifest metadata stays consistent
+    with CSV contents.
+    """
+    csv_content = _generate_csv(events, include_pii=include_pii)
     export_hash = hashlib.sha256(csv_content.encode("utf-8")).hexdigest()
     return csv_content, export_hash
 
 
-def generate_csv_v2_and_hash(events: list[dict]) -> tuple[str, str]:
-    """Generate v2 CSV content (with compliance columns) and its SHA-256 hash."""
-    csv_content = _generate_csv_v2(events)
+def generate_csv_v2_and_hash(
+    events: list[dict],
+    *,
+    include_pii: bool = False,
+) -> tuple[str, str]:
+    """Generate v2 CSV content (with compliance columns) and its SHA-256 hash.
+
+    ``include_pii`` is forwarded to :func:`_generate_csv_v2` (issue #1219).
+    """
+    csv_content = _generate_csv_v2(events, include_pii=include_pii)
     export_hash = hashlib.sha256(csv_content.encode("utf-8")).hexdigest()
     return csv_content, export_hash
 
@@ -62,13 +79,21 @@ def build_csv_response(
     record_count: int,
     chain_valid: bool,
     extra_headers: dict[str, str] | None = None,
+    *,
+    include_pii: bool = False,
 ) -> StreamingResponse:
-    """Build a StreamingResponse for a CSV export."""
+    """Build a StreamingResponse for a CSV export.
+
+    ``include_pii`` only controls the ``X-PII-Redacted`` response header;
+    the caller must already have generated ``csv_content`` with the same
+    flag (issue #1219).
+    """
     headers = {
         "Content-Disposition": f"attachment; filename={filename}",
         "X-Export-Hash": export_hash,
         "X-Record-Count": str(record_count),
         "X-Chain-Integrity": "VERIFIED" if chain_valid else "UNVERIFIED",
+        "X-PII-Redacted": "false" if include_pii else "true",
     }
     if extra_headers:
         headers.update(extra_headers)
@@ -87,14 +112,20 @@ def build_pdf_response(
     record_count: int,
     chain_valid: bool,
     extra_headers: dict[str, str] | None = None,
+    *,
+    include_pii: bool = False,
 ) -> StreamingResponse:
-    """Build a StreamingResponse for a PDF export."""
-    pdf_bytes = _generate_pdf(events, metadata=metadata)
+    """Build a StreamingResponse for a PDF export.
+
+    ``include_pii`` is forwarded to :func:`_generate_pdf` (issue #1219).
+    """
+    pdf_bytes = _generate_pdf(events, metadata=metadata, include_pii=include_pii)
     headers = {
         "Content-Disposition": f"attachment; filename={filename}",
         "X-Export-Hash": export_hash,
         "X-Record-Count": str(record_count),
         "X-Chain-Integrity": "VERIFIED" if chain_valid else "UNVERIFIED",
+        "X-PII-Redacted": "false" if include_pii else "true",
     }
     if extra_headers:
         headers.update(extra_headers)
@@ -118,8 +149,16 @@ def build_package_response(
     filename: str,
     extra_headers: dict[str, str] | None = None,
     chain_payload_extras: dict | None = None,
+    *,
+    include_pii: bool = False,
 ) -> StreamingResponse:
-    """Build a StreamingResponse for a ZIP package export."""
+    """Build a StreamingResponse for a ZIP package export.
+
+    ``include_pii`` is forwarded to the chain-payload + package builders
+    (issue #1219). The caller must have generated ``csv_content`` with
+    the same flag; otherwise manifest metadata and CSV contents will
+    disagree on redaction status.
+    """
     chain_payload = _build_chain_verification_payload(
         tenant_id=tenant_id,
         tlc=tlc,
@@ -127,6 +166,7 @@ def build_package_response(
         csv_hash=export_hash,
         chain_verification=chain_verification,
         completeness_summary=completeness_summary,
+        include_pii=include_pii,
     )
     if chain_payload_extras:
         chain_payload.update(chain_payload_extras)
@@ -141,6 +181,7 @@ def build_package_response(
         tlc=tlc,
         query_start_date=start_date,
         query_end_date=end_date,
+        include_pii=include_pii,
     )
     headers = {
         "Content-Disposition": f"attachment; filename={filename}",
@@ -148,6 +189,7 @@ def build_package_response(
         "X-Package-Hash": package_meta["package_hash"],
         "X-Record-Count": str(len(events)),
         "X-Chain-Integrity": "VERIFIED" if chain_verification.valid else "UNVERIFIED",
+        "X-PII-Redacted": "false" if include_pii else "true",
     }
     if extra_headers:
         headers.update(extra_headers)

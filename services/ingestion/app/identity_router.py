@@ -40,11 +40,33 @@ logger = logging.getLogger("identity-resolution")
 router = APIRouter(prefix="/api/v1/identity", tags=["Identity Resolution"])
 
 
-def _get_service(db_session):
+def _get_service(
+    db_session,
+    principal: Optional[IngestionPrincipal] = None,
+    *,
+    allow_cross_tenant: bool = False,
+):
+    """Construct an IdentityResolutionService bound to the caller.
+
+    #1230: the service's write methods will reject any ``tenant_id`` that
+    doesn't match the principal's ``tenant_id``. This is defense-in-depth
+    against router-level bugs like #1106 where an ``X-Tenant-ID`` header
+    was forwarded without cross-check. Callers that legitimately need
+    cross-tenant writes (platform admin) pass ``allow_cross_tenant=True``.
+
+    The ``principal`` argument is optional to preserve back-compat with
+    any legacy import path (none in tree today) — but every call in this
+    router threads the principal through.
+    """
     if db_session is None:
         raise HTTPException(status_code=503, detail="Database unavailable")
     from shared.identity_resolution import IdentityResolutionService
-    return IdentityResolutionService(db_session)
+    principal_tenant_id = principal.tenant_id if principal is not None else None
+    return IdentityResolutionService(
+        db_session,
+        principal_tenant_id=principal_tenant_id,
+        allow_cross_tenant=allow_cross_tenant,
+    )
 
 
 
@@ -112,7 +134,7 @@ async def list_entities(
     db_session=Depends(get_db_session),
 ):
     tid = resolve_tenant(tenant_id, principal)
-    svc = _get_service(db_session)
+    svc = _get_service(db_session, principal)
     if search:
         entities = svc.find_potential_matches(tid, search, entity_type=entity_type)
     else:
@@ -145,7 +167,7 @@ async def register_entity(
     db_session=Depends(get_db_session),
 ):
     tid = resolve_tenant(tenant_id, principal)
-    svc = _get_service(db_session)
+    svc = _get_service(db_session, principal)
     entity_id = svc.register_entity(
         tenant_id=tid,
         entity_type=body.entity_type,
@@ -177,7 +199,7 @@ async def get_entity(
     db_session=Depends(get_db_session),
 ):
     tid = resolve_tenant(tenant_id, principal)
-    svc = _get_service(db_session)
+    svc = _get_service(db_session, principal)
     entity = svc.get_entity(tid, entity_id)
     if not entity:
         raise HTTPException(status_code=404, detail="Entity not found")
@@ -197,7 +219,7 @@ async def add_alias(
     db_session=Depends(get_db_session),
 ):
     tid = resolve_tenant(tenant_id, principal)
-    svc = _get_service(db_session)
+    svc = _get_service(db_session, principal)
     alias_id = svc.add_alias(
         tenant_id=tid,
         entity_id=entity_id,
@@ -221,7 +243,7 @@ async def lookup_by_alias(
     db_session=Depends(get_db_session),
 ):
     tid = resolve_tenant(tenant_id, principal)
-    svc = _get_service(db_session)
+    svc = _get_service(db_session, principal)
     entities = svc.find_entity_by_alias(tid, alias_value, alias_type)
     return {"tenant_id": tid, "matches": entities, "total": len(entities)}
 
@@ -239,7 +261,7 @@ async def find_matches(
     db_session=Depends(get_db_session),
 ):
     tid = resolve_tenant(tenant_id, principal)
-    svc = _get_service(db_session)
+    svc = _get_service(db_session, principal)
     matches = svc.find_potential_matches(
         tid, name, entity_type=entity_type, min_confidence=min_confidence,
     )
@@ -257,7 +279,7 @@ async def merge_entities(
     db_session=Depends(get_db_session),
 ):
     tid = resolve_tenant(tenant_id, principal)
-    svc = _get_service(db_session)
+    svc = _get_service(db_session, principal)
     merge_id = svc.merge_entities(
         tenant_id=tid,
         source_entity_id=body.source_entity_id,
@@ -279,7 +301,7 @@ async def split_entities(
     db_session=Depends(get_db_session),
 ):
     tid = resolve_tenant(tenant_id, principal)
-    svc = _get_service(db_session)
+    svc = _get_service(db_session, principal)
     svc.split_entity(tid, body.merge_id, body.performed_by)
     return {"merge_id": body.merge_id, "status": "split"}
 
@@ -294,7 +316,7 @@ async def list_reviews(
     db_session=Depends(get_db_session),
 ):
     tid = resolve_tenant(tenant_id, principal)
-    svc = _get_service(db_session)
+    svc = _get_service(db_session, principal)
     reviews = svc.list_pending_reviews(tid)
     return {"tenant_id": tid, "reviews": reviews, "total": len(reviews)}
 
@@ -311,7 +333,7 @@ async def resolve_review(
     db_session=Depends(get_db_session),
 ):
     tid = resolve_tenant(tenant_id, principal)
-    svc = _get_service(db_session)
+    svc = _get_service(db_session, principal)
     svc.resolve_review(
         tenant_id=tid,
         review_id=review_id,
