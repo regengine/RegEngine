@@ -454,6 +454,33 @@ class IdentityResolutionService:
         merge_id = str(uuid4())
         now = datetime.now(timezone.utc)
 
+        # #1207 — snapshot the source entity's aliases BEFORE re-pointing
+        # them to the target. Without this, split_entity can only restore
+        # the canonical-name alias by string match; GLN/GTIN/FDA registration
+        # aliases are irrecoverable, giving a false sense of rollback.
+        #
+        # Shape: {"<source_entity_uuid>": [
+        #     {"alias_type": "gln", "alias_value": "..."},
+        #     {"alias_type": "gtin", "alias_value": "..."},
+        #     ...
+        # ]}
+        source_aliases_rows = self.session.execute(
+            text("""
+                SELECT alias_type, alias_value
+                FROM fsma.entity_aliases
+                WHERE tenant_id = :tenant_id
+                  AND entity_id = :source_entity_id
+                ORDER BY alias_type, alias_value
+            """),
+            {"tenant_id": tenant_id, "source_entity_id": source_entity_id},
+        ).fetchall()
+        alias_snapshot = {
+            source_entity_id: [
+                {"alias_type": r[0], "alias_value": r[1]}
+                for r in source_aliases_rows
+            ]
+        }
+
         # Re-point aliases from source to target (skip duplicates)
         self.session.execute(
             text("""
@@ -494,17 +521,17 @@ class IdentityResolutionService:
             {"tenant_id": tenant_id, "source_entity_id": source_entity_id, "now": now},
         )
 
-        # Record merge history
+        # Record merge history WITH alias snapshot (#1207)
         self.session.execute(
             text("""
                 INSERT INTO fsma.entity_merge_history (
                     merge_id, tenant_id, action, source_entity_ids,
                     target_entity_id, reason, performed_by, performed_at,
-                    is_reversed
+                    is_reversed, alias_snapshot
                 ) VALUES (
                     :merge_id, :tenant_id, 'merge', ARRAY[:source_entity_id]::uuid[],
                     :target_entity_id, :reason, :performed_by, :now,
-                    FALSE
+                    FALSE, CAST(:alias_snapshot AS jsonb)
                 )
             """),
             {
@@ -515,6 +542,7 @@ class IdentityResolutionService:
                 "reason": reason,
                 "performed_by": performed_by,
                 "now": now,
+                "alias_snapshot": json.dumps(alias_snapshot),
             },
         )
 
@@ -574,20 +602,25 @@ class IdentityResolutionService:
 
         - Looks up the original merge record.
         - Re-activates the source entity.
-        - Restores aliases that originally belonged to the source entity
-          (aliases added *after* the merge stay with the target).
+        - Restores aliases from ``entity_merge_history.alias_snapshot``
+          (#1207) — every alias that was on the source at merge time
+          is moved back to the source. Aliases added to the target
+          AFTER the merge stay with the target.
         - Records the reversal in merge_history.
 
-        Note: only the alias snapshot at merge time can be inferred from
-        the source_system='identity_resolution' seed alias. Additional
-        aliases that were on the source before merge cannot be perfectly
-        reconstructed; those remain on the target. A full undo would
-        require an alias snapshot table (future enhancement).
+        #1207 — pre-v069 merges lack an ``alias_snapshot``. Those
+        merges cannot be safely reversed: the canonical-name alias
+        alone came back, and every GLN/GTIN/FDA identifier silently
+        stayed on the target. Rather than perpetuate the lossy
+        behavior, this method now RAISES when the snapshot is NULL.
+        Operators can either manually reconstruct aliases and flip
+        ``is_reversed`` themselves, or accept that pre-v069 merges
+        are non-reversible through this API.
         """
         merge_row = self.session.execute(
             text("""
                 SELECT merge_id, source_entity_ids, target_entity_id,
-                       action, is_reversed
+                       action, is_reversed, alias_snapshot
                 FROM fsma.entity_merge_history
                 WHERE tenant_id = :tenant_id AND merge_id = :merge_id
             """),
@@ -603,9 +636,29 @@ class IdentityResolutionService:
 
         source_entity_ids = merge_row[1]  # UUID[]
         target_entity_id = str(merge_row[2])
+        alias_snapshot_raw = merge_row[5]  # JSONB -> dict or None
+
+        # #1207 — refuse to reverse a pre-v069 merge. Silent alias loss
+        # is a false-audit surface we no longer tolerate.
+        if alias_snapshot_raw is None:
+            raise ValueError(
+                f"Merge '{merge_id}' was recorded before v069 and has no "
+                "alias_snapshot. Split is refused to prevent silent loss "
+                "of GLN/GTIN/FDA aliases that would otherwise stay on the "
+                "target entity. Reconstruct aliases manually if reversal "
+                "is required (#1207)."
+            )
+
+        # JSONB may arrive as a dict (SQLAlchemy + psycopg2) or as a
+        # string (SQLite or some driver configs). Normalize.
+        if isinstance(alias_snapshot_raw, str):
+            alias_snapshot = json.loads(alias_snapshot_raw)
+        else:
+            alias_snapshot = alias_snapshot_raw
+
         now = datetime.now(timezone.utc)
 
-        # Re-activate source entities
+        # Re-activate source entities and replay each one's alias snapshot.
         for src_id in source_entity_ids:
             src_id_str = str(src_id)
             self.session.execute(
@@ -617,32 +670,30 @@ class IdentityResolutionService:
                 {"tenant_id": tenant_id, "entity_id": src_id_str, "now": now},
             )
 
-            # Restore the canonical-name alias back to the source entity
-            source_entity = self.session.execute(
-                text("""
-                    SELECT canonical_name
-                    FROM fsma.canonical_entities
-                    WHERE tenant_id = :tenant_id AND entity_id = :entity_id
-                """),
-                {"tenant_id": tenant_id, "entity_id": src_id_str},
-            ).fetchone()
-
-            if source_entity and source_entity[0]:
-                # Move the canonical name alias back if it's on the target
+            # Move the snapshot aliases back from target to source. Each
+            # (alias_type, alias_value) is a unique key within a tenant,
+            # so UPDATE suffices — there will be at most one row to flip.
+            snapshot_aliases = alias_snapshot.get(src_id_str, [])
+            for alias in snapshot_aliases:
+                alias_type = alias.get("alias_type")
+                alias_value = alias.get("alias_value")
+                if not alias_type or not alias_value:
+                    continue
                 self.session.execute(
                     text("""
                         UPDATE fsma.entity_aliases
                         SET entity_id = :source_entity_id
                         WHERE tenant_id = :tenant_id
                           AND entity_id = :target_entity_id
-                          AND alias_type = 'name'
-                          AND alias_value = :canonical_name
+                          AND alias_type = :alias_type
+                          AND alias_value = :alias_value
                     """),
                     {
                         "tenant_id": tenant_id,
                         "source_entity_id": src_id_str,
                         "target_entity_id": target_entity_id,
-                        "canonical_name": source_entity[0],
+                        "alias_type": alias_type,
+                        "alias_value": alias_value,
                     },
                 )
 
