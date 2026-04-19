@@ -443,6 +443,12 @@ class TraceResponse(BaseModel):
     direction: str
     links: List[TraceLink]
     total_hops: int
+    # #1282: callers MUST honor this. ``truncated=True`` means the
+    # traversal hit ``max_results`` and stopped early — the link list is
+    # a valid prefix but is NOT a complete trace. Regulator-facing
+    # exports should either fail-closed or re-query with a higher cap
+    # when this flag is set. Defaults to False for existing clients.
+    truncated: bool = False
 
 
 @router.get(
@@ -463,7 +469,10 @@ def trace_forward(
     db_session.execute(text("SET LOCAL app.tenant_id = :tid"), {"tid": tid})
 
     store = CanonicalEventStore(db_session, dual_write=False)
-    raw_links = store.trace_forward(tid, tlc, max_depth=max_depth)
+    # #1282: trace_forward now returns (links, truncated). ``truncated``
+    # means the BFS hit max_results and stopped early; surface it so
+    # API clients can distinguish a complete trace from a capped one.
+    raw_links, truncated = store.trace_forward(tid, tlc, max_depth=max_depth)
 
     links = [
         TraceLink(
@@ -481,6 +490,7 @@ def trace_forward(
     return TraceResponse(
         tlc=tlc, direction="forward", links=links,
         total_hops=max(r["depth"] for r in raw_links) if raw_links else 0,
+        truncated=truncated,
     )
 
 
@@ -502,7 +512,9 @@ def trace_backward(
     db_session.execute(text("SET LOCAL app.tenant_id = :tid"), {"tid": tid})
 
     store = CanonicalEventStore(db_session, dual_write=False)
-    raw_links = store.trace_backward(tid, tlc, max_depth=max_depth)
+    # #1282: trace_backward now returns (links, truncated). See
+    # trace_forward handler for the rationale.
+    raw_links, truncated = store.trace_backward(tid, tlc, max_depth=max_depth)
 
     links = [
         TraceLink(
@@ -520,4 +532,5 @@ def trace_backward(
     return TraceResponse(
         tlc=tlc, direction="backward", links=links,
         total_hops=max(r["depth"] for r in raw_links) if raw_links else 0,
+        truncated=truncated,
     )
