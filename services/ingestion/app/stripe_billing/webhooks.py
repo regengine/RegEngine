@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import os
+from datetime import datetime, timezone
 from typing import Any, Optional
 
 import stripe
@@ -274,6 +275,176 @@ def _update_subscription_status(
     _state_mod._store_subscription_mapping(tenant_id, existing)
 
 
+def _handle_trial_will_end(subscription: dict[str, Any]) -> None:
+    """Handle ``customer.subscription.trial_will_end`` (#1189).
+
+    Stripe fires this event ~3 days before a trialing subscription
+    expires. The tenant needs a prompt to add a payment method, and
+    product/marketing needs a signal to nudge conversion. We:
+
+    1. Find the tenant via subscription or customer lookup.
+    2. Persist ``trial_end`` and ``trial_will_end_notified_at`` onto
+       the subscription mapping so the app can surface the countdown.
+    3. Emit a WARN log so the 3-day window is visible in operator
+       dashboards.
+
+    If the tenant cannot be resolved (no prior successful checkout),
+    we log and no-op — there is no subscription mapping to annotate
+    yet, and the dashboard will pick up the countdown when the tenant
+    completes checkout.
+    """
+    subscription_id = subscription.get("id")
+    customer_id = subscription.get("customer")
+    trial_end = _helpers_mod._format_period_end(
+        _helpers_mod._coerce_int(subscription.get("trial_end"))
+    )
+
+    tenant_id = _state_mod._find_tenant_id(subscription_id, customer_id)
+    if not tenant_id:
+        logger.warning(
+            "stripe_trial_will_end_tenant_not_found "
+            "subscription_id=%s customer_id=%s",
+            subscription_id, customer_id,
+        )
+        return
+
+    existing = _state_mod._get_subscription_mapping(tenant_id)
+    existing.update(
+        {
+            "trial_end": trial_end or "",
+            "trial_will_end_notified_at": datetime.now(timezone.utc).isoformat(),
+            "status": (
+                str(subscription.get("status") or existing.get("status") or "trialing")
+            ),
+            "subscription_id": str(subscription_id or existing.get("subscription_id", "")),
+            "customer_id": str(customer_id or existing.get("customer_id", "")),
+        }
+    )
+    _state_mod._store_subscription_mapping(tenant_id, existing)
+    logger.warning(
+        "stripe_trial_will_end tenant_id=%s subscription_id=%s trial_end=%s",
+        tenant_id, subscription_id, trial_end,
+    )
+
+
+def _handle_dispute_created(dispute: dict[str, Any]) -> None:
+    """Handle ``charge.dispute.created`` (#1189).
+
+    A chargeback has been opened. This is ops-critical: the tenant's
+    payment method has been challenged by the cardholder's bank and
+    Stripe will deduct the disputed amount (plus a dispute fee) until
+    it is resolved. We:
+
+    1. Locate the tenant via the customer_id on the dispute (newer
+       Stripe API versions populate this field directly).
+    2. Persist dispute metadata (id, amount_cents, currency, reason,
+       status, charge, opened_at) onto the subscription mapping so
+       the admin dashboard can surface the dispute.
+    3. Emit an ERROR-level log so on-call is paged — a dispute
+       requires a human response within Stripe's deadline (usually
+       7 days) or the chargeback is lost by default.
+    """
+    dispute_id = str(dispute.get("id", "") or "")
+    charge_id = str(dispute.get("charge", "") or "")
+    customer_id = dispute.get("customer")
+
+    # Tenant lookup: disputes are customer-scoped, not subscription-scoped
+    # (a dispute could target any past charge for that customer).
+    tenant_id = _state_mod._find_tenant_id(None, customer_id)
+    if not tenant_id:
+        logger.error(
+            "stripe_dispute_tenant_not_found "
+            "dispute_id=%s charge_id=%s customer_id=%s",
+            dispute_id, charge_id, customer_id,
+        )
+        return
+
+    existing = _state_mod._get_subscription_mapping(tenant_id)
+    existing.update(
+        {
+            "last_dispute_id": dispute_id,
+            "last_dispute_charge_id": charge_id,
+            "last_dispute_amount_cents": str(
+                _helpers_mod._coerce_int(dispute.get("amount"))
+            ),
+            "last_dispute_currency": str(dispute.get("currency", "") or ""),
+            "last_dispute_reason": str(dispute.get("reason", "") or ""),
+            "last_dispute_status": str(dispute.get("status", "") or ""),
+            "last_dispute_opened_at": (
+                _helpers_mod._format_period_end(
+                    _helpers_mod._coerce_int(dispute.get("created"))
+                )
+                or datetime.now(timezone.utc).isoformat()
+            ),
+        }
+    )
+    _state_mod._store_subscription_mapping(tenant_id, existing)
+    # ERROR not WARN: chargebacks must page a human.
+    logger.error(
+        "stripe_dispute_opened tenant_id=%s dispute_id=%s "
+        "amount_cents=%s currency=%s reason=%s charge_id=%s",
+        tenant_id, dispute_id,
+        existing["last_dispute_amount_cents"],
+        existing["last_dispute_currency"],
+        existing["last_dispute_reason"],
+        charge_id,
+    )
+
+
+def _handle_customer_deleted(customer: dict[str, Any]) -> None:
+    """Handle ``customer.deleted`` (#1189).
+
+    The Stripe customer has been deleted (typically an admin action in
+    the Stripe dashboard, or a churned-account cleanup script). We:
+
+    1. Locate the tenant via the customer_id.
+    2. Mark the subscription mapping as ``customer_deleted`` and
+       record ``customer_deleted_at``. We preserve the tenant hash
+       as an audit record (past billing history doesn't vanish just
+       because the Stripe customer was removed).
+    3. Delete the ``billing:customer:{customer_id}`` lookup key and
+       the ``billing:subscription:{subscription_id}`` lookup key so a
+       subsequent out-of-order webhook for the stale IDs can't silently
+       re-bind to the same tenant.
+    4. Emit a WARN log — this event is uncommon enough that operators
+       will want to know why the customer was removed.
+    """
+    customer_id = customer.get("id")
+    if not customer_id:
+        logger.warning("stripe_customer_deleted_missing_id")
+        return
+
+    tenant_id = _state_mod._find_tenant_id(None, customer_id)
+    if not tenant_id:
+        logger.warning(
+            "stripe_customer_deleted_tenant_not_found customer_id=%s",
+            customer_id,
+        )
+        # Still clear the stale lookup defensively — nothing bound to
+        # it but also no reason to keep a dead pointer around.
+        _state_mod._clear_customer_lookup(str(customer_id))
+        return
+
+    existing = _state_mod._get_subscription_mapping(tenant_id)
+    prior_subscription_id = existing.get("subscription_id", "")
+    existing.update(
+        {
+            "status": "customer_deleted",
+            "customer_deleted_at": datetime.now(timezone.utc).isoformat(),
+        }
+    )
+    _state_mod._store_subscription_mapping(tenant_id, existing)
+
+    _state_mod._clear_customer_lookup(str(customer_id))
+    if prior_subscription_id:
+        _state_mod._clear_subscription_lookup(str(prior_subscription_id))
+
+    logger.warning(
+        "stripe_customer_deleted tenant_id=%s customer_id=%s subscription_id=%s",
+        tenant_id, customer_id, prior_subscription_id or "(none)",
+    )
+
+
 async def _handle_stripe_event(event: dict[str, Any]) -> None:
     event_type = event.get("type")
     data_object = (event.get("data") or {}).get("object") or {}
@@ -348,6 +519,21 @@ async def _handle_stripe_event(event: dict[str, Any]) -> None:
             if event_created is None or int(event_created) >= last_seen:
                 existing["current_period_end"] = _helpers_mod._format_period_end(data_object.get("current_period_end")) or ""
                 _state_mod._store_subscription_mapping(tenant_id, existing)
+        return
+
+    # #1189: trial expiration notice (~3 days before trial_end).
+    if event_type == "customer.subscription.trial_will_end":
+        _handle_trial_will_end(data_object)
+        return
+
+    # #1189: chargeback opened — ops-critical, logs at ERROR.
+    if event_type == "charge.dispute.created":
+        _handle_dispute_created(data_object)
+        return
+
+    # #1189: Stripe customer removed — clean up lookup keys.
+    if event_type == "customer.deleted":
+        _handle_customer_deleted(data_object)
         return
 
     logger.info("stripe_webhook_ignored", event_type=event_type)
