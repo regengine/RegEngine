@@ -247,6 +247,86 @@ FSMA_RULE_SEEDS: List[Dict[str, Any]] = [
         "failure_reason_template": "Cooling event missing {field_name} \u2014 temperature reading required for cold-chain audit ({citation})",
         "remediation_suggestion": "Record the temperature achieved during cooling in \u00b0F or \u00b0C",
     },
+    # --- #1364: COOLING CTE was a checkbox.
+    # Presence-only checks let a cooling event through with
+    # ``cooling_temperature=80`` (°F) — clearly out of spec for a cold-chain
+    # step — because no rule ever compared the number against a threshold.
+    # The two rules below add:
+    #   (1) a numeric_range gate that enforces the achieved cooling
+    #       temperature is at or below the food-safety cold-chain ceiling,
+    #       normalized to °C so rules can be written unit-agnostically
+    #       (ingestion payloads arrive in both °F and °C);
+    #   (2) a presence check on ``cooling_duration`` so the hold time
+    #       required by 21 CFR \u00a71.1330(b)(5) can be audited (a
+    #       temperature reading without a duration cannot prove the
+    #       thermal kill-step or cold-hold was maintained).
+    {
+        "title": "Cooling: Achieved Temperature Within Cold-Chain Threshold",
+        "description": (
+            "The achieved cooling temperature must be at or below 5 \u00b0C / 41 \u00b0F "
+            "(the FDA cold-chain ceiling). Evaluated via numeric_range so "
+            "readings arriving in either unit are normalized before comparison."
+        ),
+        "severity": "critical",
+        "category": "kde_threshold",
+        "applicability_conditions": {"cte_types": ["cooling"], "ftl_scope": ["ALL"]},
+        "citation_reference": "21 CFR \u00a71.1330(b)(5)",
+        "evaluation_logic": {
+            "type": "numeric_range",
+            "field": "kdes.cooling_temperature",
+            "params": {
+                "max": 5,
+                "unit": "celsius",
+                "unit_field": "kdes.cooling_temperature_unit",
+                # Default to Celsius when the payload omitted a unit —
+                # raw numeric readings without a unit are rare but we
+                # prefer the stricter interpretation (5 vs 41) over
+                # failing the rule outright on legacy feeds.
+                "assumed_unit": "celsius",
+            },
+        },
+        "failure_reason_template": (
+            "Cooling temperature {value} is above {max} \u00b0C ({citation}) "
+            "\u2014 cold-chain ceiling exceeded"
+        ),
+        "remediation_suggestion": (
+            "Re-verify the cooling temperature reading and unit. The achieved "
+            "cold-chain temperature must be \u2264 5 \u00b0C (41 \u00b0F) per 21 CFR "
+            "\u00a71.1330(b)(5). Record the unit alongside the value so the "
+            "rules engine can normalize Fahrenheit readings."
+        ),
+    },
+    {
+        "title": "Cooling: Cooling Duration Required",
+        "description": (
+            "Cooling events must record the duration of the cooling hold so "
+            "the thermal kill-step / cold-chain hold time can be audited "
+            "alongside the achieved temperature"
+        ),
+        "severity": "critical",
+        "category": "kde_presence",
+        "applicability_conditions": {"cte_types": ["cooling"], "ftl_scope": ["ALL"]},
+        "citation_reference": "21 CFR \u00a71.1330(b)(5)",
+        "evaluation_logic": {
+            "type": "multi_field_presence",
+            "field": "kdes.cooling_duration",
+            "params": {
+                "fields": [
+                    "kdes.cooling_duration",
+                    "kdes.cooling_duration_minutes",
+                    "kdes.cooling_hold_time",
+                ]
+            },
+        },
+        "failure_reason_template": (
+            "Cooling event missing {field_name} \u2014 cannot audit hold time "
+            "required by {citation}"
+        ),
+        "remediation_suggestion": (
+            "Record the cooling duration (minutes) or cooling hold time so "
+            "the thermal kill-step can be audited"
+        ),
+    },
     {
         "title": "Initial Packing: Packing Location Required",
         "description": "Initial-packing events must identify the location description of the packing facility",
