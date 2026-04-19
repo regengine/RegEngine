@@ -356,30 +356,105 @@ class IdentityResolutionService:
             "entity_type": entity_type,  # None is bound explicitly to NULL
         }
 
-        rows = self.session.execute(
-            text(
-                """
-                SELECT ce.entity_id, ce.entity_type, ce.canonical_name,
-                       ce.gln, ce.gtin, ce.verification_status,
-                       ce.confidence_score, ea.alias_value
-                FROM fsma.entity_aliases ea
-                JOIN fsma.canonical_entities ce
-                    ON ce.entity_id = ea.entity_id AND ce.tenant_id = ea.tenant_id
-                WHERE ea.tenant_id = :tenant_id
-                  AND ea.alias_type IN ('name', 'trade_name', 'abbreviation')
-                  AND ce.is_active = TRUE
-                  AND (:entity_type IS NULL OR ce.entity_type = :entity_type)
-                """
-            ),
-            params,
-        ).fetchall()
-
-        # Only normalize when case_sensitive=False. The raw alias_value is
-        # always returned verbatim so callers never see a mutated identifier.
+        # Pre-normalize the search term — we need it for both the
+        # Python re-score and the SQL-side trigram filter (lowered).
         if case_sensitive:
             search_norm = search_name
         else:
             search_norm = search_name.lower().strip()
+
+        # #1208 — SQL-side pg_trgm pre-filter.
+        #
+        # Before: this method pulled every tenant alias into Python
+        # (``O(N)`` wire + ``O(N)`` SequenceMatcher) — multi-second at
+        # 100K aliases and directly on the ingestion hot path.
+        #
+        # After: a ``similarity(lower(alias_value), :q) >= :sim_floor``
+        # predicate (backed by the GIN/pg_trgm index added in v070
+        # migration) shrinks the candidate set to ``candidate_pool``
+        # rows before Python re-scores them with the authoritative
+        # Ratcliff/Obershelp ratio that callers depend on.
+        #
+        # Fallback: when pg_trgm isn't present (stripped-down test PG,
+        # or the migration hasn't run), the SQL raises ``UndefinedFunction``
+        # which we catch and re-issue the pre-#1208 full-scan query.
+        # Correctness stays identical — only the perf win is lost.
+        #
+        # The trigram path only runs when we have a normalized search
+        # term and we're not in case-sensitive mode; case_sensitive
+        # paths are non-fuzzy comparisons typically used for
+        # authoritative lookups where a full-scan match matters more
+        # than speed.
+        candidate_pool = max(limit * 20, 100)
+        rows = None
+        if not case_sensitive and search_norm:
+            try:
+                rows = self.session.execute(
+                    text(
+                        """
+                        SELECT ce.entity_id, ce.entity_type, ce.canonical_name,
+                               ce.gln, ce.gtin, ce.verification_status,
+                               ce.confidence_score, ea.alias_value
+                        FROM fsma.entity_aliases ea
+                        JOIN fsma.canonical_entities ce
+                            ON ce.entity_id = ea.entity_id
+                           AND ce.tenant_id = ea.tenant_id
+                        WHERE ea.tenant_id = :tenant_id
+                          AND ea.alias_type IN ('name', 'trade_name', 'abbreviation')
+                          AND ce.is_active = TRUE
+                          AND (:entity_type IS NULL OR ce.entity_type = :entity_type)
+                          AND similarity(lower(ea.alias_value), :q) >= :sim_floor
+                        ORDER BY similarity(lower(ea.alias_value), :q) DESC
+                        LIMIT :cand_limit
+                        """
+                    ),
+                    {
+                        **params,
+                        "q": search_norm,
+                        # Lenient floor — the authoritative cutoff is
+                        # the Python-side ``threshold``. Use ``0.2`` as
+                        # the absolute minimum (roughly "shares at
+                        # least one meaningful trigram") and raise it
+                        # toward the caller's threshold up to 0.8 so
+                        # the caller's stricter threshold translates
+                        # into a smaller candidate pool.
+                        "sim_floor": max(0.2, min(threshold * 0.7, 0.8)),
+                        "cand_limit": candidate_pool,
+                    },
+                ).fetchall()
+            except Exception as exc:
+                logger.debug(
+                    "find_potential_matches_trgm_unavailable",
+                    exc_info=True,
+                    error=str(exc)[:200],
+                )
+                rows = None
+
+        if rows is None:
+            # Fallback path — pre-#1208 behavior, preserved for
+            # environments without pg_trgm and for ``case_sensitive=True``
+            # callers.
+            rows = self.session.execute(
+                text(
+                    """
+                    SELECT ce.entity_id, ce.entity_type, ce.canonical_name,
+                           ce.gln, ce.gtin, ce.verification_status,
+                           ce.confidence_score, ea.alias_value
+                    FROM fsma.entity_aliases ea
+                    JOIN fsma.canonical_entities ce
+                        ON ce.entity_id = ea.entity_id AND ce.tenant_id = ea.tenant_id
+                    WHERE ea.tenant_id = :tenant_id
+                      AND ea.alias_type IN ('name', 'trade_name', 'abbreviation')
+                      AND ce.is_active = TRUE
+                      AND (:entity_type IS NULL OR ce.entity_type = :entity_type)
+                    """
+                ),
+                params,
+            ).fetchall()
+
+        # ``search_norm`` is already computed above (pre-#1208 it was
+        # computed here). The raw alias_value is still returned verbatim
+        # so callers never see a mutated identifier.
 
         scored: List[Dict[str, Any]] = []
         seen_entities: set = set()
