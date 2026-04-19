@@ -2,6 +2,30 @@ import pytest
 from testcontainers.core.container import DockerContainer
 import boto3
 
+
+def _docker_available() -> bool:
+    """Return True if the local Docker daemon is reachable.
+
+    testcontainers raises DockerException at fixture setup if the
+    daemon isn't running, which in CI/dev without Docker turns into a
+    hard ERROR rather than a clean skip. This probes the socket
+    up-front so the whole module can skip cleanly.
+    """
+    try:
+        import docker  # type: ignore[import-untyped]
+        client = docker.from_env()
+        client.ping()
+        return True
+    except Exception:
+        return False
+
+
+pytestmark = pytest.mark.skipif(
+    not _docker_available(),
+    reason="Docker daemon not reachable — skipping testcontainers S3 integration",
+)
+
+
 @pytest.fixture(scope="session")
 def minio_container():
     """Start a real MinIO container for S3 integration testing."""
