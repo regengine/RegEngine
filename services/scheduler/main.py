@@ -1061,7 +1061,11 @@ class HealthHandler(BaseHTTPRequestHandler):
                     "success": r.success,
                     "count": r.items_found,
                     "scraped_at": r.scraped_at.isoformat(),
-                    "error": r.error_message if not r.success else None
+                    "error": r.error_message if not r.success else None,
+                    # #1140: surface soft-failure warnings (e.g.
+                    # parser_mismatch_suspected) to ops dashboards even
+                    # when success=True.
+                    "warnings": list(getattr(r, "warnings", []) or []),
                 }
                 for st, r in self.scheduler_service.last_results.items()
             } if self.scheduler_service else {}
