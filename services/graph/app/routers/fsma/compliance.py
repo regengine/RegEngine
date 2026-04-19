@@ -950,11 +950,22 @@ async def get_compliance_score(
     try:
         async with Neo4jClient() as client:
             async with client.session() as session:
+                # #1273 — every OPTIONAL MATCH must repeat the tenant filter.
+                # The Obligation anchor was scoped, but Control and Evidence
+                # were not, so a Control belonging to tenant B reached via a
+                # cross-tenant REQUIRES edge (ingestion bug, mistakenly
+                # shared global control, etc.) was being counted into
+                # tenant A's score AND its `controls_mapped`/`evidence_items`
+                # response fields. That's both a numeric correctness bug
+                # (dashboard reflects another tenant's controls) and an
+                # info-disclosure leak.
                 result = await session.run(
                     """
                     MATCH (o:Obligation {tenant_id: $tenant_id})
                     OPTIONAL MATCH (o)-[:REQUIRES]->(c:Control)
+                        WHERE c.tenant_id = $tenant_id
                     OPTIONAL MATCH (c)-[:PROVEN_BY]->(e:Evidence)
+                        WHERE e.tenant_id = $tenant_id
                     WITH
                         count(DISTINCT o)  AS total_obligations,
                         count(DISTINCT c)  AS controls_mapped,

@@ -18,7 +18,12 @@ import os
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from services.vertical_compiler.compiler import VerticalCompiler
+# NOTE: despite the "6 services → monolith" direction, the compiler stack
+# lives at ``kernel/control/`` today. The prior import path
+# ``services.vertical_compiler.compiler`` has never existed on disk, so
+# every invocation of ``regengine compile vertical`` died with a
+# ModuleNotFoundError before executing any user code (#1309).
+from kernel.control.compiler import VerticalCompiler
 
 
 @click.group()
@@ -128,7 +133,9 @@ def validate_vertical(vertical_name: str, verticals_dir: str):
     click.echo("")
     
     try:
-        from services.vertical_compiler.schema_validator import (
+        # Same relocation as the compile command above — schema_validator
+        # lives at kernel/control/, not services/vertical_compiler/ (#1309).
+        from kernel.control.schema_validator import (
             validate_vertical_schema,
             validate_obligations_schema
         )
