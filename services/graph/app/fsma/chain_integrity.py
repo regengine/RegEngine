@@ -105,7 +105,24 @@ async def find_broken_chains(
     Returns:
         List of violation dicts, each containing event details and
         violation_type ``"broken_chain"``.
+
+    Raises:
+        ValueError: if `tenant_id` is None or empty. Previously the queries
+            short-circuited with `$tenant_id IS NULL OR ...` which allowed
+            null-tenant callers to see every tenant's chain data — the
+            exact cross-tenant exposure this function is supposed to
+            prevent. #1301 removes that shim; callers must pass a tenant.
     """
+    # #1301 — fail-fast on null-tenant calls. The previous
+    # `$tenant_id IS NULL OR l.tenant_id = $tenant_id` idiom was a
+    # test-time shim that turned into a production info-disclosure the
+    # moment a caller forgot to pass tenant_id. Prefer a loud error.
+    if not tenant_id:
+        raise ValueError(
+            "find_broken_chains requires a non-empty tenant_id; "
+            "null-tenant queries are no longer supported (#1301)"
+        )
+
     start_time = time.time()
 
     # ------------------------------------------------------------------ #
@@ -113,12 +130,21 @@ async def find_broken_chains(
     # Optimization: single-hop UNDERWENT only (no variable-length path),
     # LIMIT 2000 caps result set on large tenants for sub-second response.
     # ------------------------------------------------------------------ #
+    # #1301: Every event node joined via UNDERWENT must be tenant-scoped,
+    # not just the Lot. A cross-tenant UNDERWENT edge (possible because of
+    # the MERGE bug tracked in #1284) otherwise surfaces tenant B's shipping
+    # events inside tenant A's chain-integrity report. The `origin` node
+    # inside the NOT EXISTS sub-query must also carry the predicate — a
+    # cross-tenant CREATION/RECEIVING would falsely satisfy the existence
+    # check and suppress a genuine broken-chain violation.
     missing_origin_query = """
     MATCH (l:Lot)-[:UNDERWENT]->(shipping:TraceEvent {type: 'SHIPPING'})
-    WHERE ($tenant_id IS NULL OR l.tenant_id = $tenant_id)
+    WHERE l.tenant_id = $tenant_id
+      AND shipping.tenant_id = $tenant_id
     AND NOT EXISTS {
         MATCH (l)-[:UNDERWENT]->(origin:TraceEvent)
         WHERE origin.type IN ['CREATION', 'RECEIVING', 'INITIAL_PACKING', 'TRANSFORMATION']
+          AND origin.tenant_id = $tenant_id
     }
     RETURN
         shipping.event_id    AS event_id,
@@ -134,13 +160,21 @@ async def find_broken_chains(
     # ------------------------------------------------------------------ #
     # Query 2: SHIPPING that precedes its own origin (Time Arrow violation)
     # ------------------------------------------------------------------ #
+    # #1301: Both shipping and origin event nodes must be tenant-scoped.
+    # Missing `origin.tenant_id = $tenant_id` is the riskier gap because a
+    # cross-tenant origin event with a later date than tenant A's shipping
+    # would create a spurious "temporal paradox" violation — a false
+    # positive that wastes compliance-reviewer time and looks like tenant
+    # A has broken data.
     temporal_paradox_query = """
     MATCH (l:Lot)-[:UNDERWENT]->(shipping:TraceEvent {type: 'SHIPPING'})
-    WHERE ($tenant_id IS NULL OR l.tenant_id = $tenant_id)
+    WHERE l.tenant_id = $tenant_id
+      AND shipping.tenant_id = $tenant_id
       AND shipping.event_date IS NOT NULL
     WITH l, shipping
     MATCH (l)-[:UNDERWENT]->(origin:TraceEvent)
     WHERE origin.type IN ['CREATION', 'RECEIVING', 'INITIAL_PACKING', 'TRANSFORMATION']
+      AND origin.tenant_id = $tenant_id
       AND origin.event_date IS NOT NULL
     // Optimization: min() aggregate computes earliest origin date in a single
     // pass, replacing ORDER BY + collect()[0] that sorted all origins per lot.
@@ -247,17 +281,26 @@ async def find_broken_chains(
         # exist but the merkle_prev_hash chain does not connect the SHIPPING
         # event to any origin event for the same Lot.
         # ------------------------------------------------------------------ #
+        # #1301: Scope every event node. The downstream `origin` MATCH
+        # (line ~17 of this query) collects merkle_hashes that the
+        # shipping.merkle_prev_hash is compared against. A cross-tenant
+        # origin whose hash happens to match could mask a genuine
+        # cryptographic-chain break, so the `origin.tenant_id` predicate is
+        # load-bearing for the integrity guarantee.
         crypto_gap_query = """
         MATCH (l:Lot)-[:UNDERWENT]->(shipping:TraceEvent {type: 'SHIPPING'})
-        WHERE ($tenant_id IS NULL OR l.tenant_id = $tenant_id)
+        WHERE l.tenant_id = $tenant_id
+          AND shipping.tenant_id = $tenant_id
           AND shipping.merkle_hash IS NOT NULL
         AND EXISTS {
             MATCH (l)-[:UNDERWENT]->(origin:TraceEvent)
             WHERE origin.type IN ['CREATION', 'RECEIVING', 'INITIAL_PACKING']
+              AND origin.tenant_id = $tenant_id
         }
         WITH l, shipping
         MATCH (l)-[:UNDERWENT]->(origin:TraceEvent)
         WHERE origin.type IN ['CREATION', 'RECEIVING', 'INITIAL_PACKING']
+          AND origin.tenant_id = $tenant_id
         WITH shipping, l,
              collect({
                  event_id: origin.event_id,
