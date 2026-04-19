@@ -187,11 +187,17 @@ def _to_iso(value: Any) -> str:
 
 
 def _severity_for_classification(classification: str) -> str:
-    """Map FDA recall classification to alert severity."""
-    if "Class I" in classification:
-        return "critical"
+    """Map FDA recall classification to alert severity.
+
+    Checks are ordered from most-specific to least-specific because
+    "Class I" is a substring of "Class II" and "Class III".
+    """
+    if "Class III" in classification:
+        return "warning"
     if "Class II" in classification:
         return "high"
+    if "Class I" in classification:
+        return "critical"
     return "warning"
 
 
