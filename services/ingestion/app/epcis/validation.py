@@ -10,9 +10,21 @@ import logging
 from datetime import datetime, timezone
 from typing import Any
 
+from fastapi import HTTPException
+
 from services.ingestion.app.epcis.extraction import _extract_lot_data
 
 logger = logging.getLogger("epcis-ingestion")
+
+# #1259: location-identifier fields whose GLN check digit must pass or
+# the event is rejected. These feed FSMA 204 exports; a malformed GLN
+# at one of these slots breaks GS1 registry lookup and lets an
+# auditor's trace chain silently dead-end at a non-existent facility.
+_MANDATORY_GLN_FIELDS: tuple[str, ...] = (
+    "location_id",
+    "source_location_id",
+    "dest_location_id",
+)
 
 
 def _audit_log_validation_failure(
@@ -121,15 +133,29 @@ def _validate_as_fsma_event(normalized: dict, tenant_id: str | None = None) -> d
 
 
 def _validate_gln_format(gln: str) -> bool:
-    """Validate a GLN using GS1 check digit algorithm."""
-    if not gln or not gln.isdigit() or len(gln) != 13:
+    """Validate a GLN using the shared GS1 check-digit implementation.
+
+    #1259: routes through ``services.shared.fsma_validation.validate_gln``
+    so EPCIS and the rest of the platform share a single GLN source of
+    truth. Falls back to the legacy inline check only when the shared
+    module is unavailable (should never happen in production).
+    """
+    if not gln:
         return False
-    total = sum(
-        int(digit) * (3 if index % 2 else 1)
-        for index, digit in enumerate(reversed(gln[:-1]))
-    )
-    expected = (10 - (total % 10)) % 10
-    return int(gln[-1]) == expected
+    try:
+        from shared.fsma_validation import validate_gln
+    except ImportError:
+        logger.debug("shared.fsma_validation unavailable — using inline GLN check")
+        if not gln.isdigit() or len(gln) != 13:
+            return False
+        total = sum(
+            int(digit) * (3 if index % 2 else 1)
+            for index, digit in enumerate(reversed(gln[:-1]))
+        )
+        expected = (10 - (total % 10)) % 10
+        return int(gln[-1]) == expected
+
+    return bool(validate_gln(gln).is_valid)
 
 
 def _validate_tlc_format(tlc: str) -> bool:
@@ -156,12 +182,63 @@ def _validate_epcis(event: dict) -> list[str]:
     return errors
 
 
+def _enforce_mandatory_gln_check_digits(normalized: dict) -> None:
+    """Reject events whose mandatory location GLNs fail the GS1 check
+    digit. Closes #1259: previously these were emitted only as warning
+    alerts, so malformed GLNs persisted into ``cte_events`` and broke
+    FDA-export GS1 lookups at audit time.
+
+    Non-numeric / wrong-length values are left to upstream format
+    validators (they signal a completely different error shape —
+    "not a GLN at all"). Only values that *look* like a GLN but fail
+    the check digit are rejected here; those are the dangerous case
+    because they survive any "isdigit and len == 13" gate.
+    """
+    failures: list[dict] = []
+    for field in _MANDATORY_GLN_FIELDS:
+        value = normalized.get(field)
+        if not value:
+            continue
+        if not value.isdigit() or len(value) != 13:
+            continue
+        if not _validate_gln_format(value):
+            failures.append({"field": field, "gln": value})
+
+    if failures:
+        logger.warning(
+            "epcis_gln_check_digit_rejected fields=%s",
+            [f["field"] for f in failures],
+        )
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "error": "invalid_gln_check_digit",
+                "message": (
+                    "One or more mandatory location GLNs failed the GS1 "
+                    "check-digit test. FSMA 204 exports must resolve "
+                    "against GS1's registry; malformed GLNs break the "
+                    "auditor's trace chain."
+                ),
+                "failures": failures,
+            },
+        )
+
+
 def _validate_epcis_glns(normalized: dict) -> list[str]:
-    """Validate GLN format on location fields, returning warnings."""
+    """Legacy advisory-only GLN warning function.
+
+    Kept for backwards compatibility with callers that want soft
+    warnings. The strict check is in
+    ``_enforce_mandatory_gln_check_digits`` which should run before
+    any persistence for mandatory fields (#1259). This function still
+    returns warnings for any future non-mandatory GLN fields.
+    """
     warnings: list[str] = []
-    gln_fields = ["location_id", "source_location_id", "dest_location_id"]
-    for field in gln_fields:
+    for field in _MANDATORY_GLN_FIELDS:
         value = normalized.get(field)
         if value and value.isdigit() and len(value) == 13 and not _validate_gln_format(value):
+            # Mandatory check-digit failures should be raised before we
+            # get here. If they aren't (legacy caller skipped the
+            # enforcer), at least surface them as warnings.
             warnings.append(f"Invalid GLN check digit in {field}: {value}")
     return warnings
