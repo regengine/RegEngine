@@ -33,7 +33,10 @@ from sqlalchemy.orm import Session
 
 from shared.rules.types import RuleDefinition, RuleEvaluationResult, EvaluationSummary
 from shared.rules.evaluators.stateless import EVALUATORS
-from shared.rules.evaluators.relational import RELATIONAL_EVALUATORS
+from shared.rules.evaluators.relational import (
+    RELATIONAL_EVALUATORS,
+    fetch_related_events,
+)
 from shared.rules.ftl import (
     is_ftl_food,
     event_has_ftl_hint,
@@ -288,8 +291,20 @@ class RulesEngine:
             )
             return summary
 
+        # #1365 — pre-fetch related events ONCE per event when any relational
+        # rule will run. Previously each relational evaluator hit the database
+        # with the same (tlc, tenant_id, event_id) triple, producing N copies
+        # of an identical SELECT per event (N = number of relational rules).
+        related_events_cache = self._prefetch_related_events(
+            event_data, applicable_rules, tenant_id
+        )
+
         for rule in applicable_rules:
-            result = self._evaluate_single_rule(event_data, rule, tenant_id=tenant_id)
+            result = self._evaluate_single_rule(
+                event_data, rule,
+                tenant_id=tenant_id,
+                related_events=related_events_cache,
+            )
             summary.results.append(result)
             self._tally_result(summary, result)
 
@@ -352,8 +367,17 @@ class RulesEngine:
                 summaries.append(summary)
                 continue
 
+            # #1365 — pre-fetch once per event (not per rule).
+            related_events_cache = self._prefetch_related_events(
+                event_data, applicable, tenant_id
+            )
+
             for rule in applicable:
-                result = self._evaluate_single_rule(event_data, rule, tenant_id=tenant_id)
+                result = self._evaluate_single_rule(
+                    event_data, rule,
+                    tenant_id=tenant_id,
+                    related_events=related_events_cache,
+                )
                 summary.results.append(result)
                 self._tally_result(summary, result)
 
@@ -394,12 +418,72 @@ class RulesEngine:
         else:  # "skip" or any unknown intentional outcome
             summary.skipped += 1
 
+    def _prefetch_related_events(
+        self,
+        event_data: Dict[str, Any],
+        applicable_rules: List[RuleDefinition],
+        tenant_id: Optional[str],
+    ) -> Optional[List[Dict[str, Any]]]:
+        """Pre-fetch the per-event related-events list once (#1365).
+
+        Relational evaluators (``temporal_order``, ``identity_consistency``,
+        ``mass_balance``) each previously called ``fetch_related_events``
+        with identical arguments — one SELECT per (event, rule) tuple.
+        For an event with 3 relational rules applicable, that's 3 copies
+        of the same query. This helper fetches once per event and forwards
+        the result into each evaluator via a kwarg.
+
+        Returns ``None`` — causing evaluators to fall back to per-call
+        fetch — when any of the following hold:
+
+        * no ``tenant_id`` (evaluator would error anyway at dispatch)
+        * no ``session`` (engine configuration error — evaluator errors)
+        * event has no ``traceability_lot_code`` (evaluator would skip)
+        * no applicable rule is relational (no waste to avoid)
+        * the pre-fetch itself raises — log and defer to per-evaluator
+          fetch rather than aborting the whole evaluation
+
+        Callers that pass ``None`` preserve the pre-#1365 semantics.
+        """
+        if not tenant_id or self.session is None:
+            return None
+        tlc = event_data.get("traceability_lot_code", "")
+        if not tlc:
+            return None
+        if not any(
+            (rule.evaluation_logic or {}).get("type") in RELATIONAL_EVALUATORS
+            for rule in applicable_rules
+        ):
+            return None
+        event_id = event_data.get("event_id", "")
+        try:
+            return fetch_related_events(
+                self.session, tlc, tenant_id, str(event_id) if event_id else None
+            )
+        except Exception as e:
+            # A failed pre-fetch must not kill the evaluation — the
+            # per-evaluator fallback will re-attempt and be caught by
+            # ``_evaluate_single_rule``'s own try/except so the failure
+            # is counted as an `error` result, not a crash.
+            logger.warning(
+                "rules_engine_prefetch_failed",
+                extra={
+                    "event_id": event_id,
+                    "tlc": tlc,
+                    "error": str(e),
+                    "error_type": type(e).__name__,
+                    "note": "falling back to per-evaluator fetch (#1365)",
+                },
+            )
+            return None
+
     def _evaluate_single_rule(
         self,
         event_data: Dict[str, Any],
         rule: RuleDefinition,
         *,
         tenant_id: Optional[str] = None,
+        related_events: Optional[List[Dict[str, Any]]] = None,
     ) -> RuleEvaluationResult:
         """Evaluate a single rule against a single event.
 
@@ -407,6 +491,12 @@ class RulesEngine:
         relational rule is dispatched without tenant_id, it is treated as
         an error (not a silent skip) so missing context is never treated
         as compliant.
+
+        ``related_events`` (#1365) is the engine-pre-fetched per-event cache
+        that is forwarded to relational evaluators to avoid N redundant
+        database queries per event (one per relational rule). Stateless
+        evaluators ignore it. ``None`` means "no cache available" — each
+        relational evaluator will self-fetch, preserving old behavior.
         """
         logic = rule.evaluation_logic
         eval_type = logic.get("type", "field_presence")
@@ -478,7 +568,9 @@ class RulesEngine:
                 )
             try:
                 return relational_evaluator(
-                    event_data, logic, rule, self.session, tenant_id=tenant_id
+                    event_data, logic, rule, self.session,
+                    tenant_id=tenant_id,
+                    related_events=related_events,
                 )
             except Exception as e:
                 logger.error(

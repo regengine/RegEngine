@@ -18,7 +18,7 @@ import structlog
 from bs4 import BeautifulSoup
 
 from ..models import EnforcementItem, EnforcementSeverity, ScrapeResult, SourceType
-from .base import BaseScraper
+from .base import BaseScraper, fetch_with_retry
 
 logger = structlog.get_logger("scraper.fda_import_alerts")
 
@@ -135,14 +135,15 @@ class FDAImportAlertsScraper(BaseScraper):
         """Close the underlying HTTP client to release connections."""
         self.session.close()
 
-    def _scrape_alerts_page(self) -> Tuple[List[EnforcementItem], List[str]]:
-        """Fetch and parse the FDA Import Alerts HTML page.
-
-        Returns a tuple ``(items, warnings)``. Warnings are soft signals —
-        the scrape didn't fail, but the operator should investigate (e.g.
-        the parser may be out of date because FDA changed the HTML).
-        """
-        response = self.session.get(FDA_IMPORT_ALERTS_URL, timeout=self.timeout)
+    def _scrape_alerts_page(self) -> List[EnforcementItem]:
+        """Parse FDA Import Alerts HTML page."""
+        # #1138: retry on 5xx/transport errors.
+        response = fetch_with_retry(
+            self.session,
+            FDA_IMPORT_ALERTS_URL,
+            timeout=self.timeout,
+            log_scope="fda_import_alerts_html",
+        )
         response.raise_for_status()
 
         return self.parse_html(response.text, base_url=FDA_IMPORT_ALERTS_URL)
