@@ -704,8 +704,28 @@ class CanonicalEventStore:
     # Read Path
     # ------------------------------------------------------------------
 
-    def get_event(self, tenant_id: str, event_id: str) -> Optional[Dict[str, Any]]:
-        """Get a single canonical event with full provenance."""
+    def get_event(
+        self,
+        tenant_id: str,
+        event_id: str,
+        *,
+        include_raw_payload: bool = False,
+    ) -> Optional[Dict[str, Any]]:
+        """Get a single canonical event with full provenance.
+
+        #1297: ``raw_payload`` is the original supplier record and can
+        contain PII (grower names, addresses, phone numbers). Default
+        to OMIT it so any new consumer that forgets to scope tenant
+        doesn't accidentally leak upstream payloads. Callers that
+        legitimately need the raw payload (audit endpoints,
+        chain-of-custody views) must opt in with
+        ``include_raw_payload=True``.
+
+        The SQL still SELECTs the column — filtering on the Python
+        side keeps the SQL text constant for prepared-statement
+        caching and keeps the returned dict shape predictable across
+        callers.
+        """
         row = self.session.execute(
             text("""
                 SELECT event_id, tenant_id, source_system, source_record_id,
@@ -727,7 +747,7 @@ class CanonicalEventStore:
         if not row:
             return None
 
-        return {
+        result: Dict[str, Any] = {
             "event_id": str(row[0]), "tenant_id": str(row[1]),
             "source_system": row[2], "source_record_id": row[3],
             "event_type": row[4],
@@ -741,7 +761,6 @@ class CanonicalEventStore:
             "from_facility_reference": row[14], "to_facility_reference": row[15],
             "transport_reference": row[16],
             "kdes": row[17] if isinstance(row[17], dict) else json.loads(row[17] or "{}"),
-            "raw_payload": row[18] if isinstance(row[18], dict) else json.loads(row[18] or "{}"),
             "normalized_payload": row[19] if isinstance(row[19], dict) else json.loads(row[19] or "{}"),
             "provenance_metadata": row[20] if isinstance(row[20], dict) else json.loads(row[20] or "{}"),
             "confidence_score": float(row[21]) if row[21] else 1.0,
@@ -751,6 +770,17 @@ class CanonicalEventStore:
             "created_at": row[27].isoformat() if row[27] else None,
             "amended_at": row[28].isoformat() if row[28] else None,
         }
+
+        # #1297: opt-in raw_payload. Safer default prevents accidental
+        # PII leaks when a new consumer is added without thinking about
+        # tenant scope / auth posture.
+        if include_raw_payload:
+            result["raw_payload"] = (
+                row[18] if isinstance(row[18], dict)
+                else json.loads(row[18] or "{}")
+            )
+
+        return result
 
     def query_events_by_tlc(
         self, tenant_id: str, tlc: str,
