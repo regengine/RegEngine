@@ -719,7 +719,15 @@ class CTEPersistence:
             previous_chain_hash = chain_hash
             next_sequence += 1
 
-        # --- Step 5: Batch INSERT ---
+        # --- Step 5: Batch INSERT (with lost-race reconciliation — #1248) ---
+        # ON CONFLICT DO NOTHING silently discards rows whose idempotency
+        # key collides with a concurrent writer's INSERT. Before #1248 we
+        # still reported idempotent=False / event_id=<our new uuid> for
+        # those, so the caller walked away with a phantom event_id that
+        # never landed. RETURNING id tells us exactly which ids actually
+        # inserted; the complement is the lost-race set and we re-select
+        # the winner rows to patch our StoreResult list.
+        inserted_ids: set[str] = set()
         if event_rows:
             # Chunk inserts to avoid parameter limits (Postgres max ~32K params)
             for chunk_start in range(0, len(event_rows), 50):
@@ -757,8 +765,70 @@ class CTEPersistence:
                         validation_status
                     ) VALUES {', '.join(values_clauses)}
                     ON CONFLICT (tenant_id, idempotency_key) DO NOTHING
+                    RETURNING id
                 """
-                self.session.execute(text(sql), params)
+                returned = self.session.execute(text(sql), params).fetchall()
+                for r in returned:
+                    inserted_ids.add(str(r[0]))
+
+            # --- #1248 lost-race reconciliation ---
+            # For every event_row that was NOT in the returned set, the
+            # concurrent writer won; re-select the winner by idempotency
+            # key and rewrite our StoreResult so the caller sees the
+            # authoritative event_id / sha256 / chain.
+            lost_idemp_keys = [
+                row["idempotency_key"]
+                for row in event_rows
+                if str(row["id"]) not in inserted_ids
+            ]
+            if lost_idemp_keys:
+                # Map idempotency_key → position in ``results`` so we can
+                # patch the entry the caller is going to see.
+                key_to_result_idx: Dict[str, int] = {}
+                for idx, p in enumerate(prepared):
+                    key_to_result_idx[p["idemp_key"]] = idx
+                winners: Dict[str, Tuple[str, str, str]] = {}
+                for chunk_start in range(0, len(lost_idemp_keys), 100):
+                    chunk_keys = lost_idemp_keys[chunk_start:chunk_start + 100]
+                    placeholders = ", ".join(
+                        f":lk{i}" for i in range(len(chunk_keys))
+                    )
+                    lr_params: Dict[str, Any] = {
+                        f"lk{i}": k for i, k in enumerate(chunk_keys)
+                    }
+                    lr_params["tid"] = tenant_id
+                    rows = self.session.execute(
+                        text(f"""
+                            SELECT idempotency_key, id, sha256_hash, chain_hash
+                            FROM fsma.cte_events
+                            WHERE tenant_id = :tid
+                              AND idempotency_key IN ({placeholders})
+                        """),
+                        lr_params,
+                    ).fetchall()
+                    for idemp_key, winner_id, sha, ch in rows:
+                        winners[idemp_key] = (str(winner_id), sha, ch)
+                for idemp_key, (winner_id, sha, ch) in winners.items():
+                    ridx = key_to_result_idx.get(idemp_key)
+                    if ridx is None:
+                        continue
+                    results[ridx] = StoreResult(
+                        success=True,
+                        event_id=winner_id,
+                        sha256_hash=sha,
+                        chain_hash=ch,
+                        idempotent=True,
+                        errors=[],
+                        kde_completeness=1.0,
+                        alerts=[],
+                    )
+                logger.info(
+                    "batch_events_lost_race_reconciled",
+                    extra={
+                        "tenant_id": tenant_id,
+                        "lost_race": len(lost_idemp_keys),
+                    },
+                )
 
         if kde_rows:
             for chunk_start in range(0, len(kde_rows), 200):
