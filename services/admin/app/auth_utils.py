@@ -2,6 +2,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 import uuid
 import jwt
+from cachetools import TTLCache
 from passlib.context import CryptContext
 import os
 import secrets
@@ -80,7 +81,15 @@ def get_password_hash(password: str) -> str:
 _active_kid: Optional[str] = None
 _active_secret: Optional[str] = None
 _verification_keys: dict[str, str] = {}  # kid -> secret
-_revoked_jtis: set[str] = set()  # in-memory fallback when Redis unavailable
+# #1039 — bound the in-memory revocation set so long-running workers
+# cannot leak memory when Redis is unavailable. TTL matches the token
+# lifetime + 5-minute slack (same slack Redis key uses), so a revoked
+# jti ages out exactly when the underlying JWT would no longer be
+# accepted anyway. 50k entries caps peak memory at ~5MB per worker.
+_revoked_jtis: TTLCache[str, bool] = TTLCache(
+    maxsize=50_000,
+    ttl=ACCESS_TOKEN_EXPIRE_MINUTES * 60 + 300,
+)
 _revocation_redis = None  # set by lifespan init
 
 
@@ -258,7 +267,7 @@ async def check_revoked_async(jti: str) -> bool:
     if _revocation_redis:
         try:
             if await _revocation_redis.sismember("regengine:jwt:revoked", jti):
-                _revoked_jtis.add(jti)
+                _revoked_jtis[jti] = True
                 return True
         except Exception as exc:  # pragma: no cover — Redis best-effort
             # If Redis is transiently unreachable, fall back to
@@ -275,7 +284,7 @@ async def revoke_token(jti: str, ttl_seconds: Optional[int] = None) -> None:
     if ttl_seconds is None:
         ttl_seconds = ACCESS_TOKEN_EXPIRE_MINUTES * 60
 
-    _revoked_jtis.add(jti)
+    _revoked_jtis[jti] = True
     _logger.warning("jwt_token_revoked: jti=%s", jti)
 
     if _revocation_redis:
