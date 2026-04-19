@@ -38,6 +38,19 @@ logger = structlog.get_logger("task-processor")
 _worker_thread: Optional[threading.Thread] = None
 _shutdown_event = threading.Event()
 
+# #1225 — drain coordination.
+#
+# ``_current_task_id`` holds the id of the task currently executing inside
+# ``_run_handler_with_heartbeat``. It is set immediately before the handler
+# fires and cleared (under the lock) when the handler returns, fails, or
+# the worker exits the loop. ``stop_task_worker`` reads this under the same
+# lock to decide whether to release the lock on an abandoned row so another
+# worker can pick it up immediately instead of waiting ``locked_until``
+# minutes for the steal-window to expire.
+_inflight_lock = threading.Lock()
+_current_task_id: Optional[int] = None
+_current_task_attempts: int = 0
+
 # How often to poll the task_queue table (seconds). 500ms default balances
 # enqueue latency (worst-case ~500ms) against idle-queue database traffic.
 # The previous default of 2.0s combined with the never-consumed pg_notify
@@ -68,6 +81,13 @@ DEFAULT_TIMEOUT_SECONDS = 120
 # Chosen so that even if the heartbeat is slightly late, the next tick
 # still lands comfortably inside the visibility window.
 HEARTBEAT_INTERVAL_SECONDS = 60
+
+# How long ``stop_task_worker`` waits for the in-flight handler to return
+# before emitting an "abandoned" log and releasing the row's lock so another
+# worker can re-claim it (#1225). Defaults to 30s to match Gunicorn's
+# graceful-timeout. Tune up if your handlers regularly run longer than 30s
+# and you want clean drains; tune down for local-dev fast restarts.
+SHUTDOWN_TIMEOUT_SECONDS = int(os.getenv("TASK_SHUTDOWN_TIMEOUT_SECONDS", "30"))
 
 # Worker identity for distributed locking
 WORKER_ID = f"worker-{os.getpid()}"
@@ -289,6 +309,7 @@ def _run_handler_with_heartbeat(
     handler: Callable[[Dict[str, Any]], None],
     payload: Dict[str, Any],
     stop_event: Optional[threading.Event] = None,
+    attempts: int = 0,
 ) -> None:
     """Execute ``handler`` while a background thread extends the task lock.
 
@@ -333,11 +354,26 @@ def _run_handler_with_heartbeat(
         name=f"task-heartbeat-{task_id}",
     )
     heartbeat_thread.start()
+    # #1225 — publish the in-flight task id so ``stop_task_worker`` can
+    # release the lock if the process is torn down mid-handler. We write
+    # under ``_inflight_lock`` to serialize with the shutdown reader.
+    global _current_task_id, _current_task_attempts
+    with _inflight_lock:
+        _current_task_id = task_id
+        _current_task_attempts = attempts
     try:
         handler(payload)
     finally:
         stop.set()
         heartbeat_thread.join(timeout=HEARTBEAT_INTERVAL_SECONDS + 5)
+        # Clear the in-flight marker — once the handler returns (whether
+        # success or exception) the task is no longer at risk of mid-run
+        # abandonment, so don't let a racing shutdown mistake it for
+        # in-flight and double-release the lock.
+        with _inflight_lock:
+            if _current_task_id == task_id:
+                _current_task_id = None
+                _current_task_attempts = 0
 
 
 def _retry_delay_seconds(attempts: int, cap_seconds: int = 3600) -> int:
@@ -453,6 +489,7 @@ def _worker_loop() -> None:
                     timeout_seconds=int(timeout),
                     handler=handler,
                     payload=task["payload"],
+                    attempts=task["attempts"],
                 )
                 _complete_task(db, task["id"])
                 logger.debug("task_completed", task_id=task["id"], task_type=task_type)
@@ -613,9 +650,112 @@ def start_task_worker() -> None:
     _worker_thread.start()
 
 
-def stop_task_worker() -> None:
-    """Stop the background task worker thread gracefully."""
+def _release_abandoned_task_lock(task_id: int, attempts: int) -> None:
+    """Best-effort release of the lock on a task we abandoned at shutdown (#1225).
+
+    If the process is torn down mid-handler, the claimed row stays in
+    ``status='processing'`` until ``locked_until`` expires — anywhere
+    from 30s to 5 minutes depending on task_type. That latency is
+    unnecessary when we KNOW we're abandoning: flip the row straight
+    back to ``pending`` and decrement ``attempts`` so the graceful
+    handover does not count against the task's ``max_attempts`` budget.
+
+    This runs in the ``stop_task_worker`` thread, so it intentionally
+    opens its own short-lived session and swallows all errors — the
+    caller is already on its way out the door and a DB blip here must
+    not block process exit.
+    """
+    try:
+        from shared.database import SessionLocal
+        from sqlalchemy import text
+    except ImportError:
+        logger.warning("abandoned_task_release_no_db_module", task_id=task_id)
+        return
+
+    db = None
+    try:
+        db = SessionLocal()
+        result = db.execute(
+            text(
+                """
+                UPDATE fsma.task_queue
+                SET status = 'pending',
+                    locked_by = NULL,
+                    locked_until = NULL,
+                    attempts = GREATEST(attempts - 1, 0)
+                WHERE id = :id
+                  AND locked_by = :worker
+                  AND status = 'processing'
+                """
+            ),
+            {"id": task_id, "worker": WORKER_ID},
+        )
+        db.commit()
+        released = bool(result.rowcount)
+        logger.warning(
+            "task_abandoned_on_shutdown",
+            task_id=task_id,
+            worker=WORKER_ID,
+            attempts=attempts,
+            released=released,
+        )
+    except Exception:
+        logger.exception("abandoned_task_release_failed", task_id=task_id)
+    finally:
+        if db is not None:
+            try:
+                db.close()
+            except Exception:
+                pass
+
+
+def stop_task_worker(timeout_seconds: Optional[int] = None) -> None:
+    """Stop the background task worker thread gracefully (#1225).
+
+    Flow:
+      1. Set the shutdown event. The worker loop observes it between
+         iterations and exits after the current handler returns.
+      2. Join the worker thread with ``timeout_seconds`` (default
+         ``SHUTDOWN_TIMEOUT_SECONDS`` env, 30s) — matched to Gunicorn's
+         graceful-timeout so we don't get SIGKILL'd mid-drain.
+      3. If the thread is STILL alive after the timeout, the handler
+         is wedged. Consult ``_current_task_id`` under lock: if a task
+         is in flight we emit a loud "abandoned" telemetry event AND
+         issue a best-effort ``UPDATE`` to release the row's lock so
+         another worker can re-claim it immediately (no wait for the
+         visibility window to expire).
+
+    The ``attempts - 1`` decrement on release is the key correctness
+    bit: a graceful hand-off between workers must not count as a
+    failed attempt, otherwise a deploy-heavy day would burn through
+    ``max_attempts`` on perfectly healthy tasks (#1225).
+    """
     _shutdown_event.set()
-    if _worker_thread is not None:
-        _worker_thread.join(timeout=10)
-        logger.info("task_worker_joined")
+    if _worker_thread is None:
+        return
+
+    effective_timeout = (
+        timeout_seconds if timeout_seconds is not None else SHUTDOWN_TIMEOUT_SECONDS
+    )
+    _worker_thread.join(timeout=effective_timeout)
+
+    # If the worker is still alive the handler is stuck — sample the
+    # in-flight state and hand the task back to the queue.
+    if _worker_thread.is_alive():
+        with _inflight_lock:
+            stranded_id = _current_task_id
+            stranded_attempts = _current_task_attempts
+        if stranded_id is not None:
+            _release_abandoned_task_lock(stranded_id, stranded_attempts)
+        else:
+            logger.warning(
+                "task_worker_join_timeout_no_inflight",
+                worker=WORKER_ID,
+                timeout=effective_timeout,
+            )
+    else:
+        logger.info(
+            "task_worker_joined",
+            worker=WORKER_ID,
+            timeout=effective_timeout,
+        )
