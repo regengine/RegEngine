@@ -29,6 +29,7 @@ from services.ingestion.app.epcis.normalization import (
 )
 from services.ingestion.app.epcis.validation import (
     _default_product_description,
+    _enforce_mandatory_gln_check_digits,
     _validate_as_fsma_event,
     _validate_epcis,
     _validate_epcis_glns,
@@ -448,6 +449,8 @@ def _ingest_single_event_fallback(tenant_id: str, event: dict) -> tuple[dict, in
     normalized = _normalize_epcis_to_cte(event)
     kdes = _extract_kdes(event)
     alerts = _compliance_alerts(normalized, kdes)
+    # #1259: fail-closed on malformed mandatory GLNs before persistence.
+    _enforce_mandatory_gln_check_digits(normalized)
     alerts.extend(_validate_epcis_glns(normalized))
 
     # Validate against FSMAEvent Pydantic model before storing.
@@ -531,6 +534,8 @@ def _prepare_event_for_persistence(tenant_id: str, event: dict) -> dict:
     normalized = _normalize_epcis_to_cte(event)
     kdes = _extract_kdes(event)
     alerts = _compliance_alerts(normalized, kdes)
+    # #1259: fail-closed on malformed mandatory GLNs before persistence.
+    _enforce_mandatory_gln_check_digits(normalized)
     alerts.extend(_validate_epcis_glns(normalized))
     kde_map = _build_kde_map(event, normalized, idempotency_key)
 
