@@ -94,7 +94,11 @@ class SchedulerService:
     def __init__(self):
         self.settings = get_settings()
         self.state_manager = StateManager()
-        self.notifier = WebhookNotifier()
+        # #1150 — pass the on-disk outbox path so failed deliveries
+        # survive restart. Empty string → legacy in-memory-only behavior.
+        self.notifier = WebhookNotifier(
+            outbox_path=self.settings.webhook_outbox_path or None,
+        )
         self.kafka_producer = get_kafka_producer()
         self.distributed_context = DistributedContext()
         
@@ -589,11 +593,48 @@ class SchedulerService:
         )
         logger.info("job_scheduled", job_id="fsma_nightly_sync", cron="02:00 UTC")
 
+        # #1150 — drain the persistent webhook outbox periodically. Only
+        # register the job when an outbox path is actually configured, so
+        # a scheduler with legacy (in-memory-only) delivery doesn't pay
+        # the cost of a no-op tick every minute.
+        if self.settings.webhook_outbox_path:
+            self.scheduler.add_job(
+                self.drain_webhook_outbox,
+                trigger=IntervalTrigger(
+                    seconds=self.settings.webhook_outbox_drain_interval_seconds,
+                ),
+                id="webhook_outbox_drain",
+                name="Webhook Outbox Drain (#1150)",
+                replace_existing=True,
+                max_instances=1,  # Never run two drain passes concurrently.
+            )
+            logger.info(
+                "job_scheduled",
+                job_id="webhook_outbox_drain",
+                interval_seconds=self.settings.webhook_outbox_drain_interval_seconds,
+                outbox_path=self.settings.webhook_outbox_path,
+            )
+
         logger.info(
             "scheduler_ready",
-            total_jobs=9,
+            total_jobs=10 if self.settings.webhook_outbox_path else 9,
             scrapers=list(self.scrapers.keys()),
         )
+
+    def drain_webhook_outbox(self) -> None:
+        """Drain the persistent webhook outbox once (#1150).
+
+        Invoked by APScheduler on the interval configured by
+        ``webhook_outbox_drain_interval_seconds``. Tolerant of per-entry
+        failures; counters are emitted via ``webhook_outbox_drain`` log.
+        """
+        try:
+            counter = self.notifier.retry_outbox_once()
+        except Exception as exc:  # pragma: no cover — telemetry must not crash
+            logger.exception("webhook_outbox_drain_failed", error=str(exc))
+            return
+        if counter["attempted"]:
+            logger.info("webhook_outbox_drain_tick", **counter)
 
     def purge_old_tasks(self) -> None:
         """Purge completed/dead ``fsma.task_queue`` rows older than 30 days.
@@ -1038,6 +1079,13 @@ class SchedulerService:
             self.kafka_producer.close()
         except (RuntimeError, ConnectionError, OSError) as e:
             logger.error("kafka_close_failed", error=str(e))
+
+        # #1150 — release webhook HTTP session cleanly so open sockets
+        # don't block the process exit.
+        try:
+            self.notifier.close()
+        except (RuntimeError, OSError) as e:
+            logger.warning("webhook_notifier_close_failed", error=str(e))
 
         logger.info("scheduler_stopped")
 
