@@ -260,6 +260,105 @@ def _validate_event_timestamp_window(timestamp: str) -> Optional[str]:
     return None
 
 
+# ── Prometheus metric (#1245) ──────────────────────────────────────────────
+# The replay-window check itself blocks the stale/future-replay vector; the
+# metric makes it observable in prod. Without a counter, an SRE can't tell
+# whether rejections are a steady-state partner-clock-skew issue, a surge
+# from one bad integration, or an active replay attack.
+try:  # pragma: no cover - metrics are best-effort; never break ingest on registry error
+    from prometheus_client import REGISTRY, Counter
+
+    def _matches_registered_name(collector_name: str, requested: str) -> bool:
+        """Prometheus strips ``_total`` from Counter names internally, so
+        a Counter requested as ``foo_total`` ends up with ``_name='foo'``.
+        Compare both forms so the fallback-lookup works regardless of
+        which suffix is present in either string."""
+        if not collector_name:
+            return False
+        a = collector_name[:-6] if collector_name.endswith("_total") else collector_name
+        b = requested[:-6] if requested.endswith("_total") else requested
+        return a == b
+
+    def _get_or_create_counter(name, documentation, labelnames):
+        try:
+            return Counter(name, documentation, labelnames)
+        except ValueError:
+            # Already registered (common during pytest re-imports or
+            # multi-path imports).
+            for collector in list(REGISTRY._collector_to_names):
+                if _matches_registered_name(
+                    getattr(collector, "_name", None), name
+                ):
+                    return collector
+            raise
+
+    WEBHOOK_REPLAY_REJECTED = _get_or_create_counter(
+        "webhook_replay_rejected_total",
+        "Webhook ingest events rejected by the replay-window check (#1245)",
+        ["reason", "age_bucket"],
+    )
+    _WEBHOOK_METRICS_ENABLED = True
+except Exception as _wh_metrics_exc:  # pragma: no cover
+    logger.debug("webhook_replay_metric_init_failed: %s", _wh_metrics_exc)
+    WEBHOOK_REPLAY_REJECTED = None
+    _WEBHOOK_METRICS_ENABLED = False
+
+
+def _classify_replay_rejection(timestamp: str) -> tuple[str, str]:
+    """Return ``(reason, age_bucket)`` for metric labelling.
+
+    ``reason`` is one of ``"stale"`` / ``"future"`` / ``"unparseable"``.
+    ``age_bucket`` is a coarse, bounded-cardinality bucket of how far
+    off the event timestamp is from now. Using buckets rather than raw
+    offsets keeps Prometheus label cardinality finite regardless of
+    hostile input.
+
+    Both are string literals from a closed set — nothing user-supplied
+    reaches the label values.
+    """
+    try:
+        dt = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+    except (ValueError, AttributeError, TypeError):
+        return ("unparseable", "na")
+
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+
+    now = datetime.now(timezone.utc)
+    delta = dt - now
+
+    if delta.total_seconds() > 0:
+        hours = delta.total_seconds() / 3600
+        # Future bucket: how far in the future
+        if hours <= 48:
+            return ("future", "lt_48h")
+        if hours <= 24 * 30:
+            return ("future", "lt_30d")
+        return ("future", "gte_30d")
+
+    # Stale path
+    days = (-delta).total_seconds() / 86400
+    if days <= 180:
+        return ("stale", "lt_180d")
+    if days <= 365:
+        return ("stale", "lt_1y")
+    return ("stale", "gte_1y")
+
+
+def _record_replay_rejection(timestamp: str) -> None:
+    """Best-effort metric emission on replay-window rejection. Never
+    raises — a metric-registry blip must not fail the ingest path."""
+    if not _WEBHOOK_METRICS_ENABLED or WEBHOOK_REPLAY_REJECTED is None:
+        return
+    try:
+        reason, age_bucket = _classify_replay_rejection(timestamp)
+        WEBHOOK_REPLAY_REJECTED.labels(
+            reason=reason, age_bucket=age_bucket
+        ).inc()
+    except Exception:  # pragma: no cover
+        pass
+
+
 # ---------------------------------------------------------------------------
 # Rate Limiting (Redis-backed with in-memory fallback via shared module)
 # ---------------------------------------------------------------------------
@@ -705,6 +804,7 @@ async def ingest_events(
                     "webhook_replay_window_rejected tenant=%s tlc=%s ts=%s",
                     tenant_id, event.traceability_lot_code, event.timestamp,
                 )
+                _record_replay_rejection(event.timestamp)
                 results.append(EventResult(
                     traceability_lot_code=event.traceability_lot_code,
                     cte_type=event.cte_type.value,
