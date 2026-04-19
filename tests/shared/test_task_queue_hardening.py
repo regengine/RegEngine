@@ -143,6 +143,112 @@ class TestRetryBackoff:
 
 
 # ---------------------------------------------------------------------------
+# #1241 — _claim_task must respect scheduled_at (+ fix related latent bugs)
+# ---------------------------------------------------------------------------
+
+
+class TestClaimTaskRespectsBackoff:
+    """Guardrail for the #1241 bug: `_fail_task` already bumps
+    `scheduled_at` (covered by :class:`TestRetryBackoff`), but prior to
+    the fix `_claim_task` did not consult that column at all. Rows in
+    backoff were immediately re-claimed, burning their retry budget in
+    seconds. These tests inspect the actual SQL the worker issues so
+    the invariant is locked in against future refactors.
+    """
+
+    def _capture_claim_sql(self) -> str:
+        db = MagicMock()
+        # fetchone=None means "queue empty" — we only care about the SQL shape.
+        db.execute.return_value.fetchone.return_value = None
+        task_processor._claim_task(db)
+        calls = [str(call.args[0]) for call in db.execute.call_args_list if call.args]
+        assert calls, "_claim_task must issue at least one SQL statement"
+        return calls[0]
+
+    def test_claim_filters_pending_by_scheduled_at(self):
+        sql = self._capture_claim_sql().lower()
+        # Pending branch must be gated by scheduled_at, otherwise deferred
+        # retries are claimed immediately and #1181 is defeated.
+        assert "scheduled_at" in sql, (
+            "#1241: _claim_task must reference scheduled_at so deferred "
+            "retries aren't re-claimed before their backoff elapses"
+        )
+        assert "scheduled_at <= :now" in sql or "scheduled_at<=:now" in sql, (
+            "#1241: the pending branch must compare scheduled_at to NOW — "
+            "found `scheduled_at` in SQL but not the inequality filter"
+        )
+
+    def test_claim_orders_by_scheduled_at_first(self):
+        # The idx_task_queue_pending index (migration v059) is keyed on
+        # (scheduled_at ASC, priority DESC, created_at ASC). ORDER BY
+        # must match leading column for the planner to use the index on
+        # high-volume queues.
+        sql = self._capture_claim_sql().lower()
+        # Tolerate whitespace variation; we just need scheduled_at before priority.
+        sched_pos = sql.find("scheduled_at asc")
+        prio_pos = sql.find("priority desc")
+        assert sched_pos != -1 and prio_pos != -1, sql
+        assert sched_pos < prio_pos, (
+            "ORDER BY scheduled_at must precede priority so the "
+            "idx_task_queue_pending index (scheduled_at, priority, "
+            "created_at) is usable"
+        )
+
+    def test_claim_does_not_raise_nameerror(self):
+        """Regression for a latent NameError in `_claim_task`.
+
+        Prior to this fix `lock_until` was referenced in the SQL params
+        dict without ever being assigned in the function body. Every
+        call raised NameError which the outer `_worker_loop` try/except
+        swallowed — with the net effect that the monolith's task worker
+        for `nlp_extraction` / `graph_update` / `review_item` claimed
+        zero tasks in production. This test ensures the function at
+        least reaches the `db.execute` call cleanly.
+        """
+        db = MagicMock()
+        db.execute.return_value.fetchone.return_value = None
+
+        # Must not raise — specifically not NameError.
+        result = task_processor._claim_task(db)
+        assert result is None
+        db.execute.assert_called_once()
+
+    def test_claim_returns_visibility_timeout_from_row(self):
+        """`row[5]` is read — RETURNING must project a sixth column.
+
+        Prior to this fix RETURNING projected only 5 columns but the
+        Python code indexed `row[5]`. Any actual claim raised
+        IndexError. We now COALESCE the column to the default so
+        `row[5]` is always a usable int.
+        """
+        db = MagicMock()
+        # Simulate a real claim — 6 columns incl. timeout.
+        db.execute.return_value.fetchone.return_value = (
+            42,                   # id
+            "nlp_extraction",     # task_type
+            {"doc": "x"},         # payload (dict)
+            1,                    # attempts
+            3,                    # max_attempts
+            180,                  # visibility_timeout_seconds
+        )
+        claimed = task_processor._claim_task(db)
+        assert claimed is not None
+        assert claimed["id"] == 42
+        assert claimed["visibility_timeout_seconds"] == 180
+
+    def test_claim_sql_returns_six_columns(self):
+        """Guard the column count in RETURNING against silent regressions."""
+        sql = self._capture_claim_sql().lower()
+        # RETURNING clause should mention visibility_timeout_seconds (either
+        # directly or via COALESCE).
+        assert "visibility_timeout_seconds" in sql, (
+            "RETURNING must project visibility_timeout_seconds so row[5] "
+            "is populated — otherwise _claim_task raises IndexError on "
+            "every successful claim"
+        )
+
+
+# ---------------------------------------------------------------------------
 # #1210 — per-task-type visibility timeout
 # ---------------------------------------------------------------------------
 

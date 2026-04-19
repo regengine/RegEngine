@@ -111,12 +111,29 @@ class CanonicalEventStore:
         return str(run.id)
 
     def complete_ingestion_run(
-        self, run_id: str, accepted: int, rejected: int,
+        self, run_id: str, tenant_id: str, accepted: int, rejected: int,
         errors: Optional[List[Dict]] = None,
     ) -> None:
-        """Mark an ingestion run as completed."""
+        """Mark an ingestion run as completed.
+
+        ``tenant_id`` is required (#1263). The previous signature
+        accepted only ``run_id`` and the WHERE clause matched only ``id``
+        — a caller passing a run_id that belonged to another tenant
+        silently mutated cross-tenant state. RLS is not a sufficient
+        backstop here because ``set_tenant_context`` is not called by
+        callers of this method, only by ``persist_event``.
+
+        Raises:
+            ValueError: when no row matched (run does not exist or
+                belongs to a different tenant). Fail-loud is preferred to
+                a silent UPDATE 0 — callers always have a real run id.
+        """
         status = "completed" if rejected == 0 else "partial"
-        self.session.execute(
+        # Defence in depth: also set RLS context so the policy filter
+        # would catch any future regression that stripped the WHERE
+        # clause.
+        self.set_tenant_context(tenant_id)
+        result = self.session.execute(
             text("""
                 UPDATE fsma.ingestion_runs
                 SET accepted_count = :accepted,
@@ -125,15 +142,24 @@ class CanonicalEventStore:
                     completed_at = NOW(),
                     errors = :errors
                 WHERE id = :id
+                  AND tenant_id = :tenant_id
             """),
             {
                 "id": run_id,
+                "tenant_id": tenant_id,
                 "accepted": accepted,
                 "rejected": rejected,
                 "status": status,
                 "errors": json.dumps(errors or []),
             },
         )
+        if getattr(result, "rowcount", 0) == 0:
+            raise ValueError(
+                f"complete_ingestion_run: no run matched id={run_id!r} for "
+                f"tenant={tenant_id!r}. Either the run does not exist or "
+                f"belongs to a different tenant — refusing silent no-op "
+                f"UPDATE (#1263)."
+            )
 
     # ------------------------------------------------------------------
     # Single Event Persistence
