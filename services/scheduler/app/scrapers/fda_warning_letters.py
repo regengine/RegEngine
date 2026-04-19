@@ -15,7 +15,7 @@ import httpx
 import structlog
 
 from ..models import EnforcementItem, EnforcementSeverity, ScrapeResult, SourceType
-from .base import BaseScraper
+from .base import BaseScraper, fetch_with_retry
 
 logger = structlog.get_logger("scraper.fda_warning_letters")
 
@@ -103,8 +103,18 @@ class FDAWarningLettersScraper(BaseScraper):
     def _scrape_rss(self) -> List[EnforcementItem]:
         """Parse FDA Warning Letters RSS feed."""
         try:
-            response = self.session.get(FDA_WARNING_LETTERS_RSS, timeout=self.timeout)
-            
+            # #1138: retry on 5xx/transport errors so a single blip doesn't
+            # force the scrape down the (slower) fallback path. 404 must
+            # still pass through — the RSS feed was deprecated by FDA and
+            # 404 is the normal case; we branch on status_code below.
+            response = fetch_with_retry(
+                self.session,
+                FDA_WARNING_LETTERS_RSS,
+                timeout=self.timeout,
+                log_scope="fda_warning_letters_rss",
+                allow_404_passthrough=True,
+            )
+
             if response.status_code == 404:
                 logger.info(
                     "rss_feed_defunct_skipping",
@@ -112,7 +122,7 @@ class FDAWarningLettersScraper(BaseScraper):
                     note="FDA has reorganized feeds; using API fallback"
                 )
                 return []
-                
+
             response.raise_for_status()
         except httpx.HTTPError as e:
             # Re-raise for fallback logic in scrape()
@@ -178,10 +188,13 @@ class FDAWarningLettersScraper(BaseScraper):
             "sort": "report_date:desc",
         }
 
-        response = self.session.get(
+        # #1138: retry on 5xx/transport errors with Retry-After honoring.
+        response = fetch_with_retry(
+            self.session,
             FDA_API_BASE,
             params=params,
             timeout=self.timeout,
+            log_scope="fda_warning_letters_api",
         )
         response.raise_for_status()
         data = response.json()
