@@ -67,12 +67,32 @@ from .metrics import get_hallucination_tracker
 
 logger = structlog.get_logger("review-consumer")
 
-REVIEW_LATENCY_HISTOGRAM = Histogram(
-    "review_message_latency_seconds",
-    "Time to process review messages",
-    ["outcome"],
-    buckets=[0.01, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0],
-)
+def _get_or_create_review_histogram() -> Histogram:
+    """Create the review-latency histogram once, even when this module
+    is imported twice under different absolute paths (``app.review_consumer``
+    vs ``services.admin.app.review_consumer``) — a configuration that
+    happens in the test suite and blows up the default Prometheus
+    registry with a ``Duplicated timeseries`` error.
+    """
+    try:
+        return Histogram(
+            "review_message_latency_seconds",
+            "Time to process review messages",
+            ["outcome"],
+            buckets=[0.01, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0],
+        )
+    except ValueError:
+        # Already registered by an earlier import path. Reuse the
+        # existing collector so both imports refer to the same
+        # histogram.
+        from prometheus_client import REGISTRY
+        for collector in list(REGISTRY._collector_to_names.keys()):
+            if getattr(collector, "_name", None) == "review_message_latency_seconds":
+                return collector  # type: ignore[return-value]
+        raise
+
+
+REVIEW_LATENCY_HISTOGRAM = _get_or_create_review_histogram()
 
 TOPIC_NEEDS_REVIEW = "nlp.needs_review"
 TOPIC_DLQ = "nlp.needs_review.dlq"
