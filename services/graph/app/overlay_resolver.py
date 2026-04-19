@@ -88,13 +88,23 @@ class OverlayResolver:
             if controls_data:
                 for control in controls_data:
                     control_id = control["id"]
+                    # #1298: Both TenantControl and ControlMapping must be
+                    # tenant-scoped. Without the filters, a mistakenly shared
+                    # HAS_MAPPING edge — or a ControlMapping node written
+                    # without a tenant_id — leaks another tenant's mapping
+                    # (and the downstream Provision hashes it exposes).
                     mapping_query = """
-                    MATCH (control:TenantControl {id: $control_id})-[:HAS_MAPPING]->(mapping:ControlMapping)
+                    MATCH (control:TenantControl {id: $control_id, tenant_id: $tenant_id})
+                          -[:HAS_MAPPING]->(mapping:ControlMapping {tenant_id: $tenant_id})
                     RETURN mapping
                     """
                     async with tenant_client.session() as session:
                         mapping_result = await session.run(
-                            mapping_query, {"control_id": control_id}
+                            mapping_query,
+                            {
+                                "control_id": control_id,
+                                "tenant_id": str(self.tenant_id),
+                            },
                         )
                         async for mapping_record in mapping_result:
                             mapping_data = dict(mapping_record["mapping"])
@@ -192,11 +202,16 @@ class OverlayResolver:
                 concepts_data = [dict(c) for c in record["concepts"] if c]
                 jurisdictions_data = [dict(j) for j in record["jurisdictions"] if j]
 
-            # Step 2: Fetch tenant controls that reference this provision
+            # Step 2: Fetch tenant controls that reference this provision.
+            # #1278: The mapping anchor was tenant-scoped, but TenantControl
+            # and CustomerProduct were not. A HAS_MAPPING or MAPS_TO edge that
+            # crosses tenant boundaries (ingestion bug, shared control
+            # template, etc.) would surface another tenant's control and
+            # product names under this provision. Scope every joined node.
             tenant_query = """
             MATCH (mapping:ControlMapping {provision_hash: $provision_hash, tenant_id: $tenant_id})
-            MATCH (control:TenantControl)-[:HAS_MAPPING]->(mapping)
-            OPTIONAL MATCH (control)-[:MAPS_TO]->(product:CustomerProduct)
+            MATCH (control:TenantControl {tenant_id: $tenant_id})-[:HAS_MAPPING]->(mapping)
+            OPTIONAL MATCH (control)-[:MAPS_TO]->(product:CustomerProduct {tenant_id: $tenant_id})
             RETURN control, mapping, collect(DISTINCT product) as products
             """
             tenant_controls = []
@@ -258,11 +273,17 @@ class OverlayResolver:
         global_client = Neo4jClient(database=self.global_db)
 
         try:
-            # Get control with its mappings and products
+            # Get control with its mappings and products.
+            # #1289: Anchor is tenant-scoped but the OPTIONAL MATCH clauses
+            # were not — a stray cross-tenant HAS_MAPPING or MAPS_TO edge
+            # would pull another tenant's mapping (with its provision_hash,
+            # exposing what regulations the other tenant has categorised) or
+            # another tenant's CustomerProduct. Scope both with an inline
+            # tenant_id filter on the joined node.
             query = """
             MATCH (control:TenantControl {id: $control_id, tenant_id: $tenant_id})
-            OPTIONAL MATCH (control)-[:HAS_MAPPING]->(mapping:ControlMapping)
-            OPTIONAL MATCH (control)-[:MAPS_TO]->(product:CustomerProduct)
+            OPTIONAL MATCH (control)-[:HAS_MAPPING]->(mapping:ControlMapping {tenant_id: $tenant_id})
+            OPTIONAL MATCH (control)-[:MAPS_TO]->(product:CustomerProduct {tenant_id: $tenant_id})
             RETURN control,
                    collect(DISTINCT mapping) as mappings,
                    collect(DISTINCT product) as products
@@ -343,10 +364,16 @@ class OverlayResolver:
                 result = await session.run(global_query, {"jurisdiction": jurisdiction})
                 all_provisions = [dict(record["prov"]) async for record in result]
 
-            # Get mapped provision hashes for this product
+            # Get mapped provision hashes for this product.
+            # #1294: Both joined nodes must filter by tenant_id. Otherwise a
+            # cross-tenant MAPS_TO or HAS_MAPPING edge makes us think another
+            # tenant's controls have already addressed provisions for *this*
+            # product, under-reporting compliance gaps (false negatives that
+            # hide genuine regulatory exposure).
             tenant_query = """
-            MATCH (product:CustomerProduct {id: $product_id, tenant_id: $tenant_id})<-[:MAPS_TO]-(control:TenantControl)
-            MATCH (control)-[:HAS_MAPPING]->(mapping:ControlMapping)
+            MATCH (product:CustomerProduct {id: $product_id, tenant_id: $tenant_id})
+                  <-[:MAPS_TO]-(control:TenantControl {tenant_id: $tenant_id})
+            MATCH (control)-[:HAS_MAPPING]->(mapping:ControlMapping {tenant_id: $tenant_id})
             RETURN collect(DISTINCT mapping.provision_hash) as mapped_hashes
             """
             mapped_hashes = []
