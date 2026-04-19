@@ -142,36 +142,54 @@ def decode_access_token(token: str) -> dict:
 
 
 def _check_revoked(payload: dict) -> dict:
-    """Raise if the token's jti has been revoked. Returns payload if ok."""
+    """Raise if the token's jti has been revoked. Returns payload if ok.
+
+    NOTE (#1071): this function consults ONLY the in-process
+    ``_revoked_jtis`` set — it does NOT contact Redis. The original
+    implementation tried to call ``loop.run_until_complete`` on the
+    async Redis client, which silently no-ops whenever an event loop
+    is already running — i.e. every FastAPI request. The net effect
+    was that a token revoked on worker A (written to Redis) was still
+    accepted by worker B until B's in-memory set happened to pick it
+    up, which only happens if B itself processed the revocation. That
+    produced an exploitable window of up to the token's natural TTL on
+    any worker that did not serve the logout.
+
+    Cross-worker revocation is now the responsibility of
+    :func:`check_revoked_async`, which every async token-validating
+    dependency MUST call after decoding. See
+    ``services.admin.app.dependencies.get_current_user`` for the
+    required wiring. Removing the broken Redis branch here makes the
+    contract explicit: sync callers get best-effort local-only
+    revocation; any caller that needs cross-worker revocation must use
+    the async path.
+    """
     jti = payload.get("jti")
     if not jti:
         return payload  # legacy token without jti — cannot be individually revoked
 
-    # Check in-memory set first (fast path)
+    # In-process fast path. Populated by revoke_token() on this worker
+    # and cached by check_revoked_async() whenever it observes a Redis
+    # hit. Cross-worker revocations reach other workers via the async
+    # path, not this sync call.
     if jti in _revoked_jtis:
         raise jwt.exceptions.InvalidTokenError("Token has been revoked")
 
-    # Check Redis if available (shared across workers)
-    if _revocation_redis:
-        try:
-            import asyncio
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                # We're in an async context but this is a sync function.
-                # The Redis check will be handled by the async revocation
-                # path in dependencies.py. The in-memory set is the sync guard.
-                pass
-            else:
-                if loop.run_until_complete(_revocation_redis.sismember("regengine:jwt:revoked", jti)):
-                    _revoked_jtis.add(jti)  # cache locally
-                    raise jwt.exceptions.InvalidTokenError("Token has been revoked")
-        except RuntimeError:
-            pass  # no event loop — rely on in-memory set
     return payload
 
 
 async def check_revoked_async(jti: str) -> bool:
-    """Async revocation check — called from auth dependencies."""
+    """Async revocation check — async token-validating dependencies MUST
+    call this after :func:`decode_access_token` succeeds.
+
+    Checks the in-memory set first (fast path, bypasses Redis on an
+    already-known revocation) then falls through to Redis so a
+    revocation written by any worker becomes visible to every other
+    worker within the Redis round-trip — not capped by the token's
+    natural TTL like the old sync implementation (#1071).
+    """
+    if not jti:
+        return False
     if jti in _revoked_jtis:
         return True
     if _revocation_redis:
@@ -179,8 +197,13 @@ async def check_revoked_async(jti: str) -> bool:
             if await _revocation_redis.sismember("regengine:jwt:revoked", jti):
                 _revoked_jtis.add(jti)
                 return True
-        except Exception:
-            pass
+        except Exception as exc:  # pragma: no cover — Redis best-effort
+            # If Redis is transiently unreachable, fall back to
+            # in-memory. The worker that issued the revocation still
+            # blocks the token, and the logout audit event is still in
+            # the DB. Better to be permissive on read than to fail
+            # every request when Redis hiccups.
+            _logger.warning("check_revoked_async_redis_error: %s", exc)
     return False
 
 
