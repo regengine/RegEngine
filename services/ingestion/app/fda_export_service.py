@@ -82,6 +82,78 @@ _NAMED_KDE_COLUMNS = {
     "growing_area_name": "Growing Area",
 }
 
+# KDE keys consumed by the literal dict block inside ``_event_to_fda_row``
+# (Ship From/To GLN+Name, Immediate Previous Source, TLC Source GLN/FDA
+# Reg). These must also be excluded from the "Additional KDEs (JSON)"
+# extras blob or they leak their values — including PII-bearing
+# ship_from_location / ship_to_location / immediate_previous_source —
+# through a back channel even when the named columns are redacted
+# (issue #1219).
+_LITERAL_CONSUMED_KDES = frozenset(
+    {
+        "ship_from_gln",
+        "ship_from_location",
+        "ship_to_gln",
+        "ship_to_location",
+        "immediate_previous_source",
+        "tlc_source_gln",
+        "tlc_source_fda_reg",
+    }
+)
+
+
+# ---------------------------------------------------------------------------
+# PII Redaction (issue #1219)
+# ---------------------------------------------------------------------------
+# Facility *names* and street/shipping *locations* are customer PII: they
+# identify the business that owns the lot, which is a competitive-intel
+# leak when exports are shared outside the regulated entity (e.g.
+# operator dashboards, exception workflows, downstream reviewers who
+# aren't the FDA).
+#
+# GLN and FDA registration numbers are registered business identifiers —
+# they're regulatory primary keys and the FDA's expected join-key. We
+# keep them visible so the export is still usable for FSMA-204 recall
+# scoping.
+#
+# Default behavior: redact these columns to ``[REDACTED]``. An export
+# with ``include_pii=True`` (gated in the router by the ``fda.export.pii``
+# permission and logged in the audit trail) emits full values.
+
+PII_REDACTION_PLACEHOLDER = "[REDACTED]"
+
+_PII_LOCATION_COLUMNS = frozenset(
+    {
+        "Location Name",
+        "Ship From Name",
+        "Ship To Name",
+        "Immediate Previous Source",
+        "Receiving Location",
+    }
+)
+
+
+def _redact_location_value(value: str, column_name: str, include_pii: bool) -> str:
+    """Redact customer-identifying location values unless ``include_pii=True``.
+
+    Returns ``PII_REDACTION_PLACEHOLDER`` when:
+      • ``include_pii`` is False, AND
+      • ``column_name`` is in :data:`_PII_LOCATION_COLUMNS`, AND
+      • ``value`` is non-empty (empty strings stay empty so blank columns
+        don't become a confusing "[REDACTED]" string in the CSV).
+
+    Otherwise returns ``value`` unchanged. The returned value is *not*
+    re-passed through ``sanitize_cell`` — callers are expected to have
+    already sanitized ``value`` before calling this helper.
+    """
+    if include_pii:
+        return value
+    if column_name not in _PII_LOCATION_COLUMNS:
+        return value
+    if not value:
+        return value
+    return PII_REDACTION_PLACEHOLDER
+
 
 # Extended column spec: original FDA columns + compliance + traceability graph columns
 FDA_COLUMNS_V2 = FDA_COLUMNS + [
@@ -93,7 +165,7 @@ FDA_COLUMNS_V2 = FDA_COLUMNS + [
 ]
 
 
-def _event_to_fda_row(event: dict) -> dict:
+def _event_to_fda_row(event: dict, *, include_pii: bool = False) -> dict:
     """Convert a persisted CTE event to an FDA spreadsheet row.
 
     Every string-valued cell passes through :func:`sanitize_cell` before
@@ -102,6 +174,14 @@ def _event_to_fda_row(event: dict) -> dict:
     spreadsheet formula into the FDA auditor's workstation. Hash fields
     are SHA-256 hex digests and cannot start with a formula prefix, but
     we sanitize them defensively for symmetry (issue #1081).
+
+    PII redaction (issue #1219): by default, facility *names* and
+    shipping *location* strings are replaced with
+    :data:`PII_REDACTION_PLACEHOLDER`. GLNs and FDA registration numbers
+    remain visible because they are the regulatory primary keys the FDA
+    uses to join exports to registered business entities. Pass
+    ``include_pii=True`` (router-gated on ``fda.export.pii`` permission
+    + audit-logged) to emit the raw values.
     """
     kdes = event.get("kdes", {})
     timestamp = event.get("event_timestamp", "")
@@ -118,6 +198,10 @@ def _event_to_fda_row(event: dict) -> dict:
         except (ValueError, AttributeError):
             event_date = str(timestamp)[:10]
 
+    # Sanitize first, then apply PII redaction. Order matters:
+    # sanitize_cell neutralizes spreadsheet-formula prefixes on the raw
+    # tenant value, and _redact_location_value then replaces the whole
+    # sanitized string with the placeholder when include_pii=False.
     row = {
         "Traceability Lot Code (TLC)": sanitize_cell(event.get("traceability_lot_code", "")),
         "Product Description": sanitize_cell(event.get("product_description", "")),
@@ -127,12 +211,28 @@ def _event_to_fda_row(event: dict) -> dict:
         "Event Date": sanitize_cell(event_date),
         "Event Time": sanitize_cell(event_time),
         "Location GLN": sanitize_cell(event.get("location_gln", "") or ""),
-        "Location Name": sanitize_cell(event.get("location_name", "") or ""),
+        "Location Name": _redact_location_value(
+            sanitize_cell(event.get("location_name", "") or ""),
+            "Location Name",
+            include_pii,
+        ),
         "Ship From GLN": sanitize_cell(kdes.get("ship_from_gln", "") or ""),
-        "Ship From Name": sanitize_cell(kdes.get("ship_from_location", "") or ""),
+        "Ship From Name": _redact_location_value(
+            sanitize_cell(kdes.get("ship_from_location", "") or ""),
+            "Ship From Name",
+            include_pii,
+        ),
         "Ship To GLN": sanitize_cell(kdes.get("ship_to_gln", "") or ""),
-        "Ship To Name": sanitize_cell(kdes.get("ship_to_location", kdes.get("receiving_location", "")) or ""),
-        "Immediate Previous Source": sanitize_cell(kdes.get("immediate_previous_source", "") or ""),
+        "Ship To Name": _redact_location_value(
+            sanitize_cell(kdes.get("ship_to_location", kdes.get("receiving_location", "")) or ""),
+            "Ship To Name",
+            include_pii,
+        ),
+        "Immediate Previous Source": _redact_location_value(
+            sanitize_cell(kdes.get("immediate_previous_source", "") or ""),
+            "Immediate Previous Source",
+            include_pii,
+        ),
         "TLC Source GLN": sanitize_cell(kdes.get("tlc_source_gln", "") or ""),
         "TLC Source FDA Registration": sanitize_cell(kdes.get("tlc_source_fda_reg", "") or ""),
         "Source Document": sanitize_cell(event.get("source", "")),
@@ -140,15 +240,41 @@ def _event_to_fda_row(event: dict) -> dict:
         "Chain Hash": sanitize_cell(event.get("chain_hash", "")),
     }
 
-    # Map named KDE columns
+    # Map named KDE columns. Apply PII redaction on the named columns
+    # that land in _PII_LOCATION_COLUMNS (e.g. "Receiving Location").
     for kde_key, col_name in _NAMED_KDE_COLUMNS.items():
         raw = kdes.get(kde_key)
-        row[col_name] = sanitize_cell(raw) if raw else ""
+        sanitized = sanitize_cell(raw) if raw else ""
+        row[col_name] = _redact_location_value(sanitized, col_name, include_pii)
 
     # Remaining KDEs not in named columns → JSON blob.
     # A JSON-encoded string can still begin with ``=`` once a spreadsheet
     # renders it into a cell, so sanitize the whole blob as well.
-    extra_kdes = {k: v for k, v in kdes.items() if k not in _NAMED_KDE_COLUMNS}
+    #
+    # Exclude both:
+    #   • keys already surfaced via ``_NAMED_KDE_COLUMNS`` (explicit map
+    #     of KDE → named column), AND
+    #   • keys surfaced via the literal dict block above (Ship From/To
+    #     Name, Immediate Previous Source, TLC Source GLN/FDA Reg, etc.).
+    # Without the second filter, those PII-bearing KDEs would leak into
+    # the extras blob as a back-channel even after we redacted the named
+    # columns (issue #1219).
+    #
+    # PII redaction for the JSON blob: the "extras" map can carry arbitrary
+    # customer-supplied keys, some of which (``facility_address``,
+    # ``receiver_address``, ``origin_address``) are PII. When
+    # ``include_pii=False`` we strip any key whose name contains a PII
+    # signal (``address``, ``street``, ``location``, ``phone``,
+    # ``contact``) before encoding. This is a defensive default — the
+    # primary PII columns are already redacted above; this catches the
+    # long tail of unknown-shape KDE data.
+    extra_kdes = {
+        k: v
+        for k, v in kdes.items()
+        if k not in _NAMED_KDE_COLUMNS and k not in _LITERAL_CONSUMED_KDES
+    }
+    if extra_kdes and not include_pii:
+        extra_kdes = _redact_extra_kde_pii(extra_kdes)
     row["Additional KDEs (JSON)"] = sanitize_cell(json.dumps(extra_kdes)) if extra_kdes else ""
 
     # FSMA 204 requires "system entry timestamp" — when the record was entered
@@ -159,29 +285,81 @@ def _event_to_fda_row(event: dict) -> dict:
     return row
 
 
-def _generate_csv(events: list[dict]) -> str:
+# KDE-key substrings that signal PII in the freeform "Additional KDEs
+# (JSON)" bucket. Case-insensitive substring match because upstream
+# parsers normalize key casing inconsistently.
+_PII_EXTRA_KDE_SUBSTRINGS = (
+    "address",
+    "street",
+    "location_name",
+    "facility_name",
+    "contact",
+    "phone",
+    "email",
+    "owner_name",
+    "operator_name",
+    "driver_name",
+    "receiver_name",
+    "consignee_name",
+)
+
+
+def _redact_extra_kde_pii(extra_kdes: dict) -> dict:
+    """Replace PII values in the extras JSON blob with the placeholder.
+
+    Preserves the key (so auditors see "this field existed but was
+    redacted") and the surrounding structure; only the string value is
+    replaced. Non-string values (numbers, dates) pass through unchanged
+    because numeric PII is unusual in KDE data and the round-trip would
+    be lossy.
+    """
+    redacted = {}
+    for key, value in extra_kdes.items():
+        key_lower = str(key).lower()
+        is_pii = any(marker in key_lower for marker in _PII_EXTRA_KDE_SUBSTRINGS)
+        if is_pii and isinstance(value, str) and value:
+            redacted[key] = PII_REDACTION_PLACEHOLDER
+        else:
+            redacted[key] = value
+    return redacted
+
+
+def _generate_csv(events: list[dict], *, include_pii: bool = False) -> str:
     """Generate FDA-compliant CSV from a list of CTE events.
 
     Uses ``csv.QUOTE_ALL`` so every cell is wrapped in double quotes —
     a defense-in-depth measure on top of :func:`sanitize_cell` that
     neutralizes cells containing newlines, quotes, or commas regardless
     of the reader's field-splitting heuristics (issue #1081).
+
+    ``include_pii=False`` (default) redacts location-name/address columns
+    per :func:`_event_to_fda_row` (issue #1219).
     """
     output = io.StringIO()
     writer = csv.DictWriter(output, fieldnames=FDA_COLUMNS, quoting=csv.QUOTE_ALL)
     writer.writeheader()
 
     for event in events:
-        writer.writerow(_event_to_fda_row(event))
+        writer.writerow(_event_to_fda_row(event, include_pii=include_pii))
 
     return output.getvalue()
 
 
-def _generate_pdf(events: list[dict], metadata: dict | None = None) -> bytes:
+def _generate_pdf(
+    events: list[dict],
+    metadata: dict | None = None,
+    *,
+    include_pii: bool = False,
+) -> bytes:
     """Generate an FDA-compliant PDF report from CTE events.
 
     Returns PDF file bytes. Uses landscape A4 to accommodate the wide column set.
     Columns are a curated subset of the full FDA_COLUMNS to fit on the page.
+
+    ``include_pii=False`` (default) redacts the ``Location Name`` column
+    (the only PII column currently in the PDF subset) per :func:`_event_to_fda_row`
+    (issue #1219). The footer also declares whether the PDF contains
+    redacted values so a downstream reader sees the PII posture.
     """
     from fpdf import FPDF
 
@@ -226,7 +404,7 @@ def _generate_pdf(events: list[dict], metadata: dict | None = None) -> bytes:
     truncated = len(events) > _PDF_MAX_ROWS
     pdf.set_font("Helvetica", "", 6.5)
     for event in events[:_PDF_MAX_ROWS]:
-        row = _event_to_fda_row(event)
+        row = _event_to_fda_row(event, include_pii=include_pii)
         for i, col in enumerate(PDF_COLUMNS):
             value = str(row.get(col, ""))
             # Truncate hash for readability
@@ -247,6 +425,24 @@ def _generate_pdf(events: list[dict], metadata: dict | None = None) -> bytes:
             0, 5,
             f"WARNING: PDF limited to {_PDF_MAX_ROWS} rows out of {len(events)} total. "
             "Use the CSV or ZIP package export for the complete data set.",
+            ln=True,
+        )
+    # Declare PII posture in the PDF footer (issue #1219) so a downstream
+    # reader can tell at a glance whether facility names/addresses were
+    # redacted. Auditors receive a version with PII; internal reviewers
+    # receive the redacted version by default.
+    if include_pii:
+        pdf.cell(
+            0, 5,
+            "PII: This report includes customer facility names and locations. "
+            "Handle according to your data-privacy agreements.",
+            ln=True,
+        )
+    else:
+        pdf.cell(
+            0, 5,
+            f"PII: Facility names and locations are redacted to '{PII_REDACTION_PLACEHOLDER}'. "
+            "Use GLN / FDA Registration for entity identification.",
             ln=True,
         )
     pdf.cell(
@@ -377,8 +573,14 @@ def _build_chain_verification_payload(
     csv_hash: str,
     chain_verification: Any,
     completeness_summary: dict,
+    include_pii: bool = False,
 ) -> dict:
-    """Build JSON payload used for independent package verification."""
+    """Build JSON payload used for independent package verification.
+
+    ``include_pii`` controls the ``privacy.pii_redacted`` field; it
+    should match the flag used to generate ``csv_content`` / the export
+    (issue #1219).
+    """
     missing_record_hashes = sum(1 for event in events if not event.get("sha256_hash"))
     missing_chain_hashes = sum(1 for event in events if not event.get("chain_hash"))
 
@@ -412,6 +614,13 @@ def _build_chain_verification_payload(
             "required_kde_coverage_ratio": completeness_summary["required_kde_coverage_ratio"],
             "events_with_missing_required_fields": completeness_summary["events_with_missing_required_fields"],
         },
+        # Issue #1219: record PII redaction posture so a chain-verifier can
+        # distinguish "CSV with redacted names" from "CSV with full names"
+        # when comparing content hashes across exports.
+        "privacy": {
+            "pii_redacted": not include_pii,
+            "redaction_placeholder": PII_REDACTION_PLACEHOLDER,
+        },
         "attestation": {
             "attested_by": "regengine-fda-export-router",
             "assertion": "Package generated from persisted fsma.cte_events with chain verification.",
@@ -430,8 +639,17 @@ def _build_fda_package(
     tlc: Optional[str],
     query_start_date: Optional[str],
     query_end_date: Optional[str],
+    include_pii: bool = False,
 ) -> tuple[bytes, dict]:
-    """Build zip package bytes and return package metadata."""
+    """Build zip package bytes and return package metadata.
+
+    ``include_pii`` is recorded in the manifest under
+    ``privacy.pii_redacted`` so downstream consumers can tell whether
+    the CSV they received has facility names/locations visible or
+    redacted. The flag does NOT re-generate ``csv_content``; the caller
+    must pass a CSV that was generated with the same ``include_pii``
+    setting (issue #1219).
+    """
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
     scope = _safe_filename_token(tlc or "all")
     csv_name = f"fda_spreadsheet_{scope}_{timestamp}.csv"
@@ -444,6 +662,17 @@ def _build_fda_package(
     chain_bytes = json.dumps(chain_payload, indent=2, sort_keys=True).encode("utf-8")
     validation_log = _build_validation_errors_log(events, completeness_summary)
     validation_bytes = validation_log.encode("utf-8") if validation_log else None
+    pii_note = (
+        f"PII: Facility names and shipping locations are redacted to "
+        f"'{PII_REDACTION_PLACEHOLDER}'. Use GLN / FDA Registration for "
+        f"entity identification. Re-export with include_pii=true (requires "
+        f"fda.export.pii permission) for full values.\n"
+        if not include_pii
+        else (
+            "PII: This export includes facility names and shipping "
+            "locations. Handle according to your data-privacy agreements.\n"
+        )
+    )
     readme_bytes = (
         "RegEngine FDA Traceability Package\n"
         "=================================\n"
@@ -452,6 +681,8 @@ def _build_fda_package(
         "2) chain_verification_*.json - chain integrity and hash coverage metadata\n"
         "3) manifest.json - package metadata and file checksums\n"
         + ("4) VALIDATION_ERRORS_*.log - KDE validation warnings per event\n" if validation_log else "")
+        + "\n"
+        + pii_note
         + "\n"
         "Verification:\n"
         "- Compare manifest file hashes with local SHA-256 calculations.\n"
@@ -494,6 +725,25 @@ def _build_fda_package(
             "csv_content_hash": csv_hash,
         },
         "completeness": completeness_summary,
+        # Issue #1219: record PII redaction posture so downstream
+        # consumers (auditors, compliance reviewers) can tell whether
+        # facility names / shipping addresses are visible in the CSV.
+        "privacy": {
+            "pii_redacted": not include_pii,
+            "redaction_placeholder": PII_REDACTION_PLACEHOLDER,
+            "redacted_columns": sorted(_PII_LOCATION_COLUMNS),
+            "note": (
+                "Facility names and shipping locations are redacted by "
+                "default. GLNs and FDA registration numbers remain "
+                "visible as the FSMA-204 primary keys."
+                if not include_pii
+                else (
+                    "This export includes facility names and shipping "
+                    "locations. Handle according to your data-privacy "
+                    "agreements."
+                )
+            ),
+        },
         "verification": {
             "status": chain_payload.get("verification_status"),
             "chain_valid": chain_payload.get("chain_verification", {}).get("valid"),
@@ -530,14 +780,16 @@ def _build_fda_package(
     }
 
 
-def _event_to_fda_row_v2(event: dict) -> dict:
+def _event_to_fda_row_v2(event: dict, *, include_pii: bool = False) -> dict:
     """Convert a canonical traceability_event row (with rule results) to an FDA spreadsheet row.
 
     Accepts the same base fields as ``_event_to_fda_row`` plus:
     - ``rule_results``: list[dict] with keys ``rule_name``, ``passed``, ``why_failed``
+
+    ``include_pii`` is forwarded to :func:`_event_to_fda_row` (issue #1219).
     """
     # Reuse the legacy mapper for core FDA columns
-    base_row = _event_to_fda_row(event)
+    base_row = _event_to_fda_row(event, include_pii=include_pii)
 
     # Compute compliance columns from attached rule results
     rule_results: list[dict] = event.get("rule_results", [])
@@ -570,17 +822,20 @@ def _event_to_fda_row_v2(event: dict) -> dict:
     return base_row
 
 
-def _generate_csv_v2(events: list[dict]) -> str:
+def _generate_csv_v2(events: list[dict], *, include_pii: bool = False) -> str:
     """Generate FDA-compliant CSV from canonical model events (with compliance columns).
 
     ``csv.QUOTE_ALL`` is used for the same reason as :func:`_generate_csv`
     (issue #1081).
+
+    ``include_pii=False`` (default) redacts location-name/address columns
+    per :func:`_event_to_fda_row` (issue #1219).
     """
     output = io.StringIO()
     writer = csv.DictWriter(output, fieldnames=FDA_COLUMNS_V2, quoting=csv.QUOTE_ALL)
     writer.writeheader()
 
     for event in events:
-        writer.writerow(_event_to_fda_row_v2(event))
+        writer.writerow(_event_to_fda_row_v2(event, include_pii=include_pii))
 
     return output.getvalue()
