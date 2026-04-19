@@ -31,6 +31,20 @@ if not _env_secret:
 SECRET_KEY = _env_secret
 ALGORITHM = "HS256"
 
+# ──────────────────────────────────────────────────────────────
+# JWT audience/issuer claims — separate token domains (#1060).
+#
+# Session tokens (admin API auth) and tool-access tokens (free
+# compliance-tool gate) share neither their signing key nor their
+# audience. Even if a key ever leaked, a tool-access token cannot
+# be swapped in as a session token — decode_access_token verifies
+# aud=SESSION_AUDIENCE and decode_tool_access_token verifies
+# aud=TOOL_ACCESS_AUDIENCE.
+# ──────────────────────────────────────────────────────────────
+SESSION_AUDIENCE = "regengine-api"
+SESSION_ISSUER = "regengine-admin"
+TOOL_ACCESS_AUDIENCE = "regengine-tool-access"
+
 # Session timeout configuration (configurable via env vars)
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60"))
 REFRESH_TOKEN_EXPIRE_DAYS = int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", "7"))
@@ -85,6 +99,10 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
     if "jti" not in to_encode:
         to_encode["jti"] = str(uuid.uuid4())
     to_encode["exp"] = expire
+    # Stamp the session domain so tool-access tokens (signed with a separate
+    # secret and audience) cannot be accepted in place of a session — see #1060.
+    to_encode.setdefault("aud", SESSION_AUDIENCE)
+    to_encode.setdefault("iss", SESSION_ISSUER)
 
     # Use registry key if available, otherwise fall back to static SECRET_KEY
     signing_secret = _active_secret or SECRET_KEY
@@ -103,13 +121,44 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
     return encoded_jwt
 
 
+def _decode_session_strict(token: str, secret: str) -> dict:
+    """Verify signature + aud/iss for a session token.
+
+    During the transitional rollout, legacy tokens minted before #1060
+    have no ``aud``/``iss`` claims. PyJWT raises ``MissingRequiredClaimError``
+    when ``audience``/``issuer`` are requested on a token that lacks them.
+    We retry without aud/iss verification in that case so existing sessions
+    survive — signature is still checked either way. Once all legacy
+    tokens expire (≤ ACCESS_TOKEN_EXPIRE_MINUTES), this fallback is dead
+    code and can be removed.
+
+    Tokens that carry the *wrong* aud (e.g. a tool-access token) raise
+    ``InvalidAudienceError`` and are rejected — that is the bug fix.
+    """
+    try:
+        return jwt.decode(
+            token,
+            secret,
+            algorithms=[ALGORITHM],
+            audience=SESSION_AUDIENCE,
+            issuer=SESSION_ISSUER,
+        )
+    except jwt.exceptions.MissingRequiredClaimError:
+        return jwt.decode(
+            token,
+            secret,
+            algorithms=[ALGORITHM],
+            options={"verify_aud": False, "verify_iss": False},
+        )
+
+
 def decode_access_token(token: str) -> dict:
     # Read the unverified header to get kid (if present)
     try:
         unverified_header = jwt.get_unverified_header(token)
     except jwt.exceptions.DecodeError:
         # Malformed token — let jwt.decode raise the proper error
-        return jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        return _decode_session_strict(token, SECRET_KEY)
 
     kid = unverified_header.get("kid")
 
@@ -117,7 +166,7 @@ def decode_access_token(token: str) -> dict:
         # New-style token: look up the specific key by kid
         key_secret = _verification_keys.get(kid)
         if key_secret:
-            payload = jwt.decode(token, key_secret, algorithms=[ALGORITHM])
+            payload = _decode_session_strict(token, key_secret)
             return _check_revoked(payload)
 
         # kid present but not in our registry — key may have expired
@@ -131,13 +180,13 @@ def decode_access_token(token: str) -> dict:
     if _verification_keys:
         for vk_secret in _verification_keys.values():
             try:
-                payload = jwt.decode(token, vk_secret, algorithms=[ALGORITHM])
+                payload = _decode_session_strict(token, vk_secret)
                 return _check_revoked(payload)
             except jwt.exceptions.InvalidSignatureError:
                 continue
 
     # Final fallback — static env var key
-    payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+    payload = _decode_session_strict(token, SECRET_KEY)
     return _check_revoked(payload)
 
 
