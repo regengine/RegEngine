@@ -294,6 +294,7 @@
     }
   ],
   "validation": {
+    "_schema_note": "Per-event required KDEs — the fields captured directly on each CTE event by ingestion (EPCIS normalization, webhook model, CSV templates). The live rules engine lives in services/shared/rules/engine.py and is keyed off fsma.rule_definitions in the database, not this block — this block documents the per-event ingestion contract for drift-prevention (#1223). Responsible-party contact is enforced at the graph layer (21 CFR 1.1370(c)), not per-event — see responsible_party_enforcement below.",
     "required_fsma_fields": [
       "tlc",
       "cte_type",
@@ -301,8 +302,7 @@
       "location",
       "quantity",
       "unit_of_measure",
-      "product_description",
-      "responsible_party_contact"
+      "product_description"
     ],
     "receiving_required_fields": [
       "prior_source_tlc"
@@ -315,6 +315,14 @@
       "SHIPPING",
       "RECEIVING",
       "TRANSFORMATION"
-    ]
+    ],
+    "responsible_party_enforcement": {
+      "_note": "21 CFR 1.1370(c) requires the responsible party's contact to be reachable for FDA within 24 hours — NOT that every event carry the contact inline. Enforcement is split between event ingestion (which requires a resolvable location_gln or location_name) and graph-layer /traceability writes (which accept an inline responsible_party_contact KDE as a first-class field). Do not add responsible_party_contact to required_fsma_fields without also collecting it via IngestEvent — see #1223 for the drift history.",
+      "reference_fields": [
+        "location_gln",
+        "location_name"
+      ],
+      "inline_field_graph_layer_only": "responsible_party_contact"
+    }
   }
 }

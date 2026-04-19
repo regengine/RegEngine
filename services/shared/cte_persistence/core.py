@@ -127,6 +127,69 @@ def _parse_timestamp(value: Any, *, field: str) -> datetime:
 
 
 # ---------------------------------------------------------------------------
+# CTE event_type Validation (fix #1312)
+# ---------------------------------------------------------------------------
+
+# The 7 FSMA 204 §1.1310 Critical Tracking Event types, in the SAME
+# lowercase form the ``fsma.cte_events_event_type_check`` DB constraint
+# accepts (see V037__obligation_cte_rules.sql). The schema already
+# rejects bad values at INSERT time — but the app-level guard here
+# fails EARLIER (before we hash and chain-lock), with a clearer
+# message, and protects against the more subtle typo cases the DB
+# constraint also rejects but opaquely (e.g. trailing whitespace, wrong
+# case). Keeping the two in sync is load-bearing: if a new CTE type
+# lands in the schema, this set must be updated in the same PR or
+# valid inputs will be rejected.
+#
+# Note: canonical_persistence has its own, parallel ``CTEType`` enum
+# (services/shared/canonical_event.py) which also includes 'growing'.
+# The cte_events schema does NOT currently accept 'growing', so this
+# module must not either — the two paths intentionally differ until
+# #1335 retires this module.
+_ALLOWED_CTE_TYPES = frozenset({
+    "harvesting",
+    "cooling",
+    "initial_packing",
+    "first_land_based_receiving",
+    "shipping",
+    "receiving",
+    "transformation",
+})
+
+
+def _validate_event_type(value: Any) -> str:
+    """Enforce that ``event_type`` is one of the 7 FSMA 204 CTE types.
+
+    Rejects (with a clear message):
+      * ``None``, non-strings, empty / whitespace-only strings
+      * Values with leading/trailing whitespace (strict equality, not
+        ``.strip()`` — a caller passing ``"HARVESTING "`` has a bug;
+        silently normalizing would mask it)
+      * Wrong case (``"HARVESTING"``, ``"Shipping"``)
+      * Non-FSMA tokens (``"XFORM"``, ``"harvest"``, ``"[object Object]"``)
+
+    The DB's CHECK constraint is the ultimate authority and would also
+    reject these — but Postgres rejects them AFTER we've hashed, chain-
+    locked, and written KDEs, surfacing as a confusing IntegrityError.
+    This guard fails fast with the list of valid types so calling code
+    can react meaningfully.
+    """
+    if not isinstance(value, str) or not value:
+        raise ValueError(
+            f"event_type is required and must be a non-empty string, "
+            f"got {type(value).__name__}: {value!r}"
+        )
+    if value not in _ALLOWED_CTE_TYPES:
+        raise ValueError(
+            f"event_type {value!r} is not a recognized FSMA 204 CTE type. "
+            f"Allowed: {sorted(_ALLOWED_CTE_TYPES)}. "
+            f"Note: values are case-sensitive and must have no surrounding "
+            f"whitespace."
+        )
+    return value
+
+
+# ---------------------------------------------------------------------------
 # KDE Value Serialization (fix #1311)
 # ---------------------------------------------------------------------------
 
@@ -264,6 +327,15 @@ class CTEPersistence:
         kdes = kdes or {}
         alerts = alerts or []
         event_id = str(uuid4())
+
+        # --- event_type validation (fix #1312) ---
+        # Fail fast on free-form strings (trailing whitespace, wrong
+        # case, typos, garbage) BEFORE we hash, chain-lock, or write
+        # KDEs. The DB CHECK constraint would also reject bad values,
+        # but only after a round-trip that leaves a confusing
+        # IntegrityError; this surfaces a clear ValueError with the
+        # allowed list.
+        event_type = _validate_event_type(event_type)
 
         # --- Timestamp validation (fix #1308) ---
         # Parse + normalize to UTC + reject naive/future/garbage inputs.
@@ -549,11 +621,17 @@ class CTEPersistence:
         for evt in events:
             event_id = str(uuid4())
             kdes = evt.get("kdes") or {}
+            # event_type guard (fix #1312) — reject free-form strings
+            # before doing any hashing/insert work for this row. Runs
+            # per-row so one malformed event in a batch fails loudly
+            # rather than corrupting the other N-1 rows' chain or
+            # polluting the idempotency cache.
+            evt = dict(evt)  # don't mutate caller input
+            evt["event_type"] = _validate_event_type(evt.get("event_type"))
             # Parse + validate timestamps, normalize to UTC ISO-8601.
             event_dt = _parse_timestamp(
                 evt.get("event_timestamp"), field="event_timestamp"
             )
-            evt = dict(evt)  # don't mutate caller input
             evt["event_timestamp"] = event_dt.isoformat()
             if evt.get("event_entry_timestamp") is not None:
                 entry_dt = _parse_timestamp(
@@ -1225,30 +1303,95 @@ class CTEPersistence:
         """
         Verify the integrity of a tenant's entire hash chain.
 
-        Walks the chain from genesis to head, recomputing each chain_hash
-        and comparing to the stored value. Any mismatch = tamper detected.
+        Walks the chain from genesis to head, recomputing each
+        ``chain_hash`` and comparing to the stored value. Any mismatch
+        means tampering.
+
+        #1314: this method formerly only read ``fsma.hash_chain``, so an
+        orphan chain row (``cte_event_id`` referencing a row that no
+        longer exists or that was never inserted in the first place —
+        see #1307) would pass verification silently, and a CTE event
+        whose chain insert failed would likewise be undetected. The
+        verification now:
+          * LEFT JOINs to ``fsma.cte_events`` and flags chain rows
+            whose ``cte_event_id`` has no matching event.
+          * Counts non-rejected events and compares to ``count(chain)``,
+            surfacing ``missing_chain_rows`` — events that should have
+            a chain entry but don't.
+        Both conditions make ``valid = False`` and append a structured
+        entry to ``orphan_chain_rows`` / ``missing_chain_rows`` plus a
+        human-readable line to ``errors``.
         """
+        # LEFT JOIN chain → cte_events: a NULL event_id means the chain
+        # row is orphaned. Chain rows are ordered by sequence_num so the
+        # per-row checks below still work left-to-right.
         rows = self.session.execute(
             text("""
-                SELECT sequence_num, event_hash, previous_chain_hash, chain_hash
-                FROM fsma.hash_chain
-                WHERE tenant_id = :tid
-                ORDER BY sequence_num ASC
+                SELECT hc.sequence_num, hc.event_hash,
+                       hc.previous_chain_hash, hc.chain_hash,
+                       hc.cte_event_id, ce.id AS matched_event_id
+                FROM fsma.hash_chain hc
+                LEFT JOIN fsma.cte_events ce
+                    ON ce.id = hc.cte_event_id
+                   AND ce.tenant_id = hc.tenant_id
+                WHERE hc.tenant_id = :tid
+                ORDER BY hc.sequence_num ASC
             """),
             {"tid": tenant_id},
         ).fetchall()
 
+        # Count non-rejected CTE events for the missing-chain cross-check.
+        # A CTE event with validation_status='rejected' is intentionally
+        # not chained (writes are short-circuited before hash_chain
+        # insert); don't flag those as missing.
+        event_count_row = self.session.execute(
+            text("""
+                SELECT COUNT(*)
+                FROM fsma.cte_events
+                WHERE tenant_id = :tid
+                  AND validation_status != 'rejected'
+            """),
+            {"tid": tenant_id},
+        ).fetchone()
+        cte_events_count = int(event_count_row[0]) if event_count_row else 0
+
+        checked_at = datetime.now(timezone.utc).isoformat()
+
         if not rows:
+            # Empty chain is only valid if the event table is also empty
+            # (or all events are rejected). Otherwise every event is
+            # orphaned — the #1314 regression surfaces here.
+            missing_ids = self._missing_chain_event_ids(tenant_id)
+            if cte_events_count == 0 and not missing_ids:
+                return ChainVerification(
+                    valid=True,
+                    chain_length=0,
+                    errors=[],
+                    checked_at=checked_at,
+                    orphan_chain_rows=[],
+                    missing_chain_rows=[],
+                    cte_events_count=0,
+                )
+            errors = [
+                f"Empty chain but {cte_events_count} non-rejected events "
+                f"exist ({len(missing_ids)} missing chain rows)"
+            ]
             return ChainVerification(
-                valid=True,
+                valid=False,
                 chain_length=0,
-                errors=[],
-                checked_at=datetime.now(timezone.utc).isoformat(),
+                errors=errors,
+                checked_at=checked_at,
+                orphan_chain_rows=[],
+                missing_chain_rows=missing_ids,
+                cte_events_count=cte_events_count,
             )
 
-        errors = []
+        errors: List[str] = []
+        orphan_chain_rows: List[int] = []
+
         for i, row in enumerate(rows):
-            seq, event_hash, stored_prev, stored_chain = row
+            seq, event_hash, stored_prev, stored_chain = row[0], row[1], row[2], row[3]
+            cte_event_id, matched_event_id = row[4], row[5]
 
             # Check sequence continuity
             expected_seq = i + 1
@@ -1280,12 +1423,72 @@ class CTEPersistence:
                     f"{recomputed[:16]}... != stored {stored_chain[:16]}..."
                 )
 
+            # #1314: orphan chain row — cte_event_id has no match in
+            # cte_events. Either the event was deleted (never legal —
+            # cte_events is append-only) or the chain was written with
+            # a bogus id (code bug). Either way the chain no longer
+            # proves what it claims to prove.
+            if matched_event_id is None:
+                orphan_chain_rows.append(int(seq))
+                errors.append(
+                    f"Orphan chain row at seq={seq}: cte_event_id={cte_event_id} "
+                    f"has no matching fsma.cte_events row"
+                )
+
+        # #1314: cross-check the row counts. chain rows should equal
+        # non-rejected event count. A mismatch means an event was
+        # written without a chain row (#1307 regression class), which
+        # the per-chain walk above cannot detect on its own because it
+        # only iterates rows that DO exist.
+        missing_chain_rows: List[str] = []
+        if len(rows) != cte_events_count:
+            missing_chain_rows = self._missing_chain_event_ids(tenant_id)
+            if missing_chain_rows:
+                errors.append(
+                    f"Chain row count ({len(rows)}) != non-rejected event "
+                    f"count ({cte_events_count}); {len(missing_chain_rows)} "
+                    f"event(s) have no chain entry"
+                )
+
         return ChainVerification(
-            valid=len(errors) == 0,
+            valid=(
+                len(errors) == 0
+                and not orphan_chain_rows
+                and not missing_chain_rows
+            ),
             chain_length=len(rows),
             errors=errors,
-            checked_at=datetime.now(timezone.utc).isoformat(),
+            checked_at=checked_at,
+            orphan_chain_rows=orphan_chain_rows,
+            missing_chain_rows=missing_chain_rows,
+            cte_events_count=cte_events_count,
         )
+
+    def _missing_chain_event_ids(self, tenant_id: str) -> List[str]:
+        """Return non-rejected ``cte_events.id`` values with no
+        matching ``hash_chain`` row (#1314 cross-check helper).
+
+        Capped at 1000 ids to bound memory — a chain that far off from
+        the event table is already deep into incident-response
+        territory; more detail than that belongs in a dedicated audit
+        query, not in every verify_chain call.
+        """
+        rows = self.session.execute(
+            text("""
+                SELECT ce.id::text
+                FROM fsma.cte_events ce
+                LEFT JOIN fsma.hash_chain hc
+                    ON hc.cte_event_id = ce.id
+                   AND hc.tenant_id = ce.tenant_id
+                WHERE ce.tenant_id = :tid
+                  AND ce.validation_status != 'rejected'
+                  AND hc.id IS NULL
+                ORDER BY ce.ingested_at
+                LIMIT 1000
+            """),
+            {"tid": tenant_id},
+        ).fetchall()
+        return [r[0] for r in rows] if rows else []
 
     # ------------------------------------------------------------------
     # Merkle Tree Verification

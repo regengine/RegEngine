@@ -23,6 +23,7 @@ import uuid
 # Add parent directory to path for shared module import
 from shared.schemas import GraphEvent
 from shared.observability.kafka_propagation import extract_correlation_headers
+from shared.kafka_auth import KafkaAuthError, get_allowed_producers, verify_event
 
 from .config import settings
 from .neo4j_utils import Neo4jClient, driver, upsert_from_entities
@@ -250,8 +251,44 @@ async def run_consumer() -> None:
             if binding:
                 bind_contextvars(**binding)
 
-            # ... logic copy ...
-            
+            # --- HMAC producer authentication (#1078) ---
+            # Refuse to touch ``tenant_id`` unless the message is signed
+            # by a service authorized to publish to this topic. The
+            # authoritative topic name is ``record.topic()`` so a
+            # multi-topic subscriber looks up the correct allowlist.
+            # On failure we DLQ the message and commit the offset —
+            # retries won't help, the signature will never verify.
+            try:
+                topic_name = record.topic()
+            except Exception:
+                topic_name = "graph.update"
+            try:
+                evt, _verified_producer = verify_event(
+                    evt if isinstance(evt, dict) else {},
+                    raw_headers if isinstance(raw_headers, list) else None,
+                    topic=topic_name,
+                    allowed_producers=get_allowed_producers(topic_name),
+                )
+            except KafkaAuthError as auth_exc:
+                logger.error(
+                    "kafka_auth_failed",
+                    reason=auth_exc.reason,
+                    topic=topic_name,
+                    **auth_exc.fields,
+                )
+                MESSAGES_COUNTER.labels(status="unauthorized").inc()
+                _send_to_dlq(
+                    evt if isinstance(evt, dict) else {"raw": str(evt)[:2048]},
+                    str(auth_exc),
+                    reason="kafka_auth_failed",
+                    doc_id=None,
+                )
+                try:
+                    consumer.commit(message=record, asynchronous=False)
+                except Exception as commit_exc:
+                    logger.error("offset_commit_failed", error=str(commit_exc))
+                continue
+
             # --- Processing Logic (Simplifying for diff) ---
             # Try to parse as GraphEvent first (new format)
             try:
