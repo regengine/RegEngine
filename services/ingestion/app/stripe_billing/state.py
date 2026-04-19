@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+import json
 import logging
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Any, Optional
 
 import redis
 
@@ -24,6 +25,15 @@ logger = logging.getLogger("stripe-billing")
 # Stripe retry burst (their published retry window is shorter), short enough
 # that Redis memory doesn't grow unboundedly if key eviction is disabled.
 _EVENT_DEDUP_TTL_SECONDS = 24 * 60 * 60
+
+# #1196: When a `customer.subscription.updated` or `.deleted` event arrives
+# before the corresponding `checkout.session.completed` (Stripe does not
+# guarantee event ordering), there is no tenant mapping to update yet.
+# We buffer the latest pending update per subscription_id and drain it
+# from `_handle_checkout_completed` once the mapping exists. TTL is 72h,
+# longer than Stripe's documented ~3-day retry window, so nothing can fall
+# through the cracks if checkout processing itself is delayed.
+_PENDING_SUB_UPDATE_TTL_SECONDS = 72 * 60 * 60
 
 
 def _redis_client() -> redis.Redis:
@@ -143,3 +153,119 @@ def _find_tenant_id(subscription_id: Optional[str], customer_id: Optional[str]) 
             return tenant_id
 
     return None
+
+
+# ── #1196: out-of-order subscription update buffer ────────────────────────
+
+def _pending_sub_update_key(subscription_id: str) -> str:
+    return f"billing:pending_sub_update:{subscription_id}"
+
+
+def _buffer_pending_subscription_update(
+    subscription_id: str,
+    payload: dict[str, Any],
+) -> bool:
+    """Store the most-recent pending status update for a subscription.
+
+    Returns ``True`` if the buffer was written (new or newer event), ``False``
+    if we discarded this payload because an existing buffered update has a
+    newer ``event_created``.
+
+    The payload MUST include ``event_created`` (epoch int) so we can reason
+    about ordering when multiple out-of-order updates queue against the same
+    subscription_id. Other keys are free-form (status, current_period_end,
+    last_invoice_id, ...).
+
+    Fail-open on Redis errors: we log loudly and return ``False`` so callers
+    don't assume the update was safely buffered. The pending update will
+    simply be lost — same blast radius as the pre-fix behavior, but bounded
+    to Redis outage windows.
+    """
+    if not subscription_id:
+        logger.warning("stripe_pending_update_missing_sub_id")
+        return False
+
+    new_event_created = int(payload.get("event_created") or 0)
+    client = _redis_client()
+    key = _pending_sub_update_key(subscription_id)
+
+    try:
+        existing_raw = client.get(key)
+        if existing_raw:
+            try:
+                existing = json.loads(existing_raw)
+                existing_event_created = int(existing.get("event_created") or 0)
+            except (ValueError, TypeError, json.JSONDecodeError):
+                existing_event_created = 0
+            if existing_event_created > new_event_created:
+                logger.info(
+                    "stripe_pending_update_older_ignored "
+                    "subscription_id=%s buffered_event_created=%s new_event_created=%s",
+                    subscription_id,
+                    existing_event_created,
+                    new_event_created,
+                )
+                return False
+
+        client.set(
+            key,
+            json.dumps(payload, separators=(",", ":")),
+            ex=_PENDING_SUB_UPDATE_TTL_SECONDS,
+        )
+        return True
+    except redis.RedisError as exc:
+        logger.error(
+            "stripe_pending_update_redis_error subscription_id=%s error=%s",
+            subscription_id,
+            exc,
+        )
+        return False
+
+
+def _pop_pending_subscription_update(
+    subscription_id: str,
+) -> Optional[dict[str, Any]]:
+    """Atomically fetch-and-delete the buffered update, if any.
+
+    Uses ``GETDEL`` (Redis ≥ 6.2) when available, with a pipeline fallback
+    for older servers. If Redis is unavailable we return ``None`` and let
+    the caller skip recovery — the next webhook retry or the periodic
+    reconciliation job will pick it up.
+    """
+    if not subscription_id:
+        return None
+
+    client = _redis_client()
+    key = _pending_sub_update_key(subscription_id)
+
+    try:
+        raw = None
+        # GETDEL is atomic and the preferred single round-trip.
+        try:
+            raw = client.getdel(key)  # type: ignore[attr-defined]
+        except (AttributeError, redis.ResponseError):
+            # Older redis-py or server — fall back to pipeline GET+DEL.
+            pipe = client.pipeline()
+            pipe.get(key)
+            pipe.delete(key)
+            results = pipe.execute()
+            raw = results[0] if results else None
+    except redis.RedisError as exc:
+        logger.error(
+            "stripe_pending_update_pop_redis_error subscription_id=%s error=%s",
+            subscription_id,
+            exc,
+        )
+        return None
+
+    if not raw:
+        return None
+    try:
+        return json.loads(raw)
+    except (ValueError, json.JSONDecodeError) as exc:
+        logger.warning(
+            "stripe_pending_update_corrupt subscription_id=%s error=%s",
+            subscription_id,
+            exc,
+        )
+        return None
