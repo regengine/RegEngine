@@ -5,16 +5,15 @@ from __future__ import annotations
 import asyncio
 import time
 import uuid
-from typing import Optional
 
 import structlog
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
 from shared.auth import APIKey, require_api_key, verify_jurisdiction_access
+from shared.database import SessionLocal
+from shared.task_queue import enqueue_task
 
-from .config import get_settings
 from .pipeline import ScraperPipeline
-from .scraper_job import run_state_scrape_job, run_generic_scrape_job
 from .scrapers.state_adaptors.base import StateRegistryScraper as AdaptorRegistryScraper
 from .scrapers.state_adaptors.cppa import CPPAScraper
 from .scrapers.state_adaptors.fl_rss import FloridaRSSScraper
@@ -42,21 +41,41 @@ ADAPTORS: dict[str, AdaptorRegistryScraper] = {
 @router.post("/v1/scrape/cppa", status_code=202, response_model=ScrapeResponse)
 async def scrape_cppa(
     url: str,
-    background_tasks: BackgroundTasks,
     api_key=Depends(require_api_key),
 ):
     verify_jurisdiction_access(api_key, "US-CA")
-    adaptor = ADAPTORS.get("cppa")
-    if adaptor:
-        background_tasks.add_task(
-            run_state_scrape_job, adaptor_name="cppa", adaptor_instance=adaptor,
-            url=url, jurisdiction_code="US-CA", tenant_id=api_key.tenant_id,
+
+    db = SessionLocal()
+    try:
+        if ADAPTORS.get("cppa"):
+            enqueue_task(
+                db,
+                task_type="state_scrape",
+                payload={
+                    "adaptor_name": "cppa",
+                    "url": url,
+                    "jurisdiction_code": "US-CA",
+                    "tenant_id": api_key.tenant_id,
+                },
+                tenant_id=api_key.tenant_id,
+            )
+            db.commit()
+            return {"status": "accepted", "message": "CPPA scrape job started"}
+
+        enqueue_task(
+            db,
+            task_type="generic_scrape",
+            payload={
+                "url": url,
+                "jurisdiction_code": "US-CA",
+                "tenant_id": api_key.tenant_id,
+            },
+            tenant_id=api_key.tenant_id,
         )
-        return {"status": "accepted", "message": "CPPA scrape job started"}
-    background_tasks.add_task(
-        run_generic_scrape_job, url=url, jurisdiction_code="US-CA", tenant_id=api_key.tenant_id,
-    )
-    return {"status": "accepted", "message": "Generic scrape job started"}
+        db.commit()
+        return {"status": "accepted", "message": "Generic scrape job started"}
+    finally:
+        db.close()
 
 
 @router.post("/scrape/{adaptor}", response_model=ScrapeRegistryResponse)
@@ -96,7 +115,6 @@ def scrape_registry(
 
 @router.post("/v1/ingest/all-regulations", response_model=IngestAllRegulationsResponse)
 async def ingest_all_regulations(
-    background_tasks: BackgroundTasks,
     api_key: APIKey = Depends(require_api_key),
 ):
     """Trigger an FDA-scoped, idempotent regulatory ingestion run."""
