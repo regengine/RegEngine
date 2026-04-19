@@ -31,7 +31,7 @@ def test_check_revoked_rejects_jti_free_payload(monkeypatch):
     """Default posture: a token payload with no jti is rejected."""
     from services.admin.app import auth_utils
 
-    monkeypatch.setattr(auth_utils, "_revoked_jtis", set())
+    monkeypatch.setattr(auth_utils, "_revoked_jtis", {})
     monkeypatch.delenv("AUTH_ALLOW_LEGACY_JTI_FREE", raising=False)
 
     with pytest.raises(pyjwt.exceptions.InvalidTokenError) as excinfo:
@@ -45,7 +45,7 @@ def test_check_revoked_allows_jti_free_when_rollback_env_set(monkeypatch):
     long as the flag exists."""
     from services.admin.app import auth_utils
 
-    monkeypatch.setattr(auth_utils, "_revoked_jtis", set())
+    monkeypatch.setattr(auth_utils, "_revoked_jtis", {})
     monkeypatch.setenv("AUTH_ALLOW_LEGACY_JTI_FREE", "true")
 
     payload = {"sub": "u1"}  # no jti
@@ -57,7 +57,7 @@ def test_check_revoked_rollback_flag_parses_case_insensitively(monkeypatch):
     all of those must engage the rollback path."""
     from services.admin.app import auth_utils
 
-    monkeypatch.setattr(auth_utils, "_revoked_jtis", set())
+    monkeypatch.setattr(auth_utils, "_revoked_jtis", {})
     for val in ("true", "True", "TRUE", "1", "yes"):
         monkeypatch.setenv("AUTH_ALLOW_LEGACY_JTI_FREE", val)
         assert auth_utils._check_revoked({"sub": "u1"}) == {"sub": "u1"}
@@ -69,7 +69,7 @@ def test_check_revoked_rollback_flag_ignores_bogus_values(monkeypatch):
     re-open the hole."""
     from services.admin.app import auth_utils
 
-    monkeypatch.setattr(auth_utils, "_revoked_jtis", set())
+    monkeypatch.setattr(auth_utils, "_revoked_jtis", {})
     for val in ("", "false", "no", "0", "off", "maybe"):
         monkeypatch.setenv("AUTH_ALLOW_LEGACY_JTI_FREE", val)
         with pytest.raises(pyjwt.exceptions.InvalidTokenError):
@@ -81,7 +81,7 @@ def test_check_revoked_allows_jti_bearing_payload(monkeypatch):
     when its jti is not revoked."""
     from services.admin.app import auth_utils
 
-    monkeypatch.setattr(auth_utils, "_revoked_jtis", set())
+    monkeypatch.setattr(auth_utils, "_revoked_jtis", {})
     monkeypatch.delenv("AUTH_ALLOW_LEGACY_JTI_FREE", raising=False)
 
     payload = {"sub": "u1", "jti": f"jti-{uuid.uuid4()}"}
@@ -99,7 +99,7 @@ def test_decode_rejects_forged_jti_free_token(monkeypatch):
     signature is valid, the decode must reject."""
     from services.admin.app import auth_utils
 
-    monkeypatch.setattr(auth_utils, "_revoked_jtis", set())
+    monkeypatch.setattr(auth_utils, "_revoked_jtis", {})
     monkeypatch.delenv("AUTH_ALLOW_LEGACY_JTI_FREE", raising=False)
 
     # Forge a token with no jti using the same signing key.
@@ -121,7 +121,7 @@ def test_decode_accepts_normally_minted_token(monkeypatch):
     from services.admin.app import auth_utils
     from services.admin.app.auth_utils import create_access_token
 
-    monkeypatch.setattr(auth_utils, "_revoked_jtis", set())
+    monkeypatch.setattr(auth_utils, "_revoked_jtis", {})
     monkeypatch.delenv("AUTH_ALLOW_LEGACY_JTI_FREE", raising=False)
 
     tok = create_access_token({"sub": str(uuid.uuid4())})
