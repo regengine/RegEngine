@@ -106,11 +106,18 @@ def evaluate_temporal_order(
     session: Session,
     *,
     tenant_id: Optional[str] = None,
+    related_events: Optional[List[Dict[str, Any]]] = None,
 ) -> RuleEvaluationResult:
     """Detect chronology paradoxes -- e.g. shipping before harvesting.
 
     #1344 — tenant_id MUST come from the caller (authenticated context).
     Any tenant_id in event_data is ignored.
+    #1365 — ``related_events`` is an engine-pre-fetched cache of the
+    per-event related-event list (same tenant, same TLC, ACTIVE-only,
+    excluding the current event_id). When provided, it is used as-is
+    and NO database query is issued. When None, the evaluator falls
+    back to a self-fetch, preserving backward compatibility for direct
+    callers that bypass the engine.
     """
     tlc = event_data.get("traceability_lot_code", "")
     event_id = event_data.get("event_id", "")
@@ -127,7 +134,11 @@ def evaluate_temporal_order(
             category=rule.category,
         )
 
-    related = fetch_related_events(session, tlc, auth_tid, str(event_id))
+    related = (
+        related_events
+        if related_events is not None
+        else fetch_related_events(session, tlc, auth_tid, str(event_id))
+    )
     if not related:
         return RuleEvaluationResult(
             rule_id=rule.rule_id, rule_version=rule.rule_version,
@@ -215,10 +226,13 @@ def evaluate_identity_consistency(
     session: Session,
     *,
     tenant_id: Optional[str] = None,
+    related_events: Optional[List[Dict[str, Any]]] = None,
 ) -> RuleEvaluationResult:
     """Detect product identity drift -- same TLC changing product mid-chain.
 
     #1344 — tenant_id MUST come from the caller (authenticated context).
+    #1365 — ``related_events``: engine-provided cache; when present, no
+    DB query is issued. See ``evaluate_temporal_order`` for semantics.
     """
     tlc = event_data.get("traceability_lot_code", "")
     event_id = event_data.get("event_id", "")
@@ -237,7 +251,11 @@ def evaluate_identity_consistency(
             category=rule.category,
         )
 
-    related = fetch_related_events(session, tlc, auth_tid, str(event_id))
+    related = (
+        related_events
+        if related_events is not None
+        else fetch_related_events(session, tlc, auth_tid, str(event_id))
+    )
     if not related:
         return RuleEvaluationResult(
             rule_id=rule.rule_id, rule_version=rule.rule_version,
@@ -299,10 +317,13 @@ def evaluate_mass_balance(
     session: Session,
     *,
     tenant_id: Optional[str] = None,
+    related_events: Optional[List[Dict[str, Any]]] = None,
 ) -> RuleEvaluationResult:
     """Detect mass balance violations -- output exceeding input for same TLC.
 
     #1344 — tenant_id MUST come from the caller (authenticated context).
+    #1365 — ``related_events``: engine-provided cache; when present, no
+    DB query is issued. See ``evaluate_temporal_order`` for semantics.
     """
     tlc = event_data.get("traceability_lot_code", "")
     event_id = event_data.get("event_id", "")
@@ -323,7 +344,11 @@ def evaluate_mass_balance(
             category=rule.category,
         )
 
-    related = fetch_related_events(session, tlc, auth_tid, str(event_id))
+    related = (
+        related_events
+        if related_events is not None
+        else fetch_related_events(session, tlc, auth_tid, str(event_id))
+    )
     if not related:
         return RuleEvaluationResult(
             rule_id=rule.rule_id, rule_version=rule.rule_version,

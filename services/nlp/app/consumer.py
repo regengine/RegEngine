@@ -46,6 +46,18 @@ from shared.observability.kafka_propagation import (
     extract_correlation_headers,
     inject_correlation_headers_tuples,
 )
+from shared.kafka_auth import (
+    KafkaAuthError,
+    get_allowed_producers,
+    sign_event,
+    verify_event,
+)
+
+# Producer service identity used when this consumer re-emits events to
+# downstream topics (graph.update, nlp.needs_review, nlp.extracted).
+# Must match the value the downstream consumer expects in its
+# KAFKA_ALLOWED_PRODUCERS_<TOPIC> env var (#1078).
+NLP_PRODUCER_SERVICE = "nlp-service"
 
 from .classification import SignalClassifier
 from .config import settings
@@ -216,12 +228,28 @@ def _run_fsma_extractor(
         "doc_hash": doc_hash,
         **routing["payload"],
     }
+    # Sign the event so downstream consumers (graph, review UI) can
+    # verify it came from this service and refuse forgeries (#1078).
+    try:
+        signed_payload, signed_headers = sign_event(
+            payload,
+            producer_service=NLP_PRODUCER_SERVICE,
+            existing_headers=kafka_headers,
+        )
+    except KafkaAuthError as sign_exc:
+        logger.error(
+            "fsma_routing_sign_failed",
+            document_id=doc_id,
+            topic=topic,
+            reason=sign_exc.reason,
+        )
+        return {"status": "error", "cte_count": len(result.ctes), "routed": topic}
     try:
         producer.send(
             topic,
             key=doc_id,
-            value=payload,
-            headers=kafka_headers,
+            value=signed_payload,
+            headers=signed_headers,
         )
         producer.flush(timeout=1.0)
     except (KafkaTimeoutError, ConnectionError, OSError) as exc:
@@ -816,11 +844,18 @@ def _route_extraction(
             entity_count=len(payload.get("extraction", {}).get("entities", [])),
             document_id=doc_id,
         )
+        # Sign the event so the graph consumer can verify it came
+        # from a trusted producer before routing by tenant_id (#1078).
+        signed_payload, signed_headers = sign_event(
+            payload,
+            producer_service=NLP_PRODUCER_SERVICE,
+            existing_headers=base_headers,
+        )
         producer.send(
             TOPIC_GRAPH_UPDATE,
             key=doc_id,
-            value=payload,
-            headers=base_headers,
+            value=signed_payload,
+            headers=signed_headers,
         )
         logger.info(
             "high_confidence_extraction",
@@ -849,11 +884,19 @@ def _route_extraction(
             "confidence": confidence,
         },
     }
+    review_headers = base_headers + [
+        ("X-Review-Priority", priority.encode("utf-8")),
+    ]
+    signed_review_payload, signed_review_headers = sign_event(
+        review_payload,
+        producer_service=NLP_PRODUCER_SERVICE,
+        existing_headers=review_headers,
+    )
     producer.send(
         TOPIC_NEEDS_REVIEW,
         key=doc_id,
-        value=review_payload,
-        headers=base_headers + [("X-Review-Priority", priority.encode("utf-8"))],
+        value=signed_review_payload,
+        headers=signed_review_headers,
     )
     logger.info(
         "low_or_medium_confidence_extraction",
@@ -1048,6 +1091,48 @@ def run_consumer() -> None:
                             continue
 
                         if not evt: continue
+
+                        # --- HMAC producer authentication (#1078) ---
+                        # Before routing by ``tenant_id``, verify that
+                        # the message was signed by a service we trust
+                        # to publish to this topic. Without this, any
+                        # actor that can publish to ingest.normalized
+                        # can tag a forged event with any tenant_id
+                        # they choose — the audit log records the
+                        # *claimed* tenant, so cross-tenant injection
+                        # has no audit signal. On failure the message
+                        # is DLQ'd and the offset is committed so the
+                        # partition is not blocked by retries that
+                        # will never succeed.
+                        try:
+                            evt, _verified_producer = verify_event(
+                                evt,
+                                record.headers,
+                                topic=settings.topic_in,
+                                allowed_producers=get_allowed_producers(settings.topic_in),
+                            )
+                        except KafkaAuthError as auth_exc:
+                            logger.error(
+                                "kafka_auth_failed",
+                                reason=auth_exc.reason,
+                                topic=settings.topic_in,
+                                offset=record.offset,
+                                **auth_exc.fields,
+                            )
+                            POISON_PILL_COUNTER.inc()
+                            doc_id_for_dlq = (
+                                evt.get("document_id") if isinstance(evt, dict) else None
+                            ) or "unknown"
+                            _send_to_fsma_dlq(
+                                producer,
+                                evt if isinstance(evt, dict) else raw_value,
+                                f"kafka_auth_failed: {auth_exc}",
+                                doc_id_for_dlq,
+                                kafka_headers,
+                            )
+                            MESSAGES_COUNTER.labels(status="unauthorized").inc()
+                            consumer.commit()
+                            continue
 
                         # Extract doc_id early for logging (before validation)
                         doc_id = evt.get("document_id") or evt.get("doc_id") or "unknown"
@@ -1272,10 +1357,19 @@ def run_consumer() -> None:
                             }
                             try:
                                 _load_schema().validate(legacy_out)
+                                # Sign the legacy emit too — subscribers
+                                # that have verification wired on will
+                                # refuse to accept unsigned messages on
+                                # any topic (#1078).
+                                signed_legacy, signed_legacy_headers = sign_event(
+                                    legacy_out,
+                                    producer_service=NLP_PRODUCER_SERVICE,
+                                )
                                 producer.send(
                                     settings.topic_out,
                                     key=doc_id,
-                                    value=legacy_out,
+                                    value=signed_legacy,
+                                    headers=signed_legacy_headers,
                                 )
                                 logger.warning(
                                     "nlp_legacy_topic_emitted",
