@@ -67,36 +67,6 @@ def _get_tenant_id_from_request(request: Request) -> Optional[str]:
     return None
 
 
-def _check_subscription_in_redis(tenant_id: str) -> Optional[str]:
-    """Look up subscription status from Redis.
-
-    Returns the status string if found, or None if Redis is unavailable
-    or the key does not exist.
-    """
-    redis_url = os.getenv("REDIS_URL")
-    if not redis_url:
-        return None
-
-    try:
-        import redis as redis_lib
-
-        redis_circuit._check_state()  # raises CircuitOpenError if open
-        client = redis_lib.from_url(redis_url, decode_responses=True)
-        status = client.hget(f"billing:tenant:{tenant_id}", "status")
-        redis_circuit._record_success()
-        return status
-    except CircuitOpenError:
-        raise
-    except Exception as exc:
-        redis_circuit._record_failure(exc)
-        logger.warning(
-            "subscription_gate_redis_unavailable tenant_id=%s error=%s",
-            tenant_id,
-            str(exc),
-        )
-        return None
-
-
 def _check_subscription_and_redis_health(tenant_id: str) -> tuple[Optional[str], bool]:
     """Return ``(status, redis_available)``.
 

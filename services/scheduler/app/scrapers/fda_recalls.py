@@ -14,7 +14,7 @@ import httpx
 import structlog
 
 from ..models import EnforcementItem, EnforcementSeverity, ScrapeResult, SourceType
-from .base import BaseScraper
+from .base import BaseScraper, fetch_with_retry
 
 logger = structlog.get_logger("scraper.fda_recalls")
 
@@ -100,10 +100,16 @@ class FDARecallsScraper(BaseScraper):
             "sort": "report_date:desc",
         }
 
-        response = self.session.get(
+        # #1138: retry on 5xx and transport errors so a single transient
+        # openFDA blip doesn't fail the whole scrape cycle. Class I recalls
+        # are time-sensitive (24h compliance window) so we don't want a
+        # 30-minute gap between scrapes just because one 503 happened.
+        response = fetch_with_retry(
+            self.session,
             FDA_ENFORCEMENT_API,
             params=params,
             timeout=self.timeout,
+            log_scope="fda_recalls_http",
         )
         response.raise_for_status()
         data = response.json()

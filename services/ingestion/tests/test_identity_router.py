@@ -49,7 +49,7 @@ def _build_client(
     app.dependency_overrides[identity_router._get_db_session] = lambda: fake_db
 
     if mock_svc is not None:
-        identity_router._get_service = lambda db_session: mock_svc  # type: ignore[assignment]
+        identity_router._get_service = lambda *_a, **_kw: mock_svc  # type: ignore[assignment]
 
     return TestClient(app)
 

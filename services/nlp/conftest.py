@@ -10,6 +10,9 @@ os.environ.setdefault("GRAPH_SERVICE_URL", "http://localhost:8200")
 os.environ.setdefault("DATABASE_URL", "sqlite:///:memory:")
 os.environ.setdefault("OPENAI_API_KEY", "test-openai-key")
 os.environ.setdefault("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092")
+# Fixed HMAC key so producer / consumer round-trips work in unit
+# tests without hitting a real KMS / secret store (#1078).
+os.environ.setdefault("KAFKA_EVENT_SIGNING_KEY", "test-nlp-kafka-signing-key-ci-only")
 os.environ.setdefault("AUTH_TEST_BYPASS_TOKEN", "test-bypass-token-for-pytest")
 os.environ.setdefault("ENVIRONMENT", "test")
 os.environ.setdefault("LOG_LEVEL", "WARNING")

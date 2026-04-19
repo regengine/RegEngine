@@ -116,6 +116,10 @@ class ResolveReviewRequest(BaseModel):
     resolved_by: str
     resolution_notes: Optional[str] = None
     auto_merge: bool = False
+    # #1193: explicit merge direction. Must equal one of the review's
+    # entity_a_id / entity_b_id if supplied; otherwise the service picks
+    # deterministically on verification → confidence → created_at.
+    target_entity_id: Optional[str] = None
 
 
 # ---------------------------------------------------------------------------
@@ -334,12 +338,20 @@ async def resolve_review(
 ):
     tid = resolve_tenant(tenant_id, principal)
     svc = _get_service(db_session, principal)
-    svc.resolve_review(
+    # Service takes ``resolution`` (not ``status``). The body field stays
+    # ``status`` for API compatibility; we translate here.
+    result = svc.resolve_review(
         tenant_id=tid,
         review_id=review_id,
-        status=body.status,
+        resolution=body.status,
         resolved_by=body.resolved_by,
         resolution_notes=body.resolution_notes,
         auto_merge=body.auto_merge,
+        target_entity_id=body.target_entity_id,
     )
-    return {"review_id": review_id, "status": body.status}
+    return {
+        "review_id": review_id,
+        "status": body.status,
+        "merge": result.get("merge"),
+        "merge_target_rationale": result.get("merge_target_rationale"),
+    }
