@@ -1,7 +1,7 @@
 """Scheduler Service Management API with rate limiting."""
 
 from contextlib import asynccontextmanager
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 
 import structlog
 from fastapi import Depends, FastAPI
@@ -12,12 +12,19 @@ from shared.rate_limit import add_rate_limiting, limiter
 from shared.metrics_auth import require_metrics_key
 from shared.cors import get_allowed_origins
 
+# Import only under type-checking to break the runtime circular import
+# between api.py (imported by main.py) and SchedulerService (defined in
+# main.py). Annotations stay stringified via the import alias.
+if TYPE_CHECKING:
+    from services.scheduler.main import SchedulerService
+
 logger = structlog.get_logger("scheduler-api")
 
 # Global reference to scheduler service (set by main)
-_scheduler_service: Optional['SchedulerService'] = None
+_scheduler_service: Optional["SchedulerService"] = None
 
-def set_scheduler_service(service: 'SchedulerService') -> None:
+
+def set_scheduler_service(service: "SchedulerService") -> None:
     """Set the global scheduler service reference."""
     global _scheduler_service
     _scheduler_service = service

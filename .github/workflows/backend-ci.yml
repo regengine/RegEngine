@@ -199,10 +199,40 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
 
       - name: Run linting
+        # F821 (undefined name) is now load-bearing — it caught the runtime
+        # NameError bugs that were hidden in services/nlp/app/extractors/
+        # llm_extractor.py for months before PR #1482 fixed them. Scope
+        # expanded from ``app/`` only to the whole service directory so
+        # ``main.py`` / ``api.py`` / ``conftest.py`` at service root are
+        # also covered, plus this job now gates merges (see ci-status).
         run: |
           pip install flake8
           cd services/${{ matrix.service }}
-          flake8 app/ --max-line-length=120 --select=E9,F63,F7,F82 --count --statistics
+          flake8 . --max-line-length=120 --select=E9,F63,F7,F82 \
+            --exclude=__pycache__,.venv,venv,build,dist \
+            --count --statistics
+
+  # ── Lint shared/ ─────────────────────────────────────────
+  # ``services/shared/`` isn't in the service matrix but is imported by
+  # every service. F821 regressions there silently break downstream
+  # callers at runtime — lint it explicitly.
+  lint-shared:
+    name: Lint shared/
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Run linting
+        run: |
+          pip install flake8
+          cd services/shared
+          flake8 . --max-line-length=120 --select=E9,F63,F7,F82 \
+            --exclude=__pycache__,.venv,venv,build,dist \
+            --count --statistics
 
   # ── RLS fallback-UUID guard (hard gate) ──────────────────
   # Scans migrations for the fail-open RLS pattern that #1091 fixed.
@@ -272,18 +302,27 @@ jobs:
   ci-status:
     name: CI Status Gate
     if: always()
-    needs: [test, lint, docker-build, security, rls-fallback-check]
+    needs: [test, lint, lint-shared, docker-build, security, rls-fallback-check]
     runs-on: ubuntu-latest
     steps:
       - name: Check results
         run: |
           echo "Test:              ${{ needs.test.result }}"
           echo "Lint:              ${{ needs.lint.result }}"
+          echo "Lint shared/:      ${{ needs.lint-shared.result }}"
           echo "Docker:            ${{ needs.docker-build.result }}"
           echo "Security:          ${{ needs.security.result }}"
           echo "RLS fallback:      ${{ needs.rls-fallback-check.result }}"
-          if [[ "${{ needs.test.result }}" == "failure" || "${{ needs.security.result }}" == "failure" || "${{ needs.rls-fallback-check.result }}" == "failure" ]]; then
-            echo "::error::Test suite, Security Audit, or RLS fallback guard failed"
+          # Lint is now blocking — flake8 F821 (undefined name) would
+          # have caught PR #1482's NLP NameError class of bugs if this
+          # gate had been enforcing. Promoting lint to a hard gate so
+          # the next occurrence trips on PR open rather than in prod.
+          if [[ "${{ needs.test.result }}" == "failure" \
+             || "${{ needs.lint.result }}" == "failure" \
+             || "${{ needs.lint-shared.result }}" == "failure" \
+             || "${{ needs.security.result }}" == "failure" \
+             || "${{ needs.rls-fallback-check.result }}" == "failure" ]]; then
+            echo "::error::Test, Lint, Security Audit, or RLS fallback guard failed"
             exit 1
           fi
           echo "All checks passed"

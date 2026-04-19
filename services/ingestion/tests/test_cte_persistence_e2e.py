@@ -48,20 +48,28 @@ except ImportError:
 
 _SKIP_REASON = "testcontainers[postgresql] and psycopg required (pip install testcontainers[postgresql] psycopg[binary])"
 
-pytestmark = [
-    pytest.mark.integration,
-    pytest.mark.skipif(
-        not (_HAS_TESTCONTAINERS and _HAS_PSYCOPG),
-        reason=_SKIP_REASON,
-    ),
-]
-
 # ---------------------------------------------------------------------------
 # Paths
 # ---------------------------------------------------------------------------
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 _MIGRATION_V002 = _REPO_ROOT / "migrations" / "V002__fsma_cte_persistence.sql"
+
+pytestmark = [
+    pytest.mark.integration,
+    pytest.mark.skipif(
+        not (_HAS_TESTCONTAINERS and _HAS_PSYCOPG),
+        reason=_SKIP_REASON,
+    ),
+    # V002 migration lives at the repo root in legacy checkouts; when a
+    # fresh clone is structured around the per-service migrations/
+    # directories (admin, ingestion, etc.) the top-level file is
+    # absent. Skip cleanly rather than failing in the fixture.
+    pytest.mark.skipif(
+        not _MIGRATION_V002.exists(),
+        reason=f"Migration file {_MIGRATION_V002} not present in this checkout",
+    ),
+]
 
 # ---------------------------------------------------------------------------
 # Preamble: objects the V002 migration depends on

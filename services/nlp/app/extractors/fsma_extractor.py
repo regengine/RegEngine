@@ -336,7 +336,7 @@ class FSMAExtractor:
             document_id=document_id,
             document_type=doc_type,
             ctes=ctes,
-            extraction_timestamp=datetime.now(timezone.utc).isoformat(),
+            extraction_timestamp=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
             raw_text=text[:1000] if text else None,  # Store first 1000 chars
             warnings=warnings,
             line_items=line_items,
@@ -390,7 +390,7 @@ class FSMAExtractor:
         return {
             "topic": topic,
             "payload": self.to_graph_event(result),
-            "routed_at": datetime.now(timezone.utc).isoformat(),
+            "routed_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         }
 
     def _classify_document(self, text: str) -> DocumentType:

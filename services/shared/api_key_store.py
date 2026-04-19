@@ -28,7 +28,12 @@ import secrets
 import time
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
-from typing import Any, AsyncGenerator, Optional, Sequence
+from typing import TYPE_CHECKING, Any, AsyncGenerator, Optional, Sequence
+
+# Imported only for annotations — breaks the runtime circular dep with
+# ``shared.auth`` which itself imports from this module.
+if TYPE_CHECKING:
+    from shared.auth import APIKeyStore
 
 import structlog
 from pydantic import BaseModel, Field
