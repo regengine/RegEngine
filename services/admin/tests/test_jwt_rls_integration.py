@@ -19,7 +19,14 @@ import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from app.auth_utils import create_access_token, decode_access_token, SECRET_KEY, ALGORITHM
+from app.auth_utils import (
+    create_access_token,
+    decode_access_token,
+    SECRET_KEY,
+    ALGORITHM,
+    SESSION_AUDIENCE,
+    SESSION_ISSUER,
+)
 
 
 class TestJWTClaims:
@@ -29,7 +36,7 @@ class TestJWTClaims:
         """JWT should include tenant_id claim for RLS"""
         user_id = uuid4()
         tenant_id = uuid4()
-        
+
         # Create JWT with tenant_id
         token_data = {
             "sub": str(user_id),
@@ -37,11 +44,17 @@ class TestJWTClaims:
             "tenant_id": str(tenant_id),
             "tid": str(tenant_id)  # Backward compat
         }
-        
+
         token = create_access_token(token_data)
-        
-        # Decode and verify
-        payload = jose_jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+
+        # Decode and verify — session tokens now stamp aud/iss (#1060)
+        payload = jose_jwt.decode(
+            token,
+            SECRET_KEY,
+            algorithms=[ALGORITHM],
+            audience=SESSION_AUDIENCE,
+            issuer=SESSION_ISSUER,
+        )
         
         assert payload["sub"] == str(user_id)
         assert payload["tenant_id"] == str(tenant_id)
