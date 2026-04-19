@@ -19,11 +19,17 @@ import json
 import logging
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
 from uuid import uuid4
 
 from sqlalchemy import text
 from sqlalchemy.orm import Session
+
+# Imported only for type-checking — avoids pulling in the rules engine
+# at runtime since this service doesn't need to evaluate, only to
+# consume an already-produced summary.
+if TYPE_CHECKING:
+    from shared.rules.types import EvaluationSummary
 
 logger = logging.getLogger("exception-queue")
 
