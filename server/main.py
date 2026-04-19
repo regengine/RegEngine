@@ -84,10 +84,32 @@ async def lifespan(app: FastAPI):
     from server.workers.task_processor import start_task_worker, stop_task_worker
     start_task_worker()
 
+    # Register ingestion task handlers and start ingestion worker
+    try:
+        from services.ingestion.app.task_handlers_sources import register_source_handlers
+        from services.ingestion.app.task_handlers_scraping import register_scraping_handlers
+        from services.ingestion.app.task_handlers_discovery import register_discovery_handlers
+        from services.ingestion.app.task_handlers_regulation import register_regulation_handlers
+        from shared.task_queue import TaskWorker
+        from shared.database import engine as _db_engine
+        register_source_handlers()
+        register_scraping_handlers()
+        register_discovery_handlers()
+        register_regulation_handlers()
+        _ingestion_worker = TaskWorker(engine=_db_engine)
+        _ingestion_worker.start()
+        app.state.ingestion_worker = _ingestion_worker
+        logger.info("ingestion_task_worker_started")
+    except Exception as exc:
+        logger.warning("ingestion_task_worker_start_failed", error=str(exc))
+        app.state.ingestion_worker = None
+
     yield
 
     # Shutdown
     stop_task_worker()
+    if getattr(app.state, "ingestion_worker", None):
+        app.state.ingestion_worker.stop()
     logger.info("regengine_shutdown")
 
 

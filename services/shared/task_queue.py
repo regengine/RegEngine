@@ -239,6 +239,12 @@ class TaskWorker:
         """Signal the run loop to exit after the current iteration."""
         self._stop_event.set()
 
+    def start(self) -> threading.Thread:
+        """Start the worker loop in a daemon thread and return it."""
+        t = threading.Thread(target=self.run, daemon=True, name=f"task-worker-{self.worker_id}")
+        t.start()
+        return t
+
     def run(self) -> None:
         """Main loop. Blocks until :meth:`stop` is called.
 
