@@ -15,7 +15,7 @@ import httpx
 import structlog
 
 from ..models import EnforcementItem, EnforcementSeverity, ScrapeResult, SourceType
-from .base import BaseScraper
+from .base import BaseScraper, fetch_with_retry
 
 logger = structlog.get_logger("scraper.fda_import_alerts")
 
@@ -95,7 +95,13 @@ class FDAImportAlertsScraper(BaseScraper):
 
     def _scrape_alerts_page(self) -> List[EnforcementItem]:
         """Parse FDA Import Alerts HTML page."""
-        response = self.session.get(FDA_IMPORT_ALERTS_URL, timeout=self.timeout)
+        # #1138: retry on 5xx/transport errors.
+        response = fetch_with_retry(
+            self.session,
+            FDA_IMPORT_ALERTS_URL,
+            timeout=self.timeout,
+            log_scope="fda_import_alerts_html",
+        )
         response.raise_for_status()
 
         items = []
