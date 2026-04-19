@@ -25,7 +25,7 @@ from urllib.parse import urlparse
 
 import httpx
 import structlog
-from fastapi import APIRouter, Depends, Header, HTTPException, BackgroundTasks, Body, File, Request, UploadFile, Query, Form
+from fastapi import APIRouter, Depends, Header, HTTPException, Body, File, Request, UploadFile, Query, Form
 from fastapi.responses import PlainTextResponse
 from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_latest
 from httpx import Response
@@ -40,6 +40,9 @@ except ModuleNotFoundError:  # pragma: no cover - local/test environments may no
 # Add shared module to path
 from shared.auth import APIKey, require_api_key, verify_jurisdiction_access
 from shared.tenant_rate_limiting import consume_tenant_rate_limit
+from shared.database import SessionLocal
+from shared.task_queue import enqueue_task
+from .task_handlers_regulation import get_staging_path
 
 from .config import get_settings
 from .kafka_utils import send
@@ -280,7 +283,6 @@ async def process_regulation_ingestion(job_id: str, name: str, filename: str, te
 @router.post("/v1/ingest/regulation", status_code=202, response_model=IngestRegulationResponse)
 async def ingest_regulation(
     name: str,
-    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     webhook: Optional[str] = Query(None),
     api_key: APIKey = Depends(_endpoint_rate_limit("ingest.regulation", 5)),
@@ -304,37 +306,61 @@ async def ingest_regulation(
     content = await file.read()
     if not content:
         raise HTTPException(status_code=400, detail="Empty file uploaded")
-    
+
     if len(content) > 100 * 1024 * 1024:  # 100MB
         raise HTTPException(status_code=413, detail="File too large (max 100MB)")
 
     job_id = str(uuid.uuid4())
     settings = get_settings()
-    
+
+    file_path = get_staging_path(job_id, file.filename)
     try:
-        # Store in Redis temporarily
+        with open(file_path, "wb") as fh:
+            fh.write(content)
+    except OSError as e:
+        logger.error("regulation_staging_write_failed", name=name, error=str(e))
+        raise HTTPException(status_code=500, detail="Failed to stage ingestion file")
+
+    try:
         r = redis.from_url(settings.redis_url)
-        r.setex(f"ingest:job:{job_id}", 7200, content)
         r.setex(f"ingest:status:{job_id}", 7200, "queued")
-        
-        background_tasks.add_task(
-            process_regulation_ingestion, 
-            job_id, 
-            name, 
-            file.filename, 
-            api_key.tenant_id,
-            webhook
+    except (redis.RedisError, ConnectionError):
+        pass  # Status key is best-effort; task queue durability is in Postgres
+
+    db = SessionLocal()
+    try:
+        enqueue_task(
+            db,
+            task_type="regulation_ingest",
+            payload={
+                "job_id": job_id,
+                "name": name,
+                "filename": file.filename,
+                "tenant_id": api_key.tenant_id,
+                "file_path": file_path,
+                "webhook": webhook,
+            },
+            tenant_id=api_key.tenant_id,
         )
-        
-        return {
-            "job_id": job_id,
-            "status": "queued",
-            "message": "Regulation ingestion started in background",
-            "webhook": webhook if webhook else "none"
-        }
-    except (redis.RedisError, ConnectionError) as e:
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        # Clean up staged file if we can't enqueue
+        try:
+            os.remove(file_path)
+        except OSError:
+            pass
         logger.error("regulation_ingestion_queue_failed", name=name, error=str(e))
         raise HTTPException(status_code=500, detail="Failed to queue ingestion job")
+    finally:
+        db.close()
+
+    return {
+        "job_id": job_id,
+        "status": "queued",
+        "message": "Regulation ingestion started in background",
+        "webhook": webhook if webhook else "none",
+    }
 
 
 # NOTE: Status/query endpoints moved to routes_status.py
@@ -615,7 +641,6 @@ async def ingest_direct(
 
 @router.post("/v1/ingest/file", response_model=NormalizedEvent)
 async def ingest_file(
-    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     source_system: str = Form("generic"),
     vertical: Optional[str] = Form(None),
