@@ -33,6 +33,12 @@ from app.authz import require_permission, IngestionPrincipal
 from app.tenant_validation import validate_tenant_id, resolve_tenant
 from shared.database import get_db_session
 
+# Backwards-compat alias used by tests:
+# ``app.dependency_overrides[_get_db_session]`` in the test harness must
+# match the exact callable passed to ``Depends()`` below. Mirrors the
+# pattern already in ``webhook_router_v2.py``.
+_get_db_session = get_db_session
+
 logger = logging.getLogger("request-workflow")
 
 router = APIRouter(prefix="/api/v1/requests", tags=["Request-Response Workflow"])

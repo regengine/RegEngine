@@ -15,6 +15,11 @@ os.environ.setdefault("OBJECT_STORAGE_SECRET_ACCESS_KEY", "test-secret")
 os.environ.setdefault("AUTH_TEST_BYPASS_TOKEN", "test-bypass-token-for-pytest")
 os.environ.setdefault("ENVIRONMENT", "test")
 os.environ.setdefault("LOG_LEVEL", "WARNING")
+# Subscription gate fails closed when Redis is unreachable (correct in
+# prod, wrong for tests that don't ship a Redis). Default to fail-open
+# here; the gate's own dedicated tests (test_subscription_gate_fail_closed.py)
+# patch os.getenv so they exercise both paths regardless of this default.
+os.environ.setdefault("SUBSCRIPTION_GATE_FAIL_OPEN", "true")
 
 # --- Standardized Bootstrap ---
 import sys
