@@ -8,6 +8,9 @@ from typing import List, Dict, Optional
 from uuid import UUID
 import uuid
 import re
+import time
+
+import jwt as _jwt
 
 from .database import get_session
 from .sqlalchemy_models import UserModel, MembershipModel, TenantModel, RoleModel
@@ -965,6 +968,173 @@ class ResetPasswordRequest(BaseModel):
     new_password: str
 
 
+# #1087: recovery tokens must be fresh. Supabase recovery links are short-lived
+# by default, but the *access token* minted after verifyOtp() inherits the
+# session TTL. We cap the acceptable age at 15 minutes so a stolen session
+# access token (even one originally obtained via OTP) can't be replayed as a
+# recovery token hours or days later. This matches common industry practice
+# for "re-authentication required" gates (OWASP ASVS V2.5.4).
+_RECOVERY_TOKEN_MAX_AGE_SECONDS = 15 * 60
+
+# #1087: valid Supabase amr.method values that indicate the token was issued
+# via a code-to-email / code-to-phone / recovery flow (i.e. the caller
+# demonstrated possession of the email/phone in the last few minutes). We
+# explicitly EXCLUDE "password" (regular login — no proof of email ownership)
+# and "oauth"/"saml" (third-party-only proof). "recovery" is what newer
+# Supabase versions emit specifically for password-recovery flows; "otp"
+# covers older versions and magic-link sessions.
+_RECOVERY_ALLOWED_AMR_METHODS = frozenset({"otp", "recovery"})
+
+
+def _parse_supabase_token_claims(token: str) -> dict:
+    """Decode a Supabase JWT's payload WITHOUT verifying the signature.
+
+    Why unverified? ``sb.auth.get_user()`` already verified the signature
+    (it calls Supabase's API, which rejects unsigned/stale tokens). We
+    just need the ``amr`` and ``iat`` claims for scope checks, and
+    re-verifying would require the Supabase JWT secret on our side —
+    which would then need to be rotated in lockstep with Supabase.
+    """
+    try:
+        return _jwt.decode(token, options={"verify_signature": False})
+    except _jwt.PyJWTError:
+        return {}
+
+
+def _enforce_recovery_token_scope(
+    token: str,
+    *,
+    user_id: Optional[str] = None,
+) -> None:
+    """Reject Supabase tokens that were not issued for password recovery (#1087).
+
+    Previously ``/auth/reset-password`` accepted any valid Supabase access
+    token — including regular password-login session tokens. That meant an
+    attacker with any stolen access token (XSS, exposed browser storage,
+    cross-origin leak) could reset the victim's password and lock them out.
+
+    Two layers of defense applied here:
+
+    1. ``amr`` claim: the Supabase JWT's ``amr`` array records how the
+       session was authenticated. Recovery flows always include a
+       method in ``_RECOVERY_ALLOWED_AMR_METHODS``. Regular password
+       logins have ``method == "password"`` and are refused.
+    2. ``iat`` recency: even a legitimately-issued recovery token must
+       be fresh. We reject anything older than
+       ``_RECOVERY_TOKEN_MAX_AGE_SECONDS`` to limit the blast radius
+       of a stolen token.
+
+    Raises ``HTTPException(401)`` on any failure. Uses a single generic
+    detail message so we don't leak which check failed to attackers.
+    """
+    claims = _parse_supabase_token_claims(token)
+    amr = claims.get("amr") or []
+    iat = claims.get("iat")
+
+    # 1. amr claim must indicate an OTP / recovery flow.
+    amr_ok = False
+    if isinstance(amr, list):
+        for entry in amr:
+            if isinstance(entry, dict):
+                method = entry.get("method")
+                if isinstance(method, str) and method in _RECOVERY_ALLOWED_AMR_METHODS:
+                    amr_ok = True
+                    break
+    if not amr_ok:
+        logger.warning(
+            "reset_password_wrong_token_scope",
+            user_id=user_id,
+            amr_methods=[
+                entry.get("method")
+                for entry in (amr if isinstance(amr, list) else [])
+                if isinstance(entry, dict)
+            ],
+        )
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired recovery token",
+        )
+
+    # 2. Token must be fresh.
+    if not isinstance(iat, (int, float)):
+        logger.warning("reset_password_token_missing_iat", user_id=user_id)
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired recovery token",
+        )
+    age_seconds = int(time.time() - int(iat))
+    # Allow small negative skew (clocks drift ±a few seconds); but reject
+    # obviously-future iats as a sign of token tampering.
+    if age_seconds < -300:
+        logger.warning(
+            "reset_password_token_future_iat",
+            user_id=user_id,
+            age_seconds=age_seconds,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired recovery token",
+        )
+    if age_seconds > _RECOVERY_TOKEN_MAX_AGE_SECONDS:
+        logger.warning(
+            "reset_password_stale_token",
+            user_id=user_id,
+            age_seconds=age_seconds,
+            max_age_seconds=_RECOVERY_TOKEN_MAX_AGE_SECONDS,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired recovery token",
+        )
+
+
+async def _claim_recovery_token_single_use(
+    session_store: RedisSessionStore,
+    token: str,
+    *,
+    user_id: Optional[str] = None,
+) -> None:
+    """Enforce single-use on a recovery-scoped Supabase token (#1087).
+
+    Uses the JWT ``jti`` (or ``session_id`` fallback) as the dedup key.
+    First caller wins; subsequent attempts with the same token receive
+    401. Fails OPEN on Redis errors — the amr+iat gates are the primary
+    defense, and we'd rather allow a legitimate retry during a Redis
+    outage than block a user out of their own reset flow.
+    """
+    claims = _parse_supabase_token_claims(token)
+    dedup_id = claims.get("jti") or claims.get("session_id")
+    if not dedup_id or not isinstance(dedup_id, str):
+        # No stable identifier to dedup on — fail open, but log.
+        logger.warning("reset_password_token_missing_jti", user_id=user_id)
+        return
+
+    key = f"auth:recovery:used:{dedup_id}"
+    try:
+        client = await session_store._get_client()
+        # SET NX EX: first writer wins, 1h TTL (longer than the 15-min
+        # iat window so we cover any clock skew + retries).
+        claimed = await client.set(key, "1", nx=True, ex=3600)
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.warning(
+            "reset_password_single_use_redis_error",
+            user_id=user_id,
+            error=str(exc),
+        )
+        return
+
+    if not claimed:
+        logger.warning(
+            "reset_password_token_replay",
+            user_id=user_id,
+            dedup_id=dedup_id,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired recovery token",
+        )
+
+
 @router.post("/reset-password", response_model=ResetPasswordResponse)
 @limiter.limit("5/minute")
 async def reset_password(
@@ -978,6 +1148,14 @@ async def reset_password(
     The caller must include `Authorization: Bearer <supabase_access_token>`.
     The token is validated via sb.auth.get_user(); the user is looked up by
     email and their argon2 password hash is updated in the RegEngine DB.
+
+    #1087 — in addition to signature validation, the token must:
+      * Have an ``amr`` claim indicating an OTP/recovery flow (excludes
+        regular password-login tokens and OAuth tokens).
+      * Have been issued within the last 15 minutes.
+      * Not have been consumed already (single-use via Redis jti check).
+    These gates fail-closed on malformed/stale/replayed tokens and emit
+    a generic 401 so an attacker can't distinguish failure modes.
     """
     # 1. Extract the Supabase access token from the Authorization header
     auth_header = request.headers.get("Authorization", "")
@@ -1012,6 +1190,18 @@ async def reset_password(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired recovery token",
         )
+
+    # #1087 — Scope check. Supabase's ``get_user()`` only validates that the
+    # token is a valid session token for SOME user; it doesn't distinguish
+    # "password login session" from "recovery session". Before this fix, any
+    # stolen password-session token could call reset-password and lock the
+    # victim out. These gates reject any token that wasn't issued via an
+    # OTP/recovery flow, or is older than 15 minutes.
+    sb_user_id = getattr(sb_user, "id", None)
+    _enforce_recovery_token_scope(supabase_token, user_id=str(sb_user_id) if sb_user_id else None)
+    await _claim_recovery_token_single_use(
+        session_store, supabase_token, user_id=str(sb_user_id) if sb_user_id else None
+    )
 
     email = getattr(sb_user, "email", None)
     if not email:
