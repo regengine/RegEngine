@@ -43,6 +43,7 @@ from shared.schemas import (
 )
 from shared.observability.kafka_propagation import (
     bind_correlation_context,
+    extract_correlation_headers,
     inject_correlation_headers_tuples,
 )
 
@@ -115,6 +116,72 @@ def _get_llm_extractor() -> LLMGenerativeExtractor:
     if _LLM_EXTRACTOR is None:
         _LLM_EXTRACTOR = LLMGenerativeExtractor()
     return _LLM_EXTRACTOR
+
+
+def _resolve_tenant_id(
+    header_tenant_id: Optional[str],
+    payload_tenant_id: Optional[str],
+) -> tuple[Optional[str], Optional[str]]:
+    """Determine the authoritative tenant_id for an inbound NLP message (#1176).
+
+    Priority:
+
+    * **Kafka header ``X-RegEngine-Tenant-ID``** — set by an authenticated
+      producer via ``inject_correlation_headers``. Trusted because the
+      producer is inside a request handler that already ran auth.
+    * **Payload ``tenant_id`` field** — legacy path. Lower trust: may have
+      been user-controllable at an earlier stage.
+
+    Validation:
+
+    * Must be a well-formed UUID. ``"default"``, empty string, and other
+      sentinel values are rejected (they were the root cause of #1268-style
+      bypasses).
+    * If header AND payload both present and **disagree**, the message is
+      treated as hostile (someone's trying to smuggle into another tenant)
+      and rejected to the FSMA DLQ.
+
+    Returns ``(resolved_tenant_id, rejection_reason)``. ``resolved`` is the
+    validated UUID string when the message should be processed. When
+    ``resolved`` is ``None``, ``rejection_reason`` explains why and the
+    caller **must** route the message to the DLQ — the consumer **must
+    not** continue processing messages without a valid tenant.
+    """
+    header_tid = str(header_tenant_id).strip() if header_tenant_id else None
+    payload_tid = str(payload_tenant_id).strip() if payload_tenant_id else None
+    # Treat empty / sentinel strings as absent so they can't satisfy the
+    # "present" check further down.
+    if not header_tid:
+        header_tid = None
+    if not payload_tid or payload_tid.lower() in {"default", "none", "null"}:
+        payload_tid = None
+
+    # Both missing → producer didn't set tenant context. Fail-fast.
+    if not header_tid and not payload_tid:
+        return None, "no_tenant_id_in_header_or_payload"
+
+    # Both present but disagree → hostile or broken producer. Reject.
+    # Case-insensitive compare because UUIDs are case-insensitive per RFC4122.
+    if (
+        header_tid
+        and payload_tid
+        and header_tid.lower() != payload_tid.lower()
+    ):
+        return None, (
+            f"tenant_id_mismatch header={header_tid!r} payload={payload_tid!r}"
+        )
+
+    # Prefer the header when present (higher-trust source).
+    resolved = header_tid or payload_tid
+
+    # Must be a valid UUID — rejects the "default" sentinel from #1268 and
+    # any other non-UUID string that somehow made it past the producer.
+    try:
+        uuid.UUID(resolved)  # type: ignore[arg-type]
+    except (ValueError, AttributeError, TypeError):
+        return None, f"invalid_tenant_id_format value={resolved!r}"
+
+    return resolved, None
 
 
 def _run_fsma_extractor(
@@ -206,11 +273,22 @@ def _run_llm_extractor(
 try:
     MESSAGES_COUNTER = Counter("nlp_messages_total", "NLP messages processed", ["status"])
     POISON_PILL_COUNTER = Counter("nlp_poison_pill_total", "Count of malformed Kafka messages")
+    # #1176 — surface tenant-resolution outcomes so SRE can spot a
+    # spike in messages missing tenant context (producer regression)
+    # or with mismatched header vs payload (injection attempt).
+    TENANT_RESOLUTION_COUNTER = Counter(
+        "nlp_tenant_resolution_total",
+        "NLP per-message tenant resolution outcome",
+        ["outcome"],
+    )
 except ValueError:
     # Metric already registered (happens during test re-imports)
     from prometheus_client import REGISTRY
     MESSAGES_COUNTER = REGISTRY._names_to_collectors.get("nlp_messages_total")
     POISON_PILL_COUNTER = REGISTRY._names_to_collectors.get("nlp_poison_pill_total")
+    TENANT_RESOLUTION_COUNTER = REGISTRY._names_to_collectors.get(
+        "nlp_tenant_resolution_total"
+    )
 
 _shutdown_event = threading.Event()
 
@@ -939,6 +1017,13 @@ def run_consumer() -> None:
                 # message's Kafka headers so every log record inside this
                 # iteration carries the originator's trace ID (#1318).
                 with bind_correlation_context(record.headers or []):
+                    # #1176 — explicit header-tenant extraction separate from
+                    # the contextvar bind so the raw value survives the
+                    # `bind_correlation_context` exit and can be compared
+                    # against the payload tenant_id below (injection check).
+                    _, header_tenant_id = extract_correlation_headers(
+                        record.headers or []
+                    )
                     # Standardized Trace Injection
                     with tracer.start_as_current_span(
                         "nlp.process_message",
@@ -992,7 +1077,14 @@ def run_consumer() -> None:
                             doc_hash = evt.get("document_hash") or evt.get("content_hash") or doc_id
                             norm_path = evt.get("normalized_s3_path")
                             inline_text = evt.get("text_clean")
-                            tenant_id = evt.get("tenant_id")
+                            # #1176 — resolve tenant_id from header (preferred)
+                            # or payload. Fail-fast DLQ on missing / invalid /
+                            # mismatched values so downstream writes can never
+                            # happen without tenant context.
+                            tenant_id, _tenant_reject_reason = _resolve_tenant_id(
+                                header_tenant_id=header_tenant_id,
+                                payload_tenant_id=evt.get("tenant_id"),
+                            )
                             provenance = evt.get("provenance") or {}
                         except (KeyError, TypeError, ValueError, AttributeError) as field_exc:
                             logger.error(
@@ -1008,11 +1100,41 @@ def run_consumer() -> None:
                             consumer.commit()
                             continue
 
+                        # #1176 — if tenant resolution failed, send to FSMA DLQ
+                        # and skip processing. An NLP extraction with no tenant
+                        # context cannot safely reach the graph / review queue
+                        # because downstream stores all assume tenant scoping.
+                        if tenant_id is None:
+                            logger.error(
+                                "nlp_message_rejected_missing_tenant",
+                                document_id=doc_id,
+                                reason=_tenant_reject_reason,
+                                offset=record.offset,
+                            )
+                            TENANT_RESOLUTION_COUNTER.labels(outcome="rejected").inc()
+                            _send_to_fsma_dlq(
+                                producer,
+                                evt,
+                                f"tenant_resolution_failed: {_tenant_reject_reason}",
+                                doc_id,
+                                headers=kafka_headers,
+                            )
+                            MESSAGES_COUNTER.labels(status="rejected").inc()
+                            consumer.commit()
+                            continue
+
+                        TENANT_RESOLUTION_COUNTER.labels(
+                            outcome="from_header" if header_tenant_id else "from_payload"
+                        ).inc()
+
                     try:
                         doc_hash = evt.get("document_hash") or evt.get("content_hash") or doc_id
                         norm_path = evt.get("normalized_s3_path")
                         inline_text = evt.get("text_clean")
-                        tenant_id = evt.get("tenant_id")
+                        # #1176 — resolver already ran above; reuse the
+                        # validated tenant_id. Do not re-read from payload
+                        # here because that would defeat the header-priority
+                        # and mismatch-rejection checks.
                         provenance = evt.get("provenance") or {}
                     except (KeyError, TypeError, ValueError, AttributeError) as field_exc:
                         logger.error(
