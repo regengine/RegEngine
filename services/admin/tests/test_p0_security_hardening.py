@@ -23,7 +23,12 @@ def test_admin_bypass_removed():
         headers={"X-Admin-Key": "admin"}
     )
     assert response.status_code == 401, "Admin bypass should be removed"
-    assert "Invalid admin credentials" in response.json().get("detail", "")
+    # Admin service installs shared.error_handling which wraps errors as
+    # {"error": {"type": "http_401", "message": ...}} instead of the
+    # FastAPI default {"detail": ...}.
+    body = response.json()
+    message = body.get("error", {}).get("message") or body.get("detail", "")
+    assert "Invalid admin credentials" in message
 
 
 @pytest.mark.security

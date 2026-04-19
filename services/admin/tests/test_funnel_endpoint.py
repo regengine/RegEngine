@@ -2,22 +2,30 @@
 
 from __future__ import annotations
 
-import sys
-
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from services.admin.main import app as admin_app
+# Previously imported services.admin.main, which eagerly initialized the
+# Postgres pool at module load and broke any test host without a running
+# local Postgres. Build a minimal FastAPI app around just the v1_router
+# so the endpoint is exercisable with in-memory mocks.
+from app import routes as routes_mod
+
+
+def _build_app() -> FastAPI:
+    app = FastAPI()
+    app.include_router(routes_mod.v1_router)
+    return app
 
 
 def test_admin_funnel_endpoint_returns_stage_metrics(monkeypatch) -> None:
-    routes_mod = sys.modules.get("app.routes") or sys.modules.get("services.admin.app.routes")
-    assert routes_mod is not None
+    app = _build_app()
 
     def _override_session():
         yield object()
 
-    admin_app.dependency_overrides[routes_mod.require_funnel_read] = lambda: None
-    admin_app.dependency_overrides[routes_mod.get_session] = _override_session
+    app.dependency_overrides[routes_mod.require_funnel_read] = lambda: None
+    app.dependency_overrides[routes_mod.get_session] = _override_session
 
     monkeypatch.setattr(
         routes_mod,
@@ -32,22 +40,20 @@ def test_admin_funnel_endpoint_returns_stage_metrics(monkeypatch) -> None:
         ],
     )
 
-    try:
-        with TestClient(admin_app) as client:
-            response = client.get("/v1/admin/funnel")
+    with TestClient(app) as client:
+        response = client.get("/v1/admin/funnel")
 
-        assert response.status_code == 200
-        body = response.json()
-        assert body["stages"][0]["name"] == "signup_completed"
-        assert body["stages"][-1]["name"] == "payment_completed"
-        assert body["stages"][-1]["count"] == 1
-    finally:
-        admin_app.dependency_overrides.pop(routes_mod.require_funnel_read, None)
-        admin_app.dependency_overrides.pop(routes_mod.get_session, None)
+    assert response.status_code == 200
+    body = response.json()
+    assert body["stages"][0]["name"] == "signup_completed"
+    assert body["stages"][-1]["name"] == "payment_completed"
+    assert body["stages"][-1]["count"] == 1
 
 
 def test_admin_funnel_endpoint_requires_auth_by_default() -> None:
-    with TestClient(admin_app) as client:
+    app = _build_app()
+
+    with TestClient(app) as client:
         response = client.get("/v1/admin/funnel")
 
     assert response.status_code in {401, 403}
