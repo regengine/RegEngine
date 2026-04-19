@@ -5,16 +5,18 @@ All shared models, helpers, and constants are imported from the original module.
 """
 from __future__ import annotations
 
+import structlog
 import uuid as uuid_module
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
+from .audit import AuditLogger
 from .database import get_session
-from .dependencies import get_current_user
+from .dependencies import PermissionChecker, get_current_user
 from .models import TenantContext
 from .sqlalchemy_models import (
     SupplierCTEEventModel,
@@ -22,6 +24,7 @@ from .sqlalchemy_models import (
     SupplierFacilityModel,
     SupplierFunnelEventModel,
     SupplierTraceabilityLotModel,
+    TenantModel,
     UserModel,
 )
 from .supplier_graph_sync import supplier_graph_sync
@@ -41,17 +44,105 @@ from .supplier_onboarding_routes import (
     _compute_funnel_summary,
 )
 
+logger = structlog.get_logger("supplier_funnel_routes")
+
 router = APIRouter(prefix="/supplier", tags=["supplier-onboarding"])
+
+
+# #1407: explicit confirmation phrase the client must send as
+# ``?confirm=<phrase>`` on the demo reset. Any other value — including
+# the empty string — is rejected. Acts as a defensive second factor
+# against accidental clicks and embedded image-tag GETs that browsers
+# would auto-fetch.
+_DEMO_RESET_CONFIRM_PHRASE = "reset-supplier-demo-data"
 
 
 @router.post("/demo/reset", response_model=SupplierDemoResetResponse)
 async def reset_supplier_demo(
+    confirm: str = Query(
+        default="",
+        description=(
+            f"Required confirmation phrase. Must equal "
+            f"'{_DEMO_RESET_CONFIRM_PHRASE}' (#1407). Empty / other "
+            f"values are rejected with 400."
+        ),
+    ),
     current_user: UserModel = Depends(get_current_user),
+    _perm=Depends(PermissionChecker("supplier.demo.reset")),
     db: Session = Depends(get_session),
 ) -> SupplierDemoResetResponse:
+    """Reset the authenticated supplier's demo data within this tenant.
+
+    #1407: previously this route was authenticated-only — any Member
+    could hard-DELETE every ``SupplierFunnelEventModel`` / facility /
+    TLC / CTE row for the tenant and reseed Salinas Valley fixtures.
+    Disgruntled employee could irrecoverably destroy in-progress FSMA
+    evidence. Hardening:
+
+    - ``PermissionChecker("supplier.demo.reset")`` — explicit grant,
+      not implicitly included in Owner/Member.
+    - Tenant must be flagged ``settings.is_demo = true``. Non-demo
+      tenants (= real customer data) return 403.
+    - ``?confirm=<phrase>`` query param required.
+    - Audit event emitted BEFORE any destructive SQL.
+    - Hard delete is retained for now; soft-delete requires adding
+      ``deleted_at`` columns across five supplier models and is
+      tracked as a separate PR so we can ship the RBAC hardening now.
+    """
     tenant_id = TenantContext.get_tenant_context(db)
     if not tenant_id:
         raise HTTPException(status_code=400, detail="Tenant context required")
+
+    # Explicit confirmation — timing-insensitive compare is fine here
+    # because the phrase is not a secret.
+    if confirm != _DEMO_RESET_CONFIRM_PHRASE:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": "confirmation_required",
+                "message": (
+                    f"Demo reset requires the query param "
+                    f"'?confirm={_DEMO_RESET_CONFIRM_PHRASE}'."
+                ),
+            },
+        )
+
+    # Demo-tenant gate — never wipe a real tenant's supplier data.
+    tenant = db.get(TenantModel, tenant_id)
+    is_demo = bool((tenant.settings or {}).get("is_demo")) if tenant else False
+    if not is_demo:
+        logger.warning(
+            "supplier_demo_reset_blocked_not_demo",
+            tenant_id=str(tenant_id),
+            actor_id=str(current_user.id),
+        )
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "error": "not_a_demo_tenant",
+                "message": (
+                    "Supplier demo reset is only available on tenants "
+                    "flagged settings.is_demo=true. Contact admin if "
+                    "this tenant should be demo-enabled."
+                ),
+            },
+        )
+
+    # Audit BEFORE destructive SQL so the operation is recorded even
+    # if the delete half-commits.
+    AuditLogger.log_event(
+        db,
+        tenant_id=tenant_id,
+        event_type="supplier.demo.reset",
+        event_category="data_modification",
+        severity="warning",
+        actor_id=current_user.id,
+        action="supplier.demo.reset",
+        resource_type="supplier_demo_data",
+        resource_id=str(current_user.id),
+        metadata={"confirm_phrase_matched": True},
+    )
+    db.commit()
 
     db.execute(
         delete(SupplierCTEEventModel).where(

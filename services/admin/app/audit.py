@@ -22,6 +22,17 @@ from .sqlalchemy_models import AuditLogModel
 logger = structlog.get_logger("audit")
 
 
+# #1415: audit chain integrity hash schema version. v1 hashed only
+# tenant/timestamp/event_type/action/resource_id/metadata, which let a
+# SQL-capable attacker rewrite actor_id/actor_email/severity/endpoint
+# without breaking the chain — defeating the FDA-relevant "who did
+# this" tamper-evidence guarantee. v2 folds all four actor/audit fields
+# into the hash input. Existing v1 rows remain verifiable via a
+# fallback in verify_chain.
+_AUDIT_HASH_VERSION_V1 = 1
+_AUDIT_HASH_VERSION_V2 = 2
+
+
 def compute_integrity_hash(
     prev_hash: Optional[str],
     tenant_id: str,
@@ -30,27 +41,44 @@ def compute_integrity_hash(
     action: str,
     resource_id: Optional[str],
     metadata: dict,
+    *,
+    actor_id: Optional[str] = None,
+    actor_email: Optional[str] = None,
+    severity: Optional[str] = None,
+    endpoint: Optional[str] = None,
+    version: int = _AUDIT_HASH_VERSION_V2,
 ) -> str:
     """
     SHA-256 hash chain. Each entry's hash depends on the previous entry,
     making retroactive tampering detectable.
 
-    The payload is canonicalized (sorted keys, deterministic serialization)
-    to ensure reproducibility across platforms.
+    #1415: v2 (new default) folds ``actor_id``, ``actor_email``,
+    ``severity``, and ``endpoint`` into the hash input. v1 kept only
+    the tenant/timestamp/event fields, so actor fields could be
+    rewritten in-place by a DB-capable attacker without breaking the
+    chain. v1 is still accepted by ``verify_chain`` for backwards
+    compatibility with pre-#1415 rows.
+
+    The payload is canonicalized (sorted keys, deterministic
+    serialization) to ensure reproducibility across platforms.
     """
-    payload = json.dumps(
-        {
-            "prev_hash": prev_hash or "GENESIS",
-            "tenant_id": str(tenant_id),
-            "timestamp": timestamp,
-            "event_type": event_type,
-            "action": action,
-            "resource_id": str(resource_id) if resource_id else None,
-            "metadata": metadata,
-        },
-        sort_keys=True,
-        default=str,
-    )
+    body: dict = {
+        "prev_hash": prev_hash or "GENESIS",
+        "tenant_id": str(tenant_id),
+        "timestamp": timestamp,
+        "event_type": event_type,
+        "action": action,
+        "resource_id": str(resource_id) if resource_id else None,
+        "metadata": metadata,
+    }
+    if version >= _AUDIT_HASH_VERSION_V2:
+        body["version"] = _AUDIT_HASH_VERSION_V2
+        body["actor_id"] = str(actor_id) if actor_id else None
+        body["actor_email"] = actor_email
+        body["severity"] = severity
+        body["endpoint"] = endpoint
+
+    payload = json.dumps(body, sort_keys=True, default=str)
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
@@ -106,7 +134,9 @@ class AuditLogger:
             # Get previous hash for chain
             prev_hash = AuditLogger._get_prev_hash(db, tenant_id)
 
-            # Compute integrity hash
+            # Compute integrity hash (v2 — folds actor fields into the
+            # hash input per #1415 so SQL-rewrite of actor_id /
+            # actor_email / severity / endpoint breaks the chain).
             integrity_hash = compute_integrity_hash(
                 prev_hash=prev_hash,
                 tenant_id=str(tenant_id),
@@ -115,6 +145,10 @@ class AuditLogger:
                 action=action,
                 resource_id=resource_id,
                 metadata=meta,
+                actor_id=str(actor_id) if actor_id else None,
+                actor_email=actor_email,
+                severity=severity,
+                endpoint=endpoint,
             )
 
             # Truncate user agent to prevent storage bloat

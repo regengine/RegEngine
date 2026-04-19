@@ -201,11 +201,11 @@ def get_alert(
     """Get a single alert by ID."""
     try:
         service = ComplianceServiceSync(session)
-        alert = service.get_alert(UUID(alert_id))
+        # #1405: service-layer filter returns None for cross-tenant
+        # alert ids — no more 403 leak of "exists but not yours".
+        alert = service.get_alert(UUID(alert_id), UUID(tenant_id))
         if not alert:
             raise HTTPException(status_code=404, detail="Alert not found")
-        if str(alert.tenant_id) != tenant_id:
-            raise HTTPException(status_code=403, detail="Alert belongs to different tenant")
         return AlertResponse(**alert.to_dict())
     except HTTPException:
         raise
@@ -236,7 +236,10 @@ def acknowledge_alert(
     """
     try:
         service = ComplianceServiceSync(session)
-        alert = service.acknowledge_alert(UUID(alert_id), str(current_user.id))
+        # #1405: tenant-scoped lookup. Cross-tenant ids → 404.
+        alert = service.acknowledge_alert(
+            UUID(alert_id), UUID(tenant_id), str(current_user.id),
+        )
         if not alert:
             raise HTTPException(status_code=404, detail="Alert not found")
         return AlertResponse(**alert.to_dict())
@@ -269,8 +272,10 @@ def resolve_alert(
     """
     try:
         service = ComplianceServiceSync(session)
+        # #1405: tenant-scoped lookup. Cross-tenant ids → 404.
         alert = service.resolve_alert(
             UUID(alert_id),
+            UUID(tenant_id),
             str(current_user.id),
             request.notes,
         )
