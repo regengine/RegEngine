@@ -33,18 +33,33 @@ async def get_lot_timeline(
     Returns:
         List of events in chronological order
     """
+    # SECURITY (#1261): every joined node must be tenant-scoped, not just
+    # the start Lot. Without the predicate on ``e`` and ``f`` the OPTIONAL
+    # MATCH can cross into another tenant's TraceEvent / Facility and return
+    # its name, address, GLN in the timeline — a privacy leak into the UI.
+    #
+    # Cypher note: attaching ``WHERE`` to an OPTIONAL MATCH filters *that*
+    # pattern — rows where the tenant predicate fails get f=NULL rather than
+    # being dropped entirely, which matches the caller contract (timeline
+    # still returns the event; facility just renders as None).
     query = """
     MATCH (l:Lot {tlc: $tlc})-[:UNDERWENT]->(e:TraceEvent)
-    WHERE ($tenant_id IS NULL OR l.tenant_id = $tenant_id)
+    WHERE ($tenant_id IS NULL OR (
+              l.tenant_id = $tenant_id
+              AND e.tenant_id = $tenant_id
+          ))
     OPTIONAL MATCH (e)-[:OCCURRED_AT]->(f:Facility)
+      WHERE ($tenant_id IS NULL OR f.tenant_id = $tenant_id)
     RETURN
         e.event_id as event_id,
         e.type as type,
         e.event_date as event_date,
         e.event_time as event_time,
         e.confidence as confidence,
+        e.tenant_id as event_tenant,
         f.name as facility_name,
-        f.gln as facility_gln
+        f.gln as facility_gln,
+        f.tenant_id as facility_tenant
     ORDER BY e.event_date, e.event_time
     """
 
@@ -52,6 +67,38 @@ async def get_lot_timeline(
     async with client.session() as session:
         result = await session.run(query, tlc=tlc, tenant_id=tenant_id)
         async for record in result:
+            # SECURITY (#1261): runtime invariant — if Cypher ever returns a
+            # cross-tenant event (future query edit, index fallback, etc.)
+            # raise loudly rather than leak into the caller's payload.
+            event_tenant = record["event_tenant"]
+            facility_tenant = record["facility_tenant"]
+            if tenant_id is not None:
+                if event_tenant not in (None, "", tenant_id):
+                    logger.error(
+                        "get_lot_timeline_tenant_invariant_violation",
+                        tlc=tlc,
+                        expected_tenant=tenant_id,
+                        event_tenant=event_tenant,
+                    )
+                    raise ValueError(
+                        "get_lot_timeline tenant invariant violation: "
+                        f"event tenant={event_tenant!r} != caller {tenant_id!r}"
+                    )
+                if (
+                    record["facility_name"] is not None
+                    and facility_tenant not in (None, "", tenant_id)
+                ):
+                    logger.error(
+                        "get_lot_timeline_facility_invariant_violation",
+                        tlc=tlc,
+                        expected_tenant=tenant_id,
+                        facility_tenant=facility_tenant,
+                    )
+                    raise ValueError(
+                        "get_lot_timeline facility invariant violation: "
+                        f"facility tenant={facility_tenant!r} != caller {tenant_id!r}"
+                    )
+
             timeline.append(
                 {
                     "event_id": record["event_id"],
@@ -102,6 +149,14 @@ async def query_events_by_range(
     """
     # Normalize dates if needed (assuming string comparison works for ISO dates in Neo4j)
     # Search endpoint support adds optional field filters and cursor paging.
+    #
+    # SECURITY (#1261): this query feeds the FDA Sortable Spreadsheet export.
+    # Before this fix, only the root TraceEvent was tenant-scoped — the
+    # joined Lot and Facility were unrestricted, so an event in tenant A
+    # with an UNDERWENT edge pointing back to a Lot in tenant B would emit
+    # tenant B's product_description and quantity in tenant A's FDA CSV.
+    # The OCCURRED_AT join into Facility had the symmetric leak. Every
+    # joined node now carries the tenant predicate.
     query = """
     MATCH (e:TraceEvent)
     WHERE ($tenant_id IS NULL OR e.tenant_id = $tenant_id)
@@ -109,11 +164,13 @@ async def query_events_by_range(
     AND ($cte_type IS NULL OR toUpper(e.type) = toUpper($cte_type))
     AND ($starting_after IS NULL OR e.event_id > $starting_after)
 
-    // Join with Lot (Input/Output)
+    // Join with Lot (Input/Output) — tenant-scoped (#1261)
     OPTIONAL MATCH (e)<-[:UNDERWENT]-(l:Lot)
+      WHERE ($tenant_id IS NULL OR l.tenant_id = $tenant_id)
 
-    // Join with Facility (Location)
+    // Join with Facility (Location) — tenant-scoped (#1261)
     OPTIONAL MATCH (e)-[:OCCURRED_AT]->(f:Facility)
+      WHERE ($tenant_id IS NULL OR f.tenant_id = $tenant_id)
 
     WITH e, l, f
     WHERE (
@@ -137,9 +194,11 @@ async def query_events_by_range(
         l.product_description as product_description,
         l.quantity as quantity,
         l.unit_of_measure as uom,
+        l.tenant_id as lot_tenant,
         f.name as facility_name,
         f.gln as facility_gln,
-        f.address as facility_address
+        f.address as facility_address,
+        f.tenant_id as facility_tenant
     ORDER BY e.event_date, e.event_time, e.event_id
     LIMIT $limit
     """
@@ -158,6 +217,40 @@ async def query_events_by_range(
             starting_after=starting_after,
         )
         async for record in result:
+            # SECURITY (#1261): defence in depth — if Cypher ever returns a
+            # cross-tenant Lot or Facility (e.g. via a future query edit),
+            # drop the row and log loudly rather than leak into the FDA CSV.
+            # The Cypher predicates above are the primary guard; this
+            # runtime check pins the contract for CI and future refactors.
+            lot_tenant = record["lot_tenant"]
+            facility_tenant = record["facility_tenant"]
+            if tenant_id is not None:
+                if record["tlc"] is not None and lot_tenant not in (None, "", tenant_id):
+                    logger.error(
+                        "query_events_by_range_lot_invariant_violation",
+                        expected_tenant=tenant_id,
+                        lot_tenant=lot_tenant,
+                        event_id=record["event_id"],
+                    )
+                    raise ValueError(
+                        "query_events_by_range lot invariant violation: "
+                        f"lot tenant={lot_tenant!r} != caller {tenant_id!r}"
+                    )
+                if (
+                    record["facility_name"] is not None
+                    and facility_tenant not in (None, "", tenant_id)
+                ):
+                    logger.error(
+                        "query_events_by_range_facility_invariant_violation",
+                        expected_tenant=tenant_id,
+                        facility_tenant=facility_tenant,
+                        event_id=record["event_id"],
+                    )
+                    raise ValueError(
+                        "query_events_by_range facility invariant violation: "
+                        f"facility tenant={facility_tenant!r} != caller {tenant_id!r}"
+                    )
+
             events.append({
                 "event_id": record["event_id"],
                 "type": record["type"],

@@ -9,9 +9,16 @@ from typing import Mapping, Optional
 import structlog
 from fastapi import HTTPException
 
+from shared.kafka_auth import KafkaAuthError, sign_event
 from shared.observability.kafka_propagation import inject_correlation_headers_tuples
 
 from .config import get_settings
+
+
+# Producer service identity used when this service publishes to Kafka.
+# Must match the value downstream consumers expect in their
+# KAFKA_ALLOWED_PRODUCERS_<TOPIC> allowlists (#1078).
+INGESTION_PRODUCER_SERVICE = "ingestion-service"
 
 try:
     from confluent_kafka import SerializingProducer
@@ -81,9 +88,31 @@ def send(
 
     kafka_headers = inject_correlation_headers_tuples(existing=extra)
 
+    # HMAC-sign the event body so NLP / graph / admin consumers can
+    # verify this message came from the ingestion service and refuse
+    # forged tenant_id claims (#1078). Signing fails loudly when the
+    # key is missing in production; callers get a 500 rather than
+    # unsigned traffic entering the bus.
+    try:
+        signed_payload, signed_headers = sign_event(
+            payload,
+            producer_service=INGESTION_PRODUCER_SERVICE,
+            existing_headers=kafka_headers,
+        )
+    except KafkaAuthError as sign_exc:
+        logger.error(
+            "kafka_sign_failed",
+            topic=topic,
+            reason=sign_exc.reason,
+        )
+        raise HTTPException(
+            status_code=500,
+            detail="Kafka message signing unavailable",
+        ) from sign_exc
+
     try:
         producer = get_producer()
-        producer.produce(topic=topic, key=key, value=payload, headers=kafka_headers)
+        producer.produce(topic=topic, key=key, value=signed_payload, headers=signed_headers)
         producer.flush()
     except RuntimeError as exc:
         logger.warning("kafka_client_unavailable", topic=topic, error=str(exc))

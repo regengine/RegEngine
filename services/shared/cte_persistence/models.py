@@ -47,10 +47,29 @@ class StoreResult:
 
 
 class ChainVerification:
-    """Result of verifying a tenant's hash chain."""
+    """Result of verifying a tenant's hash chain.
+
+    The ``valid`` flag is True only when every per-chain integrity check
+    passes AND the chain is consistent with the CTE event table:
+      * no sequence gaps, chain linkage breaks, or hash tampering
+      * no orphan chain rows (``hash_chain.cte_event_id`` that no longer
+        joins to ``fsma.cte_events``)
+      * no missing chain entries (non-rejected CTE events with no chain
+        row — #1314 / #1307)
+
+    Structured fields (added #1314) let callers surface specific break
+    reasons without parsing ``errors`` strings:
+      * ``orphan_chain_rows``: sequence numbers whose LEFT JOIN to
+        ``fsma.cte_events`` returned NULL.
+      * ``missing_chain_rows``: ``cte_events.id`` values that have no
+        matching ``hash_chain`` row and are not rejected.
+      * ``cte_events_count``: the non-rejected event count used in the
+        consistency check; useful for diagnostics.
+    """
 
     __slots__ = (
         "valid", "chain_length", "errors", "checked_at",
+        "orphan_chain_rows", "missing_chain_rows", "cte_events_count",
     )
 
     def __init__(self, **kwargs):
