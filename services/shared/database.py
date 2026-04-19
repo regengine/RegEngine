@@ -92,14 +92,24 @@ if not DATABASE_URL:
         msg="DATABASE_URL not set — using dev default. Do NOT use in production.",
     )
     DATABASE_URL = _DEV_DATABASE_URL
-engine = create_engine(
-    DATABASE_URL,
-    pool_size=int(os.getenv("DB_POOL_SIZE", "10")),
-    max_overflow=int(os.getenv("DB_MAX_OVERFLOW", "20")),
-    pool_timeout=int(os.getenv("DB_POOL_TIMEOUT", "30")),
-    pool_pre_ping=True,
-    pool_recycle=int(os.getenv("DB_POOL_RECYCLE", "1800")),
-)
+# Pool-sizing kwargs are only valid for connection-pooled dialects.
+# SQLite (used by tests with ``DATABASE_URL=sqlite:///:memory:``) picks
+# ``SingletonThreadPool`` or ``StaticPool`` which reject
+# ``pool_size`` / ``max_overflow`` / ``pool_timeout`` / ``pool_recycle``
+# with a ``TypeError`` at engine construction. Previously this failed
+# collection of every ingestion-service pytest run that transitively
+# imported ``shared.database``. Production uses Postgres so this guard
+# is invisible there.
+_engine_kwargs: dict = {"pool_pre_ping": True}
+if not DATABASE_URL.startswith("sqlite"):
+    _engine_kwargs.update(
+        pool_size=int(os.getenv("DB_POOL_SIZE", "10")),
+        max_overflow=int(os.getenv("DB_MAX_OVERFLOW", "20")),
+        pool_timeout=int(os.getenv("DB_POOL_TIMEOUT", "30")),
+        pool_recycle=int(os.getenv("DB_POOL_RECYCLE", "1800")),
+    )
+
+engine = create_engine(DATABASE_URL, **_engine_kwargs)
 
 db_pool_checkedout.set_function(lambda: engine.pool.checkedout())
 db_pool_overflow.set_function(lambda: engine.pool.overflow())
