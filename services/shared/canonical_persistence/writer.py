@@ -160,7 +160,7 @@ class CanonicalEventStore:
                 f"complete_ingestion_run: no run matched id={run_id!r} for "
                 f"tenant={tenant_id!r}. Either the run does not exist or "
                 f"belongs to a different tenant — refusing silent no-op "
-                f"UPDATE (#1263)."
+                "write (#1263)."
             )
 
     # ------------------------------------------------------------------
