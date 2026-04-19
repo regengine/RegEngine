@@ -301,8 +301,17 @@ class CanonicalEventStore:
         # --- Create transformation links ---
         self._create_transformation_links(event)
 
-        # --- Publish to graph sync (TEMPORARY — see migration.py) ---
-        migration.publish_graph_sync(event)
+        # --- Stage graph sync for POST-COMMIT publish (fix #1276) ---
+        # Previously we called migration.publish_graph_sync(event) here
+        # synchronously, which meant Redis received the 'canonical.created'
+        # message BEFORE the outer DB transaction committed. If the caller
+        # later rolled back (schema violation, chain-hash conflict, any
+        # downstream error) the canonical row disappeared but the Neo4j
+        # worker had already applied the message, producing a ghost graph
+        # node with no authoritative DB backing. stage_graph_sync installs
+        # SQLAlchemy after_commit / after_rollback hooks on the session:
+        # a commit triggers the publish, a rollback discards it silently.
+        migration.stage_graph_sync(self.session, event)
 
         logger.info(
             "canonical_event_persisted",

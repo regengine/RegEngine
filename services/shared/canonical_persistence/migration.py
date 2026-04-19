@@ -43,9 +43,9 @@ from __future__ import annotations
 import json
 import logging
 import os
-from typing import Any, Dict, Optional, TYPE_CHECKING
+from typing import Any, Dict, List, Optional, TYPE_CHECKING
 
-from sqlalchemy import text
+from sqlalchemy import event as sa_event, text
 from sqlalchemy.orm import Session
 
 if TYPE_CHECKING:
@@ -258,3 +258,125 @@ def publish_graph_sync(event: TraceabilityEvent) -> None:
         logger.warning("canonical_graph_sync_failed", extra={
             "event_id": str(event.event_id), "error": str(exc),
         })
+
+
+# ---------------------------------------------------------------------------
+# #1276 — Transactional-outbox deferral for graph sync
+# ---------------------------------------------------------------------------
+#
+# Problem: ``persist_event`` used to call ``publish_graph_sync`` SYNCHRONOUSLY
+# inside the active session, BEFORE the surrounding DB transaction committed.
+# If the outer transaction rolled back (schema-validation failure, chain-hash
+# conflict, anything), Redis had already received the ``canonical.created``
+# message. The Neo4j sync worker then applied it, creating a ghost graph
+# node whose canonical DB row did not exist — divergence that can corrupt
+# trace-forward / trace-back queries and produce FDA reports referencing
+# events that were never persisted.
+#
+# Fix: stage the event in ``session.info`` at call time and install
+# ``after_commit`` / ``after_rollback`` listeners. Publishing runs only
+# after the SQL-level commit succeeds; a rollback discards the staged
+# events silently. This is effectively a transactional outbox whose
+# "table" is the in-memory session, which is sufficient for a
+# temporary migration shim (the whole module is scheduled for
+# deletion when Neo4j is retired).
+#
+# The staging function is also the correct place for future transports
+# (e.g. an in-DB outbox table for at-least-once durability across
+# process restarts); everything flows through ``stage_graph_sync``.
+
+# Keys we stash on ``session.info`` — underscore-prefixed so they stay
+# well away from application keys that travel on the session.
+_SESSION_PENDING_KEY = "_canonical_graph_sync_pending"
+_SESSION_HOOKS_INSTALLED_KEY = "_canonical_graph_sync_hooks_installed"
+
+
+def _drain_pending_graph_sync(session: Session) -> None:
+    """after_commit listener: publish every event staged during the now-committed transaction.
+
+    Called once per session commit. Pops the pending list so a subsequent
+    commit on the same session does not re-publish. Any exception in a
+    single publish is swallowed and logged — graph sync is best-effort
+    and the canonical DB row is the authoritative record of truth.
+    """
+    pending: Optional[List[Any]] = session.info.pop(_SESSION_PENDING_KEY, None)
+    if not pending:
+        return
+    for event in pending:
+        try:
+            publish_graph_sync(event)
+        except Exception as exc:  # pragma: no cover - defensive
+            logger.warning(
+                "canonical_graph_sync_post_commit_failed",
+                extra={"event_id": str(getattr(event, "event_id", "?")), "error": str(exc)},
+            )
+
+
+def _clear_pending_graph_sync(session: Session) -> None:
+    """after_rollback listener: drop staged events so they never reach Redis.
+
+    This is the core of the #1276 fix: if the transaction rolls back we
+    MUST NOT publish — publishing would create the exact ghost event the
+    issue calls out. Signature matches ``after_rollback(session)``.
+    """
+    dropped = session.info.pop(_SESSION_PENDING_KEY, None)
+    if dropped:
+        logger.info(
+            "canonical_graph_sync_dropped_on_rollback",
+            extra={"count": len(dropped)},
+        )
+
+
+def _clear_pending_graph_sync_soft(session: Session, previous_transaction: Any) -> None:
+    """after_soft_rollback listener: same semantics as the hard-rollback
+    drop, but SQLAlchemy dispatches this event with an extra
+    ``previous_transaction`` argument (the SessionTransaction that just
+    rolled back). A nested savepoint rollback counts as a "soft"
+    rollback; anything staged inside that savepoint must also be
+    dropped because the canonical row it referenced is gone.
+
+    We keep this as a separate callable to match the event's 2-arg
+    signature; a unified ``*args``-style handler would work but makes
+    the signature intent less obvious in stack traces.
+    """
+    _clear_pending_graph_sync(session)
+
+
+def stage_graph_sync(session: Session, event: "TraceabilityEvent") -> None:
+    """Defer ``publish_graph_sync`` until after the session commits (#1276).
+
+    Call from any code path that currently runs inside a DB transaction
+    and used to call ``publish_graph_sync`` directly. Semantics:
+
+    - On COMMIT: the event is published to Redis exactly once.
+    - On ROLLBACK: the event is discarded; Redis never sees it.
+    - If ``ENABLE_NEO4J_SYNC`` is off (the production default), this is
+      a no-op and the staging dict is never even touched. The
+      short-circuit keeps the hot path identical to the pre-fix
+      behaviour when the feature is disabled.
+
+    The function is idempotent across repeated calls on the same
+    session: listeners are installed exactly once, subsequent events
+    merely append to the pending list.
+    """
+    # Match the short-circuit in publish_graph_sync: if the operator has
+    # not opted in, staging is pointless. Evaluating the env flag here
+    # (rather than at publish time) avoids the per-call overhead of
+    # dict mutation and listener installation in the default case, which
+    # matters because persist_event is in the hot ingestion path.
+    if not _neo4j_sync_enabled():
+        return
+
+    pending: List[Any] = session.info.setdefault(_SESSION_PENDING_KEY, [])
+
+    # Install listeners once per session. SQLAlchemy allows multiple
+    # listeners for the same event, so guard against double-install
+    # on repeated calls; otherwise a batch of N events would register
+    # N after_commit hooks and publish the same event N times.
+    if not session.info.get(_SESSION_HOOKS_INSTALLED_KEY):
+        session.info[_SESSION_HOOKS_INSTALLED_KEY] = True
+        sa_event.listen(session, "after_commit", _drain_pending_graph_sync)
+        sa_event.listen(session, "after_rollback", _clear_pending_graph_sync)
+        sa_event.listen(session, "after_soft_rollback", _clear_pending_graph_sync_soft)
+
+    pending.append(event)
