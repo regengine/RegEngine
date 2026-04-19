@@ -32,6 +32,11 @@ from shared.identity_resolution.constants import (
     AMBIGUOUS_THRESHOLD_LOW,
     AMBIGUOUS_THRESHOLD_HIGH,
 )
+# #1233: PII masking helpers for log emission. Raw alias_value /
+# canonical_name must never reach the log sinks — log retention is
+# typically longer than DB retention and sinks are accessible to a
+# wider personnel surface (SRE, observability vendors).
+from shared.pii import mask_alias_value, mask_name
 
 logger = logging.getLogger("identity-resolution")
 
@@ -156,13 +161,16 @@ class IdentityResolutionService:
                     created_by=created_by,
                 )
 
+        # #1233: canonical_name is PII (GDPR) when the entity is a
+        # sole proprietor / natural person. Mask before emit — the
+        # hashed suffix preserves log correlation without leaking.
         logger.info(
             "entity_registered",
             extra={
                 "entity_id": entity_id,
                 "tenant_id": tenant_id,
                 "entity_type": entity_type,
-                "canonical_name": canonical_name,
+                "canonical_name_masked": mask_name(canonical_name),
             },
         )
 
@@ -220,13 +228,17 @@ class IdentityResolutionService:
             created_by=created_by,
         )
 
+        # #1233: alias_value is a regulated identifier (DUNS, EIN,
+        # FDA-registration number) or a name — either way, never log
+        # the raw value. ``mask_alias_value`` dispatches on alias_type
+        # to pick the right masking strategy.
         logger.info(
             "alias_added",
             extra={
                 "alias_id": alias_id,
                 "entity_id": entity_id,
                 "alias_type": alias_type,
-                "alias_value": alias_value,
+                "alias_value_masked": mask_alias_value(alias_type, alias_value),
                 "tenant_id": tenant_id,
             },
         )
@@ -1326,12 +1338,14 @@ class IdentityResolutionService:
                     created_by=created_by,
                 )
             except (ValueError, RuntimeError) as exc:
+                # #1233: reference is a regulated identifier or name;
+                # mask before emission.
                 logger.warning(
                     "resolve_or_register_alias_insert_failed",
                     extra={
                         "entity_id": new_entity["entity_id"],
                         "alias_type": alias_type,
-                        "alias_value": reference,
+                        "alias_value_masked": mask_alias_value(alias_type, reference),
                         "error": str(exc),
                     },
                 )
