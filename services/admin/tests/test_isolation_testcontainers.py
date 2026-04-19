@@ -4,6 +4,28 @@ import pytest
 # Skip if testcontainers is not installed (requires Docker, not available in standard CI)
 tc = pytest.importorskip("testcontainers")
 
+
+def _docker_available() -> bool:
+    """Return True if the local Docker daemon is reachable.
+
+    testcontainers raises ``DockerException`` at fixture setup when the
+    daemon is down, which turns into a hard ERROR rather than a clean
+    skip. Probe the socket up-front so the whole module skips.
+    """
+    try:
+        import docker  # type: ignore[import-untyped]
+        client = docker.from_env()
+        client.ping()
+        return True
+    except Exception:
+        return False
+
+
+pytestmark = pytest.mark.skipif(
+    not _docker_available(),
+    reason="Docker daemon not reachable — skipping testcontainers RLS isolation test",
+)
+
 from testcontainers.postgres import PostgresContainer
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker

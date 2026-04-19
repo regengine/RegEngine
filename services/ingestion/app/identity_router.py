@@ -29,6 +29,12 @@ from app.authz import require_permission, IngestionPrincipal
 from app.tenant_validation import validate_tenant_id, resolve_tenant
 from shared.database import get_db_session
 
+# Backwards-compat alias for tests:
+# ``app.dependency_overrides[_get_db_session]`` matches ``Depends(get_db_session)``
+# because Python treats the alias as the same callable object. Mirrors the
+# pattern already in ``webhook_router_v2.py``.
+_get_db_session = get_db_session
+
 logger = logging.getLogger("identity-resolution")
 
 router = APIRouter(prefix="/api/v1/identity", tags=["Identity Resolution"])

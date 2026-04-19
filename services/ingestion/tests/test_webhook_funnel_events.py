@@ -108,9 +108,14 @@ def test_ingest_events_emits_first_ingest_funnel_event(monkeypatch) -> None:
     }
 
     with TestClient(app) as client:
-        response = client.post("/api/v1/webhooks/ingest", json=payload)
+        # #1232: /webhooks/ingest requires a tenant-scoped Idempotency-Key.
+        response = client.post(
+            "/api/v1/webhooks/ingest",
+            json=payload,
+            headers={"Idempotency-Key": "test-funnel-idem-1"},
+        )
 
-    assert response.status_code == 200
+    assert response.status_code == 200, response.text
     body = response.json()
     assert body["accepted"] == 1
     assert captured["tenant_id"] == payload["tenant_id"]

@@ -26,12 +26,16 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
+from typing import TYPE_CHECKING
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+if TYPE_CHECKING:
+    from starlette.requests import Request as _StarletteRequest
 
-def _make_starlette_request(headers: dict | None = None) -> "Request":  # type: ignore[name-defined]
+
+def _make_starlette_request(headers: dict | None = None) -> "_StarletteRequest":
     """Construct a minimal starlette.requests.Request suitable for SlowAPI.
 
     SlowAPI's ``async_wrapper`` runs ``isinstance(request, Request)`` and

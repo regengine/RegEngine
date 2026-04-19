@@ -34,7 +34,10 @@ def client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
     def _db_unavailable():
         raise RuntimeError("db unavailable in unit test")
 
-    monkeypatch.setattr(exchange_api, "_get_db_session", _db_unavailable)
+    # exchange_api calls ``get_db_safe()`` directly (not via Depends),
+    # so the seam for forcing the in-memory fallback path is to swap
+    # the function at module scope.
+    monkeypatch.setattr(exchange_api, "get_db_safe", _db_unavailable)
 
     with TestClient(app) as test_client:
         yield test_client
@@ -130,7 +133,10 @@ def test_send_denied_without_exchange_write_scope(monkeypatch: pytest.MonkeyPatc
     def _db_unavailable():
         raise RuntimeError("db unavailable in unit test")
 
-    monkeypatch.setattr(exchange_api, "_get_db_session", _db_unavailable)
+    # exchange_api calls ``get_db_safe()`` directly (not via Depends),
+    # so the seam for forcing the in-memory fallback path is to swap
+    # the function at module scope.
+    monkeypatch.setattr(exchange_api, "get_db_safe", _db_unavailable)
 
     with TestClient(app) as test_client:
         response = test_client.post(
