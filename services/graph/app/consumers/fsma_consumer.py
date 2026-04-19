@@ -236,8 +236,15 @@ async def ingest_fsma_event(client: Neo4jClient, event: Dict[str, Any]) -> None:
                 )
                 await session.run(TraceEvent.create_cypher(), properties=trace_event.node_properties)
 
-                # Link Document -> Event
-                await session.run(FSMARelationships.DOCUMENT_EVIDENCES, document_id=document_id, event_id=event_id)
+                # Link Document -> Event (tenant-scoped per #1284 —
+                # prevents cross-tenant edge creation when document_id or
+                # event_id collides across tenants).
+                await session.run(
+                    FSMARelationships.DOCUMENT_EVIDENCES,
+                    document_id=document_id,
+                    event_id=event_id,
+                    tenant_id=tenant_id,
+                )
 
                 # 3. Create Lot
                 tlc = kdes.get("traceability_lot_code")
@@ -252,7 +259,12 @@ async def ingest_fsma_event(client: Neo4jClient, event: Dict[str, Any]) -> None:
                         tlc_source_fda_reg=tlc_source_fda_reg,
                     )
                     await session.run(Lot.merge_cypher(), tlc=tlc, properties=lot.node_properties)
-                    await session.run(FSMARelationships.LOT_UNDERWENT_EVENT, tlc=tlc, event_id=event_id)
+                    await session.run(
+                        FSMARelationships.LOT_UNDERWENT_EVENT,
+                        tlc=tlc,
+                        event_id=event_id,
+                        tenant_id=tenant_id,
+                    )
                     
                     assigned_by = lot.assigned_by_cypher()
                     if assigned_by:
@@ -268,7 +280,12 @@ async def ingest_fsma_event(client: Neo4jClient, event: Dict[str, Any]) -> None:
                     if gln:
                         facility = Facility(gln=gln, name=f"Facility-{gln}", tenant_id=tenant_id)
                         await session.run(Facility.merge_cypher(), gln=gln, properties=facility.node_properties)
-                        await session.run(FSMARelationships.EVENT_OCCURRED_AT, event_id=event_id, gln=gln)
+                        await session.run(
+                            FSMARelationships.EVENT_OCCURRED_AT,
+                            event_id=event_id,
+                            gln=gln,
+                            tenant_id=tenant_id,
+                        )
 
     FSMA_MESSAGES_COUNTER.labels(status="success").inc()
     logger.info("fsma_event_ingested", document_id=document_id, cte_count=len(ctes))

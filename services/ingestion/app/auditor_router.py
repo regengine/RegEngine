@@ -273,7 +273,10 @@ async def audit_event_detail(
 
     from shared.canonical_persistence import CanonicalEventStore
     store = CanonicalEventStore(db, dual_write=False)
-    event = store.get_event(tid, event_id)
+    # #1297: auditor endpoint legitimately needs the raw supplier
+    # payload for chain-of-custody verification — opt in explicitly.
+    # Behind ``audit.read`` permission.
+    event = store.get_event(tid, event_id, include_raw_payload=True)
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")
 

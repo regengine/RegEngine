@@ -20,6 +20,8 @@ from shared.canonical_event import (
     TraceabilityEvent,
     IngestionRun,
     IngestionRunStatus,
+    RawPayloadTooLargeError,
+    _raw_payload_max_bytes,
 )
 from shared.cte_persistence import compute_chain_hash
 from shared.canonical_persistence.models import CanonicalStoreResult
@@ -111,12 +113,29 @@ class CanonicalEventStore:
         return str(run.id)
 
     def complete_ingestion_run(
-        self, run_id: str, accepted: int, rejected: int,
+        self, run_id: str, tenant_id: str, accepted: int, rejected: int,
         errors: Optional[List[Dict]] = None,
     ) -> None:
-        """Mark an ingestion run as completed."""
+        """Mark an ingestion run as completed.
+
+        ``tenant_id`` is required (#1263). The previous signature
+        accepted only ``run_id`` and the WHERE clause matched only ``id``
+        — a caller passing a run_id that belonged to another tenant
+        silently mutated cross-tenant state. RLS is not a sufficient
+        backstop here because ``set_tenant_context`` is not called by
+        callers of this method, only by ``persist_event``.
+
+        Raises:
+            ValueError: when no row matched (run does not exist or
+                belongs to a different tenant). Fail-loud is preferred to
+                a silent UPDATE 0 — callers always have a real run id.
+        """
         status = "completed" if rejected == 0 else "partial"
-        self.session.execute(
+        # Defence in depth: also set RLS context so the policy filter
+        # would catch any future regression that stripped the WHERE
+        # clause.
+        self.set_tenant_context(tenant_id)
+        result = self.session.execute(
             text("""
                 UPDATE fsma.ingestion_runs
                 SET accepted_count = :accepted,
@@ -125,15 +144,24 @@ class CanonicalEventStore:
                     completed_at = NOW(),
                     errors = :errors
                 WHERE id = :id
+                  AND tenant_id = :tenant_id
             """),
             {
                 "id": run_id,
+                "tenant_id": tenant_id,
                 "accepted": accepted,
                 "rejected": rejected,
                 "status": status,
                 "errors": json.dumps(errors or []),
             },
         )
+        if getattr(result, "rowcount", 0) == 0:
+            raise ValueError(
+                f"complete_ingestion_run: no run matched id={run_id!r} for "
+                f"tenant={tenant_id!r}. Either the run does not exist or "
+                f"belongs to a different tenant — refusing silent no-op "
+                f"UPDATE (#1263)."
+            )
 
     # ------------------------------------------------------------------
     # Single Event Persistence
@@ -678,8 +706,28 @@ class CanonicalEventStore:
     # Read Path
     # ------------------------------------------------------------------
 
-    def get_event(self, tenant_id: str, event_id: str) -> Optional[Dict[str, Any]]:
-        """Get a single canonical event with full provenance."""
+    def get_event(
+        self,
+        tenant_id: str,
+        event_id: str,
+        *,
+        include_raw_payload: bool = False,
+    ) -> Optional[Dict[str, Any]]:
+        """Get a single canonical event with full provenance.
+
+        #1297: ``raw_payload`` is the original supplier record and can
+        contain PII (grower names, addresses, phone numbers). Default
+        to OMIT it so any new consumer that forgets to scope tenant
+        doesn't accidentally leak upstream payloads. Callers that
+        legitimately need the raw payload (audit endpoints,
+        chain-of-custody views) must opt in with
+        ``include_raw_payload=True``.
+
+        The SQL still SELECTs the column — filtering on the Python
+        side keeps the SQL text constant for prepared-statement
+        caching and keeps the returned dict shape predictable across
+        callers.
+        """
         row = self.session.execute(
             text("""
                 SELECT event_id, tenant_id, source_system, source_record_id,
@@ -701,7 +749,7 @@ class CanonicalEventStore:
         if not row:
             return None
 
-        return {
+        result: Dict[str, Any] = {
             "event_id": str(row[0]), "tenant_id": str(row[1]),
             "source_system": row[2], "source_record_id": row[3],
             "event_type": row[4],
@@ -715,7 +763,6 @@ class CanonicalEventStore:
             "from_facility_reference": row[14], "to_facility_reference": row[15],
             "transport_reference": row[16],
             "kdes": row[17] if isinstance(row[17], dict) else json.loads(row[17] or "{}"),
-            "raw_payload": row[18] if isinstance(row[18], dict) else json.loads(row[18] or "{}"),
             "normalized_payload": row[19] if isinstance(row[19], dict) else json.loads(row[19] or "{}"),
             "provenance_metadata": row[20] if isinstance(row[20], dict) else json.loads(row[20] or "{}"),
             "confidence_score": float(row[21]) if row[21] else 1.0,
@@ -725,6 +772,17 @@ class CanonicalEventStore:
             "created_at": row[27].isoformat() if row[27] else None,
             "amended_at": row[28].isoformat() if row[28] else None,
         }
+
+        # #1297: opt-in raw_payload. Safer default prevents accidental
+        # PII leaks when a new consumer is added without thinking about
+        # tenant scope / auth posture.
+        if include_raw_payload:
+            result["raw_payload"] = (
+                row[18] if isinstance(row[18], dict)
+                else json.loads(row[18] or "{}")
+            )
+
+        return result
 
     def query_events_by_tlc(
         self, tenant_id: str, tlc: str,
@@ -836,7 +894,21 @@ class CanonicalEventStore:
         return (str(row[0]), row[1], row[2])
 
     def _event_to_params(self, event: TraceabilityEvent) -> Dict[str, Any]:
-        """Convert a TraceabilityEvent to SQL parameter dict."""
+        """Convert a TraceabilityEvent to SQL parameter dict.
+
+        #1290: enforce the raw_payload size cap HERE as defense-in-depth.
+        ``prepare_for_persistence`` already checks the size, but that
+        only runs when ``sha256_hash`` is unset — a developer who
+        mutates ``raw_payload`` after prepping (e.g. in tests or a
+        custom ingestion pipeline) would otherwise slip past the check.
+        Serializing once and measuring the bytes we're about to write
+        makes the check authoritative.
+        """
+        raw_payload_serialized = json.dumps(event.raw_payload, default=str)
+        max_bytes = _raw_payload_max_bytes()
+        raw_size = len(raw_payload_serialized.encode("utf-8"))
+        if raw_size > max_bytes:
+            raise RawPayloadTooLargeError(raw_size, max_bytes)
         return {
             "event_id": str(event.event_id),
             "tenant_id": str(event.tenant_id),
@@ -858,7 +930,7 @@ class CanonicalEventStore:
             "to_facility_reference": event.to_facility_reference,
             "transport_reference": event.transport_reference,
             "kdes": json.dumps(event.kdes, default=str),
-            "raw_payload": json.dumps(event.raw_payload, default=str),
+            "raw_payload": raw_payload_serialized,
             "normalized_payload": json.dumps(event.normalized_payload, default=str),
             "provenance_metadata": json.dumps(event.provenance_metadata.to_dict(), default=str),
             "confidence_score": event.confidence_score,

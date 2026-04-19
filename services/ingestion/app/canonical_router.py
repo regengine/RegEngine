@@ -288,7 +288,11 @@ async def get_record(
     tid = resolve_tenant(tenant_id, principal)
     from shared.canonical_persistence import CanonicalEventStore
     store = CanonicalEventStore(db_session, dual_write=False)
-    event = store.get_event(tid, event_id)
+    # #1297: this endpoint's OpenAPI docstring advertises
+    # "the complete canonical event including raw payload" — opt in
+    # explicitly. Behind ``records.read`` permission so the tenant is
+    # always resolved via the authenticated principal.
+    event = store.get_event(tid, event_id, include_raw_payload=True)
 
     if not event:
         raise HTTPException(status_code=404, detail="Record not found")
