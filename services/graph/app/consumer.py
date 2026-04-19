@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 
 import structlog
+from cachetools import TTLCache
 from confluent_kafka import DeserializingConsumer, Producer
 from confluent_kafka.schema_registry import SchemaRegistryClient, SchemaRegistryError
 from confluent_kafka.schema_registry.avro import AvroDeserializer
@@ -42,7 +43,10 @@ _shutdown_event = threading.Event()
 # Dead Letter Queue configuration
 TOPIC_DLQ = "graph.update.dlq"
 MAX_RETRIES = 3
-_retry_counts: Dict[str, int] = {}
+# #1166 — bound retry counter with TTLCache so it cannot leak memory on
+# a stream of unique doc_ids. 10k entries × 1h TTL covers bursts while
+# still letting a poison-pill age out if the consumer is long-lived.
+_retry_counts: TTLCache[str, int] = TTLCache(maxsize=10_000, ttl=3600)
 _dlq_producer: Optional[Producer] = None
 
 
