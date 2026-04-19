@@ -348,3 +348,134 @@ class TestIdempotentReturn_Issue1252:
         # No INSERT statements were issued for the event
         inserts = [c for c in session.calls if c[0].lstrip().upper().startswith("INSERT") or "INSERT INTO" in c[0].upper()]
         assert not any("INTO fsma.traceability_events" in c[0] for c in inserts)
+
+
+# ---------------------------------------------------------------------------
+# #1263 — complete_ingestion_run UPDATE must scope by tenant_id
+# ---------------------------------------------------------------------------
+
+
+class _RowcountResult(_FakeResult):
+    """``_FakeResult`` extension that exposes a ``rowcount`` attribute.
+
+    The fix in ``complete_ingestion_run`` reads ``result.rowcount`` to
+    detect "no row matched" and raise ValueError. The bare ``_FakeResult``
+    above doesn't carry one because the existing tests don't need it.
+    """
+
+    def __init__(self, rowcount: int = 1):
+        super().__init__()
+        self.rowcount = rowcount
+
+
+class TestCompleteIngestionRunTenantScope_Issue1263:
+    """Regression tests for #1263.
+
+    Prior shape::
+
+        UPDATE fsma.ingestion_runs
+        SET ...
+        WHERE id = :id
+
+    A caller passing a run_id from another tenant silently mutated that
+    tenant's row. RLS is not a backstop because callers of this method do
+    not always pre-set ``app.tenant_id`` (the writer's defensive
+    ``set_tenant_context`` only fires inside ``persist_event``).
+    """
+
+    def _new_store(self, session: FakeSession) -> CanonicalEventStore:
+        return CanonicalEventStore(
+            session=session,
+            dual_write=False,
+            skip_chain_write=True,
+        )
+
+    def test_update_includes_tenant_id_in_where_clause(self):
+        """The UPDATE WHERE clause must filter on tenant_id, not just id."""
+        session = FakeSession()
+        # Wrap in a result that reports a non-zero rowcount so the
+        # method does not raise on its post-update check.
+        session.add_rule(r"UPDATE fsma\.ingestion_runs", _RowcountResult(rowcount=1))
+
+        store = self._new_store(session)
+        store.complete_ingestion_run(
+            run_id="11111111-1111-1111-1111-111111111111",
+            tenant_id="22222222-2222-2222-2222-222222222222",
+            accepted=10,
+            rejected=0,
+        )
+
+        update_calls = [c for c in session.calls if "UPDATE fsma.ingestion_runs" in c[0]]
+        assert update_calls, "complete_ingestion_run must issue an UPDATE"
+        sql, params = update_calls[0]
+
+        assert "tenant_id = :tenant_id" in sql, (
+            "#1263: UPDATE WHERE clause must filter by tenant_id so cross-tenant "
+            "run_ids cannot mutate another tenant's row. SQL was:\n" + sql
+        )
+        assert "id = :id" in sql, "id filter must remain alongside the tenant filter"
+        assert params["tenant_id"] == "22222222-2222-2222-2222-222222222222"
+
+    def test_update_sets_rls_tenant_context_for_defence_in_depth(self):
+        """Defence in depth: also bind the RLS GUC.
+
+        If a future refactor accidentally drops the explicit WHERE
+        filter, the RLS policy on fsma.ingestion_runs will still reject
+        cross-tenant rows — but only if the GUC is set.
+        """
+        session = FakeSession()
+        session.add_rule(r"UPDATE fsma\.ingestion_runs", _RowcountResult(rowcount=1))
+
+        store = self._new_store(session)
+        store.complete_ingestion_run(
+            run_id="run-id",
+            tenant_id="tenant-id",
+            accepted=1,
+            rejected=0,
+        )
+
+        rls_calls = [c for c in session.calls if "SET LOCAL app.tenant_id" in c[0]]
+        assert rls_calls, (
+            "complete_ingestion_run must also set RLS context as a "
+            "defence-in-depth guard against future refactors"
+        )
+        # The RLS bind must be the same tenant as the UPDATE bind.
+        assert any(p.get("tid") == "tenant-id" for _, p in rls_calls)
+
+    def test_no_row_matched_raises(self):
+        """When the UPDATE matches 0 rows, the method must fail loud.
+
+        A spurious silent success here masks bugs (caller using the wrong
+        run_id, run was deleted, tenant mismatch). Raise so the caller
+        finds out at write time, not when reading stale dashboards.
+        """
+        session = FakeSession()
+        session.add_rule(r"UPDATE fsma\.ingestion_runs", _RowcountResult(rowcount=0))
+
+        store = self._new_store(session)
+        with pytest.raises(ValueError, match=r"#1263"):
+            store.complete_ingestion_run(
+                run_id="nonexistent-or-cross-tenant",
+                tenant_id="tenant-id",
+                accepted=1,
+                rejected=0,
+            )
+
+    def test_signature_requires_tenant_id(self):
+        """``tenant_id`` must be a required positional argument.
+
+        Locks the API change in: callers can no longer omit tenant_id and
+        rely on the prior single-id WHERE.
+        """
+        import inspect
+
+        sig = inspect.signature(CanonicalEventStore.complete_ingestion_run)
+        params = sig.parameters
+        assert "tenant_id" in params, (
+            "#1263: complete_ingestion_run must accept a `tenant_id` parameter"
+        )
+        # Required: no default value.
+        assert params["tenant_id"].default is inspect.Parameter.empty, (
+            "#1263: tenant_id must be required (no default) so callers cannot "
+            "accidentally omit it and fall back to an id-only WHERE"
+        )
