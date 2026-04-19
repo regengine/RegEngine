@@ -1155,30 +1155,95 @@ class CTEPersistence:
         """
         Verify the integrity of a tenant's entire hash chain.
 
-        Walks the chain from genesis to head, recomputing each chain_hash
-        and comparing to the stored value. Any mismatch = tamper detected.
+        Walks the chain from genesis to head, recomputing each
+        ``chain_hash`` and comparing to the stored value. Any mismatch
+        is recorded as a tamper.
+
+        Also detects the two integrity gaps covered by #1314:
+
+        1. **Orphan chain rows.** A chain row whose ``cte_event_id`` no
+           longer resolves to a row in ``fsma.cte_events`` (possible
+           via #1307 before the batch guard was added, or via a future
+           partial-insert bug). Pre-fix, ``verify_chain`` never joined
+           to ``cte_events`` at all, so these orphans silently passed.
+
+        2. **Unchained events.** A non-rejected CTE event with no
+           matching ``hash_chain`` row — the chain INSERT was skipped
+           (by a raised exception, a crashed worker, or a lost
+           idempotency race) but the event row still committed. The
+           event is not protected by the tamper chain and FDA export
+           cannot prove its provenance, yet pre-fix ``verify_chain``
+           reported ``valid=True``.
         """
+        # Primary chain walk, now LEFT JOIN'd against fsma.cte_events
+        # so an orphan chain row surfaces as a NULL event_id column.
+        # The join is scoped to the same tenant on both sides to
+        # prevent an orphan "false negative" where an attacker's
+        # tenant-B event row masks a missing tenant-A row — and to
+        # avoid cross-tenant leaks.
         rows = self.session.execute(
             text("""
-                SELECT sequence_num, event_hash, previous_chain_hash, chain_hash
-                FROM fsma.hash_chain
-                WHERE tenant_id = :tid
-                ORDER BY sequence_num ASC
+                SELECT hc.sequence_num,
+                       hc.event_hash,
+                       hc.previous_chain_hash,
+                       hc.chain_hash,
+                       hc.cte_event_id,
+                       e.id AS event_id
+                FROM fsma.hash_chain hc
+                LEFT JOIN fsma.cte_events e
+                       ON e.id = hc.cte_event_id
+                      AND e.tenant_id = hc.tenant_id
+                WHERE hc.tenant_id = :tid
+                ORDER BY hc.sequence_num ASC
             """),
             {"tid": tenant_id},
         ).fetchall()
 
+        # Count non-rejected CTE events, regardless of chain
+        # membership. If this exceeds the chain length, at least one
+        # event has no chain row (= unchained event).
+        event_count_row = self.session.execute(
+            text("""
+                SELECT COUNT(*)
+                FROM fsma.cte_events
+                WHERE tenant_id = :tid
+                  AND validation_status != 'rejected'
+            """),
+            {"tid": tenant_id},
+        ).fetchone()
+        non_rejected_event_count = int(event_count_row[0]) if event_count_row else 0
+
         if not rows:
+            errors: list[str] = []
+            if non_rejected_event_count > 0:
+                # Events exist but the chain is empty — every event is
+                # unchained. This is the worst case: no tamper
+                # protection at all.
+                errors.append(
+                    f"Unchained events: {non_rejected_event_count} non-rejected "
+                    f"event(s) have no hash_chain row"
+                )
             return ChainVerification(
-                valid=True,
+                valid=len(errors) == 0,
                 chain_length=0,
-                errors=[],
+                errors=errors,
                 checked_at=datetime.now(timezone.utc).isoformat(),
             )
 
         errors = []
         for i, row in enumerate(rows):
-            seq, event_hash, stored_prev, stored_chain = row
+            seq, event_hash, stored_prev, stored_chain, cte_event_id, joined_event_id = row
+
+            # --- #1314: orphan chain row (cte_event_id points nowhere) ---
+            # LEFT JOIN yields NULL for joined_event_id when the chain
+            # row references a non-existent cte_event. Record each
+            # orphan with its sequence_num so downstream tooling can
+            # trace the break.
+            if joined_event_id is None:
+                errors.append(
+                    f"Orphan chain row at seq={seq}: cte_event_id="
+                    f"{cte_event_id} has no matching fsma.cte_events row"
+                )
 
             # Check sequence continuity
             expected_seq = i + 1
@@ -1209,6 +1274,19 @@ class CTEPersistence:
                     f"Tamper detected at seq={seq}: recomputed chain_hash "
                     f"{recomputed[:16]}... != stored {stored_chain[:16]}..."
                 )
+
+        # --- #1314: unchained events (event count > chain length) ---
+        # If the chain has N rows but the tenant has N+k non-rejected
+        # events, k events are missing chain membership. We can't
+        # point at specific event IDs here without another query, but
+        # the mismatch is itself the tamper signal the caller needs.
+        if non_rejected_event_count > len(rows):
+            missing = non_rejected_event_count - len(rows)
+            errors.append(
+                f"Unchained events: {missing} non-rejected event(s) have no "
+                f"hash_chain row (events={non_rejected_event_count}, "
+                f"chain_length={len(rows)})"
+            )
 
         return ChainVerification(
             valid=len(errors) == 0,
