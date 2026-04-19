@@ -52,7 +52,9 @@ async def lifespan(app: FastAPI):
     except Exception as exc:
         logger.warning("connector_registration_skipped: %s", exc)
     from app.task_handlers_sources import register_source_handlers
+    from app.task_handlers_scraping import register_scraping_handlers
     register_source_handlers()
+    register_scraping_handlers()
     logger.info("task_handlers_registered")
     yield
     # Shutdown
