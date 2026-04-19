@@ -341,6 +341,129 @@ class TestOrphanDetectionLogic:
 
 
 # ============================================================================
+# #1270 — Cypher AND/OR precedence regression
+# ============================================================================
+
+
+class TestOrphanDetectionTenantScoping:
+    """Regression tests for #1270.
+
+    Prior to the fix, the WHERE clause was::
+
+        WHERE ($tenant_id IS NULL OR l.tenant_id = $tenant_id)
+          AND EXISTS { inbound_a }
+           OR EXISTS { inbound_b }
+          AND NOT EXISTS { outbound_a }
+          AND NOT EXISTS { outbound_b }
+
+    Cypher's ``AND`` binds tighter than ``OR``, so this parses as two
+    disjuncts — the second of which has no tenant filter. A transformation
+    that PRODUCED a lot in tenant B therefore surfaced to tenant A through
+    ``GET /fsma/compliance/gaps/orphans``.
+
+    We can't execute Cypher in-process here, so these tests inspect the
+    query string directly. They fail fast if a future refactor re-breaks
+    the precedence.
+    """
+
+    def _capture_query(self) -> str:
+        mock_client = MagicMock()
+        mock_session = AsyncMock()
+
+        mock_result = AsyncMock()
+        mock_result.__aiter__ = lambda self: self
+        mock_result.__anext__ = AsyncMock(side_effect=StopAsyncIteration)
+        mock_session.run = AsyncMock(return_value=mock_result)
+
+        mock_client.session = MagicMock(return_value=mock_session)
+        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_session.__aexit__ = AsyncMock(return_value=False)
+
+        import asyncio
+
+        asyncio.get_event_loop().run_until_complete(
+            find_orphaned_lots(mock_client, tenant_id="tenant-a", days_stagnant=30)
+        )
+
+        call = mock_session.run.call_args
+        # find_orphaned_lots passes the query as the first positional arg.
+        return call.args[0]
+
+    @staticmethod
+    def _flatten(query: str) -> str:
+        """Strip Cypher ``//`` comments and collapse whitespace.
+
+        Done in two passes so structural tokens like ``) AND NOT EXISTS``
+        are not separated by stray ``// ...`` comment lines after we
+        squash newlines.
+        """
+        import re
+
+        # Drop ``// comment`` segments line-by-line before flattening.
+        no_comments = re.sub(r"//[^\n]*", "", query)
+        return " ".join(no_comments.split())
+
+    def test_inbound_or_is_parenthesized(self):
+        """The inbound ``EXISTS ... OR EXISTS ...`` must be wrapped in parens.
+
+        Without parens, AND/OR precedence peels the PRODUCED branch out
+        from under the tenant filter, so tenant B's orphan lots leak to
+        tenant A (#1270).
+        """
+        query = self._capture_query()
+
+        # Normalize whitespace AND strip Cypher comments so structural
+        # tokens like ``) AND NOT EXISTS`` aren't split by inline notes.
+        compact = self._flatten(query)
+
+        # Locate the inbound block. It must begin with "AND (" (open paren
+        # immediately after AND), contain both EXISTS clauses, and then
+        # close with ")".
+        assert "AND (" in compact, (
+            "#1270: the inbound-event OR must be parenthesized as `AND (...)` — "
+            "otherwise the PRODUCED branch is outside the tenant filter. "
+            f"Query was: {compact!r}"
+        )
+
+        # Between `AND (` and the first `AND NOT EXISTS`, we expect an
+        # opening EXISTS, then an `OR EXISTS`, then a closing paren.
+        start = compact.find("AND (")
+        tail = compact[start:]
+        close_idx = tail.find(") AND NOT EXISTS")
+        assert close_idx != -1, (
+            "#1270: expected the parenthesized inbound-OR group to be "
+            "closed before the outbound `AND NOT EXISTS` clauses. "
+            f"Query tail was: {tail!r}"
+        )
+
+        inbound_group = tail[: close_idx + 1]
+        assert "EXISTS {" in inbound_group
+        assert "OR EXISTS {" in inbound_group, (
+            "#1270: inbound-OR group lost its `OR EXISTS` alternative; "
+            f"group was: {inbound_group!r}"
+        )
+
+    def test_tenant_filter_precedes_inbound_group(self):
+        """Tenant filter must appear before the inbound-event group.
+
+        Structural guarantee: the tenant clause is AND-joined to the
+        parenthesized inbound group, which is the shape the planner needs
+        to drop cross-tenant lots before evaluating the EXISTS predicates.
+        """
+        query = self._capture_query()
+        compact = self._flatten(query)
+
+        tenant_pos = compact.find("l.tenant_id = $tenant_id")
+        group_pos = compact.find("AND (")
+        assert tenant_pos != -1, f"tenant clause missing from query: {compact!r}"
+        assert group_pos != -1, f"parenthesized inbound group missing: {compact!r}"
+        assert tenant_pos < group_pos, (
+            "#1270: tenant filter must precede the inbound-event group; "
+            "otherwise precedence is unchanged in meaning even if parens are added"
+        )
+
+
+# ============================================================================
 # KDE COMPLETENESS ANALYSIS LOGIC TESTS (MOCKED)
 # ============================================================================
 
