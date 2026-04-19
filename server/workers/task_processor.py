@@ -166,12 +166,30 @@ def _claim_task(db) -> Optional[Dict[str, Any]]:
     (which are persisted as status='completed' by recall persistence,
     but we keep this belt-and-suspenders guard in case a row ever
     ends up pending).
+
+    #1241: must filter on ``scheduled_at <= NOW()`` so rows that
+    :func:`_fail_task` pushed into exponential-backoff are not re-claimed
+    before their backoff expires.  Prior to this fix the WHERE clause
+    ignored ``scheduled_at`` entirely — _fail_task wrote a future value
+    and the next 500ms poll grabbed it anyway, burning attempts in ~2s.
+
+    Also fixes two latent bugs in the same SQL block:
+      * ``lock_until`` was referenced but never defined — every call
+        raised ``NameError`` under the outer try/except and no task
+        was ever claimed in production.
+      * ``row[5]`` read a sixth column that RETURNING never projected.
+        Added ``visibility_timeout_seconds`` to RETURNING with a
+        COALESCE default so ``row[5]`` is always a non-null int.
     """
     from sqlalchemy import text
-    from sqlalchemy.exc import ProgrammingError
 
     now = datetime.now(timezone.utc)
     default_timeout_seconds = DEFAULT_TIMEOUT_SECONDS
+    # `lock_until` is the visibility deadline for this claim — after
+    # this instant another worker may steal the row if we haven't
+    # completed or heartbeated. Kept in minutes for ops ergonomics
+    # (LOCK_TIMEOUT_MINUTES env).
+    lock_until = now + timedelta(minutes=LOCK_TIMEOUT_MINUTES)
 
     # Only claim tasks whose task_type has a registered handler.  This
     # prevents us from fighting with recall_drill rows (which are owned
@@ -190,20 +208,22 @@ def _claim_task(db) -> Optional[Dict[str, Any]]:
                 SELECT id FROM fsma.task_queue
                 WHERE task_type = ANY(:handler_types)
                   AND (
-                      status = 'pending'
+                      (status = 'pending' AND scheduled_at <= :now)
                       OR (status = 'processing' AND locked_until < :now)
                   )
-                ORDER BY priority DESC, created_at ASC
+                ORDER BY scheduled_at ASC, priority DESC, created_at ASC
                 LIMIT 1
                 FOR UPDATE SKIP LOCKED
             )
-            RETURNING id, task_type, payload, attempts, max_attempts
+            RETURNING id, task_type, payload, attempts, max_attempts,
+                      COALESCE(visibility_timeout_seconds, :default_timeout)
         """),
         {
             "now": now,
             "worker": WORKER_ID,
             "lock_until": lock_until,
             "handler_types": handler_types,
+            "default_timeout": default_timeout_seconds,
         },
     ).fetchone()
 
