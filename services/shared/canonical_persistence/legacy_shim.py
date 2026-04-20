@@ -1,15 +1,20 @@
 """
-TEMPORARY: Legacy dual-write and graph sync code.
+TEMPORARY: Legacy dual-write and graph sync shim.
 
-This module exists ONLY for the migration period. It will be deleted
-entirely when:
+NOTE: This module was previously named ``migration.py``. That name was
+misleading — this file contains NO Alembic migration logic and does NOT
+run schema migrations. Schema evolution must be handled via Alembic
+migration scripts in ``services/shared/alembic/``.
+
+This module exists ONLY for the dual-write transition period. It will be
+deleted entirely when:
   1. All consumers (export, graph sync) read from fsma.traceability_events
      instead of fsma.cte_events
   2. Neo4j graph sync is replaced by direct PostgreSQL queries
 
 To remove: delete this file and remove the two calls in writer.py:
-  - migration.dual_write_legacy(...)
-  - migration.publish_graph_sync(...)
+  - legacy_shim.dual_write_legacy(...)
+  - legacy_shim.publish_graph_sync(...)
 
 ## Operational note — Neo4j graph sync (#1378)
 
@@ -51,7 +56,7 @@ from sqlalchemy.orm import Session
 if TYPE_CHECKING:
     from shared.canonical_event import TraceabilityEvent
 
-logger = logging.getLogger("canonical-persistence.migration")
+logger = logging.getLogger("canonical-persistence.legacy-shim")
 
 
 # ---------------------------------------------------------------------------
