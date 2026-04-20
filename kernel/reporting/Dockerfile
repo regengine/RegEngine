@@ -1,17 +1,28 @@
-FROM python:3.11-slim
+# Stage 1: builder — has gcc/libpq-dev for compiling Python C extensions
+FROM python:3.11-slim AS builder
+
+WORKDIR /build
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+    libpq-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY kernel/reporting/requirements.txt .
+RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
+
+# Stage 2: runtime — no build toolchain, only the shared runtime library
+FROM python:3.11-slim AS runtime
 
 WORKDIR /app
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
-    gcc \
-    libpq-dev \
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libpq5 \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Python dependencies
-COPY kernel/reporting/requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# Pull installed Python packages from builder
+COPY --from=builder /install /usr/local
 
 # Copy shared code
 COPY shared /app/shared

@@ -325,11 +325,30 @@ jobs:
           pip install pip-audit
           pip-audit -r requirements.lock --desc on
 
+  # ── Dockerfile hygiene (hard gate) ──────────────────────
+  # #1155: Reject any Dockerfile that explicitly copies tests/ into the image.
+  # .dockerignore handles the COPY services/ wildcard case; this gate catches
+  # explicit `COPY .../tests` lines that would bypass .dockerignore exclusions.
+  dockerfile-hygiene:
+    name: Dockerfile hygiene
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+
+      - name: Ensure no tests copied into production images
+        run: |
+          if grep -rn "COPY.*tests" services/*/Dockerfile Dockerfile 2>/dev/null; then
+            echo "::error::Dockerfile(s) copy tests into production image — remove the COPY .*/tests line(s) (#1155)"
+            exit 1
+          fi
+          echo "OK: no Dockerfile copies tests/ into the image"
+
   # ── CI Summary ───────────────────────────────────────────
   ci-status:
     name: CI Status Gate
     if: always()
-    needs: [test, lint, lint-shared, docker-build, security, rls-fallback-check]
+    needs: [test, lint, lint-shared, docker-build, security, rls-fallback-check, dockerfile-hygiene]
     runs-on: ubuntu-latest
     steps:
       - name: Check results
@@ -340,6 +359,7 @@ jobs:
           echo "Docker:            ${{ needs.docker-build.result }}"
           echo "Security:          ${{ needs.security.result }}"
           echo "RLS fallback:      ${{ needs.rls-fallback-check.result }}"
+          echo "Dockerfile hygiene:${{ needs.dockerfile-hygiene.result }}"
           # Lint is now blocking — flake8 F821 (undefined name) would
           # have caught PR #1482's NLP NameError class of bugs if this
           # gate had been enforcing. Promoting lint to a hard gate so
@@ -348,8 +368,9 @@ jobs:
              || "${{ needs.lint.result }}" == "failure" \
              || "${{ needs.lint-shared.result }}" == "failure" \
              || "${{ needs.security.result }}" == "failure" \
-             || "${{ needs.rls-fallback-check.result }}" == "failure" ]]; then
-            echo "::error::Test, Lint, Security Audit, or RLS fallback guard failed"
+             || "${{ needs.rls-fallback-check.result }}" == "failure" \
+             || "${{ needs.dockerfile-hygiene.result }}" == "failure" ]]; then
+            echo "::error::Test, Lint, Security Audit, RLS fallback guard, or Dockerfile hygiene check failed"
             exit 1
           fi
           echo "All checks passed"

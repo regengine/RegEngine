@@ -1,20 +1,29 @@
-FROM python:3.11-slim
+# Stage 1: builder — has gcc/libpq-dev for compiling Python C extensions
+FROM python:3.11-slim AS builder
+
+WORKDIR /build
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+    libpq-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements.in /build/requirements.in
+COPY requirements.lock /build/requirements.lock
+RUN pip install --no-cache-dir --require-hashes --prefix=/install -r /build/requirements.lock
+
+# Stage 2: runtime — no build toolchain, only the shared runtime library
+FROM python:3.11-slim AS runtime
 
 WORKDIR /app
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
-    gcc \
-    libpq-dev \
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libpq5 \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Python dependencies from the pip-compile lockfile.
-# requirements.in = human-edited loose spec; requirements.lock = fully pinned w/ hashes.
-# --require-hashes enforces that every dep resolves to the exact artifact in the lock.
-COPY requirements.in /app/requirements.in
-COPY requirements.lock /app/requirements.lock
-RUN pip install --no-cache-dir --require-hashes -r /app/requirements.lock
+# Pull installed Python packages from builder
+COPY --from=builder /install /usr/local
 
 # Create non-root user
 RUN adduser --disabled-password --gecos '' --uid 1001 appuser
@@ -24,7 +33,7 @@ COPY alembic.ini /app/alembic.ini
 COPY alembic /app/alembic
 COPY scripts/run-migrations.sh /app/scripts/run-migrations.sh
 
-# Copy all service code
+# Copy all service code (excluding test files via .dockerignore)
 COPY services /app/services
 
 # Copy kernel package (obligation, discovery, graph, reporting modules)
