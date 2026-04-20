@@ -374,7 +374,7 @@ class ObligationEvaluator:
         """
         Compute overall risk score from individual obligation matches.
         
-        Uses weighted average, with higher weight on higher individual risk scores.
+        Uses unweighted mean across all obligation matches.
         """
         if not obligation_matches:
             return 0.0

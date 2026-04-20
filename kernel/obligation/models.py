@@ -11,12 +11,12 @@ from enum import Enum
 
 
 class Regulator(str, Enum):
-    """Regulatory agencies."""
-    OCC = "OCC"
-    CFPB = "CFPB"
-    FRB = "FRB"
-    FDIC = "FDIC"
-    NCUA = "NCUA"
+    """Regulatory agencies.
+
+    RegEngine is FSMA-focused (food traceability). Banking regulators
+    (OCC, CFPB, FRB, FDIC, NCUA) were removed in #1359 — they will be
+    re-added if/when a financial-services vertical is introduced.
+    """
     FDA = "FDA"
 
 
@@ -108,15 +108,31 @@ class ObligationCoverageReport(BaseModel):
     decisions_by_risk_level: Dict[RiskLevel, int]
 
 
+# ---------------------------------------------------------------------------
+# Reserved for future verticals (#1359)
+# RiskWeight and ComplianceScore are not used by the current FSMA-only
+# evaluation path (ObligationEvaluator uses a flat unweighted mean).
+# They are kept here as stubs so that kernel/models.py re-exports remain
+# stable; remove the stubs when the weighted variant is actually implemented.
+# ---------------------------------------------------------------------------
+
 class RiskWeight(BaseModel):
-    """Weighting for different risk factors in compliance scoring."""
+    """RESERVED — not used by the current FSMA evaluator (#1359).
+
+    Weighting for different risk factors in a future weighted compliance
+    scoring variant. Do not reference outside of tests until implemented.
+    """
     criticality: float = Field(0.5, ge=0.0, le=1.0)
     reputation_impact: float = Field(0.2, ge=0.0, le=1.0)
     legal_liability: float = Field(0.3, ge=0.0, le=1.0)
 
 
 class ComplianceScore(BaseModel):
-    """High-integrity compliance score result."""
+    """RESERVED — not used by the current FSMA evaluator (#1359).
+
+    High-integrity compliance score result for a future weighted variant.
+    Do not reference outside of tests until implemented.
+    """
     score: float = Field(..., ge=0.0, le=100.0)
     timestamp: datetime = Field(default_factory=datetime.utcnow)
     tenant_id: str
