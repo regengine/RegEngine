@@ -1,7 +1,13 @@
 from opentelemetry import trace, baggage, _logs as logs
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
-from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
-from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
+try:
+    from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
+except ImportError:  # pragma: no cover
+    SQLAlchemyInstrumentor = None  # type: ignore[assignment,misc]
+try:
+    from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
+except ImportError:  # pragma: no cover
+    HTTPXClientInstrumentor = None  # type: ignore[assignment,misc]
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from opentelemetry.sdk.trace.sampling import TraceIdRatioBased
@@ -43,6 +49,40 @@ def get_shared_resource(service_name: str):
     valid_attributes = {k: v for k, v in attributes.items() if v is not None}
     return Resource.create(valid_attributes)
 
+def _instrument_downstream_clients() -> None:
+    """Instrument SQLAlchemy and httpx so DB queries and outbound HTTP appear in traces.
+
+    Both instrumentors are idempotent: calling instrument() a second time is a no-op
+    because each checks internally whether it is already active.  This makes it safe
+    to call this helper from both ``add_observability`` and ``setup_standalone_observability``
+    without risk of double-instrumentation.
+
+    Note on Kafka: the project uses confluent-kafka / kafka-python-ng.  A stable
+    opentelemetry-instrumentation-confluent-kafka package is not yet available at the
+    same version pin (1.41.0 / 0.62b0) used by the rest of the OTel stack, and
+    Kafka is slated for removal as part of the monolith migration.  Correlation-ID
+    propagation is already handled by ``shared.observability.kafka_propagation``.
+    Kafka OTel instrumentation is therefore intentionally deferred — see #1327.
+    """
+    if SQLAlchemyInstrumentor is not None:
+        try:
+            SQLAlchemyInstrumentor().instrument()
+            logger.debug("otel_sqlalchemy_instrumented")
+        except Exception as exc:
+            logger.warning("otel_sqlalchemy_instrument_failed", error=str(exc))
+    else:
+        logger.warning("otel_sqlalchemy_package_missing")
+
+    if HTTPXClientInstrumentor is not None:
+        try:
+            HTTPXClientInstrumentor().instrument()
+            logger.debug("otel_httpx_instrumented")
+        except Exception as exc:
+            logger.warning("otel_httpx_instrument_failed", error=str(exc))
+    else:
+        logger.warning("otel_httpx_package_missing")
+
+
 def add_observability(app: FastAPI, service_name: str):
     """Unified entry point for FastAPI OTel (Tracing + Baggage + Logs)."""
     if not _otel_enabled():
@@ -71,8 +111,7 @@ def add_observability(app: FastAPI, service_name: str):
             logger.warning("otel_log_setup_failed", service=service_name, error=str(e))
 
         FastAPIInstrumentor.instrument_app(app)
-        SQLAlchemyInstrumentor().instrument()
-        HTTPXClientInstrumentor().instrument()
+        _instrument_downstream_clients()
     except Exception as e:
         logger.error("otel_setup_failed", service=service_name, error=str(e))
 
@@ -103,8 +142,7 @@ def setup_standalone_observability(service_name: str):
         except Exception as e:
             logger.warning("otel_log_setup_failed", service=service_name, error=str(e))
 
-        SQLAlchemyInstrumentor().instrument()
-        HTTPXClientInstrumentor().instrument()
+        _instrument_downstream_clients()
     except Exception as e:
         logger.error("otel_standalone_setup_failed", service=service_name, error=str(e))
 

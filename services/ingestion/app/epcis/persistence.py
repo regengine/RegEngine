@@ -682,33 +682,58 @@ def _persist_prepared_event_in_session(
     )
 
     # Canonical normalization — write to traceability_events + evaluate rules.
-    # Kept best-effort: a canonical-write failure must not block CTE persistence.
+    # (#1335) Fan-out timeout: legacy write already committed; canonical is
+    # best-effort.  Cap via CANONICAL_DUAL_WRITE_TIMEOUT_S (default 5 s) so a
+    # slow canonical DB path does not block the EPCIS ingest response.
     if not result.idempotent:
-        try:
-            from shared.canonical_event import normalize_epcis_event
-            from shared.canonical_persistence import CanonicalEventStore
-            canonical = normalize_epcis_event(event, tenant_id)
-            canonical_store = CanonicalEventStore(db_session, dual_write=False, skip_chain_write=True)
-            canonical_store.set_tenant_context(tenant_id)
-            canonical_store.persist_event(canonical)
-            from shared.rules_engine import RulesEngine
-            engine = RulesEngine(db_session)
-            event_data = {
-                "event_id": str(canonical.event_id),
-                "event_type": canonical.event_type.value,
-                "traceability_lot_code": canonical.traceability_lot_code,
-                "product_reference": canonical.product_reference,
-                "quantity": canonical.quantity,
-                "unit_of_measure": canonical.unit_of_measure,
-                "from_facility_reference": canonical.from_facility_reference,
-                "to_facility_reference": canonical.to_facility_reference,
-                "from_entity_reference": canonical.from_entity_reference,
-                "to_entity_reference": canonical.to_entity_reference,
-                "kdes": canonical.kdes,
+        import os  # noqa: PLC0415
+        import threading as _threading  # noqa: PLC0415
+        _timeout_s = float(os.environ.get("CANONICAL_DUAL_WRITE_TIMEOUT_S", "5"))
+
+        def _epcis_canonical_write() -> None:
+            from shared.canonical_event import normalize_epcis_event  # noqa: PLC0415
+            from shared.canonical_persistence import CanonicalEventStore  # noqa: PLC0415
+            from shared.rules_engine import RulesEngine  # noqa: PLC0415
+            _canonical = normalize_epcis_event(event, tenant_id)
+            _store = CanonicalEventStore(db_session, dual_write=False, skip_chain_write=True)
+            _store.set_tenant_context(tenant_id)
+            _store.persist_event(_canonical)
+            _engine = RulesEngine(db_session)
+            _event_data = {
+                "event_id": str(_canonical.event_id),
+                "event_type": _canonical.event_type.value,
+                "traceability_lot_code": _canonical.traceability_lot_code,
+                "product_reference": _canonical.product_reference,
+                "quantity": _canonical.quantity,
+                "unit_of_measure": _canonical.unit_of_measure,
+                "from_facility_reference": _canonical.from_facility_reference,
+                "to_facility_reference": _canonical.to_facility_reference,
+                "from_entity_reference": _canonical.from_entity_reference,
+                "to_entity_reference": _canonical.to_entity_reference,
+                "kdes": _canonical.kdes,
             }
-            engine.evaluate_event(event_data, persist=True, tenant_id=tenant_id)
-        except Exception as canon_err:
-            logger.warning("epcis_canonical_write_skipped: %s", str(canon_err))
+            _engine.evaluate_event(_event_data, persist=True, tenant_id=tenant_id)
+
+        import threading  # noqa: PLC0415
+        _epcis_exc: list[BaseException] = []
+
+        def _guarded_epcis_canonical_write() -> None:
+            try:
+                _epcis_canonical_write()
+            except Exception as _exc:  # noqa: BLE001
+                _epcis_exc.append(_exc)
+
+        _t = _threading.Thread(target=_guarded_epcis_canonical_write, daemon=True)
+        _t.start()
+        _t.join(timeout=_timeout_s)
+        if _t.is_alive():
+            logger.warning(
+                "epcis_canonical_write_timeout",
+                event_id=getattr(result, "event_id", None),
+                timeout_s=_timeout_s,
+            )
+        elif _epcis_exc:
+            logger.warning("epcis_canonical_write_skipped", error=str(_epcis_exc[0]))
 
     status_code = 200 if result.idempotent else 201
     return (

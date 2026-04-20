@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import logging
 from typing import Dict, List, Optional
 
 import regex as re
+
+logger = logging.getLogger(__name__)
 
 OBLIGATION_PATTERN = re.compile(r"\b(shall|must|required to|has to)\b", re.I)
 THRESHOLD_PATTERN = re.compile(
@@ -31,6 +34,102 @@ UNIT_NORMALIZATION = {
     "unit": "units",
 }
 
+# ---------------------------------------------------------------------------
+# Negation + modality helpers (#1299)
+# ---------------------------------------------------------------------------
+
+# Negation tokens that flip obligation type when found within N tokens of a modal.
+_NEGATION_TOKENS: frozenset = frozenset({"not", "no", "never", "without"})
+
+# Conditional hedge phrases — sentence contains both obligation and an escape clause.
+_CONDITIONAL_PATTERNS = re.compile(
+    r"\b(unless|except|provided that|subject to|exempt(?:ion)?|unless exempt)\b",
+    re.I,
+)
+
+# Window size (tokens) to check around a modal keyword for negation.
+_NEGATION_WINDOW = 5
+
+
+def _tokenise(text: str) -> list:
+    """Whitespace-split, strip trailing punctuation from each token."""
+    return [t.strip(".,;:()[]\"'") for t in text.lower().split()]
+
+
+def infer_obligation_type(text: str) -> dict:
+    """Infer obligation modality from *text* using negation-aware token matching.
+
+    Returns a dict with keys:
+        ``obligation``  – ``"MANDATORY"``, ``"PROHIBITED"``, ``"PERMITTED"``,
+                          or ``"CONDITIONAL"``.
+        ``negation_detected`` – ``True`` when a negation token flipped the
+                                base modality.
+
+    Rules (applied in order):
+    1. Explicit prohibited phrases ("shall not", "must not", "may not",
+       "not required", "no obligation", "exempt from", "does not require")
+       → PROHIBITED (negation_detected=True).
+    2. Conditional hedge ("unless", "except", "exempt") alongside a
+       mandatory keyword → CONDITIONAL (WARNING logged).
+    3. Mandatory keywords ("shall", "must", "required") without negation
+       → MANDATORY.
+    4. Permissive keywords ("may", "can") without negation → PERMITTED.
+    5. Negated permissive ("may not") caught by phase 1.
+    6. Fallback → MANDATORY (conservative default).
+    """
+    text_lower = text.lower()
+    tokens = _tokenise(text)
+
+    def _has_negation_near(keyword: str) -> bool:
+        """True if *keyword* has a negation token within _NEGATION_WINDOW tokens."""
+        for idx, tok in enumerate(tokens):
+            if tok == keyword:
+                window_start = max(0, idx - _NEGATION_WINDOW)
+                window_end = min(len(tokens), idx + _NEGATION_WINDOW + 1)
+                window = set(tokens[window_start:window_end]) - {keyword}
+                if window & _NEGATION_TOKENS:
+                    return True
+        return False
+
+    # --- Phase 1: explicit negated-modal phrases (highest priority) ----------
+    _PROHIBITED_PHRASES = [
+        "shall not", "must not", "may not", "is not required",
+        "not required", "no obligation", "exempt from", "does not require",
+        "does not need",
+    ]
+    for phrase in _PROHIBITED_PHRASES:
+        if phrase in text_lower:
+            return {"obligation": "PROHIBITED", "negation_detected": True}
+
+    # --- Phase 2: conditional hedge ------------------------------------------
+    _MANDATORY_KW = ["shall", "must", "required"]
+    has_mandatory = any(kw in text_lower for kw in _MANDATORY_KW)
+    if has_mandatory and _CONDITIONAL_PATTERNS.search(text):
+        logger.warning(
+            "obligation_type CONDITIONAL inferred from hedge phrase",
+            extra={"text_snippet": text[:120]},
+        )
+        return {"obligation": "CONDITIONAL", "negation_detected": False}
+
+    # --- Phase 3: positive mandatory keywords --------------------------------
+    for kw in _MANDATORY_KW:
+        if kw in text_lower and not _has_negation_near(kw):
+            return {"obligation": "MANDATORY", "negation_detected": False}
+
+    # --- Phase 4: positive permissive keywords --------------------------------
+    _PERMISSIVE_KW = ["may", "can", "permitted", "allowed"]
+    for kw in _PERMISSIVE_KW:
+        if kw in text_lower and not _has_negation_near(kw):
+            return {"obligation": "PERMITTED", "negation_detected": False}
+
+    # --- Phase 5: negated permissive → PROHIBITED ----------------------------
+    for kw in _PERMISSIVE_KW:
+        if kw in text_lower and _has_negation_near(kw):
+            return {"obligation": "PROHIBITED", "negation_detected": True}
+
+    # --- Fallback -------------------------------------------------------------
+    return {"obligation": "MANDATORY", "negation_detected": False}
+
 
 def extract_entities(text: str) -> List[Dict]:
     """Extract entities from raw text.
@@ -55,13 +154,18 @@ def extract_entities(text: str) -> List[Dict]:
         if end_sentence == -1:
             end_sentence = min(len(text), match.end() + 200)
         span_text = text[start_sentence:end_sentence].strip()
+        # Infer obligation type with negation/modality awareness (#1299).
+        modality = infer_obligation_type(span_text)
         ents.append(
             {
                 "type": "OBLIGATION",
                 "text": span_text,
                 "start": start_sentence,
                 "end": end_sentence,
-                "attrs": {},
+                "attrs": {
+                    "obligation": modality["obligation"],
+                    "negation_detected": modality["negation_detected"],
+                },
             }
         )
 
@@ -115,26 +219,26 @@ def extract_entities(text: str) -> List[Dict]:
 def extract_fsma_facts(text: str) -> List[Dict]:
     """
     Extract specific FSMA regulatory facts, such as compliance dates.
-    
+
     This enhancement allows the system to detect changes in regulatory timelines
     (e.g., the July 20, 2028 update).
     """
     facts = []
-    
+
     # Heuristic for Compliance Date
     # Pattern looks for "Compliance Date" vicinity or explicit date formats known for FSMA
     # Regex for "January 20, 2026" or "July 20, 2028"
-    
+
     # Broad pattern for the date itself
     _ALL_MONTHS = (
         "January|February|March|April|May|June|"
         "July|August|September|October|November|December"
     )
     date_pattern = re.compile(rf"\b({_ALL_MONTHS})\s+\d{{1,2}},\s+\d{{4}}\b", re.I)
-    
+
     # Context pattern to ensure it's a compliance date
     context_window_size = 100
-    
+
     for match in date_pattern.finditer(text):
         # Check context for "Compliance Date" or "Enforcement"
         start = max(0, match.start() - context_window_size)
