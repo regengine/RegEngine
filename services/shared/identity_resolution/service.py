@@ -348,6 +348,10 @@ class IdentityResolutionService:
                   AND ea.alias_type = :alias_type
                   AND ea.alias_value = :alias_value
                   AND ce.is_active = TRUE
+                -- #1234: deterministic order — oldest canonical entity wins so a
+                -- newer alias never clobbers an established canonical; entity_id
+                -- is the UUID-PK tiebreak for identical created_at timestamps.
+                ORDER BY ce.created_at ASC, ce.entity_id ASC
             """),
             {
                 "tenant_id": tenant_id,
