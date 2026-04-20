@@ -369,7 +369,11 @@ async def login(
         "email": user.email,
         "tenant_id": str(active_tenant_id) if active_tenant_id else None,  # For RLS
         "tid": str(active_tenant_id) if active_tenant_id else None,  # Backward compat
-        "tenant_status": active_tenant_status,  # Middleware checks this to reject suspended tenants
+        # #1401 — Never put None in the claim; middleware that blocks
+        # tenant_status == "suspended" treats None as pass-through,
+        # which lets users with no memberships slip through as if active.
+        # Use "no_tenant" so downstream guards can treat it explicitly.
+        "tenant_status": active_tenant_status if active_tenant_status is not None else "no_tenant",
         # #1349 / #1375 — token_version binds this access token to the user's
         # current password/session generation. Bumped on reset or logout-all.
         "tv": int(getattr(user, "token_version", 0) or 0),
@@ -459,7 +463,20 @@ async def signup(
         select(UserModel).where(UserModel.email == normalized_email)
     ).scalar_one_or_none()
     if existing_user:
-        raise HTTPException(status_code=409, detail="User already exists")
+        # #1400 — Do NOT surface a 409; that leaks account existence to
+        # unauthenticated callers. Return a uniform 200 with the same
+        # body shape as a successful new-user signup, then bail out.
+        # The internal log line lets operators detect enumeration bursts
+        # without exposing the signal in the HTTP response.
+        logger.info(
+            "signup_duplicate_email",
+            email=mask_email(normalized_email),
+        )
+        from fastapi.responses import JSONResponse
+        return JSONResponse(
+            status_code=200,
+            content={"message": "If this email is new, you'll receive a verification link shortly."},
+        )
 
     try:
         validate_password(payload.password, user_context={"email": normalized_email})
@@ -777,7 +794,18 @@ async def refresh_session(
         "email": user.email,
         "tenant_id": str(active_tenant_id) if active_tenant_id else None,  # For RLS
         "tid": str(active_tenant_id) if active_tenant_id else None,  # Backward compat
-        "tenant_status": "active",  # Only active tenants reach this point (query filters above)
+        # #1401 — Re-query the tenant's current status rather than
+        # hardcoding "active".  The membership query above already
+        # filters to is_active=True + tenant.status=="active", so in
+        # the normal path this resolves to "active".  But if that query
+        # were ever relaxed, hardcoding "active" here would silently
+        # allow suspended tenants to mint fresh "active" JWTs forever.
+        # Derive the value from the actual DB row instead.
+        "tenant_status": (
+            db.execute(
+                select(TenantModel.status).where(TenantModel.id == active_tenant_id)
+            ).scalar_one_or_none() or "no_tenant"
+        ),
         "tv": int(getattr(user, "token_version", 0) or 0),
     }
     access_token = create_access_token(access_token_data)
