@@ -14,6 +14,7 @@ preserves the audit trail's integrity while removing PII.
 from __future__ import annotations
 
 import logging
+import os
 import uuid
 from typing import Optional
 
@@ -21,7 +22,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
+from app.audit import AuditLogger
 from app.dependencies import get_current_user
+from app.supplier_graph_sync import supplier_graph_sync
 from shared.database import get_db
 
 logger = logging.getLogger("erasure")
@@ -49,6 +52,7 @@ class ErasureResponse(BaseModel):
     audit_logs_anonymized: bool = False
     hard_delete_scheduled: bool = False
     hard_delete_date: Optional[str] = None
+    neo4j_nodes_purged: int = 0
 
 
 @router.post(
@@ -177,6 +181,57 @@ async def request_erasure(
 
             db.commit()
 
+        # 3. Neo4j tenant subgraph purge — gated behind
+        # ENABLE_NEO4J_TENANT_PURGE (default false) so it can be
+        # enabled in prod only after MERGE-key fixes are confirmed
+        # merged (see #1412 issue notes). Soft-fails: a Neo4j outage
+        # must not block the Postgres erasure that already committed.
+        neo4j_nodes_purged = 0
+        if os.getenv("ENABLE_NEO4J_TENANT_PURGE", "false").lower() == "true":
+            try:
+                neo4j_nodes_purged = supplier_graph_sync.purge_tenant(
+                    str(tenant_id)
+                )
+                logger.info(
+                    "erasure_neo4j_purged tenant_id=%s deleted_nodes=%d",
+                    tenant_id,
+                    neo4j_nodes_purged,
+                )
+                # 4. Audit the Neo4j purge — best-effort; we re-open a
+                # short-lived session so we don't resurrect the
+                # already-committed Postgres session.
+                if tenant_uuid is not None:
+                    try:
+                        with get_db() as audit_db:
+                            AuditLogger.log_event(
+                                audit_db,
+                                tenant_id=tenant_uuid,
+                                event_type="data_delete",
+                                action="tenant.neo4j_purge",
+                                event_category="data_management",
+                                severity="info",
+                                actor_id=user_uuid,
+                                resource_type="neo4j_subgraph",
+                                resource_id=str(tenant_id),
+                                metadata={
+                                    "deleted_nodes": neo4j_nodes_purged,
+                                    "gdpr_article": "17",
+                                },
+                            )
+                            audit_db.commit()
+                    except Exception as audit_err:  # noqa: BLE001
+                        logger.warning(
+                            "erasure_neo4j_audit_failed",
+                            tenant_id=str(tenant_id),
+                            error=str(audit_err),
+                        )
+            except Exception as neo4j_err:  # noqa: BLE001
+                logger.error(
+                    "erasure_neo4j_failed tenant_id=%s error=%s",
+                    tenant_id,
+                    neo4j_err,
+                )
+
         return ErasureResponse(
             status="accepted",
             message=(
@@ -188,6 +243,7 @@ async def request_erasure(
             audit_logs_anonymized=bool(anonymized_count),
             hard_delete_scheduled=result.get("hard_delete_scheduled", False),
             hard_delete_date=result.get("hard_delete_date"),
+            neo4j_nodes_purged=neo4j_nodes_purged,
         )
 
     except ImportError as e:
