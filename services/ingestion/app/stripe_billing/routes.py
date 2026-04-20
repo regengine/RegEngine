@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-import logging
 import os
 from typing import Any, Optional
 
 import redis
 import stripe
+import structlog
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 
 from app.authz import IngestionPrincipal, get_ingestion_principal, require_permission
@@ -36,7 +36,7 @@ from .models import (
 )
 from .plans import DEFAULT_PORTAL_RETURN_URL, PLANS
 
-logger = logging.getLogger("stripe-billing")
+logger = structlog.get_logger("stripe-billing")
 
 router = APIRouter(prefix="/api/v1/billing", tags=["Billing & Subscriptions"])
 
@@ -205,13 +205,11 @@ async def create_checkout(
 
     logger.info(
         "checkout_created",
-        extra={
-            "tenant_id": authenticated_tenant_id,
-            "plan": plan["id"],
-            "amount": amount,
-            "billing_period": billing_period,
-            "session_id": session.id,
-        },
+        tenant_id=authenticated_tenant_id,
+        plan=plan["id"],
+        amount=amount,
+        billing_period=billing_period,
+        session_id=session.id,
     )
 
     return CheckoutResponse(

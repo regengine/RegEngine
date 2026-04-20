@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-import logging
 import os
 from datetime import datetime, timezone
 from typing import Any, Optional
 
 import stripe
+import structlog
 from fastapi import HTTPException, Request
 
 from shared import funnel_events as _funnel_mod
@@ -17,7 +17,7 @@ from . import helpers as _helpers_mod
 from . import plans as _plans_mod
 from . import state as _state_mod
 
-logger = logging.getLogger("stripe-billing")
+logger = structlog.get_logger("stripe-billing")
 
 
 async def _handle_checkout_completed(
