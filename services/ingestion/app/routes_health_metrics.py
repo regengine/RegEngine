@@ -55,6 +55,6 @@ def health() -> dict[str, str]:
 
     return {
         "status": overall_status,
-        "service": "ingestion-service",
+        "service": "regengine",
         "kafka": kafka_status,
     }
