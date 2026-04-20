@@ -1,6 +1,3 @@
-# DEPRECATED: will be removed once EVENT_BACKBONE=pg is default (see #1159 #1240).
-# The PostgreSQL task_processor (server/workers/task_processor.py) is the canonical
-# replacement for this Kafka consumer. Do not add new logic here.
 from __future__ import annotations
 
 import json
@@ -539,24 +536,58 @@ def _convert_entities_to_extraction(
         action = next((w for w in action_words if w in text.lower()), "must")
 
         # Determine obligation type with negation and modality detection (#1299).
-        # Delegate to infer_obligation_type() in extractor.py so the logic
-        # lives in one place and is covered by unit tests.
-        from .extractor import infer_obligation_type
+        #
+        # Negation detection: if a matched keyword is immediately preceded by
+        # a negation token ("not", "no", "never", "without") within 3 tokens,
+        # the match is skipped — "must not report" should NOT infer MANDATORY.
+        # We tokenise on whitespace and check the 3 tokens before the keyword.
+        #
+        # Modality detection:
+        #   MANDATORY  ← "must", "shall", "required"
+        #   RECOMMENDED ← "may", "should"
+        # We use ObligationType.MUST for MANDATORY and ObligationType.SHOULD for
+        # RECOMMENDED; ObligationType.MAY maps to the weakest recommendation.
+        _NEGATION_TOKENS = {"not", "no", "never", "without"}
 
-        _modality = infer_obligation_type(text)
-        _obligation_label = _modality["obligation"]
-        _negation_detected = _modality["negation_detected"]
+        def _keyword_is_negated(full_text: str, keyword: str) -> bool:
+            """Return True if ``keyword`` appears preceded by a negation token
+            within 3 whitespace-delimited tokens in ``full_text``."""
+            tokens = full_text.lower().split()
+            for idx, tok in enumerate(tokens):
+                # Strip punctuation from token for comparison.
+                clean_tok = tok.strip(".,;:()[]\"'")
+                if clean_tok == keyword:
+                    preceding = tokens[max(0, idx - 3): idx]
+                    preceding_clean = {t.strip(".,;:()[]\"'") for t in preceding}
+                    if preceding_clean & _NEGATION_TOKENS:
+                        return True
+            return False
 
-        # Map the string label to the ObligationType enum used by ExtractionPayload.
-        _OBLIGATION_MAP = {
-            "MANDATORY": ObligationType.MUST,
-            "PROHIBITED": ObligationType.MUST_NOT,
-            "PERMITTED": ObligationType.MAY,
-            # CONDITIONAL has no direct enum value; surface as MUST so
-            # downstream HITL review sees it as requiring attention.
-            "CONDITIONAL": ObligationType.MUST,
-        }
-        obl_type = _OBLIGATION_MAP.get(_obligation_label, ObligationType.MUST)
+        text_lower = text.lower()
+
+        # MANDATORY keywords — "must", "shall", "required", "mandatory" (#1299)
+        _MANDATORY_KEYWORDS = ["must", "shall", "required", "mandatory"]
+        # RECOMMENDED keywords — "may", "should", "can", "recommend" (#1299)
+        _RECOMMENDED_KEYWORDS = ["should", "can", "may", "recommend"]
+
+        obl_type = None
+        # Check MANDATORY first (higher precedence).
+        for kw in _MANDATORY_KEYWORDS:
+            if kw in text_lower and not _keyword_is_negated(text, kw):
+                obl_type = ObligationType.MUST
+                break
+
+        if obl_type is None:
+            for kw in _RECOMMENDED_KEYWORDS:
+                if kw in text_lower and not _keyword_is_negated(text, kw):
+                    # "should"/"can"/"recommend" → RECOMMENDED (SHOULD);
+                    # "may" → weakest recommendation (MAY).
+                    obl_type = ObligationType.MAY if kw == "may" else ObligationType.SHOULD
+                    break
+
+        if obl_type is None:
+            # Default when no keyword matched or all were negated.
+            obl_type = ObligationType.MUST
 
         # Find associated thresholds (within proximity)
         associated_thresholds = []
@@ -632,9 +663,6 @@ def _convert_entities_to_extraction(
             "risk_level": risk,
             "extractor": "legacy_regex_v1",
             "confidence_capped_at": _LEGACY_HEURISTIC_CONFIDENCE_CAP,
-            # Negation/modality metadata from #1299.
-            "negation_detected": _negation_detected,
-            "obligation_label": _obligation_label,
         }
         if resolved_entities:
             attributes["resolved_entities"] = resolved_entities

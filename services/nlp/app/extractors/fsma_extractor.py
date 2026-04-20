@@ -225,6 +225,11 @@ class FSMAExtractor:
         DocumentType.PACKING_SLIP: CTEType.INITIAL_PACKING,
         DocumentType.LANDING_REPORT: CTEType.FIRST_LAND_BASED_RECEIVER,
         DocumentType.PRODUCTION_LOG: CTEType.TRANSFORMATION,
+        # #1288 — INVOICE defaults to TRANSFORMATION (not SHIPPING).
+        # Invoices more often accompany transformation/packing events
+        # than pure shipping handoffs; prior SHIPPING default produced
+        # incorrect CTE classifications.
+        DocumentType.INVOICE: CTEType.TRANSFORMATION,
         # BILL_OF_LADING is handled specially — see #1123 split logic
         # in ``_extract_ctes`` (emits both SHIPPING and RECEIVING).
     }
@@ -316,8 +321,8 @@ class FSMAExtractor:
             tenant_id=tenant_id,
         )
 
-        # Pass 1: Document Type Classification
-        doc_type = self._classify_document(text)
+        # Pass 1: Document Type Classification (#1288 — tuple return)
+        doc_type, classify_warning = self._classify_document(text)
         logger.debug("document_classified", doc_type=doc_type.value)
 
         # Pass 2: Layout-aware tabular extraction (if available)
@@ -354,6 +359,8 @@ class FSMAExtractor:
 
         # Calculate warnings
         warnings = self._validate_extraction(ctes, doc_type)
+        if classify_warning:
+            warnings.append(classify_warning)
         if review_required:
              warnings.append(f"Confidence {doc_confidence:.2f} ({risk_level.value}) requires manual review")
         if not kde_minimums_met:
@@ -421,8 +428,14 @@ class FSMAExtractor:
             "routed_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         }
 
-    def _classify_document(self, text: str) -> DocumentType:
-        """Classify document type based on content indicators."""
+    def _classify_document(self, text: str) -> Tuple[DocumentType, Optional[str]]:
+        """Classify document type based on content indicators.
+
+        Returns a ``(DocumentType, warning_or_None)`` tuple. On a tie between
+        two or more document types, defaults to SHIPPING (via BILL_OF_LADING)
+        and returns a warning string so callers can surface it in result.warnings
+        (#1288).
+        """
         text_lower = text.lower()
 
         scores = {}
@@ -430,10 +443,25 @@ class FSMAExtractor:
             score = sum(1 for ind in indicators if ind in text_lower)
             scores[doc_type] = score
 
-        if max(scores.values()) == 0:
-            return DocumentType.UNKNOWN
+        max_score = max(scores.values())
+        if max_score == 0:
+            return DocumentType.UNKNOWN, None
 
-        return max(scores, key=lambda k: scores[k])
+        top_types = [dt for dt, sc in scores.items() if sc == max_score]
+        if len(top_types) > 1:
+            # #1288 — On a tie, default to SHIPPING (BILL_OF_LADING) and
+            # surface a warning in result.warnings so callers and HITL
+            # reviewers can see the ambiguity.
+            tie_warning = "Ambiguous CTE type classification — defaulted to SHIPPING"
+            logger.warning(
+                "ambiguous_document_type_tie",
+                message=tie_warning,
+                tied_types=[dt.value for dt in top_types],
+                score=max_score,
+            )
+            return DocumentType.BILL_OF_LADING, tie_warning
+
+        return top_types[0], None
 
     def _extract_tabular_data(
         self, text: str, pdf_bytes: Optional[bytes] = None
@@ -1186,58 +1214,39 @@ class FSMAExtractor:
 
         return date_str  # Return as-is if no format matches
 
-    # ---------------------------------------------------------------------------
-    # KDE field weights for confidence scoring (#1286).
-    #
-    # Weight semantics (FSMA 204 regulatory criticality):
-    #   3 = Required — absence means the record cannot satisfy traceability;
-    #       maps to the three FSMA 204 "critical" KDEs every CTE must carry.
-    #   2 = Important — strongly expected; absence degrades compliance posture.
-    #   1 = Advisory — helpful but not strictly required by the rule.
-    #
-    # Fields not present in this dict default to weight 1 (advisory).
-    # ---------------------------------------------------------------------------
-    _KDE_FIELD_WEIGHTS: Dict[str, int] = {
-        # Required (weight 3)
+    # Field weights for confidence calculation (#1286).
+    # High-priority KDEs (weight=3): traceability_lot_code, event_date, location_identifier
+    # Medium-priority KDEs (weight=2): quantity, product_description
+    # All other required fields default to weight=1.
+    _FIELD_WEIGHTS: Dict[str, int] = {
         "traceability_lot_code": 3,
         "event_date": 3,
         "location_identifier": 3,
-        # Important (weight 2)
         "quantity": 2,
         "product_description": 2,
-        "unit_of_measure": 2,
-        # Advisory fields inherit the default weight of 1.
-    }
-
-    # FSMA 204 required fields per CTE type.  Only fields in this mapping
-    # participate in the confidence score; everything else is ignored.
-    _CTE_REQUIRED_FIELDS: Dict["CTEType", List[str]] = {
-        # Will be populated after CTEType is defined; see class body below.
     }
 
     def _calculate_confidence(self, kde: KDE, cte_type: CTEType) -> float:
         """
-        Calculate extraction confidence as a weighted score of KDE completeness.
+        Calculate extraction confidence as a weighted average of KDE completeness.
 
-        Algorithm (#1286):
-        1. Each field carries a weight from ``_KDE_FIELD_WEIGHTS`` (default 1).
-        2. score = sum(weight for present fields) / sum(all weights).
-        3. If ANY weight-3 (Required) field is absent, the score is capped at
-           0.5 regardless of advisory coverage — a compliant record MUST have
-           all required KDEs.
+        Fields are weighted by regulatory importance (#1286):
+        - traceability_lot_code, event_date, location_identifier → weight 3
+        - quantity, product_description → weight 2
+        - all other required fields → weight 1
+
+        Result = sum(weight for present fields) / sum(weights for all required fields).
         """
-        cte_required_fields: Dict["CTEType", List[str]] = {
+        required_fields = {
             CTEType.SHIPPING: [
                 "traceability_lot_code",
                 "quantity",
-                "unit_of_measure",
                 "location_identifier",
                 "event_date",
             ],
             CTEType.RECEIVING: [
                 "traceability_lot_code",
                 "quantity",
-                "unit_of_measure",
                 "location_identifier",
                 "event_date",
             ],
@@ -1254,28 +1263,17 @@ class FSMAExtractor:
             ],
         }
 
-        fields = cte_required_fields.get(cte_type, cte_required_fields[CTEType.SHIPPING])
-        total_weight = sum(self._KDE_FIELD_WEIGHTS.get(f, 1) for f in fields)
-        if total_weight == 0:
-            return 0.0
-
+        fields = required_fields.get(cte_type, required_fields[CTEType.SHIPPING])
+        total_weight = sum(self._FIELD_WEIGHTS.get(f, 1) for f in fields)
         weighted_found = sum(
-            self._KDE_FIELD_WEIGHTS.get(f, 1)
+            self._FIELD_WEIGHTS.get(f, 1)
             for f in fields
             if getattr(kde, f, None) is not None
         )
-        score = round(weighted_found / total_weight, 2)
 
-        # Cap at 0.5 if any Required (weight-3) field is missing.
-        missing_required = any(
-            self._KDE_FIELD_WEIGHTS.get(f, 1) == 3
-            and getattr(kde, f, None) is None
-            for f in fields
-        )
-        if missing_required:
-            score = min(score, 0.5)
-
-        return score
+        if total_weight == 0:
+            return 0.0
+        return round(weighted_found / total_weight, 2)
 
     def _validate_extraction(
         self, ctes: List[CTE], doc_type: DocumentType
