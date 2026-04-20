@@ -568,29 +568,22 @@ def _convert_entities_to_extraction(
 
         text_lower = text.lower()
 
-        # MANDATORY keywords — "must", "shall", "required", "shall not" (#1299).
-        # "shall not" is an explicit prohibition and is still MANDATORY —
-        # check it before the generic negation-skip path.
+        # MANDATORY keywords — "must", "shall", "required"
         _MANDATORY_KEYWORDS = ["must", "shall", "required"]
-        # RECOMMENDED keywords — "may", "should", "can" (#1299)
-        _RECOMMENDED_KEYWORDS = ["should", "may", "can"]
+        # RECOMMENDED keywords — "may", "should"
+        _RECOMMENDED_KEYWORDS = ["should", "may"]
 
         obl_type = None
-        # "shall not" is a mandatory prohibition; handle before generic loop
-        # so "shall" is not incorrectly skipped by negation detection.
-        if "shall not" in text_lower:
-            obl_type = ObligationType.MUST
-        else:
-            # Check MANDATORY first (higher precedence).
-            for kw in _MANDATORY_KEYWORDS:
-                if kw in text_lower and not _keyword_is_negated(text, kw):
-                    obl_type = ObligationType.MUST
-                    break
+        # Check MANDATORY first (higher precedence).
+        for kw in _MANDATORY_KEYWORDS:
+            if kw in text_lower and not _keyword_is_negated(text, kw):
+                obl_type = ObligationType.MUST
+                break
 
         if obl_type is None:
             for kw in _RECOMMENDED_KEYWORDS:
                 if kw in text_lower and not _keyword_is_negated(text, kw):
-                    obl_type = ObligationType.SHOULD if kw in ("should", "can") else ObligationType.MAY
+                    obl_type = ObligationType.SHOULD if kw == "should" else ObligationType.MAY
                     break
 
         if obl_type is None:

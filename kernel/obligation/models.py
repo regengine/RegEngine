@@ -1,3 +1,4 @@
+# Scope: FSMA 204 regulatory obligations only. Banking/financial regulators removed 2026-04-21 (#1359).
 """
 Regulatory Obligation Engine - Data Models
 ==========================================
@@ -11,12 +12,7 @@ from enum import Enum
 
 
 class Regulator(str, Enum):
-    """Regulatory agencies."""
-    OCC = "OCC"
-    CFPB = "CFPB"
-    FRB = "FRB"
-    FDIC = "FDIC"
-    NCUA = "NCUA"
+    """Regulatory agencies. Scoped to FSMA 204 only."""
     FDA = "FDA"
 
 
@@ -108,19 +104,3 @@ class ObligationCoverageReport(BaseModel):
     decisions_by_risk_level: Dict[RiskLevel, int]
 
 
-class RiskWeight(BaseModel):
-    """Weighting for different risk factors in compliance scoring."""
-    criticality: float = Field(0.5, ge=0.0, le=1.0)
-    reputation_impact: float = Field(0.2, ge=0.0, le=1.0)
-    legal_liability: float = Field(0.3, ge=0.0, le=1.0)
-
-
-class ComplianceScore(BaseModel):
-    """High-integrity compliance score result."""
-    score: float = Field(..., ge=0.0, le=100.0)
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
-    tenant_id: str
-    vertical: str = "fsma"
-    domain_scores: Dict[str, float] = Field(default_factory=dict)
-    critical_findings_count: int = 0
-    weights_used: RiskWeight
