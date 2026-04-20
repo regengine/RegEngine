@@ -32,6 +32,7 @@ permissions:
   contents: read
   checks: write
   pull-requests: write
+  id-token: write  # required for cosign keyless signing on push to main
 
 jobs:
   # ── Test Matrix ──────────────────────────────────────────
@@ -293,10 +294,52 @@ jobs:
         uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd  # v4
 
       - name: Build root Dockerfile
-        run: docker build -t regengine:test -f Dockerfile .
+        run: |
+          docker build -t regengine:test -f Dockerfile .
+          # Export image tarball so syft can scan the exact build artifact
+          docker save regengine:test -o /tmp/regengine.tar
 
       - name: Verify image starts
         run: docker run --rm regengine:test python -c "print('Build OK')"
+
+      # ── SBOM generation (#1169) ───────────────────────────
+      - name: Install syft
+        run: curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin
+
+      - name: Generate SBOM (SPDX JSON)
+        run: syft /tmp/regengine.tar -o spdx-json > sbom.spdx.json
+
+      - name: Upload SBOM artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7
+        with:
+          name: sbom
+          path: sbom.spdx.json
+          retention-days: 90
+          if-no-files-found: error
+
+      # ── Image signing via cosign (#1169) ──────────────────
+      # Runs only on push to main (not on PRs) to avoid needing the
+      # COSIGN_PRIVATE_KEY secret in fork/PR contexts.
+      # To enable: add COSIGN_PRIVATE_KEY and COSIGN_PASSWORD as repo
+      # secrets, then push sigstore public key to .github/cosign.pub.
+      - name: Install cosign
+        if: github.event_name != 'pull_request'
+        uses: sigstore/cosign-installer@4959ce089c160fddf62f7b42464195ba1a56d382  # v3.6.0
+
+      - name: Sign image with cosign
+        if: github.event_name != 'pull_request' && env.COSIGN_PRIVATE_KEY != ''
+        env:
+          COSIGN_PRIVATE_KEY: ${{ secrets.COSIGN_PRIVATE_KEY }}
+          COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
+        run: |
+          # Load the image so cosign can reference it by digest
+          docker load -i /tmp/regengine.tar
+          IMAGE_DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' regengine:test 2>/dev/null || echo "")
+          if [ -n "$IMAGE_DIGEST" ]; then
+            cosign sign --key env://COSIGN_PRIVATE_KEY "$IMAGE_DIGEST"
+          else
+            echo "No registry digest available (local build); skipping cosign sign. Push to a registry first."
+          fi
 
   # ── Security (Hard Gate) ─────────────────────────────────
   security:

@@ -32,92 +32,70 @@ updates:
       - dependency-name: "vitest"
         update-types: ["version-update:semver-major"]
 
-  # Python services — ALL grouped into one ecosystem entry per service
-  # with aggressive grouping to reduce PR noise
+  # Python services — ungrouped so each package gets its own PR.
+  # A bundled "all-dependencies" group hides dangerous version bumps
+  # inside large PRs; individual PRs make it easy to review, revert,
+  # or hold a specific package without blocking others. (#1178)
 
   - package-ecosystem: "pip"
     directory: "/services/admin"
     schedule:
       interval: "weekly"
       day: "monday"
-    open-pull-requests-limit: 3
+    open-pull-requests-limit: 10
     labels:
       - "dependencies"
       - "backend"
-    groups:
-      all-dependencies:
-        patterns:
-          - "*"
 
   - package-ecosystem: "pip"
     directory: "/services/ingestion"
     schedule:
       interval: "weekly"
       day: "monday"
-    open-pull-requests-limit: 3
+    open-pull-requests-limit: 10
     labels:
       - "dependencies"
       - "backend"
-    groups:
-      all-dependencies:
-        patterns:
-          - "*"
 
   - package-ecosystem: "pip"
     directory: "/services/compliance"
     schedule:
       interval: "weekly"
       day: "monday"
-    open-pull-requests-limit: 3
+    open-pull-requests-limit: 10
     labels:
       - "dependencies"
       - "backend"
-    groups:
-      all-dependencies:
-        patterns:
-          - "*"
 
   - package-ecosystem: "pip"
     directory: "/services/graph"
     schedule:
       interval: "weekly"
       day: "monday"
-    open-pull-requests-limit: 3
+    open-pull-requests-limit: 10
     labels:
       - "dependencies"
       - "backend"
-    groups:
-      all-dependencies:
-        patterns:
-          - "*"
 
   - package-ecosystem: "pip"
     directory: "/services/nlp"
     schedule:
       interval: "weekly"
       day: "monday"
-    open-pull-requests-limit: 3
+    open-pull-requests-limit: 10
     labels:
       - "dependencies"
       - "backend"
-    groups:
-      all-dependencies:
-        patterns:
-          - "*"
 
   - package-ecosystem: "pip"
     directory: "/services/scheduler"
     schedule:
       interval: "weekly"
       day: "monday"
-    open-pull-requests-limit: 3
+    open-pull-requests-limit: 10
     labels:
       - "dependencies"
       - "backend"
-    groups:
-      all-dependencies:
-        patterns:
-          - "*"
 
   # GitHub Actions
   - package-ecosystem: "github-actions"
