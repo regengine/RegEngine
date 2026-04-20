@@ -66,6 +66,9 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     CMD sh -c 'curl -fsS "http://localhost:${PORT:-8000}/health" || exit 1'
 
+# Issue #1155: Remove any test files that slipped through the build context
+RUN find /app -name "test_*.py" -delete
+
 # Set ownership and switch to non-root user
 RUN chown -R appuser:appuser /app
 USER appuser
