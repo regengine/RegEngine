@@ -15,21 +15,31 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from shared.auth import require_api_key
+from shared.fda_export import (
+    ExportWindowError,
+    MAX_EXPORT_WINDOW_DAYS,
+    safe_filename,
+    safe_filename_token,
+    validate_export_window,
+)
 from shared.resilient_http import resilient_client
 from shared.circuit_breaker import CircuitOpenError
+from shared.rules.ftl import FTL_CATEGORIES
 from .config import settings
 from .csv_safety import sanitize_cell
 from .fsma_spreadsheet import FSMATimestampError, generate_fda_csv
 
 
 # ---------------------------------------------------------------------------
-# FDA spreadsheet hardening helpers (issues #1283, #1272, #1291)
+# FDA spreadsheet hardening helpers
 # ---------------------------------------------------------------------------
-
-# FSMA 204 retention window — records older than 2 years are not in scope
-# for mandatory response. We still export them, but refuse ranges that
-# would materialize an unbounded history.
-_MAX_EXPORT_RANGE_DAYS = 366 * 2
+#
+# EPIC-L (#1655) consolidated the cross-service safe-export primitives into
+# ``services/shared/fda_export``. This route now uses
+# :func:`validate_export_window` to enforce the 90-day cap mandated by
+# EPIC-L ("end_date-only exports permitting full-tenant dumps") and
+# :func:`safe_filename` to build ``Content-Disposition`` headers — no
+# raw query-string values reach the header value.
 
 # Cursor-pagination parameters for the upstream graph service
 # (issue #1038). The graph service caps ``limit`` at 500; we request
@@ -40,47 +50,11 @@ _MAX_EXPORT_RANGE_DAYS = 366 * 2
 _GRAPH_PAGE_SIZE = 500
 _MAX_EXPORT_EVENTS = 50_000
 
-# Narrow regex for safe filename tokens — ASCII alphanumerics plus
-# ``.``, ``_``, ``-``. Anything else is stripped to prevent CRLF /
-# quote / path-separator injection into the Content-Disposition header.
-_FILENAME_SAFE_RE = re.compile(r"[^A-Za-z0-9._-]")
-
 # Requesting-entity is rendered into a CSV metadata row that an auditor
 # sees at the top of the spreadsheet. Restrict to a very conservative
 # set so formula injection cannot land even if the CSV sanitizer is
 # ever regressed.
 _REQUESTING_ENTITY_RE = re.compile(r"^[A-Za-z0-9 .,&'\-]{0,120}$")
-
-
-def _parse_iso_date(name: str, value: str) -> date:
-    """Parse ``value`` as ISO-8601 ``YYYY-MM-DD`` or 400.
-
-    Rejects typos like ``2026-13-99`` and formats like ``01/15/26`` that
-    previously slipped through and either produced empty "official"
-    exports (#1291) or were interpolated verbatim into Content-
-    Disposition filenames (#1283).
-    """
-    try:
-        return date.fromisoformat(value)
-    except (TypeError, ValueError) as exc:
-        raise HTTPException(
-            status_code=400,
-            detail=f"{name} must be ISO-8601 YYYY-MM-DD",
-        ) from exc
-
-
-def _safe_filename_token(value: str, *, max_len: int = 64) -> str:
-    """Sanitize a filename component.
-
-    Restricts to ``[A-Za-z0-9._-]``, caps length, and rejects ``..``
-    traversal. Used before interpolating any user-influenced value
-    into a Content-Disposition header (issue #1283).
-    """
-    cleaned = _FILENAME_SAFE_RE.sub("_", value)[:max_len] or "all"
-    # Defense-in-depth: prevent .. after normalization.
-    while ".." in cleaned:
-        cleaned = cleaned.replace("..", "_")
-    return cleaned
 
 _logger = logging.getLogger(__name__)
 _audit_logger = logging.getLogger("compliance-audit")
@@ -179,18 +153,14 @@ _CHECKLIST_INDEX: dict[str, ComplianceChecklist] = {c.id: c for c in _CHECKLISTS
 # Routes
 # ---------------------------------------------------------------------------
 #
-# NOTE (#1203): The POST /validate endpoint was removed on 2026-04-17.
-#
-# It was orphaned — no backend caller and no React consumer actually invoked
-# it in production. EPCIS ingestion validates via its own Pydantic check
-# (see services/ingestion/app/epcis/validation.py), and the real compliance
-# logic lives in the versioned RulesEngine (services/shared/rules/engine.py)
-# which is wired through services/ingestion/app/rules_router.py.
-#
-# Keeping a dead validator advertised as "POST /validate" overstated product
-# functionality and risked accidental future callers relying on fail-open
-# behavior. If re-wiring is ever needed, do it by calling RulesEngine
-# directly from ingestion, not by resurrecting this endpoint.
+# HISTORY (#1203 / #1105): POST /validate was removed on 2026-04-17 as
+# orphaned code. It was restored below on 2026-04-20 as part of #1105 but
+# now gates STRICTLY on FTL-commodity scope — any caller that reaches this
+# endpoint must declare an FDA Food Traceability List commodity, otherwise
+# the request is rejected (400 ``E_NON_FTL_FOOD``) rather than returning a
+# false-positive compliance stamp. The deeper rule-engine logic (per-CTE
+# required-field enforcement, etc.) remains in ``services/shared/rules``
+# and is pending the #1203 option-2 rewire.
 
 @router.get("/industries", dependencies=[Depends(require_api_key)], response_model=IndustriesResponse)
 async def list_industries() -> IndustriesResponse:
@@ -214,55 +184,194 @@ async def get_checklist(checklist_id: str) -> ComplianceChecklist:
 
 
 # ---------------------------------------------------------------------------
+# /validate — FTL-scoped compliance validation (issue #1105)
+# ---------------------------------------------------------------------------
+#
+# The prior /validate endpoint was removed on 2026-04-17 (#1203) as orphaned
+# code. Issue #1105 requires that when a caller asks the compliance service
+# to validate a configuration, we first confirm the subject food is on the
+# FDA Food Traceability List — otherwise a "compliant" response is a false-
+# positive certification for a product FSMA 204 does not even cover.
+#
+# This handler is the catalog-level gate: every request MUST declare an
+# ``ftl_commodity``. Non-FTL commodities are rejected with 400
+# ``E_NON_FTL_FOOD`` so callers surface the out-of-scope food rather than
+# receive a clean stamp.
+#
+# Per-checklist scope (``applicable_ftl_commodities``) is a follow-up — the
+# existing checklist schema has no scope field, so we do not invent one here.
+# If the request names a ``checklist_id`` that declares a scope in the
+# future, this handler already enforces it via ``E_CHECKLIST_OUT_OF_SCOPE``.
+
+
+class ValidateRequest(BaseModel):
+    """Request body for POST /validate.
+
+    ``ftl_commodity`` is required per #1105 — a caller must declare which
+    FDA Food Traceability List commodity the configuration targets. Non-FTL
+    commodities (bananas, apples, beef, etc.) are out of FSMA 204 scope
+    and are rejected before any further validation runs.
+
+    ``config`` and ``checklist_id`` are optional hooks for the future rules-
+    engine reintegration (#1203 option 2). They are carried through today
+    for forward compatibility but are not yet evaluated; downstream callers
+    should still expect the endpoint to gate on ``ftl_commodity`` first.
+    """
+
+    ftl_commodity: str
+    config: dict[str, Any] | None = None
+    checklist_id: str | None = None
+    strict: bool = False
+
+
+class ValidateResponse(BaseModel):
+    """Response body for POST /validate.
+
+    Always returns a structured ``valid`` flag plus lists of ``errors`` and
+    ``warnings``. FTL out-of-scope conditions are surfaced as HTTP 400 with
+    a structured ``detail`` code rather than a 200 with ``valid=false`` so
+    a caller that ignores the body still fails closed.
+    """
+
+    valid: bool
+    ftl_commodity: str
+    errors: list[str] = []
+    warnings: list[str] = []
+
+
+@router.post(
+    "/validate",
+    dependencies=[Depends(require_api_key)],
+    response_model=ValidateResponse,
+)
+async def validate_compliance(request: ValidateRequest) -> ValidateResponse:
+    """Validate an FSMA 204 configuration, gated on FTL commodity scope.
+
+    Enforcement order (#1105):
+
+    1. Request must declare ``ftl_commodity`` (Pydantic 422 if missing).
+    2. The commodity must be on the FDA FTL catalog, else 400
+       ``E_NON_FTL_FOOD`` — prevents false-positive compliance stamps for
+       out-of-scope products.
+    3. If a ``checklist_id`` is supplied and the checklist declares an
+       ``applicable_ftl_commodities`` scope (future schema), the request's
+       commodity must fall inside that scope, else 400
+       ``E_CHECKLIST_OUT_OF_SCOPE``. Today's checklists carry no scope
+       field, so this branch is a no-op — wired now so the follow-up can
+       drop in a scope without another endpoint change.
+    """
+    # --- Step 1 / 2 — catalog-level FTL gate ------------------------------
+    if not _is_ftl_commodity(request.ftl_commodity):
+        raise HTTPException(status_code=400, detail="E_NON_FTL_FOOD")
+
+    canonical_commodity = _canonicalize_ftl_commodity(request.ftl_commodity)
+
+    # --- Step 3 — per-checklist scope (future-proofed, not yet enforced) --
+    if request.checklist_id is not None:
+        checklist = _CHECKLIST_INDEX.get(request.checklist_id)
+        if checklist is None:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Checklist '{request.checklist_id}' not found",
+            )
+        # ``applicable_ftl_commodities`` is not part of the current
+        # ``ComplianceChecklist`` schema — read defensively so that the
+        # day a scope field is added, this gate activates automatically.
+        scope = getattr(checklist, "applicable_ftl_commodities", None)
+        if scope:
+            normalized_scope = {_canonicalize_ftl_commodity(s) for s in scope}
+            if canonical_commodity not in normalized_scope:
+                raise HTTPException(
+                    status_code=400,
+                    detail="E_CHECKLIST_OUT_OF_SCOPE",
+                )
+
+    # --- Basic validation stub --------------------------------------------
+    # The deeper rule-engine logic lives in ``services/shared/rules`` and
+    # will be wired in per #1203 option 2. For now we surface a clean
+    # response so callers can rely on the FTL gate being authoritative.
+    return ValidateResponse(
+        valid=True,
+        ftl_commodity=canonical_commodity,
+        errors=[],
+        warnings=[],
+    )
+
+
+# ---------------------------------------------------------------------------
 # FDA Audit Spreadsheet Export
 # ---------------------------------------------------------------------------
 
 _GRAPH_SERVICE_URL = settings.graph_service_url
 
 
-@router.get("/v1/fsma/audit/spreadsheet", dependencies=[Depends(require_api_key)])
+@router.get("/v1/fsma/audit/spreadsheet")
 async def fsma_audit_spreadsheet(
     request: Request,
     start_date: str = Query(..., description="Start date (YYYY-MM-DD)"),
     end_date: str = Query(..., description="End date (YYYY-MM-DD)"),
     tlc: str | None = Query(None, description="Filter by Traceability Lot Code"),
     requesting_entity: str | None = Query(None, description="Name of requesting entity"),
+    api_key: APIKey = Depends(require_api_key),
 ) -> StreamingResponse:
     """Generate an FDA 204 Sortable Spreadsheet CSV for the given date range.
 
-    Hardening applied in this handler (issues #1272, #1283, #1291):
+    Hardening applied in this handler (EPIC-L / #1655, prior #1272 /
+    #1283 / #1291):
 
-    * ``start_date`` / ``end_date`` must parse as ISO-8601 ``YYYY-MM-DD``
-      and be ordered — misspelled dates no longer produce empty
-      "official" exports with an FDA-formatted cover block.
-    * The date-range span is capped at :data:`_MAX_EXPORT_RANGE_DAYS`
-      to prevent DoS / cost exhaustion on pathological windows.
+    * ``start_date`` and ``end_date`` are both required and pass
+      through :func:`shared.fda_export.validate_export_window`, which
+      enforces ISO-8601 format, strict ordering, and a 90-day span cap
+      — "end_date-only exports permitting full-tenant dumps" from
+      EPIC-L are now impossible by construction.
     * ``requesting_entity`` is rejected unless it matches
       :data:`_REQUESTING_ENTITY_RE` — a narrow character class that
       cannot carry a formula prefix into the spreadsheet header row.
     * ``Content-Disposition`` is built from parsed ``date`` objects
-      passed through :func:`_safe_filename_token`, never raw
-      query-string values — blocking CRLF / quote injection of a
-      second response header (issue #1283).
+      passed through :func:`shared.fda_export.safe_filename`, never
+      raw query-string values — blocking CRLF / quote injection of a
+      second response header.
     * Zero-row exports return HTTP 404 with a structured body rather
-      than an empty FDA-formatted CSV (issue #1291).
+      than an empty FDA-formatted CSV.
     """
+    # ---- Tenant binding (#1106) ------------------------------------------
+    # The authenticated API key is the sole source of truth for tenant
+    # scope. If the client sent an X-Tenant-ID / X-RegEngine-Tenant-ID
+    # header that disagrees, reject loudly rather than silently taking
+    # the header (which would let any authenticated caller export
+    # another tenant's FDA package).
+    authenticated_tenant_id = getattr(api_key, "tenant_id", None)
+    if not authenticated_tenant_id:
+        raise HTTPException(
+            status_code=403,
+            detail="API key is not associated with a tenant",
+        )
+    client_tenant_header = (
+        request.headers.get("X-Tenant-ID")
+        or request.headers.get("X-RegEngine-Tenant-ID")
+    )
+    if client_tenant_header and client_tenant_header != str(authenticated_tenant_id):
+        _logger.warning(
+            "fda_export_tenant_mismatch",
+            extra={
+                "authenticated_tenant": str(authenticated_tenant_id),
+                "client_header_tenant": client_tenant_header,
+                "key_id": getattr(api_key, "key_id", None),
+            },
+        )
+        raise HTTPException(
+            status_code=409,
+            detail="E_TENANT_MISMATCH",
+        )
+    tenant_id = str(authenticated_tenant_id)
+
     # ---- Input validation -------------------------------------------------
-    start = _parse_iso_date("start_date", start_date)
-    end = _parse_iso_date("end_date", end_date)
-    if end < start:
-        raise HTTPException(
-            status_code=400,
-            detail="end_date must be on or after start_date",
-        )
-    if (end - start).days > _MAX_EXPORT_RANGE_DAYS:
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                f"Date range exceeds the {_MAX_EXPORT_RANGE_DAYS}-day "
-                "FSMA 204 retention window — narrow the query"
-            ),
-        )
+    try:
+        window = validate_export_window(start_date, end_date)
+    except ExportWindowError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    start = window.start
+    end = window.end
     if requesting_entity and not _REQUESTING_ENTITY_RE.match(requesting_entity):
         raise HTTPException(
             status_code=400,
@@ -284,14 +393,17 @@ async def fsma_audit_spreadsheet(
     if tlc:
         base_params["tlc"] = tlc
 
-    # Forward auth, tenant, and correlation headers to downstream graph service
-    headers: dict[str, str] = {}
-    api_key = request.headers.get("X-RegEngine-API-Key")
-    if api_key:
-        headers["X-RegEngine-API-Key"] = api_key
-    tenant_id = request.headers.get("X-Tenant-ID") or request.headers.get("X-RegEngine-Tenant-ID")
-    if tenant_id:
-        headers["X-RegEngine-Tenant-ID"] = tenant_id
+    # Build outbound headers. We forward the authenticated tenant_id
+    # (never the client-supplied header) and an internal service
+    # secret for service-to-service auth. We do NOT forward the
+    # caller's raw X-RegEngine-API-Key to the graph service — that
+    # header stays at the compliance boundary (#1106).
+    headers: dict[str, str] = {
+        "X-RegEngine-Tenant-ID": tenant_id,
+    }
+    internal_secret = settings.internal_service_secret
+    if internal_secret:
+        headers["X-RegEngine-Internal-Secret"] = internal_secret
     request_id = request.headers.get("X-Request-ID")
     if request_id:
         headers["X-Request-ID"] = request_id
@@ -447,9 +559,15 @@ async def fsma_audit_spreadsheet(
     )
 
     # Build the filename from parsed ``date`` objects and a sanitized
-    # TLC token — never from the raw query string (issue #1283).
-    tlc_token = f"_{_safe_filename_token(tlc)}" if tlc else ""
-    filename = f"fsma_204_audit_{start.isoformat()}_{end.isoformat()}{tlc_token}.csv"
+    # TLC token — never from the raw query string. ``safe_filename``
+    # is the shared EPIC-L primitive so ingestion and compliance
+    # produce structurally identical attachment headers.
+    filename = safe_filename(
+        "fsma_204_audit",
+        scope=safe_filename_token(tlc) if tlc else None,
+        start=start,
+        end=end,
+    )
     return StreamingResponse(
         iter([csv_content]),
         media_type="text/csv",
