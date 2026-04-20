@@ -32,6 +32,11 @@ from fastapi.responses import StreamingResponse
 
 from app.authz import IngestionPrincipal, require_permission
 from app.export_models import ExportHistoryResponse, ExportVerifyResponse
+from shared.fda_export import (
+    ExportWindowError,
+    MAX_EXPORT_WINDOW_DAYS,
+    validate_export_window,
+)
 from shared.permissions import has_permission as _has_permission
 from app.fda_export_service import (
     _build_chain_verification_payload,
@@ -591,6 +596,15 @@ async def export_all_events(
             ),
         )
 
+    # EPIC-L (#1655): the ``/export/all`` path is the full-tenant-dump
+    # risk surface. Require both dates and cap the window at 90 days
+    # so a caller can't materialize the entire retention window in
+    # one synchronous request.
+    try:
+        validate_export_window(start_date, end_date)
+    except ExportWindowError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
     # Authorize PII access (issue #1219).
     _authorize_pii_access(
         include_pii=include_pii,
@@ -638,6 +652,18 @@ async def export_all_events(
             if e["id"] not in seen:
                 seen.add(e["id"])
                 deduped.append(e)
+
+        # EPIC-L (#1655): no empty-success exports. An FDA-formatted CSV
+        # with zero data rows looks identical to a complete "no compliance
+        # activity" response and is easy to misread. Fail loudly instead.
+        if not deduped:
+            raise HTTPException(
+                status_code=404,
+                detail=(
+                    "No traceability records found for the requested "
+                    "window. Widen the date range or verify tenant_id."
+                ),
+            )
 
         csv_content = _generate_csv(deduped, include_pii=include_pii)
         export_hash = hashlib.sha256(csv_content.encode("utf-8")).hexdigest()
