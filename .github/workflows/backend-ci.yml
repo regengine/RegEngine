@@ -158,21 +158,32 @@ jobs:
         run: |
           export PYTHONPATH=$(pwd):$PYTHONPATH
           cd services/${{ matrix.service }}
-          # Per-service coverage thresholds — ratcheted up 2026-04-12.
-          # Strategy: set floor at (actual - 2%). Bump after each test cycle.
-          THRESHOLD=50
+          # Per-service coverage thresholds — ratcheted up 2026-04-20 (#1348).
+          # Actual coverage measured 2026-04-20; thresholds set at (actual - 5%)
+          # to give a meaningful floor without immediately breaking CI.
+          # compliance: actual 85% → floor 80%
+          # scheduler:  actual 69% → floor 65%
+          # admin:      actual 75% → floor 70%
+          # graph:      actual 64% → floor 60%
+          # nlp:        actual 68% → floor 65%
+          # ingestion:  actual ~50% on CI (collect errors block local run) → floor 48%
+          THRESHOLD=60
           case "${{ matrix.service }}" in
-            compliance) THRESHOLD=30 ;;  # was 18; bumped with new validation/checklist/spreadsheet tests
-            scheduler)  THRESHOLD=35 ;;  # was 24; bumped with new state/kafka/notification tests
-            admin)      THRESHOLD=50 ;;
-            graph)      THRESHOLD=50 ;;
-            ingestion)  THRESHOLD=42 ;;  # was 40; actual ~42%
-            nlp)        THRESHOLD=50 ;;
+            compliance) THRESHOLD=80 ;;  # was 30; actual 85%
+            scheduler)  THRESHOLD=65 ;;  # was 35; actual 69%
+            admin)      THRESHOLD=70 ;;  # was 50; actual 75%
+            graph)      THRESHOLD=60 ;;  # was 50; actual 64%
+            ingestion)  THRESHOLD=48 ;;  # was 42; actual ~50% on CI
+            nlp)        THRESHOLD=65 ;;  # was 50; actual 68%
           esac
+          # NOTE: --ignore=tests/integration/ is intentionally removed so that
+          # integration tests contribute to the coverage report when they run.
+          # Tests that require live external services should be marked with
+          # @pytest.mark.integration and can be skipped via -m "not integration"
+          # in environments without those services.
           pytest tests/ -v --cov=app --cov-report=term \
             --cov-report=xml:coverage.xml \
             --cov-fail-under=$THRESHOLD \
-            --ignore=tests/integration/ \
             -o "testpaths=tests"
 
       - name: Upload coverage
