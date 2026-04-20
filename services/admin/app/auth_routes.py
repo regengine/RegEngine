@@ -592,6 +592,29 @@ async def signup(
         db.commit()
     except Exception as commit_exc:
         db.rollback()
+
+        # #1090 — Compensating cleanup: if the DB insert rolls back but a
+        # Supabase user was already created, delete it so the email is not
+        # permanently locked in Supabase with no matching DB record.
+        if supabase_user_id is not None:
+            _sb = get_supabase()
+            if _sb:
+                try:
+                    _sb.auth.admin.delete_user(str(supabase_user_id))
+                    logger.info(
+                        "signup_supabase_orphan_cleaned",
+                        supabase_user_id=str(supabase_user_id),
+                        email=mask_email(normalized_email),
+                    )
+                except Exception as sb_cleanup_exc:
+                    logger.warning(
+                        "signup_supabase_orphan_cleanup_failed",
+                        supabase_user_id=str(supabase_user_id),
+                        email=mask_email(normalized_email),
+                        error=str(sb_cleanup_exc),
+                        residual_orphan="supabase_user_dangling",
+                    )
+
         try:
             await session_store.delete_session(session_data.id)
         except Exception as cleanup_exc:
