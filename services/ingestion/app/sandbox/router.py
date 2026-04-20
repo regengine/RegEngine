@@ -14,11 +14,11 @@ No auth required. No data stored. Rate-limited to prevent abuse.
 from __future__ import annotations
 
 import hashlib
-import logging
 import secrets
 from datetime import datetime, timezone, timedelta
 from typing import Any, Dict, List
 
+import structlog
 from fastapi import APIRouter, HTTPException, Request
 from sqlalchemy import text
 
@@ -50,7 +50,7 @@ from app.sandbox.validation import (
     _validate_kdes,
 )
 
-logger = logging.getLogger("sandbox")
+logger = structlog.get_logger("sandbox")
 
 router = APIRouter(prefix="/api/v1/sandbox", tags=["Sandbox"])
 
