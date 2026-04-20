@@ -3,15 +3,15 @@
 from __future__ import annotations
 
 import json
-import logging
 from datetime import datetime, timezone
 from typing import Any, Optional
 
 import redis
+import structlog
 
 from app.config import get_settings
 
-logger = logging.getLogger("stripe-billing")
+logger = structlog.get_logger("stripe-billing")
 
 # #1076: Stripe retries any webhook that doesn't ack within ~a few seconds,
 # and continues retrying for up to 3 days on 5xx/timeouts. Without a dedup

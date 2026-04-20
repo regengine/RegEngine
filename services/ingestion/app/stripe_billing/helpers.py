@@ -2,19 +2,19 @@
 
 from __future__ import annotations
 
-import logging
 import os
 from datetime import datetime, timezone
 from typing import Any, Optional
 from urllib.parse import urlparse, urlunparse
 
 import stripe
+import structlog
 from fastapi import HTTPException
 
 from app.authz import IngestionPrincipal
 from shared.permissions import has_permission
 
-logger = logging.getLogger("stripe-billing.helpers")
+logger = structlog.get_logger("stripe-billing.helpers")
 
 
 def _configure_stripe() -> None:
