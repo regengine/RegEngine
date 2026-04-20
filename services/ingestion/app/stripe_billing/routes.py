@@ -15,6 +15,7 @@ from app.webhook_compat import _verify_api_key
 from shared import funnel_events as _funnel_mod
 
 from . import customers as _customers_mod
+from . import rate_limiting as _rate_limiting_mod
 from . import helpers as _helpers_mod
 from . import plans as _plans_mod
 from . import state as _state_mod
@@ -294,6 +295,7 @@ async def stripe_webhooks(
     stripe_signature: Optional[str] = Header(default=None, alias="Stripe-Signature"),
 ) -> dict[str, Any]:
     """Primary Stripe webhook endpoint."""
+    _rate_limiting_mod._check_stripe_webhook_rate_limit(request)
     return await _webhooks_mod._process_stripe_webhook(request, stripe_signature)
 
 
@@ -308,6 +310,7 @@ async def stripe_webhook_legacy(
     stripe_signature: Optional[str] = Header(default=None, alias="Stripe-Signature"),
 ) -> dict[str, Any]:
     """Legacy Stripe webhook path retained for backward compatibility."""
+    _rate_limiting_mod._check_stripe_webhook_rate_limit(request)
     return await _webhooks_mod._process_stripe_webhook(request, stripe_signature)
 
 
