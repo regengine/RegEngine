@@ -1186,22 +1186,58 @@ class FSMAExtractor:
 
         return date_str  # Return as-is if no format matches
 
+    # ---------------------------------------------------------------------------
+    # KDE field weights for confidence scoring (#1286).
+    #
+    # Weight semantics (FSMA 204 regulatory criticality):
+    #   3 = Required — absence means the record cannot satisfy traceability;
+    #       maps to the three FSMA 204 "critical" KDEs every CTE must carry.
+    #   2 = Important — strongly expected; absence degrades compliance posture.
+    #   1 = Advisory — helpful but not strictly required by the rule.
+    #
+    # Fields not present in this dict default to weight 1 (advisory).
+    # ---------------------------------------------------------------------------
+    _KDE_FIELD_WEIGHTS: Dict[str, int] = {
+        # Required (weight 3)
+        "traceability_lot_code": 3,
+        "event_date": 3,
+        "location_identifier": 3,
+        # Important (weight 2)
+        "quantity": 2,
+        "product_description": 2,
+        "unit_of_measure": 2,
+        # Advisory fields inherit the default weight of 1.
+    }
+
+    # FSMA 204 required fields per CTE type.  Only fields in this mapping
+    # participate in the confidence score; everything else is ignored.
+    _CTE_REQUIRED_FIELDS: Dict["CTEType", List[str]] = {
+        # Will be populated after CTEType is defined; see class body below.
+    }
+
     def _calculate_confidence(self, kde: KDE, cte_type: CTEType) -> float:
         """
-        Calculate extraction confidence based on KDE completeness.
+        Calculate extraction confidence as a weighted score of KDE completeness.
 
-        FSMA 204 requires specific KDEs for each CTE type.
+        Algorithm (#1286):
+        1. Each field carries a weight from ``_KDE_FIELD_WEIGHTS`` (default 1).
+        2. score = sum(weight for present fields) / sum(all weights).
+        3. If ANY weight-3 (Required) field is absent, the score is capped at
+           0.5 regardless of advisory coverage — a compliant record MUST have
+           all required KDEs.
         """
-        required_fields = {
+        cte_required_fields: Dict["CTEType", List[str]] = {
             CTEType.SHIPPING: [
                 "traceability_lot_code",
                 "quantity",
+                "unit_of_measure",
                 "location_identifier",
                 "event_date",
             ],
             CTEType.RECEIVING: [
                 "traceability_lot_code",
                 "quantity",
+                "unit_of_measure",
                 "location_identifier",
                 "event_date",
             ],
@@ -1218,10 +1254,28 @@ class FSMAExtractor:
             ],
         }
 
-        fields = required_fields.get(cte_type, required_fields[CTEType.SHIPPING])
-        found = sum(1 for f in fields if getattr(kde, f, None) is not None)
+        fields = cte_required_fields.get(cte_type, cte_required_fields[CTEType.SHIPPING])
+        total_weight = sum(self._KDE_FIELD_WEIGHTS.get(f, 1) for f in fields)
+        if total_weight == 0:
+            return 0.0
 
-        return round(found / len(fields), 2)
+        weighted_found = sum(
+            self._KDE_FIELD_WEIGHTS.get(f, 1)
+            for f in fields
+            if getattr(kde, f, None) is not None
+        )
+        score = round(weighted_found / total_weight, 2)
+
+        # Cap at 0.5 if any Required (weight-3) field is missing.
+        missing_required = any(
+            self._KDE_FIELD_WEIGHTS.get(f, 1) == 3
+            and getattr(kde, f, None) is None
+            for f in fields
+        )
+        if missing_required:
+            score = min(score, 0.5)
+
+        return score
 
     def _validate_extraction(
         self, ctes: List[CTE], doc_type: DocumentType
