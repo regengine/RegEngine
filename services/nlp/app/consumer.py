@@ -535,18 +535,56 @@ def _convert_entities_to_extraction(
         action_words = ["shall", "must", "required to", "has to", "should", "may"]
         action = next((w for w in action_words if w in text.lower()), "must")
 
-        # Determine obligation type
-        if (
-            "must" in text.lower()
-            or "shall" in text.lower()
-            or "required" in text.lower()
-        ):
-            obl_type = ObligationType.MUST
-        elif "should" in text.lower():
-            obl_type = ObligationType.SHOULD
-        elif "may" in text.lower():
-            obl_type = ObligationType.MAY
-        else:
+        # Determine obligation type with negation and modality detection (#1299).
+        #
+        # Negation detection: if a matched keyword is immediately preceded by
+        # a negation token ("not", "no", "never", "without") within 3 tokens,
+        # the match is skipped — "must not report" should NOT infer MANDATORY.
+        # We tokenise on whitespace and check the 3 tokens before the keyword.
+        #
+        # Modality detection:
+        #   MANDATORY  ← "must", "shall", "required"
+        #   RECOMMENDED ← "may", "should"
+        # We use ObligationType.MUST for MANDATORY and ObligationType.SHOULD for
+        # RECOMMENDED; ObligationType.MAY maps to the weakest recommendation.
+        _NEGATION_TOKENS = {"not", "no", "never", "without"}
+
+        def _keyword_is_negated(full_text: str, keyword: str) -> bool:
+            """Return True if ``keyword`` appears preceded by a negation token
+            within 3 whitespace-delimited tokens in ``full_text``."""
+            tokens = full_text.lower().split()
+            for idx, tok in enumerate(tokens):
+                # Strip punctuation from token for comparison.
+                clean_tok = tok.strip(".,;:()[]\"'")
+                if clean_tok == keyword:
+                    preceding = tokens[max(0, idx - 3): idx]
+                    preceding_clean = {t.strip(".,;:()[]\"'") for t in preceding}
+                    if preceding_clean & _NEGATION_TOKENS:
+                        return True
+            return False
+
+        text_lower = text.lower()
+
+        # MANDATORY keywords — "must", "shall", "required"
+        _MANDATORY_KEYWORDS = ["must", "shall", "required"]
+        # RECOMMENDED keywords — "may", "should"
+        _RECOMMENDED_KEYWORDS = ["should", "may"]
+
+        obl_type = None
+        # Check MANDATORY first (higher precedence).
+        for kw in _MANDATORY_KEYWORDS:
+            if kw in text_lower and not _keyword_is_negated(text, kw):
+                obl_type = ObligationType.MUST
+                break
+
+        if obl_type is None:
+            for kw in _RECOMMENDED_KEYWORDS:
+                if kw in text_lower and not _keyword_is_negated(text, kw):
+                    obl_type = ObligationType.SHOULD if kw == "should" else ObligationType.MAY
+                    break
+
+        if obl_type is None:
+            # Default when no keyword matched or all were negated.
             obl_type = ObligationType.MUST
 
         # Find associated thresholds (within proximity)
@@ -1135,10 +1173,87 @@ def stop_consumer() -> None:
     _shutdown_event.set()
 
 
+# ---------------------------------------------------------------------------
+# Issue #1231 — HTTP health endpoint for the Kafka consumer
+# ---------------------------------------------------------------------------
+#
+# Orchestrators (Railway, Kubernetes, ECS) need a way to determine whether
+# the consumer process is alive. Without this, the only liveness signal is
+# "process still running", which misses stuck consumers that have stopped
+# polling. A background thread exposes GET /health on port 8099; it returns
+# 200 {"status":"ok"} as long as _shutdown_event is not set.
+#
+# Uses only Python stdlib (http.server) — no new dependencies.
+# ---------------------------------------------------------------------------
+
+import http.server
+import socket
+
+
+_HEALTH_PORT = int(os.getenv("NLP_HEALTH_PORT", "8099"))
+
+
+class _HealthHandler(http.server.BaseHTTPRequestHandler):
+    """Minimal HTTP handler for the consumer liveness probe."""
+
+    def do_GET(self) -> None:  # noqa: N802
+        if self.path in ("/health", "/healthz"):
+            if _shutdown_event.is_set():
+                self.send_response(503)
+                body = b'{"status":"stopping"}'
+            else:
+                self.send_response(200)
+                body = b'{"status":"ok"}'
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+        else:
+            self.send_response(404)
+            self.end_headers()
+
+    def log_message(self, fmt: str, *args: object) -> None:  # noqa: N802
+        # Suppress noisy access logs; structlog handles observability.
+        pass
+
+
+def _start_health_server() -> None:
+    """Start a background thread serving the health endpoint on _HEALTH_PORT.
+
+    The server uses SO_REUSEADDR so a fast restart doesn't hit EADDRINUSE.
+    Binds to 0.0.0.0 so container health-check probes from the host can
+    reach it without loopback-only restrictions.
+
+    Called once from run_consumer() before the Kafka consumer loop starts so
+    the probe is available from process startup (before the first Kafka poll).
+    """
+    try:
+        server = http.server.HTTPServer(("0.0.0.0", _HEALTH_PORT), _HealthHandler)
+        server.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    except OSError as exc:
+        logger.warning(
+            "health_server_bind_failed",
+            port=_HEALTH_PORT,
+            error=str(exc),
+        )
+        return
+
+    thread = threading.Thread(
+        target=server.serve_forever,
+        name="nlp-health-server",
+        daemon=True,  # exits when the main process exits
+    )
+    thread.start()
+    logger.info("health_server_started", port=_HEALTH_PORT, path="/health")
+
+
 from shared.observability import setup_standalone_observability
 tracer = setup_standalone_observability("nlp-consumer")
 
 def run_consumer() -> None:
+    # Start health endpoint before first Kafka poll so probes succeed at startup
+    _start_health_server()
+
     # Ensure topics exist
     _ensure_topic(TOPIC_GRAPH_UPDATE)
     _ensure_topic(TOPIC_NEEDS_REVIEW)

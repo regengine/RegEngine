@@ -117,6 +117,21 @@ jobs:
         env:
           SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN }}
 
+      # Gate: ERROR-level findings fail CI. See issue #1157.
+      # p/security-audit findings were previously uploaded as an artifact only
+      # (silently ignored on PRs). This step gates the build on ERROR severity
+      # findings from that ruleset. WARNING-level findings are informational
+      # and do not block CI, keeping the gate signal-to-noise ratio manageable.
+      - name: Semgrep security-audit gate (fail on ERROR severity -- #1157)
+        run: |
+          pip install semgrep
+          semgrep --config=p/security-audit \
+            --exclude-rule python.sqlalchemy.security.audit.avoid-sqlalchemy-text.avoid-sqlalchemy-text \
+            --severity ERROR \
+            --error .
+        env:
+          SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN }}
+
       - name: Semgrep EPIC-A scan (tenant_id trust — #1651, advisory until rollout)
         run: |
           pip install semgrep
@@ -335,6 +350,42 @@ jobs:
           elif [ "$DAYS_LEFT" -lt 90 ]; then
             echo "WARNING: security.txt expires in less than 90 days. Plan rotation."
           fi
+
+  # ──────────────────────────────────────────────
+  # 6b. SBOM Generation (Anchore syft) — #1169
+  # ──────────────────────────────────────────────
+  sbom:
+    name: Generate SBOM (SPDX)
+    runs-on: ubuntu-latest
+    needs: [secrets, sast, deps]
+    permissions:
+      contents: read
+      id-token: write  # required for cosign keyless signing
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+
+      - name: Generate SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          path: .
+          artifact-name: sbom.spdx.json
+          format: spdx-json
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd  # v4
+
+      - name: Build image for signing
+        run: docker build -t regengine:sbom -f Dockerfile .
+
+      - name: Sign container image (keyless via Sigstore)
+        # Keyless signing — no private key to manage. The signature is bound
+        # to the GitHub Actions OIDC token so verifiers can confirm the image
+        # was built by this workflow on this repo. Requires id-token: write.
+        run: |
+          cosign sign --yes regengine:sbom
 
   # ──────────────────────────────────────────────
   # 7. Container Scan (Trivy) — consolidated monolith image
