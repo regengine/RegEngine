@@ -14,6 +14,7 @@ from cachetools import TTLCache
 from confluent_kafka import DeserializingConsumer, Producer
 from confluent_kafka.schema_registry import SchemaRegistryClient, SchemaRegistryError
 from confluent_kafka.schema_registry.avro import AvroDeserializer
+from jsonschema import Draft7Validator
 from prometheus_client import Counter
 from pydantic import ValidationError
 from structlog.contextvars import bind_contextvars, clear_contextvars
@@ -143,6 +144,58 @@ def load_schema(schema_name: str) -> str:
     path = os.path.join(os.path.dirname(__file__), "../../../schemas", schema_name)
     with open(path, "r", encoding="utf-8") as f:
         return f.read()
+
+
+def _load_inbound_schema() -> Optional[Draft7Validator]:
+    """Load JSON schema for inbound ``graph.update`` events (#1216).
+
+    Validating before ``GraphEvent.parse_obj()`` / legacy-entity access turns
+    producer bugs into structured DLQ entries instead of ``AttributeError:
+    'NoneType' object has no attribute ...`` crashes that burn the retry
+    budget on deterministic failures. Mirrors the inbound-validation pattern
+    in ``services/nlp/app/consumer.py``.
+    """
+    try:
+        from shared.paths import project_root
+
+        repo_root = project_root()
+        schema_path = repo_root / "data-schemas" / "events" / "graph.update.schema.json"
+
+        if not schema_path.exists():
+            logger.error("inbound_schema_not_found", path=str(schema_path))
+            return None
+
+        schema = json.loads(schema_path.read_text())
+        return Draft7Validator(schema)
+    except (FileNotFoundError, json.JSONDecodeError, OSError, ImportError) as exc:
+        logger.error("inbound_schema_load_failed", error=str(exc))
+        return None
+
+
+# Eagerly load inbound schema at module level so validation is fast per-message.
+_INBOUND_VALIDATOR: Optional[Draft7Validator] = _load_inbound_schema()
+
+
+def _validate_inbound_event(evt: Any) -> Optional[str]:
+    """Validate an inbound graph.update payload against the JSON schema (#1216).
+
+    Returns ``None`` on success, or a concatenated error string (joined with
+    ``"; "``, max 5 errors) for the DLQ payload on failure. Non-dict payloads
+    (e.g. raw bytes that slipped past the deserializer) are rejected before
+    any attribute access can crash the record processor.
+    """
+    if _INBOUND_VALIDATOR is None:
+        # Schema file could not be loaded — fail-open with a warning so a
+        # broken deploy does not halt the consumer entirely.
+        return None
+
+    if not isinstance(evt, dict):
+        return f"Payload is not a JSON object (got {type(evt).__name__})"
+
+    errors = list(_INBOUND_VALIDATOR.iter_errors(evt))
+    if not errors:
+        return None
+    return "; ".join(e.message for e in errors[:5])
 
 def _ensure_topic(topic: str) -> None:
     # confluent-kafka AdminClient implementation omitted for brevity/simplicity in this refactor step.
@@ -292,6 +345,37 @@ async def run_consumer() -> None:
                     consumer.commit(message=record, asynchronous=False)
                 except Exception as commit_exc:
                     logger.error("offset_commit_failed", error=str(commit_exc))
+                continue
+
+            # --- Inbound schema validation (#1216) ---
+            # Reject malformed payloads here so downstream parsing can't crash
+            # with AttributeError on missing fields. Commit the offset so a
+            # poison-pill doesn't occupy the partition head across restarts.
+            schema_error = _validate_inbound_event(evt)
+            if schema_error is not None:
+                probe_doc_id = (
+                    evt.get("document_id") or evt.get("doc_id")
+                    if isinstance(evt, dict) else None
+                ) or "unknown"
+                logger.error(
+                    "inbound_schema_invalid",
+                    topic=topic_name,
+                    document_id=probe_doc_id,
+                    correlation_id=correlation_id,
+                    error=schema_error,
+                )
+                MESSAGES_COUNTER.labels(status="rejected").inc()
+                _send_to_dlq(
+                    evt if isinstance(evt, dict) else {"raw": str(evt)[:2048]},
+                    schema_error,
+                    reason="schema_invalid",
+                    doc_id=probe_doc_id if probe_doc_id != "unknown" else None,
+                )
+                try:
+                    consumer.commit(message=record, asynchronous=False)
+                except Exception as commit_exc:
+                    logger.error("offset_commit_failed", error=str(commit_exc))
+                clear_contextvars()
                 continue
 
             # --- Processing Logic (Simplifying for diff) ---
