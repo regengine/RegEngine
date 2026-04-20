@@ -91,7 +91,7 @@ class TestTabularLineItemExtraction:
 
     def test_multi_line_bol_extracts_distinct_items(self):
         """Verify each product gets its correct lot code from BOL."""
-        result = self.extractor.extract(MULTI_LINE_BOL, "test-bol-001")
+        result = self.extractor.extract(MULTI_LINE_BOL, "test-bol-001", tenant_id="11111111-1111-1111-1111-111111111111")
 
         assert result.document_type == DocumentType.BILL_OF_LADING
         assert len(result.line_items) >= 2, "Should extract at least 2 line items"
@@ -132,7 +132,7 @@ class TestTabularLineItemExtraction:
 
         This is the key regression test for the tabular extraction upgrade.
         """
-        result = self.extractor.extract(MULTI_LINE_BOL, "test-bol-002")
+        result = self.extractor.extract(MULTI_LINE_BOL, "test-bol-002", tenant_id="11111111-1111-1111-1111-111111111111")
 
         for item in result.line_items:
             if item.lot_code and "A" in item.lot_code:
@@ -143,7 +143,7 @@ class TestTabularLineItemExtraction:
 
     def test_quantities_associated_with_correct_items(self):
         """Verify quantities are matched to correct line items."""
-        result = self.extractor.extract(MULTI_LINE_BOL, "test-bol-003")
+        result = self.extractor.extract(MULTI_LINE_BOL, "test-bol-003", tenant_id="11111111-1111-1111-1111-111111111111")
 
         for item in result.line_items:
             if item.description and "romaine" in item.description.lower():
@@ -157,7 +157,7 @@ class TestTabularLineItemExtraction:
 
     def test_invoice_format_extraction(self):
         """Test extraction from invoice-style format with inline lots."""
-        result = self.extractor.extract(MULTI_LINE_INVOICE, "test-inv-001")
+        result = self.extractor.extract(MULTI_LINE_INVOICE, "test-inv-001", tenant_id="11111111-1111-1111-1111-111111111111")
 
         assert result.document_type == DocumentType.INVOICE
 
@@ -170,7 +170,7 @@ class TestTabularLineItemExtraction:
 
     def test_production_log_input_output_separation(self):
         """Test that input and output lots are correctly separated."""
-        result = self.extractor.extract(PRODUCTION_LOG_TABULAR, "test-prod-001")
+        result = self.extractor.extract(PRODUCTION_LOG_TABULAR, "test-prod-001", tenant_id="11111111-1111-1111-1111-111111111111")
 
         assert result.document_type == DocumentType.PRODUCTION_LOG
 
@@ -187,7 +187,7 @@ class TestTabularLineItemExtraction:
 
     def test_similar_product_names_distinct_lots(self):
         """Test products with similar names get distinct lot codes."""
-        result = self.extractor.extract(SIMILAR_PRODUCTS_BOL, "test-similar-001")
+        result = self.extractor.extract(SIMILAR_PRODUCTS_BOL, "test-similar-001", tenant_id="11111111-1111-1111-1111-111111111111")
 
         # All three Romaine variants should have different lots
         romaine_items = [
@@ -257,7 +257,7 @@ class TestFSMAExtractionResultWithLineItems:
     def test_extraction_result_has_line_items(self):
         """Verify extraction result includes line_items list."""
         extractor = FSMAExtractor()
-        result = extractor.extract(MULTI_LINE_BOL, "test-001")
+        result = extractor.extract(MULTI_LINE_BOL, "test-001", tenant_id="11111111-1111-1111-1111-111111111111")
 
         assert hasattr(result, "line_items")
         assert isinstance(result.line_items, list)
@@ -265,7 +265,7 @@ class TestFSMAExtractionResultWithLineItems:
     def test_ctes_created_from_line_items(self):
         """Test CTEs are created based on line items when available."""
         extractor = FSMAExtractor()
-        result = extractor.extract(MULTI_LINE_BOL, "test-002")
+        result = extractor.extract(MULTI_LINE_BOL, "test-002", tenant_id="11111111-1111-1111-1111-111111111111")
 
         # If line items were extracted, CTEs should reflect them
         if result.line_items:
@@ -281,7 +281,7 @@ class TestHeuristicFallback:
         extractor = FSMAExtractor()
         extractor._table_extractor = False  # Simulate unavailable
 
-        result = extractor.extract(MULTI_LINE_BOL, "test-heuristic-001")
+        result = extractor.extract(MULTI_LINE_BOL, "test-heuristic-001", tenant_id="11111111-1111-1111-1111-111111111111")
 
         # Should still extract something via heuristic
         assert result.document_type == DocumentType.BILL_OF_LADING
@@ -303,7 +303,7 @@ class TestHeuristicFallback:
         Spinach Baby (Lot: LOT-B) 75 cases
         """
 
-        result = extractor.extract(simple_bol, "test-heuristic-002")
+        result = extractor.extract(simple_bol, "test-heuristic-002", tenant_id="11111111-1111-1111-1111-111111111111")
 
         # Check that if both items extracted, they have different lots
         if len(result.line_items) >= 2:
@@ -337,7 +337,7 @@ class TestTableExtractorIntegration:
         extractor = FSMAExtractor()
 
         # Should not raise, should fall back to heuristic
-        result = extractor.extract(MULTI_LINE_BOL, "test-no-table-001")
+        result = extractor.extract(MULTI_LINE_BOL, "test-no-table-001", tenant_id="11111111-1111-1111-1111-111111111111")
 
         assert isinstance(result, FSMAExtractionResult)
 
@@ -348,7 +348,7 @@ class TestEdgeCases:
     def test_empty_document(self):
         """Test handling of empty document."""
         extractor = FSMAExtractor()
-        result = extractor.extract("", "test-empty-001")
+        result = extractor.extract("", "test-empty-001", tenant_id="11111111-1111-1111-1111-111111111111")
 
         assert result.document_type == DocumentType.UNKNOWN
         assert result.line_items == []
@@ -362,7 +362,7 @@ class TestEdgeCases:
         """
 
         extractor = FSMAExtractor()
-        result = extractor.extract(plain_text, "test-plain-001")
+        result = extractor.extract(plain_text, "test-plain-001", tenant_id="11111111-1111-1111-1111-111111111111")
 
         # Should still extract via regex fallback
         assert len(result.ctes) >= 1
@@ -381,7 +381,7 @@ class TestEdgeCases:
         """
 
         extractor = FSMAExtractor()
-        result = extractor.extract(messy_bol, "test-messy-001")
+        result = extractor.extract(messy_bol, "test-messy-001", tenant_id="11111111-1111-1111-1111-111111111111")
 
         # Should handle gracefully
         assert isinstance(result, FSMAExtractionResult)
@@ -421,7 +421,7 @@ class TestCriticalRequirement:
         Kale                    LOT-C           25 cases
         """
 
-        result = extractor.extract(bol_text, "critical-test-001")
+        result = extractor.extract(bol_text, "critical-test-001", tenant_id="11111111-1111-1111-1111-111111111111")
 
         # Verify line items exist
         assert (
