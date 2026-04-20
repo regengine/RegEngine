@@ -294,8 +294,12 @@ jobs:
 
       - name: Run pip-audit
         run: |
+          # Root requirements.txt is the single source of truth (per #1429 /
+          # #1433 which removed per-service requirements.txt files). The
+          # matrix still fans out by service name to preserve historical
+          # check names on branch-protection rules; every job audits the
+          # same consolidated dependency set.
           pip install pip-audit
-          cd services/${{ matrix.service }}
           pip-audit -r requirements.txt --desc on
 
   # ── CI Summary ───────────────────────────────────────────

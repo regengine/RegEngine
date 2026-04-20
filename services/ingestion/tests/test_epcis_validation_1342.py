@@ -145,11 +145,8 @@ class TestValidateEpcis:
         ["", None, 0],
     )
     def test_falsy_required_value_reported_like_missing(self, falsy_value):
-        # ``not event.get(field)`` — any falsy hashable value triggers
-        # the "Missing required" error the same way absence does.
-        # Unhashable values (list / dict) crash the ``not in {...}``
-        # type allowlist with TypeError — that's a latent defect in
-        # the validator, out of scope for this coverage-pin test.
+        # ``not event.get(field)`` — any falsy value triggers the
+        # "Missing required" error the same way absence does.
         event = self._base_event()
         event["type"] = falsy_value
         errors = _validate_epcis(event)
@@ -158,6 +155,17 @@ class TestValidateEpcis:
     def test_unsupported_type_flagged(self):
         event = self._base_event()
         event["type"] = "MysteryEvent"
+        errors = _validate_epcis(event)
+        assert any("Unsupported EPCIS event type" in e for e in errors)
+
+    @pytest.mark.parametrize("bad_type", [[], {}, ["ObjectEvent"], {"k": "v"}])
+    def test_unhashable_type_flagged_not_raised(self, bad_type):
+        # Issue #1342: previously ``event.get("type") in {set}`` raised
+        # TypeError when the caller supplied a list or dict, surfacing
+        # as a 500 instead of a clean validation error. The guard now
+        # rejects any non-string ``type`` as "Unsupported".
+        event = self._base_event()
+        event["type"] = bad_type
         errors = _validate_epcis(event)
         assert any("Unsupported EPCIS event type" in e for e in errors)
 
