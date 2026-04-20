@@ -14,7 +14,7 @@ import jwt as _jwt
 
 from .database import get_session
 from .sqlalchemy_models import UserModel, MembershipModel, TenantModel, RoleModel
-from .auth_utils import verify_password, get_password_hash, create_access_token, create_refresh_token, decode_access_token, hash_token, REFRESH_TOKEN_EXPIRE_DAYS
+from .auth_utils import verify_password, verify_login, get_password_hash, create_access_token, create_refresh_token, decode_access_token, hash_token, REFRESH_TOKEN_EXPIRE_DAYS
 from .dependencies import get_current_user, PermissionChecker, get_session_store
 from .audit import AuditLogger
 from .password_policy import validate_password, PasswordPolicyError
@@ -297,7 +297,15 @@ async def login(
     stmt = select(UserModel).where(UserModel.email == normalized_login_email)
     user = db.execute(stmt).scalar_one_or_none()
 
-    if not user or not verify_password(payload.password, user.password_hash):
+    # #1082 — verify_login() runs argon2 against a module-level dummy
+    # hash when user is None, so the unknown-email and wrong-password
+    # branches both pay the full verify cost. Previously the
+    # ``not user or not verify_password(...)`` short-circuited the
+    # argon2 op on unknown emails, making response latency a reliable
+    # account-enumeration oracle. Both branches must also fire the
+    # same Redis side-effects (failed-login counter + lockout ramp) so
+    # subsequent-request state can't become a secondary timing oracle.
+    if not verify_login(payload.password, user):
         logger.warning("login_failed", reason="invalid_credentials")
         await _record_failed_login_attempt(session_store, normalized_login_email)
         await _record_lockout_attempt(session_store, normalized_login_email)
