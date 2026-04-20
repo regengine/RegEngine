@@ -14,7 +14,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
-from shared.auth import require_api_key
+from shared.auth import APIKey, require_api_key
 from shared.resilient_http import resilient_client
 from shared.circuit_breaker import CircuitOpenError
 from .config import settings
@@ -220,17 +220,18 @@ async def get_checklist(checklist_id: str) -> ComplianceChecklist:
 _GRAPH_SERVICE_URL = settings.graph_service_url
 
 
-@router.get("/v1/fsma/audit/spreadsheet", dependencies=[Depends(require_api_key)])
+@router.get("/v1/fsma/audit/spreadsheet")
 async def fsma_audit_spreadsheet(
     request: Request,
     start_date: str = Query(..., description="Start date (YYYY-MM-DD)"),
     end_date: str = Query(..., description="End date (YYYY-MM-DD)"),
     tlc: str | None = Query(None, description="Filter by Traceability Lot Code"),
     requesting_entity: str | None = Query(None, description="Name of requesting entity"),
+    api_key: APIKey = Depends(require_api_key),
 ) -> StreamingResponse:
     """Generate an FDA 204 Sortable Spreadsheet CSV for the given date range.
 
-    Hardening applied in this handler (issues #1272, #1283, #1291):
+    Hardening applied in this handler (issues #1272, #1283, #1291, #1106):
 
     * ``start_date`` / ``end_date`` must parse as ISO-8601 ``YYYY-MM-DD``
       and be ordered — misspelled dates no longer produce empty
@@ -246,7 +247,49 @@ async def fsma_audit_spreadsheet(
       second response header (issue #1283).
     * Zero-row exports return HTTP 404 with a structured body rather
       than an empty FDA-formatted CSV (issue #1291).
+    * **Tenant trust (#1106)**: ``tenant_id`` is derived solely from
+      the authenticated API key, never from client-supplied
+      ``X-Tenant-ID`` / ``X-RegEngine-Tenant-ID`` headers. A mismatch
+      between a client-supplied header and the API key's tenant
+      raises HTTP 409 ``E_TENANT_MISMATCH`` so cross-tenant FDA
+      exports are impossible, even for a legitimately authenticated
+      user. We also stop forwarding the caller's raw
+      ``X-RegEngine-API-Key`` to the graph service; the compliance
+      service authenticates to graph with an internal service secret
+      (``REGENGINE_INTERNAL_SECRET``) plus the authenticated
+      tenant_id.
     """
+    # ---- Tenant binding (#1106) ------------------------------------------
+    # The authenticated API key is the sole source of truth for tenant
+    # scope. If the client sent an X-Tenant-ID / X-RegEngine-Tenant-ID
+    # header that disagrees, reject loudly rather than silently taking
+    # the header (which would let any authenticated caller export
+    # another tenant's FDA package).
+    authenticated_tenant_id = getattr(api_key, "tenant_id", None)
+    if not authenticated_tenant_id:
+        raise HTTPException(
+            status_code=403,
+            detail="API key is not associated with a tenant",
+        )
+    client_tenant_header = (
+        request.headers.get("X-Tenant-ID")
+        or request.headers.get("X-RegEngine-Tenant-ID")
+    )
+    if client_tenant_header and client_tenant_header != str(authenticated_tenant_id):
+        _logger.warning(
+            "fda_export_tenant_mismatch",
+            extra={
+                "authenticated_tenant": str(authenticated_tenant_id),
+                "client_header_tenant": client_tenant_header,
+                "key_id": getattr(api_key, "key_id", None),
+            },
+        )
+        raise HTTPException(
+            status_code=409,
+            detail="E_TENANT_MISMATCH",
+        )
+    tenant_id = str(authenticated_tenant_id)
+
     # ---- Input validation -------------------------------------------------
     start = _parse_iso_date("start_date", start_date)
     end = _parse_iso_date("end_date", end_date)
@@ -284,14 +327,17 @@ async def fsma_audit_spreadsheet(
     if tlc:
         base_params["tlc"] = tlc
 
-    # Forward auth, tenant, and correlation headers to downstream graph service
-    headers: dict[str, str] = {}
-    api_key = request.headers.get("X-RegEngine-API-Key")
-    if api_key:
-        headers["X-RegEngine-API-Key"] = api_key
-    tenant_id = request.headers.get("X-Tenant-ID") or request.headers.get("X-RegEngine-Tenant-ID")
-    if tenant_id:
-        headers["X-RegEngine-Tenant-ID"] = tenant_id
+    # Build outbound headers. We forward the authenticated tenant_id
+    # (never the client-supplied header) and an internal service
+    # secret for service-to-service auth. We do NOT forward the
+    # caller's raw X-RegEngine-API-Key to the graph service — that
+    # header stays at the compliance boundary (#1106).
+    headers: dict[str, str] = {
+        "X-RegEngine-Tenant-ID": tenant_id,
+    }
+    internal_secret = settings.internal_service_secret
+    if internal_secret:
+        headers["X-RegEngine-Internal-Secret"] = internal_secret
     request_id = request.headers.get("X-Request-ID")
     if request_id:
         headers["X-Request-ID"] = request_id
