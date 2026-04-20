@@ -1,9 +1,17 @@
 from __future__ import annotations
 
+import re
 from datetime import date, datetime
 from typing import Dict, List, Literal, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+
+# Reviewer hint character class — ASCII alphanumerics plus the subset
+# of punctuation that legitimately appears in names and email addresses.
+# Anything outside this set is rejected to prevent stored-XSS / CKG
+# node-key poisoning when the hint is rendered in an admin UI or
+# written as a graph node key (issue #1125 / EPIC-L).
+_REVIEWER_HINT_RE = re.compile(r"^[A-Za-z0-9 .,'_@\-]{2,120}$")
 
 
 # ---------------------------------------------------------------------------
@@ -57,9 +65,44 @@ AuditOutputType = Literal[
 
 
 class AuditExportRequest(BaseModel):
-    model_id: str = Field(..., min_length=2)
+    """Request body for an audit-artifact export.
+
+    ``reviewer`` is a **hint only** — it is never used as the
+    authoritative attestation identity. The route handler derives the
+    reviewer sign-off from the authenticated principal (api_key.key_id
+    or a signed reviewer-identity JWT) and ignores any attempt to
+    assert a different reviewer via the request body.
+
+    The hint is still accepted so auditors can annotate who they
+    *intend* the reviewer to be, but it's validated against a narrow
+    character class so stored-XSS or CKG node-key poisoning attempts
+    can't land even if a future handler accidentally echoes it (issue
+    #1125 / EPIC-L).
+    """
+
+    model_id: str = Field(..., min_length=2, max_length=120)
     output_type: AuditOutputType
-    reviewer: str = Field(..., min_length=2)
+    reviewer: str = Field(
+        ...,
+        min_length=2,
+        max_length=120,
+        description=(
+            "Advisory reviewer label only — the authoritative reviewer "
+            "sign-off is derived server-side from the authenticated "
+            "principal. Must match ^[A-Za-z0-9 .,'_@-]{2,120}$."
+        ),
+    )
+
+    @field_validator("reviewer")
+    @classmethod
+    def _validate_reviewer(cls, value: str) -> str:
+        if not _REVIEWER_HINT_RE.match(value):
+            raise ValueError(
+                "reviewer must match ^[A-Za-z0-9 .,'_@-]{2,120}$; "
+                "tokens containing HTML, quotes, or control characters "
+                "are rejected to prevent audit-trail pollution"
+            )
+        return value
 
 
 class AuditExportResponse(BaseModel):

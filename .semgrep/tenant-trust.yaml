@@ -1,0 +1,134 @@
+# Semgrep rules enforcing EPIC-A #1651 ("client-supplied tenant_id trust").
+#
+# The shared tenant context is authoritative. Services MUST obtain the
+# acting tenant from `services.shared.tenant_context.resolve_tenant_context`
+# or from an already-authenticated principal (APIKey.tenant_id /
+# UserModel.tenant_id). Any other source of tenant_id is forbidden.
+#
+# Wire this file into CI via:
+#   semgrep --config .semgrep/tenant-trust.yaml --error .
+#
+# To grant a legitimate exception, add a `# nosemgrep: rule-id` comment
+# with a rationale on the same line.
+
+rules:
+  - id: tenant-id-from-query-string
+    message: >-
+      Reading tenant_id from the query string is forbidden (EPIC-A #1651).
+      Use resolve_tenant_context(request) or the authenticated principal
+      (api_key.tenant_id / user.tenant_id) instead.
+    severity: ERROR
+    languages: [python]
+    patterns:
+      - pattern-either:
+          - pattern: $REQ.query_params.get("tenant_id", ...)
+          - pattern: $REQ.query_params["tenant_id"]
+          - pattern-regex: 'query_params\.get\(\s*["'']tenant_id["''].*?\)'
+    paths:
+      exclude:
+        - "**/services/shared/tenant_context.py"
+        - "**/tests/**"
+
+  - id: tenant-id-from-request-body
+    message: >-
+      Reading tenant_id from a request body dict / payload is forbidden
+      (EPIC-A #1651). The body is attacker-controllable. Use
+      resolve_tenant_context(request) or the authenticated principal
+      instead.
+
+      NOTE: this rule only flags dict-style subscripts on names that look
+      like request bodies (payload, body, request_body, metadata, msg,
+      event, message). ORM filter clauses like `Model.tenant_id == value`
+      are NOT flagged.
+    severity: ERROR
+    languages: [python]
+    patterns:
+      - pattern-either:
+          - pattern-regex: '\b(?:payload|body|request_body|metadata|msg|message|event|data)\[["'']tenant_id["'']\]'
+          - pattern-regex: '\b(?:payload|body|request_body|metadata|msg|message|event|data)\.get\(\s*["'']tenant_id["'']'
+    paths:
+      exclude:
+        - "**/services/shared/tenant_context.py"
+        - "**/services/shared/canonical_event.py"  # envelope schema itself
+        - "**/services/shared/rules/models.py"  # evaluator input schema
+        - "**/tests/**"
+        - "**/migrations/**"
+
+  - id: tenant-id-from-supabase-user-metadata
+    message: >-
+      Reading tenant_id from Supabase user_metadata is forbidden (EPIC-A #1651).
+      user_metadata is user-writable via the Supabase Auth client; callers
+      can flip their active tenant. Use the signed JWT `tenant_id` claim or
+      resolve_tenant_context(request) instead.
+    severity: ERROR
+    languages: [python]
+    patterns:
+      - pattern-either:
+          - pattern: $USER.user_metadata["tenant_id"]
+          - pattern: $USER.user_metadata.get("tenant_id", ...)
+          - pattern-regex: 'user_metadata\[["'']tenant_id["'']\]'
+          - pattern-regex: 'user_metadata\.get\(\s*["'']tenant_id["'']'
+    paths:
+      exclude:
+        - "**/services/shared/tenant_context.py"
+        - "**/tests/**"
+
+  - id: tenant-id-hardcoded-uuid-fallback
+    message: >-
+      Hardcoded tenant_id fallback (demo/default UUID) is forbidden
+      (EPIC-A #1651, #1391). Fail closed with HTTP 401 E_NO_TENANT
+      instead. Use resolve_tenant_context(request).
+    severity: ERROR
+    languages: [python]
+    patterns:
+      - pattern-either:
+          # Demo tenant UUID we've seen in the wild
+          - pattern: |
+              return "5946c58f-ddf9-4db0-9baa-acb11c6fce91"
+          - pattern: |
+              tenant_id = "5946c58f-ddf9-4db0-9baa-acb11c6fce91"
+          # Any variable named `_default_tenant` / `demo_tenant_id` being assigned a UUID
+          - pattern-regex: '(?:_default_tenant|demo_tenant_id|DEMO_TENANT|DEFAULT_TENANT_ID)\s*=\s*["''][0-9a-f\-]{36}["'']'
+    paths:
+      exclude:
+        - "**/services/shared/tenant_context.py"
+        - "**/tests/**"
+        - "**/fixtures/**"
+
+  - id: tenant-id-fallback-string-literal
+    message: >-
+      `api_key.get("tenant_id", "default")` or similar string-fallback is
+      forbidden (EPIC-A #1651, #1268). The caller will receive the string
+      "default" and pass it into RLS/graph lookups, producing cross-tenant
+      leaks. Raise TenantContextError(E_NO_TENANT) instead.
+    severity: ERROR
+    languages: [python]
+    pattern-regex: '\.get\(\s*["'']tenant_id["''],\s*["''][^"'']+["'']\s*\)'
+    paths:
+      exclude:
+        - "**/services/shared/tenant_context.py"
+        - "**/tests/**"
+
+  - id: kafka-payload-tenant-id-trust
+    message: >-
+      Reading tenant_id directly from a Kafka message payload is forbidden
+      (EPIC-A #1651, EPIC-H #1603). Kafka envelopes are not authenticated
+      by default — require an HMAC-signed header and compare against the
+      payload before trusting.
+    severity: WARNING
+    languages: [python]
+    patterns:
+      - pattern-either:
+          - pattern: $MSG.value["tenant_id"]
+          - pattern: $MSG.value.get("tenant_id", ...)
+      - pattern-inside: |
+          async def $FN(..., $MSG, ...):
+              ...
+    paths:
+      include:
+        - "**/services/nlp/app/consumer.py"
+        - "**/services/graph/app/consumer.py"
+        - "**/services/review/app/consumer.py"
+        - "**/services/admin/app/consumer.py"
+      exclude:
+        - "**/tests/**"
