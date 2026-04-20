@@ -1254,10 +1254,16 @@ def _start_health_server() -> None:
     logger.info("health_server_started", port=_HEALTH_PORT, path="/health")
 
 
+# DEPRECATED: Use task_processor (services/shared/task_queue.py) instead
 from shared.observability import setup_standalone_observability
 tracer = setup_standalone_observability("nlp-consumer")
 
 def run_consumer() -> None:
+    logger.warning("KafkaConsumer is deprecated — use task_processor")
+    if os.getenv('DISABLE_KAFKA_CONSUMER', 'false').lower() == 'true':
+        logger.info("DISABLE_KAFKA_CONSUMER=true — consumer disabled")
+        return
+
     # Start health endpoint before first Kafka poll so probes succeed at startup
     _start_health_server()
 

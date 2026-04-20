@@ -1,13 +1,24 @@
 """
 Backward-compatibility shim — re-exports from schema_bootstrap.
 
+NOT an Alembic migration — bootstraps schema if absent. Use Alembic for
+versioned migrations.
+
 This file is retained so that existing callers (writer.py, tests, docs) that
 import ``shared.canonical_persistence.migration`` continue to work. New code
 should import from ``shared.canonical_persistence.schema_bootstrap`` directly.
-
-NOT an Alembic migration. Bootstraps schema if tables absent. Use Alembic for
-versioned migrations.
 """
+
+import warnings
+
+warnings.warn(
+    "Importing from 'shared.canonical_persistence.migration' is deprecated. "
+    "This module is NOT an Alembic migration — it bootstraps schema if absent. "
+    "Use 'shared.canonical_persistence.schema_bootstrap' for direct imports, "
+    "and Alembic for versioned migrations.",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
 from shared.canonical_persistence.schema_bootstrap import (  # noqa: F401
     dual_write_legacy,

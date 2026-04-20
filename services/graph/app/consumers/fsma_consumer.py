@@ -1,3 +1,7 @@
+# TODO: refactor to import from shared dlq_producer_base (#1228)
+# The _dlq_producer singleton and send_to_dlq helper below should be replaced with:
+#   from shared.observability.dlq_producer_base import BaseDLQProducer
+
 """
 FSMA 204 Kafka Consumer for Graph Ingestion.
 
@@ -10,6 +14,7 @@ Migrated to Confluent Kafka with Avro Schema Validation (Task 5.6).
 from __future__ import annotations
 
 import asyncio
+import os
 import sys
 import threading
 import uuid
@@ -294,7 +299,11 @@ async def ingest_fsma_event(client: Neo4jClient, event: Dict[str, Any]) -> None:
 
 async def run_fsma_consumer(database: Optional[str] = None) -> None:
     """Run the FSMA Kafka consumer with Avro support."""
-    
+    logger.warning("KafkaConsumer is deprecated — use task_processor")
+    if os.getenv('DISABLE_KAFKA_CONSUMER', 'false').lower() == 'true':
+        logger.info("DISABLE_KAFKA_CONSUMER=true — consumer disabled")
+        return
+
     client = Neo4jClient(database=database)
     await _ensure_constraints(client)
 

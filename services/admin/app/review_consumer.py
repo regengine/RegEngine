@@ -1,3 +1,8 @@
+# TODO: refactor to import from shared dlq_producer_base (#1228)
+# The _dlq_producer singleton and _get_dlq_producer/_send_to_dlq helpers below
+# should be replaced with:
+#   from shared.observability.dlq_producer_base import BaseDLQProducer
+
 """Kafka consumer that ingests low-confidence extractions and records them via HallucinationTracker.
 
 Security hardening:
@@ -263,6 +268,11 @@ def get_consumer_health() -> Dict[str, Any]:
 
 def run_consumer() -> None:
     """Main consumer loop that reads from nlp.needs_review and persists via tracker."""
+    logger.warning("KafkaConsumer is deprecated — use task_processor")
+    if os.getenv('DISABLE_KAFKA_CONSUMER', 'false').lower() == 'true':
+        logger.info("DISABLE_KAFKA_CONSUMER=true — consumer disabled")
+        return
+
     global _last_poll_time, _consumer_started_at
 
     settings = get_settings()

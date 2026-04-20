@@ -1,3 +1,8 @@
+# TODO: refactor to import from shared dlq_producer_base (#1228)
+# The _dlq_producer singleton and _init_dlq_producer/_send_to_dlq helpers below
+# should be replaced with:
+#   from shared.observability.dlq_producer_base import BaseDLQProducer
+
 from __future__ import annotations
 
 import asyncio
@@ -49,13 +54,23 @@ MAX_RETRIES = 3
 # in services/nlp/app/consumer.py and covers bursts while still letting
 # a poison-pill age out if the consumer is long-lived.
 _retry_counts: TTLCache[str, int] = TTLCache(maxsize=50_000, ttl=3600)
-_dlq_producer: Optional[Producer] = None
+_dlq_producer: Optional[object] = None  # shared.observability.dlq_producer.DLQProducer
 
 
-def _init_dlq_producer() -> Producer:
-    """Initialize the DLQ producer (called once at consumer startup)."""
+def _init_dlq_producer() -> object:
+    """Initialize the shared DLQ producer (called once at consumer startup).
+
+    #1228: Previously created a raw confluent_kafka.Producer here. Now delegates
+    to the canonical shared singleton so DLQ logic is not duplicated per service.
+    """
     global _dlq_producer
-    _dlq_producer = Producer({"bootstrap.servers": settings.kafka_bootstrap})
+    from shared.observability.dlq_producer import DLQProducer
+
+    _dlq_producer = DLQProducer(
+        bootstrap_servers=settings.kafka_bootstrap,
+        topic=TOPIC_DLQ,
+        service_name="graph-consumer",
+    )
     return _dlq_producer
 
 
@@ -79,8 +94,8 @@ def _send_to_dlq(
             "document_id": doc_id,
             "retry_count": _retry_counts.get(doc_id or "unknown", 0),
         }).encode("utf-8")
-        _dlq_producer.produce(TOPIC_DLQ, value=dlq_payload)
-        _dlq_producer.flush(timeout=5.0)
+        _dlq_producer.send(dlq_payload, reason=reason, original_topic="graph.update")  # type: ignore[union-attr]
+        _dlq_producer.flush()  # type: ignore[union-attr]
         DLQ_COUNTER.labels(reason=reason).inc()
         logger.info("message_sent_to_dlq", topic=TOPIC_DLQ, document_id=doc_id, reason=reason)
     except (ConnectionError, TimeoutError, OSError, RuntimeError) as exc:
@@ -217,6 +232,11 @@ def json_deserializer(v, ctx):
         return v
 
 async def run_consumer() -> None:
+    logger.warning("KafkaConsumer is deprecated — use task_processor")
+    if os.getenv('DISABLE_KAFKA_CONSUMER', 'false').lower() == 'true':
+        logger.info("DISABLE_KAFKA_CONSUMER=true — consumer disabled")
+        return
+
     topics = [settings.topic_in, "graph.update"]
 
     # Initialize DLQ producer for error routing
