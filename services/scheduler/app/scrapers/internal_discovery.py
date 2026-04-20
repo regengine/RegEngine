@@ -1,7 +1,7 @@
 import httpx
 import asyncio
 from tenacity import retry, stop_after_attempt, wait_exponential_jitter
-from shared.logging import logger
+from shared.observability.context import logger
 from shared.resilient_http import resilient_client
 from app.config import get_settings
 from shared.metrics import (

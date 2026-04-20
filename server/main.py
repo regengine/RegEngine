@@ -45,7 +45,7 @@ from shared.error_handling import init_sentry
 init_sentry()
 
 # ── Logging ──────────────────────────────────────────────────────
-from shared.logging import setup_logging
+from shared.observability.context import setup_logging
 logger = setup_logging()
 
 # ── Imports ──────────────────────────────────────────────────────
