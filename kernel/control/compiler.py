@@ -12,6 +12,7 @@ Usage:
     regengine compile vertical finance
 """
 
+import warnings
 import yaml
 import json
 from datetime import datetime
@@ -19,6 +20,16 @@ from pathlib import Path
 from typing import Dict, List, Any, Optional
 from pydantic import BaseModel
 import logging
+
+# RETIRED: kernel/control is scheduled for removal in the monolith
+# consolidation sprint (#1366).  This compiler stack has no production
+# callers; only the dev-facing CLI uses it.  Do not add new functionality here.
+warnings.warn(
+    "kernel.control.compiler is deprecated and will be removed in the monolith "
+    "consolidation sprint.  See kernel/control/DEPRECATED.md — #1366.",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
 from .schema_validator import validate_vertical_schema, validate_obligations_schema
 from .codegen import (

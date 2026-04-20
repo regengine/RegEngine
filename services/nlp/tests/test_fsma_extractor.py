@@ -13,6 +13,7 @@ from services.nlp.app.extractors.fsma_extractor import (
     DocumentType,
     FSMAExtractor,
 )
+from services.nlp.app.extractors.fsma_types import KDE
 
 
 @pytest.fixture
@@ -102,12 +103,17 @@ class TestLotCodeExtraction:
         assert "L-2025-1105-A" in result.ctes[0].kdes.traceability_lot_code
 
     def test_extract_batch_code(self, extractor):
-        """Test extraction of Batch code from invoice."""
+        """Invoice documents are routed to HITL — no CTEs emitted (#1288).
+
+        Before #1288 the extractor silently emitted a SHIPPING-typed CTE for
+        invoices.  Now invoices produce zero CTEs and always land in the HITL
+        review queue so a human can determine the correct CTE classification.
+        """
         result = extractor.extract(SAMPLE_INVOICE_TEXT, "test-doc-002", tenant_id="11111111-1111-1111-1111-111111111111")
 
-        assert len(result.ctes) > 0
-        assert result.ctes[0].kdes.traceability_lot_code is not None
-        assert "BATCH-2025-1105-B" in result.ctes[0].kdes.traceability_lot_code
+        assert result.document_type.value == "INVOICE"
+        assert len(result.ctes) == 0, "Invoices must not emit CTEs (#1288)"
+        assert result.review_required is True
 
     def test_gtin_not_prepended_to_lot(self, extractor):
         """Regression guard for #1104 — the TLC must be preserved
@@ -138,11 +144,12 @@ class TestQuantityExtraction:
         assert result.ctes[0].kdes.unit_of_measure == "cases"
 
     def test_extract_quantity_from_invoice(self, extractor):
-        """Test extraction of quantity from invoice."""
+        """Invoice documents emit no CTEs after #1288 — verify HITL routing."""
         result = extractor.extract(SAMPLE_INVOICE_TEXT, "test-doc-005", tenant_id="11111111-1111-1111-1111-111111111111")
 
-        assert result.ctes[0].kdes.quantity == 100.0
-        assert result.ctes[0].kdes.unit_of_measure == "units"
+        # No CTEs for invoices — quantity available only via line_items or HITL
+        assert len(result.ctes) == 0, "Invoices must not emit CTEs (#1288)"
+        assert result.review_required is True
 
 
 class TestLocationExtraction:
@@ -172,10 +179,12 @@ class TestDateExtraction:
         assert result.ctes[0].kdes.event_date == "2025-11-05"
 
     def test_extract_date_iso(self, extractor):
-        """Test extraction of ISO date format."""
+        """Invoice documents emit no CTEs after #1288 — verify HITL routing."""
         result = extractor.extract(SAMPLE_INVOICE_TEXT, "test-doc-009", tenant_id="11111111-1111-1111-1111-111111111111")
 
-        assert result.ctes[0].kdes.event_date == "2025-11-05"
+        # No CTEs for invoices — date visible only via HITL queue (#1288)
+        assert len(result.ctes) == 0, "Invoices must not emit CTEs (#1288)"
+        assert result.review_required is True
 
 
 class TestConfidenceCalculation:
@@ -194,6 +203,88 @@ class TestConfidenceCalculation:
         result = extractor.extract(text, "test-doc-011", tenant_id="11111111-1111-1111-1111-111111111111")
 
         assert result.ctes[0].confidence < 0.5
+
+
+class TestWeightedConfidence:
+    """Unit tests for weighted KDE confidence scoring (#1286).
+
+    These tests call _calculate_confidence directly with crafted KDE objects
+    so we are not dependent on the regex/LLM extraction path.
+    """
+
+    def test_all_required_and_advisory_fields_high_score(self, extractor):
+        """All weight-3 fields present → score > 0.5 and no required-field cap."""
+        kde = KDE(
+            traceability_lot_code="L-001",
+            event_date="2025-11-05",
+            location_identifier="1234567890123",
+            quantity=50.0,
+            unit_of_measure="cases",
+        )
+        score = extractor._calculate_confidence(kde, CTEType.SHIPPING)
+        # All weight-3 fields present, no cap; full score = 1.0
+        assert score > 0.5
+        assert score == 1.0
+
+    def test_missing_required_field_caps_score_at_0_5(self, extractor):
+        """Missing weight-3 field (event_date) → score capped at 0.5."""
+        kde = KDE(
+            traceability_lot_code="L-001",
+            event_date=None,            # required field missing
+            location_identifier="1234567890123",
+            quantity=50.0,
+            unit_of_measure="cases",
+        )
+        score = extractor._calculate_confidence(kde, CTEType.SHIPPING)
+        assert score <= 0.5
+
+    def test_all_required_missing_score_is_zero_or_capped(self, extractor):
+        """No required fields → capped at 0.5 (or 0.0 if no advisory weight)."""
+        kde = KDE()  # everything None
+        score = extractor._calculate_confidence(kde, CTEType.SHIPPING)
+        assert score <= 0.5
+
+    def test_only_advisory_fields_populated_low_score(self, extractor):
+        """Only non-required (advisory) fields populated → low score and capped."""
+        # ship_from_location is advisory (weight 1), required fields all None
+        kde = KDE(
+            ship_from_location="Some Farm",
+        )
+        score = extractor._calculate_confidence(kde, CTEType.SHIPPING)
+        # Required fields (weight-3) missing → cap applies
+        assert score <= 0.5
+
+    def test_transformation_cte_all_fields_high_score(self, extractor):
+        """TRANSFORMATION CTE: all required fields present → 1.0."""
+        kde = KDE(
+            traceability_lot_code="L-002",
+            product_description="Organic Spinach",
+            event_date="2025-11-06",
+        )
+        score = extractor._calculate_confidence(kde, CTEType.TRANSFORMATION)
+        assert score == 1.0
+
+    def test_transformation_cte_missing_tlc_capped(self, extractor):
+        """TRANSFORMATION CTE: missing TLC (weight-3) → capped at 0.5."""
+        kde = KDE(
+            traceability_lot_code=None,
+            product_description="Organic Spinach",
+            event_date="2025-11-06",
+        )
+        score = extractor._calculate_confidence(kde, CTEType.TRANSFORMATION)
+        assert score <= 0.5
+
+    def test_weights_are_module_level_constant(self, extractor):
+        """_KDE_FIELD_WEIGHTS must be accessible as a class attribute."""
+        weights = FSMAExtractor._KDE_FIELD_WEIGHTS
+        assert isinstance(weights, dict)
+        # Spot-check critical KDEs carry weight 3
+        assert weights["traceability_lot_code"] == 3
+        assert weights["event_date"] == 3
+        assert weights["location_identifier"] == 3
+        # Important KDEs carry weight 2
+        assert weights["quantity"] == 2
+        assert weights["product_description"] == 2
 
 
 class TestWarnings:
