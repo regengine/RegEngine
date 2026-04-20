@@ -7,14 +7,15 @@ Supports: HTML, XML, CSV, Excel (.xlsx/.xls), Word (.docx), EDI (X12/EDIFACT)
 from __future__ import annotations
 
 import io
-import logging
 import re
 import zipfile
 from typing import List, Tuple, Optional
 
+import structlog
+
 from .models import PositionMapEntry, TextExtractionMetadata
 
-logger = logging.getLogger("ingestion.format_extractors")
+logger = structlog.get_logger("ingestion.format_extractors")
 
 
 # =============================================================================
