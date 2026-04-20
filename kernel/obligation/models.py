@@ -11,12 +11,13 @@ from enum import Enum
 
 
 class Regulator(str, Enum):
-    """Regulatory agencies."""
-    OCC = "OCC"
-    CFPB = "CFPB"
-    FRB = "FRB"
-    FDIC = "FDIC"
-    NCUA = "NCUA"
+    """Regulatory agencies.
+
+    This engine is scoped to FSMA 204 (food safety) only.  Banking-sector
+    agencies (OCC, CFPB, FRB, FDIC, NCUA) were listed here by mistake — they
+    map to no ``RegulatoryDomain`` value and were never referenced by any
+    obligation definition or test.  Removed in #1359.
+    """
     FDA = "FDA"
 
 
@@ -108,19 +109,12 @@ class ObligationCoverageReport(BaseModel):
     decisions_by_risk_level: Dict[RiskLevel, int]
 
 
-class RiskWeight(BaseModel):
-    """Weighting for different risk factors in compliance scoring."""
-    criticality: float = Field(0.5, ge=0.0, le=1.0)
-    reputation_impact: float = Field(0.2, ge=0.0, le=1.0)
-    legal_liability: float = Field(0.3, ge=0.0, le=1.0)
-
-
-class ComplianceScore(BaseModel):
-    """High-integrity compliance score result."""
-    score: float = Field(..., ge=0.0, le=100.0)
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
-    tenant_id: str
-    vertical: str = "fsma"
-    domain_scores: Dict[str, float] = Field(default_factory=dict)
-    critical_findings_count: int = 0
-    weights_used: RiskWeight
+# ---------------------------------------------------------------------------
+# RETIRED models — #1359
+#
+# RiskWeight and ComplianceScore were defined here but never imported or
+# instantiated by any caller outside this file.  Each service that exposes a
+# compliance score (services/ingestion, services/graph, services/admin) uses
+# its own locally-defined response model.  These definitions are removed to
+# eliminate dead code and the confusion they caused.
+# ---------------------------------------------------------------------------

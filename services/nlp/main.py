@@ -38,6 +38,8 @@ logger = _structlog.get_logger("nlp")
 # Local package imports (using absolute-style imports from services root)
 # Refers to services/nlp/app/...
 from app.config import settings
+# DEPRECATED: Kafka consumer import — will be removed once EVENT_BACKBONE=pg is
+# default (see #1159 #1240). Gated by EVENT_BACKBONE=kafka env flag below.
 from app.consumer import run_consumer, stop_consumer
 from app.routes import router as nlp_router
 
@@ -49,17 +51,23 @@ async def lifespan(api_app: FastAPI):
     # Startup
     logger.info("nlp_service_startup")
     
-    # Start consumer thread
-    consumer_thread = threading.Thread(target=run_consumer, daemon=True)
-    consumer_thread.start()
-    logger.info("nlp_consumer_thread_started")
-    
+    # DEPRECATED (#1159 #1240): Kafka consumer only runs when EVENT_BACKBONE=kafka.
+    # Default is pg (task_processor). Remove this block once #1159 is merged.
+    consumer_thread: threading.Thread | None = None
+    if os.getenv("EVENT_BACKBONE", "pg").lower() == "kafka":
+        consumer_thread = threading.Thread(target=run_consumer, daemon=True)
+        consumer_thread.start()
+        logger.info("nlp_consumer_thread_started")
+    else:
+        logger.info("nlp_kafka_consumer_skipped", reason="EVENT_BACKBONE!=kafka")
+
     yield
-    
+
     # Shutdown
     logger.info("nlp_service_shutdown")
-    stop_consumer()
-    consumer_thread.join(timeout=5.0)
+    if consumer_thread is not None:
+        stop_consumer()
+        consumer_thread.join(timeout=5.0)
 
 from shared.cors import get_allowed_origins, should_allow_credentials
 

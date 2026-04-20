@@ -240,8 +240,10 @@ class FSMAAuditAction(str, Enum):
     CORRECTED = "CORRECTED"  # HITL corrected extraction
 
     # Query/Access events
+    READ = "READ"  # Record read/accessed (FSMA 204 21 CFR 1.1455(g), NIST SP 800-53 AU-2)
     TRACED = "TRACED"  # Traceability query executed
     EXPORTED = "EXPORTED"  # Data exported (CSV, FDA report)
+    KDE_READ = "KDE_READ"  # #1033: Read access to KDE records (FSMA 204 / NIST AU-2)
 
     # Recall events
     RECALL_INITIATED = "RECALL_INITIATED"
@@ -489,12 +491,32 @@ class FSMAAuditLog:
 
             return entry
 
-    def get_by_target(self, target_id: str) -> List[FSMAAuditEntry]:
+    def get_by_target(
+        self,
+        target_id: str,
+        actor: str = "System/AI",
+        actor_type: "FSMAAuditActorType" = None,
+        tenant_id: Optional[str] = None,
+        correlation_id: Optional[str] = None,
+    ) -> List["FSMAAuditEntry"]:
         """Get all audit entries for a specific target (lot, event, etc.).
 
         Reads from PostgreSQL when available so entries survive restarts.
         Falls back to the in-process cache when the DB is unreachable.
+
+        Logs a READ audit entry BEFORE executing the query per FSMA 204
+        21 CFR 1.1455(g) and NIST SP 800-53 AU-2.
         """
+        _actor_type = actor_type if actor_type is not None else FSMAAuditActorType.SYSTEM
+        self.log(
+            action=FSMAAuditAction.READ,
+            target_type="AuditTrail",
+            target_id=target_id,
+            actor=actor,
+            actor_type=_actor_type,
+            tenant_id=tenant_id,
+            correlation_id=correlation_id,
+        )
         db_entries = _query_audit_trail(target_id=target_id)
         if db_entries:
             return db_entries
@@ -503,12 +525,31 @@ class FSMAAuditLog:
             event_ids = self._by_target.get(target_id, [])
             return [e for e in self._entries if e.event_id in event_ids]
 
-    def get_by_tenant(self, tenant_id: str) -> List[FSMAAuditEntry]:
+    def get_by_tenant(
+        self,
+        tenant_id: str,
+        actor: str = "System/AI",
+        actor_type: "FSMAAuditActorType" = None,
+        correlation_id: Optional[str] = None,
+    ) -> List["FSMAAuditEntry"]:
         """Get all audit entries for a tenant.
 
         Reads from PostgreSQL when available so entries survive restarts.
         Falls back to the in-process cache when the DB is unreachable.
+
+        Logs a READ audit entry BEFORE executing the query per FSMA 204
+        21 CFR 1.1455(g) and NIST SP 800-53 AU-2.
         """
+        _actor_type = actor_type if actor_type is not None else FSMAAuditActorType.SYSTEM
+        self.log(
+            action=FSMAAuditAction.READ,
+            target_type="AuditTrail",
+            target_id=f"tenant:{tenant_id}",
+            actor=actor,
+            actor_type=_actor_type,
+            tenant_id=tenant_id,
+            correlation_id=correlation_id,
+        )
         db_entries = _query_audit_trail(tenant_id=tenant_id)
         if db_entries:
             return db_entries
@@ -804,6 +845,26 @@ def log_approval(
         target_id=target_id,
         actor=actor,
         actor_type=FSMAAuditActorType.USER,
+        tenant_id=tenant_id,
+        correlation_id=correlation_id,
+    )
+
+
+def log_read_access(
+    target_type: str,
+    target_id: str,
+    actor: str = "API",
+    actor_type: Optional[FSMAAuditActorType] = None,
+    tenant_id: Optional[str] = None,
+    correlation_id: Optional[str] = None,
+) -> FSMAAuditEntry:
+    """Log a read-access event (FSMA 204 21 CFR 1.1455(g), NIST SP 800-53 AU-2)."""
+    return get_audit_log().log(
+        action=FSMAAuditAction.READ,
+        target_type=target_type,
+        target_id=target_id,
+        actor=actor,
+        actor_type=actor_type if actor_type is not None else FSMAAuditActorType.API,
         tenant_id=tenant_id,
         correlation_id=correlation_id,
     )

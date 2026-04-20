@@ -45,6 +45,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import warnings
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple
 from uuid import uuid4
@@ -57,7 +58,7 @@ from sqlalchemy.exc import (
 )
 from sqlalchemy.orm import Session
 
-from .models import StoreResult, ChainVerification, MerkleVerification
+from .models import StoreResult, ChainVerification, MerkleVerification, DuplicateEventError
 from .hashing import compute_event_hash, compute_chain_hash, compute_idempotency_key
 
 # ---------------------------------------------------------------------------
@@ -242,6 +243,37 @@ def _jsonify_kde(value: Any) -> str:
 
 
 # ---------------------------------------------------------------------------
+# Append-only enforcement helpers (#1334)
+# ---------------------------------------------------------------------------
+
+def _assert_not_exists(sha256_hash: str, tenant_id: str, session: Any) -> None:
+    """Raise DuplicateEventError if a CTE event with this sha256_hash already exists.
+
+    fsma.cte_events is append-only — no UPDATE or DELETE is ever valid (#1334).
+    This application-level check fires before the INSERT so callers receive a
+    typed ``DuplicateEventError`` rather than a DB IntegrityError.  The
+    companion DB trigger ``fsma.cte_events_no_update_delete`` enforces the same
+    constraint at the SQL layer for direct-DB writes that bypass Python.
+
+    Parameterised SQL only — no user input is interpolated into the query text.
+    """
+    from sqlalchemy import text as _text  # local import avoids circular at module load
+
+    row = session.execute(
+        _text(
+            """
+            SELECT id FROM fsma.cte_events
+            WHERE sha256_hash = :sha AND tenant_id = :tid
+            LIMIT 1
+            """
+        ),
+        {"sha": sha256_hash, "tid": tenant_id},
+    ).fetchone()
+    if row is not None:
+        raise DuplicateEventError(event_id=str(row[0]), sha256_hash=sha256_hash)
+
+
+# ---------------------------------------------------------------------------
 # Persistence Layer
 # ---------------------------------------------------------------------------
 
@@ -345,6 +377,15 @@ class CTEPersistence:
         Returns:
             StoreResult with event_id, hashes, and any alerts.
         """
+        # #1335 — LEGACY write path. Migrate callers to
+        # ``shared.canonical_persistence.CanonicalEventStore``.
+        warnings.warn(
+            "CTEPersistence.store_event() is LEGACY (#1335). "
+            "Use shared.canonical_persistence.CanonicalEventStore instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+
         kdes = kdes or {}
         alerts = alerts or []
         validator_results = validator_results or []
@@ -445,6 +486,16 @@ class CTEPersistence:
             product_description, quantity, unit_of_measure,
             location_gln, location_name, event_timestamp, kdes,
         )
+
+        # --- Append-only enforcement (#1334) ---
+        # Raise before INSERT so callers see a typed DuplicateEventError
+        # rather than an IntegrityError.  The idempotency_key check above
+        # already handles exact duplicate inputs; this catches the distinct
+        # case where the same event content arrives with a different
+        # idempotency_key (e.g. from a different source field) but would
+        # produce the same SHA-256 hash — an overwrite attempt on an
+        # already-locked event record.
+        _assert_not_exists(sha256_hash, tenant_id, self.session)
 
         # Get the current chain head for this tenant
         chain_head = self.session.execute(
@@ -682,6 +733,15 @@ class CTEPersistence:
         Returns:
             List of StoreResult, one per input event.
         """
+        # #1335 — LEGACY write path. Migrate callers to
+        # ``shared.canonical_persistence.CanonicalEventStore``.
+        warnings.warn(
+            "CTEPersistence.store_events_batch() is LEGACY (#1335). "
+            "Use shared.canonical_persistence.CanonicalEventStore instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+
         if not events:
             return []
 
@@ -818,6 +878,9 @@ class CTEPersistence:
                 evt.get("unit_of_measure", ""), evt.get("location_gln"),
                 evt.get("location_name"), evt["event_timestamp"], kdes,
             )
+
+            # --- Append-only enforcement (#1334) ---
+            _assert_not_exists(sha256_hash, tenant_id, self.session)
 
             chain_hash = compute_chain_hash(sha256_hash, previous_chain_hash)
 

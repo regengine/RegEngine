@@ -18,7 +18,7 @@ from typing import Any, Dict, Optional
 
 import socket
 import structlog
-from confluent_kafka import Consumer, Producer, KafkaException
+from confluent_kafka import Consumer, KafkaException
 from confluent_kafka.schema_registry import SchemaRegistryClient
 from confluent_kafka.schema_registry.avro import AvroDeserializer
 from confluent_kafka.serialization import SerializationContext, MessageField
@@ -28,35 +28,24 @@ from structlog.contextvars import bind_contextvars, clear_contextvars
 # DLQ - Dead Letter Queue Counter
 DLQ_COUNTER = Counter("fsma_consumer_dlq_messages", "Messages sent to DLQ", ["reason"])
 
-# Global DLQ Producer (initialized in run_fsma_consumer)
-_dlq_producer: Optional[Producer] = None
+# Global DLQ Producer (initialized in run_fsma_consumer) -- #1228: shared singleton
+_dlq_producer: Optional[object] = None  # shared.observability.dlq_producer.DLQProducer
 
 def send_to_dlq(topic: str, original_msg: bytes, reason: str, error: str = "") -> None:
-    """Send failed message to Dead Letter Queue."""
+    """Send failed message to Dead Letter Queue via shared DLQProducer. #1228"""
     if not _dlq_producer:
         logger.error("dlq_producer_not_initialized", reason=reason)
         return
 
     try:
-        # Add metadata headers
-        headers = [
-            ("error_reason", reason.encode("utf-8")),
-            ("error_detail", str(error)[:1024].encode("utf-8")),
-            ("original_topic", topic.encode("utf-8")),
-            ("service", b"fsma-graph-consumer"),
-        ]
-        
-        _dlq_producer.produce(
-            settings.topic_dlq,
-            value=original_msg,
-            headers=headers,
+        _dlq_producer.send(  # type: ignore[union-attr]
+            original_msg,
+            reason=reason,
+            detail=error,
+            original_topic=topic,
         )
-        # Flush immediately for safety in this critical path (could be optimized)
-        _dlq_producer.poll(0)
-        
         DLQ_COUNTER.labels(reason=reason).inc()
         logger.info("message_sent_to_dlq", reason=reason, error=error)
-        
     except Exception as e:
         logger.critical("dlq_emission_failed", error=str(e))
 
@@ -308,9 +297,14 @@ async def run_fsma_consumer(database: Optional[str] = None) -> None:
         _load_schema_str(),
     )
 
-    # Initialize DLQ Producer
+    # Initialize DLQ Producer -- #1228: use shared singleton
+    from shared.dlq import DLQProducer
     global _dlq_producer
-    _dlq_producer = Producer({'bootstrap.servers': settings.kafka_bootstrap})
+    _dlq_producer = DLQProducer(
+        bootstrap_servers=settings.kafka_bootstrap,
+        topic=settings.topic_dlq,
+        service_name="fsma-graph-consumer",
+    )
 
     # Consumer Config
     consumer_conf = {

@@ -1,3 +1,6 @@
+# DEPRECATED: will be removed once EVENT_BACKBONE=pg is default (see #1159 #1240).
+# The PostgreSQL task_processor (server/workers/task_processor.py) is the canonical
+# replacement for this Kafka consumer. Do not add new logic here.
 """Kafka consumer that ingests low-confidence extractions and records them via HallucinationTracker.
 
 Security hardening:
@@ -32,7 +35,7 @@ if TYPE_CHECKING:
 import structlog
 from opentelemetry import trace, propagate
 from prometheus_client import Counter, Histogram
-from kafka import KafkaConsumer, KafkaProducer
+from kafka import KafkaConsumer
 from kafka.admin import KafkaAdminClient, NewTopic
 from kafka.errors import TopicAlreadyExistsError
 from tenacity import retry, stop_after_attempt, stop_after_delay, wait_exponential
@@ -55,6 +58,7 @@ from shared.paths import ensure_shared_importable
 ensure_shared_importable()
 
 from shared.observability import setup_standalone_observability
+from shared.observability.dlq_producer import DLQProducer, get_dlq_producer
 from shared.observability.kafka_propagation import (
     bind_correlation_context,
     inject_correlation_headers_tuples,
@@ -100,8 +104,8 @@ TOPIC_DLQ = "nlp.needs_review.dlq"
 _shutdown_event = threading.Event()
 _last_poll_time: Optional[datetime] = None
 _consumer_started_at: Optional[datetime] = None
-_dlq_producer: Optional[KafkaProducer] = None
-_dlq_producer_lock = threading.Lock()
+# DLQ producer — shared singleton (#1228)
+_dlq: Optional[DLQProducer] = None
 
 
 def _ensure_topic(topic: str, bootstrap_servers: str) -> None:
@@ -122,38 +126,35 @@ def _ensure_topic(topic: str, bootstrap_servers: str) -> None:
                 logger.debug("admin_client_close_failed", error=str(cleanup_exc))
 
 
-def _get_dlq_producer(bootstrap: str) -> KafkaProducer:
-    """Get or create DLQ producer (thread-safe singleton)."""
-    global _dlq_producer
-    if _dlq_producer is None:
-        with _dlq_producer_lock:
-            if _dlq_producer is None:
-                _dlq_producer = KafkaProducer(
-                    bootstrap_servers=bootstrap,
-                    value_serializer=lambda v: json.dumps(v).encode("utf-8"),
-                )
-    return _dlq_producer
+def _init_dlq_producer(bootstrap: str) -> DLQProducer:
+    """Get or create the shared DLQ producer singleton (#1228)."""
+    global _dlq
+    _dlq = get_dlq_producer(
+        topic=TOPIC_DLQ,
+        bootstrap_servers=bootstrap,
+        service_name="admin-review-consumer",
+    )
+    return _dlq
 
 
-def _send_to_dlq(bootstrap: str, event: any, error: str, headers: list | None = None) -> None:
+def _send_to_dlq(bootstrap: str, event: Any, error: str, headers: list | None = None) -> None:
     """Send failed message to dead letter queue."""
+    producer = _dlq or _init_dlq_producer(bootstrap)
     try:
-        producer = _get_dlq_producer(bootstrap)
         if isinstance(event, dict):
-            dlq_payload = {
+            dlq_payload = json.dumps({
                 "original_event": event,
                 "error": error,
                 "failed_at": datetime.now(timezone.utc).isoformat(),
-            }
+            }).encode("utf-8")
         else:
-            dlq_payload = {
+            dlq_payload = json.dumps({
                 "raw_payload": str(event),
                 "error": error,
                 "failed_at": datetime.now(timezone.utc).isoformat(),
                 "is_poison_pill": True,
-            }
-        producer.send(TOPIC_DLQ, value=dlq_payload, headers=headers or [])
-        producer.flush(timeout=5.0)
+            }).encode("utf-8")
+        producer.send(dlq_payload, reason=error[:120], headers=headers or [])
         logger.info("message_sent_to_dlq", error=error)
     except (AttributeError, TypeError, ValueError, RuntimeError, OSError) as exc:  # pragma: no cover - infra dependent
         logger.error("dlq_send_failed", error=str(exc))
@@ -206,31 +207,20 @@ def stop_consumer() -> None:
 
 
 def _cleanup_dlq_producer() -> None:
-    """Flush then close the DLQ producer on shutdown (#1220).
+    """Flush then close the shared DLQ producer on shutdown (#1228).
 
-    librdkafka buffers ``send()`` calls asynchronously, so ``close()``
-    alone can drop in-flight DLQ messages on SIGTERM. We flush first to
-    drain the buffer (up to 5s) and only then close. Exceptions during
-    flush are logged but never re-raised -- we still want close() to
-    run and the shutdown path to complete even if the broker is
-    unreachable.
+    Delegates to DLQProducer.close() which flushes then tears down the
+    underlying Kafka client.  Exceptions are absorbed so shutdown always
+    completes even if the broker is unreachable.
     """
-    global _dlq_producer
-    with _dlq_producer_lock:
-        if _dlq_producer is not None:
-            try:
-                _dlq_producer.flush(timeout=5.0)
-                logger.info("dlq_producer_flushed_on_shutdown")
-            except Exception as flush_exc:  # pragma: no cover - infra
-                logger.exception(
-                    "dlq_flush_on_shutdown_failed",
-                    error=str(flush_exc),
-                )
-            try:
-                _dlq_producer.close(timeout=2.0)
-            except (AttributeError, TypeError, ValueError, RuntimeError, OSError) as cleanup_exc:  # pragma: no cover
-                logger.debug("dlq_producer_close_failed", error=str(cleanup_exc))
-            _dlq_producer = None
+    global _dlq
+    if _dlq is not None:
+        try:
+            _dlq.close()
+            logger.info("dlq_producer_flushed_on_shutdown")
+        except Exception as exc:  # pragma: no cover - infra
+            logger.exception("dlq_flush_on_shutdown_failed", error=str(exc))
+        _dlq = None
 
 
 # Configurable staleness threshold (seconds)

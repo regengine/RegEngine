@@ -7,6 +7,7 @@ import structlog
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
 
+from ...fsma_audit import FSMAAuditAction, FSMAAuditActorType, get_audit_log
 from ...fsma_metrics import record_trace_query
 from ...fsma_utils import (
     TraceResult,
@@ -119,6 +120,17 @@ async def trace_forward_endpoint(
             facility_count=len(result.facilities),
         )
 
+        # #1033: audit KDE/CTE read access (FSMA 204 / NIST AU-2)
+        _actor = getattr(api_key, "key_id", str(api_key)) if api_key else "API"
+        get_audit_log().log(
+            action=FSMAAuditAction.KDE_READ,
+            target_type="KDE",
+            target_id=tlc,
+            actor=_actor,
+            actor_type=FSMAAuditActorType.API,
+            tenant_id=str(tenant_id),
+        )
+
         return {
             "lot_id": result.lot_id,
             "direction": result.direction,
@@ -203,6 +215,17 @@ async def trace_backward_endpoint(
             facility_count=len(result.facilities),
         )
 
+        # #1033: audit KDE/CTE read access (FSMA 204 / NIST AU-2)
+        _actor = getattr(api_key, "key_id", str(api_key)) if api_key else "API"
+        get_audit_log().log(
+            action=FSMAAuditAction.KDE_READ,
+            target_type="KDE",
+            target_id=tlc,
+            actor=_actor,
+            actor_type=FSMAAuditActorType.API,
+            tenant_id=str(tenant_id),
+        )
+
         return {
             "lot_id": result.lot_id,
             "direction": result.direction,
@@ -241,6 +264,18 @@ async def lot_timeline_endpoint(
     try:
         timeline = await get_lot_timeline(client, tlc, str(tenant_id))
         await client.close()
+
+        # #1033: audit KDE/CTE read access (FSMA 204 / NIST AU-2)
+        _actor = getattr(api_key, "key_id", str(api_key)) if api_key else "API"
+        get_audit_log().log(
+            action=FSMAAuditAction.KDE_READ,
+            target_type="KDE",
+            target_id=tlc,
+            actor=_actor,
+            actor_type=FSMAAuditActorType.API,
+            tenant_id=str(tenant_id),
+        )
+
         return {"lot_id": tlc, "events": timeline}
     except (neo4j.exceptions.Neo4jError, ConnectionError) as e:
         logger.exception("timeline_error", tlc=tlc, error=str(e))
@@ -387,6 +422,17 @@ async def search_traceability_events(
         has_more = len(events) > limit
         page_events = events[:limit]
         next_cursor = page_events[-1]["event_id"] if has_more and page_events else None
+
+        # #1033: audit KDE/CTE read access on search (FSMA 204 / NIST AU-2)
+        _actor = getattr(api_key, "key_id", str(api_key)) if api_key else "API"
+        get_audit_log().log(
+            action=FSMAAuditAction.KDE_READ,
+            target_type="KDE",
+            target_id=f"search:{effective_start}:{effective_end}",
+            actor=_actor,
+            actor_type=FSMAAuditActorType.API,
+            tenant_id=str(tenant_id),
+        )
 
         return {
             "count": len(page_events),
