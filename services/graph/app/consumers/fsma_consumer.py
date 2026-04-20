@@ -1,3 +1,6 @@
+# DEPRECATED: This Kafka consumer is superseded by server/workers/task_processor.py.
+# task_processor handles graph_update task types via the PostgreSQL fsma.task_queue table.
+# Do not add new handlers here. Will be deleted in the monolith consolidation (#1240, #1159).
 # DEPRECATED: will be removed once EVENT_BACKBONE=pg is default (see #1159 #1240).
 # The PostgreSQL task_processor (server/workers/task_processor.py) is the canonical
 # replacement for this Kafka consumer. Do not add new logic here.
