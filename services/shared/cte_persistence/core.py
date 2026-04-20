@@ -64,6 +64,14 @@ from .hashing import compute_event_hash, compute_chain_hash, compute_idempotency
 
 logger = logging.getLogger("cte-persistence")
 
+# ---------------------------------------------------------------------------
+# Validation Status Constants
+# ---------------------------------------------------------------------------
+VALIDATION_STATUS_VALID = "valid"
+VALIDATION_STATUS_WARNING = "warning"
+VALIDATION_STATUS_REJECTED = "rejected"
+_REJECT_SEVERITIES: frozenset[str] = frozenset({"reject", "REJECT", "error", "ERROR"})
+
 # Machine-findable marker: this module and canonical_persistence dual-write
 # the same events with divergent idempotency-key formulas. Reconciliation
 # is required before canonical_persistence can be made the sole writer.
@@ -1304,6 +1312,27 @@ class CTEPersistence:
             for event in events:
                 event["kdes"] = kde_map.get(event["id"], {})
 
+        # FSMA 204 / NIST AU-2 read-access audit (#1033)
+        # Emit a structured log record for every KDE read so that
+        # SIEM / log-aggregation can reconstruct who accessed which records.
+        # We use structlog-style kwargs on the stdlib logger so the record
+        # appears in the service's structured log stream without requiring
+        # an async AuditLogger instance in this sync method.
+        if events:
+            logger.info(
+                "kde_read_access",
+                extra={
+                    "audit": True,
+                    "event_type": "kde_read_access",
+                    "tenant_id": tenant_id,
+                    "query_tlc": tlc,
+                    "event_count": len(events),
+                    "event_ids": [e["id"] for e in events],
+                    "source": "query_events_by_tlc",
+                    "fsma_au2": True,
+                },
+            )
+
         return events
 
     def query_all_events(
@@ -1377,6 +1406,22 @@ class CTEPersistence:
             }
             for r in rows
         ]
+
+        # FSMA 204 / NIST AU-2 read-access audit (#1033)
+        if events:
+            logger.info(
+                "kde_read_access",
+                extra={
+                    "audit": True,
+                    "event_type": "kde_read_access",
+                    "tenant_id": tenant_id,
+                    "event_count": len(events),
+                    "total_matching": total,
+                    "event_ids": [e["id"] for e in events],
+                    "source": "query_all_events",
+                    "fsma_au2": True,
+                },
+            )
 
         return events, total
 
