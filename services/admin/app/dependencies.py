@@ -239,11 +239,18 @@ class PermissionChecker:
         
         current_tenant_id = TenantContext.get_tenant_context(db)
         if not current_tenant_id:
-            # If no tenant context, only system-wide permissions apply (if implemented)
-            # OR we fail for tenant-scoped resources
-            if user.is_sysadmin:
-                return True
-            raise HTTPException(status_code=403, detail="No tenant context active")
+            # SECURITY (#1065): fail closed for everyone — including sysadmins.
+            # Previously this short-circuited with `return True` when
+            # `user.is_sysadmin`, granting access to tenant-scoped endpoints
+            # with no bound tenant. That breaks the fail-closed invariant:
+            # a sysadmin performing a tenant-scoped operation MUST supply a
+            # tenant context (X-Tenant-ID / JWT claim). Global sysadmin
+            # privilege is still honored on the normal path below once a
+            # tenant is bound.
+            raise HTTPException(
+                status_code=403,
+                detail="E_NO_TENANT_CONTEXT: tenant-scoped endpoint requires X-Tenant-ID",
+            )
             
         # Get Membership and Role
         stmt = select(RoleModel).join(MembershipModel).where(

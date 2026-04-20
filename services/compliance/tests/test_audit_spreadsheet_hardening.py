@@ -49,13 +49,22 @@ def _fresh_routes():
 
 @pytest.fixture()
 def client(monkeypatch):
-    """Return a TestClient with auth bypassed and a fresh router."""
+    """Return a TestClient with auth bypassed and a fresh router.
+
+    The override returns a stub principal with a ``tenant_id``
+    attribute so routes that bind tenant from the authenticated
+    principal (e.g. /v1/fsma/audit/spreadsheet, #1106) can read it.
+    """
     from shared.auth import require_api_key
+
+    class _StubPrincipal:
+        tenant_id = "11111111-1111-1111-1111-111111111111"
+        key_id = "test-key"
 
     routes_mod = _fresh_routes()
     app = FastAPI()
     app.include_router(routes_mod.router)
-    app.dependency_overrides[require_api_key] = lambda: None
+    app.dependency_overrides[require_api_key] = lambda: _StubPrincipal()
 
     with TestClient(app) as c:
         # Stash the module handle so tests can patch against the
@@ -179,13 +188,15 @@ def test_1283_rejects_inverted_range(client):
 
 
 def test_1283_rejects_excessive_range(client):
-    """FSMA 204 retention is 2 years; 10 years is not a legit query."""
+    """EPIC-L (#1655) caps a synchronous export at 90 days; 10 years
+    is not a legit query for the interactive spreadsheet endpoint."""
     r = client.get(
         "/v1/fsma/audit/spreadsheet",
         params={"start_date": "2016-01-01", "end_date": "2026-01-01"},
     )
     assert r.status_code == 400
-    assert "retention window" in r.json()["detail"]
+    detail = r.json()["detail"]
+    assert "exceeds" in detail and "90-day" in detail
 
 
 def test_1283_rejects_requesting_entity_with_formula_prefix(client):
@@ -240,7 +251,13 @@ def test_1283_content_disposition_uses_parsed_dates(client):
         )
     assert r.status_code == 200
     disp = r.headers["Content-Disposition"]
-    assert disp.startswith('attachment; filename="fsma_204_audit_2026-04-01_2026-04-17_')
+    # EPIC-L (#1655) stitched via shared.fda_export.safe_filename:
+    # prefix → scope → start → end → .csv.
+    assert disp.startswith('attachment; filename="fsma_204_audit_')
+    assert "2026-04-01" in disp and "2026-04-17" in disp
+    assert disp.endswith('.csv"')
+    # Path traversal and separator injection must not survive the
+    # token sanitizer.
     assert ".." not in disp
     assert "/" not in disp.split("filename=", 1)[1]
 

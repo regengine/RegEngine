@@ -434,7 +434,11 @@ CLASSIFIER = SignalClassifier()
 
 
 def _now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    # Match the `Z` suffix contract enforced by the FSMA extractor
+    # (see `app/extractors/fsma_extractor.py`) so all NLP-service timestamps
+    # share a single UTC serialization. Python's default `isoformat()` emits
+    # `+00:00`, which breaks downstream consumers that expect `Z`. -- #1132
+    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
 # Heuristic confidence cap for the legacy regex path (#1202).

@@ -316,6 +316,46 @@
       "RECEIVING",
       "TRANSFORMATION"
     ],
+    "cte_types_by_industry": {
+      "_note": "Per FSMA 204 (21 CFR §1.1305, §1.1320, §1.1330), only a subset of CTEs applies to each food category. COOLING is defined for Raw Agricultural Commodities (RACs, produce) only; accepting it for dairy/seafood/eggs produces non-conformant submissions (#1109). FIRST_LAND_BASED_RECEIVING is defined only for food obtained from a fishing vessel; it is mutually exclusive with INITIAL_PACKING for a given lot. Industry keys match fsma_rules.json.industries[].id. HARVESTING for seafood covers aquaculture; wild-caught fish use FIRST_LAND_BASED_RECEIVING instead.",
+      "fresh-produce": [
+        "HARVESTING",
+        "COOLING",
+        "INITIAL_PACKING",
+        "SHIPPING",
+        "RECEIVING",
+        "TRANSFORMATION"
+      ],
+      "seafood": [
+        "HARVESTING",
+        "FIRST_LAND_BASED_RECEIVING",
+        "SHIPPING",
+        "RECEIVING",
+        "TRANSFORMATION"
+      ],
+      "dairy": [
+        "SHIPPING",
+        "RECEIVING",
+        "TRANSFORMATION"
+      ],
+      "deli-prepared": [
+        "SHIPPING",
+        "RECEIVING",
+        "TRANSFORMATION"
+      ],
+      "shell-eggs": [
+        "INITIAL_PACKING",
+        "SHIPPING",
+        "RECEIVING",
+        "TRANSFORMATION"
+      ]
+    },
+    "mutually_exclusive_ctes": {
+      "_note": "Pairs of CTEs that cannot both apply to the same lot. INITIAL_PACKING describes land-side first packing of RACs; FIRST_LAND_BASED_RECEIVING describes the land-side handoff of food from a fishing vessel. A given lot is one or the other, never both (#1109).",
+      "pairs": [
+        ["INITIAL_PACKING", "FIRST_LAND_BASED_RECEIVING"]
+      ]
+    },
     "responsible_party_enforcement": {
       "_note": "21 CFR 1.1370(c) requires the responsible party's contact to be reachable for FDA within 24 hours — NOT that every event carry the contact inline. Enforcement is split between event ingestion (which requires a resolvable location_gln or location_name) and graph-layer /traceability writes (which accept an inline responsible_party_contact KDE as a first-class field). Do not add responsible_party_contact to required_fsma_fields without also collecting it via IngestEvent — see #1223 for the drift history.",
       "reference_fields": [

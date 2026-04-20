@@ -271,13 +271,16 @@ def generate_fda_csv(
 
     # --- Data rows (sorted by event_date then event_time) ---
     # ``_normalise_event`` already applies :func:`sanitize_cell` to every
-    # value, so the column-ordered list here inherits the sanitization.
+    # value. We still re-wrap in :func:`sanitize_sequence` at the
+    # ``writer.writerow`` boundary so the EPIC-L Semgrep rule (see
+    # ``.semgrep.yml``) can statically verify the contract without
+    # tracing into ``_normalise_event``.
     # ``strict_dates=True`` refuses to truncate malformed event_dates
     # into the FDA submission (issue #1108).
     normalised = [_normalise_event(e, strict_dates=True) for e in events]
     normalised.sort(key=lambda r: (r.get("event_date") or "", r.get("event_time") or ""))
 
     for row in normalised:
-        writer.writerow([row[col] for col in FDA_COLUMNS])
+        writer.writerow(sanitize_sequence([row[col] for col in FDA_COLUMNS]))
 
     return buf.getvalue()
