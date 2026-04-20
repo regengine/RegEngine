@@ -19,6 +19,7 @@ from uuid import uuid4
 
 from app.shared.csv_safety import sanitize_cell
 from app.webhook_models import REQUIRED_KDES_BY_CTE, WebhookCTEType
+from shared.fda_export import safe_filename_token as _shared_safe_filename_token
 
 
 # ---------------------------------------------------------------------------
@@ -457,8 +458,13 @@ def _generate_pdf(
 
 
 def _safe_filename_token(raw: str) -> str:
-    """Normalize user-provided identifiers for filenames."""
-    return "".join(ch if ch.isalnum() or ch in {"-", "_"} else "_" for ch in raw)[:64] or "all"
+    """Normalize user-provided identifiers for filenames.
+
+    Thin shim over :func:`shared.fda_export.safe_filename_token` — the
+    canonical implementation lives in the EPIC-L shared module so both
+    services sanitize identically (#1655).
+    """
+    return _shared_safe_filename_token(raw)
 
 
 def _event_value_for_required_field(event: dict, required_field: str) -> Any:
