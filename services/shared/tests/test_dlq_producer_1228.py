@@ -151,3 +151,64 @@ class TestDLQProducerConfluentBackend:
             t.join()
 
         assert not errors, f"Thread-safety violations: {errors}"
+
+
+# ---------------------------------------------------------------------------
+# Singleton-per-topic tests (#1228)
+# ---------------------------------------------------------------------------
+
+class TestDLQProducerSingleton:
+    """DLQProducer.get() returns per-topic singletons."""
+
+    def setup_method(self):
+        # Clear the singleton registry before each test to ensure isolation.
+        DLQProducer._instances.clear()
+
+    def teardown_method(self):
+        DLQProducer._instances.clear()
+
+    def test_same_topic_returns_same_instance(self):
+        """Two calls with the same topic must return the identical object."""
+        with patch.object(DLQProducer, "_init_producer"):
+            a = DLQProducer.get("topic.foo", bootstrap_servers="localhost:9092")
+            b = DLQProducer.get("topic.foo", bootstrap_servers="localhost:9092")
+        assert a is b, "Expected singleton: same topic must return same instance"
+
+    def test_different_topics_return_different_instances(self):
+        """Two different topics must each get their own DLQProducer instance."""
+        with patch.object(DLQProducer, "_init_producer"):
+            a = DLQProducer.get("topic.alpha", bootstrap_servers="localhost:9092")
+            b = DLQProducer.get("topic.beta", bootstrap_servers="localhost:9092")
+        assert a is not b, "Different topics must yield different instances"
+        assert a._topic == "topic.alpha"
+        assert b._topic == "topic.beta"
+
+    def test_send_noops_when_kafka_unavailable(self):
+        """send() must log and return (not raise) when the underlying producer raises."""
+        with patch.object(DLQProducer, "_init_producer"):
+            dlq = DLQProducer.get("topic.noop", bootstrap_servers="localhost:9092")
+            # Inject a broken inner producer
+            broken = MagicMock()
+            broken.produce.side_effect = RuntimeError("broker unreachable")
+            broken.send.side_effect = RuntimeError("broker unreachable")
+            dlq._producer = broken
+            dlq._confluent = True
+
+        # Must not raise
+        dlq.send(b"payload", reason="test_noop", original_topic="topic.src")
+
+    def test_singleton_thread_safety(self):
+        """Concurrent DLQProducer.get() calls for the same topic must return the same instance."""
+        results = []
+
+        def get_instance():
+            with patch.object(DLQProducer, "_init_producer"):
+                results.append(DLQProducer.get("topic.concurrent", bootstrap_servers="localhost:9092"))
+
+        threads = [threading.Thread(target=get_instance) for _ in range(30)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        assert len(set(id(r) for r in results)) == 1, "All threads should get the same instance"

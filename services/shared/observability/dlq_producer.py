@@ -26,13 +26,43 @@ logger = structlog.get_logger("shared.dlq_producer")
 
 
 class DLQProducer:
-    """Thread-safe DLQ producer wrapper.
+    """Thread-safe DLQ producer wrapper with per-topic singleton semantics.
 
     Wraps a Kafka producer (confluent-kafka or kafka-python) behind a uniform
     interface so callers do not need to know which library is in use.  The
     instance is created once at service startup and shared across threads via
     a lock.
+
+    Use ``DLQProducer.get(topic, ...)`` to obtain the singleton instance for a
+    topic.  Direct instantiation is still supported for cases where callers
+    manage lifecycle explicitly.
     """
+
+    # Class-level registry: topic -> singleton instance. #1228
+    _instances: dict[str, "DLQProducer"] = {}
+    _registry_lock: threading.Lock = threading.Lock()
+
+    @classmethod
+    def get(
+        cls,
+        topic: str,
+        bootstrap_servers: str = "",
+        service_name: str = "unknown-service",
+    ) -> "DLQProducer":
+        """Return the singleton DLQProducer for *topic*, creating it if needed.
+
+        Subsequent calls with the same topic return the identical object
+        regardless of the other arguments passed.
+        """
+        if topic not in cls._instances:
+            with cls._registry_lock:
+                if topic not in cls._instances:
+                    cls._instances[topic] = cls(
+                        bootstrap_servers=bootstrap_servers,
+                        topic=topic,
+                        service_name=service_name,
+                    )
+        return cls._instances[topic]
 
     def __init__(
         self,
