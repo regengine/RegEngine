@@ -71,6 +71,42 @@ jobs:
         env:
           SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN }}
 
+      - name: Semgrep EPIC-A scan (tenant_id trust — #1651, advisory until rollout)
+        run: |
+          pip install semgrep
+          # Advisory-only while EPIC-A rollout is in flight. Emits findings
+          # to the log but does not fail the build. Each finding corresponds
+          # to a call site that an EPIC-A child issue is migrating to
+          # resolve_tenant_context(). Promote to --error (blocking) once
+          # the open EPIC-A children under label `epic-a-tenant-trust` reach
+          # zero. See services/shared/tenant_context.py.
+          semgrep --config=.semgrep/tenant-trust.yaml . \
+            --json --output semgrep-tenant-trust.json || true
+          # Summary line for reviewers (count by rule).
+          python3 -c "
+          import json
+          data = json.load(open('semgrep-tenant-trust.json'))
+          results = data.get('results', [])
+          if not results:
+              print('EPIC-A: clean — promote this step to --error.')
+          else:
+              from collections import Counter
+              by_rule = Counter(r['check_id'].split('.')[-1] for r in results)
+              print(f'EPIC-A: {len(results)} findings (advisory):')
+              for k, v in by_rule.most_common():
+                  print(f'  {v:3d}  {k}')
+          "
+        env:
+          SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN }}
+
+      - name: Upload EPIC-A Semgrep results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: semgrep-tenant-trust
+          path: semgrep-tenant-trust.json
+          retention-days: 90
+
       - name: Upload Semgrep results
         if: always()
         uses: actions/upload-artifact@v7
