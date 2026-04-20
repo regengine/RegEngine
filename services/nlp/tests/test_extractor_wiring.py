@@ -105,7 +105,9 @@ class TestFSMAExtractorIsWired:
                 kafka_headers=[],
             )
 
-        mock_extractor.extract.assert_called_once_with("sample document text", "doc-1")
+        mock_extractor.extract.assert_called_once_with(
+            "sample document text", "doc-1", tenant_id="tenant-a"
+        )
         mock_extractor.route_extraction.assert_called_once_with(result)
         mock_producer.send.assert_called_once()
         send_kwargs = mock_producer.send.call_args

@@ -94,7 +94,7 @@ class TestLotCodeExtraction:
 
     def test_extract_lot_code_from_bol(self, extractor):
         """Test extraction of Lot Code from BOL."""
-        result = extractor.extract(SAMPLE_BOL_TEXT, "test-doc-001")
+        result = extractor.extract(SAMPLE_BOL_TEXT, "test-doc-001", tenant_id="11111111-1111-1111-1111-111111111111")
 
         assert len(result.ctes) > 0
         assert result.ctes[0].kdes.traceability_lot_code is not None
@@ -103,7 +103,7 @@ class TestLotCodeExtraction:
 
     def test_extract_batch_code(self, extractor):
         """Test extraction of Batch code from invoice."""
-        result = extractor.extract(SAMPLE_INVOICE_TEXT, "test-doc-002")
+        result = extractor.extract(SAMPLE_INVOICE_TEXT, "test-doc-002", tenant_id="11111111-1111-1111-1111-111111111111")
 
         assert len(result.ctes) > 0
         assert result.ctes[0].kdes.traceability_lot_code is not None
@@ -116,7 +116,7 @@ class TestLotCodeExtraction:
         mutating the originator-assigned TLC and breaking traceability
         (21 CFR §1.1320 defines the TLC as assigned by the originator).
         GTIN is now stored separately in ``KDE.gtin``."""
-        result = extractor.extract(SAMPLE_BOL_TEXT, "test-doc-003")
+        result = extractor.extract(SAMPLE_BOL_TEXT, "test-doc-003", tenant_id="11111111-1111-1111-1111-111111111111")
 
         tlc = result.ctes[0].kdes.traceability_lot_code
         assert tlc is not None
@@ -132,14 +132,14 @@ class TestQuantityExtraction:
 
     def test_extract_quantity_from_bol(self, extractor):
         """Test extraction of quantity from BOL."""
-        result = extractor.extract(SAMPLE_BOL_TEXT, "test-doc-004")
+        result = extractor.extract(SAMPLE_BOL_TEXT, "test-doc-004", tenant_id="11111111-1111-1111-1111-111111111111")
 
         assert result.ctes[0].kdes.quantity == 50.0
         assert result.ctes[0].kdes.unit_of_measure == "cases"
 
     def test_extract_quantity_from_invoice(self, extractor):
         """Test extraction of quantity from invoice."""
-        result = extractor.extract(SAMPLE_INVOICE_TEXT, "test-doc-005")
+        result = extractor.extract(SAMPLE_INVOICE_TEXT, "test-doc-005", tenant_id="11111111-1111-1111-1111-111111111111")
 
         assert result.ctes[0].kdes.quantity == 100.0
         assert result.ctes[0].kdes.unit_of_measure == "units"
@@ -150,14 +150,14 @@ class TestLocationExtraction:
 
     def test_extract_gln(self, extractor):
         """Test extraction of GLN location identifier."""
-        result = extractor.extract(SAMPLE_BOL_TEXT, "test-doc-006")
+        result = extractor.extract(SAMPLE_BOL_TEXT, "test-doc-006", tenant_id="11111111-1111-1111-1111-111111111111")
 
         assert result.ctes[0].kdes.location_identifier == "urn:gln:1234567890123"
 
     def test_missing_location(self, extractor):
         """Test warning when location is missing."""
         text = "Lot: L-2025-001\nQuantity: 50 cases"
-        result = extractor.extract(text, "test-doc-007")
+        result = extractor.extract(text, "test-doc-007", tenant_id="11111111-1111-1111-1111-111111111111")
 
         assert any("Missing location identifier" in w for w in result.warnings)
 
@@ -167,13 +167,13 @@ class TestDateExtraction:
 
     def test_extract_date_mm_dd_yyyy(self, extractor):
         """Test extraction of MM/DD/YYYY date format."""
-        result = extractor.extract(SAMPLE_BOL_TEXT, "test-doc-008")
+        result = extractor.extract(SAMPLE_BOL_TEXT, "test-doc-008", tenant_id="11111111-1111-1111-1111-111111111111")
 
         assert result.ctes[0].kdes.event_date == "2025-11-05"
 
     def test_extract_date_iso(self, extractor):
         """Test extraction of ISO date format."""
-        result = extractor.extract(SAMPLE_INVOICE_TEXT, "test-doc-009")
+        result = extractor.extract(SAMPLE_INVOICE_TEXT, "test-doc-009", tenant_id="11111111-1111-1111-1111-111111111111")
 
         assert result.ctes[0].kdes.event_date == "2025-11-05"
 
@@ -183,7 +183,7 @@ class TestConfidenceCalculation:
 
     def test_high_confidence_with_all_fields(self, extractor):
         """Test high confidence when all required fields present."""
-        result = extractor.extract(SAMPLE_BOL_TEXT, "test-doc-010")
+        result = extractor.extract(SAMPLE_BOL_TEXT, "test-doc-010", tenant_id="11111111-1111-1111-1111-111111111111")
 
         # BOL has lot code, quantity, location, date = 4/4 required fields
         assert result.ctes[0].confidence >= 0.75
@@ -191,7 +191,7 @@ class TestConfidenceCalculation:
     def test_low_confidence_with_missing_fields(self, extractor):
         """Test low confidence when fields are missing."""
         text = "Lot: L-2025-001"  # Missing quantity, location, date
-        result = extractor.extract(text, "test-doc-011")
+        result = extractor.extract(text, "test-doc-011", tenant_id="11111111-1111-1111-1111-111111111111")
 
         assert result.ctes[0].confidence < 0.5
 
@@ -202,21 +202,21 @@ class TestWarnings:
     def test_warnings_for_missing_tlc(self, extractor):
         """Test warnings generated for missing TLC."""
         text = "Ship Date: 11/05/2025\nQuantity: 50 cases"
-        result = extractor.extract(text, "test-doc-012")
+        result = extractor.extract(text, "test-doc-012", tenant_id="11111111-1111-1111-1111-111111111111")
 
         assert any("Missing Traceability Lot Code" in w for w in result.warnings)
 
     def test_warnings_for_low_confidence(self, extractor):
         """Test warnings for low confidence extractions."""
         text = "Lot: ABC123"  # Minimal document
-        result = extractor.extract(text, "test-doc-013")
+        result = extractor.extract(text, "test-doc-013", tenant_id="11111111-1111-1111-1111-111111111111")
 
         assert any("Low confidence" in w for w in result.warnings)
 
     def test_no_cte_warning(self, extractor):
         """Test warning when no CTEs can be extracted."""
         text = ""
-        result = extractor.extract(text, "test-doc-014")
+        result = extractor.extract(text, "test-doc-014", tenant_id="11111111-1111-1111-1111-111111111111")
 
         assert any("No CTEs extracted" in w for w in result.warnings)
 
@@ -226,13 +226,13 @@ class TestCTETypeAssignment:
 
     def test_cte_type_shipping_for_bol(self, extractor):
         """Test CTE type assignment for BOL."""
-        result = extractor.extract(SAMPLE_BOL_TEXT, "test-doc-015")
+        result = extractor.extract(SAMPLE_BOL_TEXT, "test-doc-015", tenant_id="11111111-1111-1111-1111-111111111111")
 
         assert result.ctes[0].type == CTEType.SHIPPING
 
     def test_cte_type_transformation_for_production(self, extractor):
         """Test CTE type assignment for production log."""
-        result = extractor.extract(SAMPLE_PRODUCTION_LOG, "test-doc-016")
+        result = extractor.extract(SAMPLE_PRODUCTION_LOG, "test-doc-016", tenant_id="11111111-1111-1111-1111-111111111111")
 
         assert result.ctes[0].type == CTEType.TRANSFORMATION
 
@@ -242,7 +242,7 @@ class TestGraphEventConversion:
 
     def test_to_graph_event_format(self, extractor):
         """Test conversion to graph event format."""
-        result = extractor.extract(SAMPLE_BOL_TEXT, "test-doc-017")
+        result = extractor.extract(SAMPLE_BOL_TEXT, "test-doc-017", tenant_id="11111111-1111-1111-1111-111111111111")
         graph_event = extractor.to_graph_event(result)
 
         assert graph_event["event_type"] == "fsma.extraction"
@@ -252,7 +252,7 @@ class TestGraphEventConversion:
 
     def test_graph_event_has_timestamp(self, extractor):
         """Test that graph event includes timestamp."""
-        result = extractor.extract(SAMPLE_BOL_TEXT, "test-doc-018")
+        result = extractor.extract(SAMPLE_BOL_TEXT, "test-doc-018", tenant_id="11111111-1111-1111-1111-111111111111")
         graph_event = extractor.to_graph_event(result)
 
         assert "timestamp" in graph_event
@@ -264,7 +264,7 @@ class TestTLCSourceFDARegistration:
 
     def test_extract_tlc_source_fda_reg(self, extractor):
         """Ensure FDA Reg near TLC source cues is captured."""
-        result = extractor.extract(SAMPLE_TLC_SOURCE_FDA, "test-doc-024")
+        result = extractor.extract(SAMPLE_TLC_SOURCE_FDA, "test-doc-024", tenant_id="11111111-1111-1111-1111-111111111111")
 
         assert result.ctes[0].kdes.tlc_source_fda_reg == "fda:12345678901"
         # With no GLN present, FDA reg should backfill location identifier
@@ -272,7 +272,7 @@ class TestTLCSourceFDARegistration:
 
     def test_graph_event_includes_tlc_source_fda_reg(self, extractor):
         """Graph event should emit TLC source FDA registration."""
-        result = extractor.extract(SAMPLE_TLC_SOURCE_FDA, "test-doc-025")
+        result = extractor.extract(SAMPLE_TLC_SOURCE_FDA, "test-doc-025", tenant_id="11111111-1111-1111-1111-111111111111")
         graph_event = extractor.to_graph_event(result)
 
         assert graph_event["ctes"][0]["kdes"]["tlc_source_fda_reg"] == "fda:12345678901"
@@ -284,7 +284,7 @@ class TestTLCFormatValidation:
     def test_non_gs1_tlc_warning(self, extractor):
         """Test that non-GS1 compliant TLCs generate warnings."""
         text = "Lot: ABC\nDate: 2025-11-05"  # Too short
-        result = extractor.extract(text, "test-doc-019")
+        result = extractor.extract(text, "test-doc-019", tenant_id="11111111-1111-1111-1111-111111111111")
 
         # Should extract but warn about format
         if result.ctes and result.ctes[0].kdes.traceability_lot_code:
@@ -293,7 +293,7 @@ class TestTLCFormatValidation:
     def test_valid_format_no_warning(self, extractor):
         """Test that valid format doesn't generate format warning."""
         text = "GTIN: 00012345678901\nLot: LOT-2025-A\nQuantity: 50 cases\nGLN: 1234567890123\nDate: 2025-11-05"
-        result = extractor.extract(text, "test-doc-020")
+        result = extractor.extract(text, "test-doc-020", tenant_id="11111111-1111-1111-1111-111111111111")
 
         # With complete data, should have high confidence
         assert result.ctes[0].confidence >= 0.75
@@ -304,26 +304,26 @@ class TestExtractionResult:
 
     def test_result_has_document_id(self, extractor):
         """Test that result includes document ID."""
-        result = extractor.extract(SAMPLE_BOL_TEXT, "my-custom-doc-id")
+        result = extractor.extract(SAMPLE_BOL_TEXT, "my-custom-doc-id", tenant_id="11111111-1111-1111-1111-111111111111")
 
         assert result.document_id == "my-custom-doc-id"
 
     def test_result_has_document_type(self, extractor):
         """Test that result includes document type."""
-        result = extractor.extract(SAMPLE_BOL_TEXT, "test-doc-021")
+        result = extractor.extract(SAMPLE_BOL_TEXT, "test-doc-021", tenant_id="11111111-1111-1111-1111-111111111111")
 
         assert result.document_type == DocumentType.BILL_OF_LADING
 
     def test_result_has_timestamp(self, extractor):
         """Test that result includes extraction timestamp."""
-        result = extractor.extract(SAMPLE_BOL_TEXT, "test-doc-022")
+        result = extractor.extract(SAMPLE_BOL_TEXT, "test-doc-022", tenant_id="11111111-1111-1111-1111-111111111111")
 
         assert result.extraction_timestamp is not None
         assert result.extraction_timestamp.endswith("Z")
 
     def test_result_stores_raw_text(self, extractor):
         """Test that result stores raw text (truncated)."""
-        result = extractor.extract(SAMPLE_BOL_TEXT, "test-doc-023")
+        result = extractor.extract(SAMPLE_BOL_TEXT, "test-doc-023", tenant_id="11111111-1111-1111-1111-111111111111")
 
         assert result.raw_text is not None
         assert len(result.raw_text) <= 1000
@@ -351,7 +351,7 @@ class TestSevenKDEExtraction:
 
     def test_extract_7_kdes_from_bol(self, extractor):
         """Test that 7 KDEs are extracted with confidence > 0."""
-        result = extractor.extract(SAMPLE_BOL_WITH_GTIN14, "test-doc-kde-001")
+        result = extractor.extract(SAMPLE_BOL_WITH_GTIN14, "test-doc-kde-001", tenant_id="11111111-1111-1111-1111-111111111111")
 
         assert len(result.ctes) > 0
         cte = result.ctes[0]
@@ -376,7 +376,7 @@ class TestSevenKDEExtraction:
 
     def test_fsma_events_output(self, extractor):
         """Test to_fsma_events outputs events with 7 KDEs."""
-        result = extractor.extract(SAMPLE_BOL_WITH_GTIN14, "test-doc-kde-002")
+        result = extractor.extract(SAMPLE_BOL_WITH_GTIN14, "test-doc-kde-002", tenant_id="11111111-1111-1111-1111-111111111111")
         events = extractor.to_fsma_events(result)
 
         # Should have at least one event
@@ -401,7 +401,7 @@ class TestSevenKDEExtraction:
     def test_tlc_format_gtin14_lot(self, extractor):
         """Test TLC extraction with GTIN-14 + Lot format."""
         text = "Lot: 00012345678901Lot-123\nDate: 2025-11-05"
-        result = extractor.extract(text, "test-doc-kde-003")
+        result = extractor.extract(text, "test-doc-kde-003", tenant_id="11111111-1111-1111-1111-111111111111")
 
         assert len(result.ctes) > 0
         tlc = result.ctes[0].kdes.traceability_lot_code

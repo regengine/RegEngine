@@ -407,6 +407,10 @@ _MINIMAL_EPCIS_XML = b"""<?xml version="1.0" encoding="UTF-8"?>
         <action>OBSERVE</action>
         <bizStep>urn:epcglobal:cbv:bizstep:receiving</bizStep>
         <disposition>urn:epcglobal:cbv:disp:in_progress</disposition>
+        <ilmd>
+          <fsma:traceabilityLotCode xmlns:fsma="urn:fsma:food:traceability">00012345678901-MIN</fsma:traceabilityLotCode>
+          <cbvmda:lotNumber xmlns:cbvmda="urn:epcglobal:cbv:mda">MIN-001</cbvmda:lotNumber>
+        </ilmd>
       </ObjectEvent>
     </EventList>
   </EPCISBody>

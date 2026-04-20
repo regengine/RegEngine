@@ -656,28 +656,16 @@ def get_graph_sync_stats() -> dict:
     return {"successes": _graph_sync_successes, "failures": _graph_sync_failures}
 
 
-# ---------------------------------------------------------------------------
-# #1378 — Neo4j sync producer gating
-# ---------------------------------------------------------------------------
+# #1378 — Neo4j sync producer gating (mirrors shared.canonical_persistence.migration).
 #
-# ``_publish_graph_sync`` rpushes one message per ingested CTE to the
-# Redis list ``neo4j-sync``.  The consumer at
-# ``services/graph/scripts/fsma_sync_worker.py`` is not referenced by
-# any deployment manifest (railway.toml, docker-compose) — so in
-# production the queue was write-only and grew without bound until
-# Redis hit its ``maxmemory`` limit.  Under the configured
-# ``allkeys-lru`` policy, continued writes evict OTHER keys
-# (rate-limit counters, idempotency records, JWT revocation list)
-# before dropping the oldest ``neo4j-sync`` entries.
-#
-# Fix — mirror the gating already applied in
-# ``shared.canonical_persistence.migration.publish_graph_sync``:
-# default OFF, explicit opt-in via ``ENABLE_NEO4J_SYNC``, and when
-# enabled bound the list via ``LTRIM`` to
-# ``NEO4J_SYNC_MAX_QUEUE`` (default 100_000) so a briefly-stalled
-# consumer cannot exhaust Redis memory.  Both producers share the
-# same env flag so operators have a single switch.
-_NEO4J_SYNC_QUEUE_KEY = os.getenv("NEO4J_SYNC_QUEUE", "neo4j-sync")
+# The consumer (services/graph/scripts/fsma_sync_worker.py) is not started
+# by any deployment manifest (Dockerfile, docker-compose, railway.toml).
+# Publishing unconditionally caused the ``neo4j-sync`` Redis list to grow
+# without bound, evicting hot keys (rate limit counters, idempotency
+# records) under the ``allkeys-lru`` policy. Gate the producer behind
+# ``ENABLE_NEO4J_SYNC`` (default off) and bound the queue with ``LTRIM``
+# in case a dev/test environment opts in but the consumer falls behind.
+_NEO4J_SYNC_QUEUE_KEY = "neo4j-sync"
 
 
 def _neo4j_sync_enabled() -> bool:
@@ -685,8 +673,8 @@ def _neo4j_sync_enabled() -> bool:
 
     Defaults to False because the consumer is not deployed by any
     published manifest; writing to Redis without a reader lets the
-    queue grow unbounded.  Evaluated at call time so env changes on
-    a long-running process take effect without a restart.
+    queue grow unbounded (#1378). Evaluated at call time so env
+    changes on a long-running process take effect without restart.
     """
     raw = os.getenv("ENABLE_NEO4J_SYNC", "false").strip().lower()
     return raw in ("1", "true", "yes", "on")
@@ -695,18 +683,15 @@ def _neo4j_sync_enabled() -> bool:
 def _neo4j_sync_max_queue() -> int:
     """Upper bound on queued messages before we drop the oldest.
 
-    Only applied when the producer is enabled.  100k was chosen as
-    a practical cap — ~50 MB at 500 bytes/message in Redis, enough
-    to absorb a few hours of production ingest while the consumer
-    is briefly down, but below the point where Redis memory
-    pressure becomes an ops problem.  Override with
-    NEO4J_SYNC_MAX_QUEUE.
+    Only applied when the producer is enabled. 100k mirrors the
+    canonical-persistence default — see migration.py for the sizing
+    rationale. Override with ``NEO4J_SYNC_MAX_QUEUE``.
     """
     try:
         return max(1, int(os.getenv("NEO4J_SYNC_MAX_QUEUE", "100000")))
     except ValueError:
         logger.warning(
-            "neo4j_sync_max_queue_invalid_env_value NEO4J_SYNC_MAX_QUEUE=%s",
+            "neo4j_sync_max_queue_invalid_env_value value=%s",
             os.getenv("NEO4J_SYNC_MAX_QUEUE"),
         )
         return 100_000
@@ -715,17 +700,20 @@ def _neo4j_sync_max_queue() -> int:
 def _publish_graph_sync(event_id: str, event: IngestEvent, tenant_id: str) -> None:
     """Push a CTE creation event to Redis for Neo4j graph sync.
 
-    Behaviour matrix (see module docstring above):
+    Behaviour matrix (#1378 — matches shared.canonical_persistence.migration):
 
-    - ``ENABLE_NEO4J_SYNC`` not set (default) → no-op.  The consumer
-      at ``services/graph/scripts/fsma_sync_worker.py`` is not in
-      any deployment manifest, so sending here would grow Redis
-      unbounded.  Default **in every environment** including dev to
-      ensure a forgotten flag does not recreate the #1378 leak.
+    - ``ENABLE_NEO4J_SYNC`` not set (default) → no-op. The consumer at
+      ``services/graph/scripts/fsma_sync_worker.py`` is not in any
+      deployment manifest, so sending here would grow Redis unbounded.
+      Default in every environment to ensure a forgotten flag does not
+      recreate the leak.
     - ``ENABLE_NEO4J_SYNC=true`` + ``REDIS_URL`` set → send, then
-      trim the list to ``NEO4J_SYNC_MAX_QUEUE`` entries so a
+      ``LTRIM`` the list to ``NEO4J_SYNC_MAX_QUEUE`` entries so a
       stalled consumer cannot exhaust Redis memory.
     - ``ENABLE_NEO4J_SYNC=true`` + ``REDIS_URL`` unset → no-op.
+
+    This function is temporary and will be deleted outright when Neo4j
+    is retired in favour of PostgreSQL-native graph queries.
     """
     if not _neo4j_sync_enabled():
         return
@@ -756,26 +744,18 @@ def _publish_graph_sync(event_id: str, event: IngestEvent, tenant_id: str) -> No
             },
         }
         client.rpush(_NEO4J_SYNC_QUEUE_KEY, json.dumps(message, default=str))
-
-        # Bound queue size.  LTRIM keeps the NEWEST ``max_queue``
-        # entries; if the consumer falls far behind the oldest
-        # messages drop on the floor instead of eating Redis.
-        # Losing stale graph-sync messages is acceptable — the
-        # canonical write in Postgres is the authoritative record
-        # (same rationale as migration.publish_graph_sync).
+        # Bound queue size. LTRIM keeps the NEWEST `max_queue` entries;
+        # if the consumer falls far behind the oldest messages drop on
+        # the floor instead of eating Redis. The canonical write in
+        # Postgres is the authoritative record so losing stale graph
+        # sync messages is acceptable.
         try:
-            max_queue = _neo4j_sync_max_queue()
-            client.ltrim(_NEO4J_SYNC_QUEUE_KEY, -max_queue, -1)
-        except (ConnectionError, TimeoutError, OSError, ValueError, TypeError) as trim_exc:
-            # Trim failure is non-fatal — the rpush already landed,
-            # and a later publish (or an operator-run LTRIM) will
-            # bound the list.  Log once so operators can see it.
-            logger.warning(
-                "graph_sync_ltrim_failed event_id=%s error=%s",
-                event_id,
-                str(trim_exc),
-            )
-
+            client.ltrim(_NEO4J_SYNC_QUEUE_KEY, -_neo4j_sync_max_queue(), -1)
+        except Exception:
+            # LTRIM bound is best-effort; a failure here must not be
+            # treated as a publish failure since the rpush above did
+            # succeed and the canonical row in Postgres is intact.
+            logger.debug("neo4j_sync_ltrim_failed", exc_info=True)
         _incr_sync_counter("successes")
     except (ImportError, ConnectionError, TimeoutError, OSError, ValueError, TypeError) as exc:
         _incr_sync_counter("failures")
