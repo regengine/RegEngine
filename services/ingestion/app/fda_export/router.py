@@ -385,6 +385,7 @@ async def export_fda_spreadsheet(
                 query_start_date=start_date,
                 query_end_date=end_date,
                 generated_by=generated_by,
+                export_type="fda_spreadsheet_package" if format == "package" else "fda_spreadsheet",
             )
             db_session.commit()
         except Exception as exc:
@@ -692,6 +693,7 @@ async def export_all_events(
                 query_start_date=start_date,
                 query_end_date=end_date,
                 generated_by=generated_by,
+                export_type="fda_export_all_package" if format == "package" else "fda_export_all",
             )
             db_session.commit()
         except Exception as exc:
