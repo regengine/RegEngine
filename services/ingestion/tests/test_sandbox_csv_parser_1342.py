@@ -322,19 +322,15 @@ class TestParseCsvCteTypeNormalization:
         assert events[0]["cte_type"] == "harvesting"
 
     def test_cte_type_dashes_converted_to_underscores(self):
-        """Dash-separated CTE values get normalized via the replace("-", "_") step.
+        """Dash-separated CTE values normalize to canonical via the alias map.
 
-        Note: the ``pre-cool`` alias key in _CTE_TYPE_ALIASES uses a dash, so
-        after normalization to ``pre_cool`` the lookup misses and the value
-        passes through as ``pre_cool`` (a latent data-quality bug in the
-        alias table). We assert the observed behavior rather than the
-        ideal one to prevent test churn until the alias map is cleaned up.
+        Raw ``pre-cool`` is lowercased and ``-`` → ``_`` before the alias
+        lookup, so the map key must be ``pre_cool`` (underscore form) for
+        the lookup to hit and resolve to ``cooling``.
         """
         csv = "cte_type,tlc\npre-cool,LOT-1\n"
         events = _parse_csv_to_events(csv)
-        # Dashes are normalized to underscores by the source code path even
-        # if the downstream lookup misses.
-        assert events[0]["cte_type"] == "pre_cool"
+        assert events[0]["cte_type"] == "cooling"
 
     def test_cte_type_spaces_converted_to_underscores(self):
         csv = "cte_type,tlc\nfirst receiver,LOT-1\n"
