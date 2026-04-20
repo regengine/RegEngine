@@ -422,7 +422,13 @@ class FSMAExtractor:
         }
 
     def _classify_document(self, text: str) -> DocumentType:
-        """Classify document type based on content indicators."""
+        """Classify document type based on content indicators.
+
+        Returns ``DocumentType.UNKNOWN`` when no indicators match OR when
+        two or more document types score equally (ambiguous tie).  The
+        caller must treat UNKNOWN as unclassified — it must NOT silently
+        default to SHIPPING (#1288).
+        """
         text_lower = text.lower()
 
         scores = {}
@@ -430,10 +436,21 @@ class FSMAExtractor:
             score = sum(1 for ind in indicators if ind in text_lower)
             scores[doc_type] = score
 
-        if max(scores.values()) == 0:
+        best_score = max(scores.values())
+        if best_score == 0:
             return DocumentType.UNKNOWN
 
-        return max(scores, key=lambda k: scores[k])
+        winners = [dt for dt, s in scores.items() if s == best_score]
+        if len(winners) > 1:
+            # Tie — cannot determine document type; caller must handle ambiguity.
+            logger.warning(
+                "document_classification_tie",
+                tied_types=[w.value for w in winners],
+                score=best_score,
+            )
+            return DocumentType.UNKNOWN
+
+        return winners[0]
 
     def _extract_tabular_data(
         self, text: str, pdf_bytes: Optional[bytes] = None
@@ -712,12 +729,28 @@ class FSMAExtractor:
             # emitted CTE into a RECEIVING partner.
             cte_type = CTEType.SHIPPING
             split_bol_into_shipping_plus_receiving = True
+        elif doc_type == DocumentType.INVOICE:
+            # #1288 — invoices are financial documents, not CTE events.
+            # Return empty CTE list; the caller sees doc_type=INVOICE and
+            # ctes=[] so it can route the document to accounts-payable /
+            # non-CTE review rather than mis-tagging it as SHIPPING.
+            logger.info(
+                "invoice_skipped_not_a_cte",
+                doc_type=doc_type.value,
+            )
+            return []
         elif doc_type in self.DOC_TO_CTE:
             cte_type = self.DOC_TO_CTE[doc_type]
             split_bol_into_shipping_plus_receiving = False
         else:
-            cte_type = CTEType.SHIPPING  # legacy default for UNKNOWN
-            split_bol_into_shipping_plus_receiving = False
+            # UNKNOWN (including ambiguous ties) — do NOT silently default to
+            # SHIPPING (#1288).  Return empty list so the extraction result is
+            # flagged for human review with doc_type=UNKNOWN and ctes=[].
+            logger.warning(
+                "document_type_unresolved_no_cte_emitted",
+                doc_type=doc_type.value,
+            )
+            return []
 
         # If we have line items with sufficient data, create CTEs from them
         # Otherwise fall back to global extraction

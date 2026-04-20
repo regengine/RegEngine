@@ -102,12 +102,15 @@ class TestLotCodeExtraction:
         assert "L-2025-1105-A" in result.ctes[0].kdes.traceability_lot_code
 
     def test_extract_batch_code(self, extractor):
-        """Test extraction of Batch code from invoice."""
+        """#1288 — invoices are not CTE events.  The extractor must return
+        document_type=INVOICE and an empty CTE list rather than routing
+        invoice data into a SHIPPING CTE."""
         result = extractor.extract(SAMPLE_INVOICE_TEXT, "test-doc-002", tenant_id="11111111-1111-1111-1111-111111111111")
 
-        assert len(result.ctes) > 0
-        assert result.ctes[0].kdes.traceability_lot_code is not None
-        assert "BATCH-2025-1105-B" in result.ctes[0].kdes.traceability_lot_code
+        assert result.document_type.value == "INVOICE"
+        assert result.ctes == [], (
+            "Invoice documents must not produce CTE events (#1288)"
+        )
 
     def test_gtin_not_prepended_to_lot(self, extractor):
         """Regression guard for #1104 — the TLC must be preserved
@@ -138,11 +141,13 @@ class TestQuantityExtraction:
         assert result.ctes[0].kdes.unit_of_measure == "cases"
 
     def test_extract_quantity_from_invoice(self, extractor):
-        """Test extraction of quantity from invoice."""
+        """#1288 — invoices are not CTE events; no CTE is emitted so there is
+        no quantity to assert against.  Verify the document is recognised as an
+        INVOICE and produces zero CTEs rather than a phantom SHIPPING CTE."""
         result = extractor.extract(SAMPLE_INVOICE_TEXT, "test-doc-005", tenant_id="11111111-1111-1111-1111-111111111111")
 
-        assert result.ctes[0].kdes.quantity == 100.0
-        assert result.ctes[0].kdes.unit_of_measure == "units"
+        assert result.document_type.value == "INVOICE"
+        assert result.ctes == [], "Invoice must not produce CTE events (#1288)"
 
 
 class TestLocationExtraction:
@@ -155,11 +160,20 @@ class TestLocationExtraction:
         assert result.ctes[0].kdes.location_identifier == "urn:gln:1234567890123"
 
     def test_missing_location(self, extractor):
-        """Test warning when location is missing."""
+        """Test warning when location is missing.
+
+        Plain lot/quantity text has no doc-type indicators so it classifies as
+        UNKNOWN (#1288 — no silent SHIPPING fallback). The extractor emits no
+        CTEs but the result still carries review warnings.
+        """
         text = "Lot: L-2025-001\nQuantity: 50 cases"
         result = extractor.extract(text, "test-doc-007", tenant_id="11111111-1111-1111-1111-111111111111")
 
-        assert any("Missing location identifier" in w for w in result.warnings)
+        # Document type is unresolved → no CTEs emitted
+        assert result.document_type == DocumentType.UNKNOWN
+        assert result.ctes == []
+        # A review warning must still be present
+        assert len(result.warnings) > 0
 
 
 class TestDateExtraction:
@@ -172,10 +186,12 @@ class TestDateExtraction:
         assert result.ctes[0].kdes.event_date == "2025-11-05"
 
     def test_extract_date_iso(self, extractor):
-        """Test extraction of ISO date format."""
+        """#1288 — invoices produce no CTEs; verify INVOICE classification
+        rather than attempting to read a CTE date that no longer exists."""
         result = extractor.extract(SAMPLE_INVOICE_TEXT, "test-doc-009", tenant_id="11111111-1111-1111-1111-111111111111")
 
-        assert result.ctes[0].kdes.event_date == "2025-11-05"
+        assert result.document_type.value == "INVOICE"
+        assert result.ctes == []
 
 
 class TestConfidenceCalculation:
@@ -189,29 +205,46 @@ class TestConfidenceCalculation:
         assert result.ctes[0].confidence >= 0.75
 
     def test_low_confidence_with_missing_fields(self, extractor):
-        """Test low confidence when fields are missing."""
-        text = "Lot: L-2025-001"  # Missing quantity, location, date
+        """#1288 — minimal text with no doc-type indicators classifies as UNKNOWN
+        and emits no CTEs (rather than a silent SHIPPING CTE at low confidence).
+        Verify the result is flagged for review."""
+        text = "Lot: L-2025-001"  # No doc-type keywords → UNKNOWN
         result = extractor.extract(text, "test-doc-011", tenant_id="11111111-1111-1111-1111-111111111111")
 
-        assert result.ctes[0].confidence < 0.5
+        assert result.document_type == DocumentType.UNKNOWN
+        assert result.ctes == []
+        assert result.review_required is True
 
 
 class TestWarnings:
     """Test warning generation."""
 
     def test_warnings_for_missing_tlc(self, extractor):
-        """Test warnings generated for missing TLC."""
+        """Test warnings generated for missing TLC.
+
+        'Ship Date' + 'Quantity' has no doc-type indicators (#1288), so the
+        extractor now returns UNKNOWN with no CTEs.  The result should still
+        carry at least one review warning.
+        """
         text = "Ship Date: 11/05/2025\nQuantity: 50 cases"
         result = extractor.extract(text, "test-doc-012", tenant_id="11111111-1111-1111-1111-111111111111")
 
-        assert any("Missing Traceability Lot Code" in w for w in result.warnings)
+        assert result.document_type == DocumentType.UNKNOWN
+        assert result.ctes == []
+        assert len(result.warnings) > 0
 
     def test_warnings_for_low_confidence(self, extractor):
-        """Test warnings for low confidence extractions."""
-        text = "Lot: ABC123"  # Minimal document
+        """Test warnings for unclassifiable / low-confidence documents (#1288).
+
+        A minimal doc with no recognised indicators now returns UNKNOWN + no CTEs
+        instead of a low-confidence SHIPPING CTE.
+        """
+        text = "Lot: ABC123"  # Minimal document — no doc-type keywords
         result = extractor.extract(text, "test-doc-013", tenant_id="11111111-1111-1111-1111-111111111111")
 
-        assert any("Low confidence" in w for w in result.warnings)
+        assert result.document_type == DocumentType.UNKNOWN
+        assert result.ctes == []
+        assert result.review_required is True
 
     def test_no_cte_warning(self, extractor):
         """Test warning when no CTEs can be extracted."""
@@ -291,12 +324,15 @@ class TestTLCFormatValidation:
             assert any("GS1 compliant" in w or "Missing" in w for w in result.warnings)
 
     def test_valid_format_no_warning(self, extractor):
-        """Test that valid format doesn't generate format warning."""
+        """#1288 — text with GTIN/Lot/Qty/GLN/Date but no doc-type keywords
+        is now UNKNOWN with no CTEs.  Validate doc type is UNKNOWN rather
+        than asserting a CTE that no longer exists."""
         text = "GTIN: 00012345678901\nLot: LOT-2025-A\nQuantity: 50 cases\nGLN: 1234567890123\nDate: 2025-11-05"
         result = extractor.extract(text, "test-doc-020", tenant_id="11111111-1111-1111-1111-111111111111")
 
-        # With complete data, should have high confidence
-        assert result.ctes[0].confidence >= 0.75
+        # No recognised doc-type indicators → UNKNOWN, no CTE emitted
+        assert result.document_type == DocumentType.UNKNOWN
+        assert result.ctes == []
 
 
 class TestExtractionResult:
@@ -399,14 +435,19 @@ class TestSevenKDEExtraction:
             assert kde.get("confidence", 0) > 0
 
     def test_tlc_format_gtin14_lot(self, extractor):
-        """Test TLC extraction with GTIN-14 + Lot format."""
-        text = "Lot: 00012345678901Lot-123\nDate: 2025-11-05"
-        result = extractor.extract(text, "test-doc-kde-003", tenant_id="11111111-1111-1111-1111-111111111111")
+        """#1288 — minimal text with no doc-type indicators is now UNKNOWN,
+        no CTE is emitted.  Use a full BOL context to test TLC extraction."""
+        bol_text = (
+            "BILL OF LADING\nShipper: Acme\nConsignee: Market\n"
+            "Carrier: FreightCo\nShip To: DC\n"
+            "Lot: 00012345678901Lot-123\nDate: 2025-11-05"
+        )
+        result = extractor.extract(bol_text, "test-doc-kde-003", tenant_id="11111111-1111-1111-1111-111111111111")
 
         assert len(result.ctes) > 0
         tlc = result.ctes[0].kdes.traceability_lot_code
         assert tlc is not None
-        # Should contain GTIN-14 prefix
+        # Should contain GTIN-14 prefix or lot suffix
         assert tlc.startswith("00012345678901") or "Lot-123" in tlc
 
 
