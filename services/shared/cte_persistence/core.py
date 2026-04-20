@@ -60,6 +60,25 @@ from sqlalchemy.orm import Session
 from .models import StoreResult, ChainVerification, MerkleVerification
 from .hashing import compute_event_hash, compute_chain_hash, compute_idempotency_key
 
+# ---------------------------------------------------------------------------
+# Validation Status Constants (fix #1324)
+# ---------------------------------------------------------------------------
+
+#: Event passed all compliance validators — safe to chain and export.
+VALIDATION_STATUS_VALID = "valid"
+
+#: Event has warnings but is not outright rejected — included in chain.
+VALIDATION_STATUS_WARNING = "warning"
+
+#: Event failed one or more compliance validators at REJECT severity.
+#: The event row is persisted (for audit) but is NOT written to the hash
+#: chain, is excluded from FDA export queries, and is excluded from graph
+#: sync.  See ``store_event`` for the short-circuit logic.
+VALIDATION_STATUS_REJECTED = "rejected"
+
+#: Validator severity strings that constitute a hard rejection.
+_REJECT_SEVERITIES = frozenset({"reject", "REJECT", "error", "ERROR"})
+
 logger = logging.getLogger("cte-persistence")
 
 
@@ -315,6 +334,7 @@ class CTEPersistence:
         epcis_biz_step: Optional[str] = None,
         source_event_id: Optional[str] = None,
         event_entry_timestamp: Optional[str] = None,
+        validator_results: Optional[List[Dict[str, Any]]] = None,
     ) -> StoreResult:
         """
         Persist a CTE event with its KDEs, hash chain entry, and alerts.
@@ -327,6 +347,7 @@ class CTEPersistence:
         """
         kdes = kdes or {}
         alerts = alerts or []
+        validator_results = validator_results or []
         event_id = str(uuid4())
 
         # --- event_type validation (fix #1312) ---
@@ -351,6 +372,31 @@ class CTEPersistence:
                 event_entry_timestamp, field="event_entry_timestamp"
             )
             event_entry_timestamp = entry_dt.isoformat()
+
+        # --- Determine validation status (fix #1324) ---
+        # If any validator result carries a REJECT-severity outcome, the
+        # event must NOT be written to the hash chain or included in FDA
+        # export / graph sync queries. We still persist the event row
+        # itself (for audit purposes) with validation_status='rejected'
+        # and carry the first rejection reason in the returned StoreResult
+        # errors list so callers can surface it to operators.
+        # REJECT severities: "reject", "REJECT", "error", "ERROR".
+        # Any other severity (e.g. "warning", "info") does not block the
+        # chain write.
+        _rejection_reasons: List[str] = []
+        for vr in validator_results:
+            sev = vr.get("severity", "")
+            if sev in _REJECT_SEVERITIES:
+                reason = vr.get("reason") or vr.get("message") or str(vr)
+                _rejection_reasons.append(reason)
+        _is_rejected = bool(_rejection_reasons)
+
+        if _is_rejected:
+            _final_status = VALIDATION_STATUS_REJECTED
+        elif alerts:
+            _final_status = VALIDATION_STATUS_WARNING
+        else:
+            _final_status = VALIDATION_STATUS_VALID
 
         # --- Serialize chain growth per-tenant (fix #1332) ---
         # Must precede both the idempotency SELECT and the chain-head
@@ -467,9 +513,37 @@ class CTEPersistence:
                 "epcis_event_type": epcis_event_type,
                 "epcis_action": epcis_action,
                 "epcis_biz_step": epcis_biz_step,
-                "validation_status": "warning" if alerts else "valid",
+                "validation_status": _final_status,
             },
         )
+
+        # --- Rejected events: skip chain write (#1324) ---
+        # A rejected event is persisted above for audit but must NOT
+        # appear in the hash chain. Returning early here prevents
+        # orphan chain rows (the WHERE EXISTS guard below would also
+        # block it, but being explicit is clearer and avoids the
+        # sequence_num slot being consumed needlessly).
+        if _is_rejected:
+            logger.info(
+                "cte_event_rejected",
+                extra={
+                    "event_id": event_id,
+                    "event_type": event_type,
+                    "tlc": traceability_lot_code,
+                    "tenant_id": tenant_id,
+                    "reasons": _rejection_reasons,
+                },
+            )
+            return StoreResult(
+                success=False,
+                event_id=event_id,
+                sha256_hash=sha256_hash,
+                chain_hash=chain_hash,
+                idempotent=False,
+                errors=_rejection_reasons,
+                kde_completeness=1.0,
+                alerts=alerts,
+            )
 
         # --- Insert KDEs (fix #1311) ---
         # The column ``fsma.cte_kdes.kde_value`` is JSONB (migration v059).
