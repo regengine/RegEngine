@@ -1093,6 +1093,23 @@ def run_consumer() -> None:
                             logger.error("poison_pill_detected", error=str(exc), offset=record.offset)
                             POISON_PILL_COUNTER.inc()
                             _send_to_dlq(producer, raw_value, f"Deserialization failed: {str(exc)}", headers=kafka_headers)
+                            # #1085 — flush DLQ producer BEFORE committing the
+                            # inbound offset. producer.send() only buffers; a
+                            # crash between buffer and broker-ack would advance
+                            # the offset while the DLQ record is still sitting
+                            # in the producer buffer — silent data loss and an
+                            # FSMA 204 audit-trail gap. On timeout, refuse to
+                            # commit so Kafka redelivers the message.
+                            try:
+                                producer.flush(timeout=5.0)
+                            except KafkaTimeoutError:
+                                logger.error(
+                                    "dlq_flush_timeout",
+                                    offset=record.offset,
+                                    topic=record.topic,
+                                    stage="poison_pill",
+                                )
+                                continue  # do NOT commit — force redelivery
                             consumer.commit()
                             continue
 
@@ -1137,6 +1154,17 @@ def run_consumer() -> None:
                                 kafka_headers,
                             )
                             MESSAGES_COUNTER.labels(status="unauthorized").inc()
+                            # #1085 — flush DLQ producer before committing.
+                            try:
+                                producer.flush(timeout=5.0)
+                            except KafkaTimeoutError:
+                                logger.error(
+                                    "dlq_flush_timeout",
+                                    offset=record.offset,
+                                    topic=record.topic,
+                                    stage="kafka_auth_failed",
+                                )
+                                continue  # do NOT commit — force redelivery
                             consumer.commit()
                             continue
 
@@ -1161,6 +1189,17 @@ def run_consumer() -> None:
                                     doc_id, headers=kafka_headers,
                                 )
                                 MESSAGES_COUNTER.labels(status="rejected").inc()
+                                # #1085 — flush DLQ producer before committing.
+                                try:
+                                    producer.flush(timeout=5.0)
+                                except KafkaTimeoutError:
+                                    logger.error(
+                                        "dlq_flush_timeout",
+                                        offset=record.offset,
+                                        topic=record.topic,
+                                        stage="inbound_schema_invalid",
+                                    )
+                                    continue  # do NOT commit — force redelivery
                                 consumer.commit()
                                 continue
 
@@ -1188,6 +1227,17 @@ def run_consumer() -> None:
                                 doc_id, kafka_headers,
                             )
                             MESSAGES_COUNTER.labels(status="error").inc()
+                            # #1085 — flush DLQ producer before committing.
+                            try:
+                                producer.flush(timeout=5.0)
+                            except KafkaTimeoutError:
+                                logger.error(
+                                    "dlq_flush_timeout",
+                                    offset=record.offset,
+                                    topic=record.topic,
+                                    stage="malformed_event_fields_pre_tenant",
+                                )
+                                continue  # do NOT commit — force redelivery
                             consumer.commit()
                             continue
 
@@ -1211,6 +1261,17 @@ def run_consumer() -> None:
                                 headers=kafka_headers,
                             )
                             MESSAGES_COUNTER.labels(status="rejected").inc()
+                            # #1085 — flush DLQ producer before committing.
+                            try:
+                                producer.flush(timeout=5.0)
+                            except KafkaTimeoutError:
+                                logger.error(
+                                    "dlq_flush_timeout",
+                                    offset=record.offset,
+                                    topic=record.topic,
+                                    stage="tenant_resolution_failed",
+                                )
+                                continue  # do NOT commit — force redelivery
                             consumer.commit()
                             continue
 
@@ -1238,6 +1299,17 @@ def run_consumer() -> None:
                             doc_id, kafka_headers,
                         )
                         MESSAGES_COUNTER.labels(status="error").inc()
+                        # #1085 — flush DLQ producer before committing.
+                        try:
+                            producer.flush(timeout=5.0)
+                        except KafkaTimeoutError:
+                            logger.error(
+                                "dlq_flush_timeout",
+                                offset=record.offset,
+                                topic=record.topic,
+                                stage="malformed_event_fields_post_tenant",
+                            )
+                            continue  # do NOT commit — force redelivery
                         consumer.commit()
                         continue
 
@@ -1458,6 +1530,20 @@ def run_consumer() -> None:
                             )
                             _send_to_fsma_dlq(producer, evt, str(exc), doc_id, headers=kafka_headers)
                             _retry_counts.pop(retry_key, None)
+                            # #1085 — flush DLQ producer before committing.
+                            try:
+                                producer.flush(timeout=5.0)
+                            except KafkaTimeoutError:
+                                logger.error(
+                                    "dlq_flush_timeout",
+                                    offset=record.offset,
+                                    topic=record.topic,
+                                    stage="max_retries_exceeded",
+                                )
+                                # Restore retry counter so redelivery doesn't
+                                # reset the retry budget on this message.
+                                _retry_counts[retry_key] = MAX_RETRIES
+                                continue  # do NOT commit — force redelivery
                             consumer.commit()
                         else:
                             logger.warning(
@@ -1474,6 +1560,18 @@ def run_consumer() -> None:
                             error=str(exc),
                         )
                         _send_to_fsma_dlq(producer, evt, str(exc), doc_id, headers=kafka_headers)
+                        # #1085 — flush DLQ producer before committing.
+                        try:
+                            producer.flush(timeout=5.0)
+                        except KafkaTimeoutError:
+                            logger.error(
+                                "dlq_flush_timeout",
+                                offset=record.offset,
+                                topic=record.topic,
+                                stage="unhandled_processing_error",
+                            )
+                            MESSAGES_COUNTER.labels(status="error").inc()
+                            continue  # do NOT commit — force redelivery
                         consumer.commit()
                         MESSAGES_COUNTER.labels(status="error").inc()
     consumer.close()
