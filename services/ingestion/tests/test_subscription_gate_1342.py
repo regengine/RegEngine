@@ -11,11 +11,15 @@ or a false-positive lockout. These tests pin:
 * the three tenant-id extraction branches (query > header > principal)
 * the fail-open env flag toggles (``1/true/yes/on`` all enable,
   everything else disables)
-* the legacy ``_check_subscription_in_redis`` helper, which still
-  ships in the package surface even though ``require_active_subscription``
-  no longer calls it — covering it prevents accidental dead-code
-  regressions where a refactor rewires the gate back through it
 * each ``require_active_subscription`` early-return
+
+History: PR #1566 originally added tests for a legacy
+``_check_subscription_in_redis`` helper. PR #1572 deleted that helper
+as dead code, which left this file with a stale import and a stale
+test class — pytest failed at collection time with ``ImportError:
+cannot import name '_check_subscription_in_redis'`` and the whole
+module's coverage regressed. This revision strips the dead references
+so the file can load again under the current package surface.
 
 Tracks GitHub issue #1342.
 """
@@ -30,7 +34,6 @@ import pytest
 from app import subscription_gate
 from app.subscription_gate import (
     _check_subscription_and_redis_health,
-    _check_subscription_in_redis,
     _fail_open_override_enabled,
     _get_tenant_id_from_request,
     require_active_subscription,
@@ -171,63 +174,6 @@ class TestTenantIdExtraction:
             headers={"X-Tenant-ID": "h-tenant"},
         )
         assert _get_tenant_id_from_request(req) == "h-tenant"
-
-
-# ===========================================================================
-# _check_subscription_in_redis — legacy helper (lines 76-97)
-# ===========================================================================
-
-
-class TestCheckSubscriptionInRedis:
-    """Covers the now-unused helper so the 77% -> 100% target closes.
-
-    NOTE: this helper is no longer called by ``require_active_subscription``
-    (see #1182) — it's legacy dead code. See the spawned follow-up task
-    for cleanup. Tests here keep the behavior pinned in case it's
-    reused elsewhere before deletion.
-    """
-
-    def setup_method(self):
-        # Keep the circuit closed during these tests.
-        from shared.circuit_breaker import redis_circuit
-        redis_circuit.reset()
-
-    def test_returns_none_when_no_redis_url(self, monkeypatch):
-        monkeypatch.delenv("REDIS_URL", raising=False)
-        assert _check_subscription_in_redis("t-1") is None
-
-    def test_returns_status_when_redis_has_key(self, monkeypatch):
-        _set_redis_url(monkeypatch)
-        client = _FakeRedisClient(hget_return="active")
-        _install_redis(monkeypatch, client)
-        assert _check_subscription_in_redis("t-1") == "active"
-        assert client.hget_calls == [("billing:tenant:t-1", "status")]
-
-    def test_returns_none_when_key_missing(self, monkeypatch):
-        _set_redis_url(monkeypatch)
-        client = _FakeRedisClient(hget_return=None)
-        _install_redis(monkeypatch, client)
-        assert _check_subscription_in_redis("t-1") is None
-
-    def test_swallows_redis_exceptions_and_returns_none(self, monkeypatch):
-        _set_redis_url(monkeypatch)
-        client = _FakeRedisClient(raise_on_hget=ConnectionError("down"))
-        _install_redis(monkeypatch, client)
-        assert _check_subscription_in_redis("t-1") is None
-
-    def test_propagates_circuit_open_error(self, monkeypatch):
-        """CircuitOpenError must bubble — callers need to distinguish
-        'circuit tripped' from 'Redis healthy but silent'."""
-        _set_redis_url(monkeypatch)
-
-        def _boom(*a, **kw):
-            raise CircuitOpenError("redis", 5.0)
-
-        monkeypatch.setattr(
-            subscription_gate.redis_circuit, "_check_state", _boom
-        )
-        with pytest.raises(CircuitOpenError):
-            _check_subscription_in_redis("t-1")
 
 
 # ===========================================================================
