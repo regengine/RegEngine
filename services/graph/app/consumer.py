@@ -11,7 +11,7 @@ from typing import Any, Dict, Optional
 
 import structlog
 from cachetools import TTLCache
-from confluent_kafka import DeserializingConsumer, Producer
+from confluent_kafka import DeserializingConsumer
 from confluent_kafka.schema_registry import SchemaRegistryClient, SchemaRegistryError
 from confluent_kafka.schema_registry.avro import AvroDeserializer
 from jsonschema import Draft7Validator
@@ -23,6 +23,7 @@ import time
 import uuid
 
 # Add parent directory to path for shared module import
+from shared.dlq import DLQProducer  # #1228: consolidated singleton
 from shared.schemas import GraphEvent, LegacyGraphEvent
 from shared.observability.kafka_propagation import extract_correlation_headers
 from shared.kafka_auth import KafkaAuthError, get_allowed_producers, verify_event
@@ -49,13 +50,17 @@ MAX_RETRIES = 3
 # in services/nlp/app/consumer.py and covers bursts while still letting
 # a poison-pill age out if the consumer is long-lived.
 _retry_counts: TTLCache[str, int] = TTLCache(maxsize=50_000, ttl=3600)
-_dlq_producer: Optional[Producer] = None
+_dlq_producer: Optional[DLQProducer] = None  # #1228: shared singleton
 
 
-def _init_dlq_producer() -> Producer:
-    """Initialize the DLQ producer (called once at consumer startup)."""
+def _init_dlq_producer() -> DLQProducer:
+    """Initialize the shared DLQ producer (called once at consumer startup). #1228"""
     global _dlq_producer
-    _dlq_producer = Producer({"bootstrap.servers": settings.kafka_bootstrap})
+    _dlq_producer = DLQProducer(
+        bootstrap_servers=settings.kafka_bootstrap,
+        topic=TOPIC_DLQ,
+        service_name="graph-consumer",
+    )
     return _dlq_producer
 
 
@@ -65,7 +70,7 @@ def _send_to_dlq(
     reason: str = "processing_error",
     doc_id: Optional[str] = None,
 ) -> None:
-    """Send a failed message to the dead letter queue for manual inspection."""
+    """Send a failed message to the dead letter queue via shared DLQProducer. #1228"""
     if not _dlq_producer:
         logger.error("dlq_producer_not_initialized", reason=reason)
         return
@@ -79,8 +84,7 @@ def _send_to_dlq(
             "document_id": doc_id,
             "retry_count": _retry_counts.get(doc_id or "unknown", 0),
         }).encode("utf-8")
-        _dlq_producer.produce(TOPIC_DLQ, value=dlq_payload)
-        _dlq_producer.flush(timeout=5.0)
+        _dlq_producer.send(dlq_payload, reason=reason, original_topic="graph.update")
         DLQ_COUNTER.labels(reason=reason).inc()
         logger.info("message_sent_to_dlq", topic=TOPIC_DLQ, document_id=doc_id, reason=reason)
     except (ConnectionError, TimeoutError, OSError, RuntimeError) as exc:
@@ -503,7 +507,7 @@ async def run_consumer() -> None:
     finally:
          consumer.close()
          if _dlq_producer:
-             _dlq_producer.flush(timeout=2.0)
+             _dlq_producer.flush(timeout=2.0)  # shared DLQProducer.flush() #1228
 
 if __name__ == "__main__":
     try:
