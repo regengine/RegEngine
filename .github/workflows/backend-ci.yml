@@ -256,6 +256,28 @@ jobs:
       - name: Check for fail-open RLS fallbacks in migrations
         run: python scripts/check_rls_fallback.py
 
+  # ── Alembic revision-ID policy (hard gate — #1296) ───────
+  # Ensures every alembic revision ID is 12-char lowercase hex AND
+  # unique. The handcrafted "shifted hex" scheme (a1b2c3d4e5f6 →
+  # b2c3d4e5f6a7 → …) previously allowed parallel branches to
+  # independently pick the same "next" ID. Nine such collisions already
+  # shipped (v059 x5, v060/v061, v068 x2) and are grandfathered in the
+  # script; every NEW duplicate fails CI here.
+  alembic-revisions-check:
+    name: Alembic revision-ID policy
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+
+      - name: Setup Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Enforce alembic revision-ID policy
+        run: python scripts/check_alembic_revisions.py
+
   # ── Docker Build (consolidated monolith) ─────────────────
   # Production deploys a single consolidated monolith built from the
   # repo-root Dockerfile — see server/main.py and railway.toml. The per-
@@ -309,7 +331,7 @@ jobs:
   ci-status:
     name: CI Status Gate
     if: always()
-    needs: [test, lint, lint-shared, docker-build, security, rls-fallback-check]
+    needs: [test, lint, lint-shared, docker-build, security, rls-fallback-check, alembic-revisions-check]
     runs-on: ubuntu-latest
     steps:
       - name: Check results
@@ -320,6 +342,7 @@ jobs:
           echo "Docker:            ${{ needs.docker-build.result }}"
           echo "Security:          ${{ needs.security.result }}"
           echo "RLS fallback:      ${{ needs.rls-fallback-check.result }}"
+          echo "Alembic revisions: ${{ needs.alembic-revisions-check.result }}"
           # Lint is now blocking — flake8 F821 (undefined name) would
           # have caught PR #1482's NLP NameError class of bugs if this
           # gate had been enforcing. Promoting lint to a hard gate so
@@ -328,8 +351,9 @@ jobs:
              || "${{ needs.lint.result }}" == "failure" \
              || "${{ needs.lint-shared.result }}" == "failure" \
              || "${{ needs.security.result }}" == "failure" \
-             || "${{ needs.rls-fallback-check.result }}" == "failure" ]]; then
-            echo "::error::Test, Lint, Security Audit, or RLS fallback guard failed"
+             || "${{ needs.rls-fallback-check.result }}" == "failure" \
+             || "${{ needs.alembic-revisions-check.result }}" == "failure" ]]; then
+            echo "::error::Test, Lint, Security Audit, RLS fallback, or alembic revision guard failed"
             exit 1
           fi
           echo "All checks passed"
