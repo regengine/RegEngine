@@ -777,6 +777,28 @@ class CTEPersistence:
                     f"(tlc={evt.get('traceability_lot_code')})"
                 )
 
+            # --- Determine validation status per event (fix #1324 — batch path) ---
+            # Each event dict may carry a "validator_results" list with the same
+            # shape as the single-event store_event parameter. Any REJECT-severity
+            # entry marks the event as rejected: it is persisted for audit but is
+            # NOT written to the hash chain or included in FDA export / graph sync.
+            _vr = evt.get("validator_results") or []
+            _batch_rejection_reasons: List[str] = []
+            for vr in _vr:
+                sev = vr.get("severity", "")
+                if sev in _REJECT_SEVERITIES:
+                    reason = vr.get("reason") or vr.get("message") or str(vr)
+                    _batch_rejection_reasons.append(reason)
+            _batch_is_rejected = bool(_batch_rejection_reasons)
+
+            evt_alerts = evt.get("alerts") or []
+            if _batch_is_rejected:
+                _batch_status = VALIDATION_STATUS_REJECTED
+            elif evt_alerts:
+                _batch_status = VALIDATION_STATUS_WARNING
+            else:
+                _batch_status = VALIDATION_STATUS_VALID
+
             sha256_hash = compute_event_hash(
                 event_id, evt["event_type"], evt["traceability_lot_code"],
                 evt.get("product_description", ""), quantity,
@@ -805,8 +827,31 @@ class CTEPersistence:
                 "epcis_event_type": evt.get("epcis_event_type"),
                 "epcis_action": evt.get("epcis_action"),
                 "epcis_biz_step": evt.get("epcis_biz_step"),
-                "validation_status": "valid",
+                "validation_status": _batch_status,
+                "_is_rejected": _batch_is_rejected,
+                "_rejection_reasons": _batch_rejection_reasons,
             })
+
+            # Rejected events: persist the row (for audit trail) but skip KDEs
+            # and hash chain so they don't appear in FDA export / graph sync.
+            if _batch_is_rejected:
+                logger.info(
+                    "cte_batch_event_rejected",
+                    extra={
+                        "event_id": event_id,
+                        "event_type": evt["event_type"],
+                        "tlc": evt["traceability_lot_code"],
+                        "tenant_id": tenant_id,
+                        "reasons": _batch_rejection_reasons,
+                    },
+                )
+                results.append(StoreResult(
+                    success=False, event_id=event_id, sha256_hash=sha256_hash,
+                    chain_hash=chain_hash, idempotent=False,
+                    errors=_batch_rejection_reasons, kde_completeness=1.0, alerts=evt_alerts,
+                ))
+                # Do NOT advance chain state — rejected events consume no chain slot.
+                continue
 
             for kde_key, kde_value in kdes.items():
                 if kde_value is not None:
