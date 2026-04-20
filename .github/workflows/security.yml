@@ -117,6 +117,21 @@ jobs:
         env:
           SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN }}
 
+      # Gate: ERROR-level findings fail CI. See issue #1157.
+      # p/security-audit findings were previously uploaded as an artifact only
+      # (silently ignored on PRs). This step gates the build on ERROR severity
+      # findings from that ruleset. WARNING-level findings are informational
+      # and do not block CI, keeping the gate signal-to-noise ratio manageable.
+      - name: Semgrep security-audit gate (fail on ERROR severity -- #1157)
+        run: |
+          pip install semgrep
+          semgrep --config=p/security-audit \
+            --exclude-rule python.sqlalchemy.security.audit.avoid-sqlalchemy-text.avoid-sqlalchemy-text \
+            --severity ERROR \
+            --error .
+        env:
+          SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN }}
+
       - name: Semgrep EPIC-A scan (tenant_id trust — #1651, advisory until rollout)
         run: |
           pip install semgrep
