@@ -20,6 +20,13 @@ import structlog
 
 from .config import get_settings
 from .models import EnforcementItem, WebhookPayload
+from .webhook_security import (
+    CappedBody,
+    WebhookURLBlocked,
+    get_max_response_bytes,
+    read_response_capped,
+    validate_webhook_url,
+)
 
 logger = structlog.get_logger("notifications")
 
@@ -253,11 +260,43 @@ class WebhookNotifier:
 
         Honors ``Retry-After`` on 429/503 responses (#1150). Retries on
         5xx and network errors. Does NOT retry on 4xx (real client bug).
+
+        #1084: enforce SSRF guard + response body cap.
+          * The URL is validated ONCE before the retry loop starts —
+            a blocked URL is a permanent configuration error, retrying
+            wastes cycles and generates log noise.
+          * The response body is read via ``client.stream`` with a
+            configurable cap (``WEBHOOK_MAX_RESPONSE_BYTES``, default
+            1 MiB) so a malicious endpoint can't OOM the scheduler by
+            streaming gigabytes of response.
+          * A split timeout (connect=5s, read=10s) prevents slow-drip
+            attacks from holding a worker thread for the full timeout.
         """
         last_error: Optional[str] = None
         last_status: Optional[int] = None
         attempts = 0
         payload_dict = payload.to_dict()
+
+        # ── #1084: SSRF guard ───────────────────────────────────────
+        # Validate the URL scheme + resolved host before any network
+        # call. A blocked URL is a permanent configuration error —
+        # don't retry, don't count attempts, just fail-fast.
+        try:
+            validate_webhook_url(url)
+        except WebhookURLBlocked as blocked:
+            logger.error(
+                "webhook_delivery_blocked_ssrf",
+                url=url,
+                reason=str(blocked),
+            )
+            return DeliveryResult(
+                url=url,
+                success=False,
+                status_code=None,
+                error=f"SSRF blocked: {blocked}",
+                attempts=0,
+                duration_ms=0.0,
+            )
 
         for attempt in range(1, self.max_retries + 1):
             attempts = attempt
@@ -265,35 +304,33 @@ class WebhookNotifier:
             retry_after_seconds: Optional[float] = None
 
             try:
-                response = self.session.post(
-                    url,
-                    json=payload_dict,
-                    timeout=self.timeout,
+                status_code, body, headers = self._post_with_body_cap(
+                    url, payload_dict
                 )
 
                 duration_ms = (time.time() - start) * 1000
-                last_status = response.status_code
+                last_status = status_code
 
-                if response.status_code < 300:
+                if status_code < 300:
                     return DeliveryResult(
                         url=url,
                         success=True,
-                        status_code=response.status_code,
+                        status_code=status_code,
                         attempts=attempts,
                         duration_ms=duration_ms,
                     )
 
-                # Non-2xx response.
-                last_error = f"HTTP {response.status_code}: {response.text[:200]}"
+                # Non-2xx response. ``body`` is already capped — safe to log.
+                last_error = f"HTTP {status_code}: {body.as_text_preview(200)}"
 
                 # Don't retry on client errors (4xx) — except 429 which is
                 # a transient rate-limit and should be retried with
                 # Retry-After.
-                if 400 <= response.status_code < 500 and response.status_code != 429:
+                if 400 <= status_code < 500 and status_code != 429:
                     return DeliveryResult(
                         url=url,
                         success=False,
-                        status_code=response.status_code,
+                        status_code=status_code,
                         error=last_error,
                         attempts=attempts,
                         duration_ms=duration_ms,
@@ -301,7 +338,7 @@ class WebhookNotifier:
 
                 # 429 or 5xx — honor Retry-After if present.
                 retry_after_seconds = _parse_retry_after(
-                    response.headers.get("Retry-After") if hasattr(response, "headers") else None
+                    headers.get("Retry-After") if headers else None
                 )
 
             except httpx.TimeoutException:
@@ -334,6 +371,51 @@ class WebhookNotifier:
             error=last_error,
             attempts=attempts,
         )
+
+    def _post_with_body_cap(
+        self,
+        url: str,
+        payload_dict: Dict,
+    ) -> tuple:
+        """POST ``payload_dict`` as JSON and read the response body with
+        a byte cap (#1084).
+
+        Returns ``(status_code, CappedBody, headers_dict)``. Headers
+        are returned as a plain dict so callers can read ``Retry-After``
+        without depending on the httpx-specific mapping type.
+
+        Uses ``httpx.Client.stream`` so the response body is read
+        incrementally. If the remote sends more than
+        ``WEBHOOK_MAX_RESPONSE_BYTES``, iteration stops early and the
+        connection is closed — the scheduler cannot be OOM'd by a
+        malicious endpoint.
+
+        #1084: split timeout (connect=5s, read=10s) prevents slow-drip
+        attacks from holding a worker thread for the full wall-clock
+        timeout.
+        """
+        cap = get_max_response_bytes()
+        # Split timeout: 5s to establish the TCP connection, 10s to
+        # read the response. A single scalar would allow an attacker to
+        # trickle bytes for the full timeout value.
+        split_timeout = httpx.Timeout(connect=5.0, read=10.0, write=5.0, pool=5.0)
+        # httpx.Client.stream is a context manager that hands back a
+        # Response with ``iter_bytes`` / ``iter_raw`` available but
+        # ``.content`` / ``.text`` NOT populated (calling them would
+        # drain the stream). We rely on that to enforce the cap.
+        with self.session.stream(
+            "POST",
+            url,
+            json=payload_dict,
+            timeout=split_timeout,
+        ) as response:
+            body = read_response_capped(response, limit=cap)
+            # Copy the headers into a plain dict while the response
+            # is still open — once we leave the ``with`` block the
+            # connection returns to the pool.
+            headers = dict(response.headers) if response.headers else {}
+            status_code = response.status_code
+        return status_code, body, headers
 
     # ------------------------------------------------------------------
     # Dead-letter / outbox API
@@ -532,12 +614,23 @@ class WebhookNotifier:
         """Attempt delivery for a single outbox entry. Returns True on
         success (2xx), False otherwise. Updates ``entry`` fields
         (last_error / last_status_code) in-place regardless of outcome.
+
+        #1084: enforces the same SSRF guard + body cap as the primary
+        delivery path. A URL that was OK when enqueued but later maps
+        to a private IP (DNS change) is now blocked on retry too.
         """
+        # SSRF re-check on every retry: DNS could have changed.
         try:
-            response = self.session.post(
-                entry.url,
-                json=entry.payload,
-                timeout=self.timeout,
+            validate_webhook_url(entry.url)
+        except WebhookURLBlocked as blocked:
+            entry.last_error = f"SSRF blocked: {blocked}"
+            entry.last_status_code = None
+            self._record_failure(entry.url, entry.last_error, None)
+            return False
+
+        try:
+            status_code, body, _headers = self._post_with_body_cap(
+                entry.url, entry.payload
             )
         except httpx.TimeoutException:
             entry.last_error = f"Timeout after {self.timeout}s"
@@ -552,12 +645,12 @@ class WebhookNotifier:
             entry.last_status_code = None
             return False
 
-        entry.last_status_code = response.status_code
-        if response.status_code < 300:
+        entry.last_status_code = status_code
+        if status_code < 300:
             self._record_success(entry.url)
             return True
-        entry.last_error = f"HTTP {response.status_code}: {response.text[:200]}"
-        self._record_failure(entry.url, entry.last_error, response.status_code)
+        entry.last_error = f"HTTP {status_code}: {body.as_text_preview(200)}"
+        self._record_failure(entry.url, entry.last_error, status_code)
         return False
 
     # ------------------------------------------------------------------
