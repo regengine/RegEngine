@@ -7,6 +7,7 @@ import hmac
 import secrets
 import threading
 import time
+import uuid
 from datetime import datetime, timezone
 from typing import Optional, Union
 
@@ -313,7 +314,29 @@ async def require_api_key(
         ):
             # Derive tenant from X-Tenant-ID header so RLS is still enforced.
             # Without this, tenant_id=None would bypass row-level security.
-            _master_tenant = request.headers.get("x-tenant-id")
+            # Require a non-empty, valid-UUID X-Tenant-ID — fail closed to
+            # prevent the master-key path from silently disabling RLS (#1068).
+            _master_tenant_raw = request.headers.get("x-tenant-id") or ""
+            _master_tenant = _master_tenant_raw.strip()
+            if not _master_tenant:
+                logger.warning(
+                    "master_key_without_tenant_id", path=request.url.path
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="E_TENANT_HEADER_REQUIRED: preshared master-key auth requires X-Tenant-ID",
+                )
+            try:
+                uuid.UUID(_master_tenant)
+            except (ValueError, AttributeError, TypeError):
+                logger.warning(
+                    "master_key_invalid_tenant_id",
+                    path=request.url.path,
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="E_TENANT_HEADER_INVALID: X-Tenant-ID must be a valid UUID",
+                )
             return APIKey(
                 key_id="preshared-master",
                 key_hash="",
