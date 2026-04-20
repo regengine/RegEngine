@@ -40,6 +40,52 @@ from shared.pii import mask_alias_value, mask_name
 
 logger = logging.getLogger("identity-resolution")
 
+# Alias types that carry structured, machine-readable identifiers.
+# These must be normalized before lookup and insert to prevent whitespace
+# variants (e.g. " 0614141123452 " vs "0614141123452") from creating
+# duplicate entity records (#1212).
+#
+# Excluded intentionally:
+#   - "name", "trade_name", "abbreviation", "address_variant" — free-text;
+#     normalization would mutate meaningful content.
+#   - "tlc", "tlc_prefix" — Traceability Lot Codes are stored VERBATIM per
+#     FSMA 204; their internal structure (supplier-defined suffix) must never
+#     be altered (#1175).
+_STRUCTURED_IDENTIFIER_ALIAS_TYPES: frozenset = frozenset({
+    "gln", "gtin", "fda_registration", "internal_code", "duns",
+})
+
+
+def _normalize_identifier(kind: str, value: str) -> str:
+    """Normalize a structured identifier before lookup or insert (#1212).
+
+    Rules:
+    - Strip leading/trailing whitespace on all structured identifier types.
+    - Lowercase URN-form values (``urn:epc:...``, ``urn:gs1:...``).
+    - Internal spaces are preserved — some identifier bodies contain them
+      legitimately (e.g. certain FDA registration formats).
+    - Free-text fields (names, addresses) and TLC values are returned
+      unchanged (caller must not pass those types here).
+
+    Args:
+        kind:  The alias_type string (e.g. "gln", "fda_registration").
+        value: The raw identifier value supplied by the caller.
+
+    Returns:
+        The normalized identifier string.
+    """
+    if kind not in _STRUCTURED_IDENTIFIER_ALIAS_TYPES:
+        # Caller error — non-structured types should never reach this helper.
+        # Return unchanged so callers that pass a name-type by mistake are not
+        # silently mutated.
+        return value
+    normalized = value.strip()
+    # Lowercase only if the value looks like a URN (case-insensitive prefix
+    # check). E.g. "URN:EPC:id:sgln:..." → "urn:epc:id:sgln:..."
+    if normalized.lower().startswith("urn:"):
+        normalized = normalized.lower()
+    return normalized
+
 
 # ---------------------------------------------------------------------------
 # Identity Resolution Service
@@ -150,6 +196,18 @@ class IdentityResolutionService:
 
         if entity_type not in VALID_ENTITY_TYPES:
             raise ValueError(f"Invalid entity_type '{entity_type}'. Must be one of {sorted(VALID_ENTITY_TYPES)}")
+
+        # #1212: normalize structured identifiers before storing on the
+        # canonical entity row.  Free-text fields (canonical_name, address,
+        # contact_*) are intentionally left untouched.
+        if gln is not None:
+            gln = _normalize_identifier("gln", gln)
+        if gtin is not None:
+            gtin = _normalize_identifier("gtin", gtin)
+        if fda_registration is not None:
+            fda_registration = _normalize_identifier("fda_registration", fda_registration)
+        if internal_id is not None:
+            internal_id = _normalize_identifier("internal_code", internal_id)
 
         entity_id = str(uuid4())
         now = datetime.now(timezone.utc)
@@ -280,6 +338,9 @@ class IdentityResolutionService:
         if alias_type not in VALID_ALIAS_TYPES:
             raise ValueError(f"Invalid alias_type '{alias_type}'. Must be one of {sorted(VALID_ALIAS_TYPES)}")
 
+        # #1212: normalize structured identifiers before insert.
+        alias_value = _normalize_identifier(alias_type, alias_value)
+
         # Verify entity exists and belongs to this tenant
         self._require_entity(tenant_id, entity_id)
 
@@ -319,33 +380,6 @@ class IdentityResolutionService:
         }
 
     # ------------------------------------------------------------------
-    # Identifier normalization (#1212)
-    # ------------------------------------------------------------------
-
-    # Alias types that carry structured identifiers (not free-text names).
-    # These are normalized before storage and lookup to prevent byte-exact
-    # duplicates from whitespace variants (e.g. " GLN123" vs "GLN123").
-    _STRUCTURED_ALIAS_TYPES = frozenset({
-        "gln", "gtin", "fda_registration", "internal_code",
-        "tlc", "tlc_prefix", "duns",
-    })
-
-    @staticmethod
-    def _normalize_identifier(alias_type: str, alias_value: str) -> str:
-        """
-        Normalize a structured identifier string.
-
-        For structured alias types: strip leading/trailing whitespace,
-        uppercase, and collapse internal whitespace runs to a single space.
-        Name-type aliases are returned unchanged (fuzzy matching handles
-        those; aggressive normalization would corrupt display values).
-        """
-        if alias_type in IdentityResolutionService._STRUCTURED_ALIAS_TYPES:
-            # Strip edges, uppercase, collapse internal whitespace
-            return " ".join(alias_value.strip().upper().split())
-        return alias_value
-
-    # ------------------------------------------------------------------
     # 3. Find Entity by Alias (exact lookup)
     # ------------------------------------------------------------------
 
@@ -359,15 +393,12 @@ class IdentityResolutionService:
         Exact-match lookup by alias type and value.
 
         Returns a list of matching entities (there may be more than one
-        if the alias hasn't been resolved/merged yet), ordered by
-        ce.created_at ASC so the oldest (most established) entity is
-        first — oldest-wins semantics (#1234).
-
-        #1212: structured identifier alias_value is normalized before the
-        query so whitespace variants resolve to the same entity.
+        if the alias hasn't been resolved/merged yet).
         """
-        # #1212: normalize so " GLN123" == "GLN123" == "gln123" (after upper)
-        alias_value = self._normalize_identifier(alias_type, alias_value)
+        # #1212: normalize structured identifiers before lookup so that
+        # whitespace variants and URN-prefix case differences resolve to the
+        # same stored record.
+        lookup_value = _normalize_identifier(alias_type, alias_value)
 
         rows = self.session.execute(
             text("""
@@ -383,12 +414,15 @@ class IdentityResolutionService:
                   AND ea.alias_type = :alias_type
                   AND ea.alias_value = :alias_value
                   AND ce.is_active = TRUE
-                ORDER BY ce.created_at ASC
+                -- Stable order: oldest entity wins over newer aliases
+                -- #1234: confidence_score DESC (higher quality first), then created_at ASC
+                -- (oldest canonical wins on ties), entity_id ASC as UUID tiebreak.
+                ORDER BY ce.confidence_score DESC, ce.created_at ASC, ce.entity_id ASC
             """),
             {
                 "tenant_id": tenant_id,
                 "alias_type": alias_type,
-                "alias_value": alias_value,
+                "alias_value": lookup_value,
             },
         ).fetchall()
 
@@ -1657,9 +1691,9 @@ class IdentityResolutionService:
         under a different entity, the INSERT is a no-op and the caller
         must re-SELECT to find the winning entity (#1190).
         """
-        # #1212: normalize structured identifiers before storage so that
-        # whitespace variants never create duplicate alias rows.
-        alias_value = self._normalize_identifier(alias_type, alias_value)
+        # #1212: normalize structured identifiers before insert so that
+        # whitespace variants are collapsed to a single canonical form.
+        alias_value = _normalize_identifier(alias_type, alias_value)
 
         alias_id = str(uuid4())
         now = datetime.now(timezone.utc)

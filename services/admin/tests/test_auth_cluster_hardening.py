@@ -124,11 +124,17 @@ def test_recovery_code_generator_only_emits_alnum_codes():
 
 def test_recovery_code_hash_matches_despite_formatting():
     """The key bug (#1377): user-typed code with different casing/spacing
-    must hash to the same value as the generated canonical form."""
-    from services.admin.app.mfa import hash_recovery_code
+    must verify against the hash of the canonical form.
+
+    Updated for #1041: argon2 hashes are salted so two calls to
+    hash_recovery_code produce different strings. Correctness is now checked
+    via verify_recovery_code, which normalizes both sides before comparing.
+    """
+    from services.admin.app.mfa import hash_recovery_code, verify_recovery_code
     canonical = "ABCD-EFGH"
+    stored = hash_recovery_code(canonical)
     for variant in ["abcd-efgh", "ABCDEFGH", "abcdefgh", " abcd-efgh ", "AbCd-EfGh"]:
-        assert hash_recovery_code(variant) == hash_recovery_code(canonical), variant
+        assert verify_recovery_code(variant, stored) is True, variant
 
 
 def test_recovery_code_verify_uses_constant_time():
@@ -557,8 +563,20 @@ async def test_refresh_preserves_original_tenant_id(monkeypatch):
     mem_a = SimpleNamespace(tenant_id=tenant_a)
     mem_b = SimpleNamespace(tenant_id=tenant_b)
 
+    # #1401 — refresh_session now calls db.get(TenantModel, tenant_id) to
+    # re-query the real tenant status. Give each model a distinct return value.
+    tenant_row_a = SimpleNamespace(id=tenant_a, status="active")
+
+    def _db_get(model, id_):
+        from services.admin.app.sqlalchemy_models import UserModel, TenantModel
+        if model is UserModel:
+            return user
+        if model is TenantModel:
+            return tenant_row_a
+        return user  # fallback
+
     db = MagicMock()
-    db.get.return_value = user
+    db.get.side_effect = _db_get
     # Ordering B, A to make it clear we aren't relying on "first row".
     db.execute.return_value.scalars.return_value.all.return_value = [mem_b, mem_a]
     db.commit.return_value = None

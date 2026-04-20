@@ -18,7 +18,7 @@ import threading
 import time
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, HTTPServer
-from typing import Dict, List, Optional
+from typing import Callable, Dict, List, Optional
 
 import structlog
 from apscheduler.events import (
@@ -58,6 +58,8 @@ init_sentry()
 # OpenTelemetry (standalone — no FastAPI)
 from shared.observability import setup_standalone_observability
 _tracer = setup_standalone_observability("scheduler")
+
+from shared.observability.context import wrap_job_with_new_correlation
 
 from app.config import get_settings
 from app.circuit_breaker import CircuitBreaker, CircuitOpenError, circuit_registry
@@ -456,18 +458,33 @@ class SchedulerService:
                 reason="primary_emission_failed_or_partial",
             )
 
+    def _add_tracked_job(self, fn: Callable, job_id: str, **kwargs) -> None:
+        """Register a job on the APScheduler instance with context propagation.
+
+        Each execution receives a fresh ``correlation_id`` of the form
+        ``job:<job_id>:<uuid4>`` so every log line emitted by the job is
+        traceable back to a single run without polluting the HTTP request
+        trace space. The ``tenant_id`` / ``request_id`` contextvars are also
+        seeded so structlog processors include them even for timer-driven jobs
+        that are not tenant-specific.
+
+        This is a thin wrapper around :func:`wrap_job_with_new_correlation`
+        from ``shared.observability.context`` -- see that module for the
+        threading contract.
+        """
+        wrapped = wrap_job_with_new_correlation(fn, job_id=job_id)
+        self.scheduler.add_job(wrapped, id=job_id, replace_existing=True, **kwargs)
+
     def schedule_jobs(self) -> None:
         """Schedule all scraping jobs."""
         settings = self.settings
 
         # FDA Warning Letters - hourly by default
-        self.scheduler.add_job(
-            self.run_scraper,
-            args=[SourceType.FDA_WARNING_LETTER],
+        self._add_tracked_job(
+            lambda: self.run_scraper(SourceType.FDA_WARNING_LETTER),
+            job_id="fda_warning_letters",
             trigger=IntervalTrigger(minutes=settings.fda_warning_letters_interval),
-            id="fda_warning_letters",
             name="FDA Warning Letters Scraper",
-            replace_existing=True,
         )
         logger.info(
             "job_scheduled",
@@ -476,13 +493,11 @@ class SchedulerService:
         )
 
         # FDA Import Alerts - every 2 hours by default
-        self.scheduler.add_job(
-            self.run_scraper,
-            args=[SourceType.FDA_IMPORT_ALERT],
+        self._add_tracked_job(
+            lambda: self.run_scraper(SourceType.FDA_IMPORT_ALERT),
+            job_id="fda_import_alerts",
             trigger=IntervalTrigger(minutes=settings.fda_import_alerts_interval),
-            id="fda_import_alerts",
             name="FDA Import Alerts Scraper",
-            replace_existing=True,
         )
         logger.info(
             "job_scheduled",
@@ -491,13 +506,11 @@ class SchedulerService:
         )
 
         # FDA Recalls - every 30 minutes by default (critical for FSMA 204)
-        self.scheduler.add_job(
-            self.run_scraper,
-            args=[SourceType.FDA_RECALL],
+        self._add_tracked_job(
+            lambda: self.run_scraper(SourceType.FDA_RECALL),
+            job_id="fda_recalls",
             trigger=IntervalTrigger(minutes=settings.fda_recalls_interval),
-            id="fda_recalls",
             name="FDA Recalls Scraper",
-            replace_existing=True,
         )
         logger.info(
             "job_scheduled",
@@ -506,13 +519,11 @@ class SchedulerService:
         )
 
         # Regulatory Discovery - daily (Nightly)
-        self.scheduler.add_job(
-            self.run_scraper,
-            args=[SourceType.REGULATORY_DISCOVERY],
+        self._add_tracked_job(
+            lambda: self.run_scraper(SourceType.REGULATORY_DISCOVERY),
+            job_id="regulatory_discovery",
             trigger=IntervalTrigger(minutes=settings.regulatory_discovery_interval),
-            id="regulatory_discovery",
             name="Regulatory Discovery Bulk Sync",
-            replace_existing=True,
         )
         logger.info(
             "job_scheduled",
@@ -521,61 +532,55 @@ class SchedulerService:
         )
 
         # State cleanup - daily
-        self.scheduler.add_job(
+        self._add_tracked_job(
             self.cleanup_state,
+            job_id="state_cleanup",
             trigger=IntervalTrigger(hours=24),
-            id="state_cleanup",
             name="State Cleanup (90 days)",
-            replace_existing=True,
         )
 
         # Deadline monitoring — check every 5 minutes for overdue/critical cases
-        self.scheduler.add_job(
+        self._add_tracked_job(
             self.check_request_deadlines,
+            job_id="deadline_monitor",
             trigger=IntervalTrigger(minutes=5),
-            id="deadline_monitor",
             name="FDA Request Deadline Monitor",
-            replace_existing=True,
         )
         logger.info("job_scheduled", job_id="deadline_monitor", interval_minutes=5)
 
         # Inactive account disablement — NIST AC-2(3) (#974)
-        self.scheduler.add_job(
+        self._add_tracked_job(
             self.disable_inactive_accounts,
+            job_id="inactive_account_sweep",
             trigger=IntervalTrigger(hours=24),
-            id="inactive_account_sweep",
             name="Disable Inactive Accounts (90 days)",
-            replace_existing=True,
         )
         logger.info("job_scheduled", job_id="inactive_account_sweep", interval_hours=24)
 
         # KDE retention enforcement — FSMA 204 24-month minimum (#973)
-        self.scheduler.add_job(
+        self._add_tracked_job(
             self.enforce_kde_retention,
+            job_id="kde_retention_enforcement",
             trigger=IntervalTrigger(hours=24),
-            id="kde_retention_enforcement",
             name="KDE Retention Enforcement (24-month floor)",
-            replace_existing=True,
         )
         logger.info("job_scheduled", job_id="kde_retention_enforcement", interval_hours=24)
 
         # Data archival/purge — retention policy enforcement (#983)
-        self.scheduler.add_job(
+        self._add_tracked_job(
             self.archive_expired_records,
+            job_id="data_archival",
             trigger=IntervalTrigger(hours=24),
-            id="data_archival",
             name="Archive Expired Records",
-            replace_existing=True,
         )
         logger.info("job_scheduled", job_id="data_archival", interval_hours=24)
 
         # Task queue retention — purge completed/dead rows (#1382)
-        self.scheduler.add_job(
+        self._add_tracked_job(
             self.purge_old_tasks,
+            job_id="task_queue_purge",
             trigger=IntervalTrigger(hours=24),
-            id="task_queue_purge",
             name="Task Queue Retention (30-day purge)",
-            replace_existing=True,
         )
         logger.info("job_scheduled", job_id="task_queue_purge", interval_hours=24)
 
@@ -583,13 +588,12 @@ class SchedulerService:
         # Previously defined in app/jobs.py on an orphaned BlockingScheduler
         # that was never started; the job has been running nowhere in
         # production. Re-home it on the real scheduler here.
-        self.scheduler.add_job(
+        self._add_tracked_job(
             self.run_fsma_nightly_sync,
+            job_id="fsma_nightly_sync",
             trigger=CronTrigger(hour=2, minute=0, timezone=utc),
-            id="fsma_nightly_sync",
             name="Nightly FSMA Source Sync (02:00 UTC)",
             misfire_grace_time=300,  # 5-minute grace window
-            replace_existing=True,
         )
         logger.info("job_scheduled", job_id="fsma_nightly_sync", cron="02:00 UTC")
 
@@ -598,14 +602,13 @@ class SchedulerService:
         # a scheduler with legacy (in-memory-only) delivery doesn't pay
         # the cost of a no-op tick every minute.
         if self.settings.webhook_outbox_path:
-            self.scheduler.add_job(
+            self._add_tracked_job(
                 self.drain_webhook_outbox,
+                job_id="webhook_outbox_drain",
                 trigger=IntervalTrigger(
                     seconds=self.settings.webhook_outbox_drain_interval_seconds,
                 ),
-                id="webhook_outbox_drain",
                 name="Webhook Outbox Drain (#1150)",
-                replace_existing=True,
                 max_instances=1,  # Never run two drain passes concurrently.
             )
             logger.info(

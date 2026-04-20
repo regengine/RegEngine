@@ -314,6 +314,20 @@ class TaskWorker:
         ``locked_until`` serves as a "not-before" marker so backoff is
         observed without a separate column.
 
+        Weighted fair queuing (#1644): instead of a pure global
+        ``ORDER BY priority DESC, created_at ASC`` (which lets one
+        tenant with a large backlog starve all others), we first pick
+        the *tenant* whose oldest eligible task arrived earliest, then
+        pick the highest-priority eligible task for that tenant.  This
+        gives round-robin fairness across tenants while still honouring
+        per-tenant priority ordering.
+
+        The ``DISTINCT ON (tenant_id)`` subquery returns one candidate
+        row per tenant (the highest-priority, then oldest, task for that
+        tenant).  The outer ``ORDER BY priority DESC, created_at ASC``
+        picks the winning candidate — the tenant whose best task scored
+        highest, breaking ties by arrival order.
+
         Returns a dict with id/task_type/payload/attempts/max_attempts/
         tenant_id, or ``None`` if nothing is eligible.
         """
@@ -330,13 +344,30 @@ class TaskWorker:
             row = conn.execute(
                 text(
                     f"""
-                    WITH claim AS (
-                        SELECT id FROM fsma.task_queue
+                    WITH per_tenant AS (
+                        -- One best candidate per tenant: highest priority,
+                        -- then earliest created_at (DISTINCT ON keeps the
+                        -- first row per group after ORDER BY).
+                        SELECT DISTINCT ON (tenant_id)
+                               id, tenant_id, priority, created_at
+                        FROM fsma.task_queue
                         WHERE status = 'pending'
                           AND (locked_until IS NULL OR locked_until <= NOW())
                           {type_filter}
+                        ORDER BY tenant_id,
+                                 priority DESC,
+                                 created_at ASC
+                    ),
+                    winner AS (
+                        -- Among the per-tenant winners, pick the one whose
+                        -- best task scored highest (priority → arrival).
+                        SELECT id FROM per_tenant
                         ORDER BY priority DESC, created_at ASC
                         LIMIT 1
+                    ),
+                    claim AS (
+                        SELECT id FROM fsma.task_queue
+                        WHERE id = (SELECT id FROM winner)
                         FOR UPDATE SKIP LOCKED
                     )
                     UPDATE fsma.task_queue q
