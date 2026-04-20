@@ -248,7 +248,7 @@ _CTE_TYPE_ALIASES = {
     # Cooling
     "cool": "cooling",
     "cooled": "cooling",
-    "pre-cool": "cooling",
+    "pre_cool": "cooling",
     "precool": "cooling",
     "c": "cooling",
     # Initial packing
