@@ -24,7 +24,7 @@ from shared.error_handling import init_sentry
 init_sentry()
 
 # Production Hardening (Phase 18)
-from shared.logging import setup_logging
+from shared.observability.context import setup_logging
 from shared.middleware.security import add_security
 from shared.rate_limit import add_rate_limiting
 from shared.observability import add_observability

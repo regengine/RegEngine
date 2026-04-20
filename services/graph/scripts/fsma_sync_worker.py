@@ -19,7 +19,7 @@ _SERVICES_DIR = Path(__file__).resolve().parents[2]
 if str(_SERVICES_DIR) not in sys.path:
     sys.path.insert(0, str(_SERVICES_DIR))
 
-from shared.logging import get_logger
+from shared.observability.context import get_logger
 
 logger = get_logger("fsma-sync-worker")
 
