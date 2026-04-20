@@ -117,6 +117,16 @@ jobs:
         env:
           SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN }}
 
+      - name: Semgrep security-audit hard gate (fail on findings) -- #1157
+        # Fixes #1157: p/security-audit was previously only uploaded as an artifact
+        # (continue-on-error: true). This step gates the build on any findings.
+        run: |
+          semgrep --config=p/security-audit \
+            --exclude-rule python.sqlalchemy.security.audit.avoid-sqlalchemy-text.avoid-sqlalchemy-text \
+            --error .
+        env:
+          SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN }}
+
       - name: Semgrep EPIC-A scan (tenant_id trust — #1651, advisory until rollout)
         run: |
           pip install semgrep
