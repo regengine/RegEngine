@@ -8,11 +8,10 @@ query plans, ANALYZE runs, or index churn, so callers that took
 ``results[0]`` got non-deterministic merges across otherwise identical
 re-runs of the same ingestion.
 
-After: ``find_entity_by_alias`` now emits ``ORDER BY ce.created_at ASC,
-ce.entity_id ASC`` — oldest canonical entity first, UUID as stable
-tiebreak. That rule was chosen so a freshly-seen alias can never bump
-an established canonical out of the top slot; ``entity_id`` handles
-identical timestamps.
+After: ``find_entity_by_alias`` now emits
+``ORDER BY ce.confidence_score DESC, ce.created_at ASC, ce.entity_id ASC``
+— highest-confidence canonical first; oldest wins on ties; entity_id is
+the UUID-PK stable tiebreak.
 
 Scope: these tests pin the *ordering contract* only. They do not assert
 anything about auto-merging duplicates — that remains #1193's territory.
@@ -38,15 +37,15 @@ ALIAS_TYPE = "name"
 ALIAS_VALUE = "Acme Cold Storage"
 
 
-# Three entities sharing the same alias, created at distinct timestamps.
-# ``oldest`` is the established canonical; ``mid`` and ``newest`` are the
-# kind of duplicate rows that #1193 will eventually auto-merge away.
-OLDEST_ID = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
-MID_ID = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
-NEWEST_ID = "cccccccc-cccc-cccc-cccc-cccccccccccc"
+# Three entities sharing the same alias, with different confidence_score and
+# created_at values. HIGH_CONF is the established canonical; MID and LOW are
+# the kind of duplicate rows that #1193 will eventually auto-merge away.
+HIGH_CONF_ID = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"  # confidence 0.95, oldest
+MID_CONF_ID = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"   # confidence 0.80, middle
+LOW_CONF_ID = "cccccccc-cccc-cccc-cccc-cccccccccccc"   # confidence 0.50, newest
 
 
-def _row(entity_id: str, alias_id: str) -> Tuple[Any, ...]:
+def _row(entity_id: str, alias_id: str, confidence_score: float) -> Tuple[Any, ...]:
     """Shape matches the SELECT in ``find_entity_by_alias`` exactly."""
     return (
         entity_id,            # ce.entity_id
@@ -57,7 +56,7 @@ def _row(entity_id: str, alias_id: str) -> Tuple[Any, ...]:
         None,                 # ce.fda_registration
         None,                 # ce.internal_id
         "unverified",         # ce.verification_status
-        1.0,                  # ce.confidence_score
+        confidence_score,     # ce.confidence_score
         True,                 # ce.is_active
         alias_id,             # ea.alias_id
         ALIAS_TYPE,           # ea.alias_type
@@ -90,14 +89,14 @@ class _OrderedAliasSession:
 
 @pytest.fixture
 def ordered_rows() -> List[Tuple[Any, ...]]:
-    # Oldest first, matching the ORDER BY contract we want the SQL to
-    # express. The actual determinism is enforced by Postgres from the
-    # SQL clause; here we're confirming the call site doesn't scramble
-    # whatever the DB returned.
+    # Ordered per the new CONTRACT: confidence_score DESC, created_at ASC,
+    # entity_id ASC. Postgres enforces this from the SQL clause; here we feed
+    # back rows already in that order to validate the Python caller does not
+    # scramble them.
     return [
-        _row(OLDEST_ID, "alias-oldest"),
-        _row(MID_ID, "alias-mid"),
-        _row(NEWEST_ID, "alias-newest"),
+        _row(HIGH_CONF_ID, "alias-high", 0.95),
+        _row(MID_CONF_ID, "alias-mid", 0.80),
+        _row(LOW_CONF_ID, "alias-low", 0.50),
     ]
 
 
@@ -107,27 +106,31 @@ class TestFindEntityByAliasOrderBy:
         svc = IdentityResolutionService(sess)
         svc.find_entity_by_alias(TENANT, ALIAS_TYPE, ALIAS_VALUE)
 
-        # The SQL must name a stable ordering — created_at first, then
-        # entity_id as UUID-PK tiebreak. Whitespace-tolerant check so
+        # The SQL must name a stable ordering. Whitespace-tolerant check so
         # incidental formatting changes don't flap this test.
         normalized = re.sub(r"\s+", " ", sess.last_sql).lower()
         assert "order by" in normalized, (
             "find_entity_by_alias must emit ORDER BY — see #1234"
         )
+        assert "ce.confidence_score desc" in normalized, (
+            "ORDER BY must lead with ce.confidence_score DESC (higher quality wins)"
+        )
         assert "ce.created_at asc" in normalized, (
-            "ORDER BY must lead with ce.created_at ASC (oldest wins)"
+            "ORDER BY must include ce.created_at ASC (oldest wins on ties)"
         )
         assert "ce.entity_id asc" in normalized, (
-            "ORDER BY must include ce.entity_id ASC as stable tiebreak"
+            "ORDER BY must include ce.entity_id ASC as stable UUID tiebreak"
         )
-        # created_at must come before entity_id — if the tiebreak is
-        # listed first the oldest-wins semantics are violated.
-        assert normalized.index("ce.created_at asc") < normalized.index(
-            "ce.entity_id asc"
-        ), "ce.created_at must precede ce.entity_id in ORDER BY"
+        # confidence_score must precede created_at which must precede entity_id.
+        idx_conf = normalized.index("ce.confidence_score desc")
+        idx_created = normalized.index("ce.created_at asc")
+        idx_id = normalized.index("ce.entity_id asc")
+        assert idx_conf < idx_created < idx_id, (
+            "ORDER BY column priority must be: confidence_score DESC, created_at ASC, entity_id ASC"
+        )
 
     def test_repeated_calls_return_same_first_entity(self, ordered_rows):
-        """Multiple calls must produce an identical top result.
+        """Multiple calls must produce an identical top result (N=10).
 
         Mirrors the real-world hazard: an ingestion pipeline that reruns
         after an ANALYZE and suddenly merges into a different canonical.
@@ -135,7 +138,7 @@ class TestFindEntityByAliasOrderBy:
         sess = _OrderedAliasSession(ordered_rows)
         svc = IdentityResolutionService(sess)
 
-        first_results: List[Dict[str, Any]] = []
+        first_results: List[str] = []
         for _ in range(10):
             results = svc.find_entity_by_alias(TENANT, ALIAS_TYPE, ALIAS_VALUE)
             assert len(results) == 3, "all three matching entities should return"
@@ -144,9 +147,9 @@ class TestFindEntityByAliasOrderBy:
         assert len(set(first_results)) == 1, (
             f"non-deterministic top result across 10 calls: {first_results}"
         )
-        assert first_results[0] == OLDEST_ID, (
-            "oldest canonical entity must win — a newer duplicate must not "
-            "clobber an established canonical"
+        assert first_results[0] == HIGH_CONF_ID, (
+            "highest-confidence canonical entity must win — a lower-confidence "
+            "duplicate must not clobber an established canonical"
         )
 
     def test_full_ordering_preserved(self, ordered_rows):
@@ -156,7 +159,17 @@ class TestFindEntityByAliasOrderBy:
         results = svc.find_entity_by_alias(TENANT, ALIAS_TYPE, ALIAS_VALUE)
 
         assert [r["entity_id"] for r in results] == [
-            OLDEST_ID,
-            MID_ID,
-            NEWEST_ID,
+            HIGH_CONF_ID,
+            MID_CONF_ID,
+            LOW_CONF_ID,
         ]
+
+    def test_confidence_scores_in_results(self, ordered_rows):
+        """Confidence scores must be surfaced in the returned dicts."""
+        sess = _OrderedAliasSession(ordered_rows)
+        svc = IdentityResolutionService(sess)
+        results = svc.find_entity_by_alias(TENANT, ALIAS_TYPE, ALIAS_VALUE)
+
+        assert results[0]["confidence_score"] == pytest.approx(0.95)
+        assert results[1]["confidence_score"] == pytest.approx(0.80)
+        assert results[2]["confidence_score"] == pytest.approx(0.50)
