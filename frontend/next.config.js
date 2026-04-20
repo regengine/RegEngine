@@ -42,7 +42,7 @@ const nextConfig = {
     images: {},
     async headers() {
         return [
-            // ── Security headers — all routes (#543 enforced CSP lives in middleware.ts)
+            // ── Security headers — all routes (#543 enforced CSP lives in src/proxy.ts)
             {
                 source: '/(.*)',
                 headers: [
@@ -53,7 +53,7 @@ const nextConfig = {
                     { key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains; preload' },
                     { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
                     // Content-Security-Policy is ENFORCED and injected per-request with a
-                    // nonce by src/middleware.ts (#543). See frontend/src/lib/csp.ts.
+                    // nonce by src/proxy.ts (#543). See frontend/src/lib/csp.ts.
                 ],
             },
             // ── Cache-Control headers (#557) ─────────────────────────────────────────

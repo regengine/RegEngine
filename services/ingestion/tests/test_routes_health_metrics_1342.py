@@ -123,7 +123,7 @@ class TestHealthKafkaUnconfigured:
         result = health()
         assert result == {
             "status": "healthy",
-            "service": "ingestion-service",
+            "service": "regengine",
             "kafka": "not_configured",
         }
         # kafka_health_check must not be called when unconfigured.
@@ -166,7 +166,7 @@ class TestHealthKafkaAvailable:
         result = health()
         assert result == {
             "status": "healthy",
-            "service": "ingestion-service",
+            "service": "regengine",
             "kafka": "available",
         }
 
@@ -200,7 +200,7 @@ class TestHealthKafkaUnavailable:
         result = health()
         assert result == {
             "status": "degraded",
-            "service": "ingestion-service",
+            "service": "regengine",
             "kafka": "unavailable",
         }
 
