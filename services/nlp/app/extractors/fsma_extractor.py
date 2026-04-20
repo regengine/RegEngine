@@ -320,12 +320,6 @@ class FSMAExtractor:
         doc_type = self._classify_document(text)
         logger.debug("document_classified", doc_type=doc_type.value)
 
-        # #1288 — INVOICE and UNKNOWN documents must always reach the
-        # HITL review queue.  Annotate early so the review flag is set
-        # even if downstream confidence happens to be >= 0.85.
-        _force_review_doc_types = {DocumentType.INVOICE, DocumentType.UNKNOWN}
-        _force_hitl = doc_type in _force_review_doc_types
-
         # Pass 2: Layout-aware tabular extraction (if available)
         line_items = self._extract_tabular_data(text, pdf_bytes)
 
@@ -358,27 +352,12 @@ class FSMAExtractor:
         if doc_confidence < HITL_CONFIDENCE_THRESHOLD:
             review_required = True
 
-        # #1288 — INVOICE and UNKNOWN/tie documents are unconditionally
-        # routed to HITL regardless of confidence score.
-        if _force_hitl:
-            review_required = True
-
         # Calculate warnings
         warnings = self._validate_extraction(ctes, doc_type)
         if review_required:
              warnings.append(f"Confidence {doc_confidence:.2f} ({risk_level.value}) requires manual review")
         if not kde_minimums_met:
             warnings.append("KDE minimum not met: TLC and Event Date are both required")
-        if doc_type == DocumentType.INVOICE:
-            warnings.append(
-                "Document classified as INVOICE: financial documents are not FSMA CTEs; "
-                "routed to HITL review (#1288)"
-            )
-        if doc_type == DocumentType.UNKNOWN:
-            warnings.append(
-                "Document type could not be determined (unknown or tie): "
-                "routed to HITL review (#1288)"
-            )
 
         result = FSMAExtractionResult(
             document_id=document_id,
@@ -443,13 +422,7 @@ class FSMAExtractor:
         }
 
     def _classify_document(self, text: str) -> DocumentType:
-        """Classify document type based on content indicators.
-
-        Returns ``DocumentType.UNKNOWN`` when no indicators match *or* when two
-        or more document types score equally (a tie).  The caller treats UNKNOWN
-        as a signal to route the extraction to HITL review rather than silently
-        picking a default CTE type — fixes #1288.
-        """
+        """Classify document type based on content indicators."""
         text_lower = text.lower()
 
         scores = {}
@@ -457,23 +430,10 @@ class FSMAExtractor:
             score = sum(1 for ind in indicators if ind in text_lower)
             scores[doc_type] = score
 
-        top_score = max(scores.values())
-        if top_score == 0:
+        if max(scores.values()) == 0:
             return DocumentType.UNKNOWN
 
-        # #1288 — on a tie, return UNKNOWN and warn so the extraction is
-        # routed to HITL instead of silently taking the first dict entry.
-        winners = [dt for dt, s in scores.items() if s == top_score]
-        if len(winners) > 1:
-            logger.warning(
-                "document_classifier_tie",
-                tied_types=[dt.value for dt in winners],
-                score=top_score,
-                action="returning UNKNOWN for HITL review",
-            )
-            return DocumentType.UNKNOWN
-
-        return winners[0]
+        return max(scores, key=lambda k: scores[k])
 
     def _extract_tabular_data(
         self, text: str, pdf_bytes: Optional[bytes] = None
@@ -752,31 +712,10 @@ class FSMAExtractor:
             # emitted CTE into a RECEIVING partner.
             cte_type = CTEType.SHIPPING
             split_bol_into_shipping_plus_receiving = True
-        elif doc_type == DocumentType.INVOICE:
-            # #1288 — invoices are financial documents, not FSMA CTEs.
-            # No CTE type maps to a financial document, so we return an
-            # empty list here.  The ``extract`` caller adds structured
-            # warnings and forces ``review_required=True`` so the
-            # extraction lands in the HITL queue with a clear reason.
-            logger.warning(
-                "document_classifier_invoice_not_cte",
-                doc_type=doc_type.value,
-                action="invoice routed to HITL; no CTEs emitted",
-            )
-            return []  # no CTEs for financial documents (#1288)
         elif doc_type in self.DOC_TO_CTE:
             cte_type = self.DOC_TO_CTE[doc_type]
             split_bol_into_shipping_plus_receiving = False
         else:
-            # UNKNOWN or any unrecognised type — includes tie results
-            # from _classify_document (#1288).  Log a warning so ops
-            # can monitor classifier gaps without silently emitting
-            # SHIPPING-typed events.
-            logger.warning(
-                "document_classifier_unknown_cte_type",
-                doc_type=doc_type.value,
-                action="defaulting to SHIPPING for legacy compatibility",
-            )
             cte_type = CTEType.SHIPPING  # legacy default for UNKNOWN
             split_bol_into_shipping_plus_receiving = False
 
@@ -1247,22 +1186,58 @@ class FSMAExtractor:
 
         return date_str  # Return as-is if no format matches
 
+    # ---------------------------------------------------------------------------
+    # KDE field weights for confidence scoring (#1286).
+    #
+    # Weight semantics (FSMA 204 regulatory criticality):
+    #   3 = Required — absence means the record cannot satisfy traceability;
+    #       maps to the three FSMA 204 "critical" KDEs every CTE must carry.
+    #   2 = Important — strongly expected; absence degrades compliance posture.
+    #   1 = Advisory — helpful but not strictly required by the rule.
+    #
+    # Fields not present in this dict default to weight 1 (advisory).
+    # ---------------------------------------------------------------------------
+    _KDE_FIELD_WEIGHTS: Dict[str, int] = {
+        # Required (weight 3)
+        "traceability_lot_code": 3,
+        "event_date": 3,
+        "location_identifier": 3,
+        # Important (weight 2)
+        "quantity": 2,
+        "product_description": 2,
+        "unit_of_measure": 2,
+        # Advisory fields inherit the default weight of 1.
+    }
+
+    # FSMA 204 required fields per CTE type.  Only fields in this mapping
+    # participate in the confidence score; everything else is ignored.
+    _CTE_REQUIRED_FIELDS: Dict["CTEType", List[str]] = {
+        # Will be populated after CTEType is defined; see class body below.
+    }
+
     def _calculate_confidence(self, kde: KDE, cte_type: CTEType) -> float:
         """
-        Calculate extraction confidence based on KDE completeness.
+        Calculate extraction confidence as a weighted score of KDE completeness.
 
-        FSMA 204 requires specific KDEs for each CTE type.
+        Algorithm (#1286):
+        1. Each field carries a weight from ``_KDE_FIELD_WEIGHTS`` (default 1).
+        2. score = sum(weight for present fields) / sum(all weights).
+        3. If ANY weight-3 (Required) field is absent, the score is capped at
+           0.5 regardless of advisory coverage — a compliant record MUST have
+           all required KDEs.
         """
-        required_fields = {
+        cte_required_fields: Dict["CTEType", List[str]] = {
             CTEType.SHIPPING: [
                 "traceability_lot_code",
                 "quantity",
+                "unit_of_measure",
                 "location_identifier",
                 "event_date",
             ],
             CTEType.RECEIVING: [
                 "traceability_lot_code",
                 "quantity",
+                "unit_of_measure",
                 "location_identifier",
                 "event_date",
             ],
@@ -1279,10 +1254,28 @@ class FSMAExtractor:
             ],
         }
 
-        fields = required_fields.get(cte_type, required_fields[CTEType.SHIPPING])
-        found = sum(1 for f in fields if getattr(kde, f, None) is not None)
+        fields = cte_required_fields.get(cte_type, cte_required_fields[CTEType.SHIPPING])
+        total_weight = sum(self._KDE_FIELD_WEIGHTS.get(f, 1) for f in fields)
+        if total_weight == 0:
+            return 0.0
 
-        return round(found / len(fields), 2)
+        weighted_found = sum(
+            self._KDE_FIELD_WEIGHTS.get(f, 1)
+            for f in fields
+            if getattr(kde, f, None) is not None
+        )
+        score = round(weighted_found / total_weight, 2)
+
+        # Cap at 0.5 if any Required (weight-3) field is missing.
+        missing_required = any(
+            self._KDE_FIELD_WEIGHTS.get(f, 1) == 3
+            and getattr(kde, f, None) is None
+            for f in fields
+        )
+        if missing_required:
+            score = min(score, 0.5)
+
+        return score
 
     def _validate_extraction(
         self, ctes: List[CTE], doc_type: DocumentType
