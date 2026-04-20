@@ -565,10 +565,10 @@ def _convert_entities_to_extraction(
 
         text_lower = text.lower()
 
-        # MANDATORY keywords — "must", "shall", "required"
-        _MANDATORY_KEYWORDS = ["must", "shall", "required"]
-        # RECOMMENDED keywords — "may", "should"
-        _RECOMMENDED_KEYWORDS = ["should", "may"]
+        # MANDATORY keywords — "must", "shall", "required", "mandatory" (#1299)
+        _MANDATORY_KEYWORDS = ["must", "shall", "required", "mandatory"]
+        # RECOMMENDED keywords — "may", "should", "can", "recommend" (#1299)
+        _RECOMMENDED_KEYWORDS = ["should", "can", "may", "recommend"]
 
         obl_type = None
         # Check MANDATORY first (higher precedence).
@@ -580,7 +580,9 @@ def _convert_entities_to_extraction(
         if obl_type is None:
             for kw in _RECOMMENDED_KEYWORDS:
                 if kw in text_lower and not _keyword_is_negated(text, kw):
-                    obl_type = ObligationType.SHOULD if kw == "should" else ObligationType.MAY
+                    # "should"/"can"/"recommend" → RECOMMENDED (SHOULD);
+                    # "may" → weakest recommendation (MAY).
+                    obl_type = ObligationType.MAY if kw == "may" else ObligationType.SHOULD
                     break
 
         if obl_type is None:

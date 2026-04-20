@@ -70,22 +70,22 @@ class TestDocumentClassification:
 
     def test_classify_bill_of_lading(self, extractor):
         """Test BOL document classification."""
-        doc_type = extractor._classify_document(SAMPLE_BOL_TEXT)
+        doc_type, _ = extractor._classify_document(SAMPLE_BOL_TEXT)
         assert doc_type == DocumentType.BILL_OF_LADING
 
     def test_classify_invoice(self, extractor):
         """Test invoice document classification."""
-        doc_type = extractor._classify_document(SAMPLE_INVOICE_TEXT)
+        doc_type, _ = extractor._classify_document(SAMPLE_INVOICE_TEXT)
         assert doc_type == DocumentType.INVOICE
 
     def test_classify_production_log(self, extractor):
         """Test production log document classification."""
-        doc_type = extractor._classify_document(SAMPLE_PRODUCTION_LOG)
+        doc_type, _ = extractor._classify_document(SAMPLE_PRODUCTION_LOG)
         assert doc_type == DocumentType.PRODUCTION_LOG
 
     def test_classify_unknown(self, extractor):
         """Test unknown document type."""
-        doc_type = extractor._classify_document("Random text with no indicators")
+        doc_type, _ = extractor._classify_document("Random text with no indicators")
         assert doc_type == DocumentType.UNKNOWN
 
 
