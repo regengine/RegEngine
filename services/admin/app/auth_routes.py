@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status, Request
+from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import select
 from datetime import timedelta, datetime, timezone
@@ -459,7 +460,16 @@ async def signup(
         select(UserModel).where(UserModel.email == normalized_email)
     ).scalar_one_or_none()
     if existing_user:
-        raise HTTPException(status_code=409, detail="User already exists")
+        # Return the same 2xx response as a successful signup to prevent email
+        # enumeration (closes #1400). We do NOT send a confirmation email here
+        # to avoid email-bombing the existing user. A "someone tried to register
+        # with your email" notification to the existing user is a nice-to-have
+        # tracked in #1400 but is intentionally omitted here.
+        logger.info("signup_duplicate_masked", email=mask_email(normalized_email))
+        return JSONResponse(
+            status_code=200,
+            content={"message": "If this email isn't already registered, you'll receive a confirmation email shortly."},
+        )
 
     try:
         validate_password(payload.password, user_context={"email": normalized_email})
@@ -582,6 +592,29 @@ async def signup(
         db.commit()
     except Exception as commit_exc:
         db.rollback()
+
+        # #1090 — Compensating cleanup: if the DB insert rolls back but a
+        # Supabase user was already created, delete it so the email is not
+        # permanently locked in Supabase with no matching DB record.
+        if supabase_user_id is not None:
+            _sb = get_supabase()
+            if _sb:
+                try:
+                    _sb.auth.admin.delete_user(str(supabase_user_id))
+                    logger.info(
+                        "signup_supabase_orphan_cleaned",
+                        supabase_user_id=str(supabase_user_id),
+                        email=mask_email(normalized_email),
+                    )
+                except Exception as sb_cleanup_exc:
+                    logger.warning(
+                        "signup_supabase_orphan_cleanup_failed",
+                        supabase_user_id=str(supabase_user_id),
+                        email=mask_email(normalized_email),
+                        error=str(sb_cleanup_exc),
+                        residual_orphan="supabase_user_dangling",
+                    )
+
         try:
             await session_store.delete_session(session_data.id)
         except Exception as cleanup_exc:
