@@ -426,6 +426,148 @@ async def test_signup_session_has_bounded_ttl(monkeypatch):
     ), f"computed TTL exceeds expected upper bound; got {ttl_seconds}s"
 
 
+# ── Supabase orphan cleanup on DB commit failure (#1090) ─────────────
+
+
+@pytest.mark.asyncio
+async def test_supabase_orphan_deleted_when_db_commit_fails(monkeypatch):
+    """#1090 — if the DB commit fails after Supabase already created a user,
+    the handler must call ``supabase.auth.admin.delete_user(supabase_user_id)``
+    so the Supabase account does not persist without a matching DB record.
+    """
+    from services.admin.app import auth_routes
+
+    # Inject a fake Supabase client that records the user_id created.
+    fake_sb_user_id = str(uuid_mod.uuid4())
+    fake_sb_user = SimpleNamespace(id=fake_sb_user_id)
+    fake_sb_response = SimpleNamespace(user=fake_sb_user)
+
+    deleted_ids: list[str] = []
+
+    class FakeSupabaseAuth:
+        class admin:
+            @staticmethod
+            def create_user(_payload):
+                return fake_sb_response
+
+            @staticmethod
+            def delete_user(uid: str):
+                deleted_ids.append(uid)
+
+    class FakeSupabase:
+        auth = FakeSupabaseAuth()
+
+    monkeypatch.setattr(auth_routes, "get_supabase", lambda: FakeSupabase())
+    monkeypatch.setattr(auth_routes.AuditLogger, "log_event", lambda *a, **k: None)
+    monkeypatch.setattr(auth_routes, "emit_funnel_event", lambda **k: None)
+
+    db = _make_db_no_existing_user()
+    db.commit.side_effect = RuntimeError("unique violation — duplicate email")
+
+    session_store = MagicMock()
+    session_store.create_session = AsyncMock(side_effect=lambda sd: sd)
+    session_store.delete_session = AsyncMock(return_value=True)
+
+    with pytest.raises(RuntimeError):
+        await _call_signup(db, session_store)
+
+    assert db.rollback.call_count >= 1
+    assert deleted_ids == [fake_sb_user_id], (
+        f"expected Supabase delete_user({fake_sb_user_id!r}); "
+        f"got delete calls: {deleted_ids}"
+    )
+
+
+@pytest.mark.asyncio
+async def test_supabase_not_created_when_supabase_is_unavailable_and_db_fails(
+    monkeypatch,
+):
+    """#1090 — when Supabase is absent (get_supabase returns None), no
+    cleanup should be attempted, and the DB commit failure still propagates.
+    """
+    from services.admin.app import auth_routes
+
+    monkeypatch.setattr(auth_routes, "get_supabase", lambda: None)
+    monkeypatch.setattr(auth_routes.AuditLogger, "log_event", lambda *a, **k: None)
+    monkeypatch.setattr(auth_routes, "emit_funnel_event", lambda **k: None)
+
+    db = _make_db_no_existing_user()
+    db.commit.side_effect = RuntimeError("unique violation")
+
+    session_store = MagicMock()
+    session_store.create_session = AsyncMock(side_effect=lambda sd: sd)
+    session_store.delete_session = AsyncMock(return_value=True)
+
+    with pytest.raises(RuntimeError, match="unique violation"):
+        await _call_signup(db, session_store)
+
+    assert db.rollback.call_count >= 1
+    # No Supabase to clean up — test just verifies no AttributeError/crash.
+
+
+@pytest.mark.asyncio
+async def test_supabase_orphan_cleanup_failure_is_logged_and_original_error_propagates(
+    monkeypatch,
+):
+    """#1090 — if the Supabase delete_user call itself fails, that failure
+    must be logged (``signup_supabase_orphan_cleanup_failed``) and the
+    original DB commit exception must still propagate to the caller.
+    """
+    from services.admin.app import auth_routes
+
+    fake_sb_user_id = str(uuid_mod.uuid4())
+    fake_sb_user = SimpleNamespace(id=fake_sb_user_id)
+    fake_sb_response = SimpleNamespace(user=fake_sb_user)
+
+    class FakeSupabaseAuth:
+        class admin:
+            @staticmethod
+            def create_user(_payload):
+                return fake_sb_response
+
+            @staticmethod
+            def delete_user(_uid: str):
+                raise RuntimeError("supabase API unreachable")
+
+    class FakeSupabase:
+        auth = FakeSupabaseAuth()
+
+    monkeypatch.setattr(auth_routes, "get_supabase", lambda: FakeSupabase())
+    monkeypatch.setattr(auth_routes.AuditLogger, "log_event", lambda *a, **k: None)
+    monkeypatch.setattr(auth_routes, "emit_funnel_event", lambda **k: None)
+
+    captured: list[tuple[str, dict]] = []
+
+    def _capture_warning(event: str, **kwargs):
+        captured.append((event, kwargs))
+
+    monkeypatch.setattr(auth_routes.logger, "warning", _capture_warning)
+
+    db = _make_db_no_existing_user()
+    db_error = RuntimeError("db commit failed")
+    db.commit.side_effect = db_error
+
+    session_store = MagicMock()
+    session_store.create_session = AsyncMock(side_effect=lambda sd: sd)
+    session_store.delete_session = AsyncMock(return_value=True)
+
+    with pytest.raises(RuntimeError) as exc_info:
+        await _call_signup(db, session_store)
+
+    # Original DB error must propagate — not the Supabase cleanup error.
+    assert exc_info.value is db_error
+
+    # Cleanup failure must have been logged.
+    cleanup_logs = [e for e, _ in captured if e == "signup_supabase_orphan_cleanup_failed"]
+    assert cleanup_logs, (
+        f"expected signup_supabase_orphan_cleanup_failed warning; "
+        f"saw {[e for e, _ in captured]}"
+    )
+    _, kw = [item for item in captured if item[0] == "signup_supabase_orphan_cleanup_failed"][0]
+    assert kw.get("residual_orphan") == "supabase_user_dangling"
+    assert "supabase_user_id" in kw
+
+
 @pytest.mark.asyncio
 async def test_redis_create_session_applies_expire_to_every_key(monkeypatch):
     """#1692 — belt-and-braces check that ``RedisSessionStore.create_session``
