@@ -42,6 +42,66 @@ logger = logging.getLogger("identity-resolution")
 
 
 # ---------------------------------------------------------------------------
+# #1212: Alias normalisation
+# ---------------------------------------------------------------------------
+
+# Alias types that carry structured numeric/alphanumeric identifiers.
+# Values for these types are stripped of surrounding whitespace and have
+# internal runs of whitespace collapsed to a single space before storage
+# and lookup so that CSV-sourced variants (e.g. " 00012345678905 ") match
+# the canonical form ("00012345678905").
+_STRUCTURED_ALIAS_TYPES = frozenset({
+    "gln",
+    "gtin",
+    "duns",
+    "ein",
+    "fda_registration",
+    "sgln",
+    "sscc",
+    "internal_code",
+    # Mirror the canonical column names used in register_entity
+    "gln", "gtin", "fda_registration",
+})
+
+# Purely-numeric structured types — internal whitespace can be removed
+# entirely (a digit string never legitimately contains spaces).
+_NUMERIC_ALIAS_TYPES = frozenset({
+    "gln",
+    "gtin",
+    "duns",
+    "sgln",
+    "sscc",
+})
+
+
+def normalize_alias(alias_type: str, value: str) -> str:
+    """
+    Normalise *value* for storage and lookup based on *alias_type*.
+
+    Rules (#1212):
+    - Structured types (GLN, GTIN, DUNS, EIN, FDA_REGISTRATION, SGLN, SSCC,
+      INTERNAL_CODE): strip surrounding whitespace, collapse internal runs.
+    - Purely numeric types (GLN, GTIN, DUNS, SGLN, SSCC): additionally remove
+      all embedded whitespace (a digit string never legitimately contains spaces).
+    - Everything else (LOT_CODE, DESCRIPTION, NAME, OTHER, …): returned
+      verbatim — do not alter free-text or lot-code identifiers.
+
+    Both write paths (_insert_alias) and read paths (find_entity_by_alias)
+    call this function so that historical data and new data normalise
+    consistently.
+    """
+    key = alias_type.lower()
+    if key in _NUMERIC_ALIAS_TYPES:
+        # Remove ALL whitespace for purely-numeric identifiers.
+        return "".join(value.split())
+    if key in _STRUCTURED_ALIAS_TYPES:
+        # Strip surrounding whitespace and collapse internal runs.
+        return " ".join(value.split())
+    # Free-text types — leave untouched.
+    return value
+
+
+# ---------------------------------------------------------------------------
 # Identity Resolution Service
 # ---------------------------------------------------------------------------
 
@@ -334,13 +394,18 @@ class IdentityResolutionService:
         Returns a list of matching entities (there may be more than one
         if the alias hasn't been resolved/merged yet).
         """
+        # #1212: normalise the lookup value so CSV-sourced whitespace
+        # variants resolve to the same stored alias.
+        normalised_value = normalize_alias(alias_type, alias_value)
+
         rows = self.session.execute(
             text("""
                 SELECT ce.entity_id, ce.entity_type, ce.canonical_name,
                        ce.gln, ce.gtin, ce.fda_registration, ce.internal_id,
                        ce.verification_status, ce.confidence_score, ce.is_active,
                        ea.alias_id, ea.alias_type, ea.alias_value,
-                       ea.source_system, ea.confidence AS alias_confidence
+                       ea.source_system, ea.confidence AS alias_confidence,
+                       ce.created_at
                 FROM fsma.entity_aliases ea
                 JOIN fsma.canonical_entities ce
                     ON ce.entity_id = ea.entity_id AND ce.tenant_id = ea.tenant_id
@@ -348,13 +413,27 @@ class IdentityResolutionService:
                   AND ea.alias_type = :alias_type
                   AND ea.alias_value = :alias_value
                   AND ce.is_active = TRUE
+                ORDER BY ce.confidence_score DESC, ce.created_at ASC
             """),
             {
                 "tenant_id": tenant_id,
                 "alias_type": alias_type,
-                "alias_value": alias_value,
+                "alias_value": normalised_value,
             },
         ).fetchall()
+
+        # #1234: warn when multiple active entities share the same alias —
+        # this signals a merge opportunity and helps ops detect drift.
+        if len(rows) > 1:
+            logger.warning(
+                "find_entity_by_alias_multiple_matches",
+                extra={
+                    "alias_type": alias_type,
+                    "alias_value_masked": mask_alias_value(alias_type, normalised_value),
+                    "match_count": len(rows),
+                    "tenant_id": tenant_id,
+                },
+            )
 
         return [
             {
@@ -1621,6 +1700,10 @@ class IdentityResolutionService:
         under a different entity, the INSERT is a no-op and the caller
         must re-SELECT to find the winning entity (#1190).
         """
+        # #1212: normalise before storage so whitespace variants from CSV
+        # parsing are stored in canonical form and match on lookup.
+        normalised_value = normalize_alias(alias_type, alias_value)
+
         alias_id = str(uuid4())
         now = datetime.now(timezone.utc)
 
@@ -1642,7 +1725,7 @@ class IdentityResolutionService:
                 "tenant_id": tenant_id,
                 "entity_id": entity_id,
                 "alias_type": alias_type,
-                "alias_value": alias_value,
+                "alias_value": normalised_value,
                 "source_system": source_system,
                 "source_file": source_file,
                 "confidence": confidence,
@@ -1763,8 +1846,20 @@ class IdentityResolutionService:
             search_types.append("gtin")
 
         for st in search_types:
-            matches = self.find_entity_by_alias(tenant_id, st, reference)
+            # #1212: normalize reference before lookup so whitespace
+            # variants (e.g. from CSV parsing) resolve to the existing entity.
+            normalised_ref = normalize_alias(st, reference)
+            matches = self.find_entity_by_alias(tenant_id, st, normalised_ref)
             active_matches = [m for m in matches if m.get("is_active")]
+            # #1234: sort for deterministic selection when multiple active
+            # entities share the alias (merge opportunity — also warned in
+            # find_entity_by_alias). Highest confidence first; oldest entity
+            # as a stable tiebreaker so replays always resolve identically.
+            active_matches.sort(
+                key=lambda m: (
+                    -(m.get("confidence_score") or 0.0),
+                ),
+            )
             if active_matches:
                 return {**active_matches[0], "resolution": "existing"}
 
