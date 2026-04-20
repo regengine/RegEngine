@@ -1,6 +1,3 @@
-# DEPRECATED: will be removed once EVENT_BACKBONE=pg is default (see #1159 #1240).
-# The PostgreSQL task_processor (server/workers/task_processor.py) is the canonical
-# replacement for this Kafka consumer. Do not add new logic here.
 """
 FSMA 204 Kafka Consumer for Graph Ingestion.
 
@@ -28,28 +25,20 @@ from confluent_kafka.serialization import SerializationContext, MessageField
 from prometheus_client import Counter, Histogram
 from structlog.contextvars import bind_contextvars, clear_contextvars
 
-# Standardized path discovery via shared utility
-from shared.paths import ensure_shared_importable
-ensure_shared_importable()
-
-from shared.observability.dlq_producer import DLQProducer, get_dlq_producer  # noqa: E402
-
 # DLQ - Dead Letter Queue Counter
 DLQ_COUNTER = Counter("fsma_consumer_dlq_messages", "Messages sent to DLQ", ["reason"])
 
-# DLQ producer — resolved lazily via shared singleton (#1228)
-# Initialized in run_fsma_consumer() once settings are available.
-_dlq: Optional[DLQProducer] = None
-
+# Global DLQ Producer (initialized in run_fsma_consumer) -- #1228: shared singleton
+_dlq_producer: Optional[object] = None  # shared.observability.dlq_producer.DLQProducer
 
 def send_to_dlq(topic: str, original_msg: bytes, reason: str, error: str = "") -> None:
-    """Send failed message to Dead Letter Queue."""
-    if not _dlq:
+    """Send failed message to Dead Letter Queue via shared DLQProducer. #1228"""
+    if not _dlq_producer:
         logger.error("dlq_producer_not_initialized", reason=reason)
         return
 
     try:
-        _dlq.send(
+        _dlq_producer.send(  # type: ignore[union-attr]
             original_msg,
             reason=reason,
             detail=error,
@@ -59,6 +48,11 @@ def send_to_dlq(topic: str, original_msg: bytes, reason: str, error: str = "") -
         logger.info("message_sent_to_dlq", reason=reason, error=error)
     except Exception as e:
         logger.critical("dlq_emission_failed", error=str(e))
+
+# Standardized path discovery via shared utility
+from shared.paths import ensure_shared_importable
+ensure_shared_importable()
+
 from services.graph.app.config import settings
 from services.graph.app.fsma_audit import log_extraction
 from services.graph.app.models.fsma_nodes import (
@@ -303,11 +297,12 @@ async def run_fsma_consumer(database: Optional[str] = None) -> None:
         _load_schema_str(),
     )
 
-    # Initialize shared DLQ Producer (#1228)
-    global _dlq
-    _dlq = get_dlq_producer(
-        topic=settings.topic_dlq,
+    # Initialize DLQ Producer -- #1228: use shared singleton
+    from shared.dlq import DLQProducer
+    global _dlq_producer
+    _dlq_producer = DLQProducer(
         bootstrap_servers=settings.kafka_bootstrap,
+        topic=settings.topic_dlq,
         service_name="fsma-graph-consumer",
     )
 

@@ -13,78 +13,16 @@ Usage example::
     dlq.send(original_bytes, reason="deserialization_error", detail="<traceback>")
     dlq.flush()
     dlq.close()
-
-Environment variables
----------------------
-``DLQ_BOOTSTRAP_SERVERS``
-    Kafka bootstrap server(s), e.g. ``kafka:9092``.  Defaults to ``localhost:9092``.
-``DLQ_TOPIC_PREFIX``
-    Optional prefix prepended to topic names (e.g. ``staging.``).  Defaults to
-    the empty string so existing topic names are used unchanged.
 """
 
 from __future__ import annotations
 
-import os
 import threading
 from typing import Optional
 
 import structlog
 
 logger = structlog.get_logger("shared.dlq_producer")
-
-# ---------------------------------------------------------------------------
-# Module-level env-var defaults
-# ---------------------------------------------------------------------------
-_DEFAULT_BOOTSTRAP = os.environ.get("DLQ_BOOTSTRAP_SERVERS", "localhost:9092")
-_TOPIC_PREFIX = os.environ.get("DLQ_TOPIC_PREFIX", "")
-
-# Module-level singleton registry (keyed by topic so multiple services can
-# share the same process without colliding).
-_instances: dict[str, "DLQProducer"] = {}
-_registry_lock = threading.Lock()
-
-
-def get_dlq_producer(
-    topic: Optional[str] = None,
-    bootstrap_servers: Optional[str] = None,
-    service_name: str = "unknown-service",
-) -> "DLQProducer":
-    """Return the singleton ``DLQProducer`` for *topic*, creating it on first call.
-
-    Parameters
-    ----------
-    topic:
-        DLQ Kafka topic name.  Defaults to ``<DLQ_TOPIC_PREFIX>dlq``.
-    bootstrap_servers:
-        Kafka bootstrap string.  Defaults to the ``DLQ_BOOTSTRAP_SERVERS``
-        environment variable (falling back to ``localhost:9092``).
-    service_name:
-        Attached to every DLQ message header for traceability.
-    """
-    effective_topic = _TOPIC_PREFIX + (topic or "dlq")
-    effective_bootstrap = bootstrap_servers or _DEFAULT_BOOTSTRAP
-
-    with _registry_lock:
-        if effective_topic not in _instances:
-            _instances[effective_topic] = DLQProducer(
-                bootstrap_servers=effective_bootstrap,
-                topic=effective_topic,
-                service_name=service_name,
-            )
-        return _instances[effective_topic]
-
-
-def reset_dlq_producer(topic: Optional[str] = None) -> None:
-    """Flush, close, and remove the singleton for *topic*.
-
-    Primarily useful in tests and at process shutdown.
-    """
-    effective_topic = _TOPIC_PREFIX + (topic or "dlq")
-    with _registry_lock:
-        producer = _instances.pop(effective_topic, None)
-    if producer is not None:
-        producer.close()
 
 
 class DLQProducer:
@@ -132,13 +70,13 @@ class DLQProducer:
 
         if self._producer is None:
             try:
-                import json  # noqa: F401 — side-effect import guard
+                import json
                 from kafka import KafkaProducer  # type: ignore[import]
 
                 self._producer = KafkaProducer(
                     bootstrap_servers=self._bootstrap,
                     value_serializer=lambda v: (
-                        v if isinstance(v, bytes) else __import__("json").dumps(v).encode("utf-8")
+                        v if isinstance(v, bytes) else json.dumps(v).encode("utf-8")
                     ),
                 )
                 self._confluent = False
