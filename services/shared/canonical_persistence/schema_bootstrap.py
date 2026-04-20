@@ -1,4 +1,5 @@
-"""
+"""Schema bootstrap for canonical_persistence tables. NOT an Alembic migration — creates tables if they don't exist. For tracked migrations, see alembic/versions/.
+
 TEMPORARY: Legacy dual-write and graph sync code.
 
 This module exists ONLY for the migration period. It will be deleted
@@ -51,7 +52,7 @@ from sqlalchemy.orm import Session
 if TYPE_CHECKING:
     from shared.canonical_event import TraceabilityEvent
 
-logger = logging.getLogger("canonical-persistence.migration")
+logger = logging.getLogger("canonical-persistence.schema_bootstrap")
 
 
 # ---------------------------------------------------------------------------
