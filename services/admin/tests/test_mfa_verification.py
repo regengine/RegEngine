@@ -116,7 +116,8 @@ async def test_rejects_invalid_recovery_code():
 
     user = _make_user()
     db = MagicMock()
-    db.execute.return_value.scalar_one_or_none.return_value = None
+    # No unused rows in DB — empty list means no match
+    db.execute.return_value.scalars.return_value.all.return_value = []
 
     with pytest.raises(HTTPException) as exc_info:
         await require_mfa(x_mfa_token="ABCD-EFGH", current_user=user, db=db)
@@ -126,14 +127,25 @@ async def test_rejects_invalid_recovery_code():
 
 @pytest.mark.asyncio
 async def test_accepts_valid_recovery_code_and_marks_used():
-    """Valid recovery code is accepted and its used_at is set."""
+    """Valid recovery code is accepted and its used_at is set.
+
+    Updated for #1041: argon2 hashes are salted, so the DB lookup now fetches
+    all unused rows and calls verify_recovery_code on each. The mock must
+    return a list of candidate rows with a real argon2 hash so verification
+    can succeed.
+    """
+    from services.admin.app.mfa import hash_recovery_code
+
     user = _make_user()
 
     recovery_row = MagicMock()
     recovery_row.used_at = None
+    # Pre-hash the code with argon2 so verify_recovery_code can verify it
+    recovery_row.code_hash = hash_recovery_code("ABCD-EFGH")
 
     db = MagicMock()
-    db.execute.return_value.scalar_one_or_none.return_value = recovery_row
+    # New query pattern: .scalars().all() returns a list of candidate rows
+    db.execute.return_value.scalars.return_value.all.return_value = [recovery_row]
 
     result = await require_mfa(x_mfa_token="ABCD-EFGH", current_user=user, db=db)
     assert result == "ABCD-EFGH"
@@ -148,8 +160,8 @@ async def test_already_used_recovery_code_rejected():
 
     user = _make_user()
     db = MagicMock()
-    # Query filters used_at.is_(None), so already-used codes return None
-    db.execute.return_value.scalar_one_or_none.return_value = None
+    # Query filters used_at.is_(None), so already-used codes are excluded → empty list
+    db.execute.return_value.scalars.return_value.all.return_value = []
 
     with pytest.raises(HTTPException) as exc_info:
         await require_mfa(x_mfa_token="ABCD-EFGH", current_user=user, db=db)

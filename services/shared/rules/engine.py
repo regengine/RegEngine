@@ -617,79 +617,89 @@ class RulesEngine:
         event_id: str,
         results: List[RuleEvaluationResult],
     ) -> None:
-        """Persist evaluation results to database."""
-        for r in results:
+        """Persist evaluation results to database.
+
+        All rows for a single event are written in one executemany-style
+        INSERT wrapped in an explicit savepoint (#1372). On failure the
+        savepoint is rolled back and the event is marked with an error flag
+        so the caller does not silently lose the failure signal.
+        """
+        if not results:
+            return
+
+        insert_params = [
+            {
+                "eval_id": r.evaluation_id,
+                "tenant_id": tenant_id,
+                "event_id": event_id,
+                "rule_id": r.rule_id,
+                "rule_version": r.rule_version,
+                "result": r.result,
+                "why_failed": r.why_failed,
+                "evidence": json.dumps(r.evidence_fields_inspected, default=str),
+                "confidence": r.confidence,
+            }
+            for r in results
+        ]
+
+        insert_stmt = text(
+            "INSERT INTO fsma.rule_evaluations ("
+            "    evaluation_id, tenant_id, event_id,"
+            "    rule_id, rule_version, result,"
+            "    why_failed, evidence_fields_inspected, confidence"
+            ") VALUES ("
+            "    :eval_id, :tenant_id, :event_id,"
+            "    :rule_id, :rule_version, :result,"
+            "    :why_failed, CAST(:evidence AS jsonb), :confidence"
+            ")"
+        )
+
+        savepoint = self.session.begin_nested()
+        try:
+            self.session.execute(insert_stmt, insert_params)
+        except Exception as e:
+            savepoint.rollback()
+            logger.error(
+                "evaluation_persist_failed",
+                extra={"event_id": event_id, "error": str(e)},
+            )
+            # Mark the event so operators can see it needs re-evaluation.
             try:
                 self.session.execute(
-                    text("""
-                        INSERT INTO fsma.rule_evaluations (
-                            evaluation_id, tenant_id, event_id,
-                            rule_id, rule_version, result,
-                            why_failed, evidence_fields_inspected,
-                            confidence
-                        ) VALUES (
-                            :eval_id, :tenant_id, :event_id,
-                            :rule_id, :rule_version, :result,
-                            :why_failed, CAST(:evidence AS jsonb),
-                            :confidence
-                        )
-                    """),
+                    text(
+                        "UPDATE fsma.traceability_events"
+                        " SET evaluation_error = :error_message,"
+                        "     evaluated_at = NOW()"
+                        " WHERE tenant_id = :tenant_id AND event_id = :event_id"
+                    ),
                     {
-                        "eval_id": r.evaluation_id,
                         "tenant_id": tenant_id,
                         "event_id": event_id,
-                        "rule_id": r.rule_id,
-                        "rule_version": r.rule_version,
-                        "result": r.result,
-                        "why_failed": r.why_failed,
-                        "evidence": json.dumps(r.evidence_fields_inspected, default=str),
-                        "confidence": r.confidence,
+                        "error_message": str(e),
                     },
                 )
-            except Exception as e:
+            except Exception as mark_err:
                 logger.error(
-                    "evaluation_persist_failed",
-                    extra={"rule_id": r.rule_id, "error": str(e)},
+                    "evaluation_persist_marker_failed",
+                    extra={"event_id": event_id, "error": str(mark_err)},
                 )
-                raise
 
     def _batch_persist_evaluations(
         self,
         tenant_id: str,
         results: List[tuple],  # (event_id, RuleEvaluationResult)
     ) -> None:
-        """Batch persist evaluation results."""
-        for chunk_start in range(0, len(results), 100):
-            chunk = results[chunk_start:chunk_start + 100]
-            values_clauses = []
-            params: Dict[str, Any] = {}
-            for i, (event_id, r) in enumerate(chunk):
-                values_clauses.append(
-                    f"(:eid_{i}, :tid_{i}, :evid_{i}, :rid_{i}, :rv_{i}, "
-                    f":res_{i}, :why_{i}, CAST(:ev_{i} AS jsonb), :conf_{i})"
-                )
-                params.update({
-                    f"eid_{i}": r.evaluation_id,
-                    f"tid_{i}": tenant_id,
-                    f"evid_{i}": event_id,
-                    f"rid_{i}": r.rule_id,
-                    f"rv_{i}": r.rule_version,
-                    f"res_{i}": r.result,
-                    f"why_{i}": r.why_failed,
-                    f"ev_{i}": json.dumps(r.evidence_fields_inspected, default=str),
-                    f"conf_{i}": r.confidence,
-                })
+        """Batch persist evaluation results.
 
-            if values_clauses:
-                sql = f"""
-                    INSERT INTO fsma.rule_evaluations (
-                        evaluation_id, tenant_id, event_id,
-                        rule_id, rule_version, result,
-                        why_failed, evidence_fields_inspected, confidence
-                    ) VALUES {', '.join(values_clauses)}
-                """
-                try:
-                    self.session.execute(text(sql), params)
-                except Exception as e:
-                    logger.error("batch_eval_persist_failed: %s", str(e))
-                    raise
+        Groups results by event_id and delegates to ``_persist_evaluations``
+        so each event gets its own savepoint — a failure for one event does
+        not abort persistence for subsequent events (#1372).
+        """
+        # Group results by event so each event gets a single atomic write.
+        from collections import defaultdict
+        by_event: Dict[str, List[RuleEvaluationResult]] = defaultdict(list)
+        for event_id, r in results:
+            by_event[event_id].append(r)
+
+        for event_id, event_results in by_event.items():
+            self._persist_evaluations(tenant_id, event_id, event_results)
