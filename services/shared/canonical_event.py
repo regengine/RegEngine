@@ -239,7 +239,37 @@ class IngestionRun(BaseModel):
 # Canonical TraceabilityEvent
 # ---------------------------------------------------------------------------
 
-SCHEMA_VERSION = "1.0.0"
+# #1197: ``SCHEMA_VERSION`` is the integer dispatch version of the
+# canonical TraceabilityEvent envelope. It is NOT a semver string — it is
+# a monotonically-increasing integer used by consumers to decide whether
+# an in-flight message (Kafka topic, task_queue row, outbox entry) is
+# understood. Bump this ONLY when the wire format changes in a way that
+# requires a migration branch at the consumer. Cosmetic additive changes
+# (a new optional field with a safe default) do NOT require a bump; a
+# rename, type change, or removal DOES.
+#
+# Legacy semver strings ("1.0.0", "1.0", "v1") from pre-#1197 events
+# deserialize as integer ``1`` — see the ``_coerce_schema_version``
+# validator below. This preserves backward compat so old rows in
+# ``fsma.traceability_events`` (where the column is TEXT) still hydrate
+# cleanly into the Pydantic model.
+SCHEMA_VERSION = 1
+
+# #1197: ``KNOWN_VERSIONS`` is the set of envelope versions the current
+# process knows how to consume. ``parse_traceability_event`` refuses any
+# payload whose ``schema_version`` is not in this set — a loud failure
+# is better than a silent "we dropped 20 unknown-version events" data
+# loss. Extend this set on the SAME commit that adds consumer handling
+# for the new version.
+KNOWN_VERSIONS: frozenset[int] = frozenset({1})
+
+# #1197: Legacy semver values from pre-envelope rows. Mapped to integer
+# ``1`` on deserialization so old ``fsma.traceability_events`` rows
+# (DB column is ``TEXT NOT NULL DEFAULT '1.0.0'``) hydrate cleanly
+# without a data migration. New producers emit the integer form.
+_LEGACY_SCHEMA_VERSION_STRINGS: frozenset[str] = frozenset({
+    "1.0.0", "1.0", "1", "v1", "v1.0", "v1.0.0",
+})
 
 
 class TraceabilityEvent(BaseModel):
@@ -260,6 +290,16 @@ class TraceabilityEvent(BaseModel):
     # Identity
     event_id: UUID = Field(default_factory=uuid4)
     tenant_id: UUID
+
+    # Envelope schema version (#1197).
+    #
+    # Placed near the top of the class so consumers that peek at raw
+    # JSON (without hydrating the full model) see it up front. Integer
+    # rather than semver string — consumers dispatch on equality with
+    # ``KNOWN_VERSIONS``, not range-comparison, so an int is both
+    # cheaper and unambiguous. See the module-level ``SCHEMA_VERSION``
+    # docstring for bump semantics.
+    schema_version: int = SCHEMA_VERSION
 
     # Source provenance
     source_system: IngestionSource
@@ -317,9 +357,6 @@ class TraceabilityEvent(BaseModel):
     # Amendment chain
     supersedes_event_id: Optional[UUID] = None
 
-    # Schema version
-    schema_version: str = SCHEMA_VERSION
-
     # Integrity (computed during persistence)
     sha256_hash: Optional[str] = None
     chain_hash: Optional[str] = None
@@ -336,6 +373,52 @@ class TraceabilityEvent(BaseModel):
     ingested_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
     model_config = {"populate_by_name": True}
+
+    @field_validator("schema_version", mode="before")
+    @classmethod
+    def _coerce_schema_version(cls, v: Any) -> int:
+        """Accept legacy semver strings and ``None`` on deserialization (#1197).
+
+        Before this issue the field was ``str`` with values like
+        ``"1.0.0"`` persisted to ``fsma.traceability_events.schema_version``
+        (a TEXT column). To avoid a backfill migration, we accept those
+        legacy strings here and coerce them to integer ``1`` — the
+        version they correspond to.
+
+        ``None`` and missing both fall through to the ``int = 1`` default
+        via Pydantic's normal default handling; this validator only runs
+        when a value was explicitly provided, so an explicit ``None``
+        (e.g. from a JSON row where the column was NULL) also normalises
+        to ``1``.
+
+        Unknown strings raise — we'd rather break loudly on a version we
+        don't understand than silently map it to ``1`` and merge two
+        incompatible schemas.
+        """
+        if v is None:
+            return SCHEMA_VERSION
+        if isinstance(v, bool):
+            # bool is a subclass of int in Python — reject before the
+            # int branch swallows True/False as 1/0.
+            raise ValueError(f"schema_version must be int, got bool: {v!r}")
+        if isinstance(v, int):
+            return v
+        if isinstance(v, str):
+            stripped = v.strip()
+            if stripped in _LEGACY_SCHEMA_VERSION_STRINGS:
+                return 1
+            # Try to parse "2", "3", etc. — a producer that used a
+            # plain numeric string for a valid integer version should
+            # still work. But "2.1" (semver for a version we don't
+            # know) must fail rather than silently floor.
+            try:
+                return int(stripped)
+            except ValueError:
+                raise ValueError(
+                    f"schema_version string not recognised: {v!r}. "
+                    f"Known legacy strings: {sorted(_LEGACY_SCHEMA_VERSION_STRINGS)}"
+                )
+        raise TypeError(f"schema_version must be int or legacy str, got {type(v).__name__}")
 
     @field_validator("event_timestamp", mode="before")
     @classmethod
@@ -475,6 +558,114 @@ class TraceabilityEvent(BaseModel):
         size = len(serialized.encode("utf-8"))
         if size > max_bytes:
             raise RawPayloadTooLargeError(size, max_bytes)
+
+
+# ---------------------------------------------------------------------------
+# Envelope-version dispatch (#1197)
+# ---------------------------------------------------------------------------
+#
+# Cross-service messaging (Kafka, fsma.task_queue, graph_outbox) exposes
+# a latency window between a producer bumping the canonical schema and
+# every consumer redeploying. Without a version stamp, new-shape events
+# land in old-shape parsers and either crash loudly or — worse — parse
+# into a truncated object and silently drop the added fields. Both modes
+# are hostile for an audit log.
+#
+# ``parse_traceability_event`` is the single entry point consumers should
+# call to hydrate a raw payload. It:
+#
+#   1. Normalises the input to a dict (bytes → JSON, str → JSON, dict
+#      passthrough). Matches the surface area of
+#      ``TraceabilityEvent.model_validate_json`` / ``model_validate``.
+#   2. Peeks at ``schema_version`` BEFORE validation. A missing field
+#      defaults to 1 — legacy events that predate the envelope were all
+#      effectively v1, and rejecting them would delete audit history
+#      at deploy time.
+#   3. Refuses unknown versions with a ``ValueError`` carrying the
+#      ``schema_version_unsupported:<v>`` tag. The prefix is grep-friendly
+#      for metrics and DLQ taxonomy so operators can count these.
+#   4. Delegates to ``TraceabilityEvent.model_validate`` for the actual
+#      field-level validation.
+#
+# The helper is deliberately lightweight — consumers do not have to
+# adopt it to benefit from the new field, but they SHOULD migrate on
+# their own schedule. The #1197 PR updates only 1-2 demonstration call
+# sites; the rest is a staged rollout.
+
+
+def parse_traceability_event(payload: Any) -> "TraceabilityEvent":
+    """Dispatch parse for a canonical ``TraceabilityEvent`` payload (#1197).
+
+    Accepts ``bytes``, ``str``, or ``dict``. Peeks at ``schema_version``
+    (default 1 when absent — see module docstring for the legacy path)
+    and refuses values not in :data:`KNOWN_VERSIONS` with
+    ``ValueError("schema_version_unsupported:<v>")``.
+
+    This is the RECOMMENDED entry point for any consumer that reads
+    ``TraceabilityEvent`` from a wire format (Kafka message value,
+    task_queue ``payload`` JSON, graph_outbox row, webhook replay). It
+    does NOT replace :meth:`TraceabilityEvent.model_validate` for
+    in-process construction — use the constructor for those.
+
+    Parameters
+    ----------
+    payload:
+        ``bytes`` / ``str`` — parsed as JSON then validated.
+        ``dict`` — validated directly (no copy; the caller keeps
+        ownership of the dict, but the Pydantic model does its own
+        internal conversion so mutations after the call do not affect
+        the returned model).
+
+    Raises
+    ------
+    ValueError
+        If the JSON is unparseable, if ``schema_version`` is a value
+        outside :data:`KNOWN_VERSIONS`, or if field-level validation
+        fails (propagated from Pydantic).
+    TypeError
+        If ``payload`` is not ``bytes``/``str``/``dict``.
+    """
+    if isinstance(payload, (bytes, bytearray)):
+        try:
+            raw = json.loads(payload)
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"traceability_event_payload_not_json: {exc}") from exc
+    elif isinstance(payload, str):
+        try:
+            raw = json.loads(payload)
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"traceability_event_payload_not_json: {exc}") from exc
+    elif isinstance(payload, dict):
+        raw = payload
+    else:
+        raise TypeError(
+            f"parse_traceability_event expected bytes/str/dict, "
+            f"got {type(payload).__name__}"
+        )
+
+    if not isinstance(raw, dict):
+        raise ValueError(
+            f"traceability_event_payload_not_object: got {type(raw).__name__}"
+        )
+
+    # Peek at the envelope version without triggering full validation.
+    # We MUST normalise the peeked value through the same coercion the
+    # Pydantic field uses so that "1.0.0" (a legacy string) is compared
+    # against KNOWN_VERSIONS as integer 1 rather than a raw string that
+    # is trivially not-in-set.
+    raw_version = raw.get("schema_version", SCHEMA_VERSION)
+    try:
+        peeked = TraceabilityEvent._coerce_schema_version(raw_version)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            f"schema_version_unsupported:{raw_version!r} "
+            f"(coercion failed: {exc})"
+        ) from exc
+
+    if peeked not in KNOWN_VERSIONS:
+        raise ValueError(f"schema_version_unsupported:{peeked}")
+
+    return TraceabilityEvent.model_validate(raw)
 
 
 # ---------------------------------------------------------------------------

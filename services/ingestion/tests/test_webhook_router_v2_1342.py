@@ -903,18 +903,80 @@ class TestRedisHelpers:
         assert "successes" in stats
 
     def test_publish_graph_sync_no_redis_url_is_noop(self, monkeypatch):
+        # Even with the producer opted in, missing REDIS_URL must short-circuit.
+        monkeypatch.setenv("ENABLE_NEO4J_SYNC", "true")
         monkeypatch.delenv("REDIS_URL", raising=False)
         event = IngestEvent(**_make_shipping_event())
         # Must not raise.
         wr._publish_graph_sync("evt-1", event, "tenant-a")
 
-    def test_publish_graph_sync_success(self, monkeypatch):
+    def test_publish_graph_sync_disabled_by_default_is_noop(self, monkeypatch):
+        """#1378 — default off: no Redis traffic, no counter increment.
+
+        The ``neo4j-sync`` consumer is not in any deployment manifest,
+        so the producer must default to disabled to avoid unbounded
+        Redis growth. Importing ``redis`` here would fail the test if
+        the gate were missing, since the rpush call site would attempt
+        the import despite there being no consumer.
+        """
+        monkeypatch.delenv("ENABLE_NEO4J_SYNC", raising=False)
         monkeypatch.setenv("REDIS_URL", "redis://fake:6379/0")
         pushed: list[tuple[str, str]] = []
 
         class _Client:
             def rpush(self, topic, payload):
                 pushed.append((topic, payload))
+
+            def ltrim(self, *_args, **_kwargs):
+                pushed.append(("__ltrim__", ""))
+
+        fake_redis = types.ModuleType("redis")
+        fake_redis.from_url = lambda *a, **kw: _Client()
+        monkeypatch.setitem(sys.modules, "redis", fake_redis)
+
+        monkeypatch.setattr(wr, "_get_redis_client", lambda: None)
+        before_success = wr._graph_sync_successes
+        before_failure = wr._graph_sync_failures
+        event = IngestEvent(**_make_shipping_event())
+        wr._publish_graph_sync("evt-1", event, "tenant-a")
+        assert pushed == [], "producer must not contact Redis when ENABLE_NEO4J_SYNC is off"
+        assert wr._graph_sync_successes == before_success
+        assert wr._graph_sync_failures == before_failure
+
+    @pytest.mark.parametrize("falsey", ["false", "0", "no", "off", "", " "])
+    def test_publish_graph_sync_falsey_env_values_are_noop(self, monkeypatch, falsey):
+        """A falsey ``ENABLE_NEO4J_SYNC`` keeps the producer off."""
+        monkeypatch.setenv("ENABLE_NEO4J_SYNC", falsey)
+        monkeypatch.setenv("REDIS_URL", "redis://fake:6379/0")
+        pushed: list[tuple[str, str]] = []
+
+        class _Client:
+            def rpush(self, topic, payload):
+                pushed.append((topic, payload))
+
+            def ltrim(self, *_args, **_kwargs):
+                pushed.append(("__ltrim__", ""))
+
+        fake_redis = types.ModuleType("redis")
+        fake_redis.from_url = lambda *a, **kw: _Client()
+        monkeypatch.setitem(sys.modules, "redis", fake_redis)
+        monkeypatch.setattr(wr, "_get_redis_client", lambda: None)
+        event = IngestEvent(**_make_shipping_event())
+        wr._publish_graph_sync("evt-1", event, "tenant-a")
+        assert pushed == []
+
+    def test_publish_graph_sync_success(self, monkeypatch):
+        monkeypatch.setenv("ENABLE_NEO4J_SYNC", "true")
+        monkeypatch.setenv("REDIS_URL", "redis://fake:6379/0")
+        pushed: list[tuple[str, str]] = []
+        ltrimmed: list[tuple[str, int, int]] = []
+
+        class _Client:
+            def rpush(self, topic, payload):
+                pushed.append((topic, payload))
+
+            def ltrim(self, topic, start, stop):
+                ltrimmed.append((topic, start, stop))
 
         fake_redis = types.ModuleType("redis")
         fake_redis.from_url = lambda *a, **kw: _Client()
@@ -926,8 +988,46 @@ class TestRedisHelpers:
         wr._publish_graph_sync("evt-1", event, "tenant-a")
         assert pushed and pushed[0][0] == "neo4j-sync"
         assert wr._graph_sync_successes == before + 1
+        # LTRIM bound applied — keeps the newest NEO4J_SYNC_MAX_QUEUE entries.
+        assert ltrimmed and ltrimmed[0][0] == "neo4j-sync"
+        assert ltrimmed[0][2] == -1
+
+    def test_publish_graph_sync_ltrim_failure_does_not_count_as_publish_failure(
+        self, monkeypatch
+    ):
+        """LTRIM bound is best-effort; the rpush already succeeded."""
+        monkeypatch.setenv("ENABLE_NEO4J_SYNC", "true")
+        monkeypatch.setenv("REDIS_URL", "redis://fake:6379/0")
+        pushed: list[tuple[str, str]] = []
+
+        class _Client:
+            def rpush(self, topic, payload):
+                pushed.append((topic, payload))
+
+            def ltrim(self, *_args, **_kwargs):
+                raise RuntimeError("ltrim broken")
+
+        fake_redis = types.ModuleType("redis")
+        fake_redis.from_url = lambda *a, **kw: _Client()
+        monkeypatch.setitem(sys.modules, "redis", fake_redis)
+        monkeypatch.setattr(wr, "_get_redis_client", lambda: None)
+        before_success = wr._graph_sync_successes
+        before_failure = wr._graph_sync_failures
+        event = IngestEvent(**_make_shipping_event())
+        wr._publish_graph_sync("evt-1", event, "tenant-a")
+        assert pushed and pushed[0][0] == "neo4j-sync"
+        assert wr._graph_sync_successes == before_success + 1
+        assert wr._graph_sync_failures == before_failure
+
+    def test_publish_graph_sync_max_queue_invalid_env_falls_back_to_default(
+        self, monkeypatch
+    ):
+        """A garbage ``NEO4J_SYNC_MAX_QUEUE`` falls back to 100k."""
+        monkeypatch.setenv("NEO4J_SYNC_MAX_QUEUE", "not-a-number")
+        assert wr._neo4j_sync_max_queue() == 100_000
 
     def test_publish_graph_sync_failure_logged_and_counted(self, monkeypatch):
+        monkeypatch.setenv("ENABLE_NEO4J_SYNC", "true")
         monkeypatch.setenv("REDIS_URL", "redis://fake:6379/0")
 
         fake_redis = types.ModuleType("redis")
