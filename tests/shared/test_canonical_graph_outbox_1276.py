@@ -149,7 +149,7 @@ class TestRollbackDoesNotPublish_Issue1276:
     def test_stage_then_rollback_publishes_nothing(
         self, fake_redis, sqlite_session, enable_sync,
     ):
-        from shared.canonical_persistence.migration import stage_graph_sync
+        from shared.canonical_persistence.schema_bootstrap import stage_graph_sync
 
         _begin_real_transaction(sqlite_session)
         event = _make_event("evt-rollback")
@@ -171,7 +171,7 @@ class TestRollbackDoesNotPublish_Issue1276:
     ):
         """A batch of N events staged in one transaction, then rolled
         back, must produce zero publishes — not even one."""
-        from shared.canonical_persistence.migration import stage_graph_sync
+        from shared.canonical_persistence.schema_bootstrap import stage_graph_sync
 
         _begin_real_transaction(sqlite_session)
         for i in range(20):
@@ -187,7 +187,7 @@ class TestRollbackDoesNotPublish_Issue1276:
         on the same session must not republish the dropped events —
         otherwise a rollback-then-commit sequence would still leak
         ghost messages."""
-        from shared.canonical_persistence.migration import stage_graph_sync
+        from shared.canonical_persistence.schema_bootstrap import stage_graph_sync
 
         _begin_real_transaction(sqlite_session)
         stage_graph_sync(sqlite_session, _make_event("evt-dropped"))
@@ -211,7 +211,7 @@ class TestCommitPublishes_Issue1276:
     def test_single_stage_then_commit_publishes_once(
         self, fake_redis, sqlite_session, enable_sync,
     ):
-        from shared.canonical_persistence.migration import stage_graph_sync
+        from shared.canonical_persistence.schema_bootstrap import stage_graph_sync
 
         _begin_real_transaction(sqlite_session)
         event = _make_event("evt-committed")
@@ -229,7 +229,7 @@ class TestCommitPublishes_Issue1276:
     ):
         """N events staged → N publishes after commit. Not 0 (dropped),
         not N² (double-install of listeners), exactly N."""
-        from shared.canonical_persistence.migration import stage_graph_sync
+        from shared.canonical_persistence.schema_bootstrap import stage_graph_sync
 
         _begin_real_transaction(sqlite_session)
         ids = [f"evt-batch-{i}" for i in range(10)]
@@ -258,7 +258,7 @@ class TestCommitPublishes_Issue1276:
         committed pending list must be cleared (popped) to avoid
         republishing the same events on every subsequent commit —
         which would be catastrophic for long-lived sessions."""
-        from shared.canonical_persistence.migration import stage_graph_sync
+        from shared.canonical_persistence.schema_bootstrap import stage_graph_sync
 
         _begin_real_transaction(sqlite_session)
         stage_graph_sync(sqlite_session, _make_event("evt-first"))
@@ -279,7 +279,7 @@ class TestCommitPublishes_Issue1276:
         """Commit T1 → stage in T2 → commit T2. Redis should see T1's
         events on commit T1 and T2's events on commit T2, never
         mixed or duplicated."""
-        from shared.canonical_persistence.migration import stage_graph_sync
+        from shared.canonical_persistence.schema_bootstrap import stage_graph_sync
 
         _begin_real_transaction(sqlite_session)
         stage_graph_sync(sqlite_session, _make_event("evt-t1"))
@@ -308,7 +308,7 @@ class TestStagingRespectsGating_Issue1276:
         should grow, so long-lived ingestion sessions cannot leak
         memory via a forgotten pending list."""
         monkeypatch.delenv("ENABLE_NEO4J_SYNC", raising=False)
-        from shared.canonical_persistence.migration import (
+        from shared.canonical_persistence.schema_bootstrap import (
             _SESSION_PENDING_KEY,
             stage_graph_sync,
         )
@@ -328,7 +328,7 @@ class TestStagingRespectsGating_Issue1276:
         a subsequent stage call must start staging; the feature is
         evaluated at call time, not at import time."""
         monkeypatch.delenv("ENABLE_NEO4J_SYNC", raising=False)
-        from shared.canonical_persistence.migration import stage_graph_sync
+        from shared.canonical_persistence.schema_bootstrap import stage_graph_sync
 
         _begin_real_transaction(sqlite_session)
         stage_graph_sync(sqlite_session, _make_event("evt-before"))
@@ -357,7 +357,7 @@ class TestListenerInstallation_Issue1276:
         after_commit listeners — that would fire the drain callback
         100 times per commit and produce 100× publishes. The flag
         guard in ``stage_graph_sync`` prevents the quadratic blowup."""
-        from shared.canonical_persistence.migration import stage_graph_sync
+        from shared.canonical_persistence.schema_bootstrap import stage_graph_sync
 
         _begin_real_transaction(sqlite_session)
         for i in range(100):
@@ -382,7 +382,7 @@ class TestPersistEventIntegrationShape_Issue1276:
     def test_caller_rollback_does_not_publish(
         self, fake_redis, sqlite_session, enable_sync,
     ):
-        from shared.canonical_persistence.migration import stage_graph_sync
+        from shared.canonical_persistence.schema_bootstrap import stage_graph_sync
 
         def persist_like(session, event):
             # Simulate the persist_event flow: do some DB work, stage
@@ -402,7 +402,7 @@ class TestPersistEventIntegrationShape_Issue1276:
     def test_caller_commit_does_publish(
         self, fake_redis, sqlite_session, enable_sync,
     ):
-        from shared.canonical_persistence.migration import stage_graph_sync
+        from shared.canonical_persistence.schema_bootstrap import stage_graph_sync
 
         def persist_like(session, event):
             session.execute(text("SELECT 1"))

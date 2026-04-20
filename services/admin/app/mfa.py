@@ -300,21 +300,31 @@ def hash_recovery_code(code: str) -> str:
     Normalizes the code (uppercase, strip non-alnum) before hashing so that
     dashes/casing differences between generation and redemption don't produce
     different hashes.
+
+    #1041 — upgraded from SHA-256 (fast, brute-forceable) to argon2 so that
+    a DB dump does not let an attacker brute-force recovery codes offline.
     """
-    import hashlib
+    from argon2 import PasswordHasher
 
     canonical = normalize_recovery_code(code)
-    return hashlib.sha256(canonical.encode()).hexdigest()
+    return PasswordHasher().hash(canonical)
 
 
 def verify_recovery_code(code: str, hashed_code: str) -> bool:
     """Verify a recovery code against its hash.
 
-    Uses constant-time comparison to avoid timing side-channels.
+    #1041 — uses argon2-cffi's PasswordHasher.verify() which handles the
+    encoded parameters and raises VerifyMismatchError on failure (no timing
+    side-channel).
     """
-    import hmac
+    from argon2 import PasswordHasher
+    from argon2.exceptions import VerifyMismatchError, VerificationError, InvalidHashError
 
-    return hmac.compare_digest(hash_recovery_code(code), hashed_code)
+    canonical = normalize_recovery_code(code)
+    try:
+        return PasswordHasher().verify(hashed_code, canonical)
+    except (VerifyMismatchError, VerificationError, InvalidHashError):
+        return False
 
 
 # ──────────────────────────────────────────────────────────────

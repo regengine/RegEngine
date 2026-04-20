@@ -11,6 +11,7 @@ Covers:
   * #1379 — /auth/refresh preserves original tenant_id from access token
   * #1380 — require_reauth rejects cross-tenant / stale-tv / revoked-jti tokens
   * #1387 — invite role-tier escalation check
+  * #1088 — /auth/change-password revokes other sessions + bumps token_version
 
 Tests are direct-call unit tests so they don't depend on the TestClient
 integration path that #1435 broke.
@@ -124,11 +125,16 @@ def test_recovery_code_generator_only_emits_alnum_codes():
 
 def test_recovery_code_hash_matches_despite_formatting():
     """The key bug (#1377): user-typed code with different casing/spacing
-    must hash to the same value as the generated canonical form."""
-    from services.admin.app.mfa import hash_recovery_code
-    canonical = "ABCD-EFGH"
+    must verify against a hash of the canonical form.
+
+    #1041 — argon2 hashes are non-deterministic (random salt per call), so
+    we cannot compare two hash() outputs directly. Instead we hash the
+    canonical form once and verify each variant against it.
+    """
+    from services.admin.app.mfa import hash_recovery_code, verify_recovery_code
+    canonical_hash = hash_recovery_code("ABCD-EFGH")
     for variant in ["abcd-efgh", "ABCDEFGH", "abcdefgh", " abcd-efgh ", "AbCd-EfGh"]:
-        assert hash_recovery_code(variant) == hash_recovery_code(canonical), variant
+        assert verify_recovery_code(variant, canonical_hash), variant
 
 
 def test_recovery_code_verify_uses_constant_time():
@@ -475,12 +481,14 @@ def test_auth_confirm_has_rate_limit_decorator():
 
 
 def test_password_reset_routes_has_no_conflicting_change_password():
-    """#1374 — the dead duplicate route in password_reset_routes must be gone."""
+    """#1374 — the dead duplicate route in password_reset_routes must be gone.
+
+    The router may now contain /auth/forgot-password (#1086) but must not
+    conflict with the authoritative /auth/change-password in auth_routes.
+    """
     from services.admin.app import password_reset_routes
     paths = {getattr(r, "path", None) for r in password_reset_routes.router.routes}
     assert "/auth/change-password" not in paths
-    # In fact, the stub router should be empty.
-    assert paths == set() or paths == {None}
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -890,3 +898,159 @@ async def test_revoke_all_for_user_drops_token_hash_mapping():
     assert count == 1
     # The key claim: delete() was called with the token_hash mapping key.
     write_pipe.delete.assert_awaited_with(f"token_hash:{token_hash}")
+
+
+# ─────────────────────────────────────────────────────────────────────
+# #1088 — /auth/change-password revokes sessions + bumps token_version
+# ─────────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_change_password_calls_revoke_all_for_user(monkeypatch):
+    """#1088 — changing password must call revoke_all_for_user so stolen
+    refresh tokens from other sessions cannot be replayed."""
+    from services.admin.app.auth_routes import change_password, ChangePasswordRequest
+    from services.admin.app.auth_utils import get_password_hash
+
+    user_id = uuid.uuid4()
+    old_hash = get_password_hash("OldPass1!")
+
+    user = SimpleNamespace(
+        id=user_id,
+        email="u@example.com",
+        status="active",
+        password_hash=old_hash,
+        token_version=0,
+    )
+
+    db = MagicMock()
+    db.get.return_value = user
+    db.commit.return_value = None
+
+    session_store = MagicMock()
+    revoke_mock = AsyncMock(return_value=2)
+    session_store.revoke_all_for_user = revoke_mock
+
+    # Stub Supabase so we don't need a live connection
+    monkeypatch.setattr(
+        "services.admin.app.auth_routes.get_supabase",
+        lambda: None,
+    )
+
+    # Stub _revoke_all_elevation_tokens_for_user
+    monkeypatch.setattr(
+        "services.admin.app.auth_routes._revoke_all_elevation_tokens_for_user",
+        AsyncMock(return_value=0),
+    )
+
+    request = _make_starlette_request()
+    payload = ChangePasswordRequest(current_password="OldPass1!", new_password="NewPass2@")
+
+    result = await change_password(
+        payload=payload,
+        request=request,
+        db=db,
+        current_user=user,
+        session_store=session_store,
+    )
+
+    assert result == {"status": "success"}
+    revoke_mock.assert_awaited_once_with(user_id)
+
+
+@pytest.mark.asyncio
+async def test_change_password_bumps_token_version(monkeypatch):
+    """#1088 — token_version must be incremented so outstanding access tokens
+    from other sessions are immediately rejected by get_current_user."""
+    from services.admin.app.auth_routes import change_password, ChangePasswordRequest
+    from services.admin.app.auth_utils import get_password_hash
+
+    user_id = uuid.uuid4()
+    old_hash = get_password_hash("OldPass1!")
+
+    user = SimpleNamespace(
+        id=user_id,
+        email="u@example.com",
+        status="active",
+        password_hash=old_hash,
+        token_version=3,
+    )
+
+    db = MagicMock()
+    db.get.return_value = user
+    db.commit.return_value = None
+
+    session_store = MagicMock()
+    session_store.revoke_all_for_user = AsyncMock(return_value=1)
+
+    monkeypatch.setattr(
+        "services.admin.app.auth_routes.get_supabase",
+        lambda: None,
+    )
+    monkeypatch.setattr(
+        "services.admin.app.auth_routes._revoke_all_elevation_tokens_for_user",
+        AsyncMock(return_value=0),
+    )
+
+    request = _make_starlette_request()
+    payload = ChangePasswordRequest(current_password="OldPass1!", new_password="NewPass2@")
+
+    await change_password(
+        payload=payload,
+        request=request,
+        db=db,
+        current_user=user,
+        session_store=session_store,
+    )
+
+    # token_version must be bumped from 3 → 4
+    assert user.token_version == 4
+
+
+@pytest.mark.asyncio
+async def test_change_password_session_revoke_failure_is_nonfatal(monkeypatch):
+    """#1088 — a Redis outage during session revocation must not block the
+    password change itself; the response must still be 'success'."""
+    from services.admin.app.auth_routes import change_password, ChangePasswordRequest
+    from services.admin.app.auth_utils import get_password_hash
+
+    user_id = uuid.uuid4()
+    old_hash = get_password_hash("OldPass1!")
+
+    user = SimpleNamespace(
+        id=user_id,
+        email="u@example.com",
+        status="active",
+        password_hash=old_hash,
+        token_version=0,
+    )
+
+    db = MagicMock()
+    db.get.return_value = user
+    db.commit.return_value = None
+
+    session_store = MagicMock()
+    session_store.revoke_all_for_user = AsyncMock(side_effect=ConnectionError("Redis down"))
+
+    monkeypatch.setattr(
+        "services.admin.app.auth_routes.get_supabase",
+        lambda: None,
+    )
+    monkeypatch.setattr(
+        "services.admin.app.auth_routes._revoke_all_elevation_tokens_for_user",
+        AsyncMock(return_value=0),
+    )
+
+    request = _make_starlette_request()
+    payload = ChangePasswordRequest(current_password="OldPass1!", new_password="NewPass2@")
+
+    result = await change_password(
+        payload=payload,
+        request=request,
+        db=db,
+        current_user=user,
+        session_store=session_store,
+    )
+
+    # Password change must succeed even when Redis is unavailable
+    assert result == {"status": "success"}

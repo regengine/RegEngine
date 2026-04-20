@@ -26,7 +26,7 @@ from uuid import uuid4
 
 import pytest
 
-from shared.canonical_persistence import migration
+from shared.canonical_persistence import schema_bootstrap as migration
 from shared.canonical_persistence.writer import CanonicalEventStore
 
 from tests.shared.test_canonical_persistence_hardening import (

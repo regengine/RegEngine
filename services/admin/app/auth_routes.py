@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status, Request
 from sqlalchemy.orm import Session
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from datetime import timedelta, datetime, timezone
 import structlog
 from pydantic import BaseModel, Field
@@ -418,6 +419,49 @@ async def login(
     return response
 
 
+
+_SIGNUP_GENERIC_MSG = "If this email is new, you'll receive a confirmation link."
+
+# Per-IP signup attempt tracking (#1404 — replaces per-email gating so the
+# 429 rate is identical regardless of whether the submitted email exists).
+_SIGNUP_IP_ATTEMPT_KEY_PREFIX = "signup_attempts_ip:"
+_SIGNUP_IP_ATTEMPT_LIMIT = 5
+_SIGNUP_IP_ATTEMPT_WINDOW = 900  # 15 minutes
+
+
+def _signup_ip_key(ip: str) -> str:
+    return f"{_SIGNUP_IP_ATTEMPT_KEY_PREFIX}{ip}"
+
+
+async def _check_signup_ip_rate_limit(session_store: RedisSessionStore, ip: str) -> None:
+    """Raise 429 if this IP has exceeded the signup attempt limit (#1404)."""
+    try:
+        client = await session_store._get_client()
+        count_str = await client.get(_signup_ip_key(ip))
+        if count_str and int(count_str) >= _SIGNUP_IP_ATTEMPT_LIMIT:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail="Too many signup attempts. Please try again later.",
+                headers={"Retry-After": str(_SIGNUP_IP_ATTEMPT_WINDOW)},
+            )
+    except HTTPException:
+        raise
+    except Exception:
+        pass  # fail open — IP rate limit is a soft defence
+
+
+async def _record_signup_ip_attempt(session_store: RedisSessionStore, ip: str) -> None:
+    try:
+        client = await session_store._get_client()
+        key = _signup_ip_key(ip)
+        async with client.pipeline(transaction=False) as pipe:
+            pipe.incr(key)
+            pipe.expire(key, _SIGNUP_IP_ATTEMPT_WINDOW)
+            await pipe.execute()
+    except Exception:
+        pass  # fail open
+
+
 @router.post("/signup", response_model=TokenResponse)
 @limiter.limit("5/minute")
 async def signup(
@@ -455,16 +499,49 @@ async def signup(
     if not tenant_name:
         raise HTTPException(status_code=400, detail="Tenant name is required")
 
+    # #1400 — check for existing email BEFORE doing any work, but return a
+    # generic 200 (not 409) so attackers cannot enumerate registered emails.
+    # Also record the attempt against the caller's IP (#1404).
+    caller_ip = request.client.host if request.client else "0.0.0.0"
+    await _check_signup_ip_rate_limit(session_store, caller_ip)
+    await _record_signup_ip_attempt(session_store, caller_ip)
+
     existing_user = db.execute(
         select(UserModel).where(UserModel.email == normalized_email)
     ).scalar_one_or_none()
     if existing_user:
-        raise HTTPException(status_code=409, detail="User already exists")
+        # Normalised response — same body whether the email exists or not.
+        # Supabase call is intentionally skipped here (no new user to create).
+        logger.info("signup_email_already_exists", email=mask_email(normalized_email))
+        from fastapi.responses import JSONResponse
+        return JSONResponse(
+            status_code=status.HTTP_200_OK,
+            content={"message": _SIGNUP_GENERIC_MSG},
+        )
 
     try:
         validate_password(payload.password, user_context={"email": normalized_email})
     except PasswordPolicyError as exc:
         raise HTTPException(status_code=400, detail=exc.message)
+
+    # #1090 — DB flush BEFORE Supabase creation so a duplicate-email race
+    # raises IntegrityError here (→ 409) instead of creating two Supabase
+    # accounts for the same email.  UUID is generated locally so the same
+    # value can be passed to Supabase after the DB uniqueness is confirmed.
+    local_user_id = uuid.uuid4()
+    new_user = UserModel(
+        id=local_user_id,
+        email=normalized_email,
+        password_hash=get_password_hash(payload.password),
+        is_sysadmin=False,
+        status="active",
+    )
+    db.add(new_user)
+    try:
+        db.flush()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="User already exists")
 
     supabase_user_id: Optional[UUID] = None
     sb = get_supabase()
@@ -483,16 +560,6 @@ async def signup(
                 supabase_user_id = UUID(str(supabase_user.id))
         except (OSError, TimeoutError, ConnectionError, ValueError, RuntimeError, AttributeError) as exc:  # pragma: no cover - external dependency behavior
             logger.warning("supabase_signup_provisioning_failed", email=mask_email(normalized_email), error=str(exc))
-
-    new_user = UserModel(
-        id=supabase_user_id or uuid.uuid4(),
-        email=normalized_email,
-        password_hash=get_password_hash(payload.password),
-        is_sysadmin=False,
-        status="active",
-    )
-    db.add(new_user)
-    db.flush()
 
     tenant_settings: dict = {
         "onboarding": {
@@ -582,6 +649,24 @@ async def signup(
         db.commit()
     except Exception as commit_exc:
         db.rollback()
+
+        # #1090 — if the DB insert failed, delete the Supabase user we just
+        # created so it doesn't become an orphan that blocks future signups
+        # or leaks a credential. Best-effort: log but don't mask the DB error.
+        if sb and supabase_user_id:
+            try:
+                sb.auth.admin.delete_user(str(supabase_user_id))
+                logger.info(
+                    "signup_supabase_orphan_cleaned",
+                    supabase_user_id=str(supabase_user_id),
+                )
+            except Exception as sb_cleanup_exc:
+                logger.error(
+                    "signup_supabase_orphan_cleanup_failed",
+                    supabase_user_id=str(supabase_user_id),
+                    error=str(sb_cleanup_exc),
+                )
+
         try:
             await session_store.delete_session(session_data.id)
         except Exception as cleanup_exc:
@@ -1014,18 +1099,45 @@ async def change_password(
 
     user.password_hash = get_password_hash(payload.new_password)
 
+    # #1088 — bump token_version so outstanding access tokens from OTHER sessions
+    # are immediately rejected by get_current_user. The caller's current session
+    # stays valid (we do not log them out of their own browser).
+    current_version = int(getattr(user, "token_version", 0) or 0)
+    user.token_version = current_version + 1
+
+    # #1089 — Supabase sync is required for password consistency. Treat a sync
+    # failure as a hard error: roll back and return 500 so the caller knows the
+    # password was NOT changed (rather than silently leaving the two stores out
+    # of sync). We skip the call when Supabase is not configured (sb is None).
     sb = get_supabase()
     if sb:
         try:
             sb.auth.admin.update_user_by_id(str(user.id), {"password": payload.new_password})
         except Exception as exc:
-            logger.warning(
+            logger.error(
                 "change_password_supabase_sync_failed",
                 user_id=str(user.id),
                 error=str(exc),
             )
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Password change failed. Please try again.",
+            )
 
     db.commit()
+
+    # #1088 — revoke all OTHER active sessions so stolen refresh tokens cannot be
+    # replayed. Best-effort: a Redis outage is logged but does not block the
+    # password change itself (token_version bump is the primary defense).
+    try:
+        sessions_revoked = await session_store.revoke_all_for_user(user.id)
+    except Exception as exc:
+        logger.warning(
+            "change_password_session_revoke_failed",
+            user_id=str(user.id),
+            error=str(exc),
+        )
+        sessions_revoked = 0
 
     # #1380 — invalidate any elevation tokens previously minted by /confirm.
     elevation_revoked = await _revoke_all_elevation_tokens_for_user(session_store, user.id)
@@ -1033,7 +1145,9 @@ async def change_password(
     logger.info(
         "change_password_success",
         user_id=str(user.id),
+        sessions_revoked=sessions_revoked,
         elevation_tokens_revoked=elevation_revoked,
+        new_token_version=user.token_version,
     )
     return {"status": "success"}
 

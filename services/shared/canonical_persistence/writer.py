@@ -25,7 +25,7 @@ from shared.canonical_event import (
 )
 from shared.cte_persistence import compute_chain_hash
 from shared.canonical_persistence.models import CanonicalStoreResult
-from shared.canonical_persistence import migration
+from shared.canonical_persistence import schema_bootstrap as migration
 
 logger = logging.getLogger("canonical-persistence")
 
@@ -1014,7 +1014,7 @@ class CanonicalEventStore:
             "source_file_id": str(event.source_file_id) if event.source_file_id else None,
             "ingestion_run_id": str(event.ingestion_run_id) if event.ingestion_run_id else None,
             "event_type": event.event_type.value,
-            "event_timestamp": event.event_timestamp.isoformat(),
+            "event_timestamp": event.event_timestamp,
             "event_timezone": event.event_timezone,
             "product_reference": event.product_reference,
             "lot_reference": event.lot_reference,
