@@ -684,22 +684,73 @@ class RulesEngine:
                     extra={"event_id": event_id, "error": str(mark_err)},
                 )
 
+    _BATCH_CHUNK_SIZE: int = 100
+
     def _batch_persist_evaluations(
         self,
         tenant_id: str,
         results: List[tuple],  # (event_id, RuleEvaluationResult)
     ) -> None:
-        """Batch persist evaluation results.
+        """Batch persist evaluation results in chunks of _BATCH_CHUNK_SIZE.
 
-        Groups results by event_id and delegates to ``_persist_evaluations``
-        so each event gets its own savepoint — a failure for one event does
-        not abort persistence for subsequent events (#1372).
+        Each chunk is written as a single ``INSERT INTO ... VALUES (...)``
+        (one round-trip per chunk) and wrapped in its own savepoint (#1372).
+        On failure the savepoint is rolled back, an ``evaluation_batch_failed``
+        event is logged with chunk metadata, and processing continues with the
+        next chunk — a single bad chunk never aborts the rest of the batch.
         """
-        # Group results by event so each event gets a single atomic write.
-        from collections import defaultdict
-        by_event: Dict[str, List[RuleEvaluationResult]] = defaultdict(list)
-        for event_id, r in results:
-            by_event[event_id].append(r)
+        if not results:
+            return
 
-        for event_id, event_results in by_event.items():
-            self._persist_evaluations(tenant_id, event_id, event_results)
+        from sqlalchemy.exc import SQLAlchemyError
+
+        chunk_size = self._BATCH_CHUNK_SIZE
+        for chunk_start in range(0, len(results), chunk_size):
+            chunk = results[chunk_start : chunk_start + chunk_size]
+            chunk_index = chunk_start // chunk_size
+            chunk_end = chunk_start + len(chunk) - 1
+
+            value_dicts = [
+                {
+                    "eval_id": r.evaluation_id,
+                    "tenant_id": tenant_id,
+                    "event_id": event_id,
+                    "rule_id": r.rule_id,
+                    "rule_version": r.rule_version,
+                    "result": r.result,
+                    "why_failed": r.why_failed,
+                    "evidence": json.dumps(r.evidence_fields_inspected, default=str),
+                    "confidence": r.confidence,
+                }
+                for event_id, r in chunk
+            ]
+
+            insert_stmt = text(
+                "INSERT INTO fsma.rule_evaluations ("
+                "    evaluation_id, tenant_id, event_id,"
+                "    rule_id, rule_version, result,"
+                "    why_failed, evidence_fields_inspected, confidence"
+                ") VALUES ("
+                "    :eval_id, :tenant_id, :event_id,"
+                "    :rule_id, :rule_version, :result,"
+                "    :why_failed, CAST(:evidence AS jsonb), :confidence"
+                ")"
+            )
+
+            savepoint = self.session.begin_nested()
+            try:
+                self.session.execute(insert_stmt, value_dicts)
+            except (SQLAlchemyError, Exception) as e:
+                savepoint.rollback()
+                logger.error(
+                    "evaluation_batch_failed",
+                    extra={
+                        "tenant_id": tenant_id,
+                        "chunk_index": chunk_index,
+                        "chunk_start": chunk_start,
+                        "chunk_end": chunk_end,
+                        "chunk_size": len(chunk),
+                        "error": str(e),
+                        "error_type": type(e).__name__,
+                    },
+                )
