@@ -170,7 +170,13 @@ def _validate_epcis(event: dict) -> list[str]:
         if not event.get(field):
             errors.append(f"Missing required EPCIS field '{field}'")
 
-    if event.get("type") not in {"ObjectEvent", "AggregationEvent", "TransactionEvent", "TransformationEvent"}:
+    event_type = event.get("type")
+    if not isinstance(event_type, str) or event_type not in {
+        "ObjectEvent",
+        "AggregationEvent",
+        "TransactionEvent",
+        "TransformationEvent",
+    }:
         errors.append("Unsupported EPCIS event type")
 
     lot_code, tlc = _extract_lot_data(event.get("ilmd") or event.get("extension", {}).get("ilmd"))
