@@ -256,6 +256,26 @@ jobs:
       - name: Check for fail-open RLS fallbacks in migrations
         run: python scripts/check_rls_fallback.py
 
+  # ── Alembic revision ID guard (hard gate) ────────────────
+  # Rejects new migrations that use handcrafted sequential revision IDs or
+  # introduce duplicate revision IDs (either would corrupt the migration DAG).
+  # Pre-existing sequential IDs (v043–v072) and known duplicate IDs are
+  # grandfathered — see scripts/check_alembic_revisions.py and #1296.
+  alembic-revision-check:
+    name: Alembic revision ID guard
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+
+      - name: Setup Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Check for sequential or duplicate Alembic revision IDs
+        run: python scripts/check_alembic_revisions.py
+
   # ── Docker Build (consolidated monolith) ─────────────────
   # Production deploys a single consolidated monolith built from the
   # repo-root Dockerfile — see server/main.py and railway.toml. The per-
