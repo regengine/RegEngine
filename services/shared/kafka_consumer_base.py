@@ -16,6 +16,11 @@ Usage:
         ConsumerHealthMonitor,
         graceful_shutdown,
     )
+
+DEPRECATED: This module and all Kafka consumer wiring will be removed once
+EVENT_BACKBONE=pg is the default (see #1159 split-brain fix, #1240 cleanup).
+The PostgreSQL task_processor (server/workers/task_processor.py) is the
+canonical event backbone. Kafka consumers are dead code for MVP traffic.
 """
 
 from __future__ import annotations

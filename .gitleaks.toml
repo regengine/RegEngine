@@ -43,14 +43,18 @@ paths = [
   # (e.g. TEST_TENANT_ID = "00000000-0000-0000-0000-000000000001")
   [rules.allowlist]
     regexes = [
+      # Test-marker UUIDs: any UUID whose second segment is "test" (e.g. 550e8400-test-41d4-a716-446655440000)
+      '''[0-9a-f]{8}-test-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}''',
       # Zero-based fixture UUIDs (test sentinel values)
       '''[0-9a-f]{8}-0000-0000-0000-[0-9a-f]{12}''',
       # Explicit test-marker strings in assignment context
       '''(?i)(test|fixture|example|placeholder|dummy|fake)[-_]?(tenant|user|org|key|id|uuid)\s*[=:]\s*["'][0-9a-f-]{36}["']''',
     ]
     paths = [
-      '''tests/''',
-      '''test_data/''',
-      '''seeds/''',
-      '''demo/''',
+      # Scoped to test files only — never migrate, docs, or production code
+      '''(^|/)tests/''',
+      '''(^|/)test_data/''',
+      '''(^|/)seeds/''',
+      '''(^|/)demo/''',
+      '''test_[^/]+\.py$''',
     ]

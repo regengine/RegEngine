@@ -1,17 +1,36 @@
-FROM python:3.11-slim
+# ── Stage 1: builder ──────────────────────────────────────────────
+# Install build-time system deps (gcc, libpq-dev) and all Python packages.
+# Nothing from this stage leaks into the final runtime image.
+FROM python:3.11-slim AS builder
 
 WORKDIR /app
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
+# Build deps needed only at compile/link time
+RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     libpq-dev \
-    curl \
+    build-essential \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python dependencies
 COPY kernel/reporting/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
+
+# ── Stage 2: runtime ──────────────────────────────────────────────
+# Lean image: no gcc, no libpq-dev, no build-essential.
+FROM python:3.11-slim AS runtime
+
+WORKDIR /app
+
+# Runtime-only system deps (libpq5 for psycopg2, curl for health-check)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libpq5 \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy installed packages from the builder stage
+COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
+COPY --from=builder /usr/local/bin /usr/local/bin
 
 # Copy shared code
 COPY shared /app/shared
@@ -24,8 +43,7 @@ COPY services/compliance/fsma_engine.py /app/fsma_engine.py
 COPY services/compliance/fsma_spreadsheet.py /app/fsma_spreadsheet.py
 COPY services/compliance/main.py /app/main.py
 
-# Copy plugins if they exist (assuming simple structure, modify if plugins dir is complex)
-# Ideally COPY entire services/compliance context but sticking to explicit copies for safety
+# Copy plugins
 COPY services/compliance/plugins /app/plugins
 
 # Create non-root user for security

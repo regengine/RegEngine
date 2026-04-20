@@ -53,7 +53,8 @@
 .claude/
 **/worktrees/
 
-# Test artifacts
+# Test artifacts and test source — never ship into production images (#1155)
+**/tests
 **/playwright-report
 **/test-results
 **/coverage
@@ -62,8 +63,8 @@
 
 # Issue #1155: exclude test directories from production image
 # services/ingestion/tests must not ship into the runtime image
-services/ingestion/tests
-**/tests/__pycache__
+services/ingestion/tests/
+**/tests/
 
 # Docs the image doesn't need (preserve README.md — some Dockerfiles
 # or runtime tooling may reference it)
