@@ -215,11 +215,23 @@ def _build_856(
     )
 
 
-def test_document_ingest_fsma_strict_rejects_bad_tlc(client: TestClient) -> None:
+def test_document_ingest_fsma_strict_rejects_bad_tlc(
+    client: TestClient, captured_payload: dict
+) -> None:
     """#1174: EDI documents that fail FSMAEvent schema validation must
-    return 422 and persist nothing. Prior behavior persisted with
+    return 422 and persist nothing into the canonical stream. The
+    rejection is still recorded in the EDI rejection log so auditors
+    see the attempt. Prior behavior persisted with
     fsma_validation_status=failed, polluting the FSMA 204 graph.
     """
+    from app.edi_ingestion.rejection_log import (
+        list_edi_rejections,
+        reset_edi_rejections,
+    )
+
+    reset_edi_rejections()
+    captured_payload.clear()
+
     response = client.post(
         "/api/v1/ingest/edi/document",
         data={
@@ -236,9 +248,31 @@ def test_document_ingest_fsma_strict_rejects_bad_tlc(client: TestClient) -> None
     assert detail["tlc"] == "not-a-gtin-tlc"
     assert len(detail["errors"]) >= 1
 
+    # Canonical stream must be untouched.
+    assert "payload" not in captured_payload
+    # Rejection is still captured for the audit trail.
+    rejections = list_edi_rejections(TEST_TENANT_ID)
+    assert len(rejections) == 1
+    assert rejections[0]["reason"] == "fsma_validation_failed"
 
-def test_document_ingest_strict_false_query_advisory(client: TestClient) -> None:
-    """#1174: ?strict=false downgrades to advisory for migrations/tests."""
+
+def test_document_ingest_strict_false_query_advisory(
+    client: TestClient, captured_payload: dict
+) -> None:
+    """#1174: ?strict=false records the rejection in the EDI rejection
+    log and DOES NOT persist into the canonical ingest stream. Prior
+    behavior wrote ``fsma_validation_status=failed`` into the canonical
+    FSMA audit trail, which polluted downstream readers (FDA export,
+    recall simulator, traceability graph).
+    """
+    from app.edi_ingestion.rejection_log import (
+        list_edi_rejections,
+        reset_edi_rejections,
+    )
+
+    reset_edi_rejections()
+    captured_payload.clear()
+
     response = client.post(
         "/api/v1/ingest/edi/document",
         params={"strict": "false"},
@@ -250,7 +284,35 @@ def test_document_ingest_strict_false_query_advisory(client: TestClient) -> None
         headers={"X-Partner-ID": "WALMART"},
     )
     assert response.status_code == 201
-    assert response.json()["extracted"]["fsma_validation_status"] == "failed"
+    body = response.json()
+    # Document was accepted for audit, but flagged as rejected — the
+    # canonical ingest stream must NOT see it.
+    assert body["status"] == "rejected"
+    assert body["extracted"]["fsma_validation_status"] == "failed"
+    assert body["ingestion_result"] is None, (
+        "advisory-mode rejections must not be reported as canonical ingestions"
+    )
+    rejection = body["rejection"]
+    assert rejection["reason"] == "fsma_validation_failed"
+    assert rejection["rejection_id"].startswith("edi-rej-")
+    assert rejection["error_count"] >= 1
+
+    # Canonical webhook pipeline must not have been invoked — that is
+    # the whole point of #1174. The TestClient fixture would have
+    # populated captured_payload["payload"] if ingest_events was called.
+    assert "payload" not in captured_payload, (
+        "ingest_events must not be called for FSMA-invalid EDI documents"
+    )
+
+    # The rejection is durably recorded for the audit trail.
+    rejections = list_edi_rejections(TEST_TENANT_ID)
+    assert len(rejections) == 1
+    recorded = rejections[0]
+    assert recorded["rejection_id"] == rejection["rejection_id"]
+    assert recorded["traceability_lot_code"] == "not-a-gtin-tlc"
+    assert recorded["transaction_set"] == "856"
+    assert recorded["partner_id"] == "WALMART"
+    assert len(recorded["errors"]) >= 1
 
 
 def test_document_ingest_strict_passes_with_compliant_tlc(
