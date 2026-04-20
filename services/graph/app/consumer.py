@@ -22,7 +22,7 @@ import time
 import uuid
 
 # Add parent directory to path for shared module import
-from shared.schemas import GraphEvent
+from shared.schemas import GraphEvent, LegacyGraphEvent
 from shared.observability.kafka_propagation import extract_correlation_headers
 from shared.kafka_auth import KafkaAuthError, get_allowed_producers, verify_event
 
@@ -294,6 +294,30 @@ async def run_consumer() -> None:
                     logger.error("offset_commit_failed", error=str(commit_exc))
                 continue
 
+            # --- Inbound schema validation (#1216) ---
+            # Require the payload to be a dict before any schema parsing so
+            # a non-dict payload (bytes, None, list) cannot crash ``.get``.
+            if not isinstance(evt, dict):
+                logger.error(
+                    "graph_update_invalid_payload_type",
+                    topic=topic_name,
+                    payload_type=type(evt).__name__,
+                    tenant_id=tenant_id_hdr,
+                )
+                MESSAGES_COUNTER.labels(status="invalid_schema").inc()
+                _send_to_dlq(
+                    {"raw": str(evt)[:2048]},
+                    f"non-dict payload: {type(evt).__name__}",
+                    reason="invalid_schema",
+                    doc_id=None,
+                )
+                try:
+                    consumer.commit(message=record, asynchronous=False)
+                except Exception as commit_exc:
+                    logger.error("offset_commit_failed", error=str(commit_exc))
+                clear_contextvars()
+                continue
+
             # --- Processing Logic (Simplifying for diff) ---
             # Try to parse as GraphEvent first (new format)
             try:
@@ -343,19 +367,46 @@ async def run_consumer() -> None:
                     _handle_processing_error(record, evt, exc, consumer, context="graph_upsert")
 
             except ValidationError:
-                # Fall back to legacy format (Synchronous)
-                doc_id = evt.get("document_id")
-                entities = evt.get("entities", [])
-                source_url = evt.get("source_url")
-                # Fix: Extract tenant_id safely for legacy events
-                tenant_id = evt.get("tenant_id")
-                
-                if not doc_id:
-                     # logger.warning("missing_document_id", event=evt) 
-                     # Skipping noisy log for tests?
-                     MESSAGES_COUNTER.labels(status="skipped").inc()
-                     consumer.commit(message=record, asynchronous=False)
-                     continue
+                # Fall back to legacy format. Validate it too (#1216) so a
+                # payload that fails BOTH schemas is routed to the DLQ
+                # instead of being used as-is. This is defense-in-depth:
+                # we fail closed rather than quietly dropping junk into
+                # the graph.
+                try:
+                    legacy_event = LegacyGraphEvent.model_validate(evt)
+                except ValidationError as legacy_exc:
+                    logger.error(
+                        "graph_update_schema_invalid",
+                        topic=topic_name,
+                        tenant_id=evt.get("tenant_id") if isinstance(evt, dict) else None,
+                        document_id=(
+                            evt.get("document_id") if isinstance(evt, dict) else None
+                        ),
+                        errors=legacy_exc.errors()[:10],
+                    )
+                    MESSAGES_COUNTER.labels(status="invalid_schema").inc()
+                    _send_to_dlq(
+                        evt,
+                        str(legacy_exc),
+                        reason="invalid_schema",
+                        doc_id=(
+                            evt.get("document_id")
+                            if isinstance(evt, dict)
+                            else None
+                        ),
+                    )
+                    try:
+                        consumer.commit(message=record, asynchronous=False)
+                    except Exception as commit_exc:
+                        logger.error("offset_commit_failed", error=str(commit_exc))
+                    clear_contextvars()
+                    continue
+
+                # Use validated object for downstream logic.
+                doc_id = legacy_event.document_id
+                entities = legacy_event.entities
+                source_url = legacy_event.source_url
+                tenant_id = legacy_event.tenant_id
 
                 try:
                     # Determine database for legacy upsert
