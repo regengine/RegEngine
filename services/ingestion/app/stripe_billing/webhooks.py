@@ -15,6 +15,7 @@ from shared import funnel_events as _funnel_mod
 from . import customers as _customers_mod
 from . import helpers as _helpers_mod
 from . import plans as _plans_mod
+from . import rate_limit as _rate_limit_mod
 from . import state as _state_mod
 
 logger = structlog.get_logger("stripe-billing")
@@ -575,6 +576,9 @@ async def _process_stripe_webhook(
 
     body = await request.body()
 
+    # Signature verification MUST happen before the rate-limit counter is
+    # incremented so that forged/replayed events with invalid signatures cannot
+    # burn the rate-limit budget for legitimate Stripe IPs.
     try:
         event = stripe.Webhook.construct_event(
             payload=body,
@@ -585,7 +589,28 @@ async def _process_stripe_webhook(
         raise HTTPException(status_code=400, detail="Invalid webhook payload") from exc
     except stripe.error.SignatureVerificationError as exc:
         logger.warning("stripe_webhook_signature_invalid", error=str(exc))
-        raise HTTPException(status_code=401, detail="Invalid Stripe signature") from exc
+        raise HTTPException(status_code=400, detail="Invalid Stripe signature") from exc
+
+    # IP-based rate limit: 100 req/min per source IP (env: STRIPE_WEBHOOK_RATE_LIMIT /
+    # STRIPE_WEBHOOK_RATE_WINDOW).  Only signature-verified requests consume a slot.
+    client_ip = (
+        request.headers.get("X-Forwarded-For", "").split(",")[0].strip()
+        or (request.client.host if request.client else "unknown")
+    )
+    limited, retry_after = _rate_limit_mod.is_rate_limited(client_ip)
+    if limited:
+        logger.warning(
+            "stripe_webhook_rate_limited",
+            ip=client_ip,
+            retry_after=retry_after,
+        )
+        from fastapi.responses import JSONResponse
+
+        return JSONResponse(
+            status_code=429,
+            content={"detail": "Too many requests"},
+            headers={"Retry-After": str(retry_after)},
+        )
 
     # #1076: Stripe retries any webhook that doesn't ack within a few seconds
     # (and for up to 3 days on 5xx/timeouts), so the same real-world event
