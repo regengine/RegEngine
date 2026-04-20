@@ -1,0 +1,72 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "Graph Update Event",
+    "description": "Schema for inbound Kafka events on the graph.update topic, consumed by services/graph (#1216). Validated before GraphEvent.parse_obj()/legacy upsert so malformed payloads are sent to DLQ instead of crashing the record processor. Supports both the canonical GraphEvent format (NLP extraction → graph upsert) and the legacy entities-based format (backward compat).",
+    "type": "object",
+    "properties": {
+        "event_id": {
+            "type": "string",
+            "minLength": 1
+        },
+        "event_type": {
+            "type": "string",
+            "enum": [
+                "create_document",
+                "create_provision",
+                "approve_provision"
+            ]
+        },
+        "document_id": {
+            "type": "string",
+            "minLength": 1
+        },
+        "doc_id": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Legacy alias for document_id."
+        },
+        "doc_hash": {
+            "type": "string",
+            "minLength": 1
+        },
+        "tenant_id": {
+            "type": ["string", "null"]
+        },
+        "text_clean": {
+            "type": "string"
+        },
+        "extraction": {
+            "type": "object"
+        },
+        "provenance": {
+            "type": "object"
+        },
+        "embedding": {
+            "type": ["array", "null"],
+            "items": {"type": "number"}
+        },
+        "status": {
+            "type": "string",
+            "enum": ["APPROVED", "APPROVED_BY_HUMAN", "PENDING_REVIEW"]
+        },
+        "reviewer_id": {
+            "type": ["string", "null"]
+        },
+        "entities": {
+            "type": "array",
+            "items": {"type": "object"},
+            "description": "Legacy-format entities list, used when the payload is not a GraphEvent."
+        },
+        "source_url": {
+            "type": "string"
+        },
+        "timestamp": {
+            "type": "string"
+        }
+    },
+    "anyOf": [
+        {"required": ["document_id"]},
+        {"required": ["doc_id"]}
+    ],
+    "additionalProperties": true
+}

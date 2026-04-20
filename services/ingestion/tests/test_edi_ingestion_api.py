@@ -215,11 +215,23 @@ def _build_856(
     )
 
 
-def test_document_ingest_fsma_strict_rejects_bad_tlc(client: TestClient) -> None:
+def test_document_ingest_fsma_strict_rejects_bad_tlc(
+    client: TestClient, captured_payload: dict
+) -> None:
     """#1174: EDI documents that fail FSMAEvent schema validation must
-    return 422 and persist nothing. Prior behavior persisted with
+    return 422 and persist nothing into the canonical stream. The
+    rejection is still recorded in the EDI rejection log so auditors
+    see the attempt. Prior behavior persisted with
     fsma_validation_status=failed, polluting the FSMA 204 graph.
     """
+    from app.edi_ingestion.rejection_log import (
+        list_edi_rejections,
+        reset_edi_rejections,
+    )
+
+    reset_edi_rejections()
+    captured_payload.clear()
+
     response = client.post(
         "/api/v1/ingest/edi/document",
         data={
@@ -236,9 +248,31 @@ def test_document_ingest_fsma_strict_rejects_bad_tlc(client: TestClient) -> None
     assert detail["tlc"] == "not-a-gtin-tlc"
     assert len(detail["errors"]) >= 1
 
+    # Canonical stream must be untouched.
+    assert "payload" not in captured_payload
+    # Rejection is still captured for the audit trail.
+    rejections = list_edi_rejections(TEST_TENANT_ID)
+    assert len(rejections) == 1
+    assert rejections[0]["reason"] == "fsma_validation_failed"
 
-def test_document_ingest_strict_false_query_advisory(client: TestClient) -> None:
-    """#1174: ?strict=false downgrades to advisory for migrations/tests."""
+
+def test_document_ingest_strict_false_query_advisory(
+    client: TestClient, captured_payload: dict
+) -> None:
+    """#1174: ?strict=false records the rejection in the EDI rejection
+    log and DOES NOT persist into the canonical ingest stream. Prior
+    behavior wrote ``fsma_validation_status=failed`` into the canonical
+    FSMA audit trail, which polluted downstream readers (FDA export,
+    recall simulator, traceability graph).
+    """
+    from app.edi_ingestion.rejection_log import (
+        list_edi_rejections,
+        reset_edi_rejections,
+    )
+
+    reset_edi_rejections()
+    captured_payload.clear()
+
     response = client.post(
         "/api/v1/ingest/edi/document",
         params={"strict": "false"},
@@ -250,7 +284,35 @@ def test_document_ingest_strict_false_query_advisory(client: TestClient) -> None
         headers={"X-Partner-ID": "WALMART"},
     )
     assert response.status_code == 201
-    assert response.json()["extracted"]["fsma_validation_status"] == "failed"
+    body = response.json()
+    # Document was accepted for audit, but flagged as rejected — the
+    # canonical ingest stream must NOT see it.
+    assert body["status"] == "rejected"
+    assert body["extracted"]["fsma_validation_status"] == "failed"
+    assert body["ingestion_result"] is None, (
+        "advisory-mode rejections must not be reported as canonical ingestions"
+    )
+    rejection = body["rejection"]
+    assert rejection["reason"] == "fsma_validation_failed"
+    assert rejection["rejection_id"].startswith("edi-rej-")
+    assert rejection["error_count"] >= 1
+
+    # Canonical webhook pipeline must not have been invoked — that is
+    # the whole point of #1174. The TestClient fixture would have
+    # populated captured_payload["payload"] if ingest_events was called.
+    assert "payload" not in captured_payload, (
+        "ingest_events must not be called for FSMA-invalid EDI documents"
+    )
+
+    # The rejection is durably recorded for the audit trail.
+    rejections = list_edi_rejections(TEST_TENANT_ID)
+    assert len(rejections) == 1
+    recorded = rejections[0]
+    assert recorded["rejection_id"] == rejection["rejection_id"]
+    assert recorded["traceability_lot_code"] == "not-a-gtin-tlc"
+    assert recorded["transaction_set"] == "856"
+    assert recorded["partner_id"] == "WALMART"
+    assert len(recorded["errors"]) >= 1
 
 
 def test_document_ingest_strict_passes_with_compliant_tlc(
@@ -331,13 +393,19 @@ def test_segment_cap_exceeded_returns_413(
     assert detail["cap"] == 3
 
 
-def test_utf8_decode_replaces_non_ascii_bytes(client: TestClient) -> None:
-    """#1170: a non-UTF-8 byte survives as U+FFFD instead of being
-    silently dropped. The request still succeeds; the warning log is
-    emitted for the operator to spot the source-encoding mismatch.
+def test_utf8_decode_preserves_latin1_bytes_as_real_chars(
+    client: TestClient,
+) -> None:
+    """#1170: a latin-1 encoded partner name flows in. Historical bugs:
+    ``errors='ignore'`` dropped the bad byte; ``errors='replace'``
+    substituted U+FFFD. Both are data corruption.
+
+    The spec-honoring fix falls back to ``latin-1`` strict (X12.5/X12.6
+    Basic character set) and preserves 0xF1 as the real ñ character. The
+    document still ingests and the partner name round-trips exactly.
     """
-    # latin-1 "ñ" (0xF1) in partner name — invalid as UTF-8, would have
-    # been dropped silently with the prior errors="ignore".
+    # latin-1 "ñ" (0xF1) in partner name — invalid as UTF-8 but
+    # spec-compliant X12 Basic set.
     envelope = _build_856().replace(b"Valley Fresh Farms", b"Valley Fre\xf1h Farms")
     response = client.post(
         "/api/v1/ingest/edi/document",
@@ -348,7 +416,6 @@ def test_utf8_decode_replaces_non_ascii_bytes(client: TestClient) -> None:
         files={"file": ("asn.edi", envelope, "application/edi-x12")},
         headers={"X-Partner-ID": "WALMART"},
     )
-    # The document still ingests (one corrupted byte is not a reason to
-    # reject the whole file), but the ship-from location carries the
-    # replacement character, proving the bytes weren't dropped.
+    # The document ingests successfully — no U+FFFD, no dropped byte,
+    # the real ñ is in the decoded stream.
     assert response.status_code == 201, response.text

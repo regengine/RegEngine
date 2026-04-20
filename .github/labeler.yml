@@ -36,6 +36,8 @@ dependencies:
   - changed-files:
     - any-glob-to-any-file:
       - '**/requirements.txt'
+      - 'requirements.in'
+      - 'requirements.lock'
       - '**/package.json'
       - '**/package-lock.json'
 
