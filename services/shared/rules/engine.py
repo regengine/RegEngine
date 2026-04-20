@@ -617,41 +617,47 @@ class RulesEngine:
         event_id: str,
         results: List[RuleEvaluationResult],
     ) -> None:
-        """Persist evaluation results to database."""
-        for r in results:
-            try:
-                self.session.execute(
-                    text("""
-                        INSERT INTO fsma.rule_evaluations (
-                            evaluation_id, tenant_id, event_id,
-                            rule_id, rule_version, result,
-                            why_failed, evidence_fields_inspected,
-                            confidence
-                        ) VALUES (
-                            :eval_id, :tenant_id, :event_id,
-                            :rule_id, :rule_version, :result,
-                            :why_failed, CAST(:evidence AS jsonb),
-                            :confidence
-                        )
-                    """),
-                    {
-                        "eval_id": r.evaluation_id,
-                        "tenant_id": tenant_id,
-                        "event_id": event_id,
-                        "rule_id": r.rule_id,
-                        "rule_version": r.rule_version,
-                        "result": r.result,
-                        "why_failed": r.why_failed,
-                        "evidence": json.dumps(r.evidence_fields_inspected, default=str),
-                        "confidence": r.confidence,
-                    },
-                )
-            except Exception as e:
-                logger.error(
-                    "evaluation_persist_failed",
-                    extra={"rule_id": r.rule_id, "error": str(e)},
-                )
-                raise
+        """Persist evaluation results to database.
+
+        All rows are written inside a single savepoint so that a failure on
+        any one INSERT rolls back the entire batch atomically — no partial
+        writes leak into the parent transaction (#1372).
+        """
+        try:
+            with self.session.begin_nested():  # savepoint — all-or-nothing
+                for r in results:
+                    self.session.execute(
+                        text("""
+                            INSERT INTO fsma.rule_evaluations (
+                                evaluation_id, tenant_id, event_id,
+                                rule_id, rule_version, result,
+                                why_failed, evidence_fields_inspected,
+                                confidence
+                            ) VALUES (
+                                :eval_id, :tenant_id, :event_id,
+                                :rule_id, :rule_version, :result,
+                                :why_failed, CAST(:evidence AS jsonb),
+                                :confidence
+                            )
+                        """),
+                        {
+                            "eval_id": r.evaluation_id,
+                            "tenant_id": tenant_id,
+                            "event_id": event_id,
+                            "rule_id": r.rule_id,
+                            "rule_version": r.rule_version,
+                            "result": r.result,
+                            "why_failed": r.why_failed,
+                            "evidence": json.dumps(r.evidence_fields_inspected, default=str),
+                            "confidence": r.confidence,
+                        },
+                    )
+        except Exception as e:
+            logger.error(
+                "evaluation_persist_failed",
+                extra={"event_id": event_id, "error": str(e)},
+            )
+            raise
 
     def _batch_persist_evaluations(
         self,
