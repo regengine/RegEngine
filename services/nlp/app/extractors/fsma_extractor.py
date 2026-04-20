@@ -111,7 +111,13 @@ class FSMAExtractor:
             r"urn:gln:(\d{13})",
         ],
         "tlc_source_gln": [
-            r"(?:TLC\s*Source|Traceability\s*Lot\s*Source|Lot\s*Owner|Packer)[^\d]{0,40}?(?:GLN|Location\s*ID)?\s*[:#]?\s*(\d{13})",
+            # #1119 — "Packed By" was listed in the FDA-Reg variant but
+            # missing here, which meant a BOL with "Ship From: GLN X /
+            # Packed By: GLN Y" would drop Y and let the positional
+            # fallback silently mirror X into both slots. Parallel
+            # alternation with the FDA-Reg variant restores labeled
+            # precedence for packer GLNs.
+            r"(?:TLC\s*Source|Traceability\s*Lot\s*Source|Lot\s*Owner|Packer|Packed\s*By)[^\d]{0,40}?(?:GLN|Location\s*ID)?\s*[:#]?\s*(\d{13})",
         ],
         "tlc_source_fda_reg": [
             r"(?:TLC\s*Source|Traceability\s*Lot\s*Source|Lot\s*Owner|Packer|Packed\s*By)[^\d]{0,80}?FDA\s*(?:Reg|Registration)\s*[:#]?\s*(\d{9,12})",
@@ -269,7 +275,12 @@ class FSMAExtractor:
         return ExtractionConfidence.LOW
 
     def extract(
-        self, text: str, document_id: str, pdf_bytes: Optional[bytes] = None
+        self,
+        text: str,
+        document_id: str,
+        *,
+        tenant_id: str,
+        pdf_bytes: Optional[bytes] = None,
     ) -> FSMAExtractionResult:
         """
         Extract FSMA CTEs and KDEs from document text.
@@ -282,12 +293,28 @@ class FSMAExtractor:
         Args:
             text: Raw text content from document
             document_id: Unique identifier for the document
+            tenant_id: Keyword-only, required (#1122). The originating tenant's
+                UUID. Forces every caller to make an explicit tenant decision —
+                no "default" / "unknown" fallback is permitted. Empty string
+                raises ValueError because downstream writes cannot safely
+                proceed without tenant scoping.
             pdf_bytes: Optional raw PDF bytes for layout-aware table extraction
 
         Returns:
             FSMAExtractionResult with extracted CTEs and line_items
+
+        Raises:
+            ValueError: with code ``E_MISSING_TENANT_ID`` when tenant_id is
+                empty or falsy. The sentinel error code makes it grep-able
+                in logs so SRE can spot a regressed caller immediately.
         """
-        logger.info("fsma_extraction_started", document_id=document_id)
+        if not tenant_id or not str(tenant_id).strip():
+            raise ValueError("E_MISSING_TENANT_ID")
+        logger.info(
+            "fsma_extraction_started",
+            document_id=document_id,
+            tenant_id=tenant_id,
+        )
 
         # Pass 1: Document Type Classification
         doc_type = self._classify_document(text)
@@ -334,6 +361,7 @@ class FSMAExtractor:
 
         result = FSMAExtractionResult(
             document_id=document_id,
+            tenant_id=tenant_id,
             document_type=doc_type,
             ctes=ctes,
             extraction_timestamp=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
@@ -936,11 +964,37 @@ class FSMAExtractor:
             if gln_value not in unique_glns:
                 unique_glns.append(gln_value)
 
+        # #1119 — positional fallback is BOL-shaped: first GLN tends to
+        # be the shipper, second the consignee. That heuristic is
+        # defensible for ship_from / ship_to because BOLs almost always
+        # print Ship-From in the header block and Ship-To in the body.
+        # It is NOT defensible for ``tlc_source_gln``: the TLC source
+        # (originator / packer / processor — FSMA §1.1320 KDE) is only
+        # the Ship-From when the supplier is also the packer. For co-
+        # packed products, distribution hubs, or any multi-hop supply
+        # chain, equating the two sends recall investigators to the
+        # wrong facility. Leave ``tlc_source_gln`` unset here; an
+        # explicit "TLC Source / Lot Owner / Packer / Packed By" label
+        # is the ONLY path to populating it (see the labeled-pattern
+        # loop above). Missing TLC source surfaces downstream as a
+        # visible HITL warning — correctness > recall.
         if unique_glns:
             roles.setdefault("ship_from_gln", normalize(unique_glns[0]))
             if len(unique_glns) > 1:
                 roles.setdefault("ship_to_gln", normalize(unique_glns[1]))
-            roles.setdefault("tlc_source_gln", normalize(unique_glns[0]))
+            # Intentionally do NOT infer tlc_source_gln from document
+            # order. If the labeled pattern above failed, log a warning
+            # so operators can route the document to HITL review.
+            if "tlc_source_gln" not in roles:
+                logger.warning(
+                    "tlc_source_gln_unlabeled_fallback_skipped",
+                    issue="1119",
+                    unique_gln_count=len(unique_glns),
+                    reason=(
+                        "positional fallback would conflate ship_from with "
+                        "tlc_source; packer != shipper in multi-hop chains"
+                    ),
+                )
 
         return roles
 
@@ -1201,6 +1255,10 @@ class FSMAExtractor:
         return {
             "event_type": "fsma.extraction",
             "document_id": result.document_id,
+            # #1122 — thread tenant_id through routing envelopes so
+            # graph.update / nlp.needs_review consumers can enforce
+            # tenant scoping without re-reading the Kafka headers.
+            "tenant_id": result.tenant_id,
             "document_type": result.document_type.value,
             "timestamp": result.extraction_timestamp,
             "ctes": [

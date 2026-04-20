@@ -507,3 +507,76 @@ def test_sanitize_source_text_response_path_re_sanitizes():
     legacy_raw = "<iframe src=evil.com></iframe>"
     cleaned = sanitize_source_text_for_response(legacy_raw)
     assert "<iframe" not in cleaned
+
+
+# =========================================================================
+# #1201: tenacity retry must have a hard wall-clock cap so a persistently
+# failing downstream call cannot block the consumer past the Kafka
+# consumer-group rebalance timeout (default max.poll.interval.ms=300s).
+# =========================================================================
+
+
+def test_record_with_retry_honors_total_wait_cap(monkeypatch):
+    """If the downstream call fails persistently, the retry MUST bail
+    within the configured wall-clock cap instead of continuing to retry
+    with exponential backoff that could exceed the rebalance timeout.
+    """
+    import importlib
+    import time as _time
+
+    from sqlalchemy.exc import OperationalError
+
+    # Configure a tiny retry budget (200 ms) and reload the module so
+    # the @retry decorator picks up the new stop_after_delay value.
+    monkeypatch.setenv("REVIEW_CONSUMER_RETRY_MAX_WAIT_SECONDS", "0.2")
+    from services.admin.app import review_consumer as rc_mod
+
+    rc_mod = importlib.reload(rc_mod)
+
+    call_count = {"n": 0}
+
+    class _AlwaysFailTracker:
+        def record_hallucination(self, **_kwargs):
+            call_count["n"] += 1
+            raise OperationalError("boom", params=None, orig=Exception("db down"))
+
+    started = _time.perf_counter()
+    with pytest.raises(OperationalError):
+        rc_mod._record_with_retry(
+            _AlwaysFailTracker(),
+            tenant_id="11111111-1111-1111-1111-111111111111",
+            document_id="doc-1",
+            doc_hash="h",
+            extractor="X",
+            confidence_score=0.1,
+            extraction={},
+        )
+    elapsed = _time.perf_counter() - started
+
+    # Must NOT block for longer than a small multiple of the configured
+    # cap (allow headroom for the final in-flight attempt + scheduler
+    # jitter, but catch any regression that removes the delay stop).
+    assert elapsed < 5.0, (
+        f"retry budget exceeded: elapsed={elapsed:.2f}s, "
+        f"cap=0.2s, calls={call_count['n']} "
+        "-- stop_after_delay regression would let this grow unbounded"
+    )
+    # And it must actually have attempted at least once.
+    assert call_count["n"] >= 1
+
+
+def test_record_with_retry_default_cap_is_configured(monkeypatch):
+    """The default cap must be a sane value comfortably under the Kafka
+    broker's default max.poll.interval.ms (300s) -- otherwise a single
+    poorly-timed failure can trigger a consumer-group rebalance."""
+    import importlib
+
+    monkeypatch.delenv("REVIEW_CONSUMER_RETRY_MAX_WAIT_SECONDS", raising=False)
+    from services.admin.app import review_consumer as rc_mod
+
+    rc_mod = importlib.reload(rc_mod)
+
+    assert 0 < rc_mod.REVIEW_CONSUMER_RETRY_MAX_WAIT_SECONDS < 300, (
+        "default retry cap must be well under Kafka "
+        "max.poll.interval.ms (300s) to avoid rebalance death spiral"
+    )

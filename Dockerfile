@@ -9,9 +9,12 @@ RUN apt-get update && apt-get install -y \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Python dependencies — single consolidated requirements file
-COPY requirements.txt /app/requirements.txt
-RUN pip install --no-cache-dir -r requirements.txt
+# Install Python dependencies from the pip-compile lockfile.
+# requirements.in = human-edited loose spec; requirements.lock = fully pinned w/ hashes.
+# --require-hashes enforces that every dep resolves to the exact artifact in the lock.
+COPY requirements.in /app/requirements.in
+COPY requirements.lock /app/requirements.lock
+RUN pip install --no-cache-dir --require-hashes -r /app/requirements.lock
 
 # Create non-root user
 RUN adduser --disabled-password --gecos '' --uid 1001 appuser

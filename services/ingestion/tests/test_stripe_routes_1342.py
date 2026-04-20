@@ -27,6 +27,7 @@ from unittest.mock import MagicMock
 import pytest
 import redis
 import stripe
+import structlog
 
 service_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(service_dir))
@@ -79,47 +80,6 @@ def _stub_emit_funnel_event(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         funnel_events, "emit_funnel_event", lambda **_kwargs: True
     )
-
-
-class _RecorderLogger:
-    """Drop-in replacement for ``routes_mod.logger`` that accepts any
-    structlog-style kwargs and records the call instead of raising.
-
-    Production bug flagged separately: many ``logger.error("msg", tenant_id=...)``
-    calls in routes.py / customers.py use stdlib ``logging.Logger``, which
-    rejects arbitrary kwargs with ``TypeError: Logger._log() got an
-    unexpected keyword argument 'tenant_id'``. The TypeError fires BEFORE
-    the ``raise HTTPException(...)`` line, so asserting on the HTTP
-    response requires bypassing the broken log call. This fixture isolates
-    the tests from that bug without hiding it — see spawn_task filed on
-    the same sweep."""
-
-    def __init__(self) -> None:
-        self.calls: list[tuple[str, str, tuple[Any, ...], dict[str, Any]]] = []
-
-    def _record(
-        self, level: str, msg: str, *args: Any, **kwargs: Any
-    ) -> None:
-        self.calls.append((level, msg, args, kwargs))
-
-    def error(self, msg: str, *args: Any, **kwargs: Any) -> None:
-        self._record("error", msg, *args, **kwargs)
-
-    def warning(self, msg: str, *args: Any, **kwargs: Any) -> None:
-        self._record("warning", msg, *args, **kwargs)
-
-    def info(self, msg: str, *args: Any, **kwargs: Any) -> None:
-        self._record("info", msg, *args, **kwargs)
-
-    def debug(self, msg: str, *args: Any, **kwargs: Any) -> None:
-        self._record("debug", msg, *args, **kwargs)
-
-
-@pytest.fixture(autouse=True)
-def _stub_logger(monkeypatch: pytest.MonkeyPatch) -> _RecorderLogger:
-    recorder = _RecorderLogger()
-    monkeypatch.setattr(routes_mod, "logger", recorder)
-    return recorder
 
 
 # ── list_plans ──────────────────────────────────────────────────────────────
@@ -300,11 +260,10 @@ class TestCreateCheckoutErrorBranches:
     async def test_client_tenant_mismatch_is_logged_and_ignored(
         self,
         monkeypatch: pytest.MonkeyPatch,
-        _stub_logger: _RecorderLogger,
     ) -> None:
         """#1184: a client cannot attach its own ``tenant_id``; the
-        authenticated tenant always wins. Line 119: the mismatch must
-        be logged for audit."""
+        authenticated tenant always wins. The mismatch must be logged
+        for audit as a structlog event."""
         monkeypatch.setattr(customers_mod, "_get_existing_customer_id", lambda _: None)
         monkeypatch.setattr(
             customers_mod, "_record_checkout_session_hint", lambda **_: None
@@ -322,24 +281,32 @@ class TestCreateCheckoutErrorBranches:
 
         monkeypatch.setattr(stripe.checkout.Session, "create", _create)
 
-        await routes_mod.create_checkout(
-            CheckoutRequest(
-                plan_id="growth",
-                billing_period="monthly",
-                # Mismatch: client says tenant-evil, principal says tenant-good.
-                tenant_id="tenant-evil",
-            ),
-            x_tenant_id=None,
-            principal=_principal(tenant_id="tenant-good"),
-        )
+        with structlog.testing.capture_logs() as log_entries:
+            await routes_mod.create_checkout(
+                CheckoutRequest(
+                    plan_id="growth",
+                    billing_period="monthly",
+                    # Mismatch: client says tenant-evil, principal says tenant-good.
+                    tenant_id="tenant-evil",
+                ),
+                x_tenant_id=None,
+                principal=_principal(tenant_id="tenant-good"),
+            )
 
         # The authenticated tenant wins in the checkout metadata.
         assert captured["metadata"]["tenant_id"] == "tenant-good"
-        # A warning was logged about the client-supplied mismatch.
-        assert any(
-            call[0] == "warning" and "checkout_ignored_client_tenant_id" in call[1]
-            for call in _stub_logger.calls
-        )
+        # A warning was logged about the client-supplied mismatch — the
+        # structured fields must travel with it for audit.
+        mismatch_entries = [
+            entry
+            for entry in log_entries
+            if entry.get("event") == "checkout_ignored_client_tenant_id"
+        ]
+        assert mismatch_entries, f"expected mismatch log; got {log_entries!r}"
+        entry = mismatch_entries[0]
+        assert entry["log_level"] == "warning"
+        assert entry["client_tenant"] == "tenant-evil"
+        assert entry["auth_tenant"] == "tenant-good"
 
     @pytest.mark.asyncio
     async def test_redis_error_on_record_session_hint_does_not_block_checkout(
