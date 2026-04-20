@@ -31,6 +31,52 @@ jobs:
           GITLEAKS_CONFIG: .gitleaks.toml
 
   # ──────────────────────────────────────────────
+  # 1b. Secrets Audit (detect-secrets) — #1173
+  # ──────────────────────────────────────────────
+  # Complements gitleaks (#1). gitleaks is a broad regex scanner with an
+  # allowlist; detect-secrets is the same scanner we run in pre-commit and
+  # produces a "new vs baseline" diff against `.secrets.baseline`. Running
+  # it here enforces the tighter-signal tool in CI instead of trusting that
+  # every contributor has `pre-commit install` wired up locally.
+  detect-secrets:
+    name: Secrets Audit (detect-secrets)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
+        with:
+          python-version: "3.11"
+
+      - name: Install detect-secrets
+        # Pin matches .pre-commit-config.yaml (rev v1.5.0) so CI enforces
+        # the same rules developers see locally.
+        run: pip install detect-secrets==1.5.0
+
+      - name: Scan for new secrets (fail on findings not in baseline)
+        # The pre-commit hook uses the same baseline/exclude list; mirror it
+        # here so pre-commit and CI agree on which files are in scope.
+        # `detect-secrets-hook` is the CLI the pre-commit hook invokes — it
+        # exits non-zero when it finds a potential secret that isn't already
+        # captured in `.secrets.baseline`.
+        run: |
+          detect-secrets-hook \
+            --baseline .secrets.baseline \
+            --exclude-files '.*\.lock$' \
+            --exclude-files '.*package-lock\.json$' \
+            --exclude-files '\.secrets\.baseline$' \
+            $(git ls-files)
+
+      - name: Baseline report (informational)
+        # Prints the current baseline contents as a JSON report so reviewers
+        # can see what's been accepted as a known false positive. Purely
+        # informational — does not gate the build.
+        run: detect-secrets audit --report .secrets.baseline
+
+  # ──────────────────────────────────────────────
   # 2. SAST (Semgrep — CLI, not deprecated action)
   # ──────────────────────────────────────────────
   sast:
