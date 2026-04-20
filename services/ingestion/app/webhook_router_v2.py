@@ -13,6 +13,7 @@ V2: Replaced in-memory storage with CTEPersistence (Postgres-backed).
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import hmac
 import json
@@ -941,35 +942,64 @@ async def ingest_events(
                     accepted += 1
 
                     # Canonical normalization + rule evaluation + exception creation
-                    try:
-                        from shared.canonical_persistence import CanonicalEventStore
-                        canonical = normalize_webhook_event(event, tenant_id)
-                        canonical_store = CanonicalEventStore(db_session, dual_write=False, skip_chain_write=True)
-                        canonical_store.persist_event(canonical)
-                        # Auto-evaluate rules
-                        from shared.rules_engine import RulesEngine
-                        engine = RulesEngine(db_session)
-                        event_data = {
-                            "event_id": str(canonical.event_id),
-                            "event_type": canonical.event_type.value,
-                            "traceability_lot_code": canonical.traceability_lot_code,
-                            "product_reference": canonical.product_reference,
-                            "quantity": canonical.quantity,
-                            "unit_of_measure": canonical.unit_of_measure,
-                            "from_facility_reference": canonical.from_facility_reference,
-                            "to_facility_reference": canonical.to_facility_reference,
-                            "from_entity_reference": canonical.from_entity_reference,
-                            "to_entity_reference": canonical.to_entity_reference,
-                            "kdes": canonical.kdes,
+                    # (#1335) Fan-out timeout: the legacy write already committed;
+                    # the canonical write is best-effort during migration.  If it
+                    # blocks (e.g., DB lock contention), cap it so the webhook
+                    # response is not held indefinitely.
+                    _CANONICAL_WRITE_TIMEOUT_S: float = float(
+                        os.environ.get("CANONICAL_DUAL_WRITE_TIMEOUT_S", "5")
+                    )
+
+                    def _do_canonical_write() -> None:
+                        from shared.canonical_persistence import CanonicalEventStore  # noqa: PLC0415
+                        from shared.rules_engine import RulesEngine  # noqa: PLC0415
+                        _canonical = normalize_webhook_event(event, tenant_id)
+                        _store = CanonicalEventStore(db_session, dual_write=False, skip_chain_write=True)
+                        _store.persist_event(_canonical)
+                        _engine = RulesEngine(db_session)
+                        _event_data = {
+                            "event_id": str(_canonical.event_id),
+                            "event_type": _canonical.event_type.value,
+                            "traceability_lot_code": _canonical.traceability_lot_code,
+                            "product_reference": _canonical.product_reference,
+                            "quantity": _canonical.quantity,
+                            "unit_of_measure": _canonical.unit_of_measure,
+                            "from_facility_reference": _canonical.from_facility_reference,
+                            "to_facility_reference": _canonical.to_facility_reference,
+                            "from_entity_reference": _canonical.from_entity_reference,
+                            "to_entity_reference": _canonical.to_entity_reference,
+                            "kdes": _canonical.kdes,
                         }
-                        summary = engine.evaluate_event(event_data, persist=True, tenant_id=tenant_id)
-                        # Auto-create exceptions from failures
-                        if not summary.compliant:
-                            from shared.exception_queue import ExceptionQueueService
-                            exc_svc = ExceptionQueueService(db_session)
-                            exc_svc.create_exceptions_from_evaluation(tenant_id, summary)
-                    except (ImportError, SQLAlchemyError, ValueError, TypeError, RuntimeError, KeyError, AttributeError) as canon_err:
-                        logger.warning("canonical_write_skipped: %s", str(canon_err))
+                        _summary = _engine.evaluate_event(_event_data, persist=True, tenant_id=tenant_id)
+                        if not _summary.compliant:
+                            from shared.exception_queue import ExceptionQueueService  # noqa: PLC0415
+                            ExceptionQueueService(db_session).create_exceptions_from_evaluation(
+                                tenant_id, _summary
+                            )
+
+                    # Run in a daemon thread so join(timeout=) returns promptly
+                    # if the canonical write is slow — the thread continues in
+                    # the background and the webhook response is not held.
+                    import threading  # noqa: PLC0415
+                    _canon_exc: list[BaseException] = []
+
+                    def _guarded_canonical_write() -> None:
+                        try:
+                            _do_canonical_write()
+                        except Exception as _exc:  # noqa: BLE001
+                            _canon_exc.append(_exc)
+
+                    _t = threading.Thread(target=_guarded_canonical_write, daemon=True)
+                    _t.start()
+                    _t.join(timeout=_CANONICAL_WRITE_TIMEOUT_S)
+                    if _t.is_alive():
+                        logger.warning(
+                            "canonical_write_timeout",
+                            event_id=getattr(store_result, "event_id", None),
+                            timeout_s=_CANONICAL_WRITE_TIMEOUT_S,
+                        )
+                    elif _canon_exc:
+                        logger.warning("canonical_write_skipped", error=str(_canon_exc[0]))
 
                     # Post-ingest graph sync (non-blocking)
                     _publish_graph_sync(store_result.event_id, event, tenant_id)

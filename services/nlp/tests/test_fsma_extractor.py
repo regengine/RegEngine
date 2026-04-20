@@ -102,12 +102,17 @@ class TestLotCodeExtraction:
         assert "L-2025-1105-A" in result.ctes[0].kdes.traceability_lot_code
 
     def test_extract_batch_code(self, extractor):
-        """Test extraction of Batch code from invoice."""
+        """Invoice documents are routed to HITL — no CTEs emitted (#1288).
+
+        Before #1288 the extractor silently emitted a SHIPPING-typed CTE for
+        invoices.  Now invoices produce zero CTEs and always land in the HITL
+        review queue so a human can determine the correct CTE classification.
+        """
         result = extractor.extract(SAMPLE_INVOICE_TEXT, "test-doc-002", tenant_id="11111111-1111-1111-1111-111111111111")
 
-        assert len(result.ctes) > 0
-        assert result.ctes[0].kdes.traceability_lot_code is not None
-        assert "BATCH-2025-1105-B" in result.ctes[0].kdes.traceability_lot_code
+        assert result.document_type.value == "INVOICE"
+        assert len(result.ctes) == 0, "Invoices must not emit CTEs (#1288)"
+        assert result.review_required is True
 
     def test_gtin_not_prepended_to_lot(self, extractor):
         """Regression guard for #1104 — the TLC must be preserved
@@ -138,11 +143,12 @@ class TestQuantityExtraction:
         assert result.ctes[0].kdes.unit_of_measure == "cases"
 
     def test_extract_quantity_from_invoice(self, extractor):
-        """Test extraction of quantity from invoice."""
+        """Invoice documents emit no CTEs after #1288 — verify HITL routing."""
         result = extractor.extract(SAMPLE_INVOICE_TEXT, "test-doc-005", tenant_id="11111111-1111-1111-1111-111111111111")
 
-        assert result.ctes[0].kdes.quantity == 100.0
-        assert result.ctes[0].kdes.unit_of_measure == "units"
+        # No CTEs for invoices — quantity available only via line_items or HITL
+        assert len(result.ctes) == 0, "Invoices must not emit CTEs (#1288)"
+        assert result.review_required is True
 
 
 class TestLocationExtraction:
@@ -172,10 +178,12 @@ class TestDateExtraction:
         assert result.ctes[0].kdes.event_date == "2025-11-05"
 
     def test_extract_date_iso(self, extractor):
-        """Test extraction of ISO date format."""
+        """Invoice documents emit no CTEs after #1288 — verify HITL routing."""
         result = extractor.extract(SAMPLE_INVOICE_TEXT, "test-doc-009", tenant_id="11111111-1111-1111-1111-111111111111")
 
-        assert result.ctes[0].kdes.event_date == "2025-11-05"
+        # No CTEs for invoices — date visible only via HITL queue (#1288)
+        assert len(result.ctes) == 0, "Invoices must not emit CTEs (#1288)"
+        assert result.review_required is True
 
 
 class TestConfidenceCalculation:

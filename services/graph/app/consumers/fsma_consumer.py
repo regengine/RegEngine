@@ -1,3 +1,6 @@
+# DEPRECATED: will be removed once EVENT_BACKBONE=pg is default (see #1159 #1240).
+# The PostgreSQL task_processor (server/workers/task_processor.py) is the canonical
+# replacement for this Kafka consumer. Do not add new logic here.
 """
 FSMA 204 Kafka Consumer for Graph Ingestion.
 
@@ -18,52 +21,44 @@ from typing import Any, Dict, Optional
 
 import socket
 import structlog
-from confluent_kafka import Consumer, Producer, KafkaException
+from confluent_kafka import Consumer, KafkaException
 from confluent_kafka.schema_registry import SchemaRegistryClient
 from confluent_kafka.schema_registry.avro import AvroDeserializer
 from confluent_kafka.serialization import SerializationContext, MessageField
 from prometheus_client import Counter, Histogram
 from structlog.contextvars import bind_contextvars, clear_contextvars
 
-# DLQ - Dead Letter Queue Counter
-DLQ_COUNTER = Counter("fsma_consumer_dlq_messages", "Messages sent to DLQ", ["reason"])
-
-# Global DLQ Producer (initialized in run_fsma_consumer)
-_dlq_producer: Optional[Producer] = None
-
-def send_to_dlq(topic: str, original_msg: bytes, reason: str, error: str = "") -> None:
-    """Send failed message to Dead Letter Queue."""
-    if not _dlq_producer:
-        logger.error("dlq_producer_not_initialized", reason=reason)
-        return
-
-    try:
-        # Add metadata headers
-        headers = [
-            ("error_reason", reason.encode("utf-8")),
-            ("error_detail", str(error)[:1024].encode("utf-8")),
-            ("original_topic", topic.encode("utf-8")),
-            ("service", b"fsma-graph-consumer"),
-        ]
-        
-        _dlq_producer.produce(
-            settings.topic_dlq,
-            value=original_msg,
-            headers=headers,
-        )
-        # Flush immediately for safety in this critical path (could be optimized)
-        _dlq_producer.poll(0)
-        
-        DLQ_COUNTER.labels(reason=reason).inc()
-        logger.info("message_sent_to_dlq", reason=reason, error=error)
-        
-    except Exception as e:
-        logger.critical("dlq_emission_failed", error=str(e))
-
 # Standardized path discovery via shared utility
 from shared.paths import ensure_shared_importable
 ensure_shared_importable()
 
+from shared.observability.dlq_producer import DLQProducer, get_dlq_producer  # noqa: E402
+
+# DLQ - Dead Letter Queue Counter
+DLQ_COUNTER = Counter("fsma_consumer_dlq_messages", "Messages sent to DLQ", ["reason"])
+
+# DLQ producer — resolved lazily via shared singleton (#1228)
+# Initialized in run_fsma_consumer() once settings are available.
+_dlq: Optional[DLQProducer] = None
+
+
+def send_to_dlq(topic: str, original_msg: bytes, reason: str, error: str = "") -> None:
+    """Send failed message to Dead Letter Queue."""
+    if not _dlq:
+        logger.error("dlq_producer_not_initialized", reason=reason)
+        return
+
+    try:
+        _dlq.send(
+            original_msg,
+            reason=reason,
+            detail=error,
+            original_topic=topic,
+        )
+        DLQ_COUNTER.labels(reason=reason).inc()
+        logger.info("message_sent_to_dlq", reason=reason, error=error)
+    except Exception as e:
+        logger.critical("dlq_emission_failed", error=str(e))
 from services.graph.app.config import settings
 from services.graph.app.fsma_audit import log_extraction
 from services.graph.app.models.fsma_nodes import (
@@ -308,9 +303,13 @@ async def run_fsma_consumer(database: Optional[str] = None) -> None:
         _load_schema_str(),
     )
 
-    # Initialize DLQ Producer
-    global _dlq_producer
-    _dlq_producer = Producer({'bootstrap.servers': settings.kafka_bootstrap})
+    # Initialize shared DLQ Producer (#1228)
+    global _dlq
+    _dlq = get_dlq_producer(
+        topic=settings.topic_dlq,
+        bootstrap_servers=settings.kafka_bootstrap,
+        service_name="fsma-graph-consumer",
+    )
 
     # Consumer Config
     consumer_conf = {

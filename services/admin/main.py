@@ -337,8 +337,26 @@ _consumer_thread: Optional[threading.Thread] = None
 
 
 def _start_review_consumer() -> None:
-    """Start the Kafka consumer in a background daemon thread."""
+    """Start the Kafka consumer in a background daemon thread.
+
+    Gated by two conditions (both must be true):
+    1. ``ENABLE_REVIEW_CONSUMER=true`` — operator has opted in to this feature.
+    2. ``EVENT_BACKBONE=kafka`` — operator has not switched to the PG backbone.
+
+    When ``EVENT_BACKBONE`` defaults to ``pg`` the consumer stays dormant,
+    preventing the Kafka/PG split-brain described in #1159.
+    """
     global _consumer_thread
+    # Event backbone gating (#1159): do not start the legacy Kafka consumer
+    # unless the operator has explicitly opted in via EVENT_BACKBONE=kafka.
+    from shared.event_backbone import kafka_enabled
+    if not kafka_enabled():
+        structlog.get_logger("admin").info(
+            "event_backbone_active",
+            backbone="pg",
+            detail="Kafka consumers disabled (EVENT_BACKBONE=pg); task_processor handles events",
+        )
+        return
     if os.getenv("ENABLE_REVIEW_CONSUMER", "false").lower() not in ("1", "true", "yes"):
         return
     try:
@@ -346,7 +364,7 @@ def _start_review_consumer() -> None:
 
         _consumer_thread = threading.Thread(target=run_consumer, daemon=True)
         _consumer_thread.start()
-        structlog.get_logger("admin").info("review_consumer_thread_started")
+        structlog.get_logger("admin").info("review_consumer_thread_started", event_backbone_active="kafka")
     except (ImportError, RuntimeError, ConnectionError) as exc:  # pragma: no cover - optional feature
         structlog.get_logger("admin").warning("review_consumer_import_failed", error=str(exc))
 
