@@ -7,7 +7,7 @@ updates:
     schedule:
       interval: "weekly"
       day: "monday"
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 10
     labels:
       - "dependencies"
       - "frontend"
@@ -32,23 +32,32 @@ updates:
       - dependency-name: "vitest"
         update-types: ["version-update:semver-major"]
 
-  # Python services — patch and minor bumps are grouped per service to reduce
-  # PR noise. Major bumps are intentionally left ungrouped so each gets its
-  # own PR for manual review (#1178).
+  # Python services — security/auth/crypto packages are intentionally excluded
+  # from the group so each gets its own individual PR (#1178). All remaining
+  # patch and minor bumps are batched together to reduce PR noise. Major bumps
+  # are always ungrouped (Dependabot default when update-types omits "major").
 
   - package-ecosystem: "pip"
     directory: "/services/admin"
     schedule:
       interval: "weekly"
       day: "monday"
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 10
     labels:
       - "dependencies"
       - "backend"
     groups:
       patch-and-minor:
-        patterns:
-          - "*"
+        # Exclude security-critical packages so they each get their own PR.
+        exclude-patterns:
+          - "fastapi"
+          - "uvicorn"
+          - "cryptography"
+          - "pyjwt"
+          - "argon2-cffi"
+          - "python-jose"
+          - "supabase"
+          - "authlib"
         update-types:
           - "version-update:semver-patch"
           - "version-update:semver-minor"
@@ -58,14 +67,21 @@ updates:
     schedule:
       interval: "weekly"
       day: "monday"
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 10
     labels:
       - "dependencies"
       - "backend"
     groups:
       patch-and-minor:
-        patterns:
-          - "*"
+        exclude-patterns:
+          - "fastapi"
+          - "uvicorn"
+          - "cryptography"
+          - "pyjwt"
+          - "argon2-cffi"
+          - "python-jose"
+          - "supabase"
+          - "authlib"
         update-types:
           - "version-update:semver-patch"
           - "version-update:semver-minor"
@@ -75,14 +91,21 @@ updates:
     schedule:
       interval: "weekly"
       day: "monday"
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 10
     labels:
       - "dependencies"
       - "backend"
     groups:
       patch-and-minor:
-        patterns:
-          - "*"
+        exclude-patterns:
+          - "fastapi"
+          - "uvicorn"
+          - "cryptography"
+          - "pyjwt"
+          - "argon2-cffi"
+          - "python-jose"
+          - "supabase"
+          - "authlib"
         update-types:
           - "version-update:semver-patch"
           - "version-update:semver-minor"
@@ -92,14 +115,21 @@ updates:
     schedule:
       interval: "weekly"
       day: "monday"
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 10
     labels:
       - "dependencies"
       - "backend"
     groups:
       patch-and-minor:
-        patterns:
-          - "*"
+        exclude-patterns:
+          - "fastapi"
+          - "uvicorn"
+          - "cryptography"
+          - "pyjwt"
+          - "argon2-cffi"
+          - "python-jose"
+          - "supabase"
+          - "authlib"
         update-types:
           - "version-update:semver-patch"
           - "version-update:semver-minor"
@@ -109,14 +139,21 @@ updates:
     schedule:
       interval: "weekly"
       day: "monday"
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 10
     labels:
       - "dependencies"
       - "backend"
     groups:
       patch-and-minor:
-        patterns:
-          - "*"
+        exclude-patterns:
+          - "fastapi"
+          - "uvicorn"
+          - "cryptography"
+          - "pyjwt"
+          - "argon2-cffi"
+          - "python-jose"
+          - "supabase"
+          - "authlib"
         update-types:
           - "version-update:semver-patch"
           - "version-update:semver-minor"
@@ -126,14 +163,21 @@ updates:
     schedule:
       interval: "weekly"
       day: "monday"
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 10
     labels:
       - "dependencies"
       - "backend"
     groups:
       patch-and-minor:
-        patterns:
-          - "*"
+        exclude-patterns:
+          - "fastapi"
+          - "uvicorn"
+          - "cryptography"
+          - "pyjwt"
+          - "argon2-cffi"
+          - "python-jose"
+          - "supabase"
+          - "authlib"
         update-types:
           - "version-update:semver-patch"
           - "version-update:semver-minor"
