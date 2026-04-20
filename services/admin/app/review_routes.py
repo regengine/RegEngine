@@ -24,9 +24,16 @@ from pydantic import BaseModel
 from datetime import datetime, timezone
 
 from shared.auth import APIKey, require_api_key
+from shared.rate_limit import limiter
 from .text_sanitize import sanitize_source_text_for_response
 
 router = APIRouter(prefix="/v1/admin", tags=["review"])
+
+# Maximum length of the inline text preview returned by the list endpoint.
+# Full ``text_raw`` is intentionally excluded from list responses to keep
+# payloads bounded -- see issue #1409. A detail endpoint (not yet wired)
+# is the correct surface for the full OCR text.
+TEXT_PREVIEW_MAX_CHARS = 200
 
 
 def _require_tenant_scoped_key(api_key: APIKey) -> str:
@@ -48,7 +55,14 @@ def _require_tenant_scoped_key(api_key: APIKey) -> str:
 
 
 class ReviewItem(BaseModel):
-    """A pending review item for curator validation."""
+    """A pending review item for curator validation.
+
+    This is the **detail** shape: it includes the full ``source_text``
+    (sanitized OCR output) and the full ``extracted_data`` JSON. It is
+    intended for a single-item detail endpoint, not for list
+    aggregates -- see ``ReviewListItem`` for the lean list-row variant
+    introduced in #1409.
+    """
     review_id: str
     doc_hash: str
     confidence_score: float
@@ -58,9 +72,28 @@ class ReviewItem(BaseModel):
     status: str = "PENDING"
 
 
+class ReviewListItem(BaseModel):
+    """Lean list-row variant of a review item (issue #1409).
+
+    Excludes the full ``source_text`` (OCR output can be 10MB+ per row)
+    and returns a bounded ``text_preview`` (<= 200 chars) instead. The
+    full text remains available via a per-item detail endpoint once one
+    is wired; until then, reviewers who need the full raw text can pull
+    the row directly from the tracker in the admin worker or via the
+    existing ``v1/admin/review/flagged-extractions`` endpoint family.
+    """
+    review_id: str
+    doc_hash: str
+    confidence_score: float
+    text_preview: str
+    extracted_data: dict
+    created_at: datetime
+    status: str = "PENDING"
+
+
 class ReviewItemsResponse(BaseModel):
     """Response containing list of review items."""
-    items: List[ReviewItem]
+    items: List[ReviewListItem]
     total: int
     offset: int
     limit: int
@@ -80,9 +113,20 @@ def _get_tracker():
 
 
 @router.get("/review/hallucinations", response_model=ReviewItemsResponse)
+@limiter.limit("30/minute")
 async def get_review_queue(
+    request: Request,
     status_filter: Optional[str] = Query("PENDING", description="Filter by status"),
-    limit: int = Query(default=50, ge=1, le=1000, description="Max items to return"),
+    limit: int = Query(
+        default=50,
+        ge=1,
+        le=100,
+        description=(
+            "Max items to return. Capped at 100 (#1409); higher values "
+            "returned multi-GB payloads because each row included the "
+            "full OCR text_raw. Use the detail endpoint for full text."
+        ),
+    ),
     offset: int = Query(default=0, ge=0, description="Number of items to skip"),
     api_key: APIKey = Depends(require_api_key),
 ) -> ReviewItemsResponse:
@@ -93,8 +137,13 @@ async def get_review_queue(
 
     Powered by the hallucination tracker database backend.
 
-    source_text is HTML-escaped on read as defense-in-depth against
+    List rows return a bounded ``text_preview`` (<= 200 chars) rather
+    than the full OCR ``text_raw``, which can exceed 10MB per row and
+    at ``limit=1000`` previously produced multi-GB responses (#1409).
+    The preview is HTML-escaped on read as defense-in-depth against
     stored XSS via document content (#1390).
+
+    Rate-limited to 30 requests/minute per remote address (#1409).
     """
     tenant_id = _require_tenant_scoped_key(api_key)
     tracker = _get_tracker()
@@ -106,20 +155,29 @@ async def get_review_queue(
             cursor=None,
         )
 
-        items = [
-            ReviewItem(
-                review_id=item["review_id"],
-                doc_hash=item.get("doc_hash", ""),
-                confidence_score=item.get("confidence_score", 0.0),
-                source_text=sanitize_source_text_for_response(
-                    item.get("text_raw", "")
-                ),
-                extracted_data=item.get("extraction", {}),
-                created_at=item.get("created_at", datetime.now(timezone.utc)),
-                status=item.get("status", "PENDING"),
+        items = []
+        for item in result.get("items", []):
+            # The tracker's list projection already truncates to 200
+            # chars at the Python layer so the raw megabytes never leave
+            # SQLAlchemy's row buffer on list requests (#1409). We still
+            # sanitize here as defense-in-depth against stored-XSS via
+            # document content (#1390), then re-truncate to the preview
+            # cap in case sanitization expanded the string (e.g.
+            # ``&`` -> ``&amp;``).
+            raw_preview = item.get("text_preview", "")
+            sanitized = sanitize_source_text_for_response(raw_preview)
+            preview = sanitized[:TEXT_PREVIEW_MAX_CHARS]
+            items.append(
+                ReviewListItem(
+                    review_id=item["review_id"],
+                    doc_hash=item.get("doc_hash", ""),
+                    confidence_score=item.get("confidence_score", 0.0),
+                    text_preview=preview,
+                    extracted_data=item.get("extraction", {}),
+                    created_at=item.get("created_at", datetime.now(timezone.utc)),
+                    status=item.get("status", "PENDING"),
+                )
             )
-            for item in result.get("items", [])
-        ]
 
         return ReviewItemsResponse(
             items=items,

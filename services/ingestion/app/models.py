@@ -38,13 +38,37 @@ def _reject_private_host(url: HttpUrl) -> None:
     if not host:
         raise ValueError("URL must include a hostname.")
 
-    # Block known metadata endpoint hostnames directly
-    if host.lower() in _BLOCKED_HOSTNAMES:
-        raise ValueError(f"Requests to '{host}' are not permitted (metadata endpoint).")
+    # Pydantic v2's HttpUrl preserves IPv6 URL brackets on ``.host``
+    # (``https://[fd00:ec2::254]/`` -> ``host == "[fd00:ec2::254]"``).
+    # Strip them before any comparison/resolution so the metadata
+    # blocklist and literal-IP short-circuit below are not bypassed.
+    host_bare = host.strip("[]")
+
+    # Block known metadata endpoint hostnames directly. Matching against
+    # the bracket-stripped form is required for the IPv6 entries in
+    # ``_BLOCKED_HOSTNAMES`` (e.g. ``fd00:ec2::254``) to fire at all.
+    if host_bare.lower() in _BLOCKED_HOSTNAMES:
+        raise ValueError(
+            f"Requests to '{host}' are not permitted (metadata endpoint)."
+        )
+
+    # Short-circuit literal-IP URLs: if the host is already an IPv4 or
+    # IPv6 address, don't bother with DNS — apply the private-range
+    # check directly. This catches ``https://10.0.0.1/`` and
+    # ``https://[fd00::1]/`` even in environments where the resolver
+    # might fail or where ``getaddrinfo`` would silently accept the
+    # literal and pass it back unchanged.
+    try:
+        literal_ip = ipaddress.ip_address(host_bare)
+    except ValueError:
+        literal_ip = None
+    if literal_ip is not None:
+        _reject_if_private_ip(literal_ip, host)
+        return
 
     # Resolve the hostname and check all returned addresses
     try:
-        addrinfos = socket.getaddrinfo(host, None)
+        addrinfos = socket.getaddrinfo(host_bare, None)
     except socket.gaierror:
         # If DNS resolution fails we cannot verify safety — reject
         raise ValueError(f"Unable to resolve hostname '{host}'.")
@@ -55,17 +79,35 @@ def _reject_private_host(url: HttpUrl) -> None:
             addr = ipaddress.ip_address(ip_str)
         except ValueError:
             continue
-        if addr.is_private or addr.is_loopback or addr.is_link_local or addr.is_reserved:
+        _reject_if_private_ip(addr, host, resolved_as=ip_str)
+
+
+def _reject_if_private_ip(
+    addr: "ipaddress.IPv4Address | ipaddress.IPv6Address",
+    host: str,
+    *,
+    resolved_as: Optional[str] = None,
+) -> None:
+    """Raise ValueError if ``addr`` is in any blocked range.
+
+    Shared tail of :func:`_reject_private_host` so the literal-IP
+    short-circuit and the DNS-resolved path use exactly the same
+    classifier. ``resolved_as`` is the DNS-observed IP literal for
+    the error message; pass ``None`` when ``host`` itself was a
+    literal IP.
+    """
+    detail = f"resolved '{host}' → {resolved_as}" if resolved_as else f"host '{host}'"
+    if addr.is_private or addr.is_loopback or addr.is_link_local or addr.is_reserved:
+        raise ValueError(
+            f"Requests to private or reserved IP addresses are not permitted "
+            f"({detail})."
+        )
+    for network in _SSRF_BLOCKED_NETWORKS:
+        if addr in network:
             raise ValueError(
                 f"Requests to private or reserved IP addresses are not permitted "
-                f"(resolved '{host}' → {ip_str})."
+                f"({detail})."
             )
-        for network in _SSRF_BLOCKED_NETWORKS:
-            if addr in network:
-                raise ValueError(
-                    f"Requests to private or reserved IP addresses are not permitted "
-                    f"(resolved '{host}' → {ip_str})."
-                )
 
 
 class IngestRequest(BaseModel):
