@@ -37,9 +37,10 @@ source "$VENV_NAME/bin/activate"
 echo "⬆️  Upgrading pip..."
 pip install --quiet --upgrade pip
 
-echo "📥 Installing dependencies from requirements.txt..."
-# We install from the root since it contains the superset of dependencies
-pip install --quiet -r requirements.txt
+echo "📥 Installing dependencies from requirements.lock..."
+# Root requirements.lock is the pinned, hash-verified output of pip-compile
+# (source: requirements.in). Reproducible builds — see #1139.
+pip install --quiet --require-hashes -r requirements.lock
 
 # 4. Environment File Setup
 if [ ! -f ".env" ]; then

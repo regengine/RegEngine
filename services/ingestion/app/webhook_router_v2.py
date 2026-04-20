@@ -656,8 +656,68 @@ def get_graph_sync_stats() -> dict:
     return {"successes": _graph_sync_successes, "failures": _graph_sync_failures}
 
 
+# #1378 — Neo4j sync producer gating (mirrors shared.canonical_persistence.migration).
+#
+# The consumer (services/graph/scripts/fsma_sync_worker.py) is not started
+# by any deployment manifest (Dockerfile, docker-compose, railway.toml).
+# Publishing unconditionally caused the ``neo4j-sync`` Redis list to grow
+# without bound, evicting hot keys (rate limit counters, idempotency
+# records) under the ``allkeys-lru`` policy. Gate the producer behind
+# ``ENABLE_NEO4J_SYNC`` (default off) and bound the queue with ``LTRIM``
+# in case a dev/test environment opts in but the consumer falls behind.
+_NEO4J_SYNC_QUEUE_KEY = "neo4j-sync"
+
+
+def _neo4j_sync_enabled() -> bool:
+    """Return True only if the operator has explicitly opted in.
+
+    Defaults to False because the consumer is not deployed by any
+    published manifest; writing to Redis without a reader lets the
+    queue grow unbounded (#1378). Evaluated at call time so env
+    changes on a long-running process take effect without restart.
+    """
+    raw = os.getenv("ENABLE_NEO4J_SYNC", "false").strip().lower()
+    return raw in ("1", "true", "yes", "on")
+
+
+def _neo4j_sync_max_queue() -> int:
+    """Upper bound on queued messages before we drop the oldest.
+
+    Only applied when the producer is enabled. 100k mirrors the
+    canonical-persistence default — see migration.py for the sizing
+    rationale. Override with ``NEO4J_SYNC_MAX_QUEUE``.
+    """
+    try:
+        return max(1, int(os.getenv("NEO4J_SYNC_MAX_QUEUE", "100000")))
+    except ValueError:
+        logger.warning(
+            "neo4j_sync_max_queue_invalid_env_value value=%s",
+            os.getenv("NEO4J_SYNC_MAX_QUEUE"),
+        )
+        return 100_000
+
+
 def _publish_graph_sync(event_id: str, event: IngestEvent, tenant_id: str) -> None:
-    """Push a CTE creation event to Redis for Neo4j graph sync."""
+    """Push a CTE creation event to Redis for Neo4j graph sync.
+
+    Behaviour matrix (#1378 — matches shared.canonical_persistence.migration):
+
+    - ``ENABLE_NEO4J_SYNC`` not set (default) → no-op. The consumer at
+      ``services/graph/scripts/fsma_sync_worker.py`` is not in any
+      deployment manifest, so sending here would grow Redis unbounded.
+      Default in every environment to ensure a forgotten flag does not
+      recreate the leak.
+    - ``ENABLE_NEO4J_SYNC=true`` + ``REDIS_URL`` set → send, then
+      ``LTRIM`` the list to ``NEO4J_SYNC_MAX_QUEUE`` entries so a
+      stalled consumer cannot exhaust Redis memory.
+    - ``ENABLE_NEO4J_SYNC=true`` + ``REDIS_URL`` unset → no-op.
+
+    This function is temporary and will be deleted outright when Neo4j
+    is retired in favour of PostgreSQL-native graph queries.
+    """
+    if not _neo4j_sync_enabled():
+        return
+
     redis_url = os.getenv("REDIS_URL")
     if not redis_url:
         return
@@ -683,7 +743,19 @@ def _publish_graph_sync(event_id: str, event: IngestEvent, tenant_id: str) -> No
                 },
             },
         }
-        client.rpush("neo4j-sync", json.dumps(message, default=str))
+        client.rpush(_NEO4J_SYNC_QUEUE_KEY, json.dumps(message, default=str))
+        # Bound queue size. LTRIM keeps the NEWEST `max_queue` entries;
+        # if the consumer falls far behind the oldest messages drop on
+        # the floor instead of eating Redis. The canonical write in
+        # Postgres is the authoritative record so losing stale graph
+        # sync messages is acceptable.
+        try:
+            client.ltrim(_NEO4J_SYNC_QUEUE_KEY, -_neo4j_sync_max_queue(), -1)
+        except Exception:
+            # LTRIM bound is best-effort; a failure here must not be
+            # treated as a publish failure since the rpush above did
+            # succeed and the canonical row in Postgres is intact.
+            logger.debug("neo4j_sync_ltrim_failed", exc_info=True)
         _incr_sync_counter("successes")
     except (ImportError, ConnectionError, TimeoutError, OSError, ValueError, TypeError) as exc:
         _incr_sync_counter("failures")

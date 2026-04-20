@@ -1,0 +1,71 @@
+# .dockerignore — prevent secrets, caches, and build artifacts from
+# being sent to the Docker build context.
+#
+# Dockerfiles in this repo build with repo-root context and some use
+# `COPY . .` (e.g. frontend/Dockerfile:6), so anything not excluded here
+# ends up in a build layer. See GitHub issue #1143.
+
+# Git
+.git
+.github
+.gitignore
+.gitattributes
+
+# Python
+**/.venv
+.venv
+**/__pycache__
+**/*.pyc
+**/*.pyo
+**/.pytest_cache
+**/.mypy_cache
+**/.ruff_cache
+**/htmlcov
+**/.coverage
+**/coverage.xml
+
+# Node / Next.js
+**/node_modules
+**/.next
+**/out
+**/dist
+**/build
+**/*.log
+**/.npm
+**/.yarn
+**/.pnpm-store
+
+# Editors / OS
+**/.DS_Store
+**/*.swp
+**/*.swo
+**/.vscode
+**/.idea
+**/*.orig
+
+# Environment (never ship secrets)
+**/.env
+**/.env.*
+!**/.env.example
+!**/.env.sample
+
+# Claude / agent artifacts
+.claude/
+**/worktrees/
+
+# Test artifacts
+**/playwright-report
+**/test-results
+**/coverage
+**/screenshots
+**/videos
+
+# Docs the image doesn't need (preserve README.md — some Dockerfiles
+# or runtime tooling may reference it)
+**/docs
+**/*.md
+!**/README.md
+
+# Supabase generated
+supabase/.temp
+supabase/seed.sql.gz
