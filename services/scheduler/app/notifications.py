@@ -6,14 +6,17 @@ retry logic and dead-letter handling.
 
 from __future__ import annotations
 
+import ipaddress
 import json
 import os
+import socket
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from pathlib import Path
 from threading import Lock
 from typing import Callable, Dict, List, Optional, Tuple
+from urllib.parse import urlparse
 
 import httpx
 import structlog
@@ -57,6 +60,87 @@ _MAX_OUTBOX_ATTEMPTS = len(_OUTBOX_BACKOFF_SCHEDULE_SECONDS)
 # Per #1138 the Retry-After cap is 60s — keep the same cap here to prevent a
 # misbehaving endpoint from stalling the worker thread.
 _RETRY_AFTER_CAP_SECONDS = 60.0
+
+
+# ── #1084: SSRF guard ────────────────────────────────────────────────────────
+# Private / loopback / link-local networks that webhook targets must never
+# resolve to. Bypassed when WEBHOOK_ALLOW_PRIVATE=true (dev only).
+_BLOCKED_NETWORKS = [
+    ipaddress.ip_network("127.0.0.0/8"),      # loopback IPv4
+    ipaddress.ip_network("10.0.0.0/8"),        # RFC-1918
+    ipaddress.ip_network("172.16.0.0/12"),     # RFC-1918
+    ipaddress.ip_network("192.168.0.0/16"),    # RFC-1918
+    ipaddress.ip_network("169.254.0.0/16"),    # link-local (IMDS)
+    ipaddress.ip_network("::1/128"),           # loopback IPv6
+    ipaddress.ip_network("fc00::/7"),          # unique local IPv6
+    ipaddress.ip_network("fe80::/10"),         # link-local IPv6
+]
+
+# Default response-body cap (1 MB). Override with WEBHOOK_MAX_RESPONSE_BYTES.
+_DEFAULT_MAX_RESPONSE_BYTES: int = 1 * 1024 * 1024  # 1 MB
+
+
+def _get_max_response_bytes() -> int:
+    try:
+        return int(os.environ.get("WEBHOOK_MAX_RESPONSE_BYTES", _DEFAULT_MAX_RESPONSE_BYTES))
+    except (ValueError, TypeError):
+        return _DEFAULT_MAX_RESPONSE_BYTES
+
+
+def _check_ssrf(url: str) -> None:
+    """Raise ``ValueError`` if *url* targets a private/loopback/link-local host.
+
+    Checks:
+    - Scheme must be ``https`` unless env ``WEBHOOK_ALLOW_HTTP=true``.
+    - Resolves the hostname via ``socket.getaddrinfo`` and rejects any address
+      in a blocked network range.
+
+    Bypassed entirely when ``WEBHOOK_ALLOW_PRIVATE=true`` (dev/test only).
+    """
+    if os.environ.get("WEBHOOK_ALLOW_PRIVATE", "").lower() == "true":
+        return
+
+    parsed = urlparse(url)
+    scheme = (parsed.scheme or "").lower()
+    allow_http = os.environ.get("WEBHOOK_ALLOW_HTTP", "").lower() == "true"
+
+    if scheme not in ("https", "http") or (scheme == "http" and not allow_http):
+        raise ValueError(
+            f"Webhook URL scheme '{scheme}' is not allowed. "
+            "Use https (or set WEBHOOK_ALLOW_HTTP=true for http)."
+        )
+
+    hostname = parsed.hostname
+    if not hostname:
+        raise ValueError(f"Webhook URL has no resolvable hostname: {url!r}")
+
+    try:
+        results = socket.getaddrinfo(hostname, None)
+    except socket.gaierror as exc:
+        raise ValueError(f"Cannot resolve webhook hostname '{hostname}': {exc}") from exc
+
+    for _family, _type, _proto, _canon, sockaddr in results:
+        ip_str = sockaddr[0]
+        try:
+            addr = ipaddress.ip_address(ip_str)
+        except ValueError:
+            continue
+        for net in _BLOCKED_NETWORKS:
+            if addr in net:
+                raise ValueError(
+                    f"Webhook URL '{url}' resolves to private/loopback address "
+                    f"{ip_str} ({net}) — SSRF blocked (#1084)."
+                )
+
+
+def _read_capped_body(response: httpx.Response, max_bytes: int) -> str:
+    """Read up to *max_bytes* from *response* content and return as text.
+
+    httpx buffers the full body by default when not using streaming; this
+    helper truncates at the cap so a huge response body can't cause OOM.
+    """
+    raw: bytes = response.content[:max_bytes]
+    return raw.decode("utf-8", errors="replace")
 
 
 def _parse_retry_after(value: Optional[str]) -> Optional[float]:
@@ -254,10 +338,18 @@ class WebhookNotifier:
         Honors ``Retry-After`` on 429/503 responses (#1150). Retries on
         5xx and network errors. Does NOT retry on 4xx (real client bug).
         """
+        # #1084: SSRF guard — reject private/loopback targets before any I/O.
+        try:
+            _check_ssrf(url)
+        except ValueError as ssrf_err:
+            logger.error("webhook_ssrf_blocked", url=url, reason=str(ssrf_err))
+            return DeliveryResult(url=url, success=False, error=str(ssrf_err), attempts=0)
+
         last_error: Optional[str] = None
         last_status: Optional[int] = None
         attempts = 0
         payload_dict = payload.to_dict()
+        _max_body = _get_max_response_bytes()
 
         for attempt in range(1, self.max_retries + 1):
             attempts = attempt
@@ -283,8 +375,8 @@ class WebhookNotifier:
                         duration_ms=duration_ms,
                     )
 
-                # Non-2xx response.
-                last_error = f"HTTP {response.status_code}: {response.text[:200]}"
+                # Non-2xx response. Cap body read to avoid OOM (#1084).
+                last_error = f"HTTP {response.status_code}: {_read_capped_body(response, _max_body)[:200]}"
 
                 # Don't retry on client errors (4xx) — except 429 which is
                 # a transient rate-limit and should be retried with
@@ -533,6 +625,15 @@ class WebhookNotifier:
         success (2xx), False otherwise. Updates ``entry`` fields
         (last_error / last_status_code) in-place regardless of outcome.
         """
+        # #1084: SSRF guard on outbox retries too.
+        try:
+            _check_ssrf(entry.url)
+        except ValueError as ssrf_err:
+            entry.last_error = str(ssrf_err)
+            entry.last_status_code = None
+            logger.error("webhook_outbox_ssrf_blocked", url=entry.url, reason=str(ssrf_err))
+            return False
+
         try:
             response = self.session.post(
                 entry.url,
@@ -552,11 +653,12 @@ class WebhookNotifier:
             entry.last_status_code = None
             return False
 
+        _max_body = _get_max_response_bytes()
         entry.last_status_code = response.status_code
         if response.status_code < 300:
             self._record_success(entry.url)
             return True
-        entry.last_error = f"HTTP {response.status_code}: {response.text[:200]}"
+        entry.last_error = f"HTTP {response.status_code}: {_read_capped_body(response, _max_body)[:200]}"
         self._record_failure(entry.url, entry.last_error, response.status_code)
         return False
 
