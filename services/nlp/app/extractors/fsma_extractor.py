@@ -269,7 +269,12 @@ class FSMAExtractor:
         return ExtractionConfidence.LOW
 
     def extract(
-        self, text: str, document_id: str, pdf_bytes: Optional[bytes] = None
+        self,
+        text: str,
+        document_id: str,
+        *,
+        tenant_id: str,
+        pdf_bytes: Optional[bytes] = None,
     ) -> FSMAExtractionResult:
         """
         Extract FSMA CTEs and KDEs from document text.
@@ -282,12 +287,28 @@ class FSMAExtractor:
         Args:
             text: Raw text content from document
             document_id: Unique identifier for the document
+            tenant_id: Keyword-only, required (#1122). The originating tenant's
+                UUID. Forces every caller to make an explicit tenant decision —
+                no "default" / "unknown" fallback is permitted. Empty string
+                raises ValueError because downstream writes cannot safely
+                proceed without tenant scoping.
             pdf_bytes: Optional raw PDF bytes for layout-aware table extraction
 
         Returns:
             FSMAExtractionResult with extracted CTEs and line_items
+
+        Raises:
+            ValueError: with code ``E_MISSING_TENANT_ID`` when tenant_id is
+                empty or falsy. The sentinel error code makes it grep-able
+                in logs so SRE can spot a regressed caller immediately.
         """
-        logger.info("fsma_extraction_started", document_id=document_id)
+        if not tenant_id or not str(tenant_id).strip():
+            raise ValueError("E_MISSING_TENANT_ID")
+        logger.info(
+            "fsma_extraction_started",
+            document_id=document_id,
+            tenant_id=tenant_id,
+        )
 
         # Pass 1: Document Type Classification
         doc_type = self._classify_document(text)
@@ -334,6 +355,7 @@ class FSMAExtractor:
 
         result = FSMAExtractionResult(
             document_id=document_id,
+            tenant_id=tenant_id,
             document_type=doc_type,
             ctes=ctes,
             extraction_timestamp=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
@@ -1201,6 +1223,10 @@ class FSMAExtractor:
         return {
             "event_type": "fsma.extraction",
             "document_id": result.document_id,
+            # #1122 — thread tenant_id through routing envelopes so
+            # graph.update / nlp.needs_review consumers can enforce
+            # tenant scoping without re-reading the Kafka headers.
+            "tenant_id": result.tenant_id,
             "document_type": result.document_type.value,
             "timestamp": result.extraction_timestamp,
             "ctes": [
