@@ -16,6 +16,7 @@ logger = logging.getLogger("bulk_upload.parsers")
 ALLOWED_EXTENSIONS = {".csv", ".xlsx", ".json", ".pdf"}
 DEFAULT_MAX_UPLOAD_BYTES = 10 * 1024 * 1024
 READ_CHUNK_BYTES = 1024 * 1024
+DEFAULT_MAX_PDF_PAGES = 200
 
 
 def _max_upload_bytes() -> int:
@@ -28,6 +29,27 @@ def _max_upload_bytes() -> int:
         return DEFAULT_MAX_UPLOAD_BYTES
     if parsed <= 0:
         return DEFAULT_MAX_UPLOAD_BYTES
+    return parsed
+
+
+def _max_pdf_pages() -> int:
+    """Hard cap on pages in an uploaded PDF to prevent DoS via PDF bombs.
+
+    A compressed PDF can decompress into tens of thousands of pages; each
+    ``extract_tables()`` / ``extract_text()`` call on such a document pins
+    a worker at ~100% CPU and inflates RSS for minutes. The upload-bytes
+    cap bounds wire size only — post-decompression page count must also
+    be bounded before iteration begins.
+    """
+    raw_value = os.getenv(
+        "BULK_UPLOAD_MAX_PDF_PAGES", str(DEFAULT_MAX_PDF_PAGES)
+    ).strip()
+    try:
+        parsed = int(raw_value)
+    except ValueError:
+        return DEFAULT_MAX_PDF_PAGES
+    if parsed <= 0:
+        return DEFAULT_MAX_PDF_PAGES
     return parsed
 
 
@@ -615,7 +637,16 @@ def _parse_pdf_bytes(
         ) from exc
 
     extracted_rows = 0
+    max_pages = _max_pdf_pages()
     with pdfplumber.open(io.BytesIO(content)) as pdf:
+        page_count = len(pdf.pages)
+        if page_count > max_pages:
+            raise HTTPException(
+                status_code=413,
+                detail=(
+                    f"PDF has {page_count} pages; max allowed is {max_pages}"
+                ),
+            )
         for page in pdf.pages:
             for table in page.extract_tables() or []:
                 if not table or len(table) < 2:

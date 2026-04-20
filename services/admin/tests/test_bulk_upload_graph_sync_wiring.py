@@ -384,15 +384,21 @@ def test_large_import_first_100_sync_remainder_enqueued(
     )
 
 
-def test_outbox_enqueue_failure_does_not_fail_bulk_import(
+def test_outbox_enqueue_failure_rolls_back_bulk_import(
     db_session: Session,
     monkeypatch: pytest.MonkeyPatch,
 ):
-    """If graph_outbox enqueue raises, bulk import still succeeds and warns.
+    """If graph_outbox enqueue raises, the whole bulk import rolls back.
 
-    Contract: the graph mirror is eventually-consistent best-effort;
-    losing a graph enqueue must not fail the whole bulk commit. The user
-    must still be told so they can re-drive a graph sync out-of-band.
+    Contract (graph_outbox.py lines 14-19): the outbox enqueue shares the
+    canonical transaction — "either both land or neither lands." An enqueue
+    failure must therefore roll back every canonical Postgres row the same
+    commit would have written, so the caller can safely retry the entire
+    payload without producing drift between Postgres and the graph mirror.
+
+    This test replaces a pre-fix test that asserted the opposite (enqueue
+    failure silently swallowed, canonical rows committed anyway). #1695
+    flagged that behavior as a contract violation.
     """
     import app.bulk_upload.transaction_manager as tx_manager
 
@@ -408,47 +414,33 @@ def test_outbox_enqueue_failure_does_not_fail_bulk_import(
     def _boom(*_args: Any, **_kwargs: Any) -> None:
         raise RuntimeError("simulated outbox insert failure")
 
-    # Patch the imported symbol the transaction_manager module uses
-    # (it's a local binding after ``from ..graph_outbox import
-    # enqueue_graph_write``).
     monkeypatch.setattr(tx_manager, "enqueue_graph_write", _boom)
 
     current_user = db_session.get(UserModel, TEST_USER_ID)
     assert current_user is not None
 
     payload = _build_payload(event_count=150)  # > MAX_SYNC_EVENTS so enqueue runs
-    summary = execute_bulk_commit(
-        db_session,
-        tenant_id=TEST_TENANT_ID,
-        current_user=current_user,
-        normalized_payload=payload,
-    )
 
-    # Bulk import itself is a success — canonical Postgres data landed.
-    assert summary["events_chained"] == 150
+    with pytest.raises(RuntimeError, match="simulated outbox insert failure"):
+        execute_bulk_commit(
+            db_session,
+            tenant_id=TEST_TENANT_ID,
+            current_user=current_user,
+            normalized_payload=payload,
+        )
+
+    # Rollback guarantee: NO canonical event rows landed. Before the #1695
+    # fix this assertion read `== 150` because the canonical commit ran
+    # before the (post-commit) outbox enqueue; that ordering produced the
+    # drift the outbox was designed to close.
+    db_session.rollback()
     db_events = db_session.execute(
         text("SELECT count(*) FROM supplier_cte_events")
     ).scalar()
-    assert db_events == 150
+    assert db_events == 0
 
-    # No rows made it into the outbox (every insert raised).
+    # And no outbox rows either — same transaction, same rollback.
     assert _outbox_rows(db_session) == []
-
-    # 50 enqueue failures surfaced as warnings (150 - 100 fast-path).
-    warnings = summary.get("sync_warnings") or []
-    enqueue_failures = [
-        w for w in warnings if w.startswith("graph_outbox_enqueue_failed:")
-    ]
-    assert len(enqueue_failures) == 50
-
-    # No misleading "graph_sync_deferred:<N> events enqueued" line when
-    # zero actually enqueued.
-    assert not any(
-        w.startswith("graph_sync_deferred:") for w in warnings
-    ), (
-        "graph_sync_deferred warning must only appear when events "
-        "actually landed in the outbox"
-    )
 
 
 if __name__ == "__main__":
