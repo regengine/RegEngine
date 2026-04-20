@@ -496,3 +496,53 @@ async def test_redis_create_session_applies_expire_to_every_key(monkeypatch):
     assert setex_ttl is not None and setex_ttl > 0, (
         f"SETEX must be called with a positive TTL; got {setex_ttl}"
     )
+
+
+# ── Duplicate-email masking (#1400) ───────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_duplicate_email_returns_200_not_409(monkeypatch):
+    """POST /auth/signup with an already-registered email must return 200,
+    not 409, to prevent email enumeration (closes #1400).
+
+    The response body must contain a generic confirmation message
+    indistinguishable from the message a first-time registrant would
+    receive, and must NOT raise HTTPException.
+    """
+    from fastapi.responses import JSONResponse
+    from services.admin.app import auth_routes
+    from services.admin.app.auth_routes import RegisterRequest, signup
+
+    # DB mock whose email lookup returns an existing user.
+    existing_user = MagicMock()
+    db = MagicMock()
+    db.execute.return_value.scalar_one_or_none.return_value = existing_user
+
+    session_store = MagicMock()
+
+    payload = RegisterRequest(
+        email="existing@example.com",
+        password="Correct-Horse-Battery-Staple-9!",
+        tenant_name="Acme Foods",
+    )
+
+    result = await signup.__wrapped__(
+        payload=payload,
+        request=_make_request(),
+        db=db,
+        session_store=session_store,
+    )
+
+    # Must be a JSONResponse (not a TokenResponse) with status 200.
+    assert isinstance(result, JSONResponse), (
+        f"Expected JSONResponse for duplicate email, got {type(result)}"
+    )
+    assert result.status_code == 200, (
+        f"Expected 200 for duplicate email to mask enumeration, got {result.status_code}"
+    )
+    # DB must not have been modified.
+    db.add.assert_not_called()
+    db.commit.assert_not_called()
+    # Session store must not have been touched.
+    session_store.create_session.assert_not_called()
