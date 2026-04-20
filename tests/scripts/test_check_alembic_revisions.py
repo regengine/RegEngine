@@ -45,15 +45,15 @@ class TestLooksSequential:
 
     def test_truly_random_hex_not_sequential(self):
         """A randomly generated 12-char hex hash must not be flagged."""
-        assert not _looks_sequential("3f7a1c9e2b84")
-        assert not _looks_sequential("deadbeef1234")
-        assert not _looks_sequential("c0ffee123456")
+        assert not _looks_sequential("3f7a1c9e2b84")  # pragma: allowlist secret
+        assert not _looks_sequential("deadbeef1234")  # pragma: allowlist secret
+        assert not _looks_sequential("c0ffee123456")  # pragma: allowlist secret
 
     def test_new_sequential_pattern_flagged(self):
         """A new nibble-shift ID that isn't grandfathered must be flagged."""
         # Pattern: each byte incremented by 0x11 relative to the previous.
         # Shift by 2 from the grandfathered series so it isn't in the set.
-        new_seq = "c3d4e5f6a7b8"  # happens to be grandfathered — skip
+        new_seq = "c3d4e5f6a7b8"  # happens to be grandfathered — skip  # pragma: allowlist secret
         # Build one that is definitely not grandfathered:
         # bytes 0x10, 0x21, 0x32, 0x43, 0x54, 0x65 → "102132435465"  (diff=+0x11 each? no)
         # Simpler: bytes 0x20, 0x31, 0x42, 0x53, 0x64, 0x75 → diff=0x11 each
@@ -63,13 +63,13 @@ class TestLooksSequential:
 
     def test_non_12_char_not_flagged(self):
         """IDs that aren't exactly 12 chars are not flagged as sequential."""
-        assert not _looks_sequential("a1b2c3d4e5")    # 10 chars
-        assert not _looks_sequential("a1b2c3d4e5f6a7")  # 14 chars
+        assert not _looks_sequential("a1b2c3d4e5")    # 10 chars  # pragma: allowlist secret
+        assert not _looks_sequential("a1b2c3d4e5f6a7")  # 14 chars  # pragma: allowlist secret
 
     def test_non_arithmetic_not_flagged(self):
         """IDs whose bytes don't form a constant-difference sequence are OK."""
         # bytes: 0xab, 0xcd, 0x12, 0x34, 0x56, 0x78 → diffs vary
-        assert not _looks_sequential("abcd12345678")
+        assert not _looks_sequential("abcd12345678")  # pragma: allowlist secret
 
 
 # ---------------------------------------------------------------------------
