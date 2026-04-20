@@ -120,10 +120,10 @@ async def trace_forward_endpoint(
             facility_count=len(result.facilities),
         )
 
-        # #1033: audit KDE/CTE read access
+        # #1033: audit KDE/CTE read access (FSMA 204 / NIST AU-2)
         _actor = getattr(api_key, "key_id", str(api_key)) if api_key else "API"
         get_audit_log().log(
-            action=FSMAAuditAction.TRACED,
+            action=FSMAAuditAction.KDE_READ,
             target_type="KDE",
             target_id=tlc,
             actor=_actor,
@@ -215,10 +215,10 @@ async def trace_backward_endpoint(
             facility_count=len(result.facilities),
         )
 
-        # #1033: audit KDE/CTE read access
+        # #1033: audit KDE/CTE read access (FSMA 204 / NIST AU-2)
         _actor = getattr(api_key, "key_id", str(api_key)) if api_key else "API"
         get_audit_log().log(
-            action=FSMAAuditAction.TRACED,
+            action=FSMAAuditAction.KDE_READ,
             target_type="KDE",
             target_id=tlc,
             actor=_actor,
@@ -265,10 +265,10 @@ async def lot_timeline_endpoint(
         timeline = await get_lot_timeline(client, tlc, str(tenant_id))
         await client.close()
 
-        # #1033: audit KDE/CTE read access
+        # #1033: audit KDE/CTE read access (FSMA 204 / NIST AU-2)
         _actor = getattr(api_key, "key_id", str(api_key)) if api_key else "API"
         get_audit_log().log(
-            action=FSMAAuditAction.TRACED,
+            action=FSMAAuditAction.KDE_READ,
             target_type="KDE",
             target_id=tlc,
             actor=_actor,
@@ -423,10 +423,10 @@ async def search_traceability_events(
         page_events = events[:limit]
         next_cursor = page_events[-1]["event_id"] if has_more and page_events else None
 
-        # #1033: audit KDE/CTE read access on search
+        # #1033: audit KDE/CTE read access on search (FSMA 204 / NIST AU-2)
         _actor = getattr(api_key, "key_id", str(api_key)) if api_key else "API"
         get_audit_log().log(
-            action=FSMAAuditAction.TRACED,
+            action=FSMAAuditAction.KDE_READ,
             target_type="KDE",
             target_id=f"search:{effective_start}:{effective_end}",
             actor=_actor,
