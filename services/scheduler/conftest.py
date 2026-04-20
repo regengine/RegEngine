@@ -8,6 +8,11 @@ import os
 os.environ.setdefault("DATABASE_URL", "postgresql://regengine:regengine@localhost:5432/regengine")
 os.environ.setdefault("ENVIRONMENT", "test")
 os.environ.setdefault("LOG_LEVEL", "WARNING")
+# #1084: allow private/unresolvable hosts in tests so existing notification
+# test fixtures (hook1.example.com, hook.example.com) work without real DNS.
+# The SSRF guard itself is covered in test_webhook_notifier_ssrf_1084.py.
+os.environ.setdefault("WEBHOOK_ALLOW_PRIVATE", "true")
+os.environ.setdefault("WEBHOOK_ALLOW_HTTP", "true")
 
 # --- Standardized Bootstrap ---
 import sys
