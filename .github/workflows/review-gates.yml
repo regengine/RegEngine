@@ -19,7 +19,7 @@ jobs:
     name: Supabase Query Patterns
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
 
       - name: Audit .single() usage
         run: |
@@ -65,7 +65,7 @@ jobs:
     name: Source Hygiene
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
 
       - name: No secrets or placeholders in source
         run: |
@@ -116,7 +116,7 @@ jobs:
     name: Audit Trail Protection
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
 
       - name: No mutations on append-only tables (frontend)
         run: |
@@ -174,7 +174,7 @@ jobs:
     name: SQL Injection Defense
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
 
       - name: No f-string SQL in Python services
         run: |
@@ -196,7 +196,7 @@ jobs:
     name: Tenant Isolation Check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
 
       - name: New migrations include tenant_id where expected
         run: |
@@ -235,7 +235,7 @@ jobs:
     name: React Patterns
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
 
       - name: Check for useEffect async patterns
         run: |
