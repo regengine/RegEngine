@@ -19,6 +19,9 @@ concurrency:
 env:
   NODE_VERSION: '20'
 
+permissions:
+  contents: read
+
 jobs:
   smoke:
     name: Proxy Route Smoke Test
