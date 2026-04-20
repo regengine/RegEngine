@@ -31,7 +31,7 @@ import httpx
 
 from app.scrapers.internal_discovery import run_regulatory_discovery
 from app.leadership import is_leader
-from shared.logging import logger
+from shared.observability.context import logger
 
 # Kept for backwards-import compatibility. Do NOT register jobs on
 # this scheduler — it is never started. See the module docstring.
