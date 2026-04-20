@@ -158,15 +158,15 @@ jobs:
         run: |
           export PYTHONPATH=$(pwd):$PYTHONPATH
           cd services/${{ matrix.service }}
-          # Per-service coverage thresholds — ratcheted up 2026-04-12.
+          # Per-service coverage thresholds — ratcheted up 2026-04-20 (#1348).
           # Strategy: set floor at (actual - 2%). Bump after each test cycle.
           THRESHOLD=50
           case "${{ matrix.service }}" in
-            compliance) THRESHOLD=30 ;;  # was 18; bumped with new validation/checklist/spreadsheet tests
-            scheduler)  THRESHOLD=35 ;;  # was 24; bumped with new state/kafka/notification tests
+            compliance) THRESHOLD=40 ;;  # was 30; raised +10pp to close gate-bypass gap
+            scheduler)  THRESHOLD=45 ;;  # was 35; raised +10pp to close gate-bypass gap
             admin)      THRESHOLD=50 ;;
             graph)      THRESHOLD=50 ;;
-            ingestion)  THRESHOLD=42 ;;  # was 40; actual ~42%
+            ingestion)  THRESHOLD=52 ;;  # was 42; raised +10pp to close gate-bypass gap
             nlp)        THRESHOLD=50 ;;
           esac
           pytest tests/ -v --cov=app --cov-report=term \
