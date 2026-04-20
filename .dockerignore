@@ -60,6 +60,11 @@
 **/screenshots
 **/videos
 
+# Issue #1155: exclude test directories from production image
+# services/ingestion/tests must not ship into the runtime image
+services/ingestion/tests/
+**/tests/
+
 # Docs the image doesn't need (preserve README.md — some Dockerfiles
 # or runtime tooling may reference it)
 **/docs
