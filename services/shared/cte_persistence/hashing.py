@@ -65,7 +65,7 @@ def compute_event_hash(
     event_id: str,
     event_type: str,
     tlc: str,
-    product_description: str,
+    product_description: str,  # kept in signature for backward compat — NOT hashed (#1323)
     quantity: float,
     unit_of_measure: str,
     location_gln: Optional[str],
@@ -81,12 +81,23 @@ def compute_event_hash(
     KDE values are normalized through ``_normalize_for_hashing`` so that
     exotic types (``datetime``, ``Decimal``, ``UUID``, ...) serialize
     deterministically and survive Python-version upgrades. See #1313.
+
+    #1323: ``product_description`` is intentionally excluded from the hash.
+    It is a mutable, human-readable field (subject to translation and
+    re-formatting); including it caused re-ingestion of the same physical
+    event with a reformatted description to produce a different SHA-256 hash,
+    breaking both idempotency dedup and hash-chain verification. Only stable
+    identifiers are hashed: event_id, event_type, tlc, quantity,
+    unit_of_measure, location_gln, location_name, timestamp, kdes.
+    The ``product_description`` parameter is retained in the signature so
+    all existing callers continue to compile; it is simply not included in
+    the canonical string.
     """
     canonical = "|".join([
         event_id,
         event_type,
         tlc,
-        product_description,
+        # product_description excluded — mutable field, see #1323
         str(quantity),
         unit_of_measure,
         location_gln or "",
