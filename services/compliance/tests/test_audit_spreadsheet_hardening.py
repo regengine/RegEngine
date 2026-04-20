@@ -49,13 +49,22 @@ def _fresh_routes():
 
 @pytest.fixture()
 def client(monkeypatch):
-    """Return a TestClient with auth bypassed and a fresh router."""
+    """Return a TestClient with auth bypassed and a fresh router.
+
+    The override returns a stub principal with a ``tenant_id``
+    attribute so routes that bind tenant from the authenticated
+    principal (e.g. /v1/fsma/audit/spreadsheet, #1106) can read it.
+    """
     from shared.auth import require_api_key
+
+    class _StubPrincipal:
+        tenant_id = "11111111-1111-1111-1111-111111111111"
+        key_id = "test-key"
 
     routes_mod = _fresh_routes()
     app = FastAPI()
     app.include_router(routes_mod.router)
-    app.dependency_overrides[require_api_key] = lambda: None
+    app.dependency_overrides[require_api_key] = lambda: _StubPrincipal()
 
     with TestClient(app) as c:
         # Stash the module handle so tests can patch against the
