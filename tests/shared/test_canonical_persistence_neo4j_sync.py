@@ -113,7 +113,7 @@ class TestGating_Issue1378:
         monkeypatch.delenv("ENABLE_NEO4J_SYNC", raising=False)
         monkeypatch.setenv("REDIS_URL", "redis://localhost:6379/0")
 
-        from shared.canonical_persistence.migration import publish_graph_sync
+        from shared.canonical_persistence.legacy_dual_write import publish_graph_sync
 
         publish_graph_sync(_make_event())
         assert fake_redis.rpush_calls == []
@@ -124,7 +124,7 @@ class TestGating_Issue1378:
         monkeypatch.setenv("ENABLE_NEO4J_SYNC", "false")
         monkeypatch.setenv("REDIS_URL", "redis://localhost:6379/0")
 
-        from shared.canonical_persistence.migration import publish_graph_sync
+        from shared.canonical_persistence.legacy_dual_write import publish_graph_sync
 
         publish_graph_sync(_make_event())
         assert fake_redis.rpush_calls == []
@@ -135,7 +135,7 @@ class TestGating_Issue1378:
         monkeypatch.setenv("ENABLE_NEO4J_SYNC", "true")
         monkeypatch.delenv("REDIS_URL", raising=False)
 
-        from shared.canonical_persistence.migration import publish_graph_sync
+        from shared.canonical_persistence.legacy_dual_write import publish_graph_sync
 
         publish_graph_sync(_make_event())
         assert fake_redis.rpush_calls == []
@@ -148,7 +148,7 @@ class TestGating_Issue1378:
         monkeypatch.setenv("ENABLE_NEO4J_SYNC", "true")
         monkeypatch.setenv("REDIS_URL", "redis://localhost:6379/0")
 
-        from shared.canonical_persistence.migration import publish_graph_sync
+        from shared.canonical_persistence.legacy_dual_write import publish_graph_sync
 
         publish_graph_sync(_make_event())
         assert len(fake_redis.rpush_calls) == 1
@@ -162,7 +162,7 @@ class TestGating_Issue1378:
     ):
         monkeypatch.setenv("ENABLE_NEO4J_SYNC", truthy)
         monkeypatch.setenv("REDIS_URL", "redis://localhost:6379/0")
-        from shared.canonical_persistence.migration import publish_graph_sync
+        from shared.canonical_persistence.legacy_dual_write import publish_graph_sync
 
         publish_graph_sync(_make_event())
         assert len(fake_redis.rpush_calls) == 1
@@ -183,7 +183,7 @@ class TestQueueBounding_Issue1378:
         monkeypatch.setenv("REDIS_URL", "redis://localhost:6379/0")
         monkeypatch.delenv("NEO4J_SYNC_MAX_QUEUE", raising=False)
 
-        from shared.canonical_persistence.migration import publish_graph_sync
+        from shared.canonical_persistence.legacy_dual_write import publish_graph_sync
 
         publish_graph_sync(_make_event())
         assert len(fake_redis.ltrim_calls) == 1
@@ -203,7 +203,7 @@ class TestQueueBounding_Issue1378:
         monkeypatch.setenv("REDIS_URL", "redis://localhost:6379/0")
         monkeypatch.setenv("NEO4J_SYNC_MAX_QUEUE", "500")
 
-        from shared.canonical_persistence.migration import publish_graph_sync
+        from shared.canonical_persistence.legacy_dual_write import publish_graph_sync
 
         publish_graph_sync(_make_event())
         assert fake_redis.ltrim_calls
@@ -220,7 +220,7 @@ class TestQueueBounding_Issue1378:
         monkeypatch.setenv("REDIS_URL", "redis://localhost:6379/0")
         monkeypatch.setenv("NEO4J_SYNC_MAX_QUEUE", "not-a-number")
 
-        from shared.canonical_persistence.migration import publish_graph_sync
+        from shared.canonical_persistence.legacy_dual_write import publish_graph_sync
 
         publish_graph_sync(_make_event())
         assert fake_redis.ltrim_calls

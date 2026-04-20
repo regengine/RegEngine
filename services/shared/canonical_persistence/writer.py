@@ -25,7 +25,7 @@ from shared.canonical_event import (
 )
 from shared.cte_persistence import compute_chain_hash
 from shared.canonical_persistence.models import CanonicalStoreResult
-from shared.canonical_persistence import migration
+from shared.canonical_persistence import legacy_dual_write as migration
 
 logger = logging.getLogger("canonical-persistence")
 
