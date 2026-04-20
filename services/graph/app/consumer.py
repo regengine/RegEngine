@@ -44,9 +44,10 @@ _shutdown_event = threading.Event()
 TOPIC_DLQ = "graph.update.dlq"
 MAX_RETRIES = 3
 # #1166 — bound retry counter with TTLCache so it cannot leak memory on
-# a stream of unique doc_ids. 10k entries × 1h TTL covers bursts while
-# still letting a poison-pill age out if the consumer is long-lived.
-_retry_counts: TTLCache[str, int] = TTLCache(maxsize=10_000, ttl=3600)
+# a stream of unique doc_ids. 50k entries × 1h TTL matches the pattern
+# in services/nlp/app/consumer.py and covers bursts while still letting
+# a poison-pill age out if the consumer is long-lived.
+_retry_counts: TTLCache[str, int] = TTLCache(maxsize=50_000, ttl=3600)
 _dlq_producer: Optional[Producer] = None
 
 
@@ -333,6 +334,10 @@ async def run_consumer() -> None:
                     await neo4j_client.close()
                     MESSAGES_COUNTER.labels(status="success").inc()
                     consumer.commit(message=record, asynchronous=False)
+                    # #1166 — clear any prior retry count so a doc that
+                    # succeeded after 1-2 transient failures does not
+                    # linger in _retry_counts until the TTL expires.
+                    _retry_counts.pop(doc_id, None)
 
                 except Exception as exc:
                     _handle_processing_error(record, evt, exc, consumer, context="graph_upsert")
@@ -383,6 +388,10 @@ async def run_consumer() -> None:
                     logger.info("graph_upsert_ok_legacy", doc_id=doc_id)
                     MESSAGES_COUNTER.labels(status="success").inc()
                     consumer.commit(message=record, asynchronous=False)
+                    # #1166 — clear any prior retry count so a doc that
+                    # succeeded after 1-2 transient failures does not
+                    # linger in _retry_counts until the TTL expires.
+                    _retry_counts.pop(doc_id, None)
                 except Exception as exc:
                     _handle_processing_error(record, evt, exc, consumer, context="legacy_upsert")
             
