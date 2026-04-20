@@ -40,6 +40,7 @@ logger = _structlog.get_logger("nlp")
 from app.config import settings
 from app.consumer import run_consumer, stop_consumer
 from app.routes import router as nlp_router
+from shared.event_backbone import kafka_enabled
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -48,18 +49,28 @@ from fastapi.middleware.cors import CORSMiddleware
 async def lifespan(api_app: FastAPI):
     # Startup
     logger.info("nlp_service_startup")
-    
-    # Start consumer thread
-    consumer_thread = threading.Thread(target=run_consumer, daemon=True)
-    consumer_thread.start()
-    logger.info("nlp_consumer_thread_started")
-    
+
+    # Event backbone gating (#1159): only start the legacy Kafka consumer when
+    # explicitly opted in. Default is the PostgreSQL task_processor.
+    consumer_thread = None
+    if kafka_enabled():
+        consumer_thread = threading.Thread(target=run_consumer, daemon=True)
+        consumer_thread.start()
+        logger.info("nlp_consumer_thread_started", event_backbone_active="kafka")
+    else:
+        logger.info(
+            "event_backbone_active",
+            backbone="pg",
+            detail="Kafka consumers disabled (EVENT_BACKBONE=pg); task_processor handles events",
+        )
+
     yield
-    
+
     # Shutdown
     logger.info("nlp_service_shutdown")
-    stop_consumer()
-    consumer_thread.join(timeout=5.0)
+    if consumer_thread is not None:
+        stop_consumer()
+        consumer_thread.join(timeout=5.0)
 
 from shared.cors import get_allowed_origins, should_allow_credentials
 

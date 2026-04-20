@@ -32,92 +32,111 @@ updates:
       - dependency-name: "vitest"
         update-types: ["version-update:semver-major"]
 
-  # Python services — ALL grouped into one ecosystem entry per service
-  # with aggressive grouping to reduce PR noise
+  # Python services — patch and minor bumps are grouped per service to reduce
+  # PR noise. Major bumps are intentionally left ungrouped so each gets its
+  # own PR for manual review (#1178).
 
   - package-ecosystem: "pip"
     directory: "/services/admin"
     schedule:
       interval: "weekly"
       day: "monday"
-    open-pull-requests-limit: 3
+    open-pull-requests-limit: 5
     labels:
       - "dependencies"
       - "backend"
     groups:
-      all-dependencies:
+      patch-and-minor:
         patterns:
           - "*"
+        update-types:
+          - "version-update:semver-patch"
+          - "version-update:semver-minor"
 
   - package-ecosystem: "pip"
     directory: "/services/ingestion"
     schedule:
       interval: "weekly"
       day: "monday"
-    open-pull-requests-limit: 3
+    open-pull-requests-limit: 5
     labels:
       - "dependencies"
       - "backend"
     groups:
-      all-dependencies:
+      patch-and-minor:
         patterns:
           - "*"
+        update-types:
+          - "version-update:semver-patch"
+          - "version-update:semver-minor"
 
   - package-ecosystem: "pip"
     directory: "/services/compliance"
     schedule:
       interval: "weekly"
       day: "monday"
-    open-pull-requests-limit: 3
+    open-pull-requests-limit: 5
     labels:
       - "dependencies"
       - "backend"
     groups:
-      all-dependencies:
+      patch-and-minor:
         patterns:
           - "*"
+        update-types:
+          - "version-update:semver-patch"
+          - "version-update:semver-minor"
 
   - package-ecosystem: "pip"
     directory: "/services/graph"
     schedule:
       interval: "weekly"
       day: "monday"
-    open-pull-requests-limit: 3
+    open-pull-requests-limit: 5
     labels:
       - "dependencies"
       - "backend"
     groups:
-      all-dependencies:
+      patch-and-minor:
         patterns:
           - "*"
+        update-types:
+          - "version-update:semver-patch"
+          - "version-update:semver-minor"
 
   - package-ecosystem: "pip"
     directory: "/services/nlp"
     schedule:
       interval: "weekly"
       day: "monday"
-    open-pull-requests-limit: 3
+    open-pull-requests-limit: 5
     labels:
       - "dependencies"
       - "backend"
     groups:
-      all-dependencies:
+      patch-and-minor:
         patterns:
           - "*"
+        update-types:
+          - "version-update:semver-patch"
+          - "version-update:semver-minor"
 
   - package-ecosystem: "pip"
     directory: "/services/scheduler"
     schedule:
       interval: "weekly"
       day: "monday"
-    open-pull-requests-limit: 3
+    open-pull-requests-limit: 5
     labels:
       - "dependencies"
       - "backend"
     groups:
-      all-dependencies:
+      patch-and-minor:
         patterns:
           - "*"
+        update-types:
+          - "version-update:semver-patch"
+          - "version-update:semver-minor"
 
   # GitHub Actions
   - package-ecosystem: "github-actions"

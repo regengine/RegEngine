@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from typing import Dict, Any, List, Optional
@@ -420,3 +421,162 @@ async def revoke_all_jwt_keys(
 
     count = await _revoke_all()
     return {"status": "all_keys_revoked", "keys_revoked": count}
+
+
+# ── DLQ Replay (sysadmin only) ──────────────────────────────────────
+
+
+class DLQReplayRequest(BaseModel):
+    """Request body for bulk DLQ replay."""
+
+    ids: List[str] = Field(
+        default=[],
+        description="Specific DLQ record IDs to replay. "
+                    "If empty, replays up to `limit` dead records.",
+    )
+    limit: int = Field(
+        default=10,
+        ge=1,
+        le=1000,
+        description="Maximum number of records to replay when ids is empty.",
+    )
+
+
+class DLQReplayResult(BaseModel):
+    """Per-record replay outcome."""
+
+    id: str
+    success: bool
+    error: Optional[str] = None
+
+
+class DLQReplayResponse(BaseModel):
+    """Aggregate result of a replay request."""
+
+    replayed: int
+    failed: int
+    results: List[DLQReplayResult]
+
+
+@router.post(
+    "/dlq/replay",
+    response_model=DLQReplayResponse,
+    status_code=200,
+    summary="Replay dead-letter queue messages",
+    description=(
+        "Re-queue dead DLQ records (status='dead') so the retry worker "
+        "will attempt delivery again.  Records are NOT deleted — the audit "
+        "trail is preserved.  On success, `replayed_at` is stamped and "
+        "`replay_attempts` is incremented.  Sysadmin only."
+    ),
+    dependencies=[Depends(_require_sysadmin)],
+)
+async def replay_dlq_messages(
+    body: DLQReplayRequest,
+    current_user: UserModel = Depends(_require_sysadmin),
+    db: Session = Depends(get_session),
+) -> DLQReplayResponse:
+    """Replay dead DLQ records (sysadmin only).
+
+    For each targeted record:
+    - Re-sets status to 'pending' and next_retry_at to NOW so the retry
+      worker picks it up immediately.
+    - Increments replay_attempts.
+    - Stamps replayed_at on success.
+    - Leaves the record intact on failure (audit trail preserved).
+    """
+    now = datetime.now(timezone.utc)
+    results: List[DLQReplayResult] = []
+
+    # ── resolve target IDs ──────────────────────────────────────────
+    if body.ids:
+        # Caller provided explicit IDs — validate they exist and are dead.
+        placeholders = ", ".join(f":id_{i}" for i in range(len(body.ids)))
+        fetch_stmt = text(f"""
+            SELECT id::text, status
+            FROM dlq.webhook_failures
+            WHERE id::text IN ({placeholders})
+        """)
+        params = {f"id_{i}": str(id_) for i, id_ in enumerate(body.ids)}
+        rows = db.execute(fetch_stmt, params).fetchall()
+
+        found = {r[0]: r[1] for r in rows}
+        target_ids: List[str] = []
+        for raw_id in body.ids:
+            str_id = str(raw_id)
+            if str_id not in found:
+                results.append(DLQReplayResult(id=str_id, success=False, error="not_found"))
+            elif found[str_id] != "dead":
+                results.append(
+                    DLQReplayResult(
+                        id=str_id,
+                        success=False,
+                        error=f"status_is_{found[str_id]}_not_dead",
+                    )
+                )
+            else:
+                target_ids.append(str_id)
+    else:
+        # No IDs provided — pick the oldest dead records up to limit.
+        fetch_stmt = text("""
+            SELECT id::text
+            FROM dlq.webhook_failures
+            WHERE status = 'dead'
+            ORDER BY created_at ASC
+            LIMIT :limit
+        """)
+        rows = db.execute(fetch_stmt, {"limit": body.limit}).fetchall()
+        target_ids = [r[0] for r in rows]
+
+    # ── replay each target ──────────────────────────────────────────
+    for record_id in target_ids:
+        try:
+            update_stmt = text("""
+                UPDATE dlq.webhook_failures
+                SET status         = 'pending',
+                    retry_count    = 0,
+                    next_retry_at  = :now,
+                    updated_at     = :now,
+                    replayed_at    = :now,
+                    replay_attempts = COALESCE(replay_attempts, 0) + 1
+                WHERE id::text = :id
+                  AND status = 'dead'
+            """)
+            result = db.execute(update_stmt, {"id": record_id, "now": now})
+            db.commit()
+
+            if result.rowcount == 0:
+                # Race condition — another process already replayed it
+                results.append(
+                    DLQReplayResult(
+                        id=record_id,
+                        success=False,
+                        error="no_rows_updated_race_condition",
+                    )
+                )
+            else:
+                logger.info(
+                    "dlq_record_replayed",
+                    record_id=record_id,
+                    replayed_by=str(current_user.id),
+                )
+                results.append(DLQReplayResult(id=record_id, success=True))
+        except Exception as exc:
+            db.rollback()
+            logger.error(
+                "dlq_replay_failed",
+                record_id=record_id,
+                error=str(exc),
+            )
+            results.append(DLQReplayResult(id=record_id, success=False, error=str(exc)))
+
+    replayed = sum(1 for r in results if r.success)
+    failed = len(results) - replayed
+
+    logger.info(
+        "dlq_replay_complete",
+        replayed=replayed,
+        failed=failed,
+        requested_by=str(current_user.id),
+    )
+    return DLQReplayResponse(replayed=replayed, failed=failed, results=results)
