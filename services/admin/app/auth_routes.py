@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status, Request
+from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import select
 from datetime import timedelta, datetime, timezone
@@ -459,7 +460,16 @@ async def signup(
         select(UserModel).where(UserModel.email == normalized_email)
     ).scalar_one_or_none()
     if existing_user:
-        raise HTTPException(status_code=409, detail="User already exists")
+        # Return the same 2xx response as a successful signup to prevent email
+        # enumeration (closes #1400). We do NOT send a confirmation email here
+        # to avoid email-bombing the existing user. A "someone tried to register
+        # with your email" notification to the existing user is a nice-to-have
+        # tracked in #1400 but is intentionally omitted here.
+        logger.info("signup_duplicate_masked", email=mask_email(normalized_email))
+        return JSONResponse(
+            status_code=200,
+            content={"message": "If this email isn't already registered, you'll receive a confirmation email shortly."},
+        )
 
     try:
         validate_password(payload.password, user_context={"email": normalized_email})
