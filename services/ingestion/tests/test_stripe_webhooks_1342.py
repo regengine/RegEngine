@@ -384,9 +384,9 @@ class TestUpdateSubscriptionStatus:
         assert not any(
             k.startswith("billing:pending_sub_update:") for k in fake_redis.values
         )
-        # Log emitted.
+        # Log emitted (structlog event with kwargs).
         assert any(
-            call[1].startswith("billing_mapping_not_found ")
+            call[0] == "warning" and call[1] == "billing_mapping_not_found"
             for call in _stub_logger.calls
         )
 
@@ -954,7 +954,9 @@ class TestHandleTrialWillEnd:
         assert mapping["trial_will_end_notified_at"]  # non-empty ISO
         assert mapping["status"] == "trialing"
         assert any(
-            call[1].startswith("stripe_trial_will_end tenant_id=")
+            call[0] == "warning"
+            and call[1] == "stripe_trial_will_end"
+            and call[3].get("tenant_id") == "tenant-trial"
             for call in _stub_logger.calls
         )
 
@@ -1041,7 +1043,8 @@ class TestHandleDisputeCreated:
         # ERROR log fires (page on-call).
         assert any(
             call[0] == "error"
-            and call[1].startswith("stripe_dispute_opened tenant_id=")
+            and call[1] == "stripe_dispute_opened"
+            and call[3].get("tenant_id") == "tenant-disp"
             for call in _stub_logger.calls
         )
 
@@ -1154,10 +1157,11 @@ class TestHandleCustomerDeleted:
         # Both lookup keys deleted.
         assert "billing:customer:cus_ghost" not in fake_redis.values
         assert "billing:subscription:sub_ghost" not in fake_redis.values
-        # WARN fired.
+        # WARN fired (structlog event with tenant_id kwarg).
         assert any(
             call[0] == "warning"
-            and call[1].startswith("stripe_customer_deleted tenant_id=")
+            and call[1] == "stripe_customer_deleted"
+            and call[3].get("tenant_id") == "tenant-ghost"
             for call in _stub_logger.calls
         )
 

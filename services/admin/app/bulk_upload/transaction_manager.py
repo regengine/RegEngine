@@ -360,6 +360,47 @@ def execute_bulk_commit(
             # Flush batch to DB (writes to Postgres, keeps transaction open)
             db.flush()
 
+        # Enqueue overflow events into the transactional outbox BEFORE commit.
+        # Per ``graph_outbox.py`` docstring (lines 14-19), the outbox guarantee
+        # is "either both land or neither lands" — so the enqueue must share
+        # the transaction with the canonical Postgres write. Post-commit
+        # enqueue is what the outbox was designed to eliminate (#1695).
+        #
+        # An enqueue failure therefore propagates out of this try block and
+        # rolls back the whole bulk import. Caller retries with the same
+        # payload; the ``bulk_upload:<event_id>`` dedupe_key keeps retries
+        # idempotent.
+        MAX_SYNC_EVENTS = 100
+        events_to_enqueue = emitted_event_rows[MAX_SYNC_EVENTS:]
+        for event, lot, facility in events_to_enqueue:
+            enqueue_graph_write(
+                db,
+                tenant_id=str(tenant_id),
+                operation="cte_event_recorded",
+                cypher=CTE_EVENT_QUERY,
+                params={
+                    "operation": "cte_event_recorded",
+                    "tenant_id": str(tenant_id),
+                    "facility_id": str(facility.id),
+                    "facility_name": facility.name,
+                    "cte_event_id": str(event.id),
+                    "cte_type": event.cte_type,
+                    "event_time": _iso_utc(event.event_time),
+                    "tlc_code": lot.tlc_code,
+                    "product_description": lot.product_description,
+                    "lot_status": lot.status,
+                    "kde_data": event.kde_data or {},
+                    "payload_sha256": event.payload_sha256,
+                    "merkle_prev_hash": event.merkle_prev_hash,
+                    "merkle_hash": event.merkle_hash,
+                    "sequence_number": int(event.sequence_number),
+                    "obligation_ids": event.obligation_ids or [],
+                },
+                # Stable dedupe so a bulk-commit retry doesn't double-enqueue.
+                dedupe_key=f"bulk_upload:{event.id}",
+            )
+        enqueued_count = len(events_to_enqueue)
+
         db.commit()
 
     except SQLAlchemyError:
@@ -396,27 +437,16 @@ def execute_bulk_commit(
             )
             sync_warnings.append(f"facility_scoping:{facility.id}")
 
-    # Graph sync for events.
+    # Graph sync — fast path for the first ``MAX_SYNC_EVENTS``.
     #
-    # Fast path (first ``MAX_SYNC_EVENTS``): write to Neo4j synchronously via
-    # :func:`supplier_graph_sync.record_cte_event`. Keeps the happy path for
-    # small imports simple and responsive.
-    #
-    # Durable path (remaining events): enqueue to the ``graph_outbox`` table
-    # via :func:`enqueue_graph_write`. A background drainer (see
-    # ``services/admin/app/graph_outbox.py::GraphOutboxDrainer``) replays each
-    # row into Neo4j with retry + backoff. Prior to #1411 this code branch
-    # appended a misleading ``graph_sync_deferred`` warning claiming a
-    # background worker would pick the events up, but no such wiring existed
-    # — a 500-event bulk import silently dropped 400 Neo4j nodes. The
-    # outbox is the existing durable primitive for exactly this case
-    # (docstring of ``graph_outbox.py`` explicitly calls out the adoption
-    # pattern).
-    MAX_SYNC_EVENTS = 100
-    events_to_sync = emitted_event_rows[:MAX_SYNC_EVENTS]
-    events_to_enqueue = emitted_event_rows[MAX_SYNC_EVENTS:]
-
-    for event, lot, facility in events_to_sync:
+    # Writes Neo4j synchronously via :func:`supplier_graph_sync.record_cte_event`.
+    # Runs post-commit because the canonical Postgres row must already exist;
+    # Neo4j failures here are best-effort and surfaced as ``sync_warnings`` so
+    # operators can re-drive out-of-band. The overflow beyond ``MAX_SYNC_EVENTS``
+    # has already been atomically enqueued into ``graph_outbox`` above (see
+    # the pre-commit loop in the try block — #1695 moved it from here to
+    # honor the outbox atomicity contract).
+    for event, lot, facility in emitted_event_rows[:MAX_SYNC_EVENTS]:
         try:
             supplier_graph_sync.record_cte_event(
                 tenant_id=str(tenant_id),
@@ -443,71 +473,6 @@ def execute_bulk_commit(
                 error=str(exc),
             )
             sync_warnings.append(f"cte_event:{event.id}")
-
-    # Enqueue the overflow to graph_outbox. We do this in its own short
-    # transaction so an outbox failure never rolls back the canonical
-    # Postgres write that has already been committed. If the enqueue
-    # itself fails (bad DB state, missing table on a misconfigured env,
-    # etc.) we surface a warning and keep going — the bulk import still
-    # succeeds because the canonical FSMA data is already durable in
-    # Postgres; the graph mirror is eventually-consistent best-effort.
-    enqueued_count = 0
-    for event, lot, facility in events_to_enqueue:
-        try:
-            enqueue_graph_write(
-                db,
-                tenant_id=str(tenant_id),
-                operation="cte_event_recorded",
-                cypher=CTE_EVENT_QUERY,
-                params={
-                    "operation": "cte_event_recorded",
-                    "tenant_id": str(tenant_id),
-                    "facility_id": str(facility.id),
-                    "facility_name": facility.name,
-                    "cte_event_id": str(event.id),
-                    "cte_type": event.cte_type,
-                    "event_time": _iso_utc(event.event_time),
-                    "tlc_code": lot.tlc_code,
-                    "product_description": lot.product_description,
-                    "lot_status": lot.status,
-                    "kde_data": event.kde_data or {},
-                    "payload_sha256": event.payload_sha256,
-                    "merkle_prev_hash": event.merkle_prev_hash,
-                    "merkle_hash": event.merkle_hash,
-                    "sequence_number": int(event.sequence_number),
-                    "obligation_ids": event.obligation_ids or [],
-                },
-                # Stable dedupe so a bulk-commit retry doesn't double-enqueue.
-                dedupe_key=f"bulk_upload:{event.id}",
-            )
-            enqueued_count += 1
-        except Exception as exc:  # pragma: no cover - defensive
-            logger.warning(
-                "bulk_upload_event_graph_outbox_enqueue_failed",
-                tenant_id=str(tenant_id),
-                cte_event_id=str(event.id),
-                error=str(exc),
-            )
-            sync_warnings.append(f"graph_outbox_enqueue_failed:{event.id}")
-
-    # Commit the outbox inserts so the drainer can pick them up. Safe to
-    # run even when no rows were enqueued — commit on an empty unit of
-    # work is a no-op.
-    if events_to_enqueue:
-        try:
-            db.commit()
-        except SQLAlchemyError as exc:
-            db.rollback()
-            logger.warning(
-                "bulk_upload_event_graph_outbox_commit_failed",
-                tenant_id=str(tenant_id),
-                error=str(exc),
-            )
-            # The enqueue attempts we counted above did not actually land.
-            sync_warnings.append(
-                f"graph_outbox_commit_failed:{len(events_to_enqueue)}"
-            )
-            enqueued_count = 0
 
     if enqueued_count > 0:
         sync_warnings.append(

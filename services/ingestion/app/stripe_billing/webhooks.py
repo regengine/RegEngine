@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-import logging
 import os
 from datetime import datetime, timezone
 from typing import Any, Optional
 
 import stripe
+import structlog
 from fastapi import HTTPException, Request
 
 from shared import funnel_events as _funnel_mod
@@ -17,7 +17,7 @@ from . import helpers as _helpers_mod
 from . import plans as _plans_mod
 from . import state as _state_mod
 
-logger = logging.getLogger("stripe-billing")
+logger = structlog.get_logger("stripe-billing")
 
 
 async def _handle_checkout_completed(
@@ -64,9 +64,11 @@ async def _handle_checkout_completed(
         # tenant in metadata. Refuse rather than silently trust the
         # server-side value — we want loud telemetry.
         logger.error(
-            "stripe_webhook_metadata_tenant_mismatch "
-            "server_tenant=%s metadata_tenant=%s session_id=%s customer_id=%s",
-            tenant_id, metadata_tenant, session_id, customer_id,
+            "stripe_webhook_metadata_tenant_mismatch",
+            server_tenant=tenant_id,
+            metadata_tenant=metadata_tenant,
+            session_id=session_id,
+            customer_id=customer_id,
         )
         raise HTTPException(
             status_code=400,
@@ -80,9 +82,10 @@ async def _handle_checkout_completed(
         # existing tenant.
         if metadata_tenant:
             logger.warning(
-                "stripe_webhook_ignored_client_metadata_tenant_id "
-                "client_tenant=%s session_id=%s (no server binding exists)",
-                metadata_tenant, session_id,
+                "stripe_webhook_ignored_client_metadata_tenant_id",
+                client_tenant=metadata_tenant,
+                session_id=session_id,
+                reason="no server binding exists",
             )
 
         tenant_name = metadata.get("tenant_name")
@@ -91,7 +94,11 @@ async def _handle_checkout_completed(
             tenant_name = f"{(fallback_email or 'New Customer').split('@')[0]} Team"
 
         tenant_id = await _customers_mod._create_tenant_via_admin(tenant_name)
-        logger.info("tenant_created_from_checkout", tenant_id=tenant_id, session_id=session_id)
+        logger.info(
+            "tenant_created_from_checkout",
+            tenant_id=tenant_id,
+            session_id=session_id,
+        )
 
     subscription_id = session.get("subscription")
 
@@ -106,7 +113,11 @@ async def _handle_checkout_completed(
             subscription_status = subscription.get("status", subscription_status)
             current_period_end = _helpers_mod._format_period_end(subscription.get("current_period_end"))
         except stripe.error.StripeError as exc:  # pragma: no cover - network/API errors
-            logger.warning("subscription_lookup_failed", subscription_id=subscription_id, error=str(exc))
+            logger.warning(
+                "subscription_lookup_failed",
+                subscription_id=subscription_id,
+                error=str(exc),
+            )
 
     # #1196: the checkout event itself is the first write that establishes
     # a tenant ↔ subscription mapping. Stamp its ``event_created`` as the
@@ -160,19 +171,20 @@ async def _handle_checkout_completed(
                 existing["last_event_created"] = str(pending_event_created)
                 _state_mod._store_subscription_mapping(tenant_id, existing)
                 logger.info(
-                    "stripe_pending_update_applied "
-                    "subscription_id=%s tenant_id=%s pending_event_created=%s "
-                    "checkout_event_created=%s status=%s",
-                    subscription_id, tenant_id, pending_event_created,
-                    checkout_event_created, pending_status,
+                    "stripe_pending_update_applied",
+                    subscription_id=subscription_id,
+                    tenant_id=tenant_id,
+                    pending_event_created=pending_event_created,
+                    checkout_event_created=checkout_event_created,
+                    status=pending_status,
                 )
             else:
                 logger.info(
-                    "stripe_pending_update_superseded_by_checkout "
-                    "subscription_id=%s tenant_id=%s pending_event_created=%s "
-                    "checkout_event_created=%s",
-                    subscription_id, tenant_id, pending_event_created,
-                    checkout_event_created,
+                    "stripe_pending_update_superseded_by_checkout",
+                    subscription_id=subscription_id,
+                    tenant_id=tenant_id,
+                    pending_event_created=pending_event_created,
+                    checkout_event_created=checkout_event_created,
                 )
 
 
@@ -224,17 +236,19 @@ def _update_subscription_status(
                 },
             )
             logger.warning(
-                "billing_mapping_not_found_update_buffered "
-                "subscription_id=%s customer_id=%s status=%s "
-                "event_created=%s buffered=%s",
-                subscription_id, customer_id, status,
-                event_created, buffered,
+                "billing_mapping_not_found_update_buffered",
+                subscription_id=subscription_id,
+                customer_id=customer_id,
+                status=status,
+                event_created=event_created,
+                buffered=buffered,
             )
         else:
             logger.warning(
-                "billing_mapping_not_found "
-                "subscription_id=%s customer_id=%s status=%s",
-                subscription_id, customer_id, status,
+                "billing_mapping_not_found",
+                subscription_id=subscription_id,
+                customer_id=customer_id,
+                status=status,
             )
         return
 
@@ -248,10 +262,12 @@ def _update_subscription_status(
             last_seen = 0
         if int(event_created) < last_seen:
             logger.info(
-                "stripe_webhook_event_out_of_order_ignored "
-                "tenant_id=%s subscription_id=%s "
-                "event_created=%s last_event_created=%s status=%s",
-                tenant_id, subscription_id, event_created, last_seen, status,
+                "stripe_webhook_event_out_of_order_ignored",
+                tenant_id=tenant_id,
+                subscription_id=subscription_id,
+                event_created=event_created,
+                last_event_created=last_seen,
+                status=status,
             )
             return
 
@@ -302,9 +318,9 @@ def _handle_trial_will_end(subscription: dict[str, Any]) -> None:
     tenant_id = _state_mod._find_tenant_id(subscription_id, customer_id)
     if not tenant_id:
         logger.warning(
-            "stripe_trial_will_end_tenant_not_found "
-            "subscription_id=%s customer_id=%s",
-            subscription_id, customer_id,
+            "stripe_trial_will_end_tenant_not_found",
+            subscription_id=subscription_id,
+            customer_id=customer_id,
         )
         return
 
@@ -322,8 +338,10 @@ def _handle_trial_will_end(subscription: dict[str, Any]) -> None:
     )
     _state_mod._store_subscription_mapping(tenant_id, existing)
     logger.warning(
-        "stripe_trial_will_end tenant_id=%s subscription_id=%s trial_end=%s",
-        tenant_id, subscription_id, trial_end,
+        "stripe_trial_will_end",
+        tenant_id=tenant_id,
+        subscription_id=subscription_id,
+        trial_end=trial_end,
     )
 
 
@@ -353,9 +371,10 @@ def _handle_dispute_created(dispute: dict[str, Any]) -> None:
     tenant_id = _state_mod._find_tenant_id(None, customer_id)
     if not tenant_id:
         logger.error(
-            "stripe_dispute_tenant_not_found "
-            "dispute_id=%s charge_id=%s customer_id=%s",
-            dispute_id, charge_id, customer_id,
+            "stripe_dispute_tenant_not_found",
+            dispute_id=dispute_id,
+            charge_id=charge_id,
+            customer_id=customer_id,
         )
         return
 
@@ -381,13 +400,13 @@ def _handle_dispute_created(dispute: dict[str, Any]) -> None:
     _state_mod._store_subscription_mapping(tenant_id, existing)
     # ERROR not WARN: chargebacks must page a human.
     logger.error(
-        "stripe_dispute_opened tenant_id=%s dispute_id=%s "
-        "amount_cents=%s currency=%s reason=%s charge_id=%s",
-        tenant_id, dispute_id,
-        existing["last_dispute_amount_cents"],
-        existing["last_dispute_currency"],
-        existing["last_dispute_reason"],
-        charge_id,
+        "stripe_dispute_opened",
+        tenant_id=tenant_id,
+        dispute_id=dispute_id,
+        amount_cents=existing["last_dispute_amount_cents"],
+        currency=existing["last_dispute_currency"],
+        reason=existing["last_dispute_reason"],
+        charge_id=charge_id,
     )
 
 
@@ -417,8 +436,8 @@ def _handle_customer_deleted(customer: dict[str, Any]) -> None:
     tenant_id = _state_mod._find_tenant_id(None, customer_id)
     if not tenant_id:
         logger.warning(
-            "stripe_customer_deleted_tenant_not_found customer_id=%s",
-            customer_id,
+            "stripe_customer_deleted_tenant_not_found",
+            customer_id=customer_id,
         )
         # Still clear the stale lookup defensively — nothing bound to
         # it but also no reason to keep a dead pointer around.
@@ -440,8 +459,10 @@ def _handle_customer_deleted(customer: dict[str, Any]) -> None:
         _state_mod._clear_subscription_lookup(str(prior_subscription_id))
 
     logger.warning(
-        "stripe_customer_deleted tenant_id=%s customer_id=%s subscription_id=%s",
-        tenant_id, customer_id, prior_subscription_id or "(none)",
+        "stripe_customer_deleted",
+        tenant_id=tenant_id,
+        customer_id=customer_id,
+        subscription_id=prior_subscription_id or "(none)",
     )
 
 
@@ -563,7 +584,7 @@ async def _process_stripe_webhook(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail="Invalid webhook payload") from exc
     except stripe.error.SignatureVerificationError as exc:
-        logger.warning("stripe_webhook_signature_invalid: %s", exc)
+        logger.warning("stripe_webhook_signature_invalid", error=str(exc))
         raise HTTPException(status_code=401, detail="Invalid Stripe signature") from exc
 
     # #1076: Stripe retries any webhook that doesn't ack within a few seconds
@@ -580,9 +601,9 @@ async def _process_stripe_webhook(
     event_type = event.get("type")
     if not _state_mod._mark_event_seen(event_id or ""):
         logger.info(
-            "stripe_webhook_duplicate_ignored event_id=%s event_type=%s",
-            event_id,
-            event_type,
+            "stripe_webhook_duplicate_ignored",
+            event_id=event_id,
+            event_type=event_type,
         )
         return {
             "received": True,

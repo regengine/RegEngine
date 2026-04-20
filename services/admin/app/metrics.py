@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
+import ipaddress
 import json
 import os
+import socket
 import threading
 from contextlib import contextmanager
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
-from typing import Any, Callable, Dict, Iterable, List, Optional
+from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple
+from urllib.parse import urlparse
 from uuid import UUID
 
 import httpx
@@ -19,14 +22,137 @@ from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from .database import SessionLocal
-from .sqlalchemy_models import ReviewItemModel
+from .sqlalchemy_models import ReviewItemModel, TenantModel
+from .webhook_outbox import (
+    SIGNATURE_HEADER,
+    enqueue_webhook,
+    sign_payload,
+)
 
-# Webhook security - optional, gracefully degrade if not available
-try:
-    from shared.webhook_security import generate_signature, get_signature_header_name
-    WEBHOOK_SIGNING_AVAILABLE = True
-except ImportError:
-    WEBHOOK_SIGNING_AVAILABLE = False
+# ---------------------------------------------------------------------------
+# Review-webhook config (#1408)
+#
+# Previously a single global ``HALLUCINATION_WEBHOOK_URL`` env var fanned
+# every tenant's approvals to one URL, HMAC signing was optional, and
+# failures were swallowed. Webhook config is now per-tenant, sourced from
+# ``tenant.settings.review_webhook_url`` and ``.review_webhook_secret``:
+#
+#   * If both URL + secret are set, we dispatch per-tenant.
+#   * If either is missing, we log and skip (no silent fallback to a
+#     shared URL).
+#   * A single-tenant fallback exists via the env vars below for dev /
+#     backward-compat deploys where only one tenant is ever served.
+# ---------------------------------------------------------------------------
+
+_TENANT_SETTINGS_WEBHOOK_URL_KEY = "review_webhook_url"
+_TENANT_SETTINGS_WEBHOOK_SECRET_KEY = "review_webhook_secret"
+_TENANT_SETTINGS_WEBHOOK_ALLOWLIST_KEY = "review_webhook_host_allowlist"
+_FALLBACK_URL_ENV = "HALLUCINATION_WEBHOOK_URL"
+_FALLBACK_SECRET_ENV = "HALLUCINATION_WEBHOOK_SECRET"
+
+
+# Blocklist for SSRF — same shape as services/ingestion/app/models.py.
+_WEBHOOK_BLOCKED_HOSTNAMES = frozenset({
+    "metadata.google.internal",
+    "169.254.169.254",
+    "fd00:ec2::254",
+    "localhost",
+})
+
+_WEBHOOK_BLOCKED_NETWORKS = (
+    ipaddress.ip_network("10.0.0.0/8"),
+    ipaddress.ip_network("172.16.0.0/12"),
+    ipaddress.ip_network("192.168.0.0/16"),
+    ipaddress.ip_network("127.0.0.0/8"),
+    ipaddress.ip_network("169.254.0.0/16"),
+    ipaddress.ip_network("::1/128"),
+    ipaddress.ip_network("fc00::/7"),
+    ipaddress.ip_network("fe80::/10"),
+)
+
+
+class WebhookTargetError(ValueError):
+    """Raised when a tenant-supplied webhook URL fails validation.
+
+    The caller should log and skip rather than crash the request — a
+    misconfigured tenant webhook should not block the review-decision
+    write itself.
+    """
+
+
+def _validate_webhook_url(url: str, *, host_allowlist: Optional[Iterable[str]] = None) -> None:
+    """Reject unsafe targets (http, private IPs, metadata endpoints).
+
+    If ``host_allowlist`` is provided, the hostname MUST also appear in
+    it (case-insensitive). Without an allowlist, any public HTTPS host
+    is accepted.
+    """
+    if not url or not isinstance(url, str):
+        raise WebhookTargetError("webhook url must be a non-empty string")
+
+    parsed = urlparse(url)
+    if parsed.scheme.lower() != "https":
+        raise WebhookTargetError(f"webhook url scheme must be https, got '{parsed.scheme}'")
+
+    host = (parsed.hostname or "").strip().strip("[]")
+    if not host:
+        raise WebhookTargetError("webhook url must include a hostname")
+
+    host_lower = host.lower()
+    if host_lower in _WEBHOOK_BLOCKED_HOSTNAMES:
+        raise WebhookTargetError(f"webhook host '{host}' is not permitted (metadata/loopback)")
+
+    if host_allowlist is not None:
+        allow = {h.strip().lower() for h in host_allowlist if h and isinstance(h, str)}
+        if allow and host_lower not in allow:
+            raise WebhookTargetError(
+                f"webhook host '{host}' not in tenant allowlist"
+            )
+
+    # Literal IP short-circuit — don't bother with DNS.
+    try:
+        literal = ipaddress.ip_address(host)
+    except ValueError:
+        literal = None
+    if literal is not None:
+        _reject_if_private_ip(literal, host)
+        return
+
+    try:
+        addrinfos = socket.getaddrinfo(host, None)
+    except socket.gaierror as exc:
+        raise WebhookTargetError(f"unable to resolve webhook host '{host}': {exc}") from exc
+
+    for _family, _type, _proto, _canonname, sockaddr in addrinfos:
+        try:
+            addr = ipaddress.ip_address(sockaddr[0])
+        except (ValueError, IndexError):
+            continue
+        _reject_if_private_ip(addr, host, resolved_as=sockaddr[0])
+
+
+def _reject_if_private_ip(
+    addr: "ipaddress.IPv4Address | ipaddress.IPv6Address",
+    host: str,
+    *,
+    resolved_as: Optional[str] = None,
+) -> None:
+    detail = f"resolved '{host}' -> {resolved_as}" if resolved_as else f"host '{host}'"
+    if addr.is_private or addr.is_loopback or addr.is_link_local or addr.is_reserved:
+        raise WebhookTargetError(
+            f"webhook target in private/reserved range ({detail})"
+        )
+    for net in _WEBHOOK_BLOCKED_NETWORKS:
+        if addr in net:
+            raise WebhookTargetError(
+                f"webhook target in blocked network ({detail})"
+            )
+
+
+# Webhook signing is now provided by ``app.webhook_outbox.sign_payload``
+# (see top-of-file imports). The legacy optional ``shared.webhook_security``
+# branch was removed as part of #1408: signing is mandatory and must
+# not depend on a single global env-var secret.
 
 try:  # Optional dependency for local dev
     import redis  # type: ignore
@@ -105,23 +231,53 @@ class HallucinationTracker:
         recent_cache_size: int = 100,
         redis_ttl_seconds: int = 3600,
         webhook_url: Optional[str] = None,
+        *,
+        webhook_dispatcher: Optional[Callable[[str, bytes, dict], Tuple[int, str]]] = None,
     ) -> None:
+        """Create a tracker.
+
+        Args:
+          webhook_url: Deprecated single-global override. Kept for the
+            legacy constructor shape; tenants with a configured
+            ``review_webhook_url`` in ``tenant.settings`` take
+            precedence. If neither is set, webhook dispatch is skipped
+            entirely (no default target).
+          webhook_dispatcher: Test-seam. Callable accepting
+            ``(url, body_bytes, headers)`` and returning
+            ``(status_code, body_excerpt)``. Production uses the
+            default ``httpx``-based poster.
+        """
         self._session_factory = session_factory
         self._redis = redis_client
         self._recent_key = "hallucination:recent"
         self._recent_cache_size = recent_cache_size
         self._redis_ttl = redis_ttl_seconds
-        self._webhook_url = webhook_url or os.getenv("HALLUCINATION_WEBHOOK_URL")
+        # Legacy single-target fallback — only used when a tenant has
+        # NOT configured a per-tenant target in tenant.settings.
+        self._fallback_webhook_url = webhook_url or os.getenv(_FALLBACK_URL_ENV)
+        self._fallback_webhook_secret = os.getenv(_FALLBACK_SECRET_ENV)
+        # Preserve the old attribute for backward-compat in tests that
+        # introspect the tracker (#1408: this attribute is NO LONGER the
+        # single source of truth — _resolve_tenant_webhook takes over).
+        self._webhook_url = self._fallback_webhook_url
+        self._webhook_dispatcher = webhook_dispatcher
 
     @contextmanager
     def _session_scope(self, tenant_id: Optional[str] = None) -> Iterable[Session]:
         session = self._session_factory()
         try:
             if tenant_id:
-                session.execute(
-                    text("SET LOCAL app.tenant_id = :tid"),
-                    {"tid": str(tenant_id)},
-                )
+                # ``SET LOCAL`` is Postgres-specific — our RLS policies
+                # read ``current_setting('app.tenant_id')``. On SQLite
+                # (dev / in-memory tests) there's nothing to set; skip
+                # quietly so the caller can still use this helper
+                # against the fallback engine.
+                dialect = getattr(getattr(session, "bind", None), "dialect", None)
+                if dialect is None or dialect.name == "postgresql":
+                    session.execute(
+                        text("SET LOCAL app.tenant_id = :tid"),
+                        {"tid": str(tenant_id)},
+                    )
             yield session
             session.commit()
         except SQLAlchemyError:
@@ -630,7 +786,7 @@ class HallucinationTracker:
         if was_pending:
             self._decrement_active_metric(resolved_tenant_id)
         self._cache_snapshot(snapshot)
-        self._notify_webhook(serialized, normalized_status)
+        self._notify_webhook(serialized, normalized_status, resolved_tenant_id)
         logger.info(
             "hallucination_resolved",
             review_id=review_id,
@@ -641,52 +797,227 @@ class HallucinationTracker:
         )
         return serialized
 
-    def _notify_webhook(self, serialized: Dict[str, Any], status: str) -> None:
-        """Send webhook notification on resolution (fire-and-forget in background thread).
-        
-        Includes HMAC signature for webhook verification if signing secret is configured.
+    def _resolve_tenant_webhook(
+        self, tenant_id: Optional[UUID]
+    ) -> Tuple[Optional[str], Optional[str], Optional[List[str]]]:
+        """Load ``(url, secret, host_allowlist)`` for a tenant.
+
+        Per-tenant settings take precedence over the legacy single-
+        target env-var fallback. If the tenant has no configuration AND
+        the env-var fallback is also missing, returns ``(None, None,
+        None)`` and the caller skips dispatch.
+
+        The settings keys are:
+
+          * ``review_webhook_url``     — https target
+          * ``review_webhook_secret``  — HMAC secret
+          * ``review_webhook_host_allowlist`` — list[str] of permitted
+            hosts; optional. Absent means "any public host".
         """
-        if not self._webhook_url:
+        if tenant_id is None:
+            # No tenant scope → fall back to env vars (single-tenant / dev).
+            return (
+                self._fallback_webhook_url,
+                self._fallback_webhook_secret,
+                None,
+            )
+
+        # Tenant settings live on the TenantModel row, which is tenant-
+        # isolated by RLS. We look it up in a scoped session.
+        try:
+            with self._session_scope(tenant_id=str(tenant_id)) as session:
+                tenant = session.get(TenantModel, tenant_id)
+                settings = dict((tenant.settings or {})) if tenant is not None else {}
+        except SQLAlchemyError as exc:
+            logger.warning(
+                "webhook_tenant_settings_lookup_failed",
+                tenant_id=str(tenant_id),
+                error=str(exc),
+            )
+            settings = {}
+
+        url = settings.get(_TENANT_SETTINGS_WEBHOOK_URL_KEY)
+        secret = settings.get(_TENANT_SETTINGS_WEBHOOK_SECRET_KEY)
+        raw_allowlist = settings.get(_TENANT_SETTINGS_WEBHOOK_ALLOWLIST_KEY)
+        allowlist: Optional[List[str]] = None
+        if isinstance(raw_allowlist, list):
+            allowlist = [h for h in raw_allowlist if isinstance(h, str)]
+
+        if url and secret:
+            return url, secret, allowlist
+
+        # Partial config is a misconfiguration — we will NOT silently
+        # fall through to the shared env-var target, because that would
+        # leak Tenant A's event to a shared URL. Log and skip.
+        if url or secret:
+            logger.warning(
+                "webhook_tenant_settings_incomplete",
+                tenant_id=str(tenant_id),
+                has_url=bool(url),
+                has_secret=bool(secret),
+            )
+            return None, None, None
+
+        # No tenant config at all → fall back to env vars (single-tenant
+        # deploys). Fallback is also HMAC-signed (secret required).
+        return (
+            self._fallback_webhook_url,
+            self._fallback_webhook_secret,
+            None,
+        )
+
+    def _notify_webhook(
+        self,
+        serialized: Dict[str, Any],
+        status: str,
+        tenant_id: Optional[UUID],
+    ) -> None:
+        """Dispatch a review-resolution webhook with HMAC + outbox fallback.
+
+        Hardening for #1408:
+
+          * Target URL + secret resolved per-tenant from
+            ``tenant.settings`` (fallback env vars for single-tenant
+            deploys).
+          * URL validated against SSRF guard (https only, public hosts,
+            optional per-tenant allowlist).
+          * HMAC-SHA256 signature is MANDATORY — no secret, no dispatch.
+          * On non-2xx / timeout / connection error the payload is
+            enqueued to ``webhook_outbox`` for durable retry by the
+            drainer. No silent swallow.
+
+        Runs in a daemon thread so API-response latency is unchanged.
+        """
+        review_id = serialized.get("review_id")
+        url, secret, allowlist = self._resolve_tenant_webhook(tenant_id)
+
+        if not url or not secret:
+            # Tenant opted out / dev deploy without env vars → no
+            # dispatch. Explicitly distinct from the failure path: this
+            # is configuration, not a delivery problem.
+            logger.debug(
+                "webhook_skipped_no_config",
+                review_id=review_id,
+                tenant_id=str(tenant_id) if tenant_id else None,
+                has_url=bool(url),
+                has_secret=bool(secret),
+            )
             return
-        
-        def _send():
+
+        # SSRF guard — rejects private/loopback/metadata targets even
+        # if the tenant settings were set by a compromised admin.
+        try:
+            _validate_webhook_url(url, host_allowlist=allowlist)
+        except WebhookTargetError as exc:
+            hallucination_webhook_calls_total.labels(status="rejected").inc()
+            logger.warning(
+                "webhook_target_rejected",
+                review_id=review_id,
+                tenant_id=str(tenant_id) if tenant_id else None,
+                error=str(exc),
+            )
+            return
+
+        payload = {
+            "event": "hallucination_resolved",
+            "status": status,
+            "data": serialized,
+            "timestamp": self._now().isoformat(),
+        }
+        payload_bytes = json.dumps(payload, default=str, sort_keys=True).encode("utf-8")
+        headers = {
+            "Content-Type": "application/json",
+            SIGNATURE_HEADER: sign_payload(payload_bytes, secret),
+            "X-RegEngine-Event": "hallucination_resolved",
+        }
+        if tenant_id is not None:
+            headers["X-RegEngine-Tenant"] = str(tenant_id)
+
+        dedupe_key = (
+            f"{review_id}:{status}"
+            if review_id
+            else None
+        )
+        tenant_str = str(tenant_id) if tenant_id else None
+
+        def _send() -> None:
+            status_code: Optional[int] = None
+            transport_error: Optional[str] = None
             try:
-                payload = {
-                    "event": "hallucination_resolved",
-                    "status": status,
-                    "data": serialized,
-                    "timestamp": self._now().isoformat(),
-                }
-                payload_bytes = json.dumps(payload, default=str).encode("utf-8")
-                
-                # Build headers with optional HMAC signature
-                headers = {"Content-Type": "application/json"}
-                if WEBHOOK_SIGNING_AVAILABLE:
-                    try:
-                        signature = generate_signature(payload_bytes)
-                        headers[get_signature_header_name("regengine")] = signature
-                    except ValueError:
-                        # No signing secret configured - send unsigned
-                        logger.debug("webhook_signing_secret_not_configured")
-                
-                with httpx.Client(timeout=5.0) as client:
-                    resp = client.post(
-                        self._webhook_url,
-                        content=payload_bytes,
-                        headers=headers,
-                    )
-                    resp.raise_for_status()
+                dispatcher = self._webhook_dispatcher
+                if dispatcher is not None:
+                    status_code, _body_excerpt = dispatcher(url, payload_bytes, headers)
+                else:
+                    with httpx.Client(timeout=5.0) as client:
+                        resp = client.post(
+                            url,
+                            content=payload_bytes,
+                            headers=headers,
+                        )
+                        status_code = resp.status_code
+            except Exception as exc:  # noqa: BLE001 — classified below
+                transport_error = str(exc)
+
+            if transport_error is None and status_code is not None and 200 <= status_code < 300:
                 hallucination_webhook_calls_total.labels(status="success").inc()
-                logger.info("webhook_notification_sent", review_id=serialized.get("review_id"))
-            except Exception as exc:
-                hallucination_webhook_calls_total.labels(status="error").inc()
-                logger.warning(
-                    "webhook_notification_failed",
-                    error=str(exc),
-                    review_id=serialized.get("review_id"),
+                logger.info(
+                    "webhook_notification_sent",
+                    review_id=review_id,
+                    tenant_id=tenant_str,
+                    status_code=status_code,
                 )
-        
-        # Fire-and-forget: don't block the API response
+                return
+
+            # Failure → enqueue for durable retry. We don't distinguish
+            # transient vs terminal here; the drainer classifies via
+            # ``_is_transient_status`` and either reschedules or marks
+            # the row failed.
+            hallucination_webhook_calls_total.labels(status="error").inc()
+            reason = transport_error or f"HTTP {status_code}"
+            logger.warning(
+                "webhook_notification_failed_enqueued",
+                review_id=review_id,
+                tenant_id=tenant_str,
+                status_code=status_code,
+                error=reason,
+            )
+            if tenant_str is None:
+                # Without a tenant we can't store the outbox row (the
+                # column is NOT NULL). This only happens on the env-var
+                # fallback path, i.e. single-tenant dev deploys.
+                logger.warning(
+                    "webhook_notification_no_tenant_cannot_enqueue",
+                    review_id=review_id,
+                )
+                return
+
+            # Enqueue in its own transaction so the outbox row survives
+            # even when this thread runs after the review transaction
+            # already committed.
+            try:
+                session = self._session_factory()
+                try:
+                    enqueue_webhook(
+                        session,
+                        tenant_id=tenant_str,
+                        event_type="hallucination_resolved",
+                        target_url=url,
+                        payload=payload,
+                        dedupe_key=dedupe_key,
+                    )
+                    session.commit()
+                finally:
+                    session.close()
+            except Exception as enqueue_err:  # noqa: BLE001
+                # Last-resort: the outbox itself failed. Log at error
+                # level so the alert fires — we've lost the event.
+                logger.error(
+                    "webhook_outbox_enqueue_failed",
+                    review_id=review_id,
+                    tenant_id=tenant_str,
+                    error=str(enqueue_err),
+                )
+
         thread = threading.Thread(target=_send, daemon=True)
         thread.start()
 

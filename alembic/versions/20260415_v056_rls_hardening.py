@@ -6,6 +6,25 @@ Consolidates raw SQL migrations:
   - SQL_V050: RLS on food_traceability_list, obligations, obligation_cte_rules (Supabase auth)
   - V056: RLS on obligations, controls, regulations, ftl (regengine roles)
 
+Known overlap with v051 — #1247
+---------------------------------
+Parts 1/3/4 below re-state work that v051 already performed (SQL_V048
+sysadmin role/audit schema/trigger function/set_admin_context helper,
+plus RLS policies on core tables). Every CREATE in Part 1 is guarded
+(``IF NOT EXISTS`` / ``CREATE OR REPLACE`` / ``DO $$ IF NOT EXISTS``),
+so running v056 on a database where v051 already applied is a no-op for
+the sysadmin/audit infrastructure. The only non-idempotent statement is
+the ``DROP FUNCTION get_tenant_context() CASCADE`` at line ~120, which
+is now guarded (see inline comment) to only drop-and-recreate when the
+function's return type differs from UUID — on a DB where the UUID
+signature is already in place, the CASCADE is skipped and dependent
+policies are preserved.
+
+v063 (``20260417_v063_restore_memberships_policy.py``) + v065
+(``20260417_v065_audit_orphan_rls_tables.py``) are the backstops for any
+policies historically dropped by the pre-guard CASCADE behavior; this
+file's guard prevents **future** re-runs from tripping the same issue.
+
 Revision ID: c2d3e4f5a6b7
 Revises: b1c2d3e4f5a6
 Create Date: 2026-04-15
@@ -112,23 +131,57 @@ def upgrade() -> None:
     # ================================================================
     # Must run BEFORE creating policies, because policies on UUID columns
     # need get_tenant_context() to return UUID, not TEXT.
-
-    # Drop existing function (return type change requires DROP first)
-    # CASCADE drops dependent policies — we'll recreate them below
-    op.execute("DROP FUNCTION IF EXISTS get_tenant_context() CASCADE")
+    #
+    # Guard (#1247): the original code was an unconditional
+    #   DROP FUNCTION IF EXISTS get_tenant_context() CASCADE
+    # which silently dropped every dependent RLS policy — including
+    # v051's policies (see #1227). We now only DROP+CREATE when the
+    # function is absent or has the legacy TEXT return type. If the
+    # UUID-returning version is already in place (common on a DB where
+    # v056 previously applied, or where a future migration recreated
+    # it), we skip the destructive path entirely and dependent policies
+    # are preserved.
     op.execute("""
-        CREATE FUNCTION get_tenant_context()
-        RETURNS UUID AS $fn$
+        DO $v056_fn$
         DECLARE
-            tid TEXT;
+            v_needs_recreate boolean;
         BEGIN
-            tid := NULLIF(current_setting('app.tenant_id', TRUE), '');
-            IF tid IS NULL THEN
-                RAISE EXCEPTION 'app.tenant_id not set - tenant context required for RLS';
+            SELECT NOT EXISTS (
+                SELECT 1
+                FROM pg_proc p
+                JOIN pg_type t ON p.prorettype = t.oid
+                JOIN pg_namespace n ON p.pronamespace = n.oid
+                WHERE p.proname = 'get_tenant_context'
+                  AND p.pronargs = 0
+                  AND t.typname = 'uuid'
+                  AND n.nspname = ANY (current_schemas(true))
+            ) INTO v_needs_recreate;
+
+            IF v_needs_recreate THEN
+                -- Function absent or returns TEXT — must recreate.
+                -- CASCADE is still needed here because changing return
+                -- type requires DROP, and any dependent policies will
+                -- be re-established by the loops below (and by the
+                -- v063/v065 backstops for tables outside those lists).
+                EXECUTE 'DROP FUNCTION IF EXISTS get_tenant_context() CASCADE';
+                EXECUTE $fn_body$
+                    CREATE FUNCTION get_tenant_context()
+                    RETURNS UUID AS $fn$
+                    DECLARE
+                        tid TEXT;
+                    BEGIN
+                        tid := NULLIF(current_setting('app.tenant_id', TRUE), '');
+                        IF tid IS NULL THEN
+                            RAISE EXCEPTION 'app.tenant_id not set - tenant context required for RLS';
+                        END IF;
+                        RETURN tid::UUID;
+                    END;
+                    $fn$ LANGUAGE plpgsql
+                $fn_body$;
             END IF;
-            RETURN tid::UUID;
-        END;
-        $fn$ LANGUAGE plpgsql
+            -- else: function exists with UUID signature, leave it and
+            -- its dependent policies alone.
+        END $v056_fn$;
     """)
 
     # 1e. Update RLS policies with dual session+role check + audit triggers

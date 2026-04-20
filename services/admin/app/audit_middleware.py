@@ -33,26 +33,68 @@ _AUDIT_SKIP_PATHS: frozenset[str] = frozenset({
     "/favicon.ico",
 })
 
+# Prefix matches — any subpath under these is also skipped. Covers FastAPI's
+# Swagger static assets (/docs/oauth2-redirect, etc.) and future health
+# subpaths like /health/db without a code change.
+_AUDIT_SKIP_PREFIXES: tuple[str, ...] = (
+    "/health/",
+    "/healthz/",
+    "/ready/",
+    "/readyz/",
+    "/docs/",
+    "/redoc/",
+    "/metrics/",
+)
+
 
 def _should_skip(path: str) -> bool:
     """Check if this request path is in the audit-middleware skip list."""
     if path in _AUDIT_SKIP_PATHS:
         return True
-    # /docs/*, /redoc/* — FastAPI mounts sub-paths for Swagger assets.
-    if path.startswith(("/docs/", "/redoc/")):
+    if path.startswith(_AUDIT_SKIP_PREFIXES):
         return True
     return False
 
 
+def _should_skip_request(method: str, path: str) -> bool:
+    """Return True when the request should bypass audit context.
+
+    Beyond the path skip list we also skip CORS preflight (``OPTIONS``) on
+    any route: preflights carry no authenticated actor and must return
+    204/200 before auth runs, so attaching audit context is pointless and
+    opens an XFF-spoofing surface on every route in the service.
+    """
+    if method == "OPTIONS":
+        return True
+    return _should_skip(path)
+
+
 def _trusted_proxy_cidrs() -> list[ipaddress._BaseNetwork]:
-    """Parse AUDIT_TRUSTED_PROXY_CIDRS env into a list of IP networks.
+    """Parse trusted-proxy CIDRs from env into a list of IP networks.
 
     #1414: ``X-Forwarded-For`` is trusted ONLY when the immediate
     connection originates from a trusted proxy. In production this is
     typically the Railway edge CIDR range; in dev it can include
     127.0.0.0/8. Unset = no proxies trusted; XFF is ignored.
+
+    Two env vars are accepted, checked in order:
+
+    1. ``AUDIT_TRUSTED_PROXY_CIDRS`` — original name, preserved for
+       back-compat with existing deploy configs.
+    2. ``TRUSTED_PROXY_CIDRS`` — shorter alias; may be shared with other
+       services in future.
+
+    If both are set, ``AUDIT_TRUSTED_PROXY_CIDRS`` wins (explicit beats
+    generic) and we log a warning so ops notices the redundancy.
     """
-    raw = os.getenv("AUDIT_TRUSTED_PROXY_CIDRS", "").strip()
+    raw_audit = os.getenv("AUDIT_TRUSTED_PROXY_CIDRS", "").strip()
+    raw_shared = os.getenv("TRUSTED_PROXY_CIDRS", "").strip()
+    if raw_audit and raw_shared and raw_audit != raw_shared:
+        logger.warning(
+            "trusted_proxy_env_conflict",
+            reason="AUDIT_TRUSTED_PROXY_CIDRS and TRUSTED_PROXY_CIDRS disagree; using AUDIT_TRUSTED_PROXY_CIDRS",
+        )
+    raw = raw_audit or raw_shared
     if not raw:
         return []
     cidrs: list[ipaddress._BaseNetwork] = []
@@ -98,8 +140,10 @@ class AuditContextMiddleware(BaseHTTPMiddleware):
     """
 
     async def dispatch(self, request: Request, call_next):
-        # #1414: skip health / docs / metrics — audit pressure without value.
-        if _should_skip(request.url.path):
+        # #1414: skip CORS preflight + health / docs / metrics — audit
+        # pressure without value, and an XFF-spoofing surface on
+        # unauthenticated routes.
+        if _should_skip_request(request.method, request.url.path):
             return await call_next(request)
 
         request_id = str(uuid.uuid4())
@@ -117,10 +161,14 @@ class AuditContextMiddleware(BaseHTTPMiddleware):
     def _get_client_ip(request: Request) -> str:
         """Extract real IP. #1414: ``X-Forwarded-For`` and
         ``X-Real-IP`` are honored ONLY when the immediate peer is a
-        trusted proxy (AUDIT_TRUSTED_PROXY_CIDRS). Otherwise we use the
-        raw socket address so attackers can't spoof ``actor_ip`` on
-        unauthenticated routes to evade per-IP rate limits or blame
-        another IP in audit.
+        trusted proxy (AUDIT_TRUSTED_PROXY_CIDRS / TRUSTED_PROXY_CIDRS).
+        Otherwise we use the raw socket address so attackers can't spoof
+        ``actor_ip`` on unauthenticated routes to evade per-IP rate
+        limits or blame another IP in audit.
+
+        Malformed XFF (first hop not a valid IP) falls back to the socket
+        address rather than returning garbage. IPv6 hops are accepted
+        natively by ``ipaddress.ip_address``.
         """
         client_host = request.client.host if request.client else None
 
@@ -128,9 +176,27 @@ class AuditContextMiddleware(BaseHTTPMiddleware):
             forwarded = request.headers.get("x-forwarded-for")
             if forwarded:
                 # Left-most hop is the originator when the chain is trusted.
-                return forwarded.split(",")[0].strip()
+                first_hop = forwarded.split(",")[0].strip()
+                if first_hop and _looks_like_ip(first_hop):
+                    return first_hop
             real_ip = request.headers.get("x-real-ip")
             if real_ip:
-                return real_ip.strip()
+                candidate = real_ip.strip()
+                if candidate and _looks_like_ip(candidate):
+                    return candidate
 
         return client_host or "unknown"
+
+
+def _looks_like_ip(value: str) -> bool:
+    """Lightweight IPv4/IPv6 validity check. Prevents a malformed XFF
+    hop (e.g. a hostname, an empty string, ``'unknown'``) from landing
+    in ``actor_ip`` where downstream audit + rate-limit code assumes an
+    IP. IPv6 addresses with zone ids (``fe80::1%eth0``) are rejected —
+    they would never appear in a legitimate XFF hop.
+    """
+    try:
+        ipaddress.ip_address(value)
+    except ValueError:
+        return False
+    return True
