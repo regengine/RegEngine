@@ -14,9 +14,11 @@ preserves the audit trail's integrity while removing PII.
 from __future__ import annotations
 
 import logging
+import os
 import uuid
 from typing import Optional
 
+import structlog
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
@@ -24,7 +26,59 @@ from sqlalchemy.orm import Session
 from app.dependencies import get_current_user
 from shared.database import get_db
 
-logger = logging.getLogger("erasure")
+logger = structlog.get_logger("erasure")
+
+# Cypher to detach-delete every node belonging to a tenant.
+# tenant_id is always passed as a parameter, never interpolated.
+_CYPHER_DELETE_TENANT_SUBGRAPH = (
+    "MATCH (n {tenant_id: $tenant_id}) DETACH DELETE n"
+)
+
+
+async def _delete_neo4j_tenant_subgraph(tenant_id: str) -> None:
+    """Delete all Neo4j nodes for *tenant_id* as part of GDPR erasure.
+
+    This is best-effort: if Neo4j is not configured (``NEO4J_URI`` /
+    ``NEO4J_URL`` absent) the call is skipped silently.  If the driver is
+    configured but the query fails, a warning is logged and the function
+    returns without raising so that the already-committed Postgres erasure
+    is not affected.
+
+    ``tenant_id`` is passed as a Cypher parameter to prevent injection.
+    """
+    neo4j_uri = (os.getenv("NEO4J_URI") or os.getenv("NEO4J_URL") or "").strip()
+    if not neo4j_uri:
+        logger.debug(
+            "erasure_neo4j_skip",
+            reason="NEO4J_URI not configured",
+            tenant_id=tenant_id,
+        )
+        return
+
+    try:
+        from neo4j import AsyncGraphDatabase
+
+        neo4j_user = os.getenv("NEO4J_USER", "neo4j")
+        neo4j_password = os.getenv("NEO4J_PASSWORD", "")
+        async with AsyncGraphDatabase.driver(
+            neo4j_uri, auth=(neo4j_user, neo4j_password)
+        ) as neo4j_driver:
+            async with neo4j_driver.session() as session:
+                await session.run(
+                    _CYPHER_DELETE_TENANT_SUBGRAPH,
+                    tenant_id=tenant_id,
+                )
+        logger.info(
+            "erasure_neo4j_subgraph_deleted",
+            tenant_id=tenant_id,
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(
+            "erasure_neo4j_subgraph_failed",
+            tenant_id=tenant_id,
+            error=str(exc),
+        )
+
 
 router = APIRouter(prefix="/v1/account", tags=["Account"])
 
@@ -176,6 +230,13 @@ async def request_erasure(
                 )
 
             db.commit()
+
+        # 3. Best-effort Neo4j subgraph deletion (GDPR data minimisation).
+        #    Runs AFTER the Postgres commit so the primary erasure is always
+        #    durable even if Neo4j is unavailable.  tenant_id is passed as a
+        #    Cypher parameter — never string-formatted — to prevent injection.
+        if tenant_id is not None:
+            await _delete_neo4j_tenant_subgraph(str(tenant_id))
 
         return ErasureResponse(
             status="accepted",
