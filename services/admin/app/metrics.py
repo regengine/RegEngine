@@ -199,6 +199,30 @@ class HallucinationTracker:
         )
         return result
 
+    def _serialize_list_item(self, item: ReviewItemModel) -> Dict[str, Any]:
+        """Lean projection for list aggregates (#1409).
+
+        Lists can return up to 100 rows; materializing the full
+        ``text_raw`` (potentially 10MB+ of OCR output) for every row
+        produced multi-GB responses. Callers that need the full text
+        must fetch the single-item detail via ``get_hallucination``.
+
+        A bounded ``text_preview`` (<= 200 chars) is included so the
+        UI can render a list row without a second round-trip. The raw
+        text is truncated at the tracker layer so the megabytes never
+        leave SQLAlchemy's row buffer for list requests.
+        """
+        snapshot = self._snapshot(item)
+        result = asdict(snapshot)
+        raw = item.text_raw or ""
+        result.update(
+            {
+                "reviewer_id": item.reviewer_id,
+                "text_preview": raw[:200],
+            }
+        )
+        return result
+
     def record_hallucination(
         self,
         *,
@@ -419,7 +443,10 @@ class HallucinationTracker:
                 next_cursor = f"{last_item.created_at.isoformat()}_{last_item.id}"
             
             return {
-                "items": [self._serialize(item) for item in items],
+                # List aggregates use the lean projection (#1409):
+                # full ``text_raw`` is excluded; a bounded
+                # ``text_preview`` (<= 200 chars) is included instead.
+                "items": [self._serialize_list_item(item) for item in items],
                 "next_cursor": next_cursor,
                 "has_more": has_more,
             }
