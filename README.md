@@ -20,8 +20,9 @@ on the production spine and must not shape core architecture decisions.
 
 ## Architecture
 
-6 FastAPI microservices on Railway + Next.js frontend on Vercel.
-Target architecture is a modular monolith (consolidation not yet started).
+Today: 6 FastAPI microservices on Railway + Next.js frontend on Vercel.
+Target: modular monolith on PostgreSQL, replacing Kafka/Neo4j/Redis. Consolidation
+is planned but not yet started — see [ARCHITECTURE.md](ARCHITECTURE.md).
 
 | Service | Port | Purpose |
 |---------|------|---------|
@@ -32,9 +33,55 @@ Target architecture is a modular monolith (consolidation not yet started).
 | nlp | 8004 | Document ingestion, regulatory text extraction |
 | scheduler | 8005 | Cron jobs, recall drills, export scheduling |
 
-Shared code lives in `services/shared/` (56 modules, 433 import references).
+Shared code lives in `services/shared/` (56 modules, 433 import references),
+including the compliance rules engine and kernel/control plane.
 
-**Infrastructure:** PostgreSQL (Supabase), Redis, Neo4j, Redpanda (Kafka-compatible), Railway (backend), Vercel (frontend).
+**Infrastructure (current):** PostgreSQL (Supabase), Redis, Neo4j, Redpanda
+(Kafka-compatible), Railway (backend), Vercel (frontend).
 
-See [ARCHITECTURE.md](ARCHITECTURE.md) for dependency management and technical debt tracking.
-See [CURRENT_SYSTEM_MAP.md](CURRENT_SYSTEM_MAP.md) for the internal survival map.
+**Infrastructure (target):** PostgreSQL only — Redis replaced by Postgres-backed
+queues/cache, Neo4j replaced by recursive CTEs, Kafka replaced by outbox pattern.
+
+## Quickstart
+
+Prerequisites: Python 3.13, Node 24, Docker, `uv`, `pnpm`.
+
+```bash
+# Install deps
+uv sync
+pnpm install
+
+# Start local infra (Postgres, Redis, Neo4j, Redpanda)
+docker compose up -d
+
+# Run migrations
+uv run python -m services.shared.db.migrate
+
+# Start a service (e.g. ingestion)
+uv run uvicorn services.ingestion.main:app --port 8002 --reload
+
+# Start the frontend
+cd apps/web && pnpm dev
+```
+
+Use the `regengine-service-runner` skill to start/stop services and tail logs.
+
+## Development
+
+- **Migrations:** `services/shared/db/migrations/` — see `regengine-migrations` skill.
+- **Testing:** `uv run pytest services/<name>/tests/` per service. Full-suite
+  runs currently cascade due to fixture bleed; per-file runs are reliable.
+- **Refactor/debug workflows:** `regengine-refactor`, `regengine-troubleshoot` skills.
+- **API quality checks:** `regengine-api-quality` skill.
+- **Deploy:** `regengine-deploy` skill wraps Railway + Vercel flows.
+
+## Documentation
+
+- [ARCHITECTURE.md](ARCHITECTURE.md) — dependency management, tech debt tracking.
+- [CURRENT_SYSTEM_MAP.md](CURRENT_SYSTEM_MAP.md) — internal survival map.
+
+## Contributing
+
+Solo-founder repo. PRs from the worktree workflow; security and compliance fixes
+take precedence over cosmetic changes. Phone-test critical flows before merging
+to `main`.
