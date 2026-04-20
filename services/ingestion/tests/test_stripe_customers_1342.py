@@ -32,7 +32,6 @@ retry window and stall tenant provisioning.
 from __future__ import annotations
 
 import asyncio
-import logging
 import sys
 import types
 from pathlib import Path
@@ -45,43 +44,17 @@ sys.path.insert(0, str(service_dir))
 pytest.importorskip("fastapi")
 pytest.importorskip("stripe")
 
+import structlog  # noqa: E402
 from fastapi import HTTPException  # noqa: E402
 
 from app.stripe_billing import customers as mod  # noqa: E402
 
 
 # ---------------------------------------------------------------------------
-# Logger stub — customers.py calls stdlib logging.Logger.error(..., kwargs)
-# with structlog-style kwargs (tenant_id=, error=) which stdlib rejects
-# with TypeError. Replace the module logger with a recorder so StripeError
-# paths are testable. The underlying call-convention bug is tracked
-# separately; this test file only pins the function's externally-visible
-# behavior (which HTTPException it raises).
+# customers.py now uses structlog.get_logger(...). Stripe/StripeError paths
+# emit structured events and we assert on them with
+# structlog.testing.capture_logs() where needed.
 # ---------------------------------------------------------------------------
-
-
-class _RecorderLogger:
-    def __init__(self):
-        self.calls: list[tuple[str, tuple, dict]] = []
-
-    def error(self, msg, *args, **kwargs):
-        self.calls.append(("error", (msg,) + args, kwargs))
-
-    def warning(self, msg, *args, **kwargs):
-        self.calls.append(("warning", (msg,) + args, kwargs))
-
-    def info(self, msg, *args, **kwargs):
-        self.calls.append(("info", (msg,) + args, kwargs))
-
-    def debug(self, msg, *args, **kwargs):
-        self.calls.append(("debug", (msg,) + args, kwargs))
-
-
-@pytest.fixture
-def rec_logger(monkeypatch):
-    rec = _RecorderLogger()
-    monkeypatch.setattr(mod, "logger", rec)
-    return rec
 
 
 # ---------------------------------------------------------------------------
@@ -335,7 +308,7 @@ class TestCreateCustomerForTenant:
         assert captured["name"] == "Tenant tenant-42"
 
     def test_stripe_error_raises_http_502_with_user_message(
-        self, monkeypatch, rec_logger
+        self, monkeypatch
     ):
         # The user-safe message is exposed; raw internals stay in the
         # logs. Regression guard against accidentally echoing stripe's
@@ -356,16 +329,21 @@ class TestCreateCustomerForTenant:
 
         monkeypatch.setattr(mod.stripe.Customer, "create", _fake_create)
 
-        with pytest.raises(HTTPException) as ei:
-            mod._create_customer_for_tenant("t", "Acme", "ops@acme.com")
+        with structlog.testing.capture_logs() as cap_logs:
+            with pytest.raises(HTTPException) as ei:
+                mod._create_customer_for_tenant("t", "Acme", "ops@acme.com")
 
         assert ei.value.status_code == 502
         assert "Your card was declined." in ei.value.detail
-        # Raw internals stayed in the logger call, not the HTTP body.
-        assert any(c[0] == "error" for c in rec_logger.calls)
+        # Raw internals stayed in the logger event, not the HTTP body.
+        assert any(
+            e["log_level"] == "error"
+            and e["event"] == "stripe_customer_create_failed"
+            for e in cap_logs
+        )
 
     def test_stripe_error_falls_back_to_str_when_no_user_message(
-        self, monkeypatch, rec_logger
+        self, monkeypatch
     ):
         # ``exc.user_message or str(exc)`` — empty/None user_message
         # means show the technical message rather than an empty body.

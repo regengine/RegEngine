@@ -110,7 +110,7 @@ const CSRF_EXEMPT_PREFIXES = [
     // Both webhook paths: /api/webhooks/* for local handlers, /api/v1/webhooks/*
     // for the next.config.js rewrite to the ingestion service. External senders
     // authenticate via HMAC signatures, not Bearer tokens, so they don't hit
-    // the Bearer bypass in middleware.ts.
+    // the Bearer bypass in src/proxy.ts.
     '/api/webhooks/',
     '/api/v1/webhooks/',
     '/api/session',

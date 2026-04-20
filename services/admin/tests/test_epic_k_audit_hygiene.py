@@ -25,6 +25,7 @@ from app import audit  # noqa: E402
 from app.audit_integrity import verify_chain  # noqa: E402
 from app.audit_middleware import (  # noqa: E402
     _should_skip,
+    _should_skip_request,
     _trusted_proxy_cidrs,
     _is_trusted_proxy,
     AuditContextMiddleware,
@@ -41,6 +42,10 @@ from app.audit_middleware import (  # noqa: E402
     [
         ("/health", True),
         ("/healthz", True),
+        ("/health/db", True),  # /health/* subpath — #1414
+        ("/health/live", True),
+        ("/ready", True),
+        ("/readyz", True),
         ("/docs", True),
         ("/docs/oauth2-redirect", True),
         ("/openapi.json", True),
@@ -48,10 +53,33 @@ from app.audit_middleware import (  # noqa: E402
         ("/favicon.ico", True),
         ("/admin/users", False),
         ("/v1/compliance/00000000-0000-0000-0000-000000000000/alerts", False),
+        # "/healthcheck" must NOT match /health skip — it's a real route name.
+        ("/healthcheck", False),
     ],
 )
 def test_should_skip(path, expected):
     assert _should_skip(path) is expected
+
+
+@pytest.mark.parametrize(
+    "method,path,expected",
+    [
+        # OPTIONS preflight is always skipped regardless of path — #1414.
+        ("OPTIONS", "/admin/users", True),
+        ("OPTIONS", "/v1/compliance/alerts", True),
+        ("OPTIONS", "/health", True),
+        # Normal methods on real routes are NOT skipped.
+        ("GET", "/admin/users", False),
+        ("POST", "/v1/admin/invitations", False),
+        ("PATCH", "/v1/admin/users/1/role", False),
+        # Normal methods on skip-list paths ARE skipped.
+        ("GET", "/health", True),
+        ("GET", "/docs", True),
+        ("GET", "/metrics", True),
+    ],
+)
+def test_should_skip_request(method, path, expected):
+    assert _should_skip_request(method, path) is expected
 
 
 # ---------------------------------------------------------------------------
@@ -61,8 +89,33 @@ def test_should_skip(path, expected):
 
 def test_trusted_proxy_env_unset(monkeypatch):
     monkeypatch.delenv("AUDIT_TRUSTED_PROXY_CIDRS", raising=False)
+    monkeypatch.delenv("TRUSTED_PROXY_CIDRS", raising=False)
     assert _trusted_proxy_cidrs() == []
     assert _is_trusted_proxy("10.0.0.1") is False
+
+
+def test_trusted_proxy_shared_alias_accepted(monkeypatch):
+    """``TRUSTED_PROXY_CIDRS`` is accepted as an alias for
+    ``AUDIT_TRUSTED_PROXY_CIDRS`` so this config can be shared across
+    services without duplicating env per service."""
+    monkeypatch.delenv("AUDIT_TRUSTED_PROXY_CIDRS", raising=False)
+    monkeypatch.setenv("TRUSTED_PROXY_CIDRS", "10.0.0.0/8")
+    assert _is_trusted_proxy("10.0.0.5") is True
+
+
+def test_trusted_proxy_audit_var_wins_over_shared(monkeypatch):
+    """If both env vars are set, the explicit AUDIT_* name wins."""
+    monkeypatch.setenv("AUDIT_TRUSTED_PROXY_CIDRS", "10.0.0.0/8")
+    monkeypatch.setenv("TRUSTED_PROXY_CIDRS", "172.16.0.0/12")
+    assert _is_trusted_proxy("10.0.0.5") is True
+    assert _is_trusted_proxy("172.16.0.5") is False
+
+
+def test_trusted_proxy_ipv6_cidr(monkeypatch):
+    """IPv6 CIDRs are honored — at minimum we don't crash on an IPv6 peer."""
+    monkeypatch.setenv("AUDIT_TRUSTED_PROXY_CIDRS", "2001:db8::/32")
+    assert _is_trusted_proxy("2001:db8::1") is True
+    assert _is_trusted_proxy("2001:db9::1") is False
 
 
 def test_trusted_proxy_single_cidr(monkeypatch):
@@ -138,6 +191,159 @@ def test_get_client_ip_trusted_falls_back_to_x_real_ip(monkeypatch):
 def test_get_client_ip_no_client():
     req = _FakeRequest(headers={}, client_host=None)
     assert AuditContextMiddleware._get_client_ip(req) == "unknown"
+
+
+def test_get_client_ip_trusted_malformed_xff_falls_back(monkeypatch):
+    """Trusted peer, but XFF first hop isn't a valid IP — fall back to
+    the socket address rather than returning garbage into actor_ip."""
+    monkeypatch.setenv("AUDIT_TRUSTED_PROXY_CIDRS", "192.168.0.0/16")
+    req = _FakeRequest(
+        headers={"x-forwarded-for": "not-an-ip"},
+        client_host="192.168.1.100",
+    )
+    assert AuditContextMiddleware._get_client_ip(req) == "192.168.1.100"
+
+
+def test_get_client_ip_trusted_empty_xff_falls_back(monkeypatch):
+    """Trusted peer, empty XFF header — fall back to socket address."""
+    monkeypatch.setenv("AUDIT_TRUSTED_PROXY_CIDRS", "192.168.0.0/16")
+    req = _FakeRequest(
+        headers={"x-forwarded-for": "   "},
+        client_host="192.168.1.100",
+    )
+    assert AuditContextMiddleware._get_client_ip(req) == "192.168.1.100"
+
+
+def test_get_client_ip_trusted_ipv6_xff(monkeypatch):
+    """IPv6 hop in XFF from a trusted proxy is accepted."""
+    monkeypatch.setenv("AUDIT_TRUSTED_PROXY_CIDRS", "2001:db8::/32")
+    req = _FakeRequest(
+        headers={"x-forwarded-for": "2001:db8::1, 10.0.0.1"},
+        client_host="2001:db8::100",
+    )
+    assert AuditContextMiddleware._get_client_ip(req) == "2001:db8::1"
+
+
+def test_get_client_ip_trusted_ipv6_peer_ipv4_xff(monkeypatch):
+    """Trusted IPv6 peer forwarding an IPv4 XFF hop — should not crash
+    and should return the client-side IPv4."""
+    monkeypatch.setenv("AUDIT_TRUSTED_PROXY_CIDRS", "2001:db8::/32")
+    req = _FakeRequest(
+        headers={"x-forwarded-for": "203.0.113.7"},
+        client_host="2001:db8::100",
+    )
+    assert AuditContextMiddleware._get_client_ip(req) == "203.0.113.7"
+
+
+def test_get_client_ip_trusted_malformed_real_ip_falls_back(monkeypatch):
+    monkeypatch.setenv("AUDIT_TRUSTED_PROXY_CIDRS", "192.168.0.0/16")
+    req = _FakeRequest(
+        headers={"x-real-ip": "totally-bogus"},
+        client_host="192.168.1.100",
+    )
+    assert AuditContextMiddleware._get_client_ip(req) == "192.168.1.100"
+
+
+# ---------------------------------------------------------------------------
+# #1414 — dispatch-level integration: skip list + OPTIONS short-circuits
+# before audit work runs. We exercise the real middleware to prove the
+# skip gate is wired at dispatch, not just a free helper.
+# ---------------------------------------------------------------------------
+
+
+class _FakeURL:
+    def __init__(self, path: str):
+        self.path = path
+
+
+class _DispatchFakeRequest:
+    """Minimal Request stand-in for dispatch. We never call call_next's
+    result, so Response mocking is unnecessary."""
+
+    def __init__(
+        self,
+        method: str,
+        path: str,
+        headers: dict | None = None,
+        client_host: str | None = "192.168.1.100",
+    ):
+        self.method = method
+        self.url = _FakeURL(path)
+        self.headers = headers or {}
+        self.client = _FakeClient(client_host) if client_host else None
+
+        class _State:
+            pass
+
+        self.state = _State()
+
+
+@pytest.mark.asyncio
+async def test_dispatch_skips_health_no_audit_context():
+    """/health GET must NOT attach audit_context."""
+    mw = AuditContextMiddleware(app=None)
+
+    async def call_next(_req):
+        return "response_sentinel"
+
+    req = _DispatchFakeRequest("GET", "/health")
+    resp = await mw.dispatch(req, call_next)
+    assert resp == "response_sentinel"
+    assert not hasattr(req.state, "audit_context")
+
+
+@pytest.mark.asyncio
+async def test_dispatch_skips_docs_no_audit_context():
+    mw = AuditContextMiddleware(app=None)
+
+    async def call_next(_req):
+        return "response_sentinel"
+
+    req = _DispatchFakeRequest("GET", "/docs")
+    resp = await mw.dispatch(req, call_next)
+    assert resp == "response_sentinel"
+    assert not hasattr(req.state, "audit_context")
+
+
+@pytest.mark.asyncio
+async def test_dispatch_skips_options_preflight_no_audit_context():
+    """OPTIONS preflight on a real route must NOT attach audit_context."""
+    mw = AuditContextMiddleware(app=None)
+
+    async def call_next(_req):
+        return "response_sentinel"
+
+    req = _DispatchFakeRequest("OPTIONS", "/v1/admin/users")
+    resp = await mw.dispatch(req, call_next)
+    assert resp == "response_sentinel"
+    assert not hasattr(req.state, "audit_context")
+
+
+@pytest.mark.asyncio
+async def test_dispatch_attaches_context_on_real_route(monkeypatch):
+    """Regular /v1/admin GET — middleware DOES attach audit context, and
+    actor_ip is the socket IP (no trusted proxy configured)."""
+    monkeypatch.delenv("AUDIT_TRUSTED_PROXY_CIDRS", raising=False)
+    monkeypatch.delenv("TRUSTED_PROXY_CIDRS", raising=False)
+    mw = AuditContextMiddleware(app=None)
+
+    async def call_next(_req):
+        return "response_sentinel"
+
+    req = _DispatchFakeRequest(
+        "GET",
+        "/v1/admin/users",
+        headers={"x-forwarded-for": "1.2.3.4", "user-agent": "pytest/1.0"},
+        client_host="203.0.113.9",
+    )
+    resp = await mw.dispatch(req, call_next)
+    assert resp == "response_sentinel"
+    ctx = req.state.audit_context
+    # Untrusted peer — XFF ignored, socket IP used.
+    assert ctx["actor_ip"] == "203.0.113.9"
+    assert ctx["actor_ua"] == "pytest/1.0"
+    assert ctx["endpoint"] == "GET /v1/admin/users"
+    assert ctx["request_id"]  # non-empty uuid
 
 
 # ---------------------------------------------------------------------------

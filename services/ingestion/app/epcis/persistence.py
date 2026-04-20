@@ -87,20 +87,44 @@ def _allow_in_memory_fallback() -> bool:
     return not _is_production()
 
 
+def _batch_transactional() -> bool:
+    """Return True when batch ingest MUST run under a single DB transaction.
+
+    Default: True (atomic). This is the regulatory-safe default for #1156 —
+    a mid-batch failure rolls back every event so downstream graph/compliance
+    readers never observe a partial supply chain.
+
+    Set ``EPCIS_BATCH_TRANSACTIONAL=false`` only for temporary migration
+    windows or legacy consumers that explicitly want HTTP 207 partial-success
+    semantics. Per-request override via ``?mode=partial`` is still accepted
+    regardless of this flag.
+    """
+    explicit = os.getenv("EPCIS_BATCH_TRANSACTIONAL")
+    if explicit is None:
+        return True
+    return explicit.strip().lower() in {"1", "true", "yes", "on", "atomic"}
+
+
 def _fsma_strict_mode() -> bool:
-    """Return True when FSMA schema validation MUST block persistence (#1239).
+    """Return True when FSMA schema validation MUST block persistence (#1239, #1151).
 
     Default: strict in production, strict outside production. This is the
     regulatory-correctness default — events that fail FSMAEvent schema
     validation are refused with HTTP 422 rather than silently persisted
     with only a warning.
 
-    Set ``FSMA_STRICT_MODE=false`` during staging migrations if you
-    absolutely need the legacy advisory behaviour. Even then, failed
-    events are marked ``fsma_validation_status=failed`` so the FDA
-    24-hour export can filter them out.
+    Two environment variables are recognized:
+      * ``STRICT_FSMA_VALIDATION`` (preferred, matches #1151 naming)
+      * ``FSMA_STRICT_MODE`` (legacy #1239 alias)
+
+    Set either to ``false`` during staging migrations if you absolutely
+    need the legacy advisory behaviour. Even then, failed events are
+    marked ``fsma_validation_status=failed`` so the FDA 24-hour export
+    can filter them out.
     """
-    explicit = os.getenv("FSMA_STRICT_MODE")
+    explicit = os.getenv("STRICT_FSMA_VALIDATION")
+    if explicit is None:
+        explicit = os.getenv("FSMA_STRICT_MODE")
     if explicit is None:
         return True
     return explicit.strip().lower() in {"1", "true", "yes", "on", "strict"}
@@ -701,8 +725,48 @@ def _persist_prepared_event_in_session(
 
 
 def _ingest_single_event_db(tenant_id: str, event: dict) -> tuple[dict, int]:
-    """Own-session convenience wrapper for single-event DB ingest."""
-    prepared = _prepare_event_for_persistence(tenant_id, event)
+    """Own-session convenience wrapper for single-event DB ingest.
+
+    #1151: refuse to persist an event whose FSMAEvent validation is
+    missing. ``_prepare_event_for_persistence`` already raises HTTP 422
+    on strict-mode validation failure; we convert that to a code-level
+    ``ValueError("E_EPCIS_UNVALIDATED")`` here so callers that are not
+    on the HTTP edge get a clear programmatic signal. We also re-assert
+    on ``fsma_validation_status`` before committing — a future caller
+    that bypasses the preparation helper (or an advisory-mode caller
+    whose ``fsma_validated`` is ``None``) must not silently persist into
+    the traceability graph when ``STRICT_FSMA_VALIDATION`` is on.
+    """
+    try:
+        prepared = _prepare_event_for_persistence(tenant_id, event)
+    except HTTPException as exc:
+        detail = exc.detail if isinstance(exc.detail, dict) else {}
+        if (
+            exc.status_code == 422
+            and detail.get("error") == "fsma_validation_failed"
+            and _fsma_strict_mode()
+        ):
+            logger.warning(
+                "epcis_single_event_refused_unvalidated tenant=%s", tenant_id
+            )
+            raise ValueError("E_EPCIS_UNVALIDATED") from exc
+        raise
+
+    # #1151: hard gate on fsma_validation_status before any DB work.
+    # ``_prepare_event_for_persistence`` sets this to 'passed' or 'failed'
+    # (strict mode already 422s on failure; advisory mode falls through
+    # with 'failed'). A missing status means some caller skipped the
+    # FSMA gate — refuse to persist in strict mode.
+    kde_map = prepared.get("kde_map") or {}
+    fsma_status = kde_map.get("fsma_validation_status")
+    if fsma_status != "passed" and _fsma_strict_mode():
+        logger.warning(
+            "epcis_single_event_refused_unvalidated tenant=%s status=%r",
+            tenant_id,
+            fsma_status,
+        )
+        raise ValueError("E_EPCIS_UNVALIDATED")
+
     db_session = get_db_safe()
     try:
         payload, status_code = _persist_prepared_event_in_session(
@@ -751,25 +815,37 @@ def _ingest_batch_events_db_atomic(
             },
         )
 
-    # Phase 2: persist every prepared event under a single session.
+    # Phase 2: persist every prepared event under a single session. Track
+    # the in-flight index so a mid-batch failure can identify the offending
+    # event in the rollback log (#1156).
     db_session = get_db_safe()
     results: list[tuple[dict, int]] = []
+    failing_index: Optional[int] = None
     try:
-        for prepared in prepared_events:
+        for idx, prepared in enumerate(prepared_events):
+            failing_index = idx
             payload, status_code = _persist_prepared_event_in_session(
                 db_session, tenant_id, prepared
             )
             results.append((payload, status_code))
+        failing_index = None
         db_session.commit()
         return results
     except Exception as exc:
         db_session.rollback()
-        logger.error("epcis_batch_rollback tenant=%s error=%s", tenant_id, str(exc))
+        logger.warning(
+            "epcis_batch_rollback tenant=%s failed_index=%s batch_size=%s error=%s",
+            tenant_id,
+            failing_index,
+            len(prepared_events),
+            str(exc),
+        )
         raise HTTPException(
             status_code=400,
             detail={
                 "error": "batch_persistence_failed",
                 "mode": "atomic",
+                "failed_index": failing_index,
                 "message": (
                     "Persistence failed mid-batch. All events in this batch "
                     "were rolled back. Use ?mode=partial for best-effort "
@@ -788,6 +864,27 @@ def _ingest_single_event(tenant_id: str, event: dict) -> tuple[dict, int]:
     except HTTPException:
         # Validation failures (400/422) must surface as-is — do not fall
         # back to in-memory for rejected events.
+        raise
+    except ValueError as exc:
+        # #1151: ``E_EPCIS_UNVALIDATED`` is a hard validation failure
+        # from ``_ingest_single_event_db``. Map to 422 at the HTTP edge
+        # instead of silently falling back to in-memory (that's what
+        # let malformed events into the graph pre-fix).
+        if str(exc) == "E_EPCIS_UNVALIDATED":
+            logger.warning(
+                "epcis_ingest_refused_unvalidated tenant=%s", tenant_id
+            )
+            raise HTTPException(
+                status_code=422,
+                detail={
+                    "error": "fsma_validation_failed",
+                    "message": (
+                        "Event failed FSMAEvent schema validation and was "
+                        "not persisted. Set STRICT_FSMA_VALIDATION=false "
+                        "only for temporary migration windows."
+                    ),
+                },
+            ) from exc
         raise
     except Exception as exc:
         if not _allow_in_memory_fallback():

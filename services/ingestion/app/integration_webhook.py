@@ -12,13 +12,13 @@ mapping in their settings, and RegEngine does the rest.
 
 from __future__ import annotations
 
-import logging
 from typing import Any, Dict, List, Optional
 
+import structlog
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
-logger = logging.getLogger("integration-webhook")
+logger = structlog.get_logger("integration-webhook")
 
 router = APIRouter(prefix="/api/v1/integrations", tags=["Integrations"])
 
