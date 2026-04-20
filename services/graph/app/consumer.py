@@ -506,6 +506,16 @@ async def run_consumer() -> None:
              _dlq_producer.flush(timeout=2.0)
 
 if __name__ == "__main__":
+    # Event backbone gating (#1159): refuse to start when PG task_processor is
+    # the active backbone so this Kafka worker cannot double-process events.
+    from shared.event_backbone import kafka_enabled
+    if not kafka_enabled():
+        logger.info(
+            "event_backbone_active",
+            backbone="pg",
+            detail="graph consumer disabled (EVENT_BACKBONE=pg); task_processor handles events",
+        )
+        sys.exit(0)
     try:
         asyncio.run(run_consumer())
     except KeyboardInterrupt:
