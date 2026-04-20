@@ -2,53 +2,59 @@ title = "RegEngine Gitleaks Config"
 
 # ─── Allowlist ────────────────────────────────────────────────────
 # Items here are known non-secrets: test fixtures, example configs,
-# demo data, and documentation samples.
+# and demo data.
+#
+# Issue #1161: Removed blanket path ignores for migrations/, schemas/,
+# docs/, and several other broad directories. Those directories can
+# contain real credentials (e.g. connection strings in migration
+# scripts). Instead we allowlist only specific known-safe patterns
+# (example env files, named fixture files, test UUIDs, etc.).
 
 [allowlist]
-description = "Known non-secrets: test fixtures, examples, docs"
+description = "Known non-secrets: test fixtures, example env files, and specific safe patterns"
 
+# Specific known-safe file patterns only — no directory wildcards for
+# migrations, schemas, or docs.
 paths = [
+  # Example / sample env files (never real credentials)
   '''\.env\.example$''',
-  '''\.env\.production$''',
-  '''test_data/''',
-  '''tests/''',
-  '''demo/''',
-  '''seeds/''',
-  '''SECRETS\.md$''',
-  '''AUTHENTICATION\.md$''',
-  '''LOCAL_SETUP_GUIDE\.md$''',
-  '''DEPLOYMENT\.md$''',
-  '''docs/''',
-  '''sales/''',
-  '''sales_enablement/''',
-  '''launch_orchestrator/''',
-  '''runbooks/''',
-  '''nfr/''',
-  '''\.audit/''',
-  '''scripts/regctl/''',
-  '''tools/''',
-  '''sdk/''',
-  '''sdks/''',
-  '''production_bundle/''',
-  '''frontend_logs\.txt$''',
-  '''ingest_logs.*\.txt$''',
-  '''login_resp\.json$''',
-  '''fix_password\.sql$''',
+  '''\.env\.sample$''',
+
+  # Named test-fixture / diagnostic scripts (specific files, not whole dirs)
   '''db_test\.py$''',
   '''diag_db\.py$''',
   '''verify_phi\.py$''',
-  '''\.github/copilot-instructions\.md$''',
+  '''fix_password\.sql$''',
+  '''login_resp\.json$''',
+  '''frontend_logs\.txt$''',
+  '''ingest_logs.*\.txt$''',
+
+  # Agent / Claude instruction files (contain example prompts, not secrets)
   '''AGENTS\.md$''',
-  '''.*_SUMMARY\.md$''',
-  '''.*_STATUS\.md$''',
-  '''.*_REPORT\.md$''',
-  '''CHANGELOG\.md$''',
-  '''portfolio_case_study\.md$''',
-  '''SOC2_CONTROL_MATRIX\.md$''',
-  '''MODEL_GOVERNANCE\.md$''',
-  '''DISASTER_RECOVERY\.md$''',
-  '''industry_plugins/''',
-  '''migrations/''',
-  '''schemas/''',
-  '''data-schemas/''',
+  '''\.github/copilot-instructions\.md$''',
 ]
+
+# Allowlist specific regex patterns that are known false positives
+# rather than silencing entire directories.
+[[rules]]
+  id = "test-fixture-uuids"
+  description = "UUIDs used as test fixture identifiers are not secrets"
+  # Match lines that look like hardcoded test tenant/user UUIDs in test files
+  # (e.g. TEST_TENANT_ID = "00000000-0000-0000-0000-000000000001")
+  [rules.allowlist]
+    regexes = [
+      # Test-marker UUIDs: any UUID whose second segment is "test" (e.g. 550e8400-test-41d4-a716-446655440000)
+      '''[0-9a-f]{8}-test-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}''',
+      # Zero-based fixture UUIDs (test sentinel values)
+      '''[0-9a-f]{8}-0000-0000-0000-[0-9a-f]{12}''',
+      # Explicit test-marker strings in assignment context
+      '''(?i)(test|fixture|example|placeholder|dummy|fake)[-_]?(tenant|user|org|key|id|uuid)\s*[=:]\s*["'][0-9a-f-]{36}["']''',
+    ]
+    paths = [
+      # Scoped to test files only — never migrate, docs, or production code
+      '''(^|/)tests/''',
+      '''(^|/)test_data/''',
+      '''(^|/)seeds/''',
+      '''(^|/)demo/''',
+      '''test_[^/]+\.py$''',
+    ]
