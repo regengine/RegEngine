@@ -169,3 +169,204 @@ def test_empty_timestamp_produces_400(client: TestClient) -> None:
     # Rows with empty first-cell are filtered out before reaching the
     # timestamp-normalizer, so we land on the "no readings" 400 instead.
     assert response.status_code == 400
+
+
+# ---------------------------------------------------------------------------
+# Coverage sweep — remaining uncovered lines of app/sensitech_parser.py
+# ---------------------------------------------------------------------------
+
+from app.sensitech_parser import (  # noqa: E402
+    TemperatureReading,
+    _detect_excursions,
+    _normalize_iso_timestamp_or_400,
+    _parse_sensitech_csv,
+)
+from fastapi import HTTPException  # noqa: E402
+
+
+class TestParseSensitechCsvEdges:
+    """Covers lines 80, 90-91, 110, 126-127 in ``_parse_sensitech_csv``."""
+
+    def test_blank_rows_skipped_during_header_detection(self) -> None:
+        # Line 80: ``if not row: continue`` while hunting for the header
+        # row. csv.reader emits ``[]`` for bare ``\n`` lines — the loop
+        # must tolerate them and find the real header below.
+        csv_text = (
+            "\n"
+            "\n"
+            "Timestamp, Temperature (°C), Alarm Status, Serial Number\n"
+            "2026-02-26T08:00:00Z, 3.1, OK, ST-1\n"
+        )
+        readings = _parse_sensitech_csv(csv_text)
+        assert len(readings) == 1
+        assert readings[0].temperature_celsius == 3.1
+
+    def test_missing_header_defaults_to_assumed_schema(self) -> None:
+        # Lines 90-91: no ``Timestamp``/``Time``/``Date`` keyword in any
+        # row — parser falls through to the default column order.
+        csv_text = (
+            "2026-02-26T08:00:00Z,4.0,OK,ST-X\n"
+            "2026-02-26T08:15:00Z,4.5,OK,ST-X\n"
+        )
+        readings = _parse_sensitech_csv(csv_text)
+        assert len(readings) == 2
+        assert readings[0].temperature_celsius == 4.0
+        assert readings[1].serial_number == "ST-X"
+
+    def test_row_shorter_than_temp_column_skipped(self) -> None:
+        # Line 110: ``if not row or len(row) <= temp_idx: continue``.
+        # The row ``["2026-02-26T08:00:00Z"]`` has no temperature column
+        # at idx=1 → skipped silently.
+        csv_text = (
+            "Timestamp, Temperature (°C), Alarm Status, Serial Number\n"
+            "2026-02-26T08:00:00Z\n"  # only one cell
+            "2026-02-26T08:15:00Z, 5.0, OK, ST-1\n"
+        )
+        readings = _parse_sensitech_csv(csv_text)
+        assert len(readings) == 1
+        assert readings[0].timestamp == "2026-02-26T08:15:00Z"
+
+    def test_unparseable_temperature_skipped(self) -> None:
+        # Lines 126-127: ``except (ValueError, IndexError): continue`` —
+        # a non-numeric temperature field must not blow up the parse.
+        csv_text = (
+            "Timestamp, Temperature (°C), Alarm Status, Serial Number\n"
+            "2026-02-26T08:00:00Z, NOT_A_NUMBER, OK, ST-1\n"
+            "2026-02-26T08:15:00Z, 6.2, OK, ST-1\n"
+        )
+        readings = _parse_sensitech_csv(csv_text)
+        assert len(readings) == 1
+        assert readings[0].temperature_celsius == 6.2
+
+
+class TestNormalizeIsoTimestampOrEdges:
+    """Covers lines 146 and 167-168 in ``_normalize_iso_timestamp_or_400``.
+
+    These branches aren't reachable through the endpoint because the CSV
+    pre-filter in ``_parse_sensitech_csv`` strips empty-first-cell rows
+    before the normalizer sees them. So we test the helper directly.
+    """
+
+    def test_empty_string_raises_400(self) -> None:
+        # Line 146: ``candidate == ""`` branch.
+        with pytest.raises(HTTPException) as exc:
+            _normalize_iso_timestamp_or_400("")
+        assert exc.value.status_code == 400
+        assert "empty timestamp" in exc.value.detail
+
+    def test_whitespace_only_raises_400(self) -> None:
+        with pytest.raises(HTTPException) as exc:
+            _normalize_iso_timestamp_or_400("    ")
+        assert exc.value.status_code == 400
+        assert "empty timestamp" in exc.value.detail
+
+    def test_dashed_but_unparseable_iso_raises_400(self) -> None:
+        # Lines 167-168: candidate has ``>=2`` dashes (so we try to parse
+        # it as ISO 8601) but ``datetime.fromisoformat`` raises. Use a
+        # clearly invalid month to force the ValueError branch.
+        with pytest.raises(HTTPException) as exc:
+            _normalize_iso_timestamp_or_400("2026-13-99")
+        assert exc.value.status_code == 400
+        assert "ISO 8601" in exc.value.detail
+
+
+class TestDetectExcursions:
+    """Covers lines 185 (WARNING severity) and 193 (freeze branch)."""
+
+    def test_warning_severity_for_mild_cold_excursion(self) -> None:
+        # Temp above cold_threshold but within +3°C → WARNING (line 185).
+        readings = [
+            TemperatureReading(
+                timestamp="2026-02-26T08:00:00Z",
+                temperature_celsius=6.5,  # cold_threshold=5.0 → 1.5 over
+                alarm_status="ALARM",
+                serial_number="ST-1",
+            ),
+        ]
+        excursions = _detect_excursions(readings, cold_threshold=5.0)
+        assert len(excursions) == 1
+        assert excursions[0].severity == "WARNING"
+
+    def test_critical_severity_for_severe_cold_excursion(self) -> None:
+        # Temp more than +3°C above threshold → CRITICAL.
+        readings = [
+            TemperatureReading(
+                timestamp="2026-02-26T08:00:00Z",
+                temperature_celsius=10.0,  # 5°C over → CRITICAL
+                alarm_status="ALARM",
+            ),
+        ]
+        excursions = _detect_excursions(readings, cold_threshold=5.0)
+        assert excursions[0].severity == "CRITICAL"
+
+    def test_freeze_excursion_detected(self) -> None:
+        # Line 193: ``elif r.temperature_celsius < freeze_threshold``.
+        readings = [
+            TemperatureReading(
+                timestamp="2026-02-26T08:00:00Z",
+                temperature_celsius=-3.0,  # below freeze_threshold=-1.0
+                serial_number="ST-1",
+            ),
+        ]
+        excursions = _detect_excursions(readings, freeze_threshold=-1.0)
+        assert len(excursions) == 1
+        assert excursions[0].severity == "WARNING"
+        assert excursions[0].threshold_celsius == -1.0
+
+    def test_in_range_readings_produce_no_excursions(self) -> None:
+        readings = [
+            TemperatureReading(timestamp="2026-02-26T08:00:00Z", temperature_celsius=3.0),
+            TemperatureReading(timestamp="2026-02-26T08:15:00Z", temperature_celsius=2.0),
+        ]
+        assert _detect_excursions(readings) == []
+
+
+class TestCteTypeValidation:
+    """Covers line 228 — invalid cte_type returns 400 at the endpoint."""
+
+    def test_invalid_cte_type_rejected(self, client: TestClient) -> None:
+        # Anything other than "cooling"/"receiving" → 400 before parsing.
+        response = client.post(
+            "/api/v1/ingest/iot/sensitech",
+            data={
+                "traceability_lot_code": "LOT-1342-0001",
+                "product_description": "Romaine Lettuce",
+                "cte_type": "shipping",  # invalid for IoT import
+                "location_name": "Metro DC Cold Room 1",
+            },
+            files={
+                "file": (
+                    "temptale.csv",
+                    _csv_with_timestamp("2026-02-26T08:00:00Z"),
+                    "text/csv",
+                ),
+            },
+        )
+        assert response.status_code == 400
+        assert "cte_type" in response.json()["detail"]
+
+    def test_receiving_cte_type_accepted(
+        self, client: TestClient, captured_payload: dict
+    ) -> None:
+        # Baseline: "receiving" is the other allowed cte_type.
+        response = client.post(
+            "/api/v1/ingest/iot/sensitech",
+            data={
+                "traceability_lot_code": "LOT-1342-0002",
+                "product_description": "Romaine Lettuce",
+                "cte_type": "receiving",
+                "location_name": "Metro DC Cold Room 1",
+            },
+            files={
+                "file": (
+                    "temptale.csv",
+                    _csv_with_timestamp("2026-02-26T08:00:00Z"),
+                    "text/csv",
+                ),
+            },
+        )
+        assert response.status_code == 200, response.text
+        event = captured_payload["payload"].events[0]
+        assert event.cte_type.value == "receiving"
+        # receiving_date KDE populated, not cooling_date.
+        assert event.kdes["receiving_date"] == "2026-02-26"
