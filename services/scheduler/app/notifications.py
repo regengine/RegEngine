@@ -18,6 +18,8 @@ from typing import Callable, Dict, List, Optional, Tuple
 import httpx
 import structlog
 
+from shared.url_validation import SSRFError, validate_url
+
 from .config import get_settings
 from .models import EnforcementItem, WebhookPayload
 
@@ -57,6 +59,8 @@ _MAX_OUTBOX_ATTEMPTS = len(_OUTBOX_BACKOFF_SCHEDULE_SECONDS)
 # Per #1138 the Retry-After cap is 60s — keep the same cap here to prevent a
 # misbehaving endpoint from stalling the worker thread.
 _RETRY_AFTER_CAP_SECONDS = 60.0
+# #1084: cap response body reads to prevent OOM from hostile endpoints
+_RESPONSE_BODY_MAX_BYTES = 1024 * 1024  # 1 MB
 
 
 def _parse_retry_after(value: Optional[str]) -> Optional[float]:
@@ -254,6 +258,18 @@ class WebhookNotifier:
         Honors ``Retry-After`` on 429/503 responses (#1150). Retries on
         5xx and network errors. Does NOT retry on 4xx (real client bug).
         """
+        # #1084: SSRF guard — validate at delivery time to catch DNS rebinding
+        try:
+            validate_url(url)
+        except SSRFError as exc:
+            logger.warning("webhook_ssrf_blocked", url=url, reason=str(exc))
+            return DeliveryResult(
+                url=url,
+                success=False,
+                error=f"SSRF blocked: {exc}",
+                attempts=0,
+            )
+
         last_error: Optional[str] = None
         last_status: Optional[int] = None
         attempts = 0
@@ -274,6 +290,10 @@ class WebhookNotifier:
                 duration_ms = (time.time() - start) * 1000
                 last_status = response.status_code
 
+                # #1084: cap response body to prevent OOM from hostile endpoints
+                body_bytes = response.content[:_RESPONSE_BODY_MAX_BYTES]
+                body_preview = body_bytes[:200].decode("utf-8", errors="replace")
+
                 if response.status_code < 300:
                     return DeliveryResult(
                         url=url,
@@ -284,7 +304,7 @@ class WebhookNotifier:
                     )
 
                 # Non-2xx response.
-                last_error = f"HTTP {response.status_code}: {response.text[:200]}"
+                last_error = f"HTTP {response.status_code}: {body_preview}"
 
                 # Don't retry on client errors (4xx) — except 429 which is
                 # a transient rate-limit and should be retried with
@@ -533,6 +553,15 @@ class WebhookNotifier:
         success (2xx), False otherwise. Updates ``entry`` fields
         (last_error / last_status_code) in-place regardless of outcome.
         """
+        # #1084: SSRF guard at delivery time (DNS rebinding protection)
+        try:
+            validate_url(entry.url)
+        except SSRFError as exc:
+            entry.last_error = f"SSRF blocked: {exc}"
+            entry.last_status_code = None
+            logger.warning("webhook_outbox_ssrf_blocked", url=entry.url, reason=str(exc))
+            return False
+
         try:
             response = self.session.post(
                 entry.url,
@@ -552,11 +581,13 @@ class WebhookNotifier:
             entry.last_status_code = None
             return False
 
+        # #1084: cap response body to prevent OOM
+        body_preview = response.content[:200].decode("utf-8", errors="replace")
         entry.last_status_code = response.status_code
         if response.status_code < 300:
             self._record_success(entry.url)
             return True
-        entry.last_error = f"HTTP {response.status_code}: {response.text[:200]}"
+        entry.last_error = f"HTTP {response.status_code}: {body_preview}"
         self._record_failure(entry.url, entry.last_error, response.status_code)
         return False
 
