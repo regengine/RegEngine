@@ -23,6 +23,8 @@ avoid the SlowAPI limiter and the full app-wiring path.
 
 from __future__ import annotations
 
+import uuid as uuid_mod
+from datetime import timedelta
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
@@ -238,3 +240,259 @@ async def test_db_commit_failure_deletes_persisted_redis_session(monkeypatch):
 
     assert db.rollback.call_count >= 1
     session_store.delete_session.assert_awaited_once()
+
+
+# ── Correlated Redis failure — commit fails AND cleanup fails (#1692) ──
+
+
+@pytest.mark.asyncio
+async def test_correlated_redis_failure_does_not_mask_original_db_error(
+    monkeypatch, caplog
+):
+    """Correlated-failure path from #1692.
+
+    Most likely Redis failure mode is that Redis is down for BOTH
+    ``create_session`` and the subsequent ``delete_session`` cleanup
+    (Redis is flaky is the whole reason we have a rollback path). In
+    that case:
+
+      * the original ``db.commit()`` exception MUST propagate to the
+        caller — callers and Sentry need to see the actionable DB error,
+        not the secondary cleanup error that happened trying to recover;
+      * the cleanup failure MUST be observable via ``__context__`` so
+        operators investigating the trace can still see both legs;
+      * a warning log MUST be emitted so ops can correlate the residual
+        dangling Redis session (bounded by TTL — see TTL test below).
+    """
+    from services.admin.app import auth_routes
+
+    monkeypatch.setattr(auth_routes, "get_supabase", lambda: None)
+    monkeypatch.setattr(auth_routes.AuditLogger, "log_event", lambda *a, **k: None)
+    monkeypatch.setattr(auth_routes, "emit_funnel_event", lambda **k: None)
+
+    db = _make_db_no_existing_user()
+    db_error = RuntimeError("db connection reset mid-commit")
+    db.commit.side_effect = db_error
+
+    session_store = MagicMock()
+    # create_session succeeds — we get past the 503 gate and into the
+    # DB-commit leg.
+    session_store.create_session = AsyncMock(side_effect=lambda sd: sd)
+    # ...but the correlated failure hits on cleanup.
+    cleanup_error = ConnectionError("redis down during cleanup")
+    session_store.delete_session = AsyncMock(side_effect=cleanup_error)
+
+    with pytest.raises(RuntimeError) as exc_info:
+        await _call_signup(db, session_store)
+
+    # The caller MUST see the DB error, not the cleanup error. Masking
+    # the commit failure behind the cleanup failure would make this
+    # incident undiagnosable in production.
+    assert exc_info.value is db_error
+    assert "db connection reset" in str(exc_info.value)
+
+    # Both failures must have been attempted — rollback fired, cleanup
+    # was tried once, and the exception chain preserves the cleanup
+    # error via __context__ for operators.
+    assert db.rollback.call_count >= 1
+    session_store.delete_session.assert_awaited_once()
+
+    # Exception chaining — operators can still reach the cleanup error.
+    # Python implicitly sets __context__ when a new exception is raised
+    # (or re-raised) inside an except block. The cleanup `except` caught
+    # the ConnectionError and then `raise` re-raised the db_error, so
+    # db_error.__context__ should be the cleanup_error.
+    assert exc_info.value.__context__ is cleanup_error
+
+
+@pytest.mark.asyncio
+async def test_correlated_redis_failure_logs_residual_orphan(monkeypatch):
+    """The cleanup-also-failed path MUST emit a warning log so ops can
+    reconcile the dangling Redis session against TTL cleanup. We also
+    verify the residual-orphan marker is present so log-based alerting
+    can target this failure mode specifically.
+    """
+    from services.admin.app import auth_routes
+
+    monkeypatch.setattr(auth_routes, "get_supabase", lambda: None)
+    monkeypatch.setattr(auth_routes.AuditLogger, "log_event", lambda *a, **k: None)
+    monkeypatch.setattr(auth_routes, "emit_funnel_event", lambda **k: None)
+
+    # Intercept structlog warnings on the auth logger. structlog is not
+    # globally configured in this test env (no ``structlog.configure``),
+    # so it uses ``PrintLoggerFactory`` which bypasses ``caplog``. We
+    # capture calls directly off the logger instance.
+    captured: list[tuple[str, dict]] = []
+
+    def _capture_warning(event: str, **kwargs):
+        captured.append((event, kwargs))
+
+    monkeypatch.setattr(auth_routes.logger, "warning", _capture_warning)
+
+    db = _make_db_no_existing_user()
+    db.commit.side_effect = RuntimeError("db connection reset")
+
+    session_store = MagicMock()
+    session_store.create_session = AsyncMock(side_effect=lambda sd: sd)
+    session_store.delete_session = AsyncMock(
+        side_effect=ConnectionError("redis down during cleanup")
+    )
+
+    with pytest.raises(RuntimeError):
+        await _call_signup(db, session_store)
+
+    # Find the cleanup-failure log record.
+    cleanup_logs = [
+        (event, kwargs)
+        for event, kwargs in captured
+        if event == "signup_session_cleanup_failed"
+    ]
+    assert cleanup_logs, (
+        f"expected a ``signup_session_cleanup_failed`` warning log; "
+        f"saw events {[e for e, _ in captured]}"
+    )
+
+    # Residual-orphan marker must be present so ops-side alerts can
+    # distinguish TTL-bounded dangling sessions from other cleanup
+    # failures and correlate with the session's TTL expiry.
+    _, kwargs = cleanup_logs[0]
+    assert kwargs.get("residual_orphan") == "redis_session_dangling_until_ttl", (
+        f"expected residual_orphan marker; saw {kwargs}"
+    )
+    assert "session_id" in kwargs, f"expected session_id in log; saw {kwargs}"
+    assert "user_id" in kwargs, f"expected user_id in log; saw {kwargs}"
+
+
+# ── TTL verification — signup session MUST have bounded expiry (#1692) ──
+
+
+@pytest.mark.asyncio
+async def test_signup_session_has_bounded_ttl(monkeypatch):
+    """#1692 — the residual-orphan safety net is Redis TTL. Verify the
+    ``SessionData`` passed to ``create_session`` has an ``expires_at``
+    in the future (so ``RedisSessionStore._calculate_ttl`` yields a
+    positive bounded TTL, not -1/no-expiry). If a regression removed
+    the ``expires_at`` wiring and Redis started persisting sessions
+    without expiry, a correlated-failure dangling session would survive
+    forever.
+    """
+    from datetime import datetime, timezone
+
+    from services.admin.app import auth_routes
+    from services.admin.app.session_store import RedisSessionStore
+
+    monkeypatch.setattr(auth_routes, "get_supabase", lambda: None)
+    monkeypatch.setattr(auth_routes.AuditLogger, "log_event", lambda *a, **k: None)
+    monkeypatch.setattr(auth_routes, "emit_funnel_event", lambda **k: None)
+
+    db = _make_db_no_existing_user()
+
+    captured_session = {}
+
+    async def _capture(session_data):
+        captured_session["data"] = session_data
+        return session_data
+
+    session_store = MagicMock()
+    session_store.create_session = AsyncMock(side_effect=_capture)
+
+    await _call_signup(db, session_store)
+
+    sd = captured_session.get("data")
+    assert sd is not None, "create_session was not called with session data"
+
+    # Sanity: expires_at must be in the future and bounded (not year 9999).
+    now = datetime.now(timezone.utc)
+    assert sd.expires_at > now, (
+        f"signup session expires_at must be in the future; "
+        f"got {sd.expires_at} vs now {now}"
+    )
+    # REFRESH_TOKEN_EXPIRE_DAYS is the upper bound the handler applies.
+    max_allowed = now + timedelta(days=auth_routes.REFRESH_TOKEN_EXPIRE_DAYS + 1)
+    assert sd.expires_at < max_allowed, (
+        f"signup session TTL exceeds REFRESH_TOKEN_EXPIRE_DAYS upper bound; "
+        f"got {sd.expires_at}"
+    )
+
+    # And the store's TTL calculation converts that to a bounded positive
+    # number of seconds — i.e. the key will carry a real EXPIRE, not -1.
+    store = RedisSessionStore("redis://unused")
+    ttl_seconds = store._calculate_ttl(sd.expires_at)
+    assert ttl_seconds > 0, (
+        f"computed TTL must be > 0 so Redis applies EXPIRE; got {ttl_seconds}"
+    )
+    assert ttl_seconds <= (
+        auth_routes.REFRESH_TOKEN_EXPIRE_DAYS * 86400 + 60
+    ), f"computed TTL exceeds expected upper bound; got {ttl_seconds}s"
+
+
+@pytest.mark.asyncio
+async def test_redis_create_session_applies_expire_to_every_key(monkeypatch):
+    """#1692 — belt-and-braces check that ``RedisSessionStore.create_session``
+    actually calls ``EXPIRE`` / ``SETEX`` on all three Redis keys with a
+    positive TTL. If a refactor switched to plain ``SET`` without an
+    expiry, the signup-rollback residual orphan would survive forever.
+    """
+    from datetime import datetime, timezone
+
+    from services.admin.app.session_store import RedisSessionStore, SessionData
+
+    store = RedisSessionStore("redis://unused")
+
+    mock_client = MagicMock()
+    pipe = MagicMock()
+    pipe.hset = AsyncMock()
+    pipe.expire = AsyncMock()
+    pipe.sadd = AsyncMock()
+    pipe.setex = AsyncMock()
+    pipe.execute = AsyncMock(return_value=None)
+    pipe.__aenter__ = AsyncMock(return_value=pipe)
+    pipe.__aexit__ = AsyncMock(return_value=None)
+    mock_client.pipeline = MagicMock(return_value=pipe)
+
+    async def _get_client():
+        return mock_client
+
+    monkeypatch.setattr(store, "_get_client", _get_client)
+
+    now = datetime.now(timezone.utc)
+    session_data = SessionData(
+        id=uuid_mod.uuid4(),
+        user_id=uuid_mod.uuid4(),
+        refresh_token_hash="deadbeef",
+        family_id=uuid_mod.uuid4(),
+        is_revoked=False,
+        created_at=now,
+        last_used_at=now,
+        expires_at=now + timedelta(hours=1),
+        user_agent="pytest",
+        ip_address="127.0.0.1",
+    )
+
+    await store.create_session(session_data)
+
+    # Every key MUST be given a bounded TTL:
+    #   session:{id}        → pipe.expire(..., ttl)
+    #   user_sessions:{uid} → pipe.expire(..., ttl)
+    #   token_hash:{hash}   → pipe.setex(..., ttl, ...)
+    assert pipe.expire.await_count == 2, (
+        f"expected 2 EXPIRE calls (session + user_sessions); "
+        f"saw {pipe.expire.await_count}"
+    )
+    assert pipe.setex.await_count == 1, (
+        f"expected 1 SETEX call (token_hash); saw {pipe.setex.await_count}"
+    )
+
+    # TTL passed to EXPIRE must be positive (not -1 / 0).
+    for call in pipe.expire.await_args_list:
+        ttl_arg = call.args[1] if len(call.args) > 1 else call.kwargs.get("time")
+        assert ttl_arg is not None and ttl_arg > 0, (
+            f"EXPIRE must be called with a positive TTL; got {ttl_arg}"
+        )
+
+    # TTL passed to SETEX (positional arg 1) must be positive.
+    setex_call = pipe.setex.await_args_list[0]
+    setex_ttl = setex_call.args[1] if len(setex_call.args) > 1 else None
+    assert setex_ttl is not None and setex_ttl > 0, (
+        f"SETEX must be called with a positive TTL; got {setex_ttl}"
+    )

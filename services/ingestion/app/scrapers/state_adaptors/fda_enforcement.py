@@ -1,7 +1,7 @@
-import logging
 import re
 import httpx
 import defusedxml.ElementTree as ET
+import structlog
 from urllib.parse import urljoin
 from typing import Iterable, Optional
 from datetime import datetime, timezone
@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from .base import StateRegistryScraper, Source, FetchedItem
 from shared.url_validation import validate_url, SSRFError
 
-logger = logging.getLogger("ingestion.scrapers.fda_enforcement")
+logger = structlog.get_logger("ingestion.scrapers.fda_enforcement")
 
 class FDAEnforcementScraper(StateRegistryScraper):
     """

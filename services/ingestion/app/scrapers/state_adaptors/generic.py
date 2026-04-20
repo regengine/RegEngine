@@ -13,8 +13,8 @@ from typing import Iterable, Optional
 from shared.url_validation import validate_url
 from .base import FetchedItem, Source, StateRegistryScraper
 
-import logging
-logger = logging.getLogger("ingestion.scraper.generic")
+import structlog
+logger = structlog.get_logger("ingestion.scraper.generic")
 
 class GenericRSSScraper(StateRegistryScraper):
     """Generic RSS feed scraper for state regulatory feeds.
