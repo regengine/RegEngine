@@ -2,18 +2,18 @@
 
 from __future__ import annotations
 
-import logging
 import os
 from typing import Any, Optional
 
 import stripe
+import structlog
 from shared.resilient_http import resilient_client
 from fastapi import HTTPException
 
 from .helpers import _stripe_get
 from .state import _get_subscription_mapping, _store_subscription_mapping
 
-logger = logging.getLogger("stripe-billing")
+logger = structlog.get_logger("stripe-billing")
 
 
 async def _create_tenant_via_admin(tenant_name: str) -> str:

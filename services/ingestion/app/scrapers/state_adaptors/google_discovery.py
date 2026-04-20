@@ -1,5 +1,5 @@
-import logging
 import httpx
+import structlog
 from typing import Iterable, Optional
 from datetime import datetime, timezone
 
@@ -7,7 +7,7 @@ from shared.url_validation import validate_url
 from ...config import get_settings
 from .base import StateRegistryScraper, Source, FetchedItem
 
-logger = logging.getLogger("ingestion.scrapers.google_discovery")
+logger = structlog.get_logger("ingestion.scrapers.google_discovery")
 
 class GoogleDiscoveryScraper(StateRegistryScraper):
     """

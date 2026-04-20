@@ -16,9 +16,10 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
-import logging
 import os
 from datetime import datetime, timedelta, timezone
+
+import structlog
 from typing import Optional
 
 from sqlalchemy.exc import SQLAlchemyError
@@ -49,7 +50,7 @@ from shared.canonical_event import normalize_webhook_event
 # shared helper so the override matches the Depends() callable.
 _get_db_session = get_db_session
 
-logger = logging.getLogger("webhook-ingestion")
+logger = structlog.get_logger("webhook-ingestion")
 
 router = APIRouter(prefix="/api/v1/webhooks", tags=["Webhook Ingestion"])
 
