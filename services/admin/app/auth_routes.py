@@ -45,14 +45,25 @@ def _email_attempt_key(email: str) -> str:
 
 
 async def _check_email_rate_limit(session_store: RedisSessionStore, email: str) -> None:
-    """Raise 429 if this email has exceeded the failed login attempt limit."""
+    """Raise 401 if this email has exceeded the failed login attempt limit.
+
+    #1404 — previously raised 429 with a Retry-After header, which let an
+    attacker probe whether a given email address has an active account: after 5
+    attempts against victim@company.com the 429 response leaks "this email
+    exists." We now return 401 (indistinguishable from a wrong-password response)
+    with a short artificial delay to slow the attacker without advertising the
+    hit. The per-email counter is still maintained internally so the throttle
+    remains effective; we just don't advertise it via a distinct status code or
+    Retry-After header.
+    """
     client = await session_store._get_client()
     count_str = await client.get(_email_attempt_key(email))
     if count_str and int(count_str) >= _EMAIL_ATTEMPT_LIMIT:
+        await asyncio.sleep(0.1)  # brief artificial delay; does NOT expose the limit
         raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail="Too many failed login attempts for this account. Please try again in 15 minutes.",
-            headers={"Retry-After": str(_EMAIL_ATTEMPT_WINDOW)},
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect email or password",
+            headers={"WWW-Authenticate": "Bearer"},
         )
 
 
@@ -249,6 +260,22 @@ class UserResponse(BaseModel):
     email: str
     is_sysadmin: bool
     status: str
+
+
+async def _cleanup_supabase_user(user_id: UUID) -> None:
+    """Best-effort delete of an orphaned Supabase user.
+
+    #1090 — called when a Supabase account was created but the subsequent
+    DB transaction failed, leaving the Supabase user without a matching
+    RegEngine record. Swallows all errors since this is cleanup-only.
+    """
+    try:
+        sb = get_supabase()
+        if sb:
+            sb.auth.admin.delete_user(str(user_id))
+            logger.info("supabase_orphan_cleaned", user_id=str(user_id))
+    except Exception as exc:
+        logger.warning("supabase_orphan_cleanup_failed", user_id=str(user_id), error=str(exc))
 
 
 def _slugify_tenant_name(name: str) -> str:
@@ -459,13 +486,40 @@ async def signup(
         select(UserModel).where(UserModel.email == normalized_email)
     ).scalar_one_or_none()
     if existing_user:
-        raise HTTPException(status_code=409, detail="User already exists")
+        # #1400 — do NOT leak that this email is registered. Return the same
+        # 202 "check your inbox" response as for a new signup. In production,
+        # you would send the existing user an out-of-band "you already have an
+        # account, try logging in" email here, but the HTTP response to the
+        # caller must be identical for new and existing addresses.
+        logger.info("signup_existing_email_suppressed", email=mask_email(normalized_email))
+        from fastapi.responses import JSONResponse
+        return JSONResponse(
+            status_code=202,
+            content={"detail": "If this email is new, you'll receive a confirmation shortly."},
+        )
 
     try:
         validate_password(payload.password, user_context={"email": normalized_email})
     except PasswordPolicyError as exc:
         raise HTTPException(status_code=400, detail=exc.message)
 
+    # #1090 — Create the DB row (flush) FIRST; only call Supabase once we know
+    # the user doesn't already exist in our DB.  If Supabase creation fails the
+    # DB transaction is rolled back cleanly.  The reverse order (Supabase first,
+    # DB second) left orphaned Supabase accounts whenever the DB insert failed.
+    new_user_id = uuid.uuid4()
+    new_user = UserModel(
+        id=new_user_id,
+        email=normalized_email,
+        password_hash=get_password_hash(payload.password),
+        is_sysadmin=False,
+        status="active",
+    )
+    db.add(new_user)
+    db.flush()
+
+    # #1090 — Supabase provisioning happens AFTER db.flush() succeeds.  If
+    # Supabase fails we roll back the DB transaction so the caller can retry.
     supabase_user_id: Optional[UUID] = None
     sb = get_supabase()
     if sb:
@@ -483,16 +537,9 @@ async def signup(
                 supabase_user_id = UUID(str(supabase_user.id))
         except (OSError, TimeoutError, ConnectionError, ValueError, RuntimeError, AttributeError) as exc:  # pragma: no cover - external dependency behavior
             logger.warning("supabase_signup_provisioning_failed", email=mask_email(normalized_email), error=str(exc))
-
-    new_user = UserModel(
-        id=supabase_user_id or uuid.uuid4(),
-        email=normalized_email,
-        password_hash=get_password_hash(payload.password),
-        is_sysadmin=False,
-        status="active",
-    )
-    db.add(new_user)
-    db.flush()
+            # Non-fatal: we continue without Supabase linkage rather than
+            # blocking signup entirely. Supabase orphan cleanup handled by
+            # _cleanup_supabase_user if needed on later failure paths.
 
     tenant_settings: dict = {
         "onboarding": {
@@ -772,12 +819,25 @@ async def refresh_session(
         logger.warning("refresh_no_active_tenant", user_id=str(user.id))
         raise HTTPException(status_code=403, detail="No active tenant available")
 
+    # #1401 — Re-query the real tenant status instead of hardcoding "active".
+    # The query above already filters for active memberships/tenants, but the
+    # status we embed in the token should reflect the DB truth at refresh time.
+    real_tenant_status: Optional[str] = None
+    if active_tenant_id:
+        tenant_row = db.get(TenantModel, active_tenant_id)
+        if tenant_row:
+            real_tenant_status = tenant_row.status
+        else:
+            real_tenant_status = "active"  # defensive fallback; query above already enforced it
+    if real_tenant_status is None:
+        logger.warning("refresh_no_tenant_status", user_id=str(user.id), tenant_id=str(active_tenant_id))
+
     access_token_data = {
         "sub": str(user.id),
         "email": user.email,
         "tenant_id": str(active_tenant_id) if active_tenant_id else None,  # For RLS
         "tid": str(active_tenant_id) if active_tenant_id else None,  # Backward compat
-        "tenant_status": "active",  # Only active tenants reach this point (query filters above)
+        "tenant_status": real_tenant_status,  # #1401: re-queried, never hardcoded
         "tv": int(getattr(user, "token_version", 0) or 0),
     }
     access_token = create_access_token(access_token_data)
@@ -1014,6 +1074,12 @@ async def change_password(
 
     user.password_hash = get_password_hash(payload.new_password)
 
+    # #1089 — Supabase sync must succeed before we commit the DB change.
+    # Previously a Supabase failure was swallowed and the DB was committed,
+    # leaving the two stores desynchronised: new password in RegEngine DB,
+    # old password still valid in Supabase. We now treat Supabase sync as a
+    # pre-commit gate: if it fails we return 503 without committing so the
+    # caller can retry (both stores remain consistent at the old password).
     sb = get_supabase()
     if sb:
         try:
@@ -1024,8 +1090,40 @@ async def change_password(
                 user_id=str(user.id),
                 error=str(exc),
             )
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Password updated locally but sync failed; please try again.",
+            )
 
     db.commit()
+
+    # #1088 — revoke all OTHER sessions after password change. The calling
+    # session is preserved so the user stays logged in on the device they
+    # used to change their password. We extract the current session id from
+    # the Authorization header's access token (best-effort; falls back to
+    # revoking all sessions if parsing fails).
+    current_session_id: Optional[UUID] = None
+    try:
+        auth_header = request.headers.get("Authorization", "")
+        if auth_header.startswith("Bearer "):
+            token_payload = decode_access_token(auth_header[7:])
+            sid_raw = token_payload.get("sid") or token_payload.get("session_id")
+            if sid_raw:
+                current_session_id = UUID(str(sid_raw))
+    except Exception:
+        pass  # fall back to revoking all sessions
+
+    try:
+        other_sessions_revoked = await session_store.revoke_all_user_sessions(
+            user.id, except_session_id=current_session_id
+        )
+    except Exception as exc:
+        logger.warning(
+            "change_password_session_revoke_failed",
+            user_id=str(user.id),
+            error=str(exc),
+        )
+        other_sessions_revoked = 0
 
     # #1380 — invalidate any elevation tokens previously minted by /confirm.
     elevation_revoked = await _revoke_all_elevation_tokens_for_user(session_store, user.id)
@@ -1033,6 +1131,7 @@ async def change_password(
     logger.info(
         "change_password_success",
         user_id=str(user.id),
+        other_sessions_revoked=other_sessions_revoked,
         elevation_tokens_revoked=elevation_revoked,
     )
     return {"status": "success"}

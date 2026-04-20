@@ -557,8 +557,20 @@ async def test_refresh_preserves_original_tenant_id(monkeypatch):
     mem_a = SimpleNamespace(tenant_id=tenant_a)
     mem_b = SimpleNamespace(tenant_id=tenant_b)
 
+    # #1401 — refresh_session now calls db.get(TenantModel, tenant_id) to
+    # re-query the real tenant status. Give each model a distinct return value.
+    tenant_row_a = SimpleNamespace(id=tenant_a, status="active")
+
+    def _db_get(model, id_):
+        from services.admin.app.sqlalchemy_models import UserModel, TenantModel
+        if model is UserModel:
+            return user
+        if model is TenantModel:
+            return tenant_row_a
+        return user  # fallback
+
     db = MagicMock()
-    db.get.return_value = user
+    db.get.side_effect = _db_get
     # Ordering B, A to make it clear we aren't relying on "first row".
     db.execute.return_value.scalars.return_value.all.return_value = [mem_b, mem_a]
     db.commit.return_value = None
