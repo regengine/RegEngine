@@ -84,10 +84,7 @@ async def ingest_events(
         persistence = CTEPersistence(db_session)
     except (ImportError, RuntimeError, ConnectionError) as exc:
         # Exhaust the generator so cleanup runs
-        try:
-            next(db_gen, None)
-        except StopIteration:
-            pass
+        next(db_gen, None)
         raise RuntimeError(f"Database unavailable: {exc}") from exc
 
     results: list[EventResult] = []
@@ -211,10 +208,7 @@ async def ingest_events(
         raise
     finally:
         # Exhaust the generator to trigger its finally block (close session)
-        try:
-            next(db_gen, None)
-        except StopIteration:
-            pass
+        next(db_gen, None)
 
     return IngestResponse(
         accepted=accepted,

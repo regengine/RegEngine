@@ -2,6 +2,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 import uuid
 import jwt
+from cachetools import TTLCache
 from passlib.context import CryptContext
 import os
 import secrets
@@ -50,6 +51,16 @@ ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60")
 REFRESH_TOKEN_EXPIRE_DAYS = int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", "7"))
 SESSION_IDLE_TIMEOUT_MINUTES = int(os.getenv("SESSION_IDLE_TIMEOUT_MINUTES", "60"))
 
+# #1069 — reject JWTs without a ``jti`` claim. ``revoke_token()`` can only
+# flag tokens by jti, so a pre-jti (legacy) token is un-revocable for its
+# full natural TTL. Forcing re-auth on these tokens closes the gap. Set
+# AUTH_ALLOW_LEGACY_JTI_FREE=true ONLY as a short-term rollback lever if
+# production traffic still contains pre-jti tokens (all tokens minted by
+# create_access_token now carry a jti, so the natural access-token TTL
+# bounds the rollback window).
+def _require_jti_default() -> bool:
+    return os.getenv("AUTH_ALLOW_LEGACY_JTI_FREE", "").lower() not in ("true", "1", "yes")
+
 pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
@@ -70,7 +81,15 @@ def get_password_hash(password: str) -> str:
 _active_kid: Optional[str] = None
 _active_secret: Optional[str] = None
 _verification_keys: dict[str, str] = {}  # kid -> secret
-_revoked_jtis: set[str] = set()  # in-memory fallback when Redis unavailable
+# #1039 — bound the in-memory revocation set so long-running workers
+# cannot leak memory when Redis is unavailable. TTL matches the token
+# lifetime + 5-minute slack (same slack Redis key uses), so a revoked
+# jti ages out exactly when the underlying JWT would no longer be
+# accepted anyway. 50k entries caps peak memory at ~5MB per worker.
+_revoked_jtis: TTLCache[str, bool] = TTLCache(
+    maxsize=50_000,
+    ttl=ACCESS_TOKEN_EXPIRE_MINUTES * 60 + 300,
+)
 _revocation_redis = None  # set by lifespan init
 
 
@@ -215,7 +234,11 @@ def _check_revoked(payload: dict) -> dict:
     """
     jti = payload.get("jti")
     if not jti:
-        return payload  # legacy token without jti — cannot be individually revoked
+        if _require_jti_default():
+            raise jwt.exceptions.InvalidTokenError(
+                "Token missing jti claim — please re-authenticate"
+            )
+        return payload  # rollback path — legacy tokens still pass through
 
     # In-process fast path. Populated by revoke_token() on this worker
     # and cached by check_revoked_async() whenever it observes a Redis
@@ -244,7 +267,7 @@ async def check_revoked_async(jti: str) -> bool:
     if _revocation_redis:
         try:
             if await _revocation_redis.sismember("regengine:jwt:revoked", jti):
-                _revoked_jtis.add(jti)
+                _revoked_jtis[jti] = True
                 return True
         except Exception as exc:  # pragma: no cover — Redis best-effort
             # If Redis is transiently unreachable, fall back to
@@ -261,7 +284,7 @@ async def revoke_token(jti: str, ttl_seconds: Optional[int] = None) -> None:
     if ttl_seconds is None:
         ttl_seconds = ACCESS_TOKEN_EXPIRE_MINUTES * 60
 
-    _revoked_jtis.add(jti)
+    _revoked_jtis[jti] = True
     _logger.warning("jwt_token_revoked: jti=%s", jti)
 
     if _revocation_redis:

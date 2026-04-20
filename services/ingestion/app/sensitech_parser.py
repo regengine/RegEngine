@@ -129,6 +129,49 @@ def _parse_sensitech_csv(content: str) -> list[TemperatureReading]:
     return readings
 
 
+def _normalize_iso_timestamp_or_400(raw: str) -> str:
+    """Coerce a Sensitech CSV timestamp into a valid ISO 8601 string, or raise 400.
+
+    Accepts:
+      - ISO 8601 variants (``YYYY-MM-DD``, ``YYYY-MM-DD HH:MM:SS``,
+        ``YYYY-MM-DDTHH:MM:SS[Z|+HH:MM]``) — passed through unchanged.
+      - Compact ``YYYYMMDD`` — expanded to midnight UTC.
+
+    Bare times (e.g. ``08:00:00``), empty strings, and anything else
+    that is not recognizably a date are rejected with 400 Bad Request,
+    rather than allowed to fall through to Pydantic and surface as 500.
+    """
+    candidate = raw.strip() if raw else ""
+    if not candidate:
+        raise HTTPException(
+            status_code=400,
+            detail="Sensitech CSV has an empty timestamp — cannot create CTE event.",
+        )
+
+    if candidate.count("-") >= 2:
+        normalized = candidate
+    elif candidate.isdigit() and len(candidate) == 8:
+        normalized = f"{candidate[:4]}-{candidate[4:6]}-{candidate[6:8]}T00:00:00Z"
+    else:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Could not parse Sensitech timestamp {candidate!r} as a date. "
+                "Expected ISO 8601 (e.g. '2026-02-26' or '2026-02-26T08:00:00') "
+                "or compact YYYYMMDD (e.g. '20260226')."
+            ),
+        )
+
+    try:
+        datetime.fromisoformat(normalized.replace("Z", "+00:00"))
+    except (ValueError, AttributeError):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Could not parse Sensitech timestamp {candidate!r} as ISO 8601.",
+        )
+    return normalized
+
+
 def _detect_excursions(
     readings: list[TemperatureReading],
     cold_threshold: float = 5.0,
@@ -216,6 +259,9 @@ async def import_sensitech(
     cte = WebhookCTEType(cte_type.lower())
     date_field = f"{cte_type}_date"
 
+    event_timestamp = _normalize_iso_timestamp_or_400(readings[0].timestamp)
+    event_date = event_timestamp.split("T")[0].split(" ")[0]
+
     events = [
         IngestEvent(
             cte_type=cte,
@@ -225,9 +271,9 @@ async def import_sensitech(
             unit_of_measure="readings",
             location_gln=location_gln,
             location_name=location_name,
-            timestamp=readings[0].timestamp if readings[0].timestamp.count("-") >= 2 else f"{readings[0].timestamp}T00:00:00Z",
+            timestamp=event_timestamp,
             kdes={
-                date_field: readings[0].timestamp.split("T")[0] if "T" in readings[0].timestamp else readings[0].timestamp.split(" ")[0],
+                date_field: event_date,
                 "temperature_min_celsius": min_temp,
                 "temperature_max_celsius": max_temp,
                 "temperature_avg_celsius": round(avg_temp, 2),

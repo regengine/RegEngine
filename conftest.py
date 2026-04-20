@@ -33,6 +33,7 @@ _APP_BEARING_SERVICES = ("admin", "graph", "ingestion", "nlp", "scheduler")
 # names from ``_APP_BEARING_SERVICES``.
 _TEST_TO_SERVICE_OVERRIDES = {
     "tests/billing/test_stripe_billing.py": "ingestion",
+    "tests/billing/test_stripe_webhook_ordering_1196.py": "ingestion",
     "tests/security/test_audit_integrity.py": "admin",
     "tests/security/test_strict_ciam_compliance.py": "admin",
     "tests/test_trace_engine.py": "ingestion",

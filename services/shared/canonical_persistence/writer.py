@@ -160,7 +160,7 @@ class CanonicalEventStore:
                 f"complete_ingestion_run: no run matched id={run_id!r} for "
                 f"tenant={tenant_id!r}. Either the run does not exist or "
                 f"belongs to a different tenant — refusing silent no-op "
-                f"UPDATE (#1263)."
+                "write (#1263)."
             )
 
     # ------------------------------------------------------------------
@@ -294,6 +294,14 @@ class CanonicalEventStore:
             )
 
         # --- Dual-write to legacy table (TEMPORARY — see migration.py) ---
+        # #1277: dual_write_legacy now raises on failure instead of
+        # silently returning None. That's intentional — the FDA-export
+        # path still reads from the legacy table during migration, so
+        # a swallowed failure would silently desync the export from
+        # canonical. Letting the exception propagate rolls the
+        # surrounding transaction back, so either BOTH tables have
+        # the event or NEITHER does. Callers that don't want legacy
+        # writes at all must opt out via ``dual_write=False``.
         legacy_id = None
         if self.dual_write:
             legacy_id = migration.dual_write_legacy(self.session, event)
@@ -301,8 +309,17 @@ class CanonicalEventStore:
         # --- Create transformation links ---
         self._create_transformation_links(event)
 
-        # --- Publish to graph sync (TEMPORARY — see migration.py) ---
-        migration.publish_graph_sync(event)
+        # --- Stage graph sync for POST-COMMIT publish (fix #1276) ---
+        # Previously we called migration.publish_graph_sync(event) here
+        # synchronously, which meant Redis received the 'canonical.created'
+        # message BEFORE the outer DB transaction committed. If the caller
+        # later rolled back (schema violation, chain-hash conflict, any
+        # downstream error) the canonical row disappeared but the Neo4j
+        # worker had already applied the message, producing a ghost graph
+        # node with no authoritative DB backing. stage_graph_sync installs
+        # SQLAlchemy after_commit / after_rollback hooks on the session:
+        # a commit triggers the publish, a rollback discards it silently.
+        migration.stage_graph_sync(self.session, event)
 
         logger.info(
             "canonical_event_persisted",
@@ -518,15 +535,19 @@ class CanonicalEventStore:
         # Only dual-write events that actually inserted here; an event
         # we lost to a concurrent writer was (presumably) dual-written
         # by that winner and re-writing would just duplicate in legacy.
+        #
+        # #1277: previously this loop wrapped dual_write_legacy in a
+        # try/except and logged-and-continued on failure. That swallowed
+        # the invariant "canonical row landed → legacy row landed",
+        # which in turn meant the FDA-export path (still reading from
+        # the legacy table during migration) silently diverged from the
+        # canonical source of truth. The fix is to let the exception
+        # propagate — the surrounding transaction rolls back, the
+        # canonical INSERTs are reverted, and the caller gets a loud
+        # failure instead of a silent data-integrity violation.
         if self.dual_write and inserted_events:
             for evt in inserted_events:
-                try:
-                    migration.dual_write_legacy(self.session, evt)
-                except Exception as e:
-                    logger.warning(
-                        "legacy_dual_write_failed",
-                        extra={"event_id": str(evt.event_id), "error": str(e)},
-                    )
+                migration.dual_write_legacy(self.session, evt)
 
         logger.info(
             "canonical_batch_persisted",
@@ -628,11 +649,37 @@ class CanonicalEventStore:
     # Trace Queries
     # ------------------------------------------------------------------
 
-    def trace_forward(self, tenant_id: str, tlc: str, max_depth: int = 5) -> List[Dict[str, Any]]:
-        """Forward trace: find all output TLCs an input TLC contributed to."""
-        results = []
-        visited = set()
-        queue = [(tlc, 0)]
+    # ``max_results`` default: caps BFS result accumulation at 10_000
+    # links per traversal. A legitimate enterprise transformation graph
+    # rarely exceeds ~1k at depth 5; 10_000 gives 10× headroom. The cap
+    # exists to prevent OOM under adversarial inputs — see #1282.
+    _TRACE_DEFAULT_MAX_RESULTS = 10_000
+
+    def trace_forward(
+        self,
+        tenant_id: str,
+        tlc: str,
+        max_depth: int = 5,
+        max_results: int = _TRACE_DEFAULT_MAX_RESULTS,
+    ) -> Tuple[List[Dict[str, Any]], bool]:
+        """Forward trace: find all output TLCs an input TLC contributed to.
+
+        Returns ``(links, truncated)``. ``truncated=True`` means the BFS
+        stopped at ``max_results`` — the link list is still valid data,
+        just incomplete. Callers MUST check the flag and either surface
+        truncation to the end user or fail-closed if completeness is
+        required (e.g. regulator traceback export).
+
+        #1282: without a cap, ``results`` could grow to O(depth × fan-out)
+        with no ceiling, letting a malicious or misconfigured tenant OOM
+        the worker with a wide transformation tree. ``visited`` prevents
+        cycles but does not bound result size, so we add an explicit
+        ``max_results`` gate distinct from ``max_depth``.
+        """
+        results: List[Dict[str, Any]] = []
+        visited: set[str] = set()
+        queue: List[Tuple[str, int]] = [(tlc, 0)]
+        truncated = False
 
         while queue:
             current_tlc, depth = queue.pop(0)
@@ -651,6 +698,9 @@ class CanonicalEventStore:
             ).fetchall()
 
             for row in rows:
+                if len(results) >= max_results:
+                    truncated = True
+                    break
                 output_tlc = row[0]
                 results.append({
                     "input_tlc": current_tlc, "output_tlc": output_tlc,
@@ -663,13 +713,42 @@ class CanonicalEventStore:
                 if output_tlc not in visited:
                     queue.append((output_tlc, depth + 1))
 
-        return results
+            if truncated:
+                # Drop remaining BFS frontier — we've already accepted we
+                # can't complete this trace, so further DB round-trips
+                # just burn budget without adding surfaced rows.
+                break
 
-    def trace_backward(self, tenant_id: str, tlc: str, max_depth: int = 5) -> List[Dict[str, Any]]:
-        """Backward trace: find all input TLCs that contributed to an output TLC."""
-        results = []
-        visited = set()
-        queue = [(tlc, 0)]
+        if truncated:
+            logger.warning(
+                "trace_forward_truncated",
+                extra={
+                    "tenant_id": tenant_id,
+                    "tlc": tlc,
+                    "max_results": max_results,
+                    "max_depth": max_depth,
+                    "returned": len(results),
+                },
+            )
+
+        return results, truncated
+
+    def trace_backward(
+        self,
+        tenant_id: str,
+        tlc: str,
+        max_depth: int = 5,
+        max_results: int = _TRACE_DEFAULT_MAX_RESULTS,
+    ) -> Tuple[List[Dict[str, Any]], bool]:
+        """Backward trace: find all input TLCs that contributed to an output TLC.
+
+        Returns ``(links, truncated)``. See ``trace_forward`` for the
+        cap rationale (#1282).
+        """
+        results: List[Dict[str, Any]] = []
+        visited: set[str] = set()
+        queue: List[Tuple[str, int]] = [(tlc, 0)]
+        truncated = False
 
         while queue:
             current_tlc, depth = queue.pop(0)
@@ -688,6 +767,9 @@ class CanonicalEventStore:
             ).fetchall()
 
             for row in rows:
+                if len(results) >= max_results:
+                    truncated = True
+                    break
                 input_tlc = row[0]
                 results.append({
                     "input_tlc": input_tlc, "output_tlc": current_tlc,
@@ -700,7 +782,22 @@ class CanonicalEventStore:
                 if input_tlc not in visited:
                     queue.append((input_tlc, depth + 1))
 
-        return results
+            if truncated:
+                break
+
+        if truncated:
+            logger.warning(
+                "trace_backward_truncated",
+                extra={
+                    "tenant_id": tenant_id,
+                    "tlc": tlc,
+                    "max_results": max_results,
+                    "max_depth": max_depth,
+                    "returned": len(results),
+                },
+            )
+
+        return results, truncated
 
     # ------------------------------------------------------------------
     # Read Path
