@@ -87,7 +87,7 @@ class LineItem:
     on the same row of a BOL, invoice, or similar document.
     """
 
-    description: str
+    description: Optional[str] = None  # #1128 — None when not extractable
     lot_code: Optional[str] = None
     quantity: Optional[float] = None
     unit_of_measure: Optional[str] = None

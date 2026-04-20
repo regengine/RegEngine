@@ -225,6 +225,11 @@ class FSMAExtractor:
         DocumentType.PACKING_SLIP: CTEType.INITIAL_PACKING,
         DocumentType.LANDING_REPORT: CTEType.FIRST_LAND_BASED_RECEIVER,
         DocumentType.PRODUCTION_LOG: CTEType.TRANSFORMATION,
+        # #1288 — INVOICE defaults to TRANSFORMATION (not SHIPPING).
+        # Invoices more often accompany transformation/packing events
+        # than pure shipping handoffs; prior SHIPPING default produced
+        # incorrect CTE classifications.
+        DocumentType.INVOICE: CTEType.TRANSFORMATION,
         # BILL_OF_LADING is handled specially — see #1123 split logic
         # in ``_extract_ctes`` (emits both SHIPPING and RECEIVING).
     }
@@ -422,7 +427,11 @@ class FSMAExtractor:
         }
 
     def _classify_document(self, text: str) -> DocumentType:
-        """Classify document type based on content indicators."""
+        """Classify document type based on content indicators.
+
+        On a tie between two or more document types, defaults to SHIPPING
+        (via BILL_OF_LADING) and logs a warning (#1288).
+        """
         text_lower = text.lower()
 
         scores = {}
@@ -430,10 +439,21 @@ class FSMAExtractor:
             score = sum(1 for ind in indicators if ind in text_lower)
             scores[doc_type] = score
 
-        if max(scores.values()) == 0:
+        max_score = max(scores.values())
+        if max_score == 0:
             return DocumentType.UNKNOWN
 
-        return max(scores, key=lambda k: scores[k])
+        top_types = [dt for dt, sc in scores.items() if sc == max_score]
+        if len(top_types) > 1:
+            logger.warning(
+                "ambiguous_cte_type_tie",
+                message="Ambiguous CTE type — defaulted to SHIPPING",
+                tied_types=[dt.value for dt in top_types],
+                score=max_score,
+            )
+            return DocumentType.BILL_OF_LADING  # SHIPPING CTE default on tie
+
+        return top_types[0]
 
     def _extract_tabular_data(
         self, text: str, pdf_bytes: Optional[bytes] = None
@@ -1186,11 +1206,28 @@ class FSMAExtractor:
 
         return date_str  # Return as-is if no format matches
 
+    # Field weights for confidence calculation (#1286).
+    # High-priority KDEs (weight=3): traceability_lot_code, event_date, location_identifier
+    # Medium-priority KDEs (weight=2): quantity, product_description
+    # All other required fields default to weight=1.
+    _FIELD_WEIGHTS: Dict[str, int] = {
+        "traceability_lot_code": 3,
+        "event_date": 3,
+        "location_identifier": 3,
+        "quantity": 2,
+        "product_description": 2,
+    }
+
     def _calculate_confidence(self, kde: KDE, cte_type: CTEType) -> float:
         """
-        Calculate extraction confidence based on KDE completeness.
+        Calculate extraction confidence as a weighted average of KDE completeness.
 
-        FSMA 204 requires specific KDEs for each CTE type.
+        Fields are weighted by regulatory importance (#1286):
+        - traceability_lot_code, event_date, location_identifier → weight 3
+        - quantity, product_description → weight 2
+        - all other required fields → weight 1
+
+        Result = sum(weight for present fields) / sum(weights for all required fields).
         """
         required_fields = {
             CTEType.SHIPPING: [
@@ -1219,9 +1256,16 @@ class FSMAExtractor:
         }
 
         fields = required_fields.get(cte_type, required_fields[CTEType.SHIPPING])
-        found = sum(1 for f in fields if getattr(kde, f, None) is not None)
+        total_weight = sum(self._FIELD_WEIGHTS.get(f, 1) for f in fields)
+        weighted_found = sum(
+            self._FIELD_WEIGHTS.get(f, 1)
+            for f in fields
+            if getattr(kde, f, None) is not None
+        )
 
-        return round(found / len(fields), 2)
+        if total_weight == 0:
+            return 0.0
+        return round(weighted_found / total_weight, 2)
 
     def _validate_extraction(
         self, ctes: List[CTE], doc_type: DocumentType
