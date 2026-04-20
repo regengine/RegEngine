@@ -243,6 +243,7 @@ class FSMAAuditAction(str, Enum):
     READ = "READ"  # Record read/accessed (FSMA 204 21 CFR 1.1455(g), NIST SP 800-53 AU-2)
     TRACED = "TRACED"  # Traceability query executed
     EXPORTED = "EXPORTED"  # Data exported (CSV, FDA report)
+    KDE_READ = "KDE_READ"  # #1033: Read access to KDE records (FSMA 204 / NIST AU-2)
 
     # Recall events
     RECALL_INITIATED = "RECALL_INITIATED"
