@@ -320,20 +320,20 @@ async def export_fda(
             date_str = ts.strftime("%Y-%m-%d") if ts else ""
             time_str = ts.strftime("%H:%M:%SZ") if ts else ""
             lines.append(",".join([
-                (r["event_type"] or "").upper(),
-                r["traceability_lot_code"] or "",
-                (r["product_description"] or "").replace(",", ";"),
+                str(r["event_type"] or "").upper(),
+                str(r["traceability_lot_code"] or ""),
+                str(r["product_description"] or "").replace(",", ";"),
                 str(r["quantity"] or ""),
-                r["unit_of_measure"] or "",
+                str(r["unit_of_measure"] or ""),
                 date_str,
                 time_str,
-                (r["ship_from"] or r["location_name"] or "").replace(",", ";"),
-                r["ship_from_gln"] or r["location_gln"] or "",
-                (r["ship_to"] or "").replace(",", ";"),
-                r["ship_to_gln"] or "",
-                (r["carrier"] or "").replace(",", ";"),
-                r["temperature_c"] or "",
-                r["sha256_hash"] or "",
+                str(r["ship_from"] or r["location_name"] or "").replace(",", ";"),
+                str(r["ship_from_gln"] or r["location_gln"] or ""),
+                str(r["ship_to"] or "").replace(",", ";"),
+                str(r["ship_to_gln"] or ""),
+                str(r["carrier"] or "").replace(",", ";"),
+                str(r["temperature_c"] or ""),
+                str(r["sha256_hash"] or ""),
             ]))
         csv_content = "\n".join(lines) + "\n"
         event_count = len(rows)
