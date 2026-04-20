@@ -1,8 +1,6 @@
-# DEPRECATED — use root requirements.txt (single source of truth)
-# This file is retained for backward compatibility only. Do not add deps here.
-# See pyproject.toml for canonical dependency specifications.
-# Reporting Worker Dependencies
-# Core versions aligned with pyproject.toml — see root requirements.txt
+# kernel/reporting — service-specific Python dependencies
+# Version pins aligned with root requirements.txt (single source of truth for shared libs).
+# Keep this file narrow: only deps the reporting service actually imports.
 
 # Core Framework
 fastapi>=0.115.0
@@ -14,29 +12,24 @@ pydantic>=2.10.0,<3
 pydantic-settings>=2.7.0
 structlog>=24.1.0
 python-multipart>=0.0.9
+PyYAML>=6.0.1
 
 # Networking
 httpx>=0.26.0
 redis>=5.0.1
 tenacity>=8.2.3
-requests>=2.31.0
 neo4j>=5.16.0
 
-# Kafka
-kafka-python-ng>=2.0.3
+# Kafka — reporting worker consumes events
 confluent-kafka>=2.3.0
 fastavro>=1.9.0
 
-# Observability — all 4 otel packages must share the same version
+# Observability — all 4 otel packages must share the same version (see root requirements.txt)
 prometheus-client>=0.19.0
 opentelemetry-api==1.41.0
 opentelemetry-sdk==1.41.0
 opentelemetry-instrumentation-fastapi==0.62b0
 opentelemetry-exporter-otlp==1.41.0
-
-# Data processing
-pandas>=2.0.0
-openpyxl>=3.1.0
 
 # Testing
 pytest>=8.0.0

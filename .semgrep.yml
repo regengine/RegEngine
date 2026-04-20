@@ -1,7 +1,59 @@
 # Semgrep configuration for RegEngine
 # This file is read by both CLI and Semgrep App (GitHub integration)
 
-rules: []
+rules:
+  # EPIC-L (#1655) — FDA CSV export hardening.
+  #
+  # Every cell written into an FDA-formatted CSV must pass through
+  # ``shared.fda_export.safe_cell`` (or the ``safe_row`` / ``safe_sequence``
+  # helpers that call it). A raw string whose first character is ``=``,
+  # ``+``, ``-``, ``@``, ``\t``, or ``\r`` is interpreted as a formula
+  # by Excel / Google Sheets / LibreOffice, turning a downloaded
+  # traceability record into an arbitrary-URL fetch or shell invocation
+  # at the auditor's desk.
+  #
+  # Scope is limited to FDA-export code paths — this is not a codebase-
+  # wide CSV rule, so static template files are not covered.
+  - id: fda-export-writer-requires-safe-cell
+    message: >-
+      EPIC-L (#1655): ``writer.writerow(...)`` inside FDA export code must
+      be given the result of ``safe_cell``, ``safe_row``, ``safe_sequence``,
+      or their legacy aliases (``sanitize_cell`` / ``sanitize_row`` /
+      ``sanitize_sequence``). Raw user-sourced values can carry a formula
+      prefix (``=``, ``+``, ``-``, ``@``) and trigger arbitrary-URL fetches
+      in downstream spreadsheet apps.
+    severity: ERROR
+    languages: [python]
+    paths:
+      include:
+        - "services/*/app/fda_export/**"
+        - "services/*/app/fda_export_service.py"
+        - "services/*/app/fda_export_router.py"
+        - "services/*/app/fsma_spreadsheet.py"
+        - "services/shared/fda_export/**"
+      exclude:
+        - "**/tests/**"
+        - "**/test_*.py"
+    patterns:
+      - pattern: $WRITER.writerow($ROW)
+      - pattern-not: $WRITER.writerow(safe_cell(...))
+      - pattern-not: $WRITER.writerow(safe_row(...))
+      - pattern-not: $WRITER.writerow(safe_sequence(...))
+      - pattern-not: $WRITER.writerow(sanitize_cell(...))
+      - pattern-not: $WRITER.writerow(sanitize_row(...))
+      - pattern-not: $WRITER.writerow(sanitize_sequence(...))
+      # Blank separator rows are literal; no user data flows here.
+      - pattern-not: $WRITER.writerow([])
+      # Known-safe internal builders whose implementations apply
+      # ``safe_cell`` / ``sanitize_cell`` to every value before
+      # returning. Each one is annotated with that contract in its
+      # docstring; grep for ``safe_cell`` inside the file to verify.
+      - pattern-not: $WRITER.writerow(_event_to_fda_row(...))
+      - pattern-not: $WRITER.writerow(_event_to_fda_row_v2(...))
+      # fsma_spreadsheet.py column-ordering comprehension: the row
+      # dict comes from ``_normalise_event`` which sanitizes every
+      # value before returning. Documented at the call site.
+      - pattern-not: $WRITER.writerow([$ROW[$COL] for $COL in $COLS])
 
 # Rule exclusions — these rules produce false positives in this codebase:
 #

@@ -10,7 +10,7 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python dependencies
-COPY services/compliance/requirements.txt .
+COPY kernel/reporting/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy shared code
