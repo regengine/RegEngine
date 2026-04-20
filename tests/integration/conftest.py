@@ -155,11 +155,20 @@ def pytest_configure(config):
 
 
 def pytest_collection_modifyitems(config, items):
-    """Skip integration tests unless --integration flag is provided"""
+    """Skip integration tests unless --integration flag is provided.
+
+    Tests explicitly marked ``@pytest.mark.unit`` (i.e. offline / no live
+    services required) are always run regardless of the --integration flag.
+    This lets offline pipeline tests live in the integration/ directory for
+    discoverability while still running in the standard fast CI suite.
+    """
     if config.getoption("--integration"):
         return
-    
+
     skip_integration = pytest.mark.skip(reason="need --integration option to run")
     for item in items:
+        if "unit" in item.keywords:
+            # Explicitly offline tests — never skip them for service-health reasons.
+            continue
         if "integration" in item.keywords:
             item.add_marker(skip_integration)
