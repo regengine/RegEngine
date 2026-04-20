@@ -348,6 +348,7 @@ class IdentityResolutionService:
                   AND ea.alias_type = :alias_type
                   AND ea.alias_value = :alias_value
                   AND ce.is_active = TRUE
+                ORDER BY ce.confidence_score DESC, ce.created_at ASC NULLS LAST
             """),
             {
                 "tenant_id": tenant_id,
