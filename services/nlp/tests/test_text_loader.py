@@ -5,14 +5,48 @@ Covers:
 - PDF text extraction
 - HTML to text conversion
 - Fallback text decoding
+
+Mocks the streaming ``httpx.stream(...)`` context manager introduced by the
+size/MIME hardening in #1120.
 """
 
 from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
-import io
 
 import pytest
+
+
+class _StreamCM:
+    """Stand-in for ``httpx.stream(...)`` context manager.
+
+    ``httpx.stream`` returns a context manager whose ``__enter__`` yields a
+    ``Response``-like object exposing ``.headers`` / ``.iter_bytes()`` /
+    ``.raise_for_status()``. Using a concrete class keeps test intent
+    obvious and avoids surprises from ``MagicMock``'s auto-spec.
+    """
+
+    def __init__(self, headers: dict, chunks: list[bytes], raise_exc=None):
+        self._headers = headers
+        self._chunks = chunks
+        self._raise_exc = raise_exc
+
+    def __enter__(self):
+        resp = MagicMock()
+        resp.headers = self._headers
+        resp.iter_bytes.return_value = iter(self._chunks)
+        if self._raise_exc is not None:
+            resp.raise_for_status.side_effect = self._raise_exc
+        else:
+            resp.raise_for_status.return_value = None
+        return resp
+
+    def __exit__(self, exc_type, exc, tb):
+        return False
+
+
+def _headers(ctype: str, body: bytes) -> dict:
+    return {"Content-Type": ctype, "Content-Length": str(len(body))}
 
 
 class TestLoadArtifact:
@@ -35,13 +69,12 @@ class TestLoadArtifact:
         """Verify http URLs are accepted (with mocked request)."""
         from services.nlp.app.text_loader import load_artifact
 
+        body = b"Sample text content"
         with patch("services.nlp.app.text_loader.validate_url") as mock_validate:
-            with patch("services.nlp.app.text_loader.httpx.get") as mock_get:
-                mock_response = MagicMock()
-                mock_response.content = b"Sample text content"
-                mock_response.headers = {"Content-Type": "text/plain"}
-                mock_get.return_value = mock_response
-
+            with patch(
+                "services.nlp.app.text_loader.httpx.stream",
+                return_value=_StreamCM(_headers("text/plain", body), [body]),
+            ):
                 result = load_artifact("http://example.com/doc.txt")
 
                 assert result == "Sample text content"
@@ -51,13 +84,12 @@ class TestLoadArtifact:
         """Verify https URLs are accepted."""
         from services.nlp.app.text_loader import load_artifact
 
+        body = b"Secure content"
         with patch("services.nlp.app.text_loader.validate_url"):
-            with patch("services.nlp.app.text_loader.httpx.get") as mock_get:
-                mock_response = MagicMock()
-                mock_response.content = b"Secure content"
-                mock_response.headers = {"Content-Type": "text/plain"}
-                mock_get.return_value = mock_response
-
+            with patch(
+                "services.nlp.app.text_loader.httpx.stream",
+                return_value=_StreamCM(_headers("text/plain", body), [body]),
+            ):
                 result = load_artifact("https://secure.example.com/doc.txt")
 
                 assert result == "Secure content"
@@ -88,12 +120,12 @@ class TestLoadArtifact:
         """
 
         with patch("services.nlp.app.text_loader.validate_url"):
-            with patch("services.nlp.app.text_loader.httpx.get") as mock_get:
-                mock_response = MagicMock()
-                mock_response.content = html_content
-                mock_response.headers = {"Content-Type": "text/html"}
-                mock_get.return_value = mock_response
-
+            with patch(
+                "services.nlp.app.text_loader.httpx.stream",
+                return_value=_StreamCM(
+                    _headers("text/html", html_content), [html_content]
+                ),
+            ):
                 result = load_artifact("https://example.com/page.html")
 
                 assert "Header" in result
@@ -106,35 +138,36 @@ class TestLoadArtifact:
         utf8_content = "Unicode: café, naïve, 日本語".encode("utf-8")
 
         with patch("services.nlp.app.text_loader.validate_url"):
-            with patch("services.nlp.app.text_loader.httpx.get") as mock_get:
-                mock_response = MagicMock()
-                mock_response.content = utf8_content
-                mock_response.headers = {"Content-Type": "text/plain; charset=utf-8"}
-                mock_get.return_value = mock_response
-
+            with patch(
+                "services.nlp.app.text_loader.httpx.stream",
+                return_value=_StreamCM(
+                    _headers("text/plain; charset=utf-8", utf8_content),
+                    [utf8_content],
+                ),
+            ):
                 result = load_artifact("https://example.com/utf8.txt")
 
                 assert "café" in result
                 assert "日本語" in result
 
-    def test_handles_binary_fallback(self):
-        """Verify binary content falls back to decode with errors=ignore."""
+    def test_bad_utf8_raises_after_hardening(self):
+        """Invalid UTF-8 must now raise (was: silently dropped pre-#1120)."""
         from services.nlp.app.text_loader import load_artifact
 
-        # Content with invalid UTF-8 bytes
+        # Invalid UTF-8 byte sequence -- prior behavior was to silently
+        # drop these via ``errors="ignore"``, which mutilated TLCs and
+        # other identifiers. Post-#1120 we fail loudly instead.
         binary_content = b"Valid text \xff\xfe invalid bytes"
 
         with patch("services.nlp.app.text_loader.validate_url"):
-            with patch("services.nlp.app.text_loader.httpx.get") as mock_get:
-                mock_response = MagicMock()
-                mock_response.content = binary_content
-                mock_response.headers = {"Content-Type": "application/octet-stream"}
-                mock_get.return_value = mock_response
-
-                result = load_artifact("https://example.com/binary.bin")
-
-                # Should not raise, invalid bytes are ignored
-                assert "Valid text" in result
+            with patch(
+                "services.nlp.app.text_loader.httpx.stream",
+                return_value=_StreamCM(
+                    _headers("text/plain", binary_content), [binary_content]
+                ),
+            ):
+                with pytest.raises(ValueError, match="E_DOC_DECODE_FAILED"):
+                    load_artifact("https://example.com/binary.bin")
 
 
 class TestPdfExtraction:
@@ -147,12 +180,12 @@ class TestPdfExtraction:
         pdf_content = b"%PDF-1.4 fake pdf content"
 
         with patch("services.nlp.app.text_loader.validate_url"):
-            with patch("services.nlp.app.text_loader.httpx.get") as mock_get:
-                mock_response = MagicMock()
-                mock_response.content = pdf_content
-                mock_response.headers = {"Content-Type": "application/pdf"}
-                mock_get.return_value = mock_response
-
+            with patch(
+                "services.nlp.app.text_loader.httpx.stream",
+                return_value=_StreamCM(
+                    _headers("application/pdf", pdf_content), [pdf_content]
+                ),
+            ):
                 with patch("services.nlp.app.text_loader.pdfminer") as mock_pdfminer:
                     mock_pdfminer.extract_text.return_value = "Extracted PDF text"
 
@@ -164,15 +197,19 @@ class TestPdfExtraction:
         """Verify fallback when pdfminer fails."""
         from services.nlp.app.text_loader import load_artifact
 
+        # Use a UTF-8-decodable body so the fallback path (bytes decode)
+        # succeeds after pdfminer throws. Pre-#1120 invalid bytes would
+        # have been swallowed; post-#1120 they raise, so the legitimate
+        # fallback path now needs clean UTF-8.
         pdf_content = b"%PDF-1.4 corrupted pdf"
 
         with patch("services.nlp.app.text_loader.validate_url"):
-            with patch("services.nlp.app.text_loader.httpx.get") as mock_get:
-                mock_response = MagicMock()
-                mock_response.content = pdf_content
-                mock_response.headers = {"Content-Type": "application/pdf"}
-                mock_get.return_value = mock_response
-
+            with patch(
+                "services.nlp.app.text_loader.httpx.stream",
+                return_value=_StreamCM(
+                    _headers("application/pdf", pdf_content), [pdf_content]
+                ),
+            ):
                 with patch("services.nlp.app.text_loader.pdfminer") as mock_pdfminer:
                     mock_pdfminer.extract_text.side_effect = Exception("PDF error")
 
@@ -190,14 +227,16 @@ class TestHttpErrors:
         from services.nlp.app.text_loader import load_artifact
         import httpx
 
+        err = httpx.HTTPStatusError(
+            "404 Not Found", request=MagicMock(), response=MagicMock()
+        )
         with patch("services.nlp.app.text_loader.validate_url"):
-            with patch("services.nlp.app.text_loader.httpx.get") as mock_get:
-                mock_response = MagicMock()
-                mock_response.raise_for_status.side_effect = httpx.HTTPStatusError(
-                    "404 Not Found", request=MagicMock(), response=MagicMock()
-                )
-                mock_get.return_value = mock_response
-
+            with patch(
+                "services.nlp.app.text_loader.httpx.stream",
+                return_value=_StreamCM(
+                    _headers("application/pdf", b""), [], raise_exc=err
+                ),
+            ):
                 with pytest.raises(httpx.HTTPStatusError):
                     load_artifact("https://example.com/missing.pdf")
 
@@ -207,8 +246,10 @@ class TestHttpErrors:
         import httpx
 
         with patch("services.nlp.app.text_loader.validate_url"):
-            with patch("services.nlp.app.text_loader.httpx.get") as mock_get:
-                mock_get.side_effect = httpx.TimeoutException("Connection timed out")
+            with patch(
+                "services.nlp.app.text_loader.httpx.stream"
+            ) as mock_stream:
+                mock_stream.side_effect = httpx.TimeoutException("Connection timed out")
 
                 with pytest.raises(httpx.TimeoutException):
                     load_artifact("https://slow.example.com/doc.pdf")
