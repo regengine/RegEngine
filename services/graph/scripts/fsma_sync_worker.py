@@ -207,9 +207,47 @@ class FSMASyncWorker:
         Creates graph nodes for the event, lot, and facility references,
         reading from the canonical model's richer field set (from/to
         facility references, entity references, provenance metadata).
+
+        #1197: demonstrates the schema_version dispatch pattern. We do
+        NOT call ``parse_traceability_event`` here because the publisher
+        (``canonical_persistence.migration.publish_graph_sync``) sends a
+        subset dict rather than a full event — the required-field set
+        does not line up. Instead we peek at ``schema_version`` and
+        refuse unknown versions, so a future envelope bump (v2+) with
+        breaking changes will DLQ rather than silently corrupt nodes.
         """
         event_id = event.get("event_id")
         if not event_id:
+            return
+
+        # #1197: refuse unknown envelope versions before touching Neo4j.
+        # Legacy rows with no ``schema_version`` or with semver strings
+        # ("1.0.0", "1.0") are coerced to integer ``1`` via the shared
+        # helper so we stay backward-compatible with events published
+        # before this field existed on the wire.
+        from shared.canonical_event import (  # noqa: E402 - lazy to avoid import cycle
+            KNOWN_VERSIONS,
+            TraceabilityEvent,
+        )
+        raw_version = event.get("schema_version", 1)
+        try:
+            peeked_version = TraceabilityEvent._coerce_schema_version(raw_version)
+        except (TypeError, ValueError):
+            logger.warning(
+                "fsma_sync_schema_version_uncoerceable",
+                event_id=event_id,
+                raw_version=raw_version,
+                tenant_id=event.get("tenant_id", ""),
+            )
+            return
+        if peeked_version not in KNOWN_VERSIONS:
+            logger.warning(
+                "fsma_sync_schema_version_unsupported",
+                event_id=event_id,
+                peeked_version=peeked_version,
+                known_versions=sorted(KNOWN_VERSIONS),
+                tenant_id=event.get("tenant_id", ""),
+            )
             return
 
         tenant_id = event.get("tenant_id", "")

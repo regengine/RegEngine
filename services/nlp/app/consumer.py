@@ -1160,6 +1160,43 @@ def run_consumer() -> None:
         acks="all",
     )
 
+    try:
+        _run_consumer_loop(consumer, producer)
+    finally:
+        # #1220 — explicitly flush the producer before close so buffered
+        # DLQ messages are persisted on SIGTERM. librdkafka's internal
+        # buffer is asynchronous; without flush, in-flight dead-letters
+        # (including FSMA extraction failures we keep for forensic
+        # analysis) can be silently dropped when the process exits.
+        _graceful_producer_shutdown(producer)
+        try:
+            consumer.close()
+        except (RuntimeError, OSError) as exc:  # pragma: no cover - infra
+            logger.warning("consumer_close_error", error=str(exc))
+
+
+def _graceful_producer_shutdown(producer: KafkaProducer) -> None:
+    """Flush buffered messages then close the producer (#1220).
+
+    Called from ``run_consumer``'s ``finally`` block on graceful shutdown.
+    The flush happens BEFORE close so any in-flight DLQ events — which
+    carry forensic context for failed FSMA extractions — are delivered
+    to the broker before the process exits. Exceptions are logged but
+    never re-raised: we still want ``close()`` to run even if the broker
+    is unreachable during shutdown.
+    """
+    try:
+        producer.flush(timeout=5.0)
+        logger.info("nlp_producer_flushed_on_shutdown")
+    except Exception as exc:  # pragma: no cover - infra dependent
+        logger.exception("dlq_flush_on_shutdown_failed", error=str(exc))
+    try:
+        producer.close(timeout=5.0)
+    except (RuntimeError, OSError) as exc:  # pragma: no cover - infra
+        logger.warning("producer_close_error", error=str(exc))
+
+
+def _run_consumer_loop(consumer: KafkaConsumer, producer: KafkaProducer) -> None:
     while not _shutdown_event.is_set():
         messages = consumer.poll(timeout_ms=500)
         if not messages:
@@ -1618,5 +1655,3 @@ def run_consumer() -> None:
                         )
                         consumer.commit()
                         MESSAGES_COUNTER.labels(status="error").inc()
-    consumer.close()
-    producer.close()
