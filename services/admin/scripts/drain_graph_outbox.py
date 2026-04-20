@@ -18,7 +18,6 @@ in ``graph_outbox.py``.
 from __future__ import annotations
 
 import argparse
-import os
 import sys
 
 import structlog
@@ -43,11 +42,14 @@ def main(argv=None) -> int:
 
     logger = structlog.get_logger("drain_graph_outbox")
 
-    if not supplier_graph_sync.enabled or supplier_graph_sync._driver is None:
+    # Resolve the current (possibly hot-reloaded) driver via the public
+    # accessor — reads the latest credentials from
+    # ``shared.secrets_manager`` and rebuilds the driver on rotation. See
+    # issue #1410.
+    driver = supplier_graph_sync.current_driver()
+    if not supplier_graph_sync.enabled or driver is None:
         logger.warning("neo4j_driver_unavailable_skipping_drain")
         return 0
-
-    driver = supplier_graph_sync._driver  # noqa: SLF001  (intentional)
 
     def factory(tenant_id: str):
         return session_with_tenant(driver, tenant_id)

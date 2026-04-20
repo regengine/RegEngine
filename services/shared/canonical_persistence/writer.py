@@ -1033,7 +1033,12 @@ class CanonicalEventStore:
             "confidence_score": event.confidence_score,
             "status": event.status.value,
             "supersedes_event_id": str(event.supersedes_event_id) if event.supersedes_event_id else None,
-            "schema_version": event.schema_version,
+            # #1197: ``schema_version`` is now an ``int`` on the Pydantic
+            # model (envelope-version dispatch). The DB column is still
+            # TEXT for backward-compat with pre-#1197 rows; cast here at
+            # the boundary. A column type-migration to INT can follow on
+            # its own schedule.
+            "schema_version": str(event.schema_version),
             "sha256_hash": event.sha256_hash,
             "chain_hash": event.chain_hash,
             "idempotency_key": event.idempotency_key,
