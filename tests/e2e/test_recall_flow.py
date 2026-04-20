@@ -1,8 +1,38 @@
 import asyncio
+import time
 import uuid
 import httpx
 import pytest
-from typing import Dict, Any
+from typing import Dict, Any, Callable, Optional
+
+
+def poll_until(
+    predicate: Callable[[], Optional[Any]],
+    timeout: float = 30.0,
+    interval: float = 1.0,
+) -> Optional[Any]:
+    """Poll ``predicate`` until it returns a truthy value or ``timeout`` elapses.
+
+    Returns the truthy return value from the predicate, or ``None`` on timeout.
+    Sleeps ``interval`` seconds between attempts. This replaces raw
+    ``time.sleep(N)`` inside retry loops so failures surface as a clean
+    timeout rather than a flaky off-by-one-iteration test result
+    (ref GH #1350).
+    """
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        try:
+            result = predicate()
+        except Exception:
+            result = None
+        if result:
+            return result
+        # Avoid over-sleeping past the deadline on the final iteration.
+        remaining = deadline - time.time()
+        if remaining <= 0:
+            break
+        time.sleep(min(interval, remaining))
+    return None
 
 # Service URLs (configurable via env vars in real run)
 # Assuming running via docker-compose
@@ -99,34 +129,30 @@ def test_full_recall_flow(http_client):
     task_id = data.get("task_id") or data.get("id")
     print(f"Ingestion successful. Task ID: {task_id}")
     
-    # 3. Poll for Graph Availability
-    # Retrying for up to 30 seconds
-    max_retries = 10
-    found = False
-    
-    for i in range(max_retries):
-        import time
-        time.sleep(3) # Wait between retries
-        
-        # Query Graph by Lot Code
-        query_resp = http_client.get(f"{GRAPH_URL}/trace/lot/{lot_code}", headers={"X-RegEngine-API-Key": "admin"})
-        
-        if query_resp.status_code == 200:
-            trace_data = query_resp.json()
+    # 3. Poll for Graph Availability (up to 30 s, 1 s interval).
+    # Uses poll_until helper so the fail mode on a stalled pipeline is a
+    # clean timeout, not a flaky sleep-based retry loop (GH #1350).
+    def _check_trace():
+        resp = http_client.get(
+            f"{GRAPH_URL}/trace/lot/{lot_code}",
+            headers={"X-RegEngine-API-Key": "admin"},
+        )
+        if resp.status_code == 200:
+            trace_data = resp.json()
             if trace_data.get("events"):
-                print(f"Found trace events for {lot_code}!")
-                found = True
-                
-                # Verify Content
-                events = trace_data["events"]
-                assert len(events) >= 1
-                first_event = events[0]
-                assert first_event["lot_code"] == lot_code
-                assert "0012345678901" in str(first_event["location_gln"]) or \
-                       "0098765432109" in str(first_event["location_gln"])
-                break
-        
-        print(f"Retry {i+1}/{max_retries}: Lot not yet in graph...")
+                return trace_data
+        return None
+
+    trace_data = poll_until(_check_trace, timeout=30.0, interval=1.0)
+    found = trace_data is not None
+    if found:
+        print(f"Found trace events for {lot_code}!")
+        events = trace_data["events"]
+        assert len(events) >= 1
+        first_event = events[0]
+        assert first_event["lot_code"] == lot_code
+        assert "0012345678901" in str(first_event["location_gln"]) or \
+               "0098765432109" in str(first_event["location_gln"])
 
     if not found:
         # When running standalone (__main__), raise a descriptive RuntimeError
