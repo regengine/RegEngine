@@ -1,3 +1,6 @@
+# DEPRECATED: will be removed once EVENT_BACKBONE=pg is default (see #1159 #1240).
+# The PostgreSQL task_processor (server/workers/task_processor.py) is the canonical
+# replacement for this Kafka consumer. Do not add new logic here.
 from __future__ import annotations
 
 import json

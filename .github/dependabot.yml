@@ -32,92 +32,250 @@ updates:
       - dependency-name: "vitest"
         update-types: ["version-update:semver-major"]
 
-  # Python services — ALL grouped into one ecosystem entry per service
-  # with aggressive grouping to reduce PR noise
+  # Python services — security-critical deps (cryptography, pyjwt, etc.) always
+  # get their own standalone PR so they are never buried in a batch. Major bumps
+  # for all other deps also get individual PRs. Only minor + patch non-security
+  # deps are grouped (#1178).
 
   - package-ecosystem: "pip"
     directory: "/services/admin"
     schedule:
       interval: "weekly"
       day: "monday"
-    open-pull-requests-limit: 3
+    open-pull-requests-limit: 10
     labels:
       - "dependencies"
       - "backend"
     groups:
-      all-dependencies:
+      security-critical-admin:
         patterns:
-          - "*"
+          - "cryptography"
+          - "pyjwt"
+          - "python-jose"
+          - "pyotp"
+          - "bcrypt"
+          - "authlib"
+      admin-major:
+        update-types:
+          - "version-update:semver-major"
+        exclude-patterns:
+          - "cryptography"
+          - "pyjwt"
+          - "python-jose"
+          - "pyotp"
+          - "bcrypt"
+          - "authlib"
+      admin-minor-patch:
+        update-types:
+          - "version-update:semver-minor"
+          - "version-update:semver-patch"
+        exclude-patterns:
+          - "cryptography"
+          - "pyjwt"
+          - "python-jose"
+          - "pyotp"
+          - "bcrypt"
+          - "authlib"
 
   - package-ecosystem: "pip"
     directory: "/services/ingestion"
     schedule:
       interval: "weekly"
       day: "monday"
-    open-pull-requests-limit: 3
+    open-pull-requests-limit: 10
     labels:
       - "dependencies"
       - "backend"
     groups:
-      all-dependencies:
+      security-critical-ingestion:
         patterns:
-          - "*"
+          - "cryptography"
+          - "pyjwt"
+          - "python-jose"
+          - "pyotp"
+          - "bcrypt"
+          - "authlib"
+      ingestion-major:
+        update-types:
+          - "version-update:semver-major"
+        exclude-patterns:
+          - "cryptography"
+          - "pyjwt"
+          - "python-jose"
+          - "pyotp"
+          - "bcrypt"
+          - "authlib"
+      ingestion-minor-patch:
+        update-types:
+          - "version-update:semver-minor"
+          - "version-update:semver-patch"
+        exclude-patterns:
+          - "cryptography"
+          - "pyjwt"
+          - "python-jose"
+          - "pyotp"
+          - "bcrypt"
+          - "authlib"
 
   - package-ecosystem: "pip"
     directory: "/services/compliance"
     schedule:
       interval: "weekly"
       day: "monday"
-    open-pull-requests-limit: 3
+    open-pull-requests-limit: 10
     labels:
       - "dependencies"
       - "backend"
     groups:
-      all-dependencies:
+      security-critical-compliance:
         patterns:
-          - "*"
+          - "cryptography"
+          - "pyjwt"
+          - "python-jose"
+          - "pyotp"
+          - "bcrypt"
+          - "authlib"
+      compliance-major:
+        update-types:
+          - "version-update:semver-major"
+        exclude-patterns:
+          - "cryptography"
+          - "pyjwt"
+          - "python-jose"
+          - "pyotp"
+          - "bcrypt"
+          - "authlib"
+      compliance-minor-patch:
+        update-types:
+          - "version-update:semver-minor"
+          - "version-update:semver-patch"
+        exclude-patterns:
+          - "cryptography"
+          - "pyjwt"
+          - "python-jose"
+          - "pyotp"
+          - "bcrypt"
+          - "authlib"
 
   - package-ecosystem: "pip"
     directory: "/services/graph"
     schedule:
       interval: "weekly"
       day: "monday"
-    open-pull-requests-limit: 3
+    open-pull-requests-limit: 10
     labels:
       - "dependencies"
       - "backend"
     groups:
-      all-dependencies:
+      security-critical-graph:
         patterns:
-          - "*"
+          - "cryptography"
+          - "pyjwt"
+          - "python-jose"
+          - "pyotp"
+          - "bcrypt"
+          - "authlib"
+      graph-major:
+        update-types:
+          - "version-update:semver-major"
+        exclude-patterns:
+          - "cryptography"
+          - "pyjwt"
+          - "python-jose"
+          - "pyotp"
+          - "bcrypt"
+          - "authlib"
+      graph-minor-patch:
+        update-types:
+          - "version-update:semver-minor"
+          - "version-update:semver-patch"
+        exclude-patterns:
+          - "cryptography"
+          - "pyjwt"
+          - "python-jose"
+          - "pyotp"
+          - "bcrypt"
+          - "authlib"
 
   - package-ecosystem: "pip"
     directory: "/services/nlp"
     schedule:
       interval: "weekly"
       day: "monday"
-    open-pull-requests-limit: 3
+    open-pull-requests-limit: 10
     labels:
       - "dependencies"
       - "backend"
     groups:
-      all-dependencies:
+      security-critical-nlp:
         patterns:
-          - "*"
+          - "cryptography"
+          - "pyjwt"
+          - "python-jose"
+          - "pyotp"
+          - "bcrypt"
+          - "authlib"
+      nlp-major:
+        update-types:
+          - "version-update:semver-major"
+        exclude-patterns:
+          - "cryptography"
+          - "pyjwt"
+          - "python-jose"
+          - "pyotp"
+          - "bcrypt"
+          - "authlib"
+      nlp-minor-patch:
+        update-types:
+          - "version-update:semver-minor"
+          - "version-update:semver-patch"
+        exclude-patterns:
+          - "cryptography"
+          - "pyjwt"
+          - "python-jose"
+          - "pyotp"
+          - "bcrypt"
+          - "authlib"
 
   - package-ecosystem: "pip"
     directory: "/services/scheduler"
     schedule:
       interval: "weekly"
       day: "monday"
-    open-pull-requests-limit: 3
+    open-pull-requests-limit: 10
     labels:
       - "dependencies"
       - "backend"
     groups:
-      all-dependencies:
+      security-critical-scheduler:
         patterns:
-          - "*"
+          - "cryptography"
+          - "pyjwt"
+          - "python-jose"
+          - "pyotp"
+          - "bcrypt"
+          - "authlib"
+      scheduler-major:
+        update-types:
+          - "version-update:semver-major"
+        exclude-patterns:
+          - "cryptography"
+          - "pyjwt"
+          - "python-jose"
+          - "pyotp"
+          - "bcrypt"
+          - "authlib"
+      scheduler-minor-patch:
+        update-types:
+          - "version-update:semver-minor"
+          - "version-update:semver-patch"
+        exclude-patterns:
+          - "cryptography"
+          - "pyjwt"
+          - "python-jose"
+          - "pyotp"
+          - "bcrypt"
+          - "authlib"
 
   # GitHub Actions
   - package-ecosystem: "github-actions"
