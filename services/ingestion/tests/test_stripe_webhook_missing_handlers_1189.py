@@ -175,7 +175,7 @@ class TestTrialWillEnd_Issue1189:
         in operator dashboards and alerting. A silent INFO would hide
         this from conversion-tracking dashboards."""
         _prebind_tenant(fake_redis)
-        with structlog.testing.capture_logs() as cap_logs:
+        with structlog.testing.capture_logs() as log_entries:
             webhooks_mod._handle_trial_will_end(
                 {
                     "id": SUBSCRIPTION,
@@ -184,22 +184,21 @@ class TestTrialWillEnd_Issue1189:
                     "trial_end": 1776513600,
                 }
             )
-        warn_events = [
-            e for e in cap_logs
-            if e["log_level"] == "warning"
-            and "stripe_trial_will_end" in e["event"]
-            and "tenant_not_found" not in e["event"]
+        warn_entries = [
+            e for e in log_entries
+            if e.get("log_level") == "warning"
+            and e.get("event") == "stripe_trial_will_end"
         ]
-        assert len(warn_events) == 1, (
+        assert len(warn_entries) == 1, (
             f"Expected exactly one WARN stripe_trial_will_end log, "
-            f"got {len(warn_events)}"
+            f"got {len(warn_entries)}"
         )
 
     def test_unknown_tenant_does_not_crash(self, fake_redis) -> None:
         """If the subscription/customer cannot be mapped to a tenant
         (e.g. trial started before our first successful checkout), the
         handler logs and no-ops rather than raising."""
-        with structlog.testing.capture_logs() as cap_logs:
+        with structlog.testing.capture_logs() as log_entries:
             webhooks_mod._handle_trial_will_end(
                 {
                     "id": "sub_unknown",
@@ -210,8 +209,8 @@ class TestTrialWillEnd_Issue1189:
             )
         # Must have logged the miss.
         assert any(
-            "stripe_trial_will_end_tenant_not_found" in e["event"]
-            for e in cap_logs
+            e.get("event") == "stripe_trial_will_end_tenant_not_found"
+            for e in log_entries
         ), "Missing-tenant branch must log for operator visibility"
 
     def test_dispatcher_routes_trial_will_end_to_handler(
@@ -314,7 +313,7 @@ class TestDisputeCreated_Issue1189:
         deprioritized and the 7-day Stripe response window would
         expire silently."""
         _prebind_tenant(fake_redis)
-        with structlog.testing.capture_logs() as cap_logs:
+        with structlog.testing.capture_logs() as log_entries:
             webhooks_mod._handle_dispute_created(
                 {
                     "id": "dp_oncall_1",
@@ -327,14 +326,14 @@ class TestDisputeCreated_Issue1189:
                     "created": 1712345678,
                 }
             )
-        error_events = [
-            e for e in cap_logs
-            if e["log_level"] == "error"
-            and "stripe_dispute_opened" in e["event"]
+        error_entries = [
+            e for e in log_entries
+            if e.get("log_level") == "error"
+            and e.get("event") == "stripe_dispute_opened"
         ]
-        assert len(error_events) == 1, (
+        assert len(error_entries) == 1, (
             f"Expected exactly one ERROR stripe_dispute_opened log for "
-            f"oncall paging, got {len(error_events)}"
+            f"oncall paging, got {len(error_entries)}"
         )
 
     def test_unknown_customer_logs_error_does_not_crash(
@@ -344,7 +343,7 @@ class TestDisputeCreated_Issue1189:
         (shouldn't happen in prod — all our customers originate from
         checkout — but the handler must not crash the event processor),
         we log at ERROR and skip the mapping update."""
-        with structlog.testing.capture_logs() as cap_logs:
+        with structlog.testing.capture_logs() as log_entries:
             webhooks_mod._handle_dispute_created(
                 {
                     "id": "dp_unknown_cust",
@@ -358,8 +357,8 @@ class TestDisputeCreated_Issue1189:
                 }
             )
         assert any(
-            "stripe_dispute_tenant_not_found" in e["event"]
-            for e in cap_logs
+            e.get("event") == "stripe_dispute_tenant_not_found"
+            for e in log_entries
         )
 
     def test_dispatcher_routes_dispute_created_to_handler(
@@ -475,12 +474,12 @@ class TestCustomerDeleted_Issue1189:
         # Intentionally don't prebind — no tenant hash, no lookup key.
         # The handler should find no tenant, log the miss, and still
         # issue the defensive delete.
-        with structlog.testing.capture_logs() as cap_logs:
+        with structlog.testing.capture_logs() as log_entries:
             webhooks_mod._handle_customer_deleted({"id": "cus_never_seen"})
         # Tenant-not-found warning fired.
         assert any(
-            "stripe_customer_deleted_tenant_not_found" in e["event"]
-            for e in cap_logs
+            e.get("event") == "stripe_customer_deleted_tenant_not_found"
+            for e in log_entries
         ), (
             "Unknown-customer branch must log tenant_not_found for "
             "operator visibility"
@@ -497,11 +496,11 @@ class TestCustomerDeleted_Issue1189:
         """A malformed event with no ``id`` must log and no-op, not
         raise (the dispatcher catches nothing and a raise would bubble
         out as a 500)."""
-        with structlog.testing.capture_logs() as cap_logs:
+        with structlog.testing.capture_logs() as log_entries:
             webhooks_mod._handle_customer_deleted({})
         assert any(
-            "stripe_customer_deleted_missing_id" in e["event"]
-            for e in cap_logs
+            e.get("event") == "stripe_customer_deleted_missing_id"
+            for e in log_entries
         )
 
     def test_dispatcher_routes_customer_deleted_to_handler(
