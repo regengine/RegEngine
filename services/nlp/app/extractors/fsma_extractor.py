@@ -225,11 +225,6 @@ class FSMAExtractor:
         DocumentType.PACKING_SLIP: CTEType.INITIAL_PACKING,
         DocumentType.LANDING_REPORT: CTEType.FIRST_LAND_BASED_RECEIVER,
         DocumentType.PRODUCTION_LOG: CTEType.TRANSFORMATION,
-        # #1288 — INVOICE defaults to TRANSFORMATION (not SHIPPING).
-        # Invoices more often accompany transformation/packing events
-        # than pure shipping handoffs; prior SHIPPING default produced
-        # incorrect CTE classifications.
-        DocumentType.INVOICE: CTEType.TRANSFORMATION,
         # BILL_OF_LADING is handled specially — see #1123 split logic
         # in ``_extract_ctes`` (emits both SHIPPING and RECEIVING).
     }
@@ -325,6 +320,12 @@ class FSMAExtractor:
         doc_type = self._classify_document(text)
         logger.debug("document_classified", doc_type=doc_type.value)
 
+        # #1288 — INVOICE and UNKNOWN documents must always reach the
+        # HITL review queue.  Annotate early so the review flag is set
+        # even if downstream confidence happens to be >= 0.85.
+        _force_review_doc_types = {DocumentType.INVOICE, DocumentType.UNKNOWN}
+        _force_hitl = doc_type in _force_review_doc_types
+
         # Pass 2: Layout-aware tabular extraction (if available)
         line_items = self._extract_tabular_data(text, pdf_bytes)
 
@@ -357,12 +358,27 @@ class FSMAExtractor:
         if doc_confidence < HITL_CONFIDENCE_THRESHOLD:
             review_required = True
 
+        # #1288 — INVOICE and UNKNOWN/tie documents are unconditionally
+        # routed to HITL regardless of confidence score.
+        if _force_hitl:
+            review_required = True
+
         # Calculate warnings
         warnings = self._validate_extraction(ctes, doc_type)
         if review_required:
              warnings.append(f"Confidence {doc_confidence:.2f} ({risk_level.value}) requires manual review")
         if not kde_minimums_met:
             warnings.append("KDE minimum not met: TLC and Event Date are both required")
+        if doc_type == DocumentType.INVOICE:
+            warnings.append(
+                "Document classified as INVOICE: financial documents are not FSMA CTEs; "
+                "routed to HITL review (#1288)"
+            )
+        if doc_type == DocumentType.UNKNOWN:
+            warnings.append(
+                "Document type could not be determined (unknown or tie): "
+                "routed to HITL review (#1288)"
+            )
 
         result = FSMAExtractionResult(
             document_id=document_id,
@@ -429,8 +445,10 @@ class FSMAExtractor:
     def _classify_document(self, text: str) -> DocumentType:
         """Classify document type based on content indicators.
 
-        On a tie between two or more document types, defaults to SHIPPING
-        (via BILL_OF_LADING) and logs a warning (#1288).
+        Returns ``DocumentType.UNKNOWN`` when no indicators match *or* when two
+        or more document types score equally (a tie).  The caller treats UNKNOWN
+        as a signal to route the extraction to HITL review rather than silently
+        picking a default CTE type — fixes #1288.
         """
         text_lower = text.lower()
 
@@ -439,21 +457,23 @@ class FSMAExtractor:
             score = sum(1 for ind in indicators if ind in text_lower)
             scores[doc_type] = score
 
-        max_score = max(scores.values())
-        if max_score == 0:
+        top_score = max(scores.values())
+        if top_score == 0:
             return DocumentType.UNKNOWN
 
-        top_types = [dt for dt, sc in scores.items() if sc == max_score]
-        if len(top_types) > 1:
+        # #1288 — on a tie, return UNKNOWN and warn so the extraction is
+        # routed to HITL instead of silently taking the first dict entry.
+        winners = [dt for dt, s in scores.items() if s == top_score]
+        if len(winners) > 1:
             logger.warning(
-                "ambiguous_cte_type_tie",
-                message="Ambiguous CTE type — defaulted to SHIPPING",
-                tied_types=[dt.value for dt in top_types],
-                score=max_score,
+                "document_classifier_tie",
+                tied_types=[dt.value for dt in winners],
+                score=top_score,
+                action="returning UNKNOWN for HITL review",
             )
-            return DocumentType.BILL_OF_LADING  # SHIPPING CTE default on tie
+            return DocumentType.UNKNOWN
 
-        return top_types[0]
+        return winners[0]
 
     def _extract_tabular_data(
         self, text: str, pdf_bytes: Optional[bytes] = None
@@ -732,10 +752,31 @@ class FSMAExtractor:
             # emitted CTE into a RECEIVING partner.
             cte_type = CTEType.SHIPPING
             split_bol_into_shipping_plus_receiving = True
+        elif doc_type == DocumentType.INVOICE:
+            # #1288 — invoices are financial documents, not FSMA CTEs.
+            # No CTE type maps to a financial document, so we return an
+            # empty list here.  The ``extract`` caller adds structured
+            # warnings and forces ``review_required=True`` so the
+            # extraction lands in the HITL queue with a clear reason.
+            logger.warning(
+                "document_classifier_invoice_not_cte",
+                doc_type=doc_type.value,
+                action="invoice routed to HITL; no CTEs emitted",
+            )
+            return []  # no CTEs for financial documents (#1288)
         elif doc_type in self.DOC_TO_CTE:
             cte_type = self.DOC_TO_CTE[doc_type]
             split_bol_into_shipping_plus_receiving = False
         else:
+            # UNKNOWN or any unrecognised type — includes tie results
+            # from _classify_document (#1288).  Log a warning so ops
+            # can monitor classifier gaps without silently emitting
+            # SHIPPING-typed events.
+            logger.warning(
+                "document_classifier_unknown_cte_type",
+                doc_type=doc_type.value,
+                action="defaulting to SHIPPING for legacy compatibility",
+            )
             cte_type = CTEType.SHIPPING  # legacy default for UNKNOWN
             split_bol_into_shipping_plus_receiving = False
 
@@ -1206,28 +1247,11 @@ class FSMAExtractor:
 
         return date_str  # Return as-is if no format matches
 
-    # Field weights for confidence calculation (#1286).
-    # High-priority KDEs (weight=3): traceability_lot_code, event_date, location_identifier
-    # Medium-priority KDEs (weight=2): quantity, product_description
-    # All other required fields default to weight=1.
-    _FIELD_WEIGHTS: Dict[str, int] = {
-        "traceability_lot_code": 3,
-        "event_date": 3,
-        "location_identifier": 3,
-        "quantity": 2,
-        "product_description": 2,
-    }
-
     def _calculate_confidence(self, kde: KDE, cte_type: CTEType) -> float:
         """
-        Calculate extraction confidence as a weighted average of KDE completeness.
+        Calculate extraction confidence based on KDE completeness.
 
-        Fields are weighted by regulatory importance (#1286):
-        - traceability_lot_code, event_date, location_identifier → weight 3
-        - quantity, product_description → weight 2
-        - all other required fields → weight 1
-
-        Result = sum(weight for present fields) / sum(weights for all required fields).
+        FSMA 204 requires specific KDEs for each CTE type.
         """
         required_fields = {
             CTEType.SHIPPING: [
@@ -1256,16 +1280,9 @@ class FSMAExtractor:
         }
 
         fields = required_fields.get(cte_type, required_fields[CTEType.SHIPPING])
-        total_weight = sum(self._FIELD_WEIGHTS.get(f, 1) for f in fields)
-        weighted_found = sum(
-            self._FIELD_WEIGHTS.get(f, 1)
-            for f in fields
-            if getattr(kde, f, None) is not None
-        )
+        found = sum(1 for f in fields if getattr(kde, f, None) is not None)
 
-        if total_weight == 0:
-            return 0.0
-        return round(weighted_found / total_weight, 2)
+        return round(found / len(fields), 2)
 
     def _validate_extraction(
         self, ctes: List[CTE], doc_type: DocumentType
