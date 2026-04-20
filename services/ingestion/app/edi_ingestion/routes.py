@@ -62,24 +62,53 @@ logger = logging.getLogger("edi-ingestion")
 
 
 def _decode_edi_bytes(raw_bytes: bytes) -> str:
-    """Decode an EDI upload as UTF-8 with replacement + warn on loss.
+    """Decode an EDI upload without silent data loss.
 
-    #1170: previously used ``errors="ignore"`` which silently dropped
-    non-ASCII characters — "Distribuidora Española" became
-    "Distribuidora Espaola" with no signal, breaking partner-name
-    matching. Replacement characters (U+FFFD) preserve byte count so
-    the operator can spot the mismatch and fix the encoding at the
-    source.
+    #1170: the original implementation used ``errors="ignore"`` which
+    silently dropped non-ASCII characters — "Distribuidora Española"
+    became "Distribuidora Espaola" with no signal, breaking partner-
+    name matching. An interim fix used ``errors="replace"`` which
+    preserves byte count but still corrupts the data with U+FFFD
+    (same bug class, just with a visible marker).
+
+    The spec-honoring fix:
+
+      1. Try ``utf-8`` strict. Modern partners send UTF-8 and
+         non-ASCII names (ñ, é, ü) round-trip exactly.
+      2. On ``UnicodeDecodeError`` fall back to ``latin-1`` strict
+         (ISO-8859-1). X12.5/X12.6 explicitly name ISO-8859-1 as the
+         Basic/Extended character set, so a partner sending latin-1
+         is spec-compliant, not broken. ``latin-1`` is a total
+         encoding (all 256 byte values map to code points) so strict
+         decoding of arbitrary bytes never fails — we don't need a
+         third fallback and we never silently drop bytes.
+      3. If even latin-1 raises (only possible via future codec
+         bugs), ``raise`` the underlying ``UnicodeDecodeError``. The
+         upload endpoint catches it and returns HTTP 422 instead of
+         persisting corrupted data.
+
+    A WARN log fires whenever latin-1 fallback is used so an operator
+    can spot encoding drift from a partner and update their config.
     """
-    text = raw_bytes.decode("utf-8", errors="replace")
-    replacement_count = text.count("\ufffd")
-    if replacement_count:
+    try:
+        return raw_bytes.decode("utf-8")
+    except UnicodeDecodeError as utf8_err:
+        # Spec fallback: X12 Basic/Extended character set is ISO-8859-1.
+        # latin-1 is total — every byte maps — so this is strict-safe.
+        try:
+            text = raw_bytes.decode("latin-1")
+        except UnicodeDecodeError:
+            # Should be unreachable for latin-1. Re-raise the original
+            # UTF-8 error so the handler can reject the row loudly.
+            raise utf8_err
         logger.warning(
-            "edi_utf8_decode_replacements count=%d bytes=%d — source may "
-            "be latin-1 or have corrupt encoding; check partner config",
-            replacement_count, len(raw_bytes),
+            "edi_decode_fallback_latin1 bytes=%d utf8_err_pos=%d — "
+            "partner is sending ISO-8859-1 (X12 Basic set); data is "
+            "preserved verbatim but partner config should declare "
+            "encoding explicitly",
+            len(raw_bytes), utf8_err.start,
         )
-    return text
+        return text
 
 
 def _edi_strict_mode() -> bool:
@@ -227,7 +256,27 @@ async def ingest_edi_856(
     if not is_edi_content(raw_bytes):
         raise HTTPException(status_code=400, detail="Unsupported EDI payload format")
 
-    raw_text = _decode_edi_bytes(raw_bytes)
+    # #1170: fail loud on undecodable bytes rather than corrupt silently.
+    try:
+        raw_text = _decode_edi_bytes(raw_bytes)
+    except UnicodeDecodeError as exc:
+        logger.warning(
+            "edi_decode_failed_856 tenant=%s bytes=%d pos=%d",
+            sender_tenant_id, len(raw_bytes), exc.start,
+        )
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "error": "edi_decode_failed",
+                "message": (
+                    "EDI payload is not valid UTF-8 or ISO-8859-1 (X12 Basic "
+                    "set). The document is rejected rather than persisted "
+                    "with corrupted names. Re-upload with a spec-compliant "
+                    "encoding."
+                ),
+                "byte_position": exc.start,
+            },
+        )
     segments = _parse_x12_segments(raw_text)
     if not segments:
         raise HTTPException(status_code=400, detail="Unable to parse EDI segments")
@@ -509,7 +558,27 @@ async def ingest_edi_document(
     if not is_edi_content(raw_bytes):
         raise HTTPException(status_code=400, detail="Unsupported EDI payload format")
 
-    raw_text = _decode_edi_bytes(raw_bytes)
+    # #1170: fail loud on undecodable bytes rather than corrupt silently.
+    try:
+        raw_text = _decode_edi_bytes(raw_bytes)
+    except UnicodeDecodeError as exc:
+        logger.warning(
+            "edi_decode_failed_document tenant=%s bytes=%d pos=%d",
+            sender_tenant_id, len(raw_bytes), exc.start,
+        )
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "error": "edi_decode_failed",
+                "message": (
+                    "EDI payload is not valid UTF-8 or ISO-8859-1 (X12 Basic "
+                    "set). The document is rejected rather than persisted "
+                    "with corrupted names. Re-upload with a spec-compliant "
+                    "encoding."
+                ),
+                "byte_position": exc.start,
+            },
+        )
     segments = _parse_x12_segments(raw_text)
     if not segments:
         raise HTTPException(status_code=400, detail="Unable to parse EDI segments")

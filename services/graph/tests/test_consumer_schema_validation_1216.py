@@ -1,193 +1,176 @@
-"""Regression tests for #1216 — graph consumer inbound schema validation.
+"""Tests for inbound schema validation on the ``graph.update`` topic (#1216).
 
-Before the fix, ``services/graph/app/consumer.py`` called
-``GraphEvent.parse_obj()`` / ``extraction.dict()`` on whatever
-dict the deserializer produced. Bad payloads crashed the record
-processor, burned the retry budget on deterministic failures, and
-eventually hit DLQ with uninformative ``AttributeError: 'NoneType'
-object has no attribute ...`` entries.
+Previously the graph consumer accepted any dict-shaped payload on the
+legacy path and blindly called ``evt.get(...)``. A non-dict payload would
+crash the worker and a junk dict would silently upsert garbage into
+Neo4j. These tests exercise the validation branch added in #1216:
 
-The fix loads a Draft7Validator from
-``data-schemas/events/graph.update.schema.json`` at module scope and
-rejects malformed payloads with a structured ``schema_invalid`` DLQ
-reason *before* any parser is given a chance to crash.
-
-These tests exercise the validator in isolation so they don't need
-Kafka, Schema Registry, or Neo4j.
+1. Non-dict payload  → route to DLQ with ``reason=invalid_schema``
+2. Dict missing required fields → route to DLQ with ``reason=invalid_schema``
+3. Dict matching the legacy schema → parses into ``LegacyGraphEvent``
 """
 
 from __future__ import annotations
 
-import sys
-from pathlib import Path
+from unittest.mock import MagicMock, patch
 
-_repo_root = Path(__file__).resolve().parents[3]
-if str(_repo_root) not in sys.path:
-    sys.path.insert(0, str(_repo_root))
+import pytest
+from pydantic import ValidationError
+
+from services.shared.schemas import LegacyGraphEvent
 
 
-class TestInboundSchemaLoaded:
-    """The module-level validator must actually load — if the schema
-    file is missing or malformed we fall back to fail-open (None),
-    which silently reopens the bug. Pin both the happy path and the
-    contract that the schema file ships with the repo."""
+class TestLegacyGraphEventModel:
+    """The new Pydantic model itself enforces the fields the consumer reads."""
 
-    def test_inbound_validator_is_loaded(self) -> None:
-        from jsonschema import Draft7Validator
-
-        from services.graph.app import consumer
-
-        assert consumer._INBOUND_VALIDATOR is not None, (
-            "Graph consumer must load its Draft7Validator at import "
-            "time; if this is None a malformed payload will silently "
-            "reach GraphEvent.parse_obj() and regress #1216."
+    def test_accepts_minimal_valid_payload(self):
+        evt = LegacyGraphEvent.model_validate(
+            {"document_id": "doc-1", "entities": []}
         )
-        assert isinstance(consumer._INBOUND_VALIDATOR, Draft7Validator)
+        assert evt.document_id == "doc-1"
+        assert evt.entities == []
+        assert evt.source_url is None
+        assert evt.tenant_id is None
 
-    def test_schema_file_exists_in_repo(self) -> None:
-        schema_path = (
-            _repo_root / "data-schemas" / "events" / "graph.update.schema.json"
+    def test_accepts_full_legacy_payload(self):
+        evt = LegacyGraphEvent.model_validate(
+            {
+                "document_id": "doc-2",
+                "entities": [{"type": "OBLIGATION", "attrs": {"name": "foo"}}],
+                "source_url": "https://example.com/doc.pdf",
+                "tenant_id": "550e8400-e29b-41d4-a716-446655440000",
+            }
         )
-        assert schema_path.exists(), (
-            "graph.update schema must be checked into "
-            "data-schemas/events/ — the consumer looks it up by path."
+        assert evt.document_id == "doc-2"
+        assert len(evt.entities) == 1
+        assert evt.source_url == "https://example.com/doc.pdf"
+
+    def test_rejects_missing_document_id(self):
+        with pytest.raises(ValidationError):
+            LegacyGraphEvent.model_validate({"entities": []})
+
+    def test_rejects_empty_document_id(self):
+        with pytest.raises(ValidationError):
+            LegacyGraphEvent.model_validate({"document_id": "", "entities": []})
+
+    def test_rejects_non_list_entities(self):
+        with pytest.raises(ValidationError):
+            LegacyGraphEvent.model_validate(
+                {"document_id": "doc-3", "entities": "not-a-list"}
+            )
+
+    def test_rejects_non_dict_entity_items(self):
+        with pytest.raises(ValidationError):
+            LegacyGraphEvent.model_validate(
+                {"document_id": "doc-4", "entities": ["string-instead-of-dict"]}
+            )
+
+    def test_ignores_extra_fields(self):
+        """Forward-compat: additional fields should not cause rejection."""
+        evt = LegacyGraphEvent.model_validate(
+            {
+                "document_id": "doc-5",
+                "entities": [],
+                "experimental_field": "future-value",
+            }
+        )
+        assert evt.document_id == "doc-5"
+
+
+class TestConsumerInvalidPayloadRouting:
+    """The consumer must DLQ malformed messages and not crash.
+
+    These tests drive a single iteration of the consumer loop with a
+    mocked ``confluent_kafka`` consumer. We bypass the schema registry /
+    Avro deserializer wiring and assert the DLQ path fires with
+    ``reason=invalid_schema``.
+    """
+
+    def _make_record(self, value, topic: str = "graph.update"):
+        record = MagicMock()
+        record.value.return_value = value
+        record.error.return_value = None
+        record.headers.return_value = []
+        record.topic.return_value = topic
+        return record
+
+    def _drive_once_with_payload(self, payload):
+        """Run the consumer loop for a single message, then stop.
+
+        Returns the mocked ``_send_to_dlq`` call list and the mocked
+        Kafka consumer so the caller can assert on commit behaviour.
+        """
+        import asyncio
+
+        from services.graph.app import consumer as consumer_mod
+
+        record = self._make_record(payload)
+        fake_consumer = MagicMock()
+        # First poll returns the message; the shutdown flag will stop
+        # the loop before a second poll happens.
+        fake_consumer.poll.return_value = record
+
+        # verify_event passes the payload through unchanged and returns
+        # a stub producer identity — isolates auth from schema concerns.
+        def _fake_verify(evt, headers, topic, allowed_producers):
+            return evt, "scheduler"
+
+        async def _drive():
+            # Trigger shutdown after a short delay so run_consumer exits.
+            async def _stop():
+                await asyncio.sleep(0.1)
+                consumer_mod._shutdown_event.set()
+
+            stop_task = asyncio.create_task(_stop())
+            try:
+                await consumer_mod.run_consumer()
+            finally:
+                await stop_task
+
+        consumer_mod._shutdown_event.clear()
+        with patch.object(
+            consumer_mod, "DeserializingConsumer", return_value=fake_consumer
+        ), patch.object(
+            consumer_mod, "SchemaRegistryClient", return_value=MagicMock()
+        ), patch.object(
+            consumer_mod, "AvroDeserializer", return_value=lambda v, c: v
+        ), patch.object(
+            consumer_mod, "load_schema", return_value="{}"
+        ), patch.object(
+            consumer_mod, "_init_dlq_producer", return_value=MagicMock()
+        ), patch.object(
+            consumer_mod, "_send_to_dlq"
+        ) as mock_send_dlq, patch.object(
+            consumer_mod, "verify_event", side_effect=_fake_verify
+        ):
+            try:
+                asyncio.run(_drive())
+            finally:
+                consumer_mod._shutdown_event.clear()
+            return mock_send_dlq, fake_consumer
+
+    def test_non_dict_payload_routes_to_dlq_and_does_not_crash(self):
+        """Bytes-shaped payload must not reach ``evt.get(...)``."""
+        mock_send_dlq, fake_consumer = self._drive_once_with_payload(b"not a dict")
+
+        reasons = [
+            call.kwargs.get("reason") for call in mock_send_dlq.call_args_list
+        ]
+        assert "invalid_schema" in reasons, (
+            f"expected invalid_schema DLQ call, got {reasons}"
+        )
+        fake_consumer.commit.assert_called()
+
+    def test_dict_payload_failing_both_schemas_routes_to_dlq(self):
+        """Dict missing ``document_id`` must be DLQ'd, not silently dropped."""
+        mock_send_dlq, fake_consumer = self._drive_once_with_payload(
+            {"entities": [], "source_url": "http://x"}
         )
 
-
-class TestValidateInboundEventHappyPath:
-    """A well-formed GraphEvent-shape payload must validate cleanly."""
-
-    def test_valid_graph_event_payload_passes(self) -> None:
-        from services.graph.app.consumer import _validate_inbound_event
-
-        payload = {
-            "event_id": "evt-001",
-            "event_type": "approve_provision",
-            "tenant_id": "00000000-0000-0000-0000-000000000001",
-            "doc_hash": "abc123",
-            "document_id": "doc-001",
-            "text_clean": "Some cleaned provision text.",
-            "extraction": {
-                "subject": "food facilities",
-                "action": "must maintain",
-                "obligation_type": "MUST",
-                "confidence_score": 0.92,
-                "source_text": "Food facilities must maintain records.",
-                "source_offset": 0,
-            },
-            "provenance": {"source_url": "https://example.com/a.pdf"},
-            "status": "APPROVED",
-        }
-
-        assert _validate_inbound_event(payload) is None, (
-            "A canonical GraphEvent payload must pass validation; "
-            "otherwise legitimate producer traffic would be DLQ'd."
+        reasons = [
+            call.kwargs.get("reason") for call in mock_send_dlq.call_args_list
+        ]
+        assert "invalid_schema" in reasons, (
+            f"expected invalid_schema DLQ call, got {reasons}"
         )
-
-    def test_valid_legacy_payload_with_entities_passes(self) -> None:
-        """Legacy-format messages (doc_id + entities list, no extraction)
-        must still pass — the consumer supports both formats and we do
-        not want the schema fix to break existing producers."""
-        from services.graph.app.consumer import _validate_inbound_event
-
-        payload = {
-            "doc_id": "legacy-doc-1",
-            "source_url": "https://example.com/legacy.pdf",
-            "entities": [
-                {"type": "ORG", "text": "ACME Corp", "start": 0, "end": 9},
-            ],
-            "tenant_id": "00000000-0000-0000-0000-000000000001",
-        }
-
-        assert _validate_inbound_event(payload) is None
-
-
-class TestValidateInboundEventRejectsMalformed:
-    """Malformed messages must return a descriptive error string so the
-    DLQ entry carries a real root cause instead of an opaque
-    ``AttributeError``."""
-
-    def test_missing_both_doc_id_fields_is_rejected(self) -> None:
-        """The ``anyOf`` clause requires ``document_id`` OR ``doc_id``.
-        A payload with neither is the canonical producer-bug case from
-        the #1216 write-up."""
-        from services.graph.app.consumer import _validate_inbound_event
-
-        payload = {
-            "event_type": "approve_provision",
-            "text_clean": "some text",
-        }
-
-        err = _validate_inbound_event(payload)
-        assert err is not None, (
-            "A payload missing both document_id and doc_id must be "
-            "rejected — otherwise the consumer crashes later on a "
-            "None doc_id."
-        )
-        assert isinstance(err, str) and len(err) > 0
-
-    def test_wrong_type_value_is_rejected(self) -> None:
-        """A field with the wrong JSON type (here: ``entities`` passed
-        as a string instead of an array) must be caught at the edge,
-        not when the legacy upsert tries to iterate it."""
-        from services.graph.app.consumer import _validate_inbound_event
-
-        payload = {
-            "doc_id": "doc-1",
-            "entities": "not-an-array",  # should be array
-        }
-
-        err = _validate_inbound_event(payload)
-        assert err is not None
-        # The error should name the offending field / type so DLQ
-        # consumers can diagnose without spelunking through logs.
-        assert "array" in err.lower() or "entities" in err.lower() or "type" in err.lower()
-
-    def test_invalid_event_type_enum_is_rejected(self) -> None:
-        """``event_type`` is constrained to a fixed enum; an arbitrary
-        string must fail so a producer can't introduce phantom event
-        types that bypass the downstream ``status`` routing."""
-        from services.graph.app.consumer import _validate_inbound_event
-
-        payload = {
-            "document_id": "doc-1",
-            "event_type": "delete_everything",  # not in enum
-            "doc_hash": "h",
-            "text_clean": "t",
-            "extraction": {},
-        }
-
-        err = _validate_inbound_event(payload)
-        assert err is not None
-
-    def test_non_dict_payload_is_rejected(self) -> None:
-        """If the deserializer falls back to raw bytes (magic-byte
-        mismatch), the payload reaches ``_validate_inbound_event`` as
-        a non-dict. Must be rejected with a clear error, not a
-        TypeError from ``iter_errors``."""
-        from services.graph.app.consumer import _validate_inbound_event
-
-        err = _validate_inbound_event(b"\x00\x01raw-bytes")
-        assert err is not None
-        assert "not a json object" in err.lower() or "bytes" in err.lower()
-
-    def test_none_payload_is_rejected(self) -> None:
-        from services.graph.app.consumer import _validate_inbound_event
-
-        err = _validate_inbound_event(None)
-        assert err is not None
-
-
-class TestDlqReasonLabel:
-    """The DLQ counter must carry a ``schema_invalid`` label so ops
-    can alert on producer-bug spikes separately from upsert errors."""
-
-    def test_dlq_counter_supports_schema_invalid_reason(self) -> None:
-        from services.graph.app.consumer import DLQ_COUNTER
-
-        # prometheus_client raises on unknown label values only if
-        # labels are pre-declared; here ``reason`` is a free-form
-        # label so any string works. The assertion is that the
-        # counter object exists and is label-compatible.
-        metric = DLQ_COUNTER.labels(reason="schema_invalid")
-        assert metric is not None
+        fake_consumer.commit.assert_called()
