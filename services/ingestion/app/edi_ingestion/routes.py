@@ -49,6 +49,7 @@ from .dedup import check_and_record_interchange, verify_trading_partner_allowed
 from .extractors import _extract_856_fields, _extract_fields_for_set
 from .models import EDIIngestResponse
 from .parser import _first_segment, _parse_x12_segments, _segment_id_set, _detect_transaction_set
+from .rejection_log import record_edi_rejection
 from .utils import (
     _normalize_unit,
     _safe_float,
@@ -533,10 +534,14 @@ async def ingest_edi_document(
         description=(
             "FSMA validation mode (#1174). ``true`` (default): schema "
             "failures return HTTP 422 and nothing is persisted. "
-            "``false``: advisory — event is persisted with "
-            "``fsma_validation_status=failed``. Set only for test or "
-            "migration scenarios. Global env default "
-            "``EDI_STRICT_MODE=false`` also disables strict mode."
+            "``false``: advisory — the rejection is written to the EDI "
+            "rejection log (separate from the canonical FSMA stream) "
+            "and the response returns ``status='rejected'`` with a "
+            "rejection_id. The invalid event is NEVER inserted into "
+            "the canonical ingest pipeline, so the FSMA 204 audit trail "
+            "stays clean. Set only for test or migration scenarios. "
+            "Global env default ``EDI_STRICT_MODE=false`` also disables "
+            "strict mode."
         ),
     ),
     x_tenant_id: Optional[str] = Header(default=None, alias="X-Tenant-ID"),
@@ -610,9 +615,14 @@ async def ingest_edi_document(
     # #1174: FSMA validation is fail-closed by default. A schema failure
     # returns HTTP 422 with per-field errors and nothing is persisted.
     # ``?strict=false`` and ``EDI_STRICT_MODE=false`` (env) both down-
-    # grade to the legacy advisory behaviour for test/migration
-    # scenarios, in which case the event is persisted with
-    # ``fsma_validation_status=failed``.
+    # grade to advisory mode — the event is NOT persisted into the
+    # canonical ingest stream (that would pollute the FSMA 204
+    # traceability graph). Instead the rejection is recorded via
+    # ``record_edi_rejection`` so the audit trail is preserved but kept
+    # out of the valid-event surface. The caller receives a response
+    # with ``status='rejected'`` and a rejection_id it can use to look
+    # up the record.
+    rejection_record: dict[str, Any] | None = None
     try:
         _validate_edi_as_fsma_event(
             extracted, transaction_set, traceability_lot_code, sender_tenant_id,
@@ -625,6 +635,17 @@ async def ingest_edi_document(
                 "edi_fsma_validation_rejected set=%s tlc=%s errors=%d",
                 transaction_set, traceability_lot_code, len(ve.errors()),
             )
+            # Record on the strict path too — the canonical stream is
+            # untouched either way, but auditors still need the trail.
+            record_edi_rejection(
+                tenant_id=sender_tenant_id,
+                transaction_set=transaction_set,
+                traceability_lot_code=traceability_lot_code,
+                errors=ve.errors(),
+                extracted=extracted,
+                partner_id=x_partner_id,
+                source=source,
+            )
             raise HTTPException(
                 status_code=422,
                 detail={
@@ -635,20 +656,59 @@ async def ingest_edi_document(
                         "EDI document failed FSMAEvent schema validation. "
                         "No events were persisted. Pass ?strict=false or "
                         "set EDI_STRICT_MODE=false only for migration "
-                        "windows — failed rows still pollute FSMA 204 "
-                        "exports if you opt in."
+                        "windows — failed rows are written to the EDI "
+                        "rejection log, never the canonical FSMA stream."
                     ),
                     "errors": ve.errors(),
                 },
             )
+        # Advisory mode: record the rejection separately and short-
+        # circuit before the canonical write. We do NOT call
+        # ``ingest_events`` — that would put the invalid event into the
+        # audit trail with ``fsma_validation_status=failed``, which is
+        # exactly the pollution #1174 is meant to stop.
         extracted["fsma_validation_status"] = "failed"
-        logger.warning(
-            "edi_fsma_validation_advisory set=%s tlc=%s errors=%d",
-            transaction_set, traceability_lot_code, len(ve.errors()),
+        rejection_record = record_edi_rejection(
+            tenant_id=sender_tenant_id,
+            transaction_set=transaction_set,
+            traceability_lot_code=traceability_lot_code,
+            errors=ve.errors(),
+            extracted=extracted,
+            partner_id=x_partner_id,
+            source=source,
         )
     except ImportError:
         logger.debug("shared.schemas not available — skipping FSMA validation")
         extracted["fsma_validation_status"] = "unknown"
+
+    if rejection_record is not None:
+        # Rejected in advisory mode: respond 201 (document was accepted
+        # for audit) but signal that nothing reached the canonical
+        # stream. ``ingestion_result`` is omitted deliberately so
+        # downstream readers don't mistake the rejection for a valid
+        # event.
+        return EDIIngestResponse(
+            status="rejected",
+            document_type=f"X12_{transaction_set}",
+            sender_tenant_id=sender_tenant_id,
+            partner_id=x_partner_id,
+            traceability_lot_code=traceability_lot_code,
+            extracted={
+                "transaction_set": transaction_set,
+                "quantity": extracted.get("quantity"),
+                "unit_of_measure": extracted.get("unit_of_measure"),
+                "product_description": extracted.get("product_description"),
+                "reference_document_number": extracted.get("reference_document_number"),
+                "fsma_validation_status": extracted.get("fsma_validation_status"),
+            },
+            ingestion_result=None,
+            rejection={
+                "rejection_id": rejection_record["rejection_id"],
+                "reason": rejection_record["reason"],
+                "recorded_at": rejection_record["recorded_at"],
+                "error_count": len(rejection_record["errors"]),
+            },
+        )
 
     event = _build_ingest_event_for_set(
         transaction_set=transaction_set,
