@@ -14,8 +14,6 @@ from kernel.obligation.models import (
     ObligationMatch,
     ObligationEvaluationResult,
     ObligationCoverageReport,
-    RiskWeight,
-    ComplianceScore,
 )
 
 __all__ = [
@@ -27,6 +25,4 @@ __all__ = [
     "ObligationMatch",
     "ObligationEvaluationResult",
     "ObligationCoverageReport",
-    "RiskWeight",
-    "ComplianceScore",
 ]

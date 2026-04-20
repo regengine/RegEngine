@@ -4,7 +4,8 @@ Canonical Event Persistence — re-exports from submodules.
 Package layout:
     shared/canonical_persistence/models.py     — CanonicalStoreResult
     shared/canonical_persistence/writer.py     — CanonicalEventStore (main class)
-    shared/canonical_persistence/migration.py  — TEMPORARY dual-write + graph sync
+    shared/canonical_persistence/legacy_dual_write.py — TEMPORARY dual-write + graph sync
+    shared/canonical_persistence/migration.py         — deprecated shim → legacy_dual_write
 """
 
 from shared.canonical_persistence.models import CanonicalStoreResult  # noqa: F401
