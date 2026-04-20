@@ -1,14 +1,16 @@
 # ============================================================
-# LEGACY — do NOT add new callers.
+# Maintained alongside canonical_persistence during transition — see ADR-XXX.
+# These modules are NOT deprecated; deprecation is tracked in #1335.
+#
+# DUAL_WRITE_RECONCILIATION_NEEDED — machine-findable marker; value defined after imports (#1335)
 #
 # This module writes to the old schema (fsma.cte_events + fsma.cte_kdes)
 # alongside the canonical writer (canonical_persistence.writer, which
-# writes to fsma.traceability_events). The canonical writer is the
-# forward path; this module stays only to serve the 11+ live callers
-# in services/ingestion/app/ (webhook_router_v2, epcis/persistence,
-# fda_export/*, etc.) that have not yet been migrated. Retirement is
-# tracked as #1335 and is a multi-sprint effort — each caller's tests
-# must stay green at every step.
+# writes to fsma.traceability_events). Both paths are actively written
+# and must remain correct. The 11+ live callers in services/ingestion/app/
+# (webhook_router_v2, epcis/persistence, fda_export/*, etc.) depend on
+# this module. Migration to canonical_persistence is a multi-sprint effort
+# tracked in #1335 — each caller's tests must stay green at every step.
 #
 # Divergence from canonical — intentional, documented:
 #   - idempotency_key formula uses (location_gln, location_name) while
@@ -23,13 +25,13 @@
 # the same bug.
 # ============================================================
 """
-FSMA 204 CTE Persistence Layer — LEGACY dual-write path.
+FSMA 204 CTE Persistence Layer — active dual-write path.
 
 Provides database-backed storage for Critical Tracking Events to the
-older ``fsma.cte_events`` + ``fsma.cte_kdes`` schema. New ingestion
-paths should use ``shared.canonical_persistence`` which writes to
+``fsma.cte_events`` + ``fsma.cte_kdes`` schema. New ingestion
+paths should also use ``shared.canonical_persistence`` which writes to
 ``fsma.traceability_events``. Both paths coexist during the in-progress
-migration; see the ``UNSAFE ZONE`` comment block above.
+migration; see the comment block above and #1335.
 
 Usage:
     from services.shared.cte_persistence import CTEPersistence
@@ -60,26 +62,13 @@ from sqlalchemy.orm import Session
 from .models import StoreResult, ChainVerification, MerkleVerification
 from .hashing import compute_event_hash, compute_chain_hash, compute_idempotency_key
 
-# ---------------------------------------------------------------------------
-# Validation Status Constants (fix #1324)
-# ---------------------------------------------------------------------------
-
-#: Event passed all compliance validators — safe to chain and export.
-VALIDATION_STATUS_VALID = "valid"
-
-#: Event has warnings but is not outright rejected — included in chain.
-VALIDATION_STATUS_WARNING = "warning"
-
-#: Event failed one or more compliance validators at REJECT severity.
-#: The event row is persisted (for audit) but is NOT written to the hash
-#: chain, is excluded from FDA export queries, and is excluded from graph
-#: sync.  See ``store_event`` for the short-circuit logic.
-VALIDATION_STATUS_REJECTED = "rejected"
-
-#: Validator severity strings that constitute a hard rejection.
-_REJECT_SEVERITIES = frozenset({"reject", "REJECT", "error", "ERROR"})
-
 logger = logging.getLogger("cte-persistence")
+
+# Machine-findable marker: this module and canonical_persistence dual-write
+# the same events with divergent idempotency-key formulas. Reconciliation
+# is required before canonical_persistence can be made the sole writer.
+# See #1335 and grep for this constant to find all related references.
+DUAL_WRITE_RECONCILIATION_NEEDED = True
 
 
 # ---------------------------------------------------------------------------
@@ -242,18 +231,49 @@ def _jsonify_kde(value: Any) -> str:
 
 
 # ---------------------------------------------------------------------------
+# Validation Status Helper (#1324)
+# ---------------------------------------------------------------------------
+
+def _derive_validation_status(alerts: List[Dict[str, Any]]) -> str:
+    """Derive the DB validation_status from the alerts list.
+
+    Rules (in priority order):
+      1. ``'rejected'``  — any alert with ``severity='critical'`` OR
+                           ``alert_type='missing_required_kde'``.
+                           These represent non-compliant events that cannot
+                           satisfy FDA 21 CFR Part 1 requirements.
+      2. ``'warning'``   — at least one alert, none of which is critical.
+      3. ``'valid'``     — no alerts.
+
+    Previously every alert (critical or not) was stored as ``'warning'``,
+    making non-compliant events indistinguishable from borderline ones on
+    exports and in the DB (#1324).
+    """
+    if not alerts:
+        return "valid"
+    for alert in alerts:
+        if (
+            alert.get("severity") == "critical"
+            or alert.get("alert_type") == "missing_required_kde"
+        ):
+            return "rejected"
+    return "warning"
+
+
+# ---------------------------------------------------------------------------
 # Persistence Layer
 # ---------------------------------------------------------------------------
 
 class CTEPersistence:
     """
-    LEGACY database-backed persistence for FSMA 204 CTE events.
+    Database-backed persistence for FSMA 204 CTE events (dual-write path).
 
     New callers should prefer
     ``shared.canonical_persistence.CanonicalEventStore`` which writes
-    to ``fsma.traceability_events``. This class exists to serve the
-    in-ingestion-service callers that have not yet migrated. Retirement
-    is tracked by #1335.
+    to ``fsma.traceability_events``. This class serves the 11+ active
+    ingestion-service callers that have not yet migrated. Migration is
+    tracked by #1335 — this module is NOT deprecated, both paths are
+    actively maintained.
 
     All methods expect a SQLAlchemy session that has already set
     the tenant context via ``SET LOCAL app.tenant_id = '<uuid>'``, or
@@ -334,7 +354,6 @@ class CTEPersistence:
         epcis_biz_step: Optional[str] = None,
         source_event_id: Optional[str] = None,
         event_entry_timestamp: Optional[str] = None,
-        validator_results: Optional[List[Dict[str, Any]]] = None,
     ) -> StoreResult:
         """
         Persist a CTE event with its KDEs, hash chain entry, and alerts.
@@ -347,7 +366,6 @@ class CTEPersistence:
         """
         kdes = kdes or {}
         alerts = alerts or []
-        validator_results = validator_results or []
         event_id = str(uuid4())
 
         # --- event_type validation (fix #1312) ---
@@ -372,31 +390,6 @@ class CTEPersistence:
                 event_entry_timestamp, field="event_entry_timestamp"
             )
             event_entry_timestamp = entry_dt.isoformat()
-
-        # --- Determine validation status (fix #1324) ---
-        # If any validator result carries a REJECT-severity outcome, the
-        # event must NOT be written to the hash chain or included in FDA
-        # export / graph sync queries. We still persist the event row
-        # itself (for audit purposes) with validation_status='rejected'
-        # and carry the first rejection reason in the returned StoreResult
-        # errors list so callers can surface it to operators.
-        # REJECT severities: "reject", "REJECT", "error", "ERROR".
-        # Any other severity (e.g. "warning", "info") does not block the
-        # chain write.
-        _rejection_reasons: List[str] = []
-        for vr in validator_results:
-            sev = vr.get("severity", "")
-            if sev in _REJECT_SEVERITIES:
-                reason = vr.get("reason") or vr.get("message") or str(vr)
-                _rejection_reasons.append(reason)
-        _is_rejected = bool(_rejection_reasons)
-
-        if _is_rejected:
-            _final_status = VALIDATION_STATUS_REJECTED
-        elif alerts:
-            _final_status = VALIDATION_STATUS_WARNING
-        else:
-            _final_status = VALIDATION_STATUS_VALID
 
         # --- Serialize chain growth per-tenant (fix #1332) ---
         # Must precede both the idempotency SELECT and the chain-head
@@ -513,37 +506,9 @@ class CTEPersistence:
                 "epcis_event_type": epcis_event_type,
                 "epcis_action": epcis_action,
                 "epcis_biz_step": epcis_biz_step,
-                "validation_status": _final_status,
+                "validation_status": _derive_validation_status(alerts),
             },
         )
-
-        # --- Rejected events: skip chain write (#1324) ---
-        # A rejected event is persisted above for audit but must NOT
-        # appear in the hash chain. Returning early here prevents
-        # orphan chain rows (the WHERE EXISTS guard below would also
-        # block it, but being explicit is clearer and avoids the
-        # sequence_num slot being consumed needlessly).
-        if _is_rejected:
-            logger.info(
-                "cte_event_rejected",
-                extra={
-                    "event_id": event_id,
-                    "event_type": event_type,
-                    "tlc": traceability_lot_code,
-                    "tenant_id": tenant_id,
-                    "reasons": _rejection_reasons,
-                },
-            )
-            return StoreResult(
-                success=False,
-                event_id=event_id,
-                sha256_hash=sha256_hash,
-                chain_hash=chain_hash,
-                idempotent=False,
-                errors=_rejection_reasons,
-                kde_completeness=1.0,
-                alerts=alerts,
-            )
 
         # --- Insert KDEs (fix #1311) ---
         # The column ``fsma.cte_kdes.kde_value`` is JSONB (migration v059).
