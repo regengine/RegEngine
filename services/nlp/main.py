@@ -38,9 +38,10 @@ logger = _structlog.get_logger("nlp")
 # Local package imports (using absolute-style imports from services root)
 # Refers to services/nlp/app/...
 from app.config import settings
+# DEPRECATED: Kafka consumer import — will be removed once EVENT_BACKBONE=pg is
+# default (see #1159 #1240). Gated by EVENT_BACKBONE=kafka env flag below.
 from app.consumer import run_consumer, stop_consumer
 from app.routes import router as nlp_router
-from shared.event_backbone import kafka_enabled
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -49,20 +50,16 @@ from fastapi.middleware.cors import CORSMiddleware
 async def lifespan(api_app: FastAPI):
     # Startup
     logger.info("nlp_service_startup")
-
-    # Event backbone gating (#1159): only start the legacy Kafka consumer when
-    # explicitly opted in. Default is the PostgreSQL task_processor.
-    consumer_thread = None
-    if kafka_enabled():
+    
+    # DEPRECATED (#1159 #1240): Kafka consumer only runs when EVENT_BACKBONE=kafka.
+    # Default is pg (task_processor). Remove this block once #1159 is merged.
+    consumer_thread: threading.Thread | None = None
+    if os.getenv("EVENT_BACKBONE", "pg").lower() == "kafka":
         consumer_thread = threading.Thread(target=run_consumer, daemon=True)
         consumer_thread.start()
-        logger.info("nlp_consumer_thread_started", event_backbone_active="kafka")
+        logger.info("nlp_consumer_thread_started")
     else:
-        logger.info(
-            "event_backbone_active",
-            backbone="pg",
-            detail="Kafka consumers disabled (EVENT_BACKBONE=pg); task_processor handles events",
-        )
+        logger.info("nlp_kafka_consumer_skipped", reason="EVENT_BACKBONE!=kafka")
 
     yield
 

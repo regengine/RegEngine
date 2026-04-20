@@ -1,4 +1,31 @@
 # ---------------------------------------------------------------------------
+# Exceptions
+# ---------------------------------------------------------------------------
+
+
+class DuplicateEventError(Exception):
+    """Raised when a CTE event with the same sha256_hash already exists.
+
+    ``fsma.cte_events`` is append-only (#1334). Any attempt to overwrite an
+    existing event (same hash, different id) is a data-integrity violation.
+    The duplicate is detected at the application layer before INSERT so that
+    callers receive a meaningful exception rather than a DB-level error.
+
+    The companion database trigger ``fsma.cte_events_no_update_delete`` raises
+    an exception if an UPDATE or DELETE is attempted directly in SQL, providing
+    a second enforcement layer that survives callers who bypass Python.
+    """
+
+    def __init__(self, event_id: str, sha256_hash: str):
+        self.event_id = event_id
+        self.sha256_hash = sha256_hash
+        super().__init__(
+            f"CTE event with sha256_hash={sha256_hash!r} already exists "
+            f"(event_id={event_id!r}). fsma.cte_events is append-only (#1334)."
+        )
+
+
+# ---------------------------------------------------------------------------
 # Data Transfer Objects
 # ---------------------------------------------------------------------------
 

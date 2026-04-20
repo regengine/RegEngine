@@ -23,10 +23,10 @@ import time
 import uuid
 
 # Add parent directory to path for shared module import
+from shared.dlq import DLQProducer  # #1228: consolidated singleton
 from shared.schemas import GraphEvent, LegacyGraphEvent
 from shared.observability.kafka_propagation import extract_correlation_headers
 from shared.kafka_auth import KafkaAuthError, get_allowed_producers, verify_event
-from shared.observability.dlq_producer import DLQProducer, get_dlq_producer
 
 from .config import settings
 from .neo4j_utils import Neo4jClient, driver, upsert_from_entities
@@ -50,20 +50,18 @@ MAX_RETRIES = 3
 # in services/nlp/app/consumer.py and covers bursts while still letting
 # a poison-pill age out if the consumer is long-lived.
 _retry_counts: TTLCache[str, int] = TTLCache(maxsize=50_000, ttl=3600)
-
-# DLQ producer — resolved lazily via shared singleton (#1228)
-_dlq: Optional[DLQProducer] = None
+_dlq_producer: Optional[DLQProducer] = None  # #1228: shared singleton
 
 
 def _init_dlq_producer() -> DLQProducer:
-    """Initialize the shared DLQ producer (called once at consumer startup)."""
-    global _dlq
-    _dlq = get_dlq_producer(
-        topic=TOPIC_DLQ,
+    """Initialize the shared DLQ producer (called once at consumer startup). #1228"""
+    global _dlq_producer
+    _dlq_producer = DLQProducer(
         bootstrap_servers=settings.kafka_bootstrap,
+        topic=TOPIC_DLQ,
         service_name="graph-consumer",
     )
-    return _dlq
+    return _dlq_producer
 
 
 def _send_to_dlq(
@@ -72,22 +70,25 @@ def _send_to_dlq(
     reason: str = "processing_error",
     doc_id: Optional[str] = None,
 ) -> None:
-    """Send a failed message to the dead letter queue for manual inspection."""
-    if not _dlq:
+    """Send a failed message to the dead letter queue via shared DLQProducer. #1228"""
+    if not _dlq_producer:
         logger.error("dlq_producer_not_initialized", reason=reason)
         return
-    dlq_payload = json.dumps({
-        "original_event": event,
-        "error": str(error)[:2048],
-        "reason": reason,
-        "failed_at": datetime.now(timezone.utc).isoformat(),
-        "source_topic": "graph.update",
-        "document_id": doc_id,
-        "retry_count": _retry_counts.get(doc_id or "unknown", 0),
-    }).encode("utf-8")
-    _dlq.send(dlq_payload, reason=reason, original_topic="graph.update")
-    DLQ_COUNTER.labels(reason=reason).inc()
-    logger.info("message_sent_to_dlq", topic=TOPIC_DLQ, document_id=doc_id, reason=reason)
+    try:
+        dlq_payload = json.dumps({
+            "original_event": event,
+            "error": str(error)[:2048],
+            "reason": reason,
+            "failed_at": datetime.now(timezone.utc).isoformat(),
+            "source_topic": "graph.update",
+            "document_id": doc_id,
+            "retry_count": _retry_counts.get(doc_id or "unknown", 0),
+        }).encode("utf-8")
+        _dlq_producer.send(dlq_payload, reason=reason, original_topic="graph.update")
+        DLQ_COUNTER.labels(reason=reason).inc()
+        logger.info("message_sent_to_dlq", topic=TOPIC_DLQ, document_id=doc_id, reason=reason)
+    except (ConnectionError, TimeoutError, OSError, RuntimeError) as exc:
+        logger.critical("dlq_send_failed", error=str(exc), document_id=doc_id)
 
 
 def _handle_processing_error(
@@ -505,20 +506,10 @@ async def run_consumer() -> None:
             clear_contextvars()
     finally:
          consumer.close()
-         if _dlq:
-             _dlq.flush(timeout=2.0)
+         if _dlq_producer:
+             _dlq_producer.flush(timeout=2.0)  # shared DLQProducer.flush() #1228
 
 if __name__ == "__main__":
-    # Event backbone gating (#1159): refuse to start when PG task_processor is
-    # the active backbone so this Kafka worker cannot double-process events.
-    from shared.event_backbone import kafka_enabled
-    if not kafka_enabled():
-        logger.info(
-            "event_backbone_active",
-            backbone="pg",
-            detail="graph consumer disabled (EVENT_BACKBONE=pg); task_processor handles events",
-        )
-        sys.exit(0)
     try:
         asyncio.run(run_consumer())
     except KeyboardInterrupt:

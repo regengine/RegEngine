@@ -53,7 +53,8 @@
 .claude/
 **/worktrees/
 
-# Test artifacts
+# Test artifacts and test source — never ship into production images (#1155)
+**/tests
 **/playwright-report
 **/test-results
 **/coverage

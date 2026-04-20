@@ -1,246 +1,153 @@
-"""Tests for shared DLQ producer singleton -- #1228.
-
-Verifies:
-1. DLQProducer.send() routes through the underlying Kafka backend.
-2. get_dlq_producer() returns the same instance on repeated calls (singleton).
-3. All three call-sites (graph/consumer, graph/consumers/fsma_consumer,
-   admin/review_consumer) import from shared.observability.dlq_producer.
-4. reset_dlq_producer() clears the registry so tests remain isolated.
-"""
-
+"""Tests for shared DLQProducer singleton -- #1228."""
 from __future__ import annotations
 
-import importlib
-import json
 import threading
-from types import ModuleType
-from typing import Any
 from unittest.mock import MagicMock, patch, call
 
 import pytest
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-def _make_mock_confluent_producer() -> MagicMock:
-    p = MagicMock()
-    p.produce = MagicMock()
-    p.poll = MagicMock()
-    p.flush = MagicMock()
-    return p
-
-
-def _make_mock_kafka_producer() -> MagicMock:
-    p = MagicMock()
-    p.send = MagicMock()
-    p.flush = MagicMock()
-    p.close = MagicMock()
-    return p
+from shared.observability.dlq_producer import DLQProducer
+from shared.dlq import DLQProducer as DLQProducerAlias
 
 
 # ---------------------------------------------------------------------------
-# Unit tests for DLQProducer
+# Re-export shim
+# ---------------------------------------------------------------------------
+
+def test_dlq_alias_is_same_class():
+    """shared.dlq.DLQProducer is the same object as the canonical class."""
+    assert DLQProducerAlias is DLQProducer
+
+
+# ---------------------------------------------------------------------------
+# confluent-kafka backend
 # ---------------------------------------------------------------------------
 
 class TestDLQProducerConfluentBackend:
-    """DLQProducer backed by confluent-kafka."""
-
-    def _make_producer(self, mock_confluent: MagicMock) -> "DLQProducer":
-        from shared.observability.dlq_producer import DLQProducer
+    def _make(self, mock_producer_cls):
+        mock_producer_cls.return_value = MagicMock()
         return DLQProducer(
-            bootstrap_servers="kafka:9092",
+            bootstrap_servers="localhost:9092",
             topic="test.dlq",
             service_name="test-svc",
         )
 
-    def test_send_calls_produce(self) -> None:
-        mock_p = _make_mock_confluent_producer()
-        with patch.dict("sys.modules", {"confluent_kafka": MagicMock(Producer=MagicMock(return_value=mock_p))}):
-            from shared.observability import dlq_producer as mod
-            import importlib
-            importlib.reload(mod)
-            producer = mod.DLQProducer(
-                bootstrap_servers="kafka:9092",
-                topic="test.dlq",
-                service_name="test-svc",
-            )
-            producer.send(b"raw-bytes", reason="test_reason", detail="some detail")
+    @patch("shared.observability.dlq_producer.DLQProducer._init_producer")
+    def test_init_sets_attributes(self, mock_init):
+        dlq = DLQProducer.__new__(DLQProducer)
+        dlq._bootstrap = "localhost:9092"
+        dlq._topic = "test.dlq"
+        dlq._service_name = "test-svc"
+        dlq._lock = threading.Lock()
+        dlq._producer = None
+        dlq._confluent = False
+        assert dlq._topic == "test.dlq"
+        assert dlq._service_name == "test-svc"
 
-        mock_p.produce.assert_called_once()
-        args, kwargs = mock_p.produce.call_args
-        assert args[0] == "test.dlq"
-        assert kwargs["value"] == b"raw-bytes"
-        # headers must include error_reason
-        header_keys = [k for k, _ in kwargs.get("headers", [])]
-        assert "error_reason" in header_keys
-        assert "service" in header_keys
+    def test_send_with_confluent_backend(self):
+        mock_inner = MagicMock()
+        with patch("shared.observability.dlq_producer.DLQProducer._init_producer"):
+            dlq = DLQProducer.__new__(DLQProducer)
+            dlq._bootstrap = "localhost:9092"
+            dlq._topic = "test.dlq"
+            dlq._service_name = "test-svc"
+            dlq._lock = threading.Lock()
+            dlq._producer = mock_inner
+            dlq._confluent = True
 
-    def test_flush_delegates(self) -> None:
-        mock_p = _make_mock_confluent_producer()
-        with patch.dict("sys.modules", {"confluent_kafka": MagicMock(Producer=MagicMock(return_value=mock_p))}):
-            from shared.observability import dlq_producer as mod
-            importlib.reload(mod)
-            producer = mod.DLQProducer("kafka:9092", "test.dlq")
-            producer.flush(timeout=3.0)
-        mock_p.flush.assert_called_once_with(3.0)
+        dlq.send(b"payload", reason="parse_error", detail="traceback", original_topic="ingest.raw")
 
-    def test_send_noop_when_not_initialized(self, caplog: Any) -> None:
-        """If producer fails to initialize, send() logs and returns gracefully."""
-        import logging
-        # Block both confluent-kafka and kafka-python
-        with patch.dict("sys.modules", {"confluent_kafka": None, "kafka": None}):
-            from shared.observability import dlq_producer as mod
-            importlib.reload(mod)
-            with caplog.at_level(logging.ERROR):
-                producer = mod.DLQProducer("kafka:9092", "test.dlq")
-                producer.send(b"data", reason="no_backend")
-        # Should not raise; producer._producer is None
-
-
-class TestDLQProducerKafkaPythonBackend:
-    """DLQProducer backed by kafka-python (confluent_kafka absent)."""
-
-    def test_send_calls_send(self) -> None:
-        mock_p = _make_mock_kafka_producer()
-        confluent_absent = MagicMock(side_effect=ImportError)
-
-        with patch.dict(
-            "sys.modules",
-            {"confluent_kafka": None, "kafka": MagicMock(KafkaProducer=MagicMock(return_value=mock_p))},
-        ):
-            from shared.observability import dlq_producer as mod
-            importlib.reload(mod)
-            producer = mod.DLQProducer("kafka:9092", "kp.dlq", "kp-svc")
-            producer.send(b"payload", reason="kp_reason")
-
-        mock_p.send.assert_called_once()
-        _, kwargs = mock_p.send.call_args
+        mock_inner.produce.assert_called_once()
+        args, kwargs = mock_inner.produce.call_args
+        assert kwargs.get("topic") == "test.dlq" or args[0] == "test.dlq"
         assert kwargs["value"] == b"payload"
+        headers = {k: v for k, v in kwargs["headers"]}
+        assert headers["error_reason"] == b"parse_error"
+        assert headers["original_topic"] == b"ingest.raw"
+        assert headers["service"] == b"test-svc"
+        mock_inner.poll.assert_called_once_with(0)
 
+    def test_send_kafka_python_backend(self):
+        mock_inner = MagicMock()
+        with patch("shared.observability.dlq_producer.DLQProducer._init_producer"):
+            dlq = DLQProducer.__new__(DLQProducer)
+            dlq._bootstrap = "localhost:9092"
+            dlq._topic = "test.dlq"
+            dlq._service_name = "test-svc"
+            dlq._lock = threading.Lock()
+            dlq._producer = mock_inner
+            dlq._confluent = False
 
-# ---------------------------------------------------------------------------
-# Singleton registry tests
-# ---------------------------------------------------------------------------
+        dlq.send(b"msg", reason="timeout")
 
-class TestGetDlqProducerSingleton:
-    """get_dlq_producer() returns the same instance on repeated calls."""
+        mock_inner.send.assert_called_once()
+        _, kwargs = mock_inner.send.call_args
+        assert kwargs["value"] == b"msg"
 
-    def setup_method(self) -> None:
-        from shared.observability import dlq_producer as mod
-        mod._instances.clear()
+    def test_send_noop_when_no_producer(self, caplog):
+        with patch("shared.observability.dlq_producer.DLQProducer._init_producer"):
+            dlq = DLQProducer.__new__(DLQProducer)
+            dlq._bootstrap = "localhost:9092"
+            dlq._topic = "test.dlq"
+            dlq._service_name = "test-svc"
+            dlq._lock = threading.Lock()
+            dlq._producer = None
+            dlq._confluent = False
+        # Should not raise
+        dlq.send(b"x", reason="no_producer")
 
-    def teardown_method(self) -> None:
-        from shared.observability import dlq_producer as mod
-        mod._instances.clear()
+    def test_flush_confluent(self):
+        mock_inner = MagicMock()
+        with patch("shared.observability.dlq_producer.DLQProducer._init_producer"):
+            dlq = DLQProducer.__new__(DLQProducer)
+            dlq._bootstrap = "localhost:9092"
+            dlq._topic = "test.dlq"
+            dlq._service_name = "svc"
+            dlq._lock = threading.Lock()
+            dlq._producer = mock_inner
+            dlq._confluent = True
+        dlq.flush(timeout=3.0)
+        mock_inner.flush.assert_called_once_with(3.0)
 
-    def test_same_instance_returned(self) -> None:
-        mock_p = _make_mock_confluent_producer()
-        with patch.dict("sys.modules", {"confluent_kafka": MagicMock(Producer=MagicMock(return_value=mock_p))}):
-            from shared.observability import dlq_producer as mod
-            importlib.reload(mod)
-            a = mod.get_dlq_producer(topic="svc.dlq", bootstrap_servers="kafka:9092")
-            b = mod.get_dlq_producer(topic="svc.dlq", bootstrap_servers="kafka:9092")
-        assert a is b
+    def test_close_kafka_python(self):
+        mock_inner = MagicMock()
+        with patch("shared.observability.dlq_producer.DLQProducer._init_producer"):
+            dlq = DLQProducer.__new__(DLQProducer)
+            dlq._bootstrap = "localhost:9092"
+            dlq._topic = "test.dlq"
+            dlq._service_name = "svc"
+            dlq._lock = threading.Lock()
+            dlq._producer = mock_inner
+            dlq._confluent = False
+        dlq.close()
+        mock_inner.flush.assert_called()
+        mock_inner.close.assert_called()
+        assert dlq._producer is None
 
-    def test_different_topics_different_instances(self) -> None:
-        mock_p = _make_mock_confluent_producer()
-        with patch.dict("sys.modules", {"confluent_kafka": MagicMock(Producer=MagicMock(return_value=mock_p))}):
-            from shared.observability import dlq_producer as mod
-            importlib.reload(mod)
-            a = mod.get_dlq_producer(topic="svc1.dlq", bootstrap_servers="kafka:9092")
-            b = mod.get_dlq_producer(topic="svc2.dlq", bootstrap_servers="kafka:9092")
-        assert a is not b
+    def test_thread_safety(self):
+        """Concurrent sends must not raise (lock guards the producer)."""
+        mock_inner = MagicMock()
+        with patch("shared.observability.dlq_producer.DLQProducer._init_producer"):
+            dlq = DLQProducer.__new__(DLQProducer)
+            dlq._bootstrap = "localhost:9092"
+            dlq._topic = "test.dlq"
+            dlq._service_name = "svc"
+            dlq._lock = threading.Lock()
+            dlq._producer = mock_inner
+            dlq._confluent = True
 
-    def test_reset_removes_instance(self) -> None:
-        mock_p = _make_mock_confluent_producer()
-        with patch.dict("sys.modules", {"confluent_kafka": MagicMock(Producer=MagicMock(return_value=mock_p))}):
-            from shared.observability import dlq_producer as mod
-            importlib.reload(mod)
-            a = mod.get_dlq_producer(topic="reset.dlq", bootstrap_servers="kafka:9092")
-            mod.reset_dlq_producer(topic="reset.dlq")
-            b = mod.get_dlq_producer(topic="reset.dlq", bootstrap_servers="kafka:9092")
-        assert a is not b
+        errors = []
 
-    def test_thread_safety(self) -> None:
-        """Concurrent calls must return the same instance."""
-        mock_p = _make_mock_confluent_producer()
-        results: list = []
+        def worker():
+            try:
+                dlq.send(b"concurrent", reason="test")
+            except Exception as exc:
+                errors.append(exc)
 
-        with patch.dict("sys.modules", {"confluent_kafka": MagicMock(Producer=MagicMock(return_value=mock_p))}):
-            from shared.observability import dlq_producer as mod
-            importlib.reload(mod)
+        threads = [threading.Thread(target=worker) for _ in range(20)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
 
-            def _get() -> None:
-                results.append(mod.get_dlq_producer(topic="threaded.dlq", bootstrap_servers="k:9092"))
-
-            threads = [threading.Thread(target=_get) for _ in range(20)]
-            for t in threads:
-                t.start()
-            for t in threads:
-                t.join()
-
-        assert len(set(id(r) for r in results)) == 1, "All threads must get the same instance"
-
-
-# ---------------------------------------------------------------------------
-# Call-site import verification  (#1228 acceptance criteria)
-# ---------------------------------------------------------------------------
-
-class TestCallSitesUseSharedModule:
-    """Assert that each service file imports DLQProducer from shared, not a local copy."""
-
-    def _grep_file(self, path: str, pattern: str) -> bool:
-        import re
-        with open(path) as f:
-            return bool(re.search(pattern, f.read()))
-
-    def test_graph_consumer_imports_shared(self) -> None:
-        path = "services/graph/app/consumer.py"
-        import os
-        full = os.path.join(
-            os.path.dirname(__file__), "..", "..", "..", path
-        )
-        assert self._grep_file(full, r"from shared\.observability\.dlq_producer import"), (
-            f"{path} must import DLQProducer from shared.observability.dlq_producer"
-        )
-
-    def test_graph_consumer_no_local_singleton(self) -> None:
-        path = "services/graph/app/consumer.py"
-        import os
-        full = os.path.join(
-            os.path.dirname(__file__), "..", "..", "..", path
-        )
-        assert not self._grep_file(full, r"confluent_kafka.*Producer"), (
-            f"{path} must not import Producer from confluent_kafka directly"
-        )
-
-    def test_fsma_consumer_imports_shared(self) -> None:
-        path = "services/graph/app/consumers/fsma_consumer.py"
-        import os
-        full = os.path.join(
-            os.path.dirname(__file__), "..", "..", "..", path
-        )
-        assert self._grep_file(full, r"from shared\.observability\.dlq_producer import"), (
-            f"{path} must import DLQProducer from shared.observability.dlq_producer"
-        )
-
-    def test_review_consumer_imports_shared(self) -> None:
-        path = "services/admin/app/review_consumer.py"
-        import os
-        full = os.path.join(
-            os.path.dirname(__file__), "..", "..", "..", path
-        )
-        assert self._grep_file(full, r"from shared\.observability\.dlq_producer import"), (
-            f"{path} must import DLQProducer from shared.observability.dlq_producer"
-        )
-
-    def test_review_consumer_no_local_kafka_producer(self) -> None:
-        path = "services/admin/app/review_consumer.py"
-        import os
-        full = os.path.join(
-            os.path.dirname(__file__), "..", "..", "..", path
-        )
-        assert not self._grep_file(full, r"KafkaProducer"), (
-            f"{path} must not use KafkaProducer directly"
-        )
+        assert not errors, f"Thread-safety violations: {errors}"

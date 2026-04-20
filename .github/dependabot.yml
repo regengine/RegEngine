@@ -32,9 +32,13 @@ updates:
       - dependency-name: "vitest"
         update-types: ["version-update:semver-major"]
 
-  # Python services — patch and minor bumps are grouped per service to reduce
-  # PR noise. Major bumps are intentionally left ungrouped so each gets its
-  # own PR for manual review (#1178).
+  # Python services — security-critical packages get solo PRs (no group entry
+  # means Dependabot opens one PR per package). Dev/test tooling is grouped to
+  # reduce noise. Everything else is grouped by category with a max of 3 packages
+  # per group so large batches can't hide a dangerous transitive bump (#1178).
+  #
+  # Security-critical (solo PRs): cryptography, pyjwt, python-jose, sqlalchemy,
+  # alembic, fastapi, starlette, stripe, httpx, opentelemetry-*
 
   - package-ecosystem: "pip"
     directory: "/services/admin"
@@ -46,12 +50,34 @@ updates:
       - "dependencies"
       - "backend"
     groups:
-      patch-and-minor:
+      dev-test:
+        # Dev/test tooling — low risk, grouped to reduce noise
         patterns:
-          - "*"
-        update-types:
-          - "version-update:semver-patch"
-          - "version-update:semver-minor"
+          - "pytest*"
+          - "ruff"
+          - "mypy"
+          - "coverage*"
+          - "hypothesis"
+          - "freezegun"
+          - "fakeredis"
+      aws:
+        # AWS SDK family — grouped, max 3 per PR
+        patterns:
+          - "boto3"
+          - "botocore"
+          - "s3transfer"
+        max-open-pull-requests: 3
+      observability:
+        # Non-security observability helpers
+        patterns:
+          - "sentry-sdk"
+          - "structlog"
+          - "prometheus-client"
+        max-open-pull-requests: 3
+      # Security-critical packages are intentionally NOT listed in any group.
+      # Dependabot will open one PR per package for:
+      #   cryptography, pyjwt, python-jose, sqlalchemy, alembic,
+      #   fastapi, starlette, stripe, httpx, opentelemetry-*
 
   - package-ecosystem: "pip"
     directory: "/services/ingestion"
@@ -63,12 +89,27 @@ updates:
       - "dependencies"
       - "backend"
     groups:
-      patch-and-minor:
+      dev-test:
         patterns:
-          - "*"
-        update-types:
-          - "version-update:semver-patch"
-          - "version-update:semver-minor"
+          - "pytest*"
+          - "ruff"
+          - "mypy"
+          - "coverage*"
+          - "hypothesis"
+          - "freezegun"
+          - "fakeredis"
+      aws:
+        patterns:
+          - "boto3"
+          - "botocore"
+          - "s3transfer"
+        max-open-pull-requests: 3
+      observability:
+        patterns:
+          - "sentry-sdk"
+          - "structlog"
+          - "prometheus-client"
+        max-open-pull-requests: 3
 
   - package-ecosystem: "pip"
     directory: "/services/compliance"
@@ -80,12 +121,27 @@ updates:
       - "dependencies"
       - "backend"
     groups:
-      patch-and-minor:
+      dev-test:
         patterns:
-          - "*"
-        update-types:
-          - "version-update:semver-patch"
-          - "version-update:semver-minor"
+          - "pytest*"
+          - "ruff"
+          - "mypy"
+          - "coverage*"
+          - "hypothesis"
+          - "freezegun"
+          - "fakeredis"
+      aws:
+        patterns:
+          - "boto3"
+          - "botocore"
+          - "s3transfer"
+        max-open-pull-requests: 3
+      observability:
+        patterns:
+          - "sentry-sdk"
+          - "structlog"
+          - "prometheus-client"
+        max-open-pull-requests: 3
 
   - package-ecosystem: "pip"
     directory: "/services/graph"
@@ -97,12 +153,32 @@ updates:
       - "dependencies"
       - "backend"
     groups:
-      patch-and-minor:
+      dev-test:
         patterns:
-          - "*"
-        update-types:
-          - "version-update:semver-patch"
-          - "version-update:semver-minor"
+          - "pytest*"
+          - "ruff"
+          - "mypy"
+          - "coverage*"
+          - "hypothesis"
+          - "freezegun"
+          - "fakeredis"
+      aws:
+        patterns:
+          - "boto3"
+          - "botocore"
+          - "s3transfer"
+        max-open-pull-requests: 3
+      observability:
+        patterns:
+          - "sentry-sdk"
+          - "structlog"
+          - "prometheus-client"
+        max-open-pull-requests: 3
+      neo4j:
+        patterns:
+          - "neo4j"
+          - "neo4j-driver"
+        max-open-pull-requests: 3
 
   - package-ecosystem: "pip"
     directory: "/services/nlp"
@@ -114,12 +190,35 @@ updates:
       - "dependencies"
       - "backend"
     groups:
-      patch-and-minor:
+      dev-test:
         patterns:
-          - "*"
-        update-types:
-          - "version-update:semver-patch"
-          - "version-update:semver-minor"
+          - "pytest*"
+          - "ruff"
+          - "mypy"
+          - "coverage*"
+          - "hypothesis"
+          - "freezegun"
+          - "fakeredis"
+      aws:
+        patterns:
+          - "boto3"
+          - "botocore"
+          - "s3transfer"
+        max-open-pull-requests: 3
+      observability:
+        patterns:
+          - "sentry-sdk"
+          - "structlog"
+          - "prometheus-client"
+        max-open-pull-requests: 3
+      nlp-models:
+        # NLP/ML libraries — grouped, max 3 per PR
+        patterns:
+          - "spacy*"
+          - "transformers"
+          - "torch"
+          - "scikit-learn"
+        max-open-pull-requests: 3
 
   - package-ecosystem: "pip"
     directory: "/services/scheduler"
@@ -131,12 +230,27 @@ updates:
       - "dependencies"
       - "backend"
     groups:
-      patch-and-minor:
+      dev-test:
         patterns:
-          - "*"
-        update-types:
-          - "version-update:semver-patch"
-          - "version-update:semver-minor"
+          - "pytest*"
+          - "ruff"
+          - "mypy"
+          - "coverage*"
+          - "hypothesis"
+          - "freezegun"
+          - "fakeredis"
+      aws:
+        patterns:
+          - "boto3"
+          - "botocore"
+          - "s3transfer"
+        max-open-pull-requests: 3
+      observability:
+        patterns:
+          - "sentry-sdk"
+          - "structlog"
+          - "prometheus-client"
+        max-open-pull-requests: 3
 
   # GitHub Actions
   - package-ecosystem: "github-actions"
