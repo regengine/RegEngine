@@ -1,13 +1,13 @@
-import logging
 import httpx
 import asyncio
+import structlog
 from typing import Dict, Any, Optional
 from urllib.parse import urlparse
 from shared.url_validation import validate_url, SSRFError
 
 from shared.url_validation import validate_url
 
-logger = logging.getLogger("ingestion.fetch")
+logger = structlog.get_logger("ingestion.fetch")
 
 STANDARD_HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
