@@ -324,6 +324,10 @@ app.include_router(tool_verification_router)
 from app.erasure_routes import router as erasure_router
 app.include_router(erasure_router)
 
+# GDPR right-to-access / data portability (Art. 15 / 20) -- #1094
+from app.data_export_routes import router as data_export_router
+app.include_router(data_export_router)
+
 
 
 # ---------------------------------------------------------------------------
