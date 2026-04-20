@@ -493,6 +493,65 @@ class SupplierGraphSync:
         """
         return self._query_required_ctes(facility_id, tenant_id)
 
+    def purge_tenant(self, tenant_id: str) -> int:
+        """GDPR Art. 17 erasure: delete all Neo4j nodes for *tenant_id*.
+
+        Runs ``DETACH DELETE`` on every node whose ``tenant_id`` property
+        matches the supplied value. Returns the number of nodes deleted.
+        Returns 0 (and does not raise) when disabled, when the circuit is
+        open, or when Neo4j is unavailable — callers treat this as
+        best-effort and must log failures independently.
+
+        Idempotency: a second call with the same *tenant_id* returns 0
+        because no matching nodes remain.
+
+        Note: ``FTLCategory`` and ``Obligation`` nodes are shared
+        regulatory catalog entries (no ``tenant_id`` property) and are
+        therefore NOT touched by this query — only tenant-owned nodes
+        (BuyerTenant, SupplierContact, PendingSupplierInvite,
+        SupplierFacility, TLC, CTEEvent) are removed.
+        """
+        if not self.enabled:
+            return 0
+
+        driver = self._get_driver()
+        if driver is None:
+            return 0
+
+        query = (
+            "MATCH (n) WHERE n.tenant_id = $tenant_id "
+            "DETACH DELETE n "
+            "RETURN count(*) AS deleted"
+        )
+        try:
+            neo4j_circuit._check_state()
+            with driver.session() as session:
+                record = session.run(query, {"tenant_id": tenant_id}).single()
+            neo4j_circuit._record_success()
+        except CircuitOpenError:
+            logger.warning(
+                "supplier_graph_sync_circuit_open",
+                operation="purge_tenant",
+                tenant_id=tenant_id,
+            )
+            return 0
+        except Exception as exc:
+            neo4j_circuit._record_failure(exc)
+            logger.warning(
+                "neo4j_purge_failed",
+                tenant_id=tenant_id,
+                error=str(exc),
+            )
+            return 0
+
+        deleted: int = record["deleted"] if record else 0
+        logger.info(
+            "supplier_graph_sync_tenant_purged",
+            tenant_id=tenant_id,
+            deleted=deleted,
+        )
+        return deleted
+
     def record_cte_event(
         self,
         *,

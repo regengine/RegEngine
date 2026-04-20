@@ -22,6 +22,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.dependencies import get_current_user
+from app.supplier_graph_sync import supplier_graph_sync
 from shared.database import get_db
 
 logger = logging.getLogger("erasure")
@@ -176,6 +177,27 @@ async def request_erasure(
                 )
 
             db.commit()
+
+        # 3. Purge tenant nodes from Neo4j (GDPR Art. 17 / #1412).
+        # This runs AFTER Postgres commit — Postgres is authoritative.
+        # A Neo4j failure MUST NOT roll back the Postgres erasure; the
+        # purge_tenant method already catches exceptions internally and
+        # logs `neo4j_purge_failed`, so we just capture the count.
+        neo4j_deleted: int = 0
+        if tenant_id is not None:
+            neo4j_deleted = supplier_graph_sync.purge_tenant(str(tenant_id))
+
+        # Emit an audit log entry that includes the Neo4j purge count so
+        # compliance reviewers can confirm graph erasure happened and how
+        # many nodes were removed (count == 0 on the second run is OK).
+        logger.info(
+            "erasure_completed",
+            user_id=user_id,
+            tenant_id=str(tenant_id) if tenant_id else None,
+            soft_deleted=result.get("soft_deleted", False),
+            audit_logs_anonymized=anonymized_count,
+            neo4j_nodes_deleted=neo4j_deleted,
+        )
 
         return ErasureResponse(
             status="accepted",
