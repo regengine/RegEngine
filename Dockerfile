@@ -1,12 +1,15 @@
-FROM python:3.11-slim
+# ── Stage 1: builder ──────────────────────────────────────────────
+# Installs build-time system deps (gcc, libpq-dev) and all Python packages.
+# Nothing from this stage leaks into the final runtime image.
+FROM python:3.11-slim AS builder
 
 WORKDIR /app
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
+# Build deps needed only at compile/link time
+RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     libpq-dev \
-    curl \
+    build-essential \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python dependencies from the pip-compile lockfile.
@@ -15,6 +18,23 @@ RUN apt-get update && apt-get install -y \
 COPY requirements.in /app/requirements.in
 COPY requirements.lock /app/requirements.lock
 RUN pip install --no-cache-dir --require-hashes -r /app/requirements.lock
+
+# ── Stage 2: runtime ──────────────────────────────────────────────
+# Lean image: no gcc, no libpq-dev, no build-essential.
+# Only the installed site-packages and application code are copied.
+FROM python:3.11-slim AS runtime
+
+WORKDIR /app
+
+# Runtime-only system deps (libpq for psycopg2, curl for health-check)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libpq5 \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy installed packages from the builder stage
+COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
+COPY --from=builder /usr/local/bin /usr/local/bin
 
 # Create non-root user
 RUN adduser --disabled-password --gecos '' --uid 1001 appuser
@@ -45,6 +65,9 @@ EXPOSE 8000
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     CMD sh -c 'curl -fsS "http://localhost:${PORT:-8000}/health" || exit 1'
+
+# Issue #1155: Remove any test files that slipped through the build context
+RUN find /app -name "test_*.py" -delete
 
 # Set ownership and switch to non-root user
 RUN chown -R appuser:appuser /app

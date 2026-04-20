@@ -1,5 +1,7 @@
 from opentelemetry import trace, baggage, _logs as logs
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
+from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from opentelemetry.sdk.trace.sampling import TraceIdRatioBased
@@ -69,6 +71,8 @@ def add_observability(app: FastAPI, service_name: str):
             logger.warning("otel_log_setup_failed", service=service_name, error=str(e))
 
         FastAPIInstrumentor.instrument_app(app)
+        SQLAlchemyInstrumentor().instrument()
+        HTTPXClientInstrumentor().instrument()
     except Exception as e:
         logger.error("otel_setup_failed", service=service_name, error=str(e))
 
@@ -98,6 +102,9 @@ def setup_standalone_observability(service_name: str):
             log_provider.add_log_record_processor(BatchLogRecordProcessor(log_exporter))
         except Exception as e:
             logger.warning("otel_log_setup_failed", service=service_name, error=str(e))
+
+        SQLAlchemyInstrumentor().instrument()
+        HTTPXClientInstrumentor().instrument()
     except Exception as e:
         logger.error("otel_standalone_setup_failed", service=service_name, error=str(e))
 
