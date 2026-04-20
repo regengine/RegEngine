@@ -557,8 +557,16 @@ async def test_refresh_preserves_original_tenant_id(monkeypatch):
     mem_a = SimpleNamespace(tenant_id=tenant_a)
     mem_b = SimpleNamespace(tenant_id=tenant_b)
 
+    # #1401 — _assert_tenant_active calls db.get(TenantModel, tenant_id).
+    # Use side_effect to return the right object by model class.
+    active_tenant_ns = SimpleNamespace(id=tenant_a, status="active")
+    from services.admin.app.sqlalchemy_models import TenantModel as _TenantModel, UserModel as _UserModel
+    def _db_get(model_cls, pk):
+        if model_cls is _TenantModel:
+            return active_tenant_ns
+        return user
     db = MagicMock()
-    db.get.return_value = user
+    db.get.side_effect = _db_get
     # Ordering B, A to make it clear we aren't relying on "first row".
     db.execute.return_value.scalars.return_value.all.return_value = [mem_b, mem_a]
     db.commit.return_value = None

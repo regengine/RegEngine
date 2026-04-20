@@ -31,6 +31,7 @@ from shared.rate_limit import limiter
 from shared.pagination import PaginationParams
 
 import asyncio
+import hashlib
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 logger = structlog.get_logger("auth")
@@ -40,12 +41,32 @@ _EMAIL_ATTEMPT_LIMIT = 5
 _EMAIL_ATTEMPT_WINDOW = 900  # 15 minutes
 
 
+def _email_hash(email: str) -> str:
+    """SHA-256 hash of the normalized email — used as a Redis key suffix.
+
+    #1404 — storing the plaintext email in Redis keys lets an attacker
+    enumerate registered accounts by probing for 429 responses and then
+    inspecting Redis (or inferring internal structure). Hashing the email
+    removes the enumeration surface while keeping the rate-limit effective:
+    the key is derived solely from the submitted string, so unknown emails
+    are rate-limited identically to known ones.
+    """
+    return hashlib.sha256(email.lower().encode()).hexdigest()
+
+
 def _email_attempt_key(email: str) -> str:
-    return f"login_attempts:{email}"
+    # #1404 — key on hashed email so the key space does not leak registered addresses.
+    return f"rate_limit:login:{_email_hash(email)}"
 
 
 async def _check_email_rate_limit(session_store: RedisSessionStore, email: str) -> None:
-    """Raise 429 if this email has exceeded the failed login attempt limit."""
+    """Raise 429 if this email has exceeded the failed login attempt limit.
+
+    #1404 — the check runs BEFORE the user lookup so that unknown emails
+    are gated by the same counter as known ones. Previously the counter was
+    only incremented for users that existed, making a 429 vs. no-429
+    distinction an enumeration oracle.
+    """
     client = await session_store._get_client()
     count_str = await client.get(_email_attempt_key(email))
     if count_str and int(count_str) >= _EMAIL_ATTEMPT_LIMIT:
@@ -183,6 +204,33 @@ async def _clear_lockout(session_store: RedisSessionStore, email: str) -> None:
     # who succeeds after a run of failures does not keep seeing 429
     # for the remainder of the delay window.
     await client.delete(_lockout_key(email), _lockout_delay_key(email))
+
+
+def _assert_tenant_active(tenant_id: UUID, db: Session) -> TenantModel:
+    """Fetch tenant and raise 403 if it is not strictly 'active'.
+
+    #1401 — login checked ``tenant.status != 'suspended'`` while refresh
+    used a DB filter of ``TenantModel.status == 'active'``.  Neither was
+    fail-closed: login allowed ``None`` status through, and refresh just
+    silently dropped the tenant from the eligible set.
+
+    This helper enforces a single policy from one place:
+      * fetches the tenant row by PK
+      * treats None status (or any non-'active' value) as suspended
+      * raises 403 on any non-'active' outcome
+
+    Both login and refresh call this helper, and the refreshed JWT claim
+    is written from the returned tenant's real status value (not hardcoded).
+    """
+    tenant = db.get(TenantModel, tenant_id)
+    if tenant is None or tenant.status != "active":
+        logger.warning(
+            "tenant_not_active",
+            tenant_id=str(tenant_id),
+            status=getattr(tenant, "status", None),
+        )
+        raise HTTPException(status_code=403, detail="Tenant account is not active")
+    return tenant
 
 
 async def _persist_session(
@@ -333,7 +381,11 @@ async def login(
         if not active_tenant_id:
             active_tenant_id = tenant.id
             active_tenant_status = tenant.status
-    
+
+    # #1401 — validate tenant is strictly 'active' (fail-closed: None is not OK).
+    if active_tenant_id:
+        _assert_tenant_active(active_tenant_id, db)
+
     # Clear failed-attempt counters on successful credential verification
     await _clear_email_rate_limit(session_store, normalized_login_email)
     await _clear_lockout(session_store, normalized_login_email)
@@ -459,7 +511,17 @@ async def signup(
         select(UserModel).where(UserModel.email == normalized_email)
     ).scalar_one_or_none()
     if existing_user:
-        raise HTTPException(status_code=409, detail="User already exists")
+        # #1400 — returning 409 when an email is already registered lets an
+        # attacker distinguish known from unknown addresses (email enumeration).
+        # Return the same 200 + opaque message whether or not the email exists
+        # so an observer cannot tell which branch fired. The confirmation email
+        # (or lack thereof) is an out-of-band channel the attacker cannot see.
+        logger.info("signup_email_already_registered", email=mask_email(normalized_email))
+        from fastapi.responses import JSONResponse
+        return JSONResponse(
+            status_code=200,
+            content={"message": "If that email is new, you'll receive a confirmation shortly."},
+        )
 
     try:
         validate_password(payload.password, user_context={"email": normalized_email})
@@ -772,12 +834,20 @@ async def refresh_session(
         logger.warning("refresh_no_active_tenant", user_id=str(user.id))
         raise HTTPException(status_code=403, detail="No active tenant available")
 
+    # #1401 — validate the acting tenant is strictly 'active' at refresh time.
+    # The membership query above already filters to active tenants, but that
+    # filter silently drops a suspended tenant rather than explicitly rejecting
+    # the refresh. _assert_tenant_active raises 403 explicitly and also
+    # returns the tenant row so we can write the REAL status into the JWT
+    # claim instead of the previous hardcoded "active" string.
+    active_tenant = _assert_tenant_active(active_tenant_id, db)
+
     access_token_data = {
         "sub": str(user.id),
         "email": user.email,
         "tenant_id": str(active_tenant_id) if active_tenant_id else None,  # For RLS
         "tid": str(active_tenant_id) if active_tenant_id else None,  # Backward compat
-        "tenant_status": "active",  # Only active tenants reach this point (query filters above)
+        "tenant_status": active_tenant.status,  # #1401: real status, not hardcoded 'active'
         "tv": int(getattr(user, "token_version", 0) or 0),
     }
     access_token = create_access_token(access_token_data)
