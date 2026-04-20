@@ -198,27 +198,82 @@ def _resolve_tenant_id(
     return resolved, None
 
 
+def _kafka_key_for(tenant_id: Optional[str], doc_id: str) -> str:
+    """Build the tenant-scoped Kafka partition key (#1122).
+
+    Format: ``"{tenant_id}:{doc_id}"``. This is used for every
+    outbound producer.send() in the NLP consumer so that two
+    different tenants publishing documents with identical doc_ids
+    cannot:
+
+    * Interleave on the same partition (downstream consumers see
+      cross-tenant events ordered by offset with no way to tell
+      them apart by key alone).
+    * Share a retry-count bucket in :data:`_retry_counts` — that
+      cache key used to be the raw doc_id, which meant tenant A's
+      3rd retry DLQ'd tenant B's first attempt.
+
+    If ``tenant_id`` is falsy (which should never happen at this
+    point — the consumer loop DLQ'd well before this call), we
+    still emit a safe sentinel that is GUARANTEED not to match a
+    legitimate key, so the message hits the DLQ deterministically
+    instead of silently joining tenant A's partition.
+    """
+    safe_tenant = str(tenant_id).strip() if tenant_id else "NO_TENANT"
+    return f"{safe_tenant}:{doc_id}"
+
+
+def _retry_key_for(tenant_id: Optional[str], doc_id: str) -> str:
+    """Build the tenant-scoped ``_retry_counts`` cache key (#1122).
+
+    Before this fix the cache was keyed by raw ``doc_id``, which meant
+    that two tenants who happened to emit messages carrying the same
+    ``doc_id`` shared a retry bucket. Tenant B's first processing
+    attempt could trigger tenant A's DLQ threshold and vice versa.
+    This helper centralizes the format so every read and write stays
+    in sync — a future refactor that changes the key scheme only
+    needs to touch this one function.
+    """
+    safe_tenant = str(tenant_id).strip() if tenant_id else "NO_TENANT"
+    return f"{safe_tenant}:{doc_id}"
+
+
 def _run_fsma_extractor(
     text: str,
     doc_id: str,
     doc_hash: str,
     producer: KafkaProducer,
-    tenant_id: Optional[str],
+    tenant_id: str,
     kafka_headers: list,
 ) -> dict:
     """
     Run FSMAExtractor and route results to the appropriate Kafka topic.
 
+    ``tenant_id`` is required (#1122) — the extractor and the Kafka key
+    both need it, and the consumer-loop caller has already validated
+    tenant resolution before we land here. Passing a falsy tenant_id
+    indicates a caller bug and raises before any downstream state
+    changes.
+
     Returns a summary dict with counts so the caller can emit a single
     structured log line.
     """
+    if not tenant_id:
+        # Defense in depth — the caller should have DLQ'd before reaching
+        # this function. Surface as an error rather than silently emit.
+        logger.error(
+            "fsma_extractor_invoked_without_tenant",
+            document_id=doc_id,
+        )
+        return {"status": "error", "cte_count": 0, "routed": None}
     extractor = _get_fsma_extractor()
     try:
-        result = extractor.extract(text, doc_id)
+        result = extractor.extract(text, doc_id, tenant_id=tenant_id)
     except Exception as exc:
         logger.exception(
             "fsma_extractor_error",
             document_id=doc_id,
+            tenant_id=tenant_id,
             error=str(exc),
         )
         return {"status": "error", "cte_count": 0, "routed": None}
@@ -249,7 +304,11 @@ def _run_fsma_extractor(
     try:
         producer.send(
             topic,
-            key=doc_id,
+            # #1122 — tenant-scoped partition key ensures two tenants
+            # with the same doc_id cannot interleave on the same
+            # partition. Prior format ``doc_id`` made cross-tenant
+            # ordering collisions silently possible.
+            key=_kafka_key_for(tenant_id, doc_id),
             value=signed_payload,
             headers=signed_headers,
         )
@@ -859,7 +918,8 @@ def _route_extraction(
         )
         producer.send(
             TOPIC_GRAPH_UPDATE,
-            key=doc_id,
+            # #1122 — tenant-scoped Kafka key.
+            key=_kafka_key_for(tenant_id, doc_id),
             value=signed_payload,
             headers=signed_headers,
         )
@@ -900,7 +960,8 @@ def _route_extraction(
     )
     producer.send(
         TOPIC_NEEDS_REVIEW,
-        key=doc_id,
+        # #1122 — tenant-scoped Kafka key.
+        key=_kafka_key_for(tenant_id, doc_id),
         value=signed_review_payload,
         headers=signed_review_headers,
     )
@@ -921,9 +982,18 @@ def _send_to_dlq(
     error: str,
     doc_id: str | None = None,
     headers: list | None = None,
+    tenant_id: str | None = None,
 ) -> None:
-    """Send a failed message to the dead letter queue for manual inspection."""
+    """Send a failed message to the dead letter queue for manual inspection.
+
+    ``tenant_id`` is optional because this path is hit on poison-pill
+    and pre-auth failures where tenant resolution has not yet occurred.
+    When present it scopes the retry-count lookup (#1122) and the
+    Kafka partition key so DLQ'd messages do not collide with healthy
+    messages from other tenants.
+    """
     try:
+        retry_key = _retry_key_for(tenant_id, doc_id or "unknown")
         # If event is already a dict, use it. If it's bytes (poison pill), wrap it.
         if isinstance(event, dict):
             payload = {
@@ -931,7 +1001,7 @@ def _send_to_dlq(
                 "error": error,
                 "failed_at": _now_iso(),
                 "source_topic": settings.topic_in if settings else "ingest.normalized",
-                "retry_count": _retry_counts.get(doc_id or "unknown", 0),
+                "retry_count": _retry_counts.get(retry_key, 0),
             }
         else:
             payload = {
@@ -943,14 +1013,24 @@ def _send_to_dlq(
 
         producer.send(
             TOPIC_DLQ,
-            key=doc_id or "unknown",
+            key=_kafka_key_for(tenant_id, doc_id or "unknown"),
             value=payload,
             headers=headers or [],
         )
         producer.flush(timeout=1.0)
-        logger.info("message_sent_to_dlq", document_id=doc_id, error=error)
+        logger.info(
+            "message_sent_to_dlq",
+            document_id=doc_id,
+            tenant_id=tenant_id,
+            error=error,
+        )
     except (ConnectionError, TimeoutError, OSError, RuntimeError) as dlq_exc:
-        logger.error("dlq_send_failed", document_id=doc_id, error=str(dlq_exc))
+        logger.error(
+            "dlq_send_failed",
+            document_id=doc_id,
+            tenant_id=tenant_id,
+            error=str(dlq_exc),
+        )
 
 
 def _is_fsma_event(evt: dict) -> bool:
@@ -1009,8 +1089,15 @@ def _send_to_fsma_dlq(
     error: str,
     doc_id: str | None = None,
     headers: list | None = None,
+    tenant_id: str | None = None,
 ) -> None:
-    """Route failed message to fsma.dead_letter if FSMA-related, else standard DLQ."""
+    """Route failed message to fsma.dead_letter if FSMA-related, else standard DLQ.
+
+    ``tenant_id`` (#1122) is optional — callers hitting this pre-tenant
+    (poison pill / auth failure) pass ``None`` and the Kafka key falls
+    back to an unambiguous sentinel that cannot shadow any legitimate
+    tenant's partition.
+    """
     topic = TOPIC_FSMA_DLQ if isinstance(event, dict) and _is_fsma_event(event) else TOPIC_DLQ
     try:
         payload = {
@@ -1020,11 +1107,28 @@ def _send_to_fsma_dlq(
             "source_topic": settings.topic_in if settings else "ingest.normalized",
             "dlq_topic": topic,
         }
-        producer.send(topic, key=doc_id or "unknown", value=payload, headers=headers or [])
+        producer.send(
+            topic,
+            key=_kafka_key_for(tenant_id, doc_id or "unknown"),
+            value=payload,
+            headers=headers or [],
+        )
         producer.flush(timeout=1.0)
-        logger.info("message_routed_to_dlq", topic=topic, document_id=doc_id, error=error)
+        logger.info(
+            "message_routed_to_dlq",
+            topic=topic,
+            document_id=doc_id,
+            tenant_id=tenant_id,
+            error=error,
+        )
     except (ConnectionError, TimeoutError, OSError, RuntimeError) as dlq_exc:
-        logger.error("dlq_routing_failed", topic=topic, document_id=doc_id, error=str(dlq_exc))
+        logger.error(
+            "dlq_routing_failed",
+            topic=topic,
+            document_id=doc_id,
+            tenant_id=tenant_id,
+            error=str(dlq_exc),
+        )
 
 
 def stop_consumer() -> None:
@@ -1130,6 +1234,23 @@ def _run_consumer_loop(consumer: KafkaConsumer, producer: KafkaProducer) -> None
                             logger.error("poison_pill_detected", error=str(exc), offset=record.offset)
                             POISON_PILL_COUNTER.inc()
                             _send_to_dlq(producer, raw_value, f"Deserialization failed: {str(exc)}", headers=kafka_headers)
+                            # #1085 — flush DLQ producer BEFORE committing the
+                            # inbound offset. producer.send() only buffers; a
+                            # crash between buffer and broker-ack would advance
+                            # the offset while the DLQ record is still sitting
+                            # in the producer buffer — silent data loss and an
+                            # FSMA 204 audit-trail gap. On timeout, refuse to
+                            # commit so Kafka redelivers the message.
+                            try:
+                                producer.flush(timeout=5.0)
+                            except KafkaTimeoutError:
+                                logger.error(
+                                    "dlq_flush_timeout",
+                                    offset=record.offset,
+                                    topic=record.topic,
+                                    stage="poison_pill",
+                                )
+                                continue  # do NOT commit — force redelivery
                             consumer.commit()
                             continue
 
@@ -1174,6 +1295,17 @@ def _run_consumer_loop(consumer: KafkaConsumer, producer: KafkaProducer) -> None
                                 kafka_headers,
                             )
                             MESSAGES_COUNTER.labels(status="unauthorized").inc()
+                            # #1085 — flush DLQ producer before committing.
+                            try:
+                                producer.flush(timeout=5.0)
+                            except KafkaTimeoutError:
+                                logger.error(
+                                    "dlq_flush_timeout",
+                                    offset=record.offset,
+                                    topic=record.topic,
+                                    stage="kafka_auth_failed",
+                                )
+                                continue  # do NOT commit — force redelivery
                             consumer.commit()
                             continue
 
@@ -1192,12 +1324,30 @@ def _run_consumer_loop(consumer: KafkaConsumer, producer: KafkaProducer) -> None
                                     error=error_msg,
                                     offset=record.offset,
                                 )
+                                # tenant_id has not been resolved yet — this
+                                # reject may or may not have a usable tenant
+                                # context; pass the raw payload value as a
+                                # best-effort hint for DLQ partitioning
+                                # (#1122). ``None`` is safe — _send_to_fsma_dlq
+                                # falls back to the NO_TENANT sentinel key.
                                 _send_to_fsma_dlq(
                                     producer, evt,
                                     f"Inbound schema invalid: {error_msg}",
                                     doc_id, headers=kafka_headers,
+                                    tenant_id=evt.get("tenant_id") if isinstance(evt, dict) else None,
                                 )
                                 MESSAGES_COUNTER.labels(status="rejected").inc()
+                                # #1085 — flush DLQ producer before committing.
+                                try:
+                                    producer.flush(timeout=5.0)
+                                except KafkaTimeoutError:
+                                    logger.error(
+                                        "dlq_flush_timeout",
+                                        offset=record.offset,
+                                        topic=record.topic,
+                                        stage="inbound_schema_invalid",
+                                    )
+                                    continue  # do NOT commit — force redelivery
                                 consumer.commit()
                                 continue
 
@@ -1223,31 +1373,59 @@ def _run_consumer_loop(consumer: KafkaConsumer, producer: KafkaProducer) -> None
                             _send_to_fsma_dlq(
                                 producer, evt, f"Field extraction failed: {field_exc}",
                                 doc_id, kafka_headers,
+                                tenant_id=evt.get("tenant_id") if isinstance(evt, dict) else None,
                             )
                             MESSAGES_COUNTER.labels(status="error").inc()
+                            # #1085 — flush DLQ producer before committing.
+                            try:
+                                producer.flush(timeout=5.0)
+                            except KafkaTimeoutError:
+                                logger.error(
+                                    "dlq_flush_timeout",
+                                    offset=record.offset,
+                                    topic=record.topic,
+                                    stage="malformed_event_fields_pre_tenant",
+                                )
+                                continue  # do NOT commit — force redelivery
                             consumer.commit()
                             continue
 
-                        # #1176 — if tenant resolution failed, send to FSMA DLQ
-                        # and skip processing. An NLP extraction with no tenant
-                        # context cannot safely reach the graph / review queue
-                        # because downstream stores all assume tenant scoping.
+                        # #1176/#1122 — if tenant resolution failed, send to FSMA
+                        # DLQ and skip processing. An NLP extraction with no
+                        # tenant context cannot safely reach the graph / review
+                        # queue because downstream stores all assume tenant
+                        # scoping. The sentinel ``E_MISSING_TENANT_ID`` is
+                        # included in the DLQ reason so SRE can grep across
+                        # services for a consistent signal.
                         if tenant_id is None:
                             logger.error(
                                 "nlp_message_rejected_missing_tenant",
                                 document_id=doc_id,
                                 reason=_tenant_reject_reason,
+                                error_code="E_MISSING_TENANT_ID",
                                 offset=record.offset,
                             )
                             TENANT_RESOLUTION_COUNTER.labels(outcome="rejected").inc()
                             _send_to_fsma_dlq(
                                 producer,
                                 evt,
-                                f"tenant_resolution_failed: {_tenant_reject_reason}",
+                                f"E_MISSING_TENANT_ID: {_tenant_reject_reason}",
                                 doc_id,
                                 headers=kafka_headers,
+                                tenant_id=None,
                             )
                             MESSAGES_COUNTER.labels(status="rejected").inc()
+                            # #1085 — flush DLQ producer before committing.
+                            try:
+                                producer.flush(timeout=5.0)
+                            except KafkaTimeoutError:
+                                logger.error(
+                                    "dlq_flush_timeout",
+                                    offset=record.offset,
+                                    topic=record.topic,
+                                    stage="tenant_resolution_failed",
+                                )
+                                continue  # do NOT commit — force redelivery
                             consumer.commit()
                             continue
 
@@ -1268,13 +1446,26 @@ def _run_consumer_loop(consumer: KafkaConsumer, producer: KafkaProducer) -> None
                         logger.error(
                             "malformed_event_fields",
                             error=str(field_exc),
+                            tenant_id=tenant_id,
                             offset=record.offset,
                         )
                         _send_to_fsma_dlq(
                             producer, evt, f"Field extraction failed: {field_exc}",
                             doc_id, kafka_headers,
+                            tenant_id=tenant_id,
                         )
                         MESSAGES_COUNTER.labels(status="error").inc()
+                        # #1085 — flush DLQ producer before committing.
+                        try:
+                            producer.flush(timeout=5.0)
+                        except KafkaTimeoutError:
+                            logger.error(
+                                "dlq_flush_timeout",
+                                offset=record.offset,
+                                topic=record.topic,
+                                stage="malformed_event_fields_post_tenant",
+                            )
+                            continue  # do NOT commit — force redelivery
                         consumer.commit()
                         continue
 
@@ -1424,7 +1615,8 @@ def _run_consumer_loop(consumer: KafkaConsumer, producer: KafkaProducer) -> None
                                 )
                                 producer.send(
                                     settings.topic_out,
-                                    key=doc_id,
+                                    # #1122 — tenant-scoped Kafka key.
+                                    key=_kafka_key_for(tenant_id, doc_id),
                                     value=signed_legacy,
                                     headers=signed_legacy_headers,
                                 )
@@ -1483,23 +1675,51 @@ def _run_consumer_loop(consumer: KafkaConsumer, producer: KafkaProducer) -> None
 
                         consumer.commit()
                     except (ValidationError, KafkaTimeoutError) as exc:
-                        retry_key = doc_id or "unknown"
+                        # #1122 — tenant-scoped retry-count key. Prior code
+                        # keyed only by doc_id which meant two tenants with
+                        # the same doc_id shared a retry bucket (e.g.
+                        # tenant A's 3rd retry DLQ'd tenant B's first
+                        # attempt).
+                        retry_key = _retry_key_for(tenant_id, doc_id or "unknown")
                         _retry_counts[retry_key] = _retry_counts.get(retry_key, 0) + 1
 
                         if _retry_counts[retry_key] >= MAX_RETRIES:
                             logger.error(
                                 "nlp_max_retries_exceeded_sending_to_dlq",
                                 document_id=doc_id,
+                                tenant_id=tenant_id,
                                 retries=_retry_counts[retry_key],
                                 error=str(exc),
                             )
-                            _send_to_fsma_dlq(producer, evt, str(exc), doc_id, headers=kafka_headers)
+                            _send_to_fsma_dlq(
+                                producer,
+                                evt,
+                                str(exc),
+                                doc_id,
+                                headers=kafka_headers,
+                                tenant_id=tenant_id,
+                            )
                             _retry_counts.pop(retry_key, None)
+                            # #1085 — flush DLQ producer before committing.
+                            try:
+                                producer.flush(timeout=5.0)
+                            except KafkaTimeoutError:
+                                logger.error(
+                                    "dlq_flush_timeout",
+                                    offset=record.offset,
+                                    topic=record.topic,
+                                    stage="max_retries_exceeded",
+                                )
+                                # Restore retry counter so redelivery doesn't
+                                # reset the retry budget on this message.
+                                _retry_counts[retry_key] = MAX_RETRIES
+                                continue  # do NOT commit — force redelivery
                             consumer.commit()
                         else:
                             logger.warning(
                                 "nlp_validation_or_kafka_error_will_retry",
                                 document_id=doc_id,
+                                tenant_id=tenant_id,
                                 retry=_retry_counts[retry_key],
                                 error=str(exc),
                             )
@@ -1508,8 +1728,16 @@ def _run_consumer_loop(consumer: KafkaConsumer, producer: KafkaProducer) -> None
                         logger.exception(
                             "nlp_processing_error_sending_to_dlq",
                             document_id=doc_id,
+                            tenant_id=tenant_id,
                             error=str(exc),
                         )
-                        _send_to_fsma_dlq(producer, evt, str(exc), doc_id, headers=kafka_headers)
+                        _send_to_fsma_dlq(
+                            producer,
+                            evt,
+                            str(exc),
+                            doc_id,
+                            headers=kafka_headers,
+                            tenant_id=tenant_id,
+                        )
                         consumer.commit()
                         MESSAGES_COUNTER.labels(status="error").inc()

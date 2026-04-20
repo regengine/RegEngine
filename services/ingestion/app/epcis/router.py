@@ -21,6 +21,7 @@ from services.ingestion.app.epcis.normalization import (
 )
 from services.ingestion.app.epcis.persistence import (
     _allow_in_memory_fallback,
+    _batch_transactional,
     _fallback_store_for,
     _ingest_batch_events_db_atomic,
     _fetch_event_from_db,
@@ -101,14 +102,15 @@ async def ingest_epcis_event(
 async def ingest_epcis_batch(
     request: Request,
     body: BatchIngestRequest,
-    mode: str = Query(
-        default="atomic",
+    mode: Optional[str] = Query(
+        default=None,
         description=(
-            "Batch semantics. ``atomic`` (default, #1156) validates every "
-            "event first and persists all under a single transaction — any "
-            "failure rolls back the whole batch and returns 400. "
-            "``partial`` restores the legacy per-event loop that returns "
-            "207 on mixed success/failure."
+            "Batch semantics. ``atomic`` (#1156) validates every event first "
+            "and persists all under a single transaction — any failure rolls "
+            "back the whole batch and returns 400. ``partial`` restores the "
+            "legacy per-event loop that returns 207 on mixed success/failure. "
+            "Default is controlled by the ``EPCIS_BATCH_TRANSACTIONAL`` env "
+            "var (default ``true`` → ``atomic``)."
         ),
     ),
     x_tenant_id: Optional[str] = Header(default=None, alias="X-Tenant-ID"),
@@ -117,6 +119,9 @@ async def ingest_epcis_batch(
 ):
     if not body.events:
         raise HTTPException(status_code=400, detail="Batch ingest requires at least one event")
+
+    if mode is None:
+        mode = "atomic" if _batch_transactional() else "partial"
 
     if mode not in {"atomic", "partial"}:
         raise HTTPException(
@@ -288,13 +293,15 @@ async def validate_epcis_event(
 @router.post("/events/xml", status_code=201, summary="Ingest EPCIS 2.0 XML document")
 async def ingest_epcis_xml(
     request: Request,
-    mode: str = Query(
-        default="atomic",
+    mode: Optional[str] = Query(
+        default=None,
         description=(
-            "Document semantics. ``atomic`` (default, #1151) validates "
-            "every parsed event first and persists all under a single "
-            "transaction — any failure rolls back and returns 400. "
-            "``partial`` restores legacy per-event 207 semantics."
+            "Document semantics. ``atomic`` (#1151) validates every parsed "
+            "event first and persists all under a single transaction — any "
+            "failure rolls back and returns 400. ``partial`` restores legacy "
+            "per-event 207 semantics. Default is controlled by the "
+            "``EPCIS_BATCH_TRANSACTIONAL`` env var (default ``true`` → "
+            "``atomic``)."
         ),
     ),
     x_tenant_id: Optional[str] = Header(default=None, alias="X-Tenant-ID"),
@@ -307,6 +314,9 @@ async def ingest_epcis_xml(
     and TransformationEvent elements, then ingests each through the standard
     EPCIS pipeline with FSMAEvent validation.
     """
+    if mode is None:
+        mode = "atomic" if _batch_transactional() else "partial"
+
     if mode not in {"atomic", "partial"}:
         raise HTTPException(
             status_code=400,

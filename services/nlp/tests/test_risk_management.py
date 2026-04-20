@@ -83,6 +83,7 @@ class TestFSMARiskManagement(unittest.TestCase):
         """Verify extract result contains risk assessment fields."""
         result = FSMAExtractionResult(
             document_id="doc1",
+            tenant_id="11111111-1111-1111-1111-111111111111",
             document_type=DocumentType.BILL_OF_LADING,
             ctes=[],
             extraction_timestamp="2024-01-01T00:00:00Z",
@@ -108,6 +109,7 @@ class TestFSMARiskManagement(unittest.TestCase):
         """High-confidence extractions with KDE minimums route to graph.update."""
         result = FSMAExtractionResult(
             document_id="doc-high",
+            tenant_id="11111111-1111-1111-1111-111111111111",
             document_type=DocumentType.BILL_OF_LADING,
             ctes=[],
             extraction_timestamp="2024-01-01T00:00:00Z",
@@ -121,6 +123,7 @@ class TestFSMARiskManagement(unittest.TestCase):
         """Low-confidence extractions route to nlp.needs_review."""
         result = FSMAExtractionResult(
             document_id="doc-low",
+            tenant_id="11111111-1111-1111-1111-111111111111",
             document_type=DocumentType.BILL_OF_LADING,
             ctes=[],
             extraction_timestamp="2024-01-01T00:00:00Z",

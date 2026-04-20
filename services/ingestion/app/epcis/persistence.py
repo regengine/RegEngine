@@ -87,6 +87,24 @@ def _allow_in_memory_fallback() -> bool:
     return not _is_production()
 
 
+def _batch_transactional() -> bool:
+    """Return True when batch ingest MUST run under a single DB transaction.
+
+    Default: True (atomic). This is the regulatory-safe default for #1156 —
+    a mid-batch failure rolls back every event so downstream graph/compliance
+    readers never observe a partial supply chain.
+
+    Set ``EPCIS_BATCH_TRANSACTIONAL=false`` only for temporary migration
+    windows or legacy consumers that explicitly want HTTP 207 partial-success
+    semantics. Per-request override via ``?mode=partial`` is still accepted
+    regardless of this flag.
+    """
+    explicit = os.getenv("EPCIS_BATCH_TRANSACTIONAL")
+    if explicit is None:
+        return True
+    return explicit.strip().lower() in {"1", "true", "yes", "on", "atomic"}
+
+
 def _fsma_strict_mode() -> bool:
     """Return True when FSMA schema validation MUST block persistence (#1239, #1151).
 
@@ -797,25 +815,37 @@ def _ingest_batch_events_db_atomic(
             },
         )
 
-    # Phase 2: persist every prepared event under a single session.
+    # Phase 2: persist every prepared event under a single session. Track
+    # the in-flight index so a mid-batch failure can identify the offending
+    # event in the rollback log (#1156).
     db_session = get_db_safe()
     results: list[tuple[dict, int]] = []
+    failing_index: Optional[int] = None
     try:
-        for prepared in prepared_events:
+        for idx, prepared in enumerate(prepared_events):
+            failing_index = idx
             payload, status_code = _persist_prepared_event_in_session(
                 db_session, tenant_id, prepared
             )
             results.append((payload, status_code))
+        failing_index = None
         db_session.commit()
         return results
     except Exception as exc:
         db_session.rollback()
-        logger.error("epcis_batch_rollback tenant=%s error=%s", tenant_id, str(exc))
+        logger.warning(
+            "epcis_batch_rollback tenant=%s failed_index=%s batch_size=%s error=%s",
+            tenant_id,
+            failing_index,
+            len(prepared_events),
+            str(exc),
+        )
         raise HTTPException(
             status_code=400,
             detail={
                 "error": "batch_persistence_failed",
                 "mode": "atomic",
+                "failed_index": failing_index,
                 "message": (
                     "Persistence failed mid-batch. All events in this batch "
                     "were rolled back. Use ?mode=partial for best-effort "
