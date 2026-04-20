@@ -99,6 +99,17 @@ def upgrade() -> None:
     # ----------------------------------------------------------------
     # Part 2: SQL_V048 — Sysadmin defense-in-depth RLS hardening
     # (previously migrations/V048__rls_sysadmin_defense_in_depth.sql)
+    #
+    # NOTE (#1247): v056 re-states this work under its own Part 1.
+    # Every statement below uses IF NOT EXISTS / CREATE OR REPLACE /
+    # DO $$ duplicate_object catch, so running v056 after v051 is a
+    # no-op for the role, audit schema, trigger function, and
+    # set_admin_context helper. The policy DROP+CREATE at the end of
+    # Part 2 IS destructive on each run, but both v051 and v056 use
+    # the same shape (``tenant_id = get_tenant_context()`` with the
+    # sysadmin bypass branch), so convergence is guaranteed. v063 and
+    # v065 back-fill any policies that the v056 CASCADE dropped on
+    # DBs that ran the pre-guard version of v056.
     # ----------------------------------------------------------------
 
     # Create the dedicated sysadmin role (if not exists)
