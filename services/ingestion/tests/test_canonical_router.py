@@ -367,7 +367,7 @@ class TestGetRecord:
         class _PatchedStore:
             def __init__(self, sess, dual_write=False):
                 pass
-            def get_event(self, tid, eid):
+            def get_event(self, tid, eid, include_raw_payload=False):
                 if tid == TENANT_ID and eid == EVENT_ID:
                     return dict(fake_event)
                 return None
@@ -398,7 +398,7 @@ class TestGetRecord:
         class _EmptyStore:
             def __init__(self, sess, dual_write=False):
                 pass
-            def get_event(self, tid, eid):
+            def get_event(self, tid, eid, include_raw_payload=False):
                 return None
 
         fake_persistence = types.ModuleType("shared.canonical_persistence")
