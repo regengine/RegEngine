@@ -111,7 +111,13 @@ class FSMAExtractor:
             r"urn:gln:(\d{13})",
         ],
         "tlc_source_gln": [
-            r"(?:TLC\s*Source|Traceability\s*Lot\s*Source|Lot\s*Owner|Packer)[^\d]{0,40}?(?:GLN|Location\s*ID)?\s*[:#]?\s*(\d{13})",
+            # #1119 — "Packed By" was listed in the FDA-Reg variant but
+            # missing here, which meant a BOL with "Ship From: GLN X /
+            # Packed By: GLN Y" would drop Y and let the positional
+            # fallback silently mirror X into both slots. Parallel
+            # alternation with the FDA-Reg variant restores labeled
+            # precedence for packer GLNs.
+            r"(?:TLC\s*Source|Traceability\s*Lot\s*Source|Lot\s*Owner|Packer|Packed\s*By)[^\d]{0,40}?(?:GLN|Location\s*ID)?\s*[:#]?\s*(\d{13})",
         ],
         "tlc_source_fda_reg": [
             r"(?:TLC\s*Source|Traceability\s*Lot\s*Source|Lot\s*Owner|Packer|Packed\s*By)[^\d]{0,80}?FDA\s*(?:Reg|Registration)\s*[:#]?\s*(\d{9,12})",
@@ -958,11 +964,37 @@ class FSMAExtractor:
             if gln_value not in unique_glns:
                 unique_glns.append(gln_value)
 
+        # #1119 — positional fallback is BOL-shaped: first GLN tends to
+        # be the shipper, second the consignee. That heuristic is
+        # defensible for ship_from / ship_to because BOLs almost always
+        # print Ship-From in the header block and Ship-To in the body.
+        # It is NOT defensible for ``tlc_source_gln``: the TLC source
+        # (originator / packer / processor — FSMA §1.1320 KDE) is only
+        # the Ship-From when the supplier is also the packer. For co-
+        # packed products, distribution hubs, or any multi-hop supply
+        # chain, equating the two sends recall investigators to the
+        # wrong facility. Leave ``tlc_source_gln`` unset here; an
+        # explicit "TLC Source / Lot Owner / Packer / Packed By" label
+        # is the ONLY path to populating it (see the labeled-pattern
+        # loop above). Missing TLC source surfaces downstream as a
+        # visible HITL warning — correctness > recall.
         if unique_glns:
             roles.setdefault("ship_from_gln", normalize(unique_glns[0]))
             if len(unique_glns) > 1:
                 roles.setdefault("ship_to_gln", normalize(unique_glns[1]))
-            roles.setdefault("tlc_source_gln", normalize(unique_glns[0]))
+            # Intentionally do NOT infer tlc_source_gln from document
+            # order. If the labeled pattern above failed, log a warning
+            # so operators can route the document to HITL review.
+            if "tlc_source_gln" not in roles:
+                logger.warning(
+                    "tlc_source_gln_unlabeled_fallback_skipped",
+                    issue="1119",
+                    unique_gln_count=len(unique_glns),
+                    reason=(
+                        "positional fallback would conflate ship_from with "
+                        "tlc_source; packer != shipper in multi-hop chains"
+                    ),
+                )
 
         return roles
 
