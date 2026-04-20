@@ -123,7 +123,7 @@ async def trace_forward_endpoint(
         # #1033: audit KDE/CTE read access
         _actor = getattr(api_key, "key_id", str(api_key)) if api_key else "API"
         get_audit_log().log(
-            action=FSMAAuditAction.TRACED,
+            action=FSMAAuditAction.KDE_READ,
             target_type="KDE",
             target_id=tlc,
             actor=_actor,
@@ -215,16 +215,20 @@ async def trace_backward_endpoint(
             facility_count=len(result.facilities),
         )
 
-        # #1033: audit KDE/CTE read access
-        _actor = getattr(api_key, "key_id", str(api_key)) if api_key else "API"
-        get_audit_log().log(
-            action=FSMAAuditAction.TRACED,
-            target_type="KDE",
-            target_id=tlc,
-            actor=_actor,
-            actor_type=FSMAAuditActorType.API,
-            tenant_id=str(tenant_id),
-        )
+        # #1033: best-effort KDE_READ audit (FSMA 204 / NIST AU-2)
+        try:
+            _actor = getattr(api_key, "key_id", str(api_key)) if api_key else "API"
+            get_audit_log().log(
+                action=FSMAAuditAction.KDE_READ,
+                target_type="KDE",
+                target_id=tlc,
+                actor=_actor,
+                actor_type=FSMAAuditActorType.API,
+                tenant_id=str(tenant_id),
+                diff=[FSMAAuditDiff("record_ids", None, [tlc] + (result.lots or []))],
+            )
+        except Exception as _ae:
+            logger.error("kde_read_audit_failed", tlc=tlc, error=str(_ae))
 
         return {
             "lot_id": result.lot_id,
@@ -268,7 +272,7 @@ async def lot_timeline_endpoint(
         # #1033: audit KDE/CTE read access
         _actor = getattr(api_key, "key_id", str(api_key)) if api_key else "API"
         get_audit_log().log(
-            action=FSMAAuditAction.TRACED,
+            action=FSMAAuditAction.KDE_READ,
             target_type="KDE",
             target_id=tlc,
             actor=_actor,
@@ -426,7 +430,7 @@ async def search_traceability_events(
         # #1033: audit KDE/CTE read access on search
         _actor = getattr(api_key, "key_id", str(api_key)) if api_key else "API"
         get_audit_log().log(
-            action=FSMAAuditAction.TRACED,
+            action=FSMAAuditAction.KDE_READ,
             target_type="KDE",
             target_id=f"search:{effective_start}:{effective_end}",
             actor=_actor,
