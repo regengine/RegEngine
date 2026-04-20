@@ -516,16 +516,41 @@ async def signup(
         ip_address=request.client.host if request.client else "0.0.0.0",
     )
 
-    # Commit the user + tenant + membership rows BEFORE attempting Redis.
-    # If Redis fails (503), the user still exists in the DB and can retry login.
-    db.commit()
+    # #1403 — Persist session to Redis BEFORE committing the DB.
+    # Previous order (commit → Redis) left an orphan tenant + membership
+    # whenever Redis was unavailable: the client got 503, saw no session,
+    # retried the same email, and was blocked by a 409 "user already exists"
+    # with no way to recover. By persisting Redis inside the transaction,
+    # a Redis failure rolls the tenant/user/membership back and the client
+    # can simply retry. Supabase-user orphans are a separate layer (#1090).
+    try:
+        await _persist_session(
+            session_store, session_data,
+            context="signup",
+            user_id=new_user.id,
+        )
+    except HTTPException:
+        # _persist_session already logged; roll back the DB so the user can
+        # retry signup with the same email once Redis recovers.
+        db.rollback()
+        raise
 
-    # Persist session — retries once, then fails with 503.
-    await _persist_session(
-        session_store, session_data,
-        context="signup",
-        user_id=new_user.id,
-    )
+    # Commit the user + tenant + membership rows now that the session is
+    # durable in Redis. If the commit itself fails, we best-effort delete
+    # the Redis session we just created so it doesn't reference a ghost user.
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        try:
+            await session_store.delete_session(session_data.id)
+        except Exception as cleanup_exc:  # pragma: no cover - best-effort cleanup
+            logger.warning(
+                "signup_session_cleanup_failed",
+                session_id=str(session_data.id),
+                error=str(cleanup_exc),
+            )
+        raise
 
     access_token_data = {
         "sub": str(new_user.id),
