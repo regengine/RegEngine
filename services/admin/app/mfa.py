@@ -295,26 +295,41 @@ def generate_recovery_codes(count: int = RECOVERY_CODE_COUNT) -> list[str]:
 
 
 def hash_recovery_code(code: str) -> str:
-    """Hash a recovery code for secure storage in the database.
+    """Hash a recovery code for secure storage in the database (#1041).
 
     Normalizes the code (uppercase, strip non-alnum) before hashing so that
     dashes/casing differences between generation and redemption don't produce
     different hashes.
+
+    Uses argon2id via the shared ``pwd_context`` (same cost parameters as
+    password hashing) rather than SHA-256. Recovery codes are auth credentials
+    and warrant the same protection — SHA-256 is a fast hash attackable at GPU
+    speed (~2^47.6 for 8-char alphanum codes).
     """
-    import hashlib
+    from .auth_utils import pwd_context
 
     canonical = normalize_recovery_code(code)
-    return hashlib.sha256(canonical.encode()).hexdigest()
+    return pwd_context.hash(canonical)
 
 
 def verify_recovery_code(code: str, hashed_code: str) -> bool:
-    """Verify a recovery code against its hash.
+    """Verify a recovery code against its argon2 hash (#1041).
 
-    Uses constant-time comparison to avoid timing side-channels.
+    Returns False (not a crash) for legacy SHA-256 hashes — passlib cannot
+    identify them as a known argon2 hash and raises ValueError, which we catch
+    and treat as a failed verification so affected users are prompted to
+    regenerate their recovery codes.
     """
-    import hmac
+    from .auth_utils import pwd_context
 
-    return hmac.compare_digest(hash_recovery_code(code), hashed_code)
+    canonical = normalize_recovery_code(code)
+    try:
+        return pwd_context.verify(canonical, hashed_code)
+    except Exception:
+        # hashed_code is not a valid argon2 hash (e.g. legacy SHA-256 hex
+        # digest). Treat as mismatch — callers will prompt the user to
+        # regenerate recovery codes.
+        return False
 
 
 # ──────────────────────────────────────────────────────────────
@@ -394,17 +409,25 @@ async def require_mfa(
             )
         return x_mfa_token
 
-    # Recovery code verification — hash_recovery_code now normalizes, so the
-    # same code accepts "ABCD-EFGH", "abcd-efgh", "abcdefgh", " ABCD-EFGH ",
-    # etc. (#1377).
-    code_hash = hash_recovery_code(x_mfa_token)
-    recovery = db.execute(
+    # Recovery code verification (#1041) — argon2 hashes are salted so we
+    # cannot look up by hash directly. Instead, fetch all unused codes for
+    # the user (max RECOVERY_CODE_COUNT rows) and verify each one. This is a
+    # bounded scan (≤ 8 rows by default) and is done only when the token
+    # format matches a recovery code, so the overhead is negligible.
+    # normalize_recovery_code / verify_recovery_code both normalize, so
+    # "ABCD-EFGH", "abcd-efgh", etc. all match (#1377).
+    unused_codes = db.execute(
         select(MFARecoveryCodeModel).where(
             MFARecoveryCodeModel.user_id == current_user.id,
-            MFARecoveryCodeModel.code_hash == code_hash,
             MFARecoveryCodeModel.used_at.is_(None),
         )
-    ).scalar_one_or_none()
+    ).scalars().all()
+
+    recovery = None
+    for candidate in unused_codes:
+        if verify_recovery_code(x_mfa_token, candidate.code_hash):
+            recovery = candidate
+            break
 
     if not recovery:
         _logger.warning(f"Recovery code verification failed for user {current_user.id}")

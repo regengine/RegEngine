@@ -453,7 +453,12 @@ class RedisSessionStore:
         
         return sessions
     
-    async def revoke_all_user_sessions(self, user_id: UUID) -> int:
+    async def revoke_all_user_sessions(
+        self,
+        user_id: UUID,
+        *,
+        except_session_id: Optional[UUID] = None,
+    ) -> int:
         """Revoke all sessions for a user (logout all devices).
 
         Also drops the refresh-token → session lookup keys so a stolen
@@ -461,6 +466,8 @@ class RedisSessionStore:
 
         Args:
             user_id: User to revoke sessions for
+            except_session_id: If provided, skip revoking this session (used by
+                password-change to keep the caller's own session alive — #1088).
 
         Returns:
             Number of sessions revoked
@@ -470,10 +477,13 @@ class RedisSessionStore:
         if not sessions:
             return 0
 
-        # Revoke all sessions in parallel
+        # Revoke all sessions in parallel (skip the caller's own session if requested)
         client = await self._get_client()
+        revoked = 0
         async with client.pipeline(transaction=False) as pipe:
             for session in sessions:
+                if except_session_id is not None and session.id == except_session_id:
+                    continue
                 await pipe.hset(
                     self._session_key(session.id),
                     "is_revoked",
@@ -482,15 +492,17 @@ class RedisSessionStore:
                 # Tear down the refresh-token mapping so /refresh can't claim it.
                 if session.refresh_token_hash:
                     await pipe.delete(self._token_hash_key(session.refresh_token_hash))
+                revoked += 1
             await pipe.execute()
 
         logger.info(
             "user_sessions_revoked",
             user_id=str(user_id),
-            count=len(sessions)
+            count=revoked,
+            except_session_id=str(except_session_id) if except_session_id else None,
         )
 
-        return len(sessions)
+        return revoked
 
     # Alias kept for mission-brief compatibility and clarity at call sites.
     async def revoke_all_for_user(self, user_id: UUID) -> int:
