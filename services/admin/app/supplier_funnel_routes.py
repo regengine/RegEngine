@@ -14,6 +14,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
+from shared.rate_limit import BruteForceLimiter
+
 from .audit import AuditLogger
 from .database import get_session
 from .dependencies import PermissionChecker, get_current_user
@@ -57,6 +59,24 @@ router = APIRouter(prefix="/supplier", tags=["supplier-onboarding"])
 _DEMO_RESET_CONFIRM_PHRASE = "reset-supplier-demo-data"
 
 
+# #1407: per-tenant rate limit — 1 reset per 24h window. This is a
+# destructive operation that wipes every supplier row for the acting
+# user within the tenant; even for demo tenants we do not want it
+# spammable (DoS via constant reseeding, or noise drowning legitimate
+# audit signal). Uses ``BruteForceLimiter`` instead of slowapi's
+# ``@limiter.limit`` because slowapi's key function runs before FastAPI
+# resolves dependencies and so cannot see the tenant context. The
+# limiter is keyed by ``<tenant_id>:<user_id>`` so distinct suppliers
+# in the same tenant do not share a budget. Falls back to an
+# in-memory counter when Redis is unavailable — same pattern as the
+# auth brute-force limiter.
+_DEMO_RESET_RATE_LIMIT = BruteForceLimiter(
+    namespace="supplier_demo_reset",
+    max_failures=1,
+    window_seconds=24 * 60 * 60,
+)
+
+
 @router.post("/demo/reset", response_model=SupplierDemoResetResponse)
 async def reset_supplier_demo(
     confirm: str = Query(
@@ -84,7 +104,10 @@ async def reset_supplier_demo(
     - Tenant must be flagged ``settings.is_demo = true``. Non-demo
       tenants (= real customer data) return 403.
     - ``?confirm=<phrase>`` query param required.
-    - Audit event emitted BEFORE any destructive SQL.
+    - Per-tenant/per-user rate limit: 1 reset per 24h (429 otherwise).
+    - Audit event emitted BEFORE any destructive SQL. If the audit
+      insert fails the whole operation aborts with 500 — no rows are
+      deleted. Audit payload records pre-delete row counts per table.
     - Hard delete is retained for now; soft-delete requires adding
       ``deleted_at`` columns across five supplier models and is
       tracked as a separate PR so we can ship the RBAC hardening now.
@@ -128,20 +151,99 @@ async def reset_supplier_demo(
             },
         )
 
+    # Per-tenant/user rate limit — 1 reset per 24h. Evaluated AFTER
+    # input validation so a malformed ``confirm`` doesn't consume the
+    # budget, but BEFORE any destructive SQL. Key includes the user so
+    # distinct suppliers within the same demo tenant don't contend.
+    rate_limit_subject = f"{tenant_id}:{current_user.id}"
+    if _DEMO_RESET_RATE_LIMIT.is_limited(rate_limit_subject):
+        logger.warning(
+            "supplier_demo_reset_rate_limited",
+            tenant_id=str(tenant_id),
+            actor_id=str(current_user.id),
+            window_seconds=_DEMO_RESET_RATE_LIMIT.window_seconds,
+        )
+        raise HTTPException(
+            status_code=429,
+            detail={
+                "error": "rate_limited",
+                "message": (
+                    "Supplier demo reset is limited to 1 invocation per "
+                    "24 hours per supplier. Try again tomorrow."
+                ),
+            },
+        )
+
+    # Pre-count rows that will be affected — captured in the audit
+    # entry so the record of "what was wiped" is permanent even though
+    # the deletes themselves are hard (no deleted_at column on these
+    # models — see class docstring).
+    pre_counts: dict[str, int] = {}
+    for label, stmt in (
+        ("supplier_cte_events", select(SupplierCTEEventModel.id).where(
+            SupplierCTEEventModel.tenant_id == tenant_id,
+            SupplierCTEEventModel.supplier_user_id == current_user.id,
+        )),
+        ("supplier_traceability_lots", select(SupplierTraceabilityLotModel.id).where(
+            SupplierTraceabilityLotModel.tenant_id == tenant_id,
+            SupplierTraceabilityLotModel.supplier_user_id == current_user.id,
+        )),
+        ("supplier_funnel_events", select(SupplierFunnelEventModel.id).where(
+            SupplierFunnelEventModel.tenant_id == tenant_id,
+            SupplierFunnelEventModel.supplier_user_id == current_user.id,
+        )),
+        ("supplier_facilities", select(SupplierFacilityModel.id).where(
+            SupplierFacilityModel.tenant_id == tenant_id,
+            SupplierFacilityModel.supplier_user_id == current_user.id,
+        )),
+    ):
+        pre_counts[label] = len(db.execute(stmt).all())
+
     # Audit BEFORE destructive SQL so the operation is recorded even
-    # if the delete half-commits.
-    AuditLogger.log_event(
+    # if the delete half-commits. If audit insertion fails (returns
+    # None), we ABORT and refuse to delete — FSMA 204 tamper-evidence
+    # requires a chained record of every destructive action, and a
+    # silent delete would break that guarantee. See #1407.
+    audit_entry_id = AuditLogger.log_event(
         db,
         tenant_id=tenant_id,
         event_type="supplier.demo.reset",
         event_category="data_modification",
         severity="warning",
         actor_id=current_user.id,
+        actor_email=current_user.email,
         action="supplier.demo.reset",
         resource_type="supplier_demo_data",
         resource_id=str(current_user.id),
-        metadata={"confirm_phrase_matched": True},
+        metadata={
+            "confirm_phrase_matched": True,
+            "row_counts": pre_counts,
+            "is_demo_tenant": True,
+        },
     )
+    if audit_entry_id is None:
+        logger.error(
+            "supplier_demo_reset_audit_failed_aborting",
+            tenant_id=str(tenant_id),
+            actor_id=str(current_user.id),
+        )
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error": "audit_write_failed",
+                "message": (
+                    "Could not write required audit entry. Demo reset "
+                    "aborted — no data was modified."
+                ),
+            },
+        )
+
+    # Success path — record the invocation against the rate limit AFTER
+    # audit has succeeded. A failed audit (above) should not burn the
+    # tenant's daily budget.
+    _DEMO_RESET_RATE_LIMIT.record_failure(rate_limit_subject)
+
     db.commit()
 
     db.execute(
