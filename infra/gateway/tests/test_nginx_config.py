@@ -152,7 +152,19 @@ class TestSecurityHeaders:
         """Content-Security-Policy header is set."""
         assert "Content-Security-Policy" in nginx_config
         assert "default-src" in nginx_config
-    
+
+    def test_csp_frame_src_none(self, nginx_config):
+        """CSP forbids nested frames via frame-src 'none' (#1066)."""
+        assert "frame-src 'none'" in nginx_config
+
+    def test_csp_form_action_self(self, nginx_config):
+        """CSP restricts form posts to same-origin via form-action 'self' (#1066)."""
+        assert "form-action 'self'" in nginx_config
+
+    def test_csp_base_uri_self(self, nginx_config):
+        """CSP prevents base-tag injection via base-uri 'self' (#1066)."""
+        assert "base-uri 'self'" in nginx_config
+
     def test_permissions_policy(self, nginx_config):
         """Permissions-Policy header is set."""
         assert "Permissions-Policy" in nginx_config
