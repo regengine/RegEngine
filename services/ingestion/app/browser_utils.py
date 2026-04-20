@@ -1,14 +1,15 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 from typing import Optional, Dict, Any
+
+import structlog
 from playwright.async_api import async_playwright
 from shared.url_validation import validate_url, SSRFError
 
 from shared.url_validation import validate_url
 
-logger = logging.getLogger("ingestion.browser")
+logger = structlog.get_logger("ingestion.browser")
 
 USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 
