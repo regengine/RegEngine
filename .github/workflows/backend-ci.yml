@@ -329,7 +329,7 @@ jobs:
   ci-status:
     name: CI Status Gate
     if: always()
-    needs: [test, lint, lint-shared, docker-build, security, rls-fallback-check]
+    needs: [test, lint, lint-shared, docker-build, security, rls-fallback-check, alembic-revision-check]
     runs-on: ubuntu-latest
     steps:
       - name: Check results
@@ -340,6 +340,7 @@ jobs:
           echo "Docker:            ${{ needs.docker-build.result }}"
           echo "Security:          ${{ needs.security.result }}"
           echo "RLS fallback:      ${{ needs.rls-fallback-check.result }}"
+          echo "Alembic rev IDs:   ${{ needs.alembic-revision-check.result }}"
           # Lint is now blocking — flake8 F821 (undefined name) would
           # have caught PR #1482's NLP NameError class of bugs if this
           # gate had been enforcing. Promoting lint to a hard gate so
@@ -348,8 +349,9 @@ jobs:
              || "${{ needs.lint.result }}" == "failure" \
              || "${{ needs.lint-shared.result }}" == "failure" \
              || "${{ needs.security.result }}" == "failure" \
-             || "${{ needs.rls-fallback-check.result }}" == "failure" ]]; then
-            echo "::error::Test, Lint, Security Audit, or RLS fallback guard failed"
+             || "${{ needs.rls-fallback-check.result }}" == "failure" \
+             || "${{ needs.alembic-revision-check.result }}" == "failure" ]]; then
+            echo "::error::Test, Lint, Security Audit, RLS fallback, or Alembic revision ID guard failed"
             exit 1
           fi
           echo "All checks passed"
