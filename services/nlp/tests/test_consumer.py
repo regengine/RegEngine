@@ -37,12 +37,13 @@ class TestNowIso:
         assert dt is not None
 
     def test_returns_utc_timestamp(self):
-        """Verify timestamp is in UTC."""
+        """Verify timestamp is in UTC with the `Z` suffix contract (#1132)."""
         from services.nlp.app.consumer import _now_iso
-        
+
         result = _now_iso()
-        # Should end with Z or +00:00
-        assert result.endswith('Z') or '+00:00' in result
+        # Contract: `Z` suffix, matching FSMA extractor output.
+        assert result.endswith('Z'), f"expected Z suffix, got {result!r}"
+        assert '+00:00' not in result
 
 
 class TestConvertEntitiesToExtraction:

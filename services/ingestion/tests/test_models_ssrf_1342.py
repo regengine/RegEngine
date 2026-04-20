@@ -94,6 +94,11 @@ class TestRejectPrivateHost:
         [
             ("metadata.google.internal", "https://metadata.google.internal/x"),
             ("169.254.169.254", "https://169.254.169.254/x"),
+            # IPv6 literals must be bracketed in URLs per RFC 3986 §3.2.2.
+            # The guard now strips brackets from ``url.host`` before the
+            # blocklist lookup so the AWS IPv6 IMDS entry actually fires
+            # through the pydantic validator path.
+            ("fd00:ec2::254", "https://[fd00:ec2::254]/x"),
         ],
     )
     def test_blocked_hostname_rejected_before_dns(
@@ -104,13 +109,6 @@ class TestRejectPrivateHost:
     ) -> None:
         # Line 42-43. Resolver should not even be consulted — if we got
         # past the hostname blocklist something is wrong.
-        #
-        # NOTE: the third entry in ``_BLOCKED_HOSTNAMES`` (``fd00:ec2::254``,
-        # the AWS IPv6 IMDS) is intentionally NOT exercised here because
-        # pydantic's ``HttpUrl`` returns IPv6 hosts with square brackets
-        # preserved (``[fd00:ec2::254]``), which never matches the
-        # bracket-less blocklist entry. See the spawned follow-up issue
-        # for the production fix.
         def _boom(*_a, **_kw):
             pytest.fail("DNS resolver must not be called for blocked hostnames")
 
@@ -120,15 +118,55 @@ class TestRejectPrivateHost:
         assert "metadata endpoint" in str(exc.value)
 
     def test_blocked_ipv6_literal_exercises_helper_directly(self) -> None:
-        # Covers the third _BLOCKED_HOSTNAMES entry by calling the helper
-        # with a duck-typed url whose ``host`` matches exactly. This pins
-        # the blocklist set even though the pydantic-driven path currently
-        # cannot reach it (see note above).
+        # Backstop: calling the helper with a duck-typed URL whose host
+        # matches the IPv6 IMDS entry exactly. Pins the blocklist set
+        # independently of the pydantic bracketed-host normalization.
         class _Ipv6Url:
             host = "fd00:ec2::254"
 
         with pytest.raises(ValueError, match="metadata endpoint"):
             _reject_private_host(_Ipv6Url())  # type: ignore[arg-type]
+
+    def test_ipv6_literal_private_rejected_without_dns(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # Literal-IP URLs should be short-circuited before DNS. Use a
+        # ULA address that is *not* on the hostname blocklist so the
+        # rejection path is the literal-IP range check.
+        def _boom(*_a, **_kw):
+            pytest.fail("DNS resolver must not be called for literal IP URLs")
+
+        monkeypatch.setattr("app.models.socket.getaddrinfo", _boom)
+        with pytest.raises(ValidationError) as exc:
+            IngestRequest(
+                url="https://[fd12:3456::1]/x", source_system="src"
+            )
+        assert "private or reserved" in str(exc.value)
+
+    def test_ipv4_literal_private_rejected_without_dns(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # 10.1.2.3 is not on the hostname blocklist but is in the
+        # private range. Literal IPv4 URLs must also skip DNS.
+        def _boom(*_a, **_kw):
+            pytest.fail("DNS resolver must not be called for literal IP URLs")
+
+        monkeypatch.setattr("app.models.socket.getaddrinfo", _boom)
+        with pytest.raises(ValidationError) as exc:
+            IngestRequest(url="https://10.1.2.3/x", source_system="src")
+        assert "private or reserved" in str(exc.value)
+
+    def test_ipv4_literal_public_passes_without_dns(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # A public IPv4 literal must pass the literal short-circuit
+        # without ever hitting DNS.
+        def _boom(*_a, **_kw):
+            pytest.fail("DNS resolver must not be called for literal IP URLs")
+
+        monkeypatch.setattr("app.models.socket.getaddrinfo", _boom)
+        req = IngestRequest(url="https://8.8.8.8/x", source_system="src")
+        assert str(req.url).startswith("https://8.8.8.8")
 
     def test_missing_host_rejects(self) -> None:
         # Line 38-39. Pydantic's HttpUrl always has a host, so we exercise
