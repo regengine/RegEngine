@@ -319,6 +319,33 @@ class IdentityResolutionService:
         }
 
     # ------------------------------------------------------------------
+    # Identifier normalization (#1212)
+    # ------------------------------------------------------------------
+
+    # Alias types that carry structured identifiers (not free-text names).
+    # These are normalized before storage and lookup to prevent byte-exact
+    # duplicates from whitespace variants (e.g. " GLN123" vs "GLN123").
+    _STRUCTURED_ALIAS_TYPES = frozenset({
+        "gln", "gtin", "fda_registration", "internal_code",
+        "tlc", "tlc_prefix", "duns",
+    })
+
+    @staticmethod
+    def _normalize_identifier(alias_type: str, alias_value: str) -> str:
+        """
+        Normalize a structured identifier string.
+
+        For structured alias types: strip leading/trailing whitespace,
+        uppercase, and collapse internal whitespace runs to a single space.
+        Name-type aliases are returned unchanged (fuzzy matching handles
+        those; aggressive normalization would corrupt display values).
+        """
+        if alias_type in IdentityResolutionService._STRUCTURED_ALIAS_TYPES:
+            # Strip edges, uppercase, collapse internal whitespace
+            return " ".join(alias_value.strip().upper().split())
+        return alias_value
+
+    # ------------------------------------------------------------------
     # 3. Find Entity by Alias (exact lookup)
     # ------------------------------------------------------------------
 
@@ -332,8 +359,16 @@ class IdentityResolutionService:
         Exact-match lookup by alias type and value.
 
         Returns a list of matching entities (there may be more than one
-        if the alias hasn't been resolved/merged yet).
+        if the alias hasn't been resolved/merged yet), ordered by
+        ce.created_at ASC so the oldest (most established) entity is
+        first — oldest-wins semantics (#1234).
+
+        #1212: structured identifier alias_value is normalized before the
+        query so whitespace variants resolve to the same entity.
         """
+        # #1212: normalize so " GLN123" == "GLN123" == "gln123" (after upper)
+        alias_value = self._normalize_identifier(alias_type, alias_value)
+
         rows = self.session.execute(
             text("""
                 SELECT ce.entity_id, ce.entity_type, ce.canonical_name,
@@ -348,6 +383,7 @@ class IdentityResolutionService:
                   AND ea.alias_type = :alias_type
                   AND ea.alias_value = :alias_value
                   AND ce.is_active = TRUE
+                ORDER BY ce.created_at ASC
             """),
             {
                 "tenant_id": tenant_id,
@@ -1621,6 +1657,10 @@ class IdentityResolutionService:
         under a different entity, the INSERT is a no-op and the caller
         must re-SELECT to find the winning entity (#1190).
         """
+        # #1212: normalize structured identifiers before storage so that
+        # whitespace variants never create duplicate alias rows.
+        alias_value = self._normalize_identifier(alias_type, alias_value)
+
         alias_id = str(uuid4())
         now = datetime.now(timezone.utc)
 
