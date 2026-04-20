@@ -171,9 +171,17 @@ class CTE:
 
 @dataclass
 class FSMAExtractionResult:
-    """Result of FSMA extraction from a document."""
+    """Result of FSMA extraction from a document.
+
+    ``tenant_id`` (#1122) — every extraction must carry its originating
+    tenant so downstream consumers (graph ingestion, review queue) can
+    enforce tenant scoping without re-reading the event envelope. The
+    top-level field is authoritative; nested ``KDE``/``CTE`` structures
+    inherit it implicitly from the containing result.
+    """
 
     document_id: str
+    tenant_id: str
     document_type: DocumentType
     ctes: List[CTE]
     extraction_timestamp: str

@@ -63,8 +63,51 @@ def _require_jti_default() -> bool:
 
 pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
 
+# ──────────────────────────────────────────────────────────────
+# #1082 — constant-time login to close user-enumeration oracle.
+#
+# The /login handler used to short-circuit verify_password when
+# the email was unknown, so an attacker could measure response
+# latency to enumerate which emails are RegEngine customers.
+# Argon2 verify is ~80-200 ms — trivially detectable as a gap.
+#
+# _DUMMY_ARGON2_HASH is a valid hash of a random string computed
+# once at import time. verify_login() uses it when the user is
+# absent so both branches do exactly one argon2 verify.
+# ──────────────────────────────────────────────────────────────
+_DUMMY_ARGON2_HASH = pwd_context.hash(secrets.token_urlsafe(32))
+
+
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     return pwd_context.verify(plain_password, hashed_password)
+
+
+def verify_login(plain_password: str, user) -> bool:
+    """Timing-safe login verification.
+
+    Always performs one argon2 verify, even when ``user`` is None, so
+    response latency does not depend on whether the email exists.
+    Returns True iff ``user`` exists AND the password hash matches.
+
+    Callers must still perform their own existence check for the
+    authorization decision — this helper is only for the
+    credential-verification timing envelope.
+    """
+    if user is None:
+        # Run argon2 against the module-level dummy hash so this
+        # branch takes the same wall time as the real one. Ignore
+        # the result — the caller will see False because user is None.
+        pwd_context.verify(plain_password, _DUMMY_ARGON2_HASH)
+        return False
+    password_hash = getattr(user, "password_hash", None)
+    if not password_hash:
+        # User row exists but has no hash (shouldn't happen; be
+        # defensive and still pay the argon2 cost so this edge case
+        # isn't its own oracle).
+        pwd_context.verify(plain_password, _DUMMY_ARGON2_HASH)
+        return False
+    return pwd_context.verify(plain_password, password_hash)
+
 
 def get_password_hash(password: str) -> str:
     return pwd_context.hash(password)

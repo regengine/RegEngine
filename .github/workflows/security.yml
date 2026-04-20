@@ -153,7 +153,9 @@ jobs:
       - name: pip-audit
         run: |
           python -m pip install -U pip pip-audit
-          python_files=$(find . -name requirements.txt -not -path "./.venv/*" -not -path "./frontend/*" | sort)
+          # Include root requirements.lock (pip-compile output, #1139) alongside
+          # any per-service requirements*.txt files still present.
+          python_files=$( { find . -name requirements.txt -not -path "./.venv/*" -not -path "./frontend/*"; [ -f requirements.lock ] && echo ./requirements.lock; } | sort)
           if [ -n "$python_files" ]; then
             printf '%s\n' "$python_files" > pip-audit-targets.txt
             printf '{\n  "audits": [\n' > pip-audit-results.json
@@ -211,7 +213,12 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install -r requirements.txt || true
+          # Install from the root requirements.lock (pip-compile output; #1139).
+          # Falls back silently if the file isn't present so tenant-isolation
+          # tests still run on branches predating this migration.
+          if [ -f requirements.lock ]; then
+            pip install --require-hashes -r requirements.lock || true
+          fi
           pip install pytest httpx pytest-json-report pytest-asyncio requests sqlalchemy psycopg2-binary
 
       - name: Run tenant isolation tests

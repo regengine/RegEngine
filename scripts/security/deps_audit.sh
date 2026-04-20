@@ -26,7 +26,11 @@ fi
 if command -v pip-audit &> /dev/null; then
   echo ""
   echo "--- pip-audit ---"
-  if [ -f requirements.txt ]; then
+  # Prefer the pip-compile lockfile (pinned + hashed, #1139). Fall back to
+  # legacy requirements.txt if a branch predates the migration, then pyproject.
+  if [ -f requirements.lock ]; then
+    pip-audit -r requirements.lock || EXIT_CODE=1
+  elif [ -f requirements.txt ]; then
     pip-audit -r requirements.txt || EXIT_CODE=1
   elif [ -f pyproject.toml ]; then
     pip-audit || EXIT_CODE=1

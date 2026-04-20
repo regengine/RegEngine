@@ -182,6 +182,36 @@ class GraphEvent(BaseModel):
     }
 
 
+class LegacyGraphEvent(BaseModel):
+    """Legacy-format event accepted on ``graph.update`` for backward compat (#1216).
+
+    Used when a producer emits the pre-``GraphEvent`` shape. Validates the
+    fields the graph consumer actually reads so a malformed / malicious
+    message is DLQ'd instead of crashing the consumer or leaking junk
+    into Neo4j. Additional fields are permitted (Pydantic default is
+    ``ignore``) so this model does not block forward-compatible additions.
+    """
+
+    document_id: str = Field(..., min_length=1, description="Document identifier")
+    entities: List[Dict[str, Any]] = Field(
+        default_factory=list, description="Extracted entities to upsert"
+    )
+    source_url: Optional[str] = Field(None, description="Origin URL for the document")
+    tenant_id: Optional[str] = Field(
+        None, description="Tenant UUID (validated downstream before DB routing)"
+    )
+
+    @field_validator("entities")
+    @classmethod
+    def _entities_must_be_dicts(cls, v):
+        if not isinstance(v, list):
+            raise ValueError("entities must be a list of dicts")
+        for i, item in enumerate(v):
+            if not isinstance(item, dict):
+                raise ValueError(f"entities[{i}] must be a dict, got {type(item).__name__}")
+        return v
+
+
 class ReviewItem(BaseModel):
     """Review queue item for human-in-the-loop validation."""
 

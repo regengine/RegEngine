@@ -33,12 +33,12 @@ The handlers live in ``services/ingestion/app/stripe_billing/webhooks.py``
 
 from __future__ import annotations
 
-import logging
 import sys
 from pathlib import Path
 from typing import Any, Optional
 
 import pytest
+import structlog
 
 service_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(service_dir))
@@ -169,13 +169,13 @@ class TestTrialWillEnd_Issue1189:
         assert mapping["billing_period"] == "monthly"
 
     def test_warn_log_emitted_for_operator_visibility(
-        self, fake_redis, caplog,
+        self, fake_redis,
     ) -> None:
         """The trial-notice must emit WARN so the 3-day countdown lands
         in operator dashboards and alerting. A silent INFO would hide
         this from conversion-tracking dashboards."""
         _prebind_tenant(fake_redis)
-        with caplog.at_level(logging.WARNING, logger="stripe-billing"):
+        with structlog.testing.capture_logs() as log_entries:
             webhooks_mod._handle_trial_will_end(
                 {
                     "id": SUBSCRIPTION,
@@ -184,22 +184,21 @@ class TestTrialWillEnd_Issue1189:
                     "trial_end": 1776513600,
                 }
             )
-        warn_records = [
-            r for r in caplog.records
-            if r.levelname == "WARNING"
-            and "stripe_trial_will_end" in r.getMessage()
-            and "tenant_not_found" not in r.getMessage()
+        warn_entries = [
+            e for e in log_entries
+            if e.get("log_level") == "warning"
+            and e.get("event") == "stripe_trial_will_end"
         ]
-        assert len(warn_records) == 1, (
+        assert len(warn_entries) == 1, (
             f"Expected exactly one WARN stripe_trial_will_end log, "
-            f"got {len(warn_records)}"
+            f"got {len(warn_entries)}"
         )
 
-    def test_unknown_tenant_does_not_crash(self, fake_redis, caplog) -> None:
+    def test_unknown_tenant_does_not_crash(self, fake_redis) -> None:
         """If the subscription/customer cannot be mapped to a tenant
         (e.g. trial started before our first successful checkout), the
         handler logs and no-ops rather than raising."""
-        with caplog.at_level(logging.WARNING, logger="stripe-billing"):
+        with structlog.testing.capture_logs() as log_entries:
             webhooks_mod._handle_trial_will_end(
                 {
                     "id": "sub_unknown",
@@ -210,8 +209,8 @@ class TestTrialWillEnd_Issue1189:
             )
         # Must have logged the miss.
         assert any(
-            "stripe_trial_will_end_tenant_not_found" in r.getMessage()
-            for r in caplog.records
+            e.get("event") == "stripe_trial_will_end_tenant_not_found"
+            for e in log_entries
         ), "Missing-tenant branch must log for operator visibility"
 
     def test_dispatcher_routes_trial_will_end_to_handler(
@@ -307,14 +306,14 @@ class TestDisputeCreated_Issue1189:
         assert "." not in mapping["last_dispute_amount_cents"]
 
     def test_error_level_log_for_oncall_paging(
-        self, fake_redis, caplog,
+        self, fake_redis,
     ) -> None:
         """Chargebacks must log at ERROR so alerting pipelines
         (PagerDuty, Sentry) page a human. A WARN-level log would be
         deprioritized and the 7-day Stripe response window would
         expire silently."""
         _prebind_tenant(fake_redis)
-        with caplog.at_level(logging.ERROR, logger="stripe-billing"):
+        with structlog.testing.capture_logs() as log_entries:
             webhooks_mod._handle_dispute_created(
                 {
                     "id": "dp_oncall_1",
@@ -327,24 +326,24 @@ class TestDisputeCreated_Issue1189:
                     "created": 1712345678,
                 }
             )
-        error_records = [
-            r for r in caplog.records
-            if r.levelname == "ERROR"
-            and "stripe_dispute_opened" in r.getMessage()
+        error_entries = [
+            e for e in log_entries
+            if e.get("log_level") == "error"
+            and e.get("event") == "stripe_dispute_opened"
         ]
-        assert len(error_records) == 1, (
+        assert len(error_entries) == 1, (
             f"Expected exactly one ERROR stripe_dispute_opened log for "
-            f"oncall paging, got {len(error_records)}"
+            f"oncall paging, got {len(error_entries)}"
         )
 
     def test_unknown_customer_logs_error_does_not_crash(
-        self, fake_redis, caplog,
+        self, fake_redis,
     ) -> None:
         """If Stripe sends a dispute for a customer we don't know
         (shouldn't happen in prod — all our customers originate from
         checkout — but the handler must not crash the event processor),
         we log at ERROR and skip the mapping update."""
-        with caplog.at_level(logging.ERROR, logger="stripe-billing"):
+        with structlog.testing.capture_logs() as log_entries:
             webhooks_mod._handle_dispute_created(
                 {
                     "id": "dp_unknown_cust",
@@ -358,8 +357,8 @@ class TestDisputeCreated_Issue1189:
                 }
             )
         assert any(
-            "stripe_dispute_tenant_not_found" in r.getMessage()
-            for r in caplog.records
+            e.get("event") == "stripe_dispute_tenant_not_found"
+            for e in log_entries
         )
 
     def test_dispatcher_routes_dispute_created_to_handler(
@@ -466,7 +465,7 @@ class TestCustomerDeleted_Issue1189:
         assert fake_redis.hashes[tenant_key].get("plan_id") == "growth"
 
     def test_unknown_customer_still_clears_lookup_defensively(
-        self, fake_redis, caplog,
+        self, fake_redis,
     ) -> None:
         """If we never saw the customer (no _find_tenant_id hit), we
         still call delete on the lookup key defensively — there's no
@@ -475,12 +474,12 @@ class TestCustomerDeleted_Issue1189:
         # Intentionally don't prebind — no tenant hash, no lookup key.
         # The handler should find no tenant, log the miss, and still
         # issue the defensive delete.
-        with caplog.at_level(logging.WARNING, logger="stripe-billing"):
+        with structlog.testing.capture_logs() as log_entries:
             webhooks_mod._handle_customer_deleted({"id": "cus_never_seen"})
         # Tenant-not-found warning fired.
         assert any(
-            "stripe_customer_deleted_tenant_not_found" in r.getMessage()
-            for r in caplog.records
+            e.get("event") == "stripe_customer_deleted_tenant_not_found"
+            for e in log_entries
         ), (
             "Unknown-customer branch must log tenant_not_found for "
             "operator visibility"
@@ -493,15 +492,15 @@ class TestCustomerDeleted_Issue1189:
             "key even when no tenant binding exists"
         )
 
-    def test_missing_id_does_not_crash(self, fake_redis, caplog) -> None:
+    def test_missing_id_does_not_crash(self, fake_redis) -> None:
         """A malformed event with no ``id`` must log and no-op, not
         raise (the dispatcher catches nothing and a raise would bubble
         out as a 500)."""
-        with caplog.at_level(logging.WARNING, logger="stripe-billing"):
+        with structlog.testing.capture_logs() as log_entries:
             webhooks_mod._handle_customer_deleted({})
         assert any(
-            "stripe_customer_deleted_missing_id" in r.getMessage()
-            for r in caplog.records
+            e.get("event") == "stripe_customer_deleted_missing_id"
+            for e in log_entries
         )
 
     def test_dispatcher_routes_customer_deleted_to_handler(

@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-import logging
 import os
 from typing import Any, Optional
 
 import redis
 import stripe
+import structlog
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 
 from app.authz import IngestionPrincipal, get_ingestion_principal, require_permission
@@ -36,7 +36,7 @@ from .models import (
 )
 from .plans import DEFAULT_PORTAL_RETURN_URL, PLANS
 
-logger = logging.getLogger("stripe-billing")
+logger = structlog.get_logger("stripe-billing")
 
 router = APIRouter(prefix="/api/v1/billing", tags=["Billing & Subscriptions"])
 
@@ -117,9 +117,9 @@ async def create_checkout(
 
     if request.tenant_id and request.tenant_id != authenticated_tenant_id:
         logger.warning(
-            "checkout_ignored_client_tenant_id auth_tenant=%s client_tenant=%s",
-            authenticated_tenant_id,
-            request.tenant_id,
+            "checkout_ignored_client_tenant_id",
+            auth_tenant=authenticated_tenant_id,
+            client_tenant=request.tenant_id,
         )
 
     metadata = {
@@ -142,8 +142,9 @@ async def create_checkout(
             existing_customer_id = _customers_mod._get_existing_customer_id(authenticated_tenant_id)
         except redis.RedisError as exc:
             logger.warning(
-                "checkout_customer_lookup_failed tenant_id=%s error=%s",
-                authenticated_tenant_id, str(exc),
+                "checkout_customer_lookup_failed",
+                tenant_id=authenticated_tenant_id,
+                error=str(exc),
             )
 
     # #1186: validate redirect URLs against the allowlist BEFORE handing
@@ -189,8 +190,9 @@ async def create_checkout(
         except redis.RedisError as exc:
             # Don't block checkout redirect if Redis is briefly unavailable.
             logger.warning(
-                "checkout_hint_store_failed tenant_id=%s error=%s",
-                authenticated_tenant_id, str(exc),
+                "checkout_hint_store_failed",
+                tenant_id=authenticated_tenant_id,
+                error=str(exc),
             )
 
     _funnel_mod.emit_funnel_event(
@@ -205,13 +207,11 @@ async def create_checkout(
 
     logger.info(
         "checkout_created",
-        extra={
-            "tenant_id": authenticated_tenant_id,
-            "plan": plan["id"],
-            "amount": amount,
-            "billing_period": billing_period,
-            "session_id": session.id,
-        },
+        tenant_id=authenticated_tenant_id,
+        plan=plan["id"],
+        amount=amount,
+        billing_period=billing_period,
+        session_id=session.id,
     )
 
     return CheckoutResponse(
