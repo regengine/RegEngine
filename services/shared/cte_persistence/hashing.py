@@ -65,7 +65,7 @@ def compute_event_hash(
     event_id: str,
     event_type: str,
     tlc: str,
-    product_description: str,
+    product_description: str,  # retained in signature for backward compat — NOT hashed (#1323)
     quantity: float,
     unit_of_measure: str,
     location_gln: Optional[str],
@@ -81,18 +81,31 @@ def compute_event_hash(
     KDE values are normalized through ``_normalize_for_hashing`` so that
     exotic types (``datetime``, ``Decimal``, ``UUID``, ...) serialize
     deterministically and survive Python-version upgrades. See #1313.
+
+    ``product_description`` is intentionally excluded from the hash (#1323).
+    It is free-text that operators may reformat, translate, or correct over time
+    without changing the underlying regulatory event identity.  Including it
+    caused re-verification to fail whenever a description was updated.  The
+    stable KDE fields (event_type, TLC, timestamp, location GLN, quantity, UoM,
+    KDE keys/values) fully identify the event for FDA audit purposes.
     """
+    # KDE values that may contain free-text descriptions are excluded from the
+    # canonical string to keep the hash stable across reformatting (#1323).
+    # Only keys and non-description scalar values participate.
+    stable_kdes = {
+        k: v for k, v in kdes.items()
+        if k not in ("product_description", "description", "item_description")
+    }
     canonical = "|".join([
         event_id,
         event_type,
         tlc,
-        product_description,
+        # product_description excluded — see #1323
         str(quantity),
         unit_of_measure,
         location_gln or "",
-        location_name or "",
         timestamp,
-        json.dumps(_normalize_for_hashing(kdes), sort_keys=True),
+        json.dumps(_normalize_for_hashing(stable_kdes), sort_keys=True),
     ])
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
@@ -117,7 +130,7 @@ def compute_idempotency_key(
     location_name: Optional[str] = None,
 ) -> str:
     """
-    Compute a deduplication key from event content (LEGACY path).
+    Compute a deduplication key from event content (cte_persistence path).
 
     Two identical events from the same source AND location produce the same key,
     preventing double-ingestion. Location is included because FSMA 204 treats
