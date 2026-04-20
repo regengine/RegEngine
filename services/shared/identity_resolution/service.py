@@ -348,7 +348,10 @@ class IdentityResolutionService:
                   AND ea.alias_type = :alias_type
                   AND ea.alias_value = :alias_value
                   AND ce.is_active = TRUE
-                ORDER BY ce.confidence_score DESC, ce.created_at ASC NULLS LAST
+                -- Stable order: oldest entity wins over newer aliases
+                -- #1234: confidence_score DESC (higher quality first), then created_at ASC
+                -- (oldest canonical wins on ties), entity_id ASC as UUID tiebreak.
+                ORDER BY ce.confidence_score DESC, ce.created_at ASC, ce.entity_id ASC
             """),
             {
                 "tenant_id": tenant_id,
