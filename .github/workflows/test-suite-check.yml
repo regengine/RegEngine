@@ -8,7 +8,8 @@ on:
       - 'kernel/**'
       - 'tests/**'
       - 'pyproject.toml'
-      - 'requirements.txt'
+      - 'requirements.in'
+      - 'requirements.lock'
       - '.github/workflows/test-suite-check.yml'
   push:
     branches: [main, develop]
@@ -18,7 +19,8 @@ on:
       - 'kernel/**'
       - 'tests/**'
       - 'pyproject.toml'
-      - 'requirements.txt'
+      - 'requirements.in'
+      - 'requirements.lock'
       - '.github/workflows/test-suite-check.yml'
 
 permissions:
@@ -51,8 +53,9 @@ jobs:
           # import real libraries (httpx, fastapi, sqlalchemy, pydantic[email],
           # scipy, etc.) can be collected. Without this step, collection
           # breaks on the first third-party import.
-          if [ -f requirements.txt ]; then
-            pip install -r requirements.txt
+          # --require-hashes enforces the pip-compile lockfile (#1139).
+          if [ -f requirements.lock ]; then
+            pip install --require-hashes -r requirements.lock
           fi
           pip install pytest pytest-asyncio email-validator scipy
 
@@ -105,12 +108,12 @@ jobs:
       
       - name: Install Dependencies
         run: |
-          # Install from the root requirements.txt — the single source of
-          # truth for runtime deps. Per-service requirements.txt files are
-          # DEPRECATED stubs (#1429) and will be removed when docker-compose
-          # is retired.
-          if [ -f requirements.txt ]; then
-            pip install -r requirements.txt
+          # Install from the root requirements.lock — the single source of
+          # truth for runtime deps (pip-compile output; see #1139).
+          # Per-service requirements.txt files are DEPRECATED stubs (#1429)
+          # and will be removed when docker-compose is retired.
+          if [ -f requirements.lock ]; then
+            pip install --require-hashes -r requirements.lock
           fi
           pip install pytest pytest-asyncio
       

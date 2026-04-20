@@ -8,14 +8,16 @@ on:
       - 'shared/**'
       - 'kernel/**'
       - 'plugins/fsma/**'
-      - 'requirements.txt'
+      - 'requirements.in'
+      - 'requirements.lock'
       - '.github/workflows/backend-ci.yml'
   pull_request:
     branches: [main]
     paths:
       - 'services/**'
       - 'shared/**'
-      - 'requirements.txt'
+      - 'requirements.in'
+      - 'requirements.lock'
       - '.github/workflows/backend-ci.yml'
 
 # Cancel in-progress runs for the same branch/PR
@@ -119,20 +121,21 @@ jobs:
         uses: actions/cache@v5
         with:
           path: ~/.cache/pip
-          # Key off the root requirements.txt — the single source of truth.
+          # Key off the root requirements.lock — the single source of truth.
           # Per-service requirements.txt files are DEPRECATED (see #1429)
           # and match root, so caching on root invalidates correctly.
-          key: pip-${{ hashFiles('requirements.txt') }}
+          key: pip-${{ hashFiles('requirements.lock') }}
           restore-keys: |
             pip-
 
       - name: Install dependencies
         run: |
-          # Install from the root requirements.txt (single source of truth).
-          # The per-service stubs are headed "DEPRECATED — use root
-          # requirements.txt" and will be removed when docker-compose is
-          # retired. See #1429 for context.
-          pip install -r requirements.txt
+          # Install from the root requirements.lock (pip-compile output; see
+          # requirements.in for the human-edited top-level spec). --require-hashes
+          # guarantees reproducible builds and rejects CVE-shifted artifacts.
+          # Per-service stubs are DEPRECATED and will be removed with
+          # docker-compose (#1429).
+          pip install --require-hashes -r requirements.lock
           pip install pytest pytest-cov pytest-asyncio httpx
 
       - name: Run tests with coverage
@@ -294,13 +297,13 @@ jobs:
 
       - name: Run pip-audit
         run: |
-          # Root requirements.txt is the single source of truth (per #1429 /
-          # #1433 which removed per-service requirements.txt files). The
-          # matrix still fans out by service name to preserve historical
-          # check names on branch-protection rules; every job audits the
-          # same consolidated dependency set.
+          # Root requirements.lock is the single source of truth (per #1429 /
+          # #1433 which removed per-service requirements.txt files; #1139 moved
+          # to pip-compile lockfile). The matrix still fans out by service name
+          # to preserve historical check names on branch-protection rules;
+          # every job audits the same consolidated dependency set.
           pip install pip-audit
-          pip-audit -r requirements.txt --desc on
+          pip-audit -r requirements.lock --desc on
 
   # ── CI Summary ───────────────────────────────────────────
   ci-status:
