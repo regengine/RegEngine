@@ -35,7 +35,7 @@ from prometheus_client import Counter, Histogram
 from kafka import KafkaConsumer, KafkaProducer
 from kafka.admin import KafkaAdminClient, NewTopic
 from kafka.errors import TopicAlreadyExistsError
-from tenacity import retry, stop_after_attempt, wait_exponential
+from tenacity import retry, stop_after_attempt, stop_after_delay, wait_exponential
 
 try:
     REVIEW_MESSAGES_COUNTER = Counter(
@@ -163,14 +163,36 @@ from sqlalchemy.exc import OperationalError, InterfaceError
 from tenacity import retry_if_exception_type
 
 
+# Total retry budget, capped well below the Kafka consumer group
+# ``max.poll.interval.ms`` (default 300s) so a persistently-failing
+# downstream call never blocks a poll long enough to trigger a
+# rebalance (#1201). Without a wall-clock cap, an unbounded exponential
+# backoff + attempt count can exceed the broker's rebalance timeout and
+# cause a death spiral where each kick-out makes the next poll slower.
+REVIEW_CONSUMER_RETRY_MAX_WAIT_SECONDS = float(
+    os.getenv("REVIEW_CONSUMER_RETRY_MAX_WAIT_SECONDS", "60")
+)
+
+
 @retry(
-    stop=stop_after_attempt(3),
+    stop=(
+        stop_after_attempt(3)
+        | stop_after_delay(REVIEW_CONSUMER_RETRY_MAX_WAIT_SECONDS)
+    ),
     wait=wait_exponential(multiplier=0.5, min=0.5, max=5),
     retry=retry_if_exception_type((OperationalError, InterfaceError, ConnectionError, TimeoutError)),
     reraise=True,
 )
 def _record_with_retry(tracker: "HallucinationTracker", **kwargs) -> Dict[str, Any]:
-    """Record hallucination with retry logic for transient DB/connection errors only."""
+    """Record hallucination with retry logic for transient DB/connection errors only.
+
+    Retries stop at whichever limit fires first: ``stop_after_attempt(3)``
+    OR ``stop_after_delay(REVIEW_CONSUMER_RETRY_MAX_WAIT_SECONDS)`` (#1201).
+    On exhaustion the last exception is re-raised and ``_process_record``
+    routes the message to the DLQ, commits the offset, and continues
+    polling -- so a persistent downstream outage cannot starve the
+    consumer past the broker's rebalance timeout.
+    """
     return tracker.record_hallucination(**kwargs)
 
 
@@ -326,7 +348,21 @@ def _process_record(record, tracker: "HallucinationTracker", bootstrap: str, kaf
             extractor=result.get("extractor"),
             latency_ms=round(elapsed * 1000, 2),
         )
-    except (AttributeError, TypeError, ValueError, RuntimeError, OSError, KeyError, LookupError) as exc:  # pragma: no cover - depends on data shape
+    except (
+        AttributeError,
+        TypeError,
+        ValueError,
+        RuntimeError,
+        OSError,
+        KeyError,
+        LookupError,
+        # SQLAlchemy errors surface here when _record_with_retry exhausts
+        # its retry budget (#1201). Without this clause, a persistent DB
+        # outage would crash the consumer loop instead of DLQ'ing the
+        # message and moving on.
+        OperationalError,
+        InterfaceError,
+    ) as exc:  # pragma: no cover - depends on data shape
         elapsed = time.perf_counter() - start_time
         REVIEW_LATENCY_HISTOGRAM.labels(outcome="error").observe(elapsed)
         logger.exception("review_consumer_error", error=str(exc), event=evt)

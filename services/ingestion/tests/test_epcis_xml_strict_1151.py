@@ -230,10 +230,11 @@ class TestXmlAtomicValidation_Issue1151:
     or FSMA schema validation MUST be rejected with 400/422 -- not
     silently stored with a compliance alert."""
 
-    def test_missing_required_field_returns_400(self, client):
+    def test_missing_required_field_returns_422(self, client):
         """Pre-fix: the missing-bizStep event would flow through with an
-        'incomplete_route' alert and be stored as 201. Post-fix: atomic
-        batch pre-validation raises 400 ``batch_validation_failed``."""
+        'incomplete_route' alert and be stored as 201. Post-fix (#1151):
+        parse-time validation raises 422 ``epcis_xml_validation_failed``
+        with per-index errors before any batch/DB work happens."""
         resp = client.post(
             "/api/v1/epcis/events/xml",
             headers={
@@ -242,12 +243,10 @@ class TestXmlAtomicValidation_Issue1151:
             },
             content=_xml_with_missing_required_fields(),
         )
-        assert resp.status_code == 400
+        assert resp.status_code == 422
         payload = resp.json()
         detail = payload.get("detail", payload)
-        # Atomic mode must be the default for the XML endpoint.
-        assert detail.get("mode") == "atomic"
-        assert detail.get("error") == "batch_validation_failed"
+        assert detail.get("error") == "epcis_xml_validation_failed"
         # Per-index error surfaces the inner validation failure.
         errors = detail.get("errors", [])
         assert len(errors) >= 1
@@ -278,9 +277,11 @@ class TestXmlAtomicValidation_Issue1151:
             assert inner_detail.get("error") == "unmapped_bizstep"
 
     def test_atomic_is_the_default_xml_mode(self, client):
-        """No ``mode`` query param → atomic behavior. Pre-fix, the XML
-        endpoint only had one mode and it was the silently-accepting
-        per-event loop."""
+        """No ``mode`` query param → atomic behavior (strict validation).
+        Pre-fix, the XML endpoint only had one mode and it was the
+        silently-accepting per-event loop. Post-fix (#1151), parse-time
+        validation surfaces 422 for structurally invalid events before
+        any atomic/partial dispatch."""
         resp = client.post(
             "/api/v1/epcis/events/xml",
             headers={
@@ -289,12 +290,12 @@ class TestXmlAtomicValidation_Issue1151:
             },
             content=_xml_with_missing_required_fields(),
         )
-        # Atomic-mode rejection = 400, not 207 (per-event partial).
-        assert resp.status_code == 400
+        # Structural validation failure surfaces as 422 at parse time;
+        # the important regression guard is "NOT 201 or 207 from the
+        # silent-accept path".
+        assert resp.status_code == 422
+        assert resp.status_code != 201
         assert resp.status_code != 207
-        detail = resp.json().get("detail", {})
-        if isinstance(detail, dict):
-            assert detail.get("mode") == "atomic"
 
 
 # ── Partial mode escape hatch still available ───────────────────────────────
@@ -304,10 +305,12 @@ class TestXmlPartialModeEscapeHatch_Issue1151:
     """Partial mode is explicit opt-in. We lock in that it's available
     (for migration / legacy clients) but NOT the default."""
 
-    def test_explicit_partial_mode_accepts_mixed_batch(self, client):
-        """With ``?mode=partial`` an invalid event produces a per-index
-        failure but does not 400 the whole request. This preserves the
-        legacy 207 semantics for clients that need them."""
+    def test_explicit_partial_mode_still_blocked_by_strict_parse(self, client):
+        """With ``?mode=partial`` AND strict FSMA validation (#1151 default),
+        invalid events still 422 at the parse stage — ``mode=partial`` only
+        governs per-event vs. atomic dispatch for events that *pass* the
+        parse gate. Tenants that genuinely need lenient parse behavior
+        must also set ``STRICT_FSMA_VALIDATION=false`` (dev / onboarding)."""
         resp = client.post(
             "/api/v1/epcis/events/xml",
             params={"mode": "partial"},
@@ -317,15 +320,12 @@ class TestXmlPartialModeEscapeHatch_Issue1151:
             },
             content=_xml_with_missing_required_fields(),
         )
-        # Partial mode with only-invalid events = 400 (no successes);
-        # mixed invalid+valid would be 207. Either is acceptable -- what
-        # we lock in is that ``mode`` was recognized.
-        assert resp.status_code in (400, 207)
-        payload = resp.json()
-        assert payload.get("mode") == "partial" or (
-            isinstance(payload.get("detail"), dict)
-            and payload["detail"].get("mode") == "partial"
-        )
+        # Parse gate fires before mode dispatch, so we expect 422 regardless
+        # of the ``mode`` query param in strict mode.
+        assert resp.status_code == 422
+        detail = resp.json().get("detail", {})
+        if isinstance(detail, dict):
+            assert detail.get("error") == "epcis_xml_validation_failed"
 
     def test_invalid_mode_value_rejected(self, client):
         resp = client.post(

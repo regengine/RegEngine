@@ -8,9 +8,31 @@ from __future__ import annotations
 
 import io
 import logging
+import os
 from typing import Any
 
+from fastapi import HTTPException
+
 logger = logging.getLogger("epcis-ingestion")
+
+
+def _strict_fsma_validation() -> bool:
+    """Return True when parse-time FSMA validation MUST reject invalid events (#1151).
+
+    Default: strict. ``STRICT_FSMA_VALIDATION=false`` disables the parse
+    gate so a malformed event is only logged as WARNING instead of
+    surfaced as HTTP 422. FDA/SMB tenants may temporarily need lenient
+    mode during onboarding; it is not intended for steady-state use.
+
+    Falls back to legacy ``FSMA_STRICT_MODE`` when ``STRICT_FSMA_VALIDATION``
+    is unset so operators can use either name interchangeably.
+    """
+    explicit = os.getenv("STRICT_FSMA_VALIDATION")
+    if explicit is None:
+        explicit = os.getenv("FSMA_STRICT_MODE")
+    if explicit is None:
+        return True
+    return explicit.strip().lower() in {"1", "true", "yes", "on", "strict"}
 
 # ---------------------------------------------------------------------------
 # EPCIS 2.0 XML Namespace constants
@@ -269,6 +291,15 @@ def _parse_epcis_xml(raw: bytes | str) -> list[dict]:
     Supports both namespace-qualified and bare-element XML. Extracts all four
     event types and converts them into the same dict structure used by the
     JSON-LD path so downstream normalization works identically.
+
+    #1151: After extraction, each event is run through ``_validate_epcis``.
+    In strict mode (default, ``STRICT_FSMA_VALIDATION=true``) any event
+    that fails validation causes the whole parse to raise
+    ``HTTPException(422)`` with a per-index error map — previously the
+    parser silently returned malformed events and the persistence layer
+    either downstream-rejected them or accepted them into the graph.
+    Lenient mode logs a WARNING per invalid event and returns them as
+    before for legacy tenants still onboarding.
     """
     try:
         from defusedxml.lxml import parse as _safe_parse
@@ -287,7 +318,44 @@ def _parse_epcis_xml(raw: bytes | str) -> list[dict]:
         return []
 
     event_elements = _xml_find_events(root)
-    return [_xml_event_to_dict(ev) for ev in event_elements]
+    events = [_xml_event_to_dict(ev) for ev in event_elements]
+
+    # #1151: gate extracted events through the EPCIS structural validator.
+    # Imported lazily to avoid a circular import (validation.py imports
+    # from extraction.py which is sibling to this module).
+    from services.ingestion.app.epcis.validation import _validate_epcis
+
+    strict = _strict_fsma_validation()
+    validation_errors: list[dict] = []
+    for idx, ev in enumerate(events):
+        errors = _validate_epcis(ev)
+        if not errors:
+            continue
+        if strict:
+            validation_errors.append({"index": idx, "errors": errors})
+        else:
+            logger.warning(
+                "epcis_xml_event_validation_failed_lenient index=%d errors=%s",
+                idx,
+                errors,
+            )
+
+    if validation_errors:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "error": "epcis_xml_validation_failed",
+                "message": (
+                    "One or more EPCIS events failed structural FSMA "
+                    "validation. No events were persisted. Set "
+                    "STRICT_FSMA_VALIDATION=false only for migration / "
+                    "onboarding windows."
+                ),
+                "errors": validation_errors,
+            },
+        )
+
+    return events
 
 
 def _is_xml_content(raw: bytes) -> bool:
