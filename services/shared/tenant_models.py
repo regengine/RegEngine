@@ -111,7 +111,7 @@ class ControlMapping(BaseModel):
             Tuple of (query_string, parameters_dict)
         """
         query = """
-        MATCH (control:TenantControl {id: $control_id})
+        MATCH (control:TenantControl {id: $control_id, tenant_id: $tenant_id})
         CREATE (mapping:ControlMapping {
             id: $id,
             tenant_id: $tenant_id,
