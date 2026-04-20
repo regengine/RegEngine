@@ -35,7 +35,7 @@ from prometheus_client import Counter, Histogram
 from kafka import KafkaConsumer, KafkaProducer
 from kafka.admin import KafkaAdminClient, NewTopic
 from kafka.errors import TopicAlreadyExistsError
-from tenacity import retry, stop_after_attempt, wait_exponential
+from tenacity import retry, stop_after_attempt, stop_after_delay, wait_exponential
 
 try:
     REVIEW_MESSAGES_COUNTER = Counter(
@@ -163,14 +163,36 @@ from sqlalchemy.exc import OperationalError, InterfaceError
 from tenacity import retry_if_exception_type
 
 
+# Total retry budget, capped well below the Kafka consumer group
+# ``max.poll.interval.ms`` (default 300s) so a persistently-failing
+# downstream call never blocks a poll long enough to trigger a
+# rebalance (#1201). Without a wall-clock cap, an unbounded exponential
+# backoff + attempt count can exceed the broker's rebalance timeout and
+# cause a death spiral where each kick-out makes the next poll slower.
+REVIEW_CONSUMER_RETRY_MAX_WAIT_SECONDS = float(
+    os.getenv("REVIEW_CONSUMER_RETRY_MAX_WAIT_SECONDS", "60")
+)
+
+
 @retry(
-    stop=stop_after_attempt(3),
+    stop=(
+        stop_after_attempt(3)
+        | stop_after_delay(REVIEW_CONSUMER_RETRY_MAX_WAIT_SECONDS)
+    ),
     wait=wait_exponential(multiplier=0.5, min=0.5, max=5),
     retry=retry_if_exception_type((OperationalError, InterfaceError, ConnectionError, TimeoutError)),
     reraise=True,
 )
 def _record_with_retry(tracker: "HallucinationTracker", **kwargs) -> Dict[str, Any]:
-    """Record hallucination with retry logic for transient DB/connection errors only."""
+    """Record hallucination with retry logic for transient DB/connection errors only.
+
+    Retries stop at whichever limit fires first: ``stop_after_attempt(3)``
+    OR ``stop_after_delay(REVIEW_CONSUMER_RETRY_MAX_WAIT_SECONDS)`` (#1201).
+    On exhaustion the last exception is re-raised and ``_process_record``
+    routes the message to the DLQ, commits the offset, and continues
+    polling -- so a persistent downstream outage cannot starve the
+    consumer past the broker's rebalance timeout.
+    """
     return tracker.record_hallucination(**kwargs)
 
 
@@ -184,10 +206,26 @@ def stop_consumer() -> None:
 
 
 def _cleanup_dlq_producer() -> None:
-    """Clean up DLQ producer (called from consumer loop on shutdown)."""
+    """Flush then close the DLQ producer on shutdown (#1220).
+
+    librdkafka buffers ``send()`` calls asynchronously, so ``close()``
+    alone can drop in-flight DLQ messages on SIGTERM. We flush first to
+    drain the buffer (up to 5s) and only then close. Exceptions during
+    flush are logged but never re-raised -- we still want close() to
+    run and the shutdown path to complete even if the broker is
+    unreachable.
+    """
     global _dlq_producer
     with _dlq_producer_lock:
         if _dlq_producer is not None:
+            try:
+                _dlq_producer.flush(timeout=5.0)
+                logger.info("dlq_producer_flushed_on_shutdown")
+            except Exception as flush_exc:  # pragma: no cover - infra
+                logger.exception(
+                    "dlq_flush_on_shutdown_failed",
+                    error=str(flush_exc),
+                )
             try:
                 _dlq_producer.close(timeout=2.0)
             except (AttributeError, TypeError, ValueError, RuntimeError, OSError) as cleanup_exc:  # pragma: no cover
@@ -245,35 +283,43 @@ def run_consumer() -> None:
     _consumer_started_at = datetime.now(timezone.utc)
     logger.info("review_consumer_started", topic=TOPIC_NEEDS_REVIEW)
 
-    while not _shutdown_event.is_set():
-        messages = consumer.poll(timeout_ms=500)
-        _last_poll_time = datetime.now(timezone.utc)
-        if not messages:
-            continue
+    try:
+        while not _shutdown_event.is_set():
+            messages = consumer.poll(timeout_ms=500)
+            _last_poll_time = datetime.now(timezone.utc)
+            if not messages:
+                continue
 
-        for records in messages.values():
-            for record in records:
-                # Re-hydrate correlation/tenant contextvars from inbound headers
-                # so every log record during handler execution carries the
-                # originator's trace ID (#1318).
-                with bind_correlation_context(record.headers or []):
-                    with tracer.start_as_current_span(
-                        "admin_review.process_message",
-                        attributes={"kafka.topic": record.topic, "kafka.offset": record.offset}
-                    ) as span:
-                        # Propagate trace + correlation context to DLQ headers.
-                        otel_headers: list = []
-                        propagate.inject(otel_headers)
-                        merged = [(k, v.encode("utf-8")) for k, v in otel_headers]
-                        kafka_headers = inject_correlation_headers_tuples(existing=merged)
+            for records in messages.values():
+                for record in records:
+                    # Re-hydrate correlation/tenant contextvars from inbound headers
+                    # so every log record during handler execution carries the
+                    # originator's trace ID (#1318).
+                    with bind_correlation_context(record.headers or []):
+                        with tracer.start_as_current_span(
+                            "admin_review.process_message",
+                            attributes={"kafka.topic": record.topic, "kafka.offset": record.offset}
+                        ) as span:
+                            # Propagate trace + correlation context to DLQ headers.
+                            otel_headers: list = []
+                            propagate.inject(otel_headers)
+                            merged = [(k, v.encode("utf-8")) for k, v in otel_headers]
+                            kafka_headers = inject_correlation_headers_tuples(existing=merged)
 
-                        _process_record(record, tracker, bootstrap, kafka_headers)
+                            _process_record(record, tracker, bootstrap, kafka_headers)
 
-        consumer.commit()  # commit once per poll batch
-
-    _cleanup_dlq_producer()
-    consumer.close()
-    logger.info("review_consumer_stopped")
+            consumer.commit()  # commit once per poll batch
+    finally:
+        # #1220 — flush DLQ producer before close so buffered DLQ
+        # messages (compliance-critical evidence of review failures)
+        # are delivered even when the loop exits via SIGTERM or
+        # unhandled exception rather than a clean shutdown_event.
+        _cleanup_dlq_producer()
+        try:
+            consumer.close()
+        except (AttributeError, TypeError, ValueError, RuntimeError, OSError) as close_exc:  # pragma: no cover
+            logger.warning("consumer_close_error", error=str(close_exc))
+        logger.info("review_consumer_stopped")
 
 
 def _process_record(record, tracker: "HallucinationTracker", bootstrap: str, kafka_headers: list) -> None:
@@ -302,7 +348,21 @@ def _process_record(record, tracker: "HallucinationTracker", bootstrap: str, kaf
             extractor=result.get("extractor"),
             latency_ms=round(elapsed * 1000, 2),
         )
-    except (AttributeError, TypeError, ValueError, RuntimeError, OSError, KeyError, LookupError) as exc:  # pragma: no cover - depends on data shape
+    except (
+        AttributeError,
+        TypeError,
+        ValueError,
+        RuntimeError,
+        OSError,
+        KeyError,
+        LookupError,
+        # SQLAlchemy errors surface here when _record_with_retry exhausts
+        # its retry budget (#1201). Without this clause, a persistent DB
+        # outage would crash the consumer loop instead of DLQ'ing the
+        # message and moving on.
+        OperationalError,
+        InterfaceError,
+    ) as exc:  # pragma: no cover - depends on data shape
         elapsed = time.perf_counter() - start_time
         REVIEW_LATENCY_HISTOGRAM.labels(outcome="error").observe(elapsed)
         logger.exception("review_consumer_error", error=str(exc), event=evt)

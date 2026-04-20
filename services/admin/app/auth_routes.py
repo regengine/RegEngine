@@ -426,7 +426,30 @@ async def signup(
     db: Session = Depends(get_session),
     session_store: RedisSessionStore = Depends(get_session_store),
 ):
-    """Self-serve signup that creates tenant + owner membership and returns session tokens."""
+    """Self-serve signup that creates tenant + owner membership and returns session tokens.
+
+    Consistency model (three systems: Supabase + Postgres + Redis):
+
+    * Redis ``create_session`` is performed BEFORE ``db.commit()`` so that a
+      Redis outage rolls the Postgres transaction back cleanly (no orphan
+      tenant / no 409 on retry). See #1403 / PR #1688.
+    * If ``db.commit()`` fails AFTER Redis persisted, we best-effort delete
+      the Redis session. If THAT ``delete_session`` call also fails (the
+      most likely correlated failure: Redis is usually down for both calls),
+      a dangling Redis session survives pointing at a rolled-back user.
+      That residual orphan is bounded by the session TTL (see
+      ``REFRESH_TOKEN_EXPIRE_DAYS`` — ``RedisSessionStore.create_session``
+      always sets an expiry via ``EXPIRE`` / ``SETEX``), so the dangling
+      session self-cleans without operator intervention. The original DB
+      commit exception is re-raised to the caller, with the Redis cleanup
+      failure explicitly attached via ``__context__`` so Sentry sees the
+      DB error as the primary (actionable) failure and the Redis cleanup
+      error as the chained secondary cause.
+    * Supabase-user orphan cleanup on DB rollback is a separate layer
+      tracked by #1090.
+
+    See #1692 for the tests that lock the above invariants in place.
+    """
     normalized_email = payload.email.strip().lower()
     tenant_name = payload.tenant_name.strip()
     if not tenant_name:
@@ -546,17 +569,35 @@ async def signup(
     # Commit the user + tenant + membership rows now that the session is
     # durable in Redis. If the commit itself fails, we best-effort delete
     # the Redis session we just created so it doesn't reference a ghost user.
+    #
+    # Correlated-failure note (#1692): Redis is the reason this rollback
+    # path exists in the first place, so the most likely mode is that
+    # ``delete_session`` ALSO fails. In that case the dangling session is
+    # bounded by its TTL (set by ``RedisSessionStore.create_session``).
+    # We explicitly attach the cleanup error to the DB exception's
+    # ``__context__`` so callers / Sentry see the full picture (DB is the
+    # primary cause, Redis-cleanup is the secondary) without the cleanup
+    # failure masking the actionable DB error.
     try:
         db.commit()
-    except Exception:
+    except Exception as commit_exc:
         db.rollback()
         try:
             await session_store.delete_session(session_data.id)
-        except Exception as cleanup_exc:  # pragma: no cover - best-effort cleanup
+        except Exception as cleanup_exc:
+            # Explicit exception chaining: attach the cleanup error to
+            # the commit error's __context__ so operators can still
+            # reach it from the trace. We DO NOT use ``raise from`` —
+            # that would set __cause__ and make the cleanup error look
+            # like the root cause, which is wrong: the DB failure is
+            # the root cause, Redis-cleanup is the secondary.
+            commit_exc.__context__ = cleanup_exc
             logger.warning(
                 "signup_session_cleanup_failed",
                 session_id=str(session_data.id),
+                user_id=str(new_user.id),
                 error=str(cleanup_exc),
+                residual_orphan="redis_session_dangling_until_ttl",
             )
         raise
 

@@ -551,6 +551,19 @@ class TestEventToDict:
 
 
 class TestParseEpcisXml:
+    """#1342 parse-mechanics coverage.
+
+    #1151 introduced a strict FSMA validation gate inside
+    ``_parse_epcis_xml``. These tests exercise extraction / namespace
+    handling in isolation, so they force ``STRICT_FSMA_VALIDATION=false``
+    to skip the gate — structural validation has its own dedicated
+    coverage in ``test_epcis_xml_strict_validation_1151.py``.
+    """
+
+    @pytest.fixture(autouse=True)
+    def _disable_strict_validation(self, monkeypatch):
+        monkeypatch.setenv("STRICT_FSMA_VALIDATION", "false")
+        monkeypatch.delenv("FSMA_STRICT_MODE", raising=False)
 
     def _doc(self, event_xml: str) -> bytes:
         return (f'<?xml version="1.0" encoding="UTF-8"?>'
