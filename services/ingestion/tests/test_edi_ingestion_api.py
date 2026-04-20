@@ -331,13 +331,19 @@ def test_segment_cap_exceeded_returns_413(
     assert detail["cap"] == 3
 
 
-def test_utf8_decode_replaces_non_ascii_bytes(client: TestClient) -> None:
-    """#1170: a non-UTF-8 byte survives as U+FFFD instead of being
-    silently dropped. The request still succeeds; the warning log is
-    emitted for the operator to spot the source-encoding mismatch.
+def test_utf8_decode_preserves_latin1_bytes_as_real_chars(
+    client: TestClient,
+) -> None:
+    """#1170: a latin-1 encoded partner name flows in. Historical bugs:
+    ``errors='ignore'`` dropped the bad byte; ``errors='replace'``
+    substituted U+FFFD. Both are data corruption.
+
+    The spec-honoring fix falls back to ``latin-1`` strict (X12.5/X12.6
+    Basic character set) and preserves 0xF1 as the real ñ character. The
+    document still ingests and the partner name round-trips exactly.
     """
-    # latin-1 "ñ" (0xF1) in partner name — invalid as UTF-8, would have
-    # been dropped silently with the prior errors="ignore".
+    # latin-1 "ñ" (0xF1) in partner name — invalid as UTF-8 but
+    # spec-compliant X12 Basic set.
     envelope = _build_856().replace(b"Valley Fresh Farms", b"Valley Fre\xf1h Farms")
     response = client.post(
         "/api/v1/ingest/edi/document",
@@ -348,7 +354,6 @@ def test_utf8_decode_replaces_non_ascii_bytes(client: TestClient) -> None:
         files={"file": ("asn.edi", envelope, "application/edi-x12")},
         headers={"X-Partner-ID": "WALMART"},
     )
-    # The document still ingests (one corrupted byte is not a reason to
-    # reject the whole file), but the ship-from location carries the
-    # replacement character, proving the bytes weren't dropped.
+    # The document ingests successfully — no U+FFFD, no dropped byte,
+    # the real ñ is in the decoded stream.
     assert response.status_code == 201, response.text
