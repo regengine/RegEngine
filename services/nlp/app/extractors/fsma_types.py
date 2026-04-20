@@ -7,9 +7,20 @@ extraction, validation, and serialization modules.
 
 from __future__ import annotations
 
+import uuid
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Dict, List, Optional
+
+
+def _new_event_id() -> str:
+    """Generate a fresh UUID for a CTE event — #1123.
+
+    A paired SHIPPING/RECEIVING split must not share an ID so the two
+    halves do not collide on ingest (they represent distinct events
+    at distinct parties).
+    """
+    return str(uuid.uuid4())
 
 
 # Kafka topic constants for FSMA event routing
@@ -152,6 +163,10 @@ class CTE:
     confidence: float
     source_text: Optional[str] = None
     bounding_box: Optional[Dict[str, float]] = None
+    # #1123 — stable per-event UUID. Each CTE gets its own ID so that
+    # a BOL split into paired SHIPPING + RECEIVING events has two
+    # distinct IDs that won't collide on ingest.
+    event_id: str = field(default_factory=_new_event_id)
 
 
 @dataclass
