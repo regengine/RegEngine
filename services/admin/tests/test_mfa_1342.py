@@ -393,26 +393,30 @@ class TestRequireMfaDependencyFactory:
 
         captured: dict = {}
 
-        async def fake_require_mfa(*, x_mfa_token, current_user, db):
+        async def fake_require_mfa(*, x_mfa_token, current_user, db, session_store):
             captured["token"] = x_mfa_token
             captured["user"] = current_user
             captured["db"] = db
+            captured["session_store"] = session_store
             return "ok"
 
         monkeypatch.setattr(mfa_module, "require_mfa", fake_require_mfa)
 
         sentinel_user = SimpleNamespace(id=uuid.uuid4())
         sentinel_db = MagicMock()
+        sentinel_session_store = MagicMock()
         result = await dep(
             x_mfa_token="999111",
             current_user=sentinel_user,
             db=sentinel_db,
+            session_store=sentinel_session_store,
         )
         assert result == "ok"
         assert captured == {
             "token": "999111",
             "user": sentinel_user,
             "db": sentinel_db,
+            "session_store": sentinel_session_store,
         }
 
 

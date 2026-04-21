@@ -8,16 +8,17 @@ This module provides:
 - FastAPI dependency for MFA token verification
 """
 
+import logging
 import os
 import secrets
 import string
-import logging
 from typing import TYPE_CHECKING, Optional
 from datetime import datetime, timezone
 
 if TYPE_CHECKING:
     # Forward-ref only; avoids a circular import between mfa and sqlalchemy_models.
     from .sqlalchemy_models import UserModel
+    from .session_store import RedisSessionStore
 
 try:
     import pyotp
@@ -30,6 +31,8 @@ from fastapi import Depends, Header, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
+
+from .audit import AuditLogger
 
 _logger = logging.getLogger("mfa")
 
@@ -127,6 +130,132 @@ RECOVERY_CODE_COUNT = int(os.getenv("RECOVERY_CODE_COUNT", "8"))
 
 # Recovery code length in characters (base64-like, urlsafe)
 RECOVERY_CODE_LENGTH = 8
+
+# MFA lockout / throttle (mirrors login lockout controls)
+_MFA_LOCKOUT_THRESHOLD = int(os.getenv("MFA_LOCKOUT_THRESHOLD", "10"))
+_MFA_LOCKOUT_DURATION = int(os.getenv("MFA_LOCKOUT_DURATION", "86400"))  # 24h
+_MFA_PROGRESSIVE_DELAY_START = int(os.getenv("MFA_PROGRESSIVE_DELAY_START", "3"))
+_MFA_PROGRESSIVE_DELAY_CAP_SECONDS = int(os.getenv("MFA_PROGRESSIVE_DELAY_CAP_SECONDS", "300"))
+_MFA_TOTP_REPLAY_TTL_SECONDS = max((2 * TOTP_WINDOW + 1) * 30, 30)
+
+
+def _mfa_subject_key(user: "UserModel") -> str:
+    email = (getattr(user, "email", None) or "").strip().lower()
+    if email:
+        return email
+    return str(getattr(user, "id", "unknown"))
+
+
+def _mfa_lockout_key(subject_key: str) -> str:
+    return f"mfa_lockout:{subject_key}"
+
+
+def _mfa_lockout_delay_key(subject_key: str) -> str:
+    return f"mfa_lockout_delay:{subject_key}"
+
+
+def _mfa_replay_key(subject_key: str, token: str) -> str:
+    return f"mfa_totp_used:{subject_key}:{token}"
+
+
+def _mfa_progressive_delay_seconds(count: int) -> int:
+    if count < _MFA_PROGRESSIVE_DELAY_START:
+        return 0
+    return min(2 ** (count - _MFA_PROGRESSIVE_DELAY_START), _MFA_PROGRESSIVE_DELAY_CAP_SECONDS)
+
+
+async def _check_mfa_lockout(session_store: "RedisSessionStore", subject_key: str) -> None:
+    client = await session_store._get_client()
+    count_str = await client.get(_mfa_lockout_key(subject_key))
+    if count_str and int(count_str) >= _MFA_LOCKOUT_THRESHOLD:
+        raise HTTPException(
+            status_code=status.HTTP_423_LOCKED,
+            detail="Account temporarily locked due to repeated failed MFA attempts. Contact support or wait 24 hours.",
+            headers={"Retry-After": str(_MFA_LOCKOUT_DURATION)},
+        )
+
+    delay_ttl = await client.ttl(_mfa_lockout_delay_key(subject_key))
+    if delay_ttl and delay_ttl > 0:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many failed MFA attempts. Please wait before trying again.",
+            headers={"Retry-After": str(delay_ttl)},
+        )
+
+
+async def _record_mfa_lockout_attempt(session_store: "RedisSessionStore", subject_key: str) -> int:
+    client = await session_store._get_client()
+    key = _mfa_lockout_key(subject_key)
+    async with client.pipeline(transaction=False) as pipe:
+        pipe.incr(key)
+        pipe.expire(key, _MFA_LOCKOUT_DURATION)
+        results = await pipe.execute()
+    count = int(results[0])
+
+    delay = _mfa_progressive_delay_seconds(count)
+    if delay > 0:
+        await client.setex(_mfa_lockout_delay_key(subject_key), delay, "1")
+
+    return count
+
+
+async def _clear_mfa_lockout(session_store: "RedisSessionStore", subject_key: str) -> None:
+    client = await session_store._get_client()
+    await client.delete(_mfa_lockout_key(subject_key), _mfa_lockout_delay_key(subject_key))
+
+
+async def _record_totp_replay_guard(
+    session_store: "RedisSessionStore",
+    subject_key: str,
+    token: str,
+) -> bool:
+    client = await session_store._get_client()
+    inserted = await client.set(
+        _mfa_replay_key(subject_key, token),
+        "1",
+        ex=_MFA_TOTP_REPLAY_TTL_SECONDS,
+        nx=True,
+    )
+    return bool(inserted)
+
+
+def _emit_mfa_verification_failed_audit(
+    db: Session,
+    current_user: "UserModel",
+    *,
+    reason: str,
+    token_type: str,
+) -> None:
+    try:
+        from .models import TenantContext
+        from .sqlalchemy_models import MembershipModel
+
+        tenant_id = TenantContext.get_tenant_context(db)
+        if not tenant_id:
+            membership = db.execute(
+                select(MembershipModel.tenant_id).where(
+                    MembershipModel.user_id == getattr(current_user, "id", None),
+                    MembershipModel.is_active == True,  # noqa: E712
+                )
+            ).scalar_one_or_none()
+            tenant_id = membership
+        if not tenant_id:
+            return
+        AuditLogger.log_event(
+            db,
+            tenant_id=tenant_id,
+            event_type="audit.mfa_verification_failed",
+            action="mfa.verify",
+            event_category="authentication",
+            severity="warning",
+            actor_id=getattr(current_user, "id", None),
+            actor_email=getattr(current_user, "email", None),
+            resource_type="user",
+            resource_id=str(getattr(current_user, "id", "")),
+            metadata={"reason": reason, "token_type": token_type},
+        )
+    except Exception as exc:
+        _logger.warning(f"mfa_failure_audit_logging_failed: {exc}")
 
 
 # ──────────────────────────────────────────────────────────────
@@ -339,6 +468,7 @@ async def require_mfa(
     x_mfa_token: Optional[str] = Header(None),
     current_user: "UserModel" = Depends(lambda: None),
     db: Session = Depends(lambda: None),
+    session_store: Optional["RedisSessionStore"] = Depends(lambda: None),
 ) -> str:
     """
     FastAPI dependency to cryptographically verify MFA token from X-MFA-Token header.
@@ -386,6 +516,29 @@ async def require_mfa(
             detail="MFA not enrolled for this account",
         )
 
+    if not session_store:
+        _logger.error("MFA verification requires a session store for lockout enforcement")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="MFA verification temporarily unavailable",
+        )
+
+    subject_key = _mfa_subject_key(current_user)
+    await _check_mfa_lockout(session_store, subject_key)
+
+    async def _raise_invalid_token(*, reason: str, token_type: str, detail: str = "Invalid MFA token") -> None:
+        await _record_mfa_lockout_attempt(session_store, subject_key)
+        _emit_mfa_verification_failed_audit(
+            db,
+            current_user,
+            reason=reason,
+            token_type=token_type,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=detail,
+        )
+
     # Classify token format. TOTP = 6 digits. Recovery = normalized 8 alnum
     # chars (after stripping dash/space/etc).
     is_totp = len(x_mfa_token) == 6 and x_mfa_token.isdigit()
@@ -394,8 +547,9 @@ async def require_mfa(
 
     if not (is_totp or is_recovery):
         _logger.warning("Invalid MFA token format")
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
+        await _raise_invalid_token(
+            reason="invalid_format",
+            token_type="unknown",
             detail="Invalid MFA token format",
         )
 
@@ -403,10 +557,13 @@ async def require_mfa(
     if is_totp:
         if not verify_totp(secret=user_secret, token=x_mfa_token):
             _logger.warning(f"TOTP verification failed for user {current_user.id}")
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Invalid MFA token",
-            )
+            await _raise_invalid_token(reason="invalid_totp", token_type="totp")
+
+        if not await _record_totp_replay_guard(session_store, subject_key, x_mfa_token):
+            _logger.warning(f"TOTP replay rejected for user {current_user.id}")
+            await _raise_invalid_token(reason="totp_replay", token_type="totp")
+
+        await _clear_mfa_lockout(session_store, subject_key)
         return x_mfa_token
 
     # Recovery code verification (#1041) — argon2 hashes are salted so we
@@ -431,14 +588,12 @@ async def require_mfa(
 
     if not recovery:
         _logger.warning(f"Recovery code verification failed for user {current_user.id}")
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Invalid MFA token",
-        )
+        await _raise_invalid_token(reason="invalid_recovery_code", token_type="recovery")
 
     # Mark recovery code as consumed (one-time use)
     recovery.used_at = datetime.now(timezone.utc)
     db.commit()
+    await _clear_mfa_lockout(session_store, subject_key)
     _logger.info(f"Recovery code consumed for user {current_user.id}")
     return x_mfa_token
 
@@ -455,16 +610,19 @@ def require_mfa_dependency():
     """
     from .dependencies import get_current_user
     from .database import get_session
+    from .dependencies import get_session_store
 
     async def _require_mfa(
         x_mfa_token: Optional[str] = Header(None),
         current_user=Depends(get_current_user),
         db: Session = Depends(get_session),
+        session_store=Depends(get_session_store),
     ) -> str:
         return await require_mfa(
             x_mfa_token=x_mfa_token,
             current_user=current_user,
             db=db,
+            session_store=session_store,
         )
 
     return _require_mfa
