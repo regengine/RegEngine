@@ -78,7 +78,7 @@ def _mint_unsigned_supabase_token(
     if session_id is not None:
         payload["session_id"] = session_id
     # HS256 with any key — we only decode unverified.
-    return _jwt.encode(payload, "irrelevant-test-key", algorithm="HS256")
+    return _jwt.encode(payload, "irrelevant-test-key", algorithm="HS256")  # nosemgrep: python.jwt.security.jwt-hardcode.jwt-python-hardcoded-secret
 
 
 # ── 1. _enforce_recovery_token_scope: amr check ─────────────────────────────
@@ -208,7 +208,7 @@ def test_enforce_rejects_missing_iat():
         "amr": [{"method": "otp"}],
         "jti": "no-iat-1",
     }
-    token = _jwt.encode(payload, "key", algorithm="HS256")
+    token = _jwt.encode(payload, "key", algorithm="HS256")  # nosemgrep: python.jwt.security.jwt-hardcode.jwt-python-hardcoded-secret
     with pytest.raises(HTTPException):
         ar._enforce_recovery_token_scope(token)
 
@@ -323,7 +323,7 @@ async def test_claim_single_use_no_dedup_id_fails_open():
         "iat": int(time.time()),
         "amr": [{"method": "otp"}],
     }
-    token = _jwt.encode(payload, "k", algorithm="HS256")
+    token = _jwt.encode(payload, "k", algorithm="HS256")  # nosemgrep: python.jwt.security.jwt-hardcode.jwt-python-hardcoded-secret
     # Should not raise — nothing to dedup on.
     await ar._claim_recovery_token_single_use(session_store, token)
     # Redis never called.

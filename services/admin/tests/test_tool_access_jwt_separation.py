@@ -79,7 +79,7 @@ def test_session_tokens_include_aud_and_iss():
         tok,
         SECRET_KEY,
         algorithms=[ALGORITHM],
-        options={"verify_aud": False, "verify_iss": False},
+        options={"verify_aud": False, "verify_iss": False},  # nosemgrep: python.jwt.security.unverified-jwt-decode.unverified-jwt-decode
     )
     assert claims["aud"] == SESSION_AUDIENCE
     assert claims["iss"] == SESSION_ISSUER

@@ -212,7 +212,7 @@ async def test_get_current_user_rejects_redis_revoked_jti(monkeypatch):
         }
     )
     # Decode to grab the auto-generated jti for the Redis mock.
-    decoded = pyjwt.decode(tok, options={"verify_signature": False})
+    decoded = pyjwt.decode(tok, options={"verify_signature": False})  # nosemgrep: python.jwt.security.unverified-jwt-decode.unverified-jwt-decode
     jti = decoded["jti"]
 
     # Worker B: in-memory set does NOT yet contain the jti.
@@ -294,7 +294,7 @@ async def test_get_current_user_rejects_in_memory_revoked_jti(monkeypatch):
     tok = create_access_token(
         {"sub": str(user_id), "tenant_id": str(tenant_id), "tv": 0}
     )
-    decoded = pyjwt.decode(tok, options={"verify_signature": False})
+    decoded = pyjwt.decode(tok, options={"verify_signature": False})  # nosemgrep: python.jwt.security.unverified-jwt-decode.unverified-jwt-decode
     jti = decoded["jti"]
 
     # In-memory set already carries the revocation (this worker did it).
