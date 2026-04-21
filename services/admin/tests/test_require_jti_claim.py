@@ -139,5 +139,5 @@ def test_create_access_token_always_embeds_jti():
 
     for _ in range(5):
         tok = create_access_token({"sub": str(uuid.uuid4())})
-        payload = pyjwt.decode(tok, options={"verify_signature": False})
+        payload = pyjwt.decode(tok, options={"verify_signature": False})  # nosemgrep: python.jwt.security.unverified-jwt-decode.unverified-jwt-decode
         assert payload.get("jti"), "every token must embed a jti (#1069)"

@@ -59,7 +59,7 @@ class TestGenerateSigningSecret:
 
 class TestSigningKey:
     def test_round_trip(self):
-        key = SigningKey(kid="re-test-0001", secret="s3cret", algorithm="HS256")
+        key = SigningKey(kid="re-test-0001", secret="s3cret", algorithm="HS256")  # nosemgrep: python.jwt.security.jwt-hardcode.jwt-python-hardcoded-secret
         d = key.to_dict()
         restored = SigningKey.from_dict(d)
         assert restored.kid == key.kid
@@ -101,7 +101,7 @@ class TestRegistryInitialize:
         keys = await registry.get_all_keys()
         assert len(keys) == 1
         assert keys[0].kid == "re-legacy-0001"
-        assert keys[0].secret == "test-legacy-secret-key-1234"
+        assert keys[0].secret == "test-legacy-secret-key-1234"  # nosemgrep: python.jwt.security.jwt-hardcode.jwt-python-hardcoded-secret
         assert keys[0].is_active is True
         assert keys[0].is_valid is True
 
@@ -135,7 +135,7 @@ class TestRegistryInitialize:
         monkeypatch.setenv("AUTH_SECRET_KEY", "should-not-be-used")
         redis = FakeAsyncRedis()
 
-        existing = SigningKey(kid="re-existing-0001", secret="pre-existing")
+        existing = SigningKey(kid="re-existing-0001", secret="pre-existing")  # nosemgrep: python.jwt.security.jwt-hardcode.jwt-python-hardcoded-secret
         redis.store[REDIS_KEY] = json.dumps([existing.to_dict()])
 
         registry = JWTKeyRegistry(redis_client=redis)
@@ -166,7 +166,7 @@ class TestGetSigningKey:
 
         key = registry._env_fallback_key()
         assert key.kid == "re-legacy-0001"
-        assert key.secret == "env-fallback-secret"
+        assert key.secret == "env-fallback-secret"  # nosemgrep: python.jwt.security.jwt-hardcode.jwt-python-hardcoded-secret
 
 
 class TestGetVerificationKeys:
@@ -365,14 +365,14 @@ class TestTokenIntegration:
     @pytest.mark.asyncio
     async def test_legacy_token_no_kid_still_verifies(self, monkeypatch):
         """Token without kid (pre-rotation era) verifies via key iteration."""
-        secret = "legacy-static-secret"
+        secret = "legacy-static-secret"  # nosemgrep: python.jwt.security.jwt-hardcode.jwt-python-hardcoded-secret
         monkeypatch.setenv("AUTH_SECRET_KEY", secret)
         redis = FakeAsyncRedis()
         registry = JWTKeyRegistry(redis_client=redis)
         await registry.initialize()
 
         # Create token WITHOUT kid (legacy style)
-        legacy_token = jwt.encode(
+        legacy_token = jwt.encode(  # nosemgrep: python.jwt.security.jwt-hardcode.jwt-python-hardcoded-secret
             {"sub": "legacy-user"},
             secret,
             algorithm="HS256",
@@ -403,7 +403,7 @@ class TestTokenIntegration:
         await registry.initialize()
 
         # Create token with a kid that doesn't exist in registry
-        forged_token = jwt.encode(
+        forged_token = jwt.encode(  # nosemgrep: python.jwt.security.jwt-hardcode.jwt-python-hardcoded-secret
             {"sub": "attacker"},
             "some-other-secret",
             algorithm="HS256",

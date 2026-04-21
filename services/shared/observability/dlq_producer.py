@@ -22,6 +22,9 @@ from typing import Optional
 
 import structlog
 
+_instances: dict[str, "DLQProducer"] = {}
+_instances_lock = threading.Lock()
+
 logger = structlog.get_logger("shared.dlq_producer")
 
 
@@ -185,3 +188,21 @@ class DLQProducer:
             logger.info("dlq_producer_closed", topic=self._topic)
         except Exception as exc:  # pragma: no cover - infra dependent
             logger.warning("dlq_producer_close_failed", error=str(exc))
+
+
+def get_dlq_producer(
+    topic: str,
+    bootstrap_servers: str,
+    service_name: str = "unknown-service",
+) -> "DLQProducer":
+    """Return a per-(topic, service) singleton DLQProducer, creating it on first call."""
+    key = f"{service_name}:{topic}"
+    if key not in _instances:
+        with _instances_lock:
+            if key not in _instances:
+                _instances[key] = DLQProducer(
+                    bootstrap_servers=bootstrap_servers,
+                    topic=topic,
+                    service_name=service_name,
+                )
+    return _instances[key]

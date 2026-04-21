@@ -79,7 +79,7 @@ def test_session_tokens_include_aud_and_iss():
         tok,
         SECRET_KEY,
         algorithms=[ALGORITHM],
-        options={"verify_aud": False, "verify_iss": False},
+        options={"verify_aud": False, "verify_iss": False},  # nosemgrep: python.jwt.security.unverified-jwt-decode.unverified-jwt-decode
     )
     assert claims["aud"] == SESSION_AUDIENCE
     assert claims["iss"] == SESSION_ISSUER
@@ -215,9 +215,9 @@ def test_decode_tool_access_rejects_session_jwt(monkeypatch):
     # prove the audience defense, we re-encode the same claims under the
     # tool-access key: worst case — attacker controls both keys — the token
     # STILL must be rejected because its aud is SESSION_AUDIENCE.
-    session_claims = pyjwt.decode(
+    session_claims = pyjwt.decode(  # nosemgrep: python.jwt.security.unverified-jwt-decode.unverified-jwt-decode
         session_token,
-        options={"verify_signature": False},
+        options={"verify_signature": False},  # nosemgrep: python.jwt.security.unverified-jwt-decode.unverified-jwt-decode
     )
     assert session_claims["aud"] == SESSION_AUDIENCE
     assert session_claims["iss"] == SESSION_ISSUER

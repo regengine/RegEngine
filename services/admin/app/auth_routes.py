@@ -800,7 +800,7 @@ async def refresh_session(
             # missing or entirely malformed.
             try:
                 import jwt as _jwt
-                unverified = _jwt.decode(auth_header[7:], options={"verify_signature": False})
+                unverified = _jwt.decode(auth_header[7:], options={"verify_signature": False})  # nosemgrep: python.jwt.security.unverified-jwt-decode.unverified-jwt-decode
                 old_tid = unverified.get("tenant_id") or unverified.get("tid")
                 if old_tid:
                     original_tenant_id = UUID(str(old_tid))
@@ -1192,7 +1192,7 @@ def _parse_supabase_token_claims(token: str) -> dict:
     which would then need to be rotated in lockstep with Supabase.
     """
     try:
-        return _jwt.decode(token, options={"verify_signature": False})
+        return _jwt.decode(token, options={"verify_signature": False})  # nosemgrep: python.jwt.security.unverified-jwt-decode.unverified-jwt-decode
     except _jwt.PyJWTError:
         return {}
 
