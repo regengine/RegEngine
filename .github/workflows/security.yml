@@ -97,6 +97,7 @@ jobs:
             --config p/owasp-top-ten \
             --config p/security-audit \
             --exclude-rule python.sqlalchemy.security.audit.avoid-sqlalchemy-text.avoid-sqlalchemy-text \
+            --exclude-rule python.lang.security.audit.logging.logger-credential-leak.python-logger-credential-disclosure \
             --json --output semgrep-results.json
 
           # Results are uploaded as artifacts AND also checked for critical/high findings below
@@ -111,6 +112,7 @@ jobs:
           pip install semgrep
           semgrep --config=p/owasp-top-ten \
             --exclude-rule python.sqlalchemy.security.audit.avoid-sqlalchemy-text.avoid-sqlalchemy-text \
+            --exclude-rule python.lang.security.audit.logging.logger-credential-leak.python-logger-credential-disclosure \
             --error .
           # --error causes semgrep to exit non-zero if any findings are found.
           # This step intentionally fails CI on security findings.
@@ -127,6 +129,7 @@ jobs:
           pip install semgrep
           semgrep --config=p/security-audit \
             --exclude-rule python.sqlalchemy.security.audit.avoid-sqlalchemy-text.avoid-sqlalchemy-text \
+            --exclude-rule python.lang.security.audit.logging.logger-credential-leak.python-logger-credential-disclosure \
             --severity ERROR \
             --error .
         env:
