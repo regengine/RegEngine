@@ -403,7 +403,7 @@ class TestTokenIntegration:
         await registry.initialize()
 
         # Create token with a kid that doesn't exist in registry
-        forged_token = jwt.encode(
+        forged_token = jwt.encode(  # nosemgrep: python.jwt.security.jwt-hardcode.jwt-python-hardcoded-secret
             {"sub": "attacker"},
             "some-other-secret",
             algorithm="HS256",

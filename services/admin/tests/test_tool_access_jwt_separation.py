@@ -217,7 +217,7 @@ def test_decode_tool_access_rejects_session_jwt(monkeypatch):
     # STILL must be rejected because its aud is SESSION_AUDIENCE.
     session_claims = pyjwt.decode(  # nosemgrep: python.jwt.security.unverified-jwt-decode.unverified-jwt-decode
         session_token,
-        options={"verify_signature": False},
+        options={"verify_signature": False},  # nosemgrep: python.jwt.security.unverified-jwt-decode.unverified-jwt-decode
     )
     assert session_claims["aud"] == SESSION_AUDIENCE
     assert session_claims["iss"] == SESSION_ISSUER
