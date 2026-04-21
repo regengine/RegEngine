@@ -15,6 +15,15 @@ description = "Known non-secrets: test fixtures, example env files, and specific
 
 # Specific known-safe file patterns only — no directory wildcards for
 # migrations, schemas, or docs.
+regexes = [
+  # Test-marker UUIDs with literal "test" segment — not real identifiers
+  '''[0-9a-f]{8}-test-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}''',
+  # Zero-based fixture UUIDs (test sentinel values like 00000000-0000-...)
+  '''[0-9a-f]{8}-0000-0000-0000-[0-9a-f]{12}''',
+  # Alembic migration revision IDs: short 12-char hex strings assigned to revision/down_revision
+  '''(?i)(revision|down_revision)\s*[=:]\s*(Union\[[^\]]+\],\s*)?["'][0-9a-f]{12}["']''',
+]
+
 paths = [
   # Example / sample env files (never real credentials)
   '''\.env\.example$''',
@@ -33,28 +42,3 @@ paths = [
   '''AGENTS\.md$''',
   '''\.github/copilot-instructions\.md$''',
 ]
-
-# Allowlist specific regex patterns that are known false positives
-# rather than silencing entire directories.
-[[rules]]
-  id = "test-fixture-uuids"
-  description = "UUIDs used as test fixture identifiers are not secrets"
-  # Match lines that look like hardcoded test tenant/user UUIDs in test files
-  # (e.g. TEST_TENANT_ID = "00000000-0000-0000-0000-000000000001")
-  [rules.allowlist]
-    regexes = [
-      # Test-marker UUIDs: any UUID whose second segment is "test" (e.g. 550e8400-test-41d4-a716-446655440000)
-      '''[0-9a-f]{8}-test-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}''',
-      # Zero-based fixture UUIDs (test sentinel values)
-      '''[0-9a-f]{8}-0000-0000-0000-[0-9a-f]{12}''',
-      # Explicit test-marker strings in assignment context
-      '''(?i)(test|fixture|example|placeholder|dummy|fake)[-_]?(tenant|user|org|key|id|uuid)\s*[=:]\s*["'][0-9a-f-]{36}["']''',
-    ]
-    paths = [
-      # Scoped to test files only — never migrate, docs, or production code
-      '''(^|/)tests/''',
-      '''(^|/)test_data/''',
-      '''(^|/)seeds/''',
-      '''(^|/)demo/''',
-      '''test_[^/]+\.py$''',
-    ]
