@@ -135,7 +135,7 @@ class TestRegistryInitialize:
         monkeypatch.setenv("AUTH_SECRET_KEY", "should-not-be-used")
         redis = FakeAsyncRedis()
 
-        existing = SigningKey(kid="re-existing-0001", secret="pre-existing"  # nosemgrep: python.jwt.security.jwt-hardcode.jwt-python-hardcoded-secret)
+        existing = SigningKey(kid="re-existing-0001", secret="pre-existing")  # nosemgrep: python.jwt.security.jwt-hardcode.jwt-python-hardcoded-secret
         redis.store[REDIS_KEY] = json.dumps([existing.to_dict()])
 
         registry = JWTKeyRegistry(redis_client=redis)
