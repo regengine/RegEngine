@@ -83,7 +83,8 @@ audit-findings-*.md
 # Agent / AI tool config (local-only)
 .agent/
 .agents/
-.claude/
+.claude/*
+!.claude/settings.json
 .gemini/
 .swarm_memory/
 
