@@ -1,19 +1,28 @@
 #!/usr/bin/env python3
-"""CI guard — reject Alembic migrations with handcrafted or duplicate revision IDs.
+"""CI guard — reject Alembic migrations that would corrupt the revision DAG.
 
-Two checks are performed:
+Four checks are performed:
 
 1. **Duplicate revision IDs** — multiple migration files sharing the same
    ``revision = "..."`` value will corrupt the Alembic migration DAG.
-   Existing duplicates (introduced before this guard) are listed as errors
-   immediately; no grandfathering is applied because they represent a live
-   DAG corruption that must be resolved.
 
-2. **Sequential / handcrafted revision IDs** — patterns like ``a1b2c3d4e5f6``
-   (each nibble incremented by one from the previous migration) are not
-   randomly generated and risk collision on concurrent branches.  Existing
-   migrations are grandfathered; only *new* files must use a random 12-char
-   hex ID as emitted by ``alembic revision --autogenerate``.
+2. **Multiple heads** — the DAG must have exactly one head.  Multiple heads
+   mean ``alembic upgrade head`` is ambiguous and deploys will fail.  This
+   check would have caught the incident documented in
+   ``docs/abandoned_migrations_20260420_incident/``.
+
+3. **Orphan ``down_revision``** — a ``down_revision`` that points at a
+   revision ID that does not exist in the versions directory.  Alembic
+   crashes on startup with ``KeyError`` when building the revision map.
+   The v073 → v072 orphan pointer from the 2026-04-20 incident is exactly
+   this failure mode.
+
+4. **Sequential / handcrafted revision IDs** — patterns like
+   ``a1b2c3d4e5f6`` (each nibble incremented by one from the previous
+   migration) are not randomly generated and risk collision on concurrent
+   branches.  Existing migrations are grandfathered; only *new* files must
+   use a random 12-char hex ID as emitted by
+   ``alembic revision --autogenerate``.
 
 Exit code 0 = clean.  Non-zero = violation found.
 
@@ -33,19 +42,17 @@ VERSIONS_DIR = REPO_ROOT / "alembic" / "versions"
 # Regex to extract the revision ID from a migration file.
 _REV_RE = re.compile(r"""revision(?::\s*str)?\s*=\s*['"]([0-9a-fA-F]+)['"]""")
 
-# Known-handcrafted revision IDs that existed before this guard was introduced.
-# These are grandfathered — new migrations MUST use randomly-generated IDs.
-# Duplicate revision IDs that existed before this guard was introduced.
-# These are P0 DAG-corruption issues tracked in #1296 and must be resolved
-# in a follow-up migration-squash PR.  They are listed here as acknowledged
-# duplicates so the guard can land on main without immediately blocking CI,
-# but they will appear as warnings in every run until fixed.
-KNOWN_DUPLICATE_IDS: set[str] = {
-    "f5a6b7c8d9e0",  # 5 files: v059 group — see #1296
-    "a7b8c9d0e1f2",  # 2 files: v060/v061 — see #1296
-    "b4c5d6e7f8a9",  # 2 files: v068 group — see #1296
-}
+# Regex to extract the down_revision.  Accepts a single string, ``None``,
+# or a tuple.  We only use the single-string form for orphan detection —
+# tuple down_revisions (merge migrations) are rare in this codebase and
+# the parse below extracts the first string if present.
+_DOWN_RE = re.compile(
+    r"""down_revision(?::[^=]+)?\s*=\s*(None|['"]([0-9a-fA-F]+)['"]|\(.*?\))"""
+)
 
+# Known-handcrafted revision IDs grandfathered from pre-2026-04-20 migrations
+# still present in alembic/versions/ after the #1855 consolidation.
+# New migrations MUST use randomly-generated IDs.
 GRANDFATHERED_IDS: set[str] = {
     "a1b2c3d4e5f6",
     "b2c3d4e5f6a7",
@@ -60,18 +67,6 @@ GRANDFATHERED_IDS: set[str] = {
     "d3e4f5a6b7c8",
     "e4f5a6b7c8d9",
     "f5a6b7c8d9e0",
-    "a7b8c9d0e1f2",
-    "b8c9d0e1f2a3",
-    "c9d0e1f2a3b4",
-    "d0e1f2a3b4c5",
-    "e1f2a3b4c5d6",
-    "f2a3b4c5d6e7",
-    "a3b4c5d6e7f8",
-    "b4c5d6e7f8a9",
-    "c5d6e7f8a9b0",
-    "d6e7f8a9b0c1",
-    "e7f8a9b0c1d2",
-    "f8a9b0c1d2e3",
 }
 
 # Detect the sequential nibble-shift pattern: each pair of hex chars is the
@@ -110,26 +105,85 @@ def collect_revisions() -> dict[str, list[Path]]:
     return rev_map
 
 
+def collect_down_revisions() -> list[tuple[Path, str, str | None]]:
+    """Return [(path, revision_id, down_revision_id_or_None)] for each file.
+
+    ``down_revision_id_or_None`` is the single string form.  Tuple form
+    (merge migrations) is not supported by this check — it returns None
+    for those, which is fine because a merge is a legitimate structure.
+    """
+    out: list[tuple[Path, str, str | None]] = []
+    for path in sorted(VERSIONS_DIR.glob("*.py")):
+        text = path.read_text(encoding="utf-8", errors="ignore")
+        rev_m = _REV_RE.search(text)
+        if not rev_m:
+            continue
+        rev_id = rev_m.group(1).lower()
+        dr_m = _DOWN_RE.search(text)
+        if dr_m is None:
+            out.append((path, rev_id, None))
+            continue
+        raw = dr_m.group(1)
+        if raw == "None":
+            out.append((path, rev_id, None))
+        elif dr_m.group(2):
+            out.append((path, rev_id, dr_m.group(2).lower()))
+        else:
+            # Tuple form — treat as None (merge migration, not a single parent)
+            out.append((path, rev_id, None))
+    return out
+
+
 def rel(path: Path) -> str:
     return str(path.relative_to(REPO_ROOT))
 
 
 def main() -> int:
     rev_map = collect_revisions()
+    down_rows = collect_down_revisions()
     failures: list[str] = []
-    warnings: list[str] = []
 
     # Check 1: duplicate revision IDs.
     for rev_id, paths in sorted(rev_map.items()):
         if len(paths) > 1:
             files = ", ".join(rel(p) for p in paths)
-            msg = f"DUPLICATE revision '{rev_id}' in {len(paths)} files: {files}"
-            if rev_id in KNOWN_DUPLICATE_IDS:
-                warnings.append(msg + " [pre-existing, tracked in #1296]")
-            else:
-                failures.append(msg)
+            failures.append(
+                f"DUPLICATE revision '{rev_id}' in {len(paths)} files: {files}"
+            )
 
-    # Check 2: sequential/handcrafted IDs in non-grandfathered files.
+    # Check 2: orphan down_revision pointers — down_revision references a
+    # revision ID that does not exist in the versions directory.  This is
+    # what triggered the 2026-04-20 incident (``v073 -> v072`` orphan).
+    all_revs = set(rev_map.keys())
+    for path, rev_id, down_id in down_rows:
+        if down_id is not None and down_id not in all_revs:
+            failures.append(
+                f"ORPHAN down_revision '{down_id}' in {rel(path)} "
+                f"(revision={rev_id}) — no migration declares that revision"
+            )
+
+    # Check 3: multiple heads — a revision that is not referenced by any
+    # other migration's down_revision is a "head".  There must be exactly
+    # one.  Multiple heads make ``alembic upgrade head`` ambiguous and
+    # every deploy fails.
+    pointed_at = {d for _, _, d in down_rows if d is not None}
+    heads = sorted(rev for rev in all_revs if rev not in pointed_at)
+    if len(heads) > 1:
+        files_per_head = {
+            h: ", ".join(rel(p) for p in rev_map[h]) for h in heads
+        }
+        detail = "; ".join(f"{h} in {files_per_head[h]}" for h in heads)
+        failures.append(
+            f"MULTIPLE HEADS ({len(heads)}): {detail} — "
+            "the revision DAG must have exactly one head"
+        )
+    elif len(heads) == 0:
+        failures.append(
+            "NO HEAD — every revision is referenced by some down_revision. "
+            "This means the DAG is a cycle or is otherwise malformed."
+        )
+
+    # Check 4: sequential/handcrafted IDs in non-grandfathered files.
     for rev_id, paths in sorted(rev_map.items()):
         if rev_id in GRANDFATHERED_IDS:
             for p in paths:
@@ -144,30 +198,38 @@ def main() -> int:
 
     total = sum(len(ps) for ps in rev_map.values())
     print(f"\nScanned {total} migration file(s) in {rel(VERSIONS_DIR)}")
-
-    for w in warnings:
-        print(f"  WARNING: {w}")
+    if heads:
+        print(f"Head(s): {', '.join(heads)}")
 
     if failures:
         print()
         for f in failures:
             print(f"FAIL: {f}")
         print(
-            "\nAlembic revision ID violations detected.\n"
+            "\nAlembic revision DAG violations detected.\n"
             "\n"
             "For DUPLICATE IDs: each migration must have a unique revision value.\n"
             "Reassign duplicates by editing the file and picking a new random ID:\n"
             "    python3 -c \"import uuid; print(uuid.uuid4().hex[:12])\"\n"
             "\n"
+            "For ORPHAN down_revision: the revision your migration extends must\n"
+            "exist in alembic/versions/.  Either fix the down_revision value or\n"
+            "restore the missing parent migration.\n"
+            "\n"
+            "For MULTIPLE HEADS: merge the divergent branches with\n"
+            "    alembic merge -m 'merge heads' <head1> <head2>\n"
+            "or rebase one branch onto the other.\n"
+            "\n"
             "For SEQUENTIAL IDs: stop handcrafting revision IDs.  Let alembic\n"
             "generate them automatically:\n"
             "    alembic revision --autogenerate -m 'description'\n"
             "\n"
-            "See GitHub issue #1296 for background."
+            "See docs/abandoned_migrations_20260420_incident/ for the incident\n"
+            "these checks exist to prevent."
         )
         return 1
 
-    print("\nOK — no duplicate or sequential revision IDs in non-grandfathered migrations.")
+    print("\nOK — revision DAG is clean: unique IDs, single head, no orphans.")
     return 0
 
 
