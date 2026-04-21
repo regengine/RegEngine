@@ -40,6 +40,7 @@ _TEST_TO_SERVICE_OVERRIDES = {
     "tests/test_compliance_control_plane_e2e.py": "ingestion",
     "tests/test_rules_engine.py": "ingestion",
     "tests/test_rules_engine_unit.py": "ingestion",
+    "tests/graph/test_hierarchy_builder_global_scope.py": "graph",
 }
 
 
@@ -85,6 +86,21 @@ def _switch_to_service(service: str) -> None:
         mod_file = getattr(mod, "__file__", None) or ""
         if mod_file and str(service_dir) in mod_file:
             continue
+        sys.modules.pop(name, None)
+
+    # Also evict ``shared.*`` entries that resolved from an unknown/stale
+    # location (e.g. loaded before sys.path was correct).  If the module
+    # file is not under the current services dir, evict it so it re-resolves.
+    _shared_dir = str(_SERVICES_DIR / "shared")
+    stale_shared = [
+        name for name in sys.modules
+        if name == "shared" or name.startswith("shared.")
+    ]
+    for name in stale_shared:
+        mod = sys.modules.get(name)
+        mod_file = getattr(mod, "__file__", None) or ""
+        if mod_file and _shared_dir in mod_file:
+            continue  # already correct
         sys.modules.pop(name, None)
 
     # Remove other service dirs from sys.path so only the current one wins
