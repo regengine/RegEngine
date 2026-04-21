@@ -58,13 +58,14 @@ class _FakeRedisPipeline:
 
     async def execute(self):
         count = None
-        for op in self._ops:
-            if op[0] == "incr":
-                key = op[1]
+        for operation in self._ops:
+            op_type = operation[0]
+            if op_type == "incr":
+                key = operation[1]
                 count = self._client._counts.get(key, 0) + 1
                 self._client._counts[key] = count
-            elif op[0] == "expire":
-                _, key, ttl = op
+            elif op_type == "expire":
+                _, key, ttl = operation
                 self._client._ttls[key] = ttl
         return [count or 0, True]
 
@@ -87,7 +88,7 @@ class _FakeRedisClient:
         self._values[key] = value
 
     async def set(self, key, value, ex=None, nx=False):
-        if nx and key in self._values:
+        if nx and (key in self._values or key in self._counts):
             return None
         self._values[key] = value
         if ex is not None:
@@ -316,14 +317,9 @@ async def test_emits_failed_mfa_audit_and_tracks_lockout_attempt():
     session_store, redis_client = _make_session_store()
     db = MagicMock()
 
-    called = {"count": 0}
-
-    def _audit_spy(*args, **kwargs):
-        called["count"] += 1
-
-    original = mfa_module._emit_mfa_verification_failed_audit
-    mfa_module._emit_mfa_verification_failed_audit = _audit_spy
-    try:
+    with pytest.MonkeyPatch.context() as monkeypatch:
+        audit_spy = MagicMock()
+        monkeypatch.setattr(mfa_module, "_emit_mfa_verification_failed_audit", audit_spy)
         with pytest.raises(HTTPException):
             await require_mfa(
                 x_mfa_token="123456",
@@ -331,10 +327,8 @@ async def test_emits_failed_mfa_audit_and_tracks_lockout_attempt():
                 db=db,
                 session_store=session_store,
             )
-    finally:
-        mfa_module._emit_mfa_verification_failed_audit = original
 
-    assert called["count"] == 1
+    audit_spy.assert_called_once()
     assert redis_client._counts, "failed MFA should increment lockout counter"
 
 

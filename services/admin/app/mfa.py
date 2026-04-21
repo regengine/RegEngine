@@ -136,6 +136,7 @@ _MFA_LOCKOUT_THRESHOLD = int(os.getenv("MFA_LOCKOUT_THRESHOLD", "10"))
 _MFA_LOCKOUT_DURATION = int(os.getenv("MFA_LOCKOUT_DURATION", "86400"))  # 24h
 _MFA_PROGRESSIVE_DELAY_START = int(os.getenv("MFA_PROGRESSIVE_DELAY_START", "3"))
 _MFA_PROGRESSIVE_DELAY_CAP_SECONDS = int(os.getenv("MFA_PROGRESSIVE_DELAY_CAP_SECONDS", "300"))
+# 30s TOTP step × (current + acceptable previous/future windows)
 _MFA_TOTP_REPLAY_TTL_SECONDS = max((2 * TOTP_WINDOW + 1) * 30, 30)
 
 
@@ -232,13 +233,13 @@ def _emit_mfa_verification_failed_audit(
 
         tenant_id = TenantContext.get_tenant_context(db)
         if not tenant_id:
-            membership = db.execute(
+            tenant_id_from_membership = db.execute(
                 select(MembershipModel.tenant_id).where(
                     MembershipModel.user_id == getattr(current_user, "id", None),
-                    MembershipModel.is_active == True,  # noqa: E712
+                    MembershipModel.is_active.is_(True),
                 )
             ).scalar_one_or_none()
-            tenant_id = membership
+            tenant_id = tenant_id_from_membership
         if not tenant_id:
             return
         AuditLogger.log_event(
@@ -255,7 +256,7 @@ def _emit_mfa_verification_failed_audit(
             metadata={"reason": reason, "token_type": token_type},
         )
     except Exception as exc:
-        _logger.warning(f"mfa_failure_audit_logging_failed: {exc}")
+        _logger.warning(f"MFA failure audit logging failed: {exc}")
 
 
 # ──────────────────────────────────────────────────────────────
@@ -517,7 +518,10 @@ async def require_mfa(
         )
 
     if not session_store:
-        _logger.error("MFA verification requires a session store for lockout enforcement")
+        _logger.error(
+            "MFA verification failed: session store dependency missing. "
+            "Ensure RedisSessionStore is properly configured."
+        )
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="MFA verification temporarily unavailable",
@@ -526,7 +530,12 @@ async def require_mfa(
     subject_key = _mfa_subject_key(current_user)
     await _check_mfa_lockout(session_store, subject_key)
 
-    async def _raise_invalid_token(*, reason: str, token_type: str, detail: str = "Invalid MFA token") -> None:
+    async def _record_and_raise_invalid_token(
+        *,
+        reason: str,
+        token_type: str,
+        detail: str = "Invalid MFA token",
+    ) -> None:
         await _record_mfa_lockout_attempt(session_store, subject_key)
         _emit_mfa_verification_failed_audit(
             db,
@@ -547,7 +556,7 @@ async def require_mfa(
 
     if not (is_totp or is_recovery):
         _logger.warning("Invalid MFA token format")
-        await _raise_invalid_token(
+        await _record_and_raise_invalid_token(
             reason="invalid_format",
             token_type="unknown",
             detail="Invalid MFA token format",
@@ -557,11 +566,11 @@ async def require_mfa(
     if is_totp:
         if not verify_totp(secret=user_secret, token=x_mfa_token):
             _logger.warning(f"TOTP verification failed for user {current_user.id}")
-            await _raise_invalid_token(reason="invalid_totp", token_type="totp")
+            await _record_and_raise_invalid_token(reason="invalid_totp", token_type="totp")
 
         if not await _record_totp_replay_guard(session_store, subject_key, x_mfa_token):
             _logger.warning(f"TOTP replay rejected for user {current_user.id}")
-            await _raise_invalid_token(reason="totp_replay", token_type="totp")
+            await _record_and_raise_invalid_token(reason="totp_replay", token_type="totp")
 
         await _clear_mfa_lockout(session_store, subject_key)
         return x_mfa_token
@@ -588,7 +597,7 @@ async def require_mfa(
 
     if not recovery:
         _logger.warning(f"Recovery code verification failed for user {current_user.id}")
-        await _raise_invalid_token(reason="invalid_recovery_code", token_type="recovery")
+        await _record_and_raise_invalid_token(reason="invalid_recovery_code", token_type="recovery")
 
     # Mark recovery code as consumed (one-time use)
     recovery.used_at = datetime.now(timezone.utc)
