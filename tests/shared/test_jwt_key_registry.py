@@ -372,7 +372,7 @@ class TestTokenIntegration:
         await registry.initialize()
 
         # Create token WITHOUT kid (legacy style)
-        legacy_token = jwt.encode(
+        legacy_token = jwt.encode(  # nosemgrep: python.jwt.security.jwt-hardcode.jwt-python-hardcoded-secret
             {"sub": "legacy-user"},
             secret,
             algorithm="HS256",

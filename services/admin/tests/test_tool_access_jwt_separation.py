@@ -215,7 +215,7 @@ def test_decode_tool_access_rejects_session_jwt(monkeypatch):
     # prove the audience defense, we re-encode the same claims under the
     # tool-access key: worst case — attacker controls both keys — the token
     # STILL must be rejected because its aud is SESSION_AUDIENCE.
-    session_claims = pyjwt.decode(
+    session_claims = pyjwt.decode(  # nosemgrep: python.jwt.security.unverified-jwt-decode.unverified-jwt-decode
         session_token,
         options={"verify_signature": False},
     )
