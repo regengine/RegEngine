@@ -287,6 +287,16 @@ jobs:
       - name: Check for sequential or duplicate Alembic revision IDs
         run: python scripts/check_alembic_revisions.py
 
+      # ── Orphan migration guard (hard gate) ────────────────
+      # Rejects new Flyway ``services/*/migrations/V*.sql`` files (Railway
+      # runs alembic only — these never execute in prod) and new files
+      # under ``docs/abandoned_migrations_*`` (quarantined during the
+      # 2026-04-20 consolidation incident). Current orphans are
+      # grandfathered via ``scripts/orphan_migrations_allowlist.txt``;
+      # the allowlist must shrink monotonically — see #1864, #1872.
+      - name: Guard against new orphan migrations
+        run: python scripts/check_orphan_migrations.py
+
   # ── Docker Build (consolidated monolith) ─────────────────
   # Production deploys a single consolidated monolith built from the
   # repo-root Dockerfile — see server/main.py and railway.toml. The per-

@@ -1,0 +1,83 @@
+# Orphan migrations allowlist — grandfathered entries only.
+#
+# These files exist today but do NOT run on Railway (Flyway is dead;
+# abandoned_migrations_* were quarantined during the 2026-04-20
+# consolidation incident). Every entry is tech debt with a latent
+# risk of becoming a prod 500.
+#
+# To shrink the list:
+#   1. Forward-port the DDL to a new alembic migration (idempotent)
+#      OR verify the file is dead code.
+#   2. Delete the file from disk.
+#   3. Delete its line from this allowlist.
+#
+# Tracked in meta-issue: #1876
+# Do not add new entries without a linked issue. See
+# scripts/check_orphan_migrations.py for the guard.
+
+services/admin/migrations/V10__add_membership_status.sql
+services/admin/migrations/V11__add_sessions_table.sql
+services/admin/migrations/V12__production_compliance_init.sql
+services/admin/migrations/V13__budget_intelligence_tables.sql
+services/admin/migrations/V14__tax_credit_tables.sql
+services/admin/migrations/V15__form_autofill_tables.sql
+services/admin/migrations/V16__classification_tables.sql
+services/admin/migrations/V17__paperwork_visa_tables.sql
+services/admin/migrations/V18__audit_provenance_tables.sql
+services/admin/migrations/V19__authority_lineage_tables.sql
+services/admin/migrations/V1__init_schema.sql
+services/admin/migrations/V20__schema_governance.sql
+services/admin/migrations/V21__vertical_expansion.sql
+services/admin/migrations/V22__immutable_evidence_log.sql
+services/admin/migrations/V23_5__performance_indexes.sql
+services/admin/migrations/V23__alpha_signups.sql
+services/admin/migrations/V24__remove_duplicate_compliance_snapshots.sql
+services/admin/migrations/V25__migrate_pcos_to_entertainment_db.sql
+services/admin/migrations/V26__deprecate_sessions_table.sql
+services/admin/migrations/V27_5__add_tenant_id_to_pcos_tables.sql
+services/admin/migrations/V27__rls_core_security_tables.sql
+services/admin/migrations/V28_5__fix_rls_fail_closed.sql
+services/admin/migrations/V28__rls_pcos_vertical_tables.sql
+services/admin/migrations/V29__jwt_rls_integration.sql
+services/admin/migrations/V30__audit_logs_tamper_evident.sql
+services/admin/migrations/V31__fsma_204_infrastructure.sql
+services/admin/migrations/V32__enforce_supplier_cte_sequence_uniqueness.sql
+services/admin/migrations/V35__fix_audit_logs_constraints.sql
+services/admin/migrations/V36__funnel_events.sql
+services/admin/migrations/V37__password_reset_tokens.sql
+services/admin/migrations/V38__tool_leads.sql
+services/admin/migrations/V39__supplier_portal_tables.sql
+services/admin/migrations/V3__tenant_isolation.sql
+services/admin/migrations/V40__pcos_vertical_removed.sql
+services/admin/migrations/V41__sandbox_shares.sql
+services/admin/migrations/V42__auth_hardening_token_version_mfa_encryption.sql
+services/admin/migrations/V43__invalidate_sha256_recovery_codes.sql
+services/admin/migrations/V4__create_review_items.sql
+services/admin/migrations/V5__add_production_indexes.sql
+services/admin/migrations/V6__create_compliance_snapshots.sql
+services/admin/migrations/V7__create_compliance_status.sql
+services/admin/migrations/V8__rls_fixes.sql
+services/admin/migrations/V9__create_invites_table.sql
+services/ingestion/migrations/V001__ingestion_schema.sql
+
+docs/abandoned_migrations_20260420_incident/20260417_cte_kdes_jsonb_v059.py
+docs/abandoned_migrations_20260420_incident/20260417_graph_outbox_v060.py
+docs/abandoned_migrations_20260420_incident/20260417_identity_alias_unique_constraint_v059.py
+docs/abandoned_migrations_20260420_incident/20260417_review_items_tenant_not_null_v059.py
+docs/abandoned_migrations_20260420_incident/20260417_rls_fail_closed_hardening_v059.py
+docs/abandoned_migrations_20260420_incident/20260417_task_queue_hardening_v059.py
+docs/abandoned_migrations_20260420_incident/20260417_v061_task_queue_rls_fail_closed.py
+docs/abandoned_migrations_20260420_incident/20260417_v062_force_rls_fsma_tables.py
+docs/abandoned_migrations_20260420_incident/20260417_v063_restore_memberships_policy.py
+docs/abandoned_migrations_20260420_incident/20260417_v064_tenant_id_not_null_audit_tasks.py
+docs/abandoned_migrations_20260420_incident/20260417_v065_audit_orphan_rls_tables.py
+docs/abandoned_migrations_20260420_incident/20260418_v066_security_definer_search_path.py
+docs/abandoned_migrations_20260420_incident/20260418_v067_transformation_links_policies.py
+docs/abandoned_migrations_20260420_incident/20260418_v068_identity_review_reopen_1211.py
+docs/abandoned_migrations_20260420_incident/20260418_v068_transformation_links_trace_indexes.py
+docs/abandoned_migrations_20260420_incident/20260418_v069_entity_merge_alias_snapshot_1207.py
+docs/abandoned_migrations_20260420_incident/20260418_v070_entity_aliases_trgm_index_1208.py
+docs/abandoned_migrations_20260420_incident/20260420_v071_fda_export_log_fingerprint_1655.py
+docs/abandoned_migrations_20260420_incident/20260420_v072_webhook_outbox_1408.py
+docs/abandoned_migrations_20260420_incident/20260420_v073_cte_events_append_only_trigger_1334.py
+docs/abandoned_migrations_20260420_incident/20260420_v073_dlq_replay_columns_1192.py
