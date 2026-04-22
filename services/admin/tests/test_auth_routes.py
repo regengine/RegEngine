@@ -93,6 +93,8 @@ def mock_session_store():
     redis_client = AsyncMock()
     redis_client.get = AsyncMock(return_value=None)
     redis_client.ttl = AsyncMock(return_value=-1)
+    redis_client.set = AsyncMock(return_value=True)
+    redis_client.setex = AsyncMock(return_value=True)
     redis_client.delete = AsyncMock(return_value=1)
     redis_client.pipeline = MagicMock(return_value=AsyncMock(
         __aenter__=AsyncMock(return_value=AsyncMock(
@@ -372,7 +374,7 @@ class TestTokenRefresh:
 # ---------------------------------------------------------------------------
 
 class TestMFAVerificationHappyPath:
-    def test_valid_totp_token_accepted(self):
+    def test_valid_totp_token_accepted(self, mock_session_store):
         """require_mfa accepts a TOTP token that pyotp verifies."""
         import sys
         import types as _types
@@ -391,9 +393,15 @@ class TestMFAVerificationHappyPath:
         import asyncio
 
         user = SimpleNamespace(id=uuid.uuid4(), email="alice@example.com", mfa_secret="TESTBASE32SECRET")
-        result = asyncio.get_event_loop().run_until_complete(
-            require_mfa(x_mfa_token="888000", current_user=user, db=MagicMock())
-        )
+        with patch("services.admin.app.mfa.verify_totp", return_value=True):
+            result = asyncio.get_event_loop().run_until_complete(
+                require_mfa(
+                    x_mfa_token="888000",
+                    current_user=user,
+                    db=MagicMock(),
+                    session_store=mock_session_store,
+                )
+            )
         assert result == "888000"
 
 
@@ -402,7 +410,7 @@ class TestMFAVerificationHappyPath:
 # ---------------------------------------------------------------------------
 
 class TestMFARecoveryCodeHappyPath:
-    def test_valid_recovery_code_accepted_and_consumed(self):
+    def test_valid_recovery_code_accepted_and_consumed(self, mock_session_store):
         """require_mfa accepts XXXX-XXXX format recovery codes and marks them used."""
         import sys
         import types as _types
@@ -421,14 +429,22 @@ class TestMFARecoveryCodeHappyPath:
 
         user = SimpleNamespace(id=uuid.uuid4(), email="alice@example.com", mfa_secret="TESTBASE32SECRET")
 
+        from services.admin.app.mfa import hash_recovery_code
+
         recovery_row = MagicMock()
         recovery_row.used_at = None
+        recovery_row.code_hash = hash_recovery_code("ABCD-EFGH")
 
         db = MagicMock()
-        db.execute.return_value.scalar_one_or_none.return_value = recovery_row
+        db.execute.return_value.scalars.return_value.all.return_value = [recovery_row]
 
         result = asyncio.get_event_loop().run_until_complete(
-            require_mfa(x_mfa_token="ABCD-EFGH", current_user=user, db=db)
+            require_mfa(
+                x_mfa_token="ABCD-EFGH",
+                current_user=user,
+                db=db,
+                session_store=mock_session_store,
+            )
         )
         assert result == "ABCD-EFGH"
         assert recovery_row.used_at is not None
