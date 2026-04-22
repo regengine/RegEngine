@@ -330,11 +330,20 @@ class DatabaseAPIKeyStore:
             raise ValueError(f"Invalid UUID: {uuid_str}")
 
     async def _set_context(self, session: AsyncSession, tenant_id: Optional[str]) -> None:
-        """Set tenant context for RLS if provided."""
+        """Set tenant context for RLS if provided.
+
+        Uses Postgres' ``set_config(name, value, is_local=true)`` rather than
+        ``SET LOCAL …`` because Postgres does not allow parameter placeholders
+        in ``SET``/``SET LOCAL`` — a parameterized ``SET LOCAL`` fails with
+        ``syntax error at or near "$1"`` (#1879). ``set_config`` is a regular
+        function call that accepts bound parameters normally, so this path
+        stays parameterized (no SQL injection surface) and no longer relies on
+        string interpolation even though ``tenant_id`` is already UUID-validated.
+        """
         if tenant_id:
             self._validate_uuid(tenant_id)
             await session.execute(
-                text("SET LOCAL app.tenant_id = :tid"),
+                text("SELECT set_config('app.tenant_id', :tid, true)"),
                 {"tid": tenant_id},
             )
 
