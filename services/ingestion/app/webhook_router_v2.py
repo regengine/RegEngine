@@ -90,19 +90,30 @@ def _is_production() -> bool:
 def _verify_api_key(
     x_regengine_api_key: Optional[str] = Header(default=None, alias="X-RegEngine-API-Key"),
 ) -> None:
-    """Verify API key using timing-safe comparison. Canonical header: X-RegEngine-API-Key."""
-    import hmac
+    """Fail-closed defense-in-depth check on the X-RegEngine-API-Key header.
+
+    Does NOT validate the key itself — that happens later in
+    ``require_permission`` → ``get_ingestion_principal`` → ``require_api_key``
+    which consults the DB-backed key store and the preshared master env var.
+    This gate only enforces that (a) a header is present at all and (b) the
+    service has at least one credential configured, so a misconfigured
+    prod deploy can't silently accept unauthenticated traffic.
+
+    Before this fix, the gate only checked ``API_KEY`` (never set on
+    Railway — ``REGENGINE_API_KEY`` is used instead), so every per-tenant
+    API key 401'd here even when valid and later resolved by the
+    principal path.
+    """
+    if not x_regengine_api_key:
+        raise HTTPException(status_code=401, detail="Invalid or missing API key")
     settings = get_settings()
-    configured_api_key = getattr(settings, "api_key", None)
-    if configured_api_key is not None:
-        if not x_regengine_api_key or not hmac.compare_digest(
-            x_regengine_api_key.encode("utf-8"),
-            configured_api_key.encode("utf-8"),
-        ):
-            raise HTTPException(status_code=401, detail="Invalid or missing API key")
-    elif _is_production():
-        # Production without API_KEY configured — reject all requests
-        # until an operator sets the API_KEY env var.
+    configured_api_key = (
+        getattr(settings, "api_key", None)
+        or os.environ.get("REGENGINE_API_KEY")
+    )
+    if not configured_api_key and _is_production():
+        # Neither API_KEY nor REGENGINE_API_KEY set in prod — reject so a
+        # misconfigured deploy cannot silently accept traffic.
         raise HTTPException(status_code=401, detail="Invalid or missing API key")
 
 
