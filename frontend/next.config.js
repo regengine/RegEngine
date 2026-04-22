@@ -199,9 +199,12 @@ const nextConfig = {
             // (Shopify/SafetyCulture/etc.) authenticate via HMAC signatures, so
             // the frontend auth-gate would reject them. The CSRF exempt list
             // (src/lib/csrf.ts) covers /api/v1/webhooks/ so middleware passes.
+            // Destination keeps the /api prefix: the ingestion router in
+            // services/ingestion/app/webhook_router_v2.py is mounted at
+            // `/api/v1/webhooks`, so stripping /api here returns 404.
             ingestionUrl && {
                 source: '/api/v1/webhooks/:path*',
-                destination: `${ingestionUrl}/v1/webhooks/:path*`,
+                destination: `${ingestionUrl}/api/v1/webhooks/:path*`,
             },
             // API-03: proxy admin health endpoint for external monitoring.
             // Public, unauthenticated — no handler needed.
