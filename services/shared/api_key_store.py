@@ -216,7 +216,7 @@ class DatabaseAPIKeyStore:
             )
         
         # Build engine kwargs (pool settings only for PostgreSQL, not SQLite)
-        engine_kwargs = {
+        engine_kwargs: dict[str, Any] = {
             "echo": os.environ.get("SQL_ECHO", "false").lower() == "true",
         }
         
@@ -241,7 +241,20 @@ class DatabaseAPIKeyStore:
             # Inject SSL for Supabase if not present
             if "ssl" not in engine_kwargs.get("connect_args", {}):
                 engine_kwargs.setdefault("connect_args", {})["ssl"] = "require"
-            
+
+        # Supabase/pgbouncer transaction-pool compatibility (#1874): asyncpg
+        # caches prepared statements per-connection by default, but pgbouncer
+        # with pool_mode=transaction rotates the backend on every transaction,
+        # so cached statement handles from one transaction are invalid in the
+        # next — queries fail with "prepared statement … does not exist" and
+        # the server returns 500. Disabling the cache makes asyncpg send plain
+        # text protocol messages, which pgbouncer can route safely. Matches
+        # asyncpg docs and Supabase's own pgbouncer guidance.
+        if "asyncpg" in self._database_url:
+            connect_args: dict[str, Any] = engine_kwargs.setdefault("connect_args", {})
+            connect_args.setdefault("statement_cache_size", 0)
+            connect_args.setdefault("prepared_statement_cache_size", 0)
+
         self._redis_url = redis_url or os.environ.get("REDIS_URL")
         
         # Only add pool settings for databases that support them (not SQLite)
