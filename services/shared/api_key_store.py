@@ -27,7 +27,7 @@ import os
 import secrets
 import time
 from contextlib import asynccontextmanager
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING, Any, AsyncGenerator, ClassVar, Optional, Sequence
 
 # Imported only for annotations — breaks the runtime circular dep with
@@ -554,8 +554,14 @@ class DatabaseAPIKeyStore:
 
         allowed = current_count <= limit
         remaining = max(0, limit - current_count)
-        reset_at = now.replace(second=0, microsecond=0)
-        reset_at = reset_at.replace(minute=reset_at.minute + 1)
+        # Start of next minute (next rate-limit bucket boundary).
+        # Use ``timedelta`` arithmetic rather than ``.replace(minute=minute+1)``
+        # because Python rejects ``minute=60`` with ``ValueError: minute must
+        # be in 0..59`` — so at XX:59 the old code raised and the global
+        # value_error handler returned HTTP 400 for every authenticated
+        # ingest request during that minute (#1887). ``timedelta`` correctly
+        # rolls minute/hour/day boundaries.
+        reset_at = now.replace(second=0, microsecond=0) + timedelta(minutes=1)
         retry_after = None if allowed else window_seconds
 
         if not allowed:
