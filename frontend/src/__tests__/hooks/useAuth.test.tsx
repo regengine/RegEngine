@@ -223,8 +223,10 @@ describe('useAuth Hook', () => {
 
             // Verify /api/session POST was called with the token
             const sessionPostCalls = mockFetch.mock.calls.filter(
-                ([url, opts]: [string, RequestInit?]) =>
-                    url.includes('/api/session') && opts?.method === 'POST'
+                ([url, opts]) =>
+                    typeof url === 'string' &&
+                    url.includes('/api/session') &&
+                    (opts as RequestInit | undefined)?.method === 'POST'
             );
             expect(sessionPostCalls.length).toBeGreaterThan(0);
 

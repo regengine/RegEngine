@@ -148,6 +148,20 @@ async def get_current_user(
         logger.warning("user_not_found_in_db", user_id=user_id)
         raise credentials_exception
 
+    # SECURITY (#1860): enforce token_version. /auth/logout-all and
+    # /auth/reset-password bump user.token_version expecting this check;
+    # without it, stolen access tokens survive both for their full TTL.
+    if token_version_claim is not None:
+        user_tv = int(getattr(user, "token_version", 0) or 0)
+        if token_version_claim < user_tv:
+            logger.warning(
+                "stale_token_version_rejected",
+                user_id=user_id,
+                token_tv=token_version_claim,
+                user_tv=user_tv,
+            )
+            raise credentials_exception
+
     logger.info("user_authenticated", user_id=user_id)
 
     # SECURITY (#1345): if no trusted tenant claim is present, derive from

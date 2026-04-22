@@ -156,6 +156,14 @@ class RedisSessionStore:
     def _token_hash_key(self, token_hash: str) -> str:
         """Redis key for token → session lookup."""
         return f"token_hash:{token_hash}"
+
+    def _used_token_key(self, token_hash: str) -> str:
+        """Redis key for rotated (historical) refresh tokens.
+
+        Written on rotation so a second presentation of the same hash can be
+        detected as reuse (#1859). Value is the session_id it belonged to.
+        """
+        return f"used_refresh:{token_hash}"
     
     def _calculate_ttl(self, expires_at: datetime) -> int:
         """Calculate TTL in seconds from expiration timestamp."""
@@ -258,6 +266,72 @@ class RedisSessionStore:
 
         session_id = UUID(session_id_str)
         return await self.get_session(session_id)
+
+    async def mark_token_used(
+        self,
+        token_hash: str,
+        session_id: UUID,
+        ttl_seconds: int,
+    ) -> None:
+        """Record a rotated refresh token hash as consumed (#1859).
+
+        If the same hash is later presented again, ``check_token_reuse``
+        will return the original session_id so the caller can revoke the
+        entire family.
+        """
+        client = await self._get_client()
+        await client.setex(
+            self._used_token_key(token_hash),
+            max(ttl_seconds, 60),
+            str(session_id),
+        )
+
+    async def check_token_reuse(self, token_hash: str) -> Optional[UUID]:
+        """Return the originating session_id if ``token_hash`` was already rotated."""
+        client = await self._get_client()
+        session_id_str = await client.get(self._used_token_key(token_hash))
+        if not session_id_str:
+            return None
+        try:
+            return UUID(session_id_str)
+        except ValueError:
+            return None
+
+    async def revoke_all_for_family(self, family_id: UUID) -> int:
+        """Revoke every session sharing ``family_id`` (#1859 reuse response).
+
+        The data model does not maintain a family_id index, so this scans
+        the caller's sessions via the session Redis keys. It is intended
+        for the reuse-detection hot path, which is rare and bounded by
+        sessions-per-user, so the linear scan is acceptable.
+        """
+        client = await self._get_client()
+        revoked = 0
+        cursor = 0
+        pattern = "session:*"
+        while True:
+            cursor, keys = await client.scan(cursor=cursor, match=pattern, count=200)
+            for key in keys:
+                data = await client.hgetall(key)
+                if not data:
+                    continue
+                if data.get("family_id") != str(family_id):
+                    continue
+                if data.get("is_revoked") == "true":
+                    continue
+                await client.hset(key, "is_revoked", "true")
+                token_hash = data.get("refresh_token_hash")
+                if token_hash:
+                    await client.delete(self._token_hash_key(token_hash))
+                revoked += 1
+            if cursor == 0:
+                break
+        logger.warning(
+            "session_family_revoked",
+            family_id=str(family_id),
+            revoked=revoked,
+        )
+        return revoked
 
     async def claim_session_by_token(self, token_hash: str) -> Optional[SessionData]:
         """Atomically claim a session by refresh token hash for rotation.

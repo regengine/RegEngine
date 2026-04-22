@@ -746,6 +746,30 @@ async def refresh_session(
     session = await session_store.claim_session_by_token(input_hash)
 
     if not session:
+        # SECURITY (#1859): distinguish "never valid" from "already rotated".
+        # If the hash appears in the used-token tombstone, this is refresh-
+        # token reuse — either a theft replay or a double-spend. Revoke the
+        # entire session family so the thief (and victim) are forced to
+        # re-authenticate, and emit a high-severity audit signal.
+        reused_session_id = await session_store.check_token_reuse(input_hash)
+        if reused_session_id is not None:
+            reused_session = await session_store.get_session(reused_session_id)
+            if reused_session is not None:
+                await session_store.revoke_all_for_family(reused_session.family_id)
+                logger.warning(
+                    "refresh_token_reuse_detected",
+                    session_id=str(reused_session_id),
+                    family_id=str(reused_session.family_id),
+                    user_id=str(reused_session.user_id),
+                    token_hash=input_hash[:8],
+                )
+            else:
+                logger.warning(
+                    "refresh_token_reuse_detected_session_gone",
+                    session_id=str(reused_session_id),
+                    token_hash=input_hash[:8],
+                )
+            raise HTTPException(status_code=401, detail="Refresh token reuse detected")
         logger.warning("refresh_invalid_token", token_hash=input_hash[:8])
         raise HTTPException(status_code=401, detail="Invalid refresh token")
 
@@ -772,6 +796,15 @@ async def refresh_session(
             "expires_at": (datetime.now(timezone.utc) + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)).isoformat()
         },
         new_token_hash=new_hash,
+    )
+
+    # SECURITY (#1859): tombstone the consumed hash so a replay can be
+    # detected as reuse (not just "unknown token"). TTL matches refresh
+    # expiration so the tombstone outlives any legitimate replay window.
+    await session_store.mark_token_used(
+        input_hash,
+        session.id,
+        ttl_seconds=REFRESH_TOKEN_EXPIRE_DAYS * 24 * 3600,
     )
 
     # Re-issue Access Token
