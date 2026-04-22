@@ -1,10 +1,12 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { useSystemMetrics } from "@/hooks/use-api";
+import { useSystemMetrics, useSystemStatus } from "@/hooks/use-api";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Shield, FileCheck, Link2, AlertTriangle } from "lucide-react";
 
 export function MetricsOverviewWidget() {
     const { data: metrics, isLoading, error } = useSystemMetrics();
+    const { data: systemStatus } = useSystemStatus();
+    const systemHealthy = systemStatus?.overall_status === 'healthy';
 
     if (isLoading) {
         return (
@@ -45,7 +47,11 @@ export function MetricsOverviewWidget() {
             {isDemo && (
                 <div className="flex items-center gap-2 px-3 py-2 text-xs rounded-lg bg-re-warning-muted text-re-warning dark:bg-re-warning/20 dark:text-re-warning border border-re-warning dark:border-re-warning">
                     <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0" />
-                    <span>Backend services unreachable — data will appear once services are connected.</span>
+                    <span>
+                        {systemHealthy
+                            ? 'Metrics temporarily unavailable — retrying.'
+                            : 'Backend services unreachable — data will appear once services are connected.'}
+                    </span>
                 </div>
             )}
         <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
