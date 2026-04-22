@@ -28,7 +28,7 @@ import secrets
 import time
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING, Any, AsyncGenerator, Optional, Sequence
+from typing import TYPE_CHECKING, Any, AsyncGenerator, ClassVar, Optional, Sequence
 
 # Imported only for annotations — breaks the runtime circular dep with
 # ``shared.auth`` which itself imports from this module.
@@ -36,7 +36,7 @@ if TYPE_CHECKING:
     from shared.auth import APIKeyStore
 
 import structlog
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import (
     Boolean,
     Column,
@@ -130,6 +130,35 @@ class APIKeyResponse(BaseModel):
     expires_at: Optional[datetime] = None
     last_used_at: Optional[datetime] = None
     total_requests: int = 0
+
+    # The underlying SQLAlchemy columns are nullable (no DB-side NOT NULL),
+    # so historical rows inserted before the Python defaults existed — or rows
+    # inserted by tools that bypass the ORM — can legitimately have NULL in
+    # these columns. Pydantic v2 rejects None against non-Optional typed fields
+    # even when a default is set, which was 500'ing POST /v1/admin/keys and
+    # 400'ing GET /v1/admin/keys. Coerce None → field default instead.
+    @field_validator("allowed_jurisdictions", "scopes", mode="before")
+    @classmethod
+    def _coerce_none_list(cls, v: object) -> object:
+        return [] if v is None else v
+
+    _INT_DEFAULTS: ClassVar[dict[str, int]] = {
+        "rate_limit_per_minute": 60,
+        "rate_limit_per_hour": 1000,
+        "rate_limit_per_day": 10000,
+        "total_requests": 0,
+    }
+
+    @field_validator(
+        "rate_limit_per_minute",
+        "rate_limit_per_hour",
+        "rate_limit_per_day",
+        "total_requests",
+        mode="before",
+    )
+    @classmethod
+    def _coerce_none_int(cls, v: object, info) -> object:
+        return cls._INT_DEFAULTS[info.field_name] if v is None else v
 
     class Config:
         from_attributes = True
