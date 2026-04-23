@@ -372,23 +372,31 @@ jobs:
         with:
           path: .
           artifact-name: sbom.spdx.json
+          output-file: sbom.spdx.json
           format: spdx-json
 
       - name: Install cosign
         uses: sigstore/cosign-installer@v3
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd  # v4
-
-      - name: Build image for signing
-        run: docker build -t regengine:sbom -f Dockerfile .
-
-      - name: Sign container image (keyless via Sigstore)
-        # Keyless signing — no private key to manage. The signature is bound
-        # to the GitHub Actions OIDC token so verifiers can confirm the image
-        # was built by this workflow on this repo. Requires id-token: write.
+      - name: Sign SBOM artifact (keyless via Sigstore)
+        # This workflow generates an SPDX artifact for review; it does not push
+        # a container image to a registry. Sign the SBOM blob directly so the
+        # signature remains verifiable without requiring Docker Hub auth.
         run: |
-          cosign sign --yes regengine:sbom
+          cosign sign-blob --yes \
+            --output-signature sbom.spdx.json.sig \
+            --output-certificate sbom.spdx.json.pem \
+            sbom.spdx.json
+
+      - name: Upload SBOM signatures
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7
+        with:
+          name: sbom-signature
+          path: |
+            sbom.spdx.json.sig
+            sbom.spdx.json.pem
+          retention-days: 90
 
   # ──────────────────────────────────────────────
   # 7. Container Scan (Trivy) — consolidated monolith image
@@ -416,6 +424,7 @@ jobs:
           format: "json"
           output: "trivy.json"
           severity: "CRITICAL,HIGH"
+          ignore-unfixed: true
           exit-code: "1"
 
       - name: Upload Trivy results

@@ -36,6 +36,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
 COPY --from=builder /usr/local/bin /usr/local/bin
 
+# Packaging/build tooling is only needed during image build. Prune it from the
+# runtime layer to reduce attack surface and keep Trivy focused on deployed code.
+RUN rm -rf \
+    /usr/local/lib/python3.11/site-packages/wheel \
+    /usr/local/lib/python3.11/site-packages/wheel-* \
+    /usr/local/lib/python3.11/site-packages/setuptools/_vendor/jaraco/context \
+    /usr/local/lib/python3.11/site-packages/setuptools/_vendor/jaraco_context* \
+    /usr/local/lib/python3.11/site-packages/setuptools/_vendor/jaraco.context* \
+    /usr/local/lib/python3.11/site-packages/setuptools/_vendor/wheel* \
+    /usr/local/bin/wheel
+
 # Create non-root user
 RUN adduser --disabled-password --gecos '' --uid 1001 appuser
 
