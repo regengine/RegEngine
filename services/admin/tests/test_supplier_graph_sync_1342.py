@@ -145,8 +145,14 @@ def test_get_required_ctes_for_facility_returns_none_when_disabled():
     assert result is None
 
 
-def test_get_required_ctes_for_facility_returns_none_when_driver_missing():
+def test_get_required_ctes_for_facility_returns_none_when_driver_missing(monkeypatch):
     """Defense-in-depth: enabled=True but driver=None must still return None."""
+    class _NoSecrets:
+        @staticmethod
+        def get_neo4j_credentials():
+            return {"uri": "", "username": "neo4j", "password": ""}
+
+    monkeypatch.setattr(module, "get_secrets_manager", lambda: _NoSecrets())
     sync = SupplierGraphSync(enabled=True, driver=None)
 
     result = sync.get_required_ctes_for_facility("facility-1", "tenant-1")

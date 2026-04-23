@@ -405,12 +405,18 @@ class MockRecallEngine:
         Returns:
             List of RecallDrill instances
         """
+        drills_by_id = {
+            drill.drill_id: drill for drill in self._drills.get(tenant_id, [])
+        }
+
         engine = self._get_engine()
         if engine is not None:
             rows = _load_drills_from_db(engine, tenant_id, limit=limit * 2)
-            drills = [_dict_to_recall_drill(r) for r in rows]
-        else:
-            drills = list(self._drills.get(tenant_id, []))
+            for row in rows:
+                drill = _dict_to_recall_drill(row)
+                drills_by_id.setdefault(drill.drill_id, drill)
+
+        drills = list(drills_by_id.values())
 
         # Apply filters
         if status_filter:

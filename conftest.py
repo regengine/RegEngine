@@ -44,7 +44,10 @@ _TEST_TO_SERVICE_OVERRIDES = {
     "tests/test_rules_engine_unit.py": "ingestion",
     "tests/graph/test_hierarchy_builder_global_scope.py": "graph",
 }
-_KNOWN_REAL_MODULES: dict[str, ModuleType] = {}
+_KNOWN_SERVICE_MODULES: dict[str, dict[str, ModuleType]] = {
+    service: {} for service in _APP_BEARING_SERVICES
+}
+_KNOWN_SHARED_MODULES: dict[str, ModuleType] = {}
 
 
 def _evict_module(name: str) -> None:
@@ -76,15 +79,20 @@ def _bind_module(name: str, module: ModuleType) -> None:
         setattr(parent, child_name, module)
 
 
-def _remember_real_module(name: str, module: ModuleType | None, expected_root: str) -> bool:
-    """Cache real service modules so later stub cleanup can restore them."""
+def _remember_real_module(
+    cache: dict[str, ModuleType],
+    name: str,
+    module: ModuleType | None,
+    expected_root: str,
+) -> bool:
+    """Cache real modules so later stub cleanup can restore them."""
     mod_file = str(getattr(module, "__file__", "") or "")
     mod_spec = getattr(module, "__spec__", None)
     if module is None or mod_spec is None:
         return False
     if expected_root and expected_root not in mod_file:
         return False
-    _KNOWN_REAL_MODULES[name] = module
+    cache[name] = module
     return True
 
 
@@ -125,6 +133,13 @@ def _service_for_path(path: Path) -> Optional[str]:
     return _TEST_TO_SERVICE_OVERRIDES.get(key)
 
 
+def _activate_service_for_path(path: Path) -> None:
+    """Flip import context for any test path owned by a service."""
+    service = _service_for_path(path)
+    if service is not None:
+        _switch_to_service(service)
+
+
 def _switch_to_service(service: str) -> None:
     """Make ``services/<service>/`` the active site for the ``app`` package.
 
@@ -135,6 +150,7 @@ def _switch_to_service(service: str) -> None:
     """
     service_dir = _SERVICES_DIR / service
     service_dir_str = str(service_dir)
+    service_cache = _KNOWN_SERVICE_MODULES.setdefault(service, {})
 
     # Drop any cached ``app`` (and its submodules) so reimport uses the
     # correct service's app/ directory. Only evict entries that don't belong
@@ -147,10 +163,10 @@ def _switch_to_service(service: str) -> None:
     )
     for name in stale:
         mod = sys.modules.get(name)
-        if _remember_real_module(name, mod, str(service_dir)):
+        if _remember_real_module(service_cache, name, mod, str(service_dir)):
             continue
 
-        cached = _KNOWN_REAL_MODULES.get(name)
+        cached = service_cache.get(name)
         if cached is not None:
             _bind_module(name, cached)
             continue
@@ -168,20 +184,22 @@ def _switch_to_service(service: str) -> None:
     )
     for name in stale_shared:
         mod = sys.modules.get(name)
-        if _remember_real_module(name, mod, _shared_dir):
+        if _remember_real_module(_KNOWN_SHARED_MODULES, name, mod, _shared_dir):
             continue  # already correct
 
-        cached = _KNOWN_REAL_MODULES.get(name)
+        cached = _KNOWN_SHARED_MODULES.get(name)
         if cached is not None:
             _bind_module(name, cached)
             continue
 
         _evict_module(name)
 
+    if "app" not in sys.modules and (cached_app := service_cache.get("app")) is not None:
+        _bind_module("app", cached_app)
+    if "shared" not in sys.modules and (cached_shared := _KNOWN_SHARED_MODULES.get("shared")) is not None:
+        _bind_module("shared", cached_shared)
+
     for prefix in ("app", "shared"):
-        cached = _KNOWN_REAL_MODULES.get(prefix)
-        if prefix not in sys.modules and cached is not None:
-            _bind_module(prefix, cached)
         _repair_package_links(prefix)
 
     # Remove other service dirs from sys.path so only the current one wins
@@ -209,7 +227,16 @@ def pytest_collectstart(collector):  # type: ignore[no-untyped-def]
     fspath = getattr(collector, "path", None) or getattr(collector, "fspath", None)
     if fspath is None:
         return
-    path = Path(str(fspath))
-    service = _service_for_path(path)
-    if service is not None:
-        _switch_to_service(service)
+    _activate_service_for_path(Path(str(fspath)))
+
+
+def pytest_collect_file(file_path, path, parent):  # type: ignore[no-untyped-def]
+    """Switch service import context before pytest creates a file collector."""
+    _activate_service_for_path(Path(str(file_path)))
+    return None
+
+
+def pytest_pycollect_makemodule(module_path, path, parent):  # type: ignore[no-untyped-def]
+    """Switch service import context immediately before module import."""
+    _activate_service_for_path(Path(str(module_path)))
+    return None

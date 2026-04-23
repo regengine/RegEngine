@@ -39,7 +39,7 @@ def _make_store_with_url(url: str):
 def test_asyncpg_url_disables_statement_cache_for_pgbouncer():
     """Supabase pooler URL → cache-disabling connect_args are injected."""
     cap = _make_store_with_url(
-        "postgresql://postgres.abc:pw@aws-0-us-east-1.pooler.supabase.com:6543/postgres"
+        "postgresql://postgres.abc:pw@aws-0-us-east-1.pooler.supabase.com:6543/postgres"  # pragma: allowlist secret
     )
     ca = cap["kwargs"].get("connect_args", {})
     assert ca.get("statement_cache_size") == 0
@@ -51,7 +51,7 @@ def test_asyncpg_url_disables_statement_cache_for_pgbouncer():
 def test_explicit_asyncpg_url_also_gets_cache_disabled():
     """URL that already declares +asyncpg still gets the connect_args."""
     cap = _make_store_with_url(
-        "postgresql+asyncpg://postgres.abc:pw@aws-0.pooler.supabase.com:6543/postgres"
+        "postgresql+asyncpg://postgres.abc:pw@aws-0.pooler.supabase.com:6543/postgres"  # pragma: allowlist secret
     )
     ca = cap["kwargs"].get("connect_args", {})
     assert ca.get("statement_cache_size") == 0
@@ -69,7 +69,7 @@ def test_sqlite_url_untouched_by_pgbouncer_fix():
 def test_existing_connect_args_preserved():
     """If SSL injection already set connect_args, cache-size keys merge in."""
     cap = _make_store_with_url(
-        "postgresql://postgres.abc:pw@aws-0.pooler.supabase.com:6543/postgres?sslmode=require"
+        "postgresql://postgres.abc:pw@aws-0.pooler.supabase.com:6543/postgres?sslmode=require"  # pragma: allowlist secret
     )
     ca = cap["kwargs"].get("connect_args", {})
     # SSL fix still applied …

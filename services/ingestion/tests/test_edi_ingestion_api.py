@@ -1,5 +1,6 @@
 """API tests for EDI 856 ingestion endpoint."""
 
+import itertools
 import sys
 from pathlib import Path
 
@@ -190,15 +191,24 @@ def test_ingest_denied_without_edi_ingest_scope() -> None:
 # TLC that matches the FSMA 204 GTIN-14 + lot-suffix pattern enforced by
 # services/shared/schemas.py:FSMAEvent.validate_tlc_format.
 _VALID_FSMA_TLC = "00012345678901-LOT001"
+_ISA13_COUNTER = itertools.count(2)
+
+
+def _next_isa13() -> bytes:
+    return f"{next(_ISA13_COUNTER):09d}".encode("ascii")
 
 
 def _build_856(
     ship_date: bytes = b"20260310",
     ship_time: bytes = b"1200",
+    isa13: bytes | None = None,
 ) -> bytes:
     """Assemble a minimal valid 856 with overridable BSN date/time."""
+    interchange_control = isa13 or _next_isa13()
     return (
-        b"ISA*00*          *00*          *ZZ*SENDERID       *ZZ*RECEIVERID     *260310*1200*U*00401*000000001*0*P*>~"
+        b"ISA*00*          *00*          *ZZ*SENDERID       *ZZ*RECEIVERID     *260310*1200*U*00401*"
+        + interchange_control
+        + b"*0*P*>~"
         b"GS*SH*SENDERID*RECEIVERID*20260310*1200*1*X*004010~"
         b"ST*856*0001~"
         b"BSN*00*ASN-12345*" + ship_date + b"*" + ship_time + b"~"
@@ -211,7 +221,7 @@ def _build_856(
         b"TD5**2*ColdExpress~"
         b"SE*11*0001~"
         b"GE*1*1~"
-        b"IEA*1*000000001~"
+        b"IEA*1*" + interchange_control + b"~"
     )
 
 
