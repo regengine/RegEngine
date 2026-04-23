@@ -3,6 +3,7 @@ Tests for FSMA 204 API Routes.
 """
 
 # Mock shared.auth before importing routes
+import os
 import sys
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -11,6 +12,12 @@ import pytest
 from fastapi.testclient import TestClient
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent / "shared"))
+
+_AUTH_HEADERS = {
+    "X-RegEngine-API-Key": os.getenv(
+        "AUTH_TEST_BYPASS_TOKEN", "test-bypass-token-for-pytest"
+    )
+}
 
 
 
@@ -198,7 +205,7 @@ class TestTraceForwardEndpoint:
 
         response = client.get(
             "/v1/fsma/trace/forward/LOT-2024-001",
-            headers={"X-RegEngine-API-Key": "test-key"},
+            headers=_AUTH_HEADERS,
         )
 
         assert response.status_code == 200
@@ -233,7 +240,7 @@ class TestTraceForwardEndpoint:
 
         response = client.get(
             "/v1/fsma/trace/forward/LOT-2024-001?max_depth=5",
-            headers={"X-RegEngine-API-Key": "test-key"},
+            headers=_AUTH_HEADERS,
         )
 
         assert response.status_code == 200
@@ -267,7 +274,7 @@ class TestTraceBackwardEndpoint:
 
         response = client.get(
             "/v1/fsma/trace/backward/LOT-2024-002",
-            headers={"X-RegEngine-API-Key": "test-key"},
+            headers=_AUTH_HEADERS,
         )
 
         assert response.status_code == 200
@@ -304,7 +311,7 @@ class TestTimelineEndpoint:
 
         response = client.get(
             "/v1/fsma/timeline/LOT-2024-001",
-            headers={"X-RegEngine-API-Key": "test-key"},
+            headers=_AUTH_HEADERS,
         )
 
         assert response.status_code == 200
@@ -341,7 +348,7 @@ class TestExportEndpoints:
 
         response = client.get(
             "/v1/fsma/export/trace/LOT-2024-001?direction=forward",
-            headers={"X-RegEngine-API-Key": "test-key"},
+            headers=_AUTH_HEADERS,
         )
 
         assert response.status_code == 200
@@ -380,7 +387,7 @@ class TestExportEndpoints:
 
         response = client.get(
             "/v1/fsma/export/recall-contacts/LOT-2024-001",
-            headers={"X-RegEngine-API-Key": "test-key"},
+            headers=_AUTH_HEADERS,
         )
 
         assert response.status_code == 200
@@ -417,7 +424,7 @@ class TestGapAnalysisEndpoints:
 
         response = client.get(
             "/v1/fsma/gaps",
-            headers={"X-RegEngine-API-Key": "test-key"},
+            headers=_AUTH_HEADERS,
         )
 
         assert response.status_code == 200
@@ -447,7 +454,7 @@ class TestGapAnalysisEndpoints:
 
         response = client.get(
             "/v1/fsma/export/gaps",
-            headers={"X-RegEngine-API-Key": "test-key"},
+            headers=_AUTH_HEADERS,
         )
 
         assert response.status_code == 200

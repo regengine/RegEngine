@@ -58,6 +58,11 @@ def notifier():
     n.close()
 
 
+@pytest.fixture(autouse=True)
+def _allow_mock_webhook_urls(monkeypatch):
+    monkeypatch.setattr("app.notifications.validate_url", lambda _url: None)
+
+
 # ─── Successful delivery ────────────────────────────────────────────────
 
 

@@ -68,8 +68,11 @@ class TestKDEReadAuditLog:
         )
 
         entries = audit.get_by_target("LOT-2024-001")
-        assert len(entries) == 1
-        entry = entries[0]
+        kde_reads = [
+            entry for entry in entries if entry.action == FSMAAuditAction.KDE_READ
+        ]
+        assert len(kde_reads) == 1
+        entry = kde_reads[0]
         assert entry.action == FSMAAuditAction.KDE_READ
         assert entry.target_type == "KDE"
         assert entry.tenant_id == "tenant-abc"

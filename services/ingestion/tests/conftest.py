@@ -14,3 +14,12 @@ from pathlib import Path
 _service_dir = str(Path(__file__).resolve().parents[1])  # services/ingestion
 if _service_dir not in sys.path:
     sys.path.insert(0, _service_dir)
+
+# Multiple services in this repo expose a top-level ``app`` package. When pytest
+# reuses a Python process, an ``app`` module imported from another service can
+# stay cached and make ingestion tests import the wrong config/auth/router code.
+_cached_app = sys.modules.get("app")
+_cached_app_file = str(getattr(_cached_app, "__file__", "") or "")
+if _cached_app is not None and _service_dir not in _cached_app_file:
+    for _key in [k for k in sys.modules if k == "app" or k.startswith("app.")]:
+        del sys.modules[_key]

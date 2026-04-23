@@ -9,6 +9,7 @@ Covers:
 """
 
 import sys
+import os
 from pathlib import Path
 from uuid import uuid4
 
@@ -18,6 +19,11 @@ for key in _to_remove:
     del sys.modules[key]
 sys.path.insert(0, str(service_dir))
 
+os.environ.setdefault("DATABASE_URL", "sqlite:///:memory:")
+os.environ.setdefault("REGENGINE_ENV", "test")
+os.environ.setdefault("AUTH_TEST_BYPASS_TOKEN", "test-bypass-token-industries")
+os.environ.setdefault("AUTH_SECRET_KEY", "test-secret-key-industries")
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -25,7 +31,7 @@ from main import app
 
 client = TestClient(app)
 
-API_KEY = "test-key-12345"
+API_KEY = os.environ["AUTH_TEST_BYPASS_TOKEN"]
 
 
 def _headers() -> dict:

@@ -14,7 +14,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
-from shared.auth import require_api_key
+from shared.auth import APIKey, require_api_key
 from shared.fda_export import (
     ExportWindowError,
     MAX_EXPORT_WINDOW_DAYS,
@@ -60,6 +60,15 @@ _logger = logging.getLogger(__name__)
 _audit_logger = logging.getLogger("compliance-audit")
 
 router = APIRouter(tags=["fsma-compliance"])
+
+
+def _canonicalize_ftl_commodity(value: str) -> str:
+    """Normalize user-facing FTL commodity labels to catalog keys."""
+    return re.sub(r"\s+", " ", value.replace("_", " ").replace("-", " ").strip().lower())
+
+
+def _is_ftl_commodity(value: str) -> bool:
+    return _canonicalize_ftl_commodity(value) in FTL_CATEGORIES
 
 
 # ---------------------------------------------------------------------------
@@ -235,8 +244,133 @@ class ValidateResponse(BaseModel):
 
     valid: bool
     ftl_commodity: str
-    errors: list[str] = []
-    warnings: list[str] = []
+    errors: list[dict[str, Any]] = []
+    warnings: list[dict[str, Any]] = []
+
+
+_ALLOWED_VALIDATE_CTE_TYPES = {
+    "HARVESTING",
+    "COOLING",
+    "INITIAL_PACKING",
+    "FIRST_LAND_BASED_RECEIVING",
+    "SHIPPING",
+    "RECEIVING",
+    "TRANSFORMATION",
+}
+
+_REQUIRED_VALIDATE_FIELDS = [
+    "tlc",
+    "cte_type",
+    "event_date",
+    "location",
+    "quantity",
+    "unit_of_measure",
+    "product_description",
+    "responsible_party_contact",
+]
+
+_RECOMMENDED_VALIDATE_FIELDS = {
+    "lot_size_unit": "Include lot size unit so reviewers can reconcile quantities.",
+    "supplier_reference": "Include supplier reference to support traceability lookups.",
+}
+
+
+def _validation_issue(
+    path: str,
+    code: str,
+    message: str,
+    *,
+    suggestion: str | None = None,
+) -> dict[str, Any]:
+    issue: dict[str, Any] = {"path": path, "code": code, "message": message}
+    if suggestion is not None:
+        issue["suggestion"] = suggestion
+    return issue
+
+
+def _validate_fsma204_config(
+    config: dict[str, Any] | None,
+    *,
+    strict: bool,
+) -> tuple[bool, list[dict[str, Any]], list[dict[str, Any]]]:
+    """Run the lightweight /validate config contract behind the FTL gate."""
+    if config is None:
+        return True, [], []
+
+    errors: list[dict[str, Any]] = []
+    warnings: list[dict[str, Any]] = []
+
+    for field in _REQUIRED_VALIDATE_FIELDS:
+        if field not in config:
+            errors.append(
+                _validation_issue(
+                    field,
+                    "MISSING_REQUIRED_FIELD",
+                    f"Missing required field: {field}",
+                )
+            )
+        elif config[field] is None:
+            errors.append(
+                _validation_issue(
+                    field,
+                    "NULL_REQUIRED_FIELD",
+                    f"Required field cannot be null: {field}",
+                )
+            )
+
+    cte_value = config.get("cte_type")
+    cte_type = cte_value.upper() if isinstance(cte_value, str) else None
+    if cte_value is not None and cte_type not in _ALLOWED_VALIDATE_CTE_TYPES:
+        errors.append(
+            _validation_issue(
+                "cte_type",
+                "INVALID_CTE_TYPE",
+                "cte_type must be a valid FSMA 204 CTE type",
+            )
+        )
+
+    if cte_type == "RECEIVING":
+        if "prior_source_tlc" not in config:
+            errors.append(
+                _validation_issue(
+                    "prior_source_tlc",
+                    "MISSING_REQUIRED_FIELD",
+                    "RECEIVING events require prior_source_tlc",
+                )
+            )
+        elif config["prior_source_tlc"] is None:
+            errors.append(
+                _validation_issue(
+                    "prior_source_tlc",
+                    "NULL_REQUIRED_FIELD",
+                    "prior_source_tlc cannot be null for RECEIVING events",
+                )
+            )
+
+    for field, suggestion in _RECOMMENDED_VALIDATE_FIELDS.items():
+        if field not in config or config[field] is None:
+            warnings.append(
+                _validation_issue(
+                    field,
+                    "MISSING_RECOMMENDED_FIELD",
+                    f"Recommended field is missing: {field}",
+                    suggestion=suggestion,
+                )
+            )
+
+    if strict and warnings:
+        errors.extend(
+            _validation_issue(
+                warning["path"],
+                "STRICT_MODE_WARNING",
+                warning["message"],
+                suggestion=warning.get("suggestion"),
+            )
+            for warning in warnings
+        )
+        warnings = []
+
+    return not errors, errors, warnings
 
 
 @router.post(
@@ -286,15 +420,15 @@ async def validate_compliance(request: ValidateRequest) -> ValidateResponse:
                     detail="E_CHECKLIST_OUT_OF_SCOPE",
                 )
 
-    # --- Basic validation stub --------------------------------------------
-    # The deeper rule-engine logic lives in ``services/shared/rules`` and
-    # will be wired in per #1203 option 2. For now we surface a clean
-    # response so callers can rely on the FTL gate being authoritative.
+    valid, errors, warnings = _validate_fsma204_config(
+        request.config,
+        strict=request.strict,
+    )
     return ValidateResponse(
-        valid=True,
+        valid=valid,
         ftl_commodity=canonical_commodity,
-        errors=[],
-        warnings=[],
+        errors=errors,
+        warnings=warnings,
     )
 
 

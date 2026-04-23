@@ -86,7 +86,7 @@ def test_to_utc_iso_converts_non_utc_aware_datetime():
 
 
 def test_from_env_returns_connected_instance_when_env_complete(monkeypatch):
-    """Covers lines 162-164: the try-block constructs a real driver and returns enabled=True."""
+    """Enabled syncs are lazy: from_env marks enabled, then _get_driver builds."""
     monkeypatch.setenv("NEO4J_URI", "bolt://fake-host:7687")
     monkeypatch.setenv("NEO4J_PASSWORD", "s3cret")
     monkeypatch.setenv("NEO4J_USER", "neo4j")
@@ -104,15 +104,17 @@ def test_from_env_returns_connected_instance_when_env_complete(monkeypatch):
     monkeypatch.setattr(module, "GraphDatabase", _FakeGraphDatabase)
 
     sync = SupplierGraphSync.from_env()
+    driver = sync._get_driver()
 
     assert sync.enabled is True
     assert sync._driver is sentinel_driver
+    assert driver is sentinel_driver
     assert captured["uri"] == "bolt://fake-host:7687"
     assert captured["auth"] == ("neo4j", "s3cret")
 
 
 def test_from_env_falls_back_to_neo4j_url_when_uri_unset(monkeypatch):
-    """Companion for the env-reading fallback used alongside the success branch."""
+    """Companion for the env-reading fallback used alongside the lazy success path."""
     monkeypatch.delenv("NEO4J_URI", raising=False)
     monkeypatch.setenv("NEO4J_URL", "bolt://alt-host:7687")
     monkeypatch.setenv("NEO4J_PASSWORD", "s3cret")
@@ -128,6 +130,7 @@ def test_from_env_falls_back_to_neo4j_url_when_uri_unset(monkeypatch):
     monkeypatch.setattr(module, "GraphDatabase", _FakeGraphDatabase)
 
     sync = SupplierGraphSync.from_env()
+    sync._get_driver()
 
     assert sync.enabled is True
     assert captured["uri"] == "bolt://alt-host:7687"

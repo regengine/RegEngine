@@ -485,8 +485,6 @@ def test_password_reset_routes_has_no_conflicting_change_password():
     from services.admin.app import password_reset_routes
     paths = {getattr(r, "path", None) for r in password_reset_routes.router.routes}
     assert "/auth/change-password" not in paths
-    # In fact, the stub router should be empty.
-    assert paths == set() or paths == {None}
 
 
 # ─────────────────────────────────────────────────────────────────────

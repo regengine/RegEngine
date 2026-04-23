@@ -45,6 +45,29 @@ except Exception:  # pragma: no cover - defense-in-depth for import paths
 logger = structlog.get_logger("fsma-extractor")
 
 
+class _ClassificationResult(tuple):
+    """Tuple-compatible classification result that also compares to DocumentType."""
+
+    def __new__(cls, document_type: DocumentType, warning: Optional[str]):
+        return tuple.__new__(cls, (document_type, warning))
+
+    @property
+    def document_type(self) -> DocumentType:
+        return self[0]
+
+    @property
+    def warning(self) -> Optional[str]:
+        return self[1]
+
+    def __eq__(self, other: object) -> bool:
+        if isinstance(other, DocumentType):
+            return self.document_type == other
+        return tuple.__eq__(self, other)
+
+    def __repr__(self) -> str:
+        return repr(self.document_type)
+
+
 class FSMAExtractor:
     """
     FSMA 204 Extractor for Critical Tracking Events and Key Data Elements.
@@ -225,11 +248,6 @@ class FSMAExtractor:
         DocumentType.PACKING_SLIP: CTEType.INITIAL_PACKING,
         DocumentType.LANDING_REPORT: CTEType.FIRST_LAND_BASED_RECEIVER,
         DocumentType.PRODUCTION_LOG: CTEType.TRANSFORMATION,
-        # #1288 — INVOICE defaults to TRANSFORMATION (not SHIPPING).
-        # Invoices more often accompany transformation/packing events
-        # than pure shipping handoffs; prior SHIPPING default produced
-        # incorrect CTE classifications.
-        DocumentType.INVOICE: CTEType.TRANSFORMATION,
         # BILL_OF_LADING is handled specially — see #1123 split logic
         # in ``_extract_ctes`` (emits both SHIPPING and RECEIVING).
     }
@@ -321,7 +339,7 @@ class FSMAExtractor:
             tenant_id=tenant_id,
         )
 
-        # Pass 1: Document Type Classification (#1288 — tuple return)
+        # Pass 1: Document Type Classification (#1288 — tuple-compatible return)
         doc_type, classify_warning = self._classify_document(text)
         logger.debug("document_classified", doc_type=doc_type.value)
 
@@ -356,11 +374,15 @@ class FSMAExtractor:
         # HITL routing: confidence < 0.85 always requires human review
         if doc_confidence < HITL_CONFIDENCE_THRESHOLD:
             review_required = True
+        if doc_type in {DocumentType.UNKNOWN, DocumentType.INVOICE}:
+            review_required = True
 
         # Calculate warnings
         warnings = self._validate_extraction(ctes, doc_type)
         if classify_warning:
             warnings.append(classify_warning)
+        if doc_type == DocumentType.INVOICE:
+            warnings.append("Invoice document routed to HITL review; no CTE emitted automatically")
         if review_required:
              warnings.append(f"Confidence {doc_confidence:.2f} ({risk_level.value}) requires manual review")
         if not kde_minimums_met:
@@ -431,10 +453,9 @@ class FSMAExtractor:
     def _classify_document(self, text: str) -> Tuple[DocumentType, Optional[str]]:
         """Classify document type based on content indicators.
 
-        Returns a ``(DocumentType, warning_or_None)`` tuple. On a tie between
-        two or more document types, defaults to SHIPPING (via BILL_OF_LADING)
-        and returns a warning string so callers can surface it in result.warnings
-        (#1288).
+        Returns a tuple-compatible result. On a tie between two or more
+        document types, returns UNKNOWN and a warning string so callers can
+        surface the ambiguity in ``result.warnings`` (#1288).
         """
         text_lower = text.lower()
 
@@ -445,23 +466,20 @@ class FSMAExtractor:
 
         max_score = max(scores.values())
         if max_score == 0:
-            return DocumentType.UNKNOWN, None
+            return _ClassificationResult(DocumentType.UNKNOWN, None)
 
         top_types = [dt for dt, sc in scores.items() if sc == max_score]
         if len(top_types) > 1:
-            # #1288 — On a tie, default to SHIPPING (BILL_OF_LADING) and
-            # surface a warning in result.warnings so callers and HITL
-            # reviewers can see the ambiguity.
-            tie_warning = "Ambiguous CTE type classification — defaulted to SHIPPING"
+            tie_warning = "Document type could not be determined from ambiguous CTE indicators"
             logger.warning(
                 "ambiguous_document_type_tie",
                 message=tie_warning,
                 tied_types=[dt.value for dt in top_types],
                 score=max_score,
             )
-            return DocumentType.BILL_OF_LADING, tie_warning
+            return _ClassificationResult(DocumentType.UNKNOWN, tie_warning)
 
-        return top_types[0], None
+        return _ClassificationResult(top_types[0], None)
 
     def _extract_tabular_data(
         self, text: str, pdf_bytes: Optional[bytes] = None
@@ -721,6 +739,9 @@ class FSMAExtractor:
             line_items: Pre-extracted line items from tabular extraction
         """
         ctes = []
+
+        if doc_type == DocumentType.INVOICE:
+            return ctes
 
         # #1103 — determine CTE type(s) from the document type.
         # Previously every non-PRODUCTION_LOG document fell back to
@@ -1225,6 +1246,7 @@ class FSMAExtractor:
         "quantity": 2,
         "product_description": 2,
     }
+    _KDE_FIELD_WEIGHTS = _FIELD_WEIGHTS
 
     def _calculate_confidence(self, kde: KDE, cte_type: CTEType) -> float:
         """
@@ -1273,7 +1295,15 @@ class FSMAExtractor:
 
         if total_weight == 0:
             return 0.0
-        return round(weighted_found / total_weight, 2)
+
+        score = round(weighted_found / total_weight, 2)
+        missing_high_priority = any(
+            self._FIELD_WEIGHTS.get(f, 1) >= 3 and getattr(kde, f, None) is None
+            for f in fields
+        )
+        if missing_high_priority:
+            return min(score, 0.5)
+        return score
 
     def _validate_extraction(
         self, ctes: List[CTE], doc_type: DocumentType
