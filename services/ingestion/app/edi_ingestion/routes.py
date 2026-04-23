@@ -21,6 +21,7 @@ relevant to FSMA Critical Tracking Events.
 
 from __future__ import annotations
 
+import importlib
 import logging
 import os
 from typing import Any, Optional
@@ -49,7 +50,6 @@ from .dedup import check_and_record_interchange, verify_trading_partner_allowed
 from .extractors import _extract_856_fields, _extract_fields_for_set
 from .models import EDIIngestResponse
 from .parser import _first_segment, _parse_x12_segments, _segment_id_set, _detect_transaction_set
-from .rejection_log import record_edi_rejection
 from .utils import (
     _normalize_unit,
     _safe_float,
@@ -60,6 +60,17 @@ from .utils import (
 from .validation import _validate_edi_as_fsma_event
 
 logger = logging.getLogger("edi-ingestion")
+
+
+def _record_edi_rejection(**kwargs):
+    """Resolve the live rejection-log module before writing.
+
+    Tests swap ``app.edi_ingestion`` modules in and out of ``sys.modules``.
+    Looking up the recorder lazily keeps the route and the test helpers
+    pointed at the same in-memory rejection store.
+    """
+    rejection_log = importlib.import_module("app.edi_ingestion.rejection_log")
+    return rejection_log.record_edi_rejection(**kwargs)
 
 
 def _decode_edi_bytes(raw_bytes: bytes) -> str:
@@ -637,7 +648,7 @@ async def ingest_edi_document(
             )
             # Record on the strict path too — the canonical stream is
             # untouched either way, but auditors still need the trail.
-            record_edi_rejection(
+            _record_edi_rejection(
                 tenant_id=sender_tenant_id,
                 transaction_set=transaction_set,
                 traceability_lot_code=traceability_lot_code,
@@ -668,7 +679,7 @@ async def ingest_edi_document(
         # audit trail with ``fsma_validation_status=failed``, which is
         # exactly the pollution #1174 is meant to stop.
         extracted["fsma_validation_status"] = "failed"
-        rejection_record = record_edi_rejection(
+        rejection_record = _record_edi_rejection(
             tenant_id=sender_tenant_id,
             transaction_set=transaction_set,
             traceability_lot_code=traceability_lot_code,

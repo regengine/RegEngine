@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hmac
+import importlib
 import logging
 import os
 import time
@@ -14,8 +15,6 @@ from typing import Optional
 from fastapi import Depends, Header, HTTPException, Request
 from pydantic import BaseModel, Field
 from sqlalchemy import text
-
-from app.config import get_settings
 
 logger = logging.getLogger("authz")
 from shared.auth import APIKey, require_api_key
@@ -168,6 +167,17 @@ def _principal_from_api_key(api_key: APIKey | APIKeyResponse) -> IngestionPrinci
     )
 
 
+def _current_settings():
+    """Resolve settings from the live ``app.config`` module.
+
+    Some ingestion tests temporarily replace ``app.config`` in ``sys.modules``.
+    Looking it up lazily keeps authz aligned with the current module instance
+    instead of holding a stale function reference across test-module swaps.
+    """
+    config_module = importlib.import_module("app.config")
+    return config_module.get_settings()
+
+
 def _lookup_scoped_key_from_db(raw_api_key: str) -> Optional[IngestionPrincipal]:
     """Fallback direct lookup when DatabaseAPIKeyStore is not enabled."""
     db_session = None
@@ -221,7 +231,7 @@ async def get_ingestion_principal(
       valid scoped key from the API key store.
     - If ``API_KEY`` is not configured: keep local-dev behavior open.
     """
-    settings = get_settings()
+    settings = _current_settings()
     configured_api_key = getattr(settings, "api_key", None)
     client_ip = request.client.host if request.client else "unknown"
 

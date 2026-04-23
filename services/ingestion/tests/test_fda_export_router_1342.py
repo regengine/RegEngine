@@ -279,6 +279,17 @@ def _build_app_with_principal(
     return app
 
 
+def _all_events_params(**overrides) -> dict[str, str]:
+    """Supply the required export window for ``/api/v1/fda/export/all``."""
+    params = {
+        "tenant_id": "tenant-a",
+        "start_date": "2026-03-01",
+        "end_date": "2026-03-31",
+    }
+    params.update(overrides)
+    return params
+
+
 # ---------------------------------------------------------------------------
 # Helper-function coverage
 # ---------------------------------------------------------------------------
@@ -493,7 +504,7 @@ class TestExportAllEvents:
         with TestClient(app) as client:
             resp = client.get(
                 "/api/v1/fda/export/all",
-                params={"tenant_id": "tenant-a", "format": "csv"},
+                params=_all_events_params(format="csv"),
             )
         assert resp.status_code == 200
         assert resp.headers["content-type"].startswith("text/csv")
@@ -513,7 +524,7 @@ class TestExportAllEvents:
         with TestClient(app) as client:
             resp = client.get(
                 "/api/v1/fda/export/all",
-                params={"tenant_id": "tenant-a", "format": "package"},
+                params=_all_events_params(format="package"),
             )
         assert resp.status_code == 200
         assert resp.headers["content-type"].startswith("application/zip")
@@ -531,7 +542,7 @@ class TestExportAllEvents:
         with TestClient(app) as client:
             resp = client.get(
                 "/api/v1/fda/export/all",
-                params={"tenant_id": "tenant-a", "format": "pdf"},
+                params=_all_events_params(format="pdf"),
             )
         assert resp.status_code == 200
         assert resp.headers["content-type"].startswith("application/pdf")
@@ -546,7 +557,7 @@ class TestExportAllEvents:
         with TestClient(app) as client:
             resp = client.get(
                 "/api/v1/fda/export/all",
-                params={"tenant_id": "tenant-a"},
+                params=_all_events_params(),
             )
         assert resp.status_code == 401
         assert "resolvable key_id" in resp.json()["detail"]
@@ -561,11 +572,7 @@ class TestExportAllEvents:
         with TestClient(app) as client:
             resp = client.get(
                 "/api/v1/fda/export/all",
-                params={
-                    "tenant_id": "tenant-a",
-                    "format": "csv",
-                    "include_pii": "true",
-                },
+                params=_all_events_params(format="csv", include_pii="true"),
             )
         assert resp.status_code == 403
 
@@ -590,7 +597,7 @@ class TestExportAllEvents:
         with TestClient(app) as client:
             resp = client.get(
                 "/api/v1/fda/export/all",
-                params={"tenant_id": "tenant-a", "format": "csv"},
+                params=_all_events_params(format="csv"),
             )
         assert resp.status_code == 503
         assert sessions and sessions[-1].rolled_back is True
@@ -608,7 +615,7 @@ class TestExportAllEvents:
         with TestClient(app) as client:
             resp = client.get(
                 "/api/v1/fda/export/all",
-                params={"tenant_id": "tenant-a", "format": "csv"},
+                params=_all_events_params(format="csv"),
             )
         assert resp.status_code == 409
         detail = resp.json()["detail"]
@@ -628,7 +635,7 @@ class TestExportAllEvents:
         with TestClient(app) as client:
             resp = client.get(
                 "/api/v1/fda/export/all",
-                params={"tenant_id": "tenant-a"},
+                params=_all_events_params(),
             )
         assert resp.status_code == 500
 
@@ -654,7 +661,7 @@ class TestExportAllEvents:
         with TestClient(app) as client:
             resp = client.get(
                 "/api/v1/fda/export/all",
-                params={"tenant_id": "tenant-a", "format": "csv"},
+                params=_all_events_params(format="csv"),
             )
         assert resp.status_code == 200
         assert "x-truncated" in {k.lower() for k in resp.headers}
@@ -675,11 +682,10 @@ class TestExportAllEvents:
         with TestClient(app) as client:
             resp = client.get(
                 "/api/v1/fda/export/all",
-                params={
-                    "tenant_id": "tenant-a",
-                    "format": "csv",
-                    "allow_incomplete": "true",
-                },
+                params=_all_events_params(
+                    format="csv",
+                    allow_incomplete="true",
+                ),
             )
         assert resp.status_code == 200
         # KDE coverage < 0.80 triggers the compliance warning.
@@ -715,7 +721,7 @@ class TestExportAllEvents:
         with TestClient(app) as client:
             resp = client.get(
                 "/api/v1/fda/export/all",
-                params={"tenant_id": "tenant-a", "format": "csv"},
+                params=_all_events_params(format="csv"),
             )
         assert resp.status_code == 200
         assert int(resp.headers["x-record-count"]) == len(many_tlcs)
@@ -975,12 +981,9 @@ class TestExportV2:
         assert resp.status_code == 403
 
     def test_audit_log_write_failure_returns_503(self, monkeypatch):
-        # Import AuditLogWriteError from the right location.
-        from app.fda_export.queries import AuditLogWriteError
-
         self._install_v2_helpers(
             monkeypatch,
-            log_v2_raises=AuditLogWriteError("audit down"),
+            log_v2_raises=router_module.AuditLogWriteError("audit down"),
         )
         app = _build_app_with_principal(scopes=["fda.export"])
         _install_fake_dependencies(
