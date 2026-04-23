@@ -41,17 +41,17 @@ function timeAgo(iso: string): string {
 }
 
 export function ScanHistoryWidget() {
-    const { apiKey, tenantId } = useAuth();
+    const { tenantId } = useAuth();
     const [events, setEvents] = useState<RecentEvent[]>([]);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        if (!apiKey || !tenantId) { setLoading(false); return; }
+        if (!tenantId) { setLoading(false); return; }
         const load = async () => {
             try {
                 const res = await fetch(
                     `${getServiceURL('ingestion')}/api/v1/webhooks/recent?tenant_id=${tenantId}&limit=8`,
-                    { headers: { 'X-RegEngine-API-Key': apiKey } },
+                    { credentials: 'include' },
                 );
                 if (res.ok) {
                     const data = await res.json();
@@ -61,7 +61,7 @@ export function ScanHistoryWidget() {
             setLoading(false);
         };
         void load();
-    }, [apiKey, tenantId]);
+    }, [tenantId]);
 
     return (
         <Card className="h-full">
