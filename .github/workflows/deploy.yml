@@ -6,6 +6,7 @@ on:
   workflow_dispatch:
 
 permissions:
+  checks: read
   contents: read
 
 concurrency:
@@ -102,4 +103,3 @@ jobs:
             --project "$RAILWAY_PROJECT_ID" \
             --environment "$RAILWAY_ENVIRONMENT_ID" \
             --service "$RAILWAY_SERVICE_ID"
-
