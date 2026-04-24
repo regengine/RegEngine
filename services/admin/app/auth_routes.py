@@ -4,7 +4,6 @@ from sqlalchemy.orm import Session
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from datetime import timedelta, datetime, timezone
-import inspect
 import structlog
 from pydantic import BaseModel, Field
 from typing import List, Dict, Optional
