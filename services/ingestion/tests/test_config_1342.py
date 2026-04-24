@@ -29,7 +29,7 @@ def _clear_env(monkeypatch):
     """Strip config-relevant env vars so the default values take effect."""
     for var in (
         "RAW_DATA_BUCKET", "PROCESSED_DATA_BUCKET", "KAFKA_BOOTSTRAP_SERVERS",
-        "KAFKA_TOPIC_NORMALIZED", "API_KEY", "AUTH_TEST_BYPASS_TOKEN",
+        "KAFKA_TOPIC_NORMALIZED", "API_KEY", "REGENGINE_API_KEY", "AUTH_TEST_BYPASS_TOKEN",
         "ENV", "ALLOWED_ORIGINS", "NEO4J_URI", "NEO4J_USER", "NEO4J_PASSWORD",
         "GROQ_API_KEY", "REDIS_URL", "GOOGLE_API_KEY", "GOOGLE_CX",
     ):
@@ -193,6 +193,17 @@ class TestGetSettingsProductionGuardrails:
         api_warnings = [w for w in recorded if "API_KEY" in str(w.message)]
         assert api_warnings == []
         assert s.api_key == "valid-key"
+
+    def test_regengine_api_key_present_in_production_no_warning(self, _clear_env, monkeypatch):
+        import shared.env as shared_env
+        monkeypatch.setattr(shared_env, "is_production", lambda: True)
+        monkeypatch.setenv("REGENGINE_API_KEY", "valid-key")
+        with warnings.catch_warnings(record=True) as recorded:
+            warnings.simplefilter("always")
+            s = get_settings()
+        api_warnings = [w for w in recorded if "API_KEY" in str(w.message)]
+        assert api_warnings == []
+        assert s.api_key is None
 
     def test_missing_api_key_in_dev_no_warning(self, _clear_env, monkeypatch):
         import shared.env as shared_env
