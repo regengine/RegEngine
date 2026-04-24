@@ -4,13 +4,14 @@ Regression coverage for ``app/shared/tenant_resolution.py``.
 This module is the single source of truth for resolving tenant context
 on every ingestion request. Misresolution is a direct tenant-isolation
 escape vector (issues #1081, #1102, #1184). The function has three
-inputs and a strict priority order:
+inputs and a strict authority order:
 
-    explicit_tenant_id  >  x_tenant_id header  >  API-key DB lookup
+    API-key tenant > matching explicit/header tenant > legacy explicit/header tenant
 
 Tests lock in:
 
-* priority order and short-circuit semantics
+* scoped API-key tenant authority and legacy fallback semantics
+* explicit/header conflict rejection
 * falsy-value passthrough (None, "")
 * API-key happy path (row returned, tenant coerced to str)
 * API-key miss path (row is None or empty tuple)
@@ -25,9 +26,10 @@ from __future__ import annotations
 from unittest.mock import MagicMock
 
 import pytest
+from fastapi import HTTPException
 
 from app.shared import tenant_resolution
-from app.shared.tenant_resolution import resolve_tenant_id
+from app.shared.tenant_resolution import resolve_principal_tenant_id, resolve_tenant_id
 
 
 # ===========================================================================
@@ -78,17 +80,17 @@ def _install_db(monkeypatch, db):
 
 class TestExplicitTenantIdWins:
 
-    def test_explicit_wins_over_header_and_api_key(self, monkeypatch):
-        """Explicit param must short-circuit even if header + API key are set."""
+    def test_explicit_used_when_only_explicit_given(self, monkeypatch):
+        """Legacy/master callers can still pass an explicit tenant."""
         db = _FakeDb(fetch_row=_FakeRow("from-api-key"))
         _install_db(monkeypatch, db)
         out = resolve_tenant_id(
             explicit_tenant_id="explicit-tenant",
-            x_tenant_id="header-tenant",
-            x_regengine_api_key="some-key",
+            x_tenant_id=None,
+            x_regengine_api_key=None,
         )
         assert out == "explicit-tenant"
-        # DB was never consulted.
+        # No API key was supplied, so DB was never consulted.
         assert db.executed == []
         assert db.closed is False
 
@@ -123,10 +125,9 @@ class TestXTenantHeaderFallback:
         out = resolve_tenant_id(
             explicit_tenant_id=None,
             x_tenant_id="header-tenant",
-            x_regengine_api_key="some-key",
+            x_regengine_api_key=None,
         )
         assert out == "header-tenant"
-        # Still short-circuits before DB.
         assert db.executed == []
 
     def test_header_used_when_explicit_is_empty_string(self, monkeypatch):
@@ -136,7 +137,7 @@ class TestXTenantHeaderFallback:
         out = resolve_tenant_id(
             explicit_tenant_id="",
             x_tenant_id="header-tenant",
-            x_regengine_api_key="some-key",
+            x_regengine_api_key=None,
         )
         assert out == "header-tenant"
         assert db.executed == []
@@ -193,6 +194,31 @@ class TestApiKeyLookupHappyPath:
         _install_db(monkeypatch, db)
         out = resolve_tenant_id(None, None, "key")
         assert out == "12345"
+
+    def test_api_key_tenant_matches_requested_tenant(self, monkeypatch):
+        db = _FakeDb(fetch_row=_FakeRow("tenant-xyz"))
+        _install_db(monkeypatch, db)
+        out = resolve_tenant_id("tenant-xyz", None, "secret-key")
+        assert out == "tenant-xyz"
+
+    def test_api_key_tenant_rejects_requested_mismatch(self, monkeypatch):
+        db = _FakeDb(fetch_row=_FakeRow("tenant-xyz"))
+        _install_db(monkeypatch, db)
+        with pytest.raises(HTTPException) as exc:
+            resolve_tenant_id("other-tenant", None, "secret-key")
+        assert exc.value.status_code == 403
+        assert "Tenant mismatch" in exc.value.detail
+
+
+class TestRequestedTenantConflicts:
+    def test_explicit_and_header_conflict_rejected(self):
+        with pytest.raises(HTTPException) as exc:
+            resolve_tenant_id("explicit-tenant", "header-tenant", None)
+        assert exc.value.status_code == 400
+        assert "Conflicting tenant context" in exc.value.detail
+
+    def test_matching_explicit_and_header_allowed(self):
+        assert resolve_tenant_id("same-tenant", "same-tenant", None) == "same-tenant"
 
 
 # ===========================================================================
@@ -251,6 +277,41 @@ class TestNoIdentifiersAtAll:
         out = resolve_tenant_id(None, None, None)
         assert out is None
         assert called["flag"] is False
+
+
+class TestResolvePrincipalTenantId:
+    def test_principal_tenant_is_authoritative(self):
+        assert (
+            resolve_principal_tenant_id(None, None, "principal-tenant")
+            == "principal-tenant"
+        )
+
+    def test_principal_tenant_allows_matching_request(self):
+        assert (
+            resolve_principal_tenant_id("principal-tenant", None, "principal-tenant")
+            == "principal-tenant"
+        )
+
+    def test_principal_tenant_rejects_mismatched_request(self):
+        with pytest.raises(HTTPException) as exc:
+            resolve_principal_tenant_id("other-tenant", None, "principal-tenant")
+        assert exc.value.status_code == 403
+        assert "Tenant mismatch" in exc.value.detail
+
+    def test_legacy_principal_uses_requested_tenant(self):
+        assert resolve_principal_tenant_id(None, "header-tenant", None) == "header-tenant"
+
+    def test_missing_legacy_tenant_rejected(self):
+        with pytest.raises(HTTPException) as exc:
+            resolve_principal_tenant_id(None, None, None)
+        assert exc.value.status_code == 400
+        assert "Tenant context required" in exc.value.detail
+
+    def test_explicit_header_conflict_rejected(self):
+        with pytest.raises(HTTPException) as exc:
+            resolve_principal_tenant_id("explicit-tenant", "header-tenant", None)
+        assert exc.value.status_code == 400
+        assert "Conflicting tenant context" in exc.value.detail
 
 
 # ===========================================================================
@@ -315,13 +376,12 @@ class TestPriorityOrderPairs:
     @pytest.mark.parametrize(
         "explicit,header,api_key,expected",
         [
-            ("A", "B", "C", "A"),        # explicit wins over header+api_key
+            ("A", "A", None, "A"),        # matching explicit/header
             ("A", None, None, "A"),       # explicit alone
-            (None, "B", "C", "B"),        # header wins over api_key
             (None, "B", None, "B"),       # header alone
             (None, None, None, None),     # nothing
-            ("", "B", "C", "B"),          # explicit falsy → header
-            ("", "", "C", None),          # both falsy + api_key (see DB test)
+            ("", "B", None, "B"),         # explicit falsy → header
+            ("", "", "C", None),          # both falsy + api_key miss
             ("", None, None, None),       # explicit falsy alone
         ],
     )

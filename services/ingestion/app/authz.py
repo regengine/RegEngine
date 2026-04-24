@@ -151,11 +151,26 @@ def _rate_limit_window_seconds() -> int:
 def _tenant_for_rate_limit(request: Request, principal: IngestionPrincipal) -> str:
     if principal.tenant_id:
         return principal.tenant_id
-    if request.headers.get("X-Tenant-ID"):
-        return str(request.headers["X-Tenant-ID"])
+    header_tenant = request.headers.get("X-Tenant-ID") or request.headers.get("X-RegEngine-Tenant-ID")
+    if header_tenant:
+        return str(header_tenant)
     if request.query_params.get("tenant_id"):
         return str(request.query_params["tenant_id"])
     return "global"
+
+
+def _requested_tenant_context(request: Request) -> Optional[str]:
+    """Return query/header tenant context, rejecting conflicts."""
+    query_tenant = request.query_params.get("tenant_id")
+    header_tenant = request.headers.get("X-Tenant-ID") or request.headers.get("X-RegEngine-Tenant-ID")
+
+    if query_tenant and header_tenant and query_tenant != header_tenant:
+        raise HTTPException(
+            status_code=400,
+            detail="Conflicting tenant context: tenant_id does not match X-Tenant-ID header",
+        )
+
+    return query_tenant or header_tenant
 
 
 def _principal_from_api_key(api_key: APIKey | APIKeyResponse) -> IngestionPrincipal:
@@ -305,7 +320,7 @@ def require_permission(required_permission: str):
     """FastAPI dependency factory enforcing a required permission scope.
 
     Also cross-checks the authenticated principal's tenant against any
-    tenant_id query parameter to prevent cross-tenant data access.
+    tenant_id query/header context to prevent cross-tenant data access.
     """
 
     async def _dependency(
@@ -315,7 +330,7 @@ def require_permission(required_permission: str):
         if has_permission(principal.scopes, required_permission):
             # Cross-check: if the principal has a tenant_id AND the request
             # specifies a different tenant_id, reject unless principal has wildcard scope.
-            requested_tenant = request.query_params.get("tenant_id")
+            requested_tenant = _requested_tenant_context(request)
             if (
                 requested_tenant
                 and principal.tenant_id

@@ -51,7 +51,7 @@ from app.stripe_billing.models import (  # noqa: E402
 
 def _principal(
     scopes: Optional[list[str]] = None,
-    tenant_id: Optional[str] = "tenant-route-test",
+    tenant_id: Optional[str] = None,
     key_id: str = "test-key",
 ) -> IngestionPrincipal:
     return IngestionPrincipal(
@@ -186,7 +186,7 @@ class TestCreateCheckoutErrorBranches:
         monkeypatch.setattr(stripe.checkout.Session, "create", _create)
 
         response = await routes_mod.create_checkout(
-            base_request, x_tenant_id=None, principal=_principal()
+            base_request, x_tenant_id=None, principal=_principal(tenant_id="tenant-checkout")
         )
         assert response.session_id == "cs_456"
         assert captured["customer"] == "cus_existing"

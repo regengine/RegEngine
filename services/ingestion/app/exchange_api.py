@@ -22,8 +22,8 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 
-from app.authz import require_permission
-from app.shared.tenant_resolution import resolve_tenant_id
+from app.authz import IngestionPrincipal, require_permission
+from app.shared.tenant_resolution import resolve_principal_tenant_id, resolve_tenant_id
 from shared.database import get_db_safe
 
 logger = logging.getLogger("b2b-exchange")
@@ -63,6 +63,7 @@ def _allow_in_memory_fallback() -> bool:
 
 # Tenant resolution is now imported from app.shared.tenant_resolution
 _resolve_tenant_id = resolve_tenant_id
+_resolve_principal_tenant_id = resolve_principal_tenant_id
 
 
 def _ensure_exchange_table(db_session) -> None:
@@ -495,16 +496,13 @@ async def send_exchange_package(
     request: ExchangeSendRequest,
     tenant_id: Optional[str] = Query(default=None, description="Optional sender tenant override"),
     x_tenant_id: Optional[str] = Header(default=None, alias="X-Tenant-ID"),
-    x_regengine_api_key: Optional[str] = Header(default=None, alias="X-RegEngine-API-Key"),
-    _auth=Depends(require_permission("exchange.write")),
+    principal: IngestionPrincipal = Depends(require_permission("exchange.write")),
 ):
-    sender_tenant_id = _resolve_tenant_id(
+    sender_tenant_id = _resolve_principal_tenant_id(
         request.sender_tenant_id or tenant_id,
         x_tenant_id,
-        x_regengine_api_key,
+        principal.tenant_id,
     )
-    if not sender_tenant_id:
-        raise HTTPException(status_code=400, detail="Sender tenant context required")
 
     try:
         db_session = get_db_safe()
@@ -608,12 +606,9 @@ async def receive_exchange_packages(
     include_payload: bool = Query(default=True, description="Include full package payload"),
     mark_received: bool = Query(default=False, description="Mark selected package as received"),
     x_tenant_id: Optional[str] = Header(default=None, alias="X-Tenant-ID"),
-    x_regengine_api_key: Optional[str] = Header(default=None, alias="X-RegEngine-API-Key"),
-    _auth=Depends(require_permission("exchange.read")),
+    principal: IngestionPrincipal = Depends(require_permission("exchange.read")),
 ):
-    receiver_tenant_id = _resolve_tenant_id(tenant_id, x_tenant_id, x_regengine_api_key)
-    if not receiver_tenant_id:
-        raise HTTPException(status_code=400, detail="Receiver tenant context required")
+    receiver_tenant_id = _resolve_principal_tenant_id(tenant_id, x_tenant_id, principal.tenant_id)
 
     try:
         packages = _load_packages_db(

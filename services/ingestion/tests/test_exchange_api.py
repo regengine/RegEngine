@@ -110,13 +110,13 @@ def test_send_requires_sender_tenant_context(client: TestClient) -> None:
         },
     )
     assert response.status_code == 400
-    assert response.json()["detail"] == "Sender tenant context required"
+    assert response.json()["detail"] == "Tenant context required"
 
 
 def test_receive_requires_receiver_tenant_context(client: TestClient) -> None:
     response = client.get("/api/v1/exchange/receive")
     assert response.status_code == 400
-    assert response.json()["detail"] == "Receiver tenant context required"
+    assert response.json()["detail"] == "Tenant context required"
 
 
 def test_send_denied_without_exchange_write_scope(monkeypatch: pytest.MonkeyPatch) -> None:

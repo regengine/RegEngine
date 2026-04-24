@@ -29,9 +29,9 @@ from typing import Any, Optional
 from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, Query, UploadFile
 from pydantic import ValidationError
 
-from app.authz import require_permission
+from app.authz import IngestionPrincipal, require_permission
 from app.format_extractors import is_edi_content
-from app.shared.tenant_resolution import resolve_tenant_id
+from app.shared.tenant_resolution import resolve_principal_tenant_id, resolve_tenant_id
 from app.shared.upload_limits import read_upload_with_limit, MAX_EDI_FILE_SIZE_BYTES
 from app.webhook_compat import ingest_events
 from app.webhook_models import (
@@ -140,6 +140,7 @@ def _edi_strict_mode() -> bool:
 router = APIRouter(prefix="/api/v1/ingest/edi", tags=["EDI Import"])
 
 _resolve_tenant_id = resolve_tenant_id
+_resolve_principal_tenant_id = resolve_principal_tenant_id
 
 
 def _enforce_envelope_integrity(
@@ -253,11 +254,9 @@ async def ingest_edi_856(
     x_tenant_id: Optional[str] = Header(default=None, alias="X-Tenant-ID"),
     x_partner_id: Optional[str] = Header(default=None, alias="X-Partner-ID"),
     x_regengine_api_key: Optional[str] = Header(default=None, alias="X-RegEngine-API-Key"),
-    _auth=Depends(require_permission("edi.ingest")),
+    principal: IngestionPrincipal = Depends(require_permission("edi.ingest")),
 ) -> EDIIngestResponse:
-    sender_tenant_id = _resolve_tenant_id(tenant_id, x_tenant_id, x_regengine_api_key)
-    if not sender_tenant_id:
-        raise HTTPException(status_code=400, detail="Sender tenant context required")
+    sender_tenant_id = _resolve_principal_tenant_id(tenant_id, x_tenant_id, principal.tenant_id)
 
     _verify_partner_id(x_partner_id)
 
@@ -558,12 +557,10 @@ async def ingest_edi_document(
     x_tenant_id: Optional[str] = Header(default=None, alias="X-Tenant-ID"),
     x_partner_id: Optional[str] = Header(default=None, alias="X-Partner-ID"),
     x_regengine_api_key: Optional[str] = Header(default=None, alias="X-RegEngine-API-Key"),
-    _auth=Depends(require_permission("edi.ingest")),
+    principal: IngestionPrincipal = Depends(require_permission("edi.ingest")),
 ) -> EDIIngestResponse:
     """Ingest any supported X12 EDI document type."""
-    sender_tenant_id = _resolve_tenant_id(tenant_id, x_tenant_id, x_regengine_api_key)
-    if not sender_tenant_id:
-        raise HTTPException(status_code=400, detail="Sender tenant context required")
+    sender_tenant_id = _resolve_principal_tenant_id(tenant_id, x_tenant_id, principal.tenant_id)
 
     _verify_partner_id(x_partner_id)
 
