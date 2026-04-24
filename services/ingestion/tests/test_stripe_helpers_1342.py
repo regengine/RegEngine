@@ -444,39 +444,40 @@ class TestEnforceAdminOrOperator:
 
 
 # ---------------------------------------------------------------------------
-# _resolve_tenant_context — 3-tier fallback
+# _resolve_tenant_context — authenticated principal authority
 # ---------------------------------------------------------------------------
 
 
 class TestResolveTenantContext:
-    def test_explicit_kwarg_wins(self):
-        # First tier: explicit kwarg beats everything.
-        principal = _Principal(scopes=[], tenant_id="from-principal")
-        assert (
-            _resolve_tenant_context("explicit", "header", principal) == "explicit"
-        )
-
-    def test_header_used_when_explicit_is_empty(self):
-        # Second tier: X-Tenant-Id header.
-        principal = _Principal(scopes=[], tenant_id="from-principal")
-        assert _resolve_tenant_context(None, "header", principal) == "header"
-        assert _resolve_tenant_context("", "header", principal) == "header"
-
-    def test_principal_used_when_both_missing(self):
-        # Third tier: the authenticated principal's own tenant.
+    def test_principal_tenant_wins(self):
         principal = _Principal(scopes=[], tenant_id="from-principal")
         assert (
             _resolve_tenant_context(None, None, principal) == "from-principal"
         )
 
-    def test_whitespace_only_is_rejected(self):
-        # ``.strip()`` — whitespace-only values do NOT fall through to
-        # the next tier (``or`` sees them as truthy), they strip to ""
-        # and land in the 400 branch. Pinned so a future refactor
-        # doesn't silently flip the precedence.
+    def test_header_or_explicit_matching_principal_ok(self):
+        principal = _Principal(scopes=[], tenant_id="from-principal")
+        assert _resolve_tenant_context("from-principal", None, principal) == "from-principal"
+        assert _resolve_tenant_context(None, "from-principal", principal) == "from-principal"
+
+    def test_mismatched_requested_tenant_rejected_for_principal(self):
         principal = _Principal(scopes=[], tenant_id="from-principal")
         with pytest.raises(HTTPException) as ei:
-            _resolve_tenant_context("   ", "", principal)
+            _resolve_tenant_context("explicit", None, principal)
+        assert ei.value.status_code == 403
+
+    def test_legacy_header_used_when_principal_has_no_tenant(self):
+        principal = _Principal(scopes=[], tenant_id=None)
+        assert _resolve_tenant_context(None, "header", principal) == "header"
+        assert _resolve_tenant_context("", "header", principal) == "header"
+
+    def test_whitespace_only_falls_back_to_principal(self):
+        principal = _Principal(scopes=[], tenant_id="from-principal")
+        assert _resolve_tenant_context("   ", "", principal) == "from-principal"
+
+    def test_conflicting_explicit_and_header_rejected(self):
+        with pytest.raises(HTTPException) as ei:
+            _resolve_tenant_context("explicit", "header", None)
         assert ei.value.status_code == 400
 
     def test_no_source_raises_http_400(self):

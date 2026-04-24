@@ -6,10 +6,10 @@ Locks:
 - IngestionPrincipal Pydantic defaults
 - Permission normalization and RBAC role → rate-limit multiplier
 - Per-scope RPM overrides via INGESTION_RBAC_RATE_LIMITS
-- Tenant resolution chain: principal.tenant_id → X-Tenant-ID → ?tenant_id → "global"
+- Tenant rate-limit chain: principal.tenant_id → X-Tenant-ID/X-RegEngine-Tenant-ID → ?tenant_id → "global"
 - DB fallback key lookup (disabled/expired/no-row/exception)
 - get_ingestion_principal branches (legacy master, scoped key, DB fallback, dev-open)
-- require_permission: insufficient perm 403, cross-tenant 403, rate-limit 429
+- require_permission: insufficient perm 403, cross-tenant 403, tenant-context conflict 400, rate-limit 429
 
 Issue: #1342
 """
@@ -38,6 +38,7 @@ from app.authz import (
     _rate_limit_overrides,
     _rate_limit_window_seconds,
     _record_auth_failure,
+    _requested_tenant_context,
     _rpm_for_permission,
     _tenant_for_rate_limit,
     get_ingestion_principal,
@@ -353,10 +354,17 @@ class TestRateLimitWindowSeconds:
 # ---------------------------------------------------------------------------
 
 
-def _fake_request(tenant_header=None, tenant_query=None, client_host="1.1.1.1"):
+def _fake_request(
+    tenant_header=None,
+    tenant_query=None,
+    client_host="1.1.1.1",
+    regengine_tenant_header=None,
+):
     headers = {}
     if tenant_header is not None:
         headers["X-Tenant-ID"] = tenant_header
+    if regengine_tenant_header is not None:
+        headers["X-RegEngine-Tenant-ID"] = regengine_tenant_header
     query = {}
     if tenant_query is not None:
         query["tenant_id"] = tenant_query
@@ -379,6 +387,11 @@ class TestTenantForRateLimit:
         req = _fake_request(tenant_header="header-t", tenant_query="query-t")
         assert _tenant_for_rate_limit(req, p) == "header-t"
 
+    def test_regengine_header_fallback(self):
+        p = IngestionPrincipal(key_id="k")
+        req = _fake_request(regengine_tenant_header="regengine-header-t", tenant_query="query-t")
+        assert _tenant_for_rate_limit(req, p) == "regengine-header-t"
+
     def test_query_fallback(self):
         p = IngestionPrincipal(key_id="k")
         req = _fake_request(tenant_query="query-t")
@@ -388,6 +401,29 @@ class TestTenantForRateLimit:
         p = IngestionPrincipal(key_id="k")
         req = _fake_request()
         assert _tenant_for_rate_limit(req, p) == "global"
+
+
+class TestRequestedTenantContext:
+    def test_query_only(self):
+        assert _requested_tenant_context(_fake_request(tenant_query="query-t")) == "query-t"
+
+    def test_x_tenant_header_only(self):
+        assert _requested_tenant_context(_fake_request(tenant_header="header-t")) == "header-t"
+
+    def test_regengine_tenant_header_only(self):
+        req = _fake_request(regengine_tenant_header="regengine-header-t")
+        assert _requested_tenant_context(req) == "regengine-header-t"
+
+    def test_matching_query_and_header_ok(self):
+        req = _fake_request(tenant_header="tenant-a", tenant_query="tenant-a")
+        assert _requested_tenant_context(req) == "tenant-a"
+
+    def test_conflicting_query_and_header_rejected(self):
+        req = _fake_request(tenant_header="header-t", tenant_query="query-t")
+        with pytest.raises(HTTPException) as exc:
+            _requested_tenant_context(req)
+        assert exc.value.status_code == 400
+        assert "Conflicting tenant context" in exc.value.detail
 
 
 # ---------------------------------------------------------------------------
@@ -851,6 +887,26 @@ class TestRequirePermission:
         resp = client.get("/protected?tenant_id=t-b")
         assert resp.status_code == 403
         assert "Tenant mismatch" in resp.json()["detail"]
+
+    def test_cross_tenant_header_403(self, monkeypatch):
+        p = IngestionPrincipal(
+            key_id="k", scopes=["fda.export"], tenant_id="t-a"
+        )
+        app, _ = self._app_with(p, monkeypatch)
+        client = TestClient(app)
+        resp = client.get("/protected", headers={"X-RegEngine-Tenant-ID": "t-b"})
+        assert resp.status_code == 403
+        assert "Tenant mismatch" in resp.json()["detail"]
+
+    def test_conflicting_query_and_header_400(self, monkeypatch):
+        p = IngestionPrincipal(
+            key_id="k", scopes=["fda.export"], tenant_id="t-a"
+        )
+        app, _ = self._app_with(p, monkeypatch)
+        client = TestClient(app)
+        resp = client.get("/protected?tenant_id=t-a", headers={"X-Tenant-ID": "t-b"})
+        assert resp.status_code == 400
+        assert "Conflicting tenant context" in resp.json()["detail"]
 
     def test_cross_tenant_allowed_with_wildcard(self, monkeypatch):
         p = IngestionPrincipal(

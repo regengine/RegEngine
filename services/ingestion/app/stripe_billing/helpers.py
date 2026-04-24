@@ -12,6 +12,7 @@ import structlog
 from fastapi import HTTPException
 
 from app.authz import IngestionPrincipal
+from app.shared.tenant_resolution import resolve_principal_tenant_id
 from shared.permissions import has_permission
 
 logger = structlog.get_logger("stripe-billing.helpers")
@@ -331,7 +332,8 @@ def _resolve_tenant_context(
     x_tenant_id: Optional[str],
     principal: Optional[IngestionPrincipal] = None,
 ) -> str:
-    resolved = (explicit_tenant_id or x_tenant_id or (principal.tenant_id if principal else None) or "").strip()
-    if not resolved:
-        raise HTTPException(status_code=400, detail="Tenant context required")
-    return resolved
+    return resolve_principal_tenant_id(
+        explicit_tenant_id=explicit_tenant_id,
+        x_tenant_id=x_tenant_id,
+        principal_tenant_id=principal.tenant_id if principal else None,
+    )

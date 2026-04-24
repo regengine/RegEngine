@@ -231,20 +231,23 @@ async def create_checkout(
 )
 async def get_subscription(
     tenant_id: str,
-    _: None = Depends(_verify_api_key),
+    _: None = None,
+    principal: IngestionPrincipal = Depends(get_ingestion_principal),
 ) -> SubscriptionStatus:
     """Get current subscription status for a tenant."""
     _helpers_mod._configure_stripe()
+    safe_principal = principal if isinstance(principal, IngestionPrincipal) else None
+    resolved_tenant_id = _helpers_mod._resolve_tenant_context(tenant_id, None, safe_principal)
 
     try:
-        mapping = _state_mod._get_subscription_mapping(tenant_id)
+        mapping = _state_mod._get_subscription_mapping(resolved_tenant_id)
     except redis.RedisError as exc:
-        logger.error("subscription_mapping_read_failed", tenant_id=tenant_id, error=str(exc))
+        logger.error("subscription_mapping_read_failed", tenant_id=resolved_tenant_id, error=str(exc))
         raise HTTPException(status_code=503, detail="Billing state store unavailable") from exc
 
     if not mapping:
         return SubscriptionStatus(
-            tenant_id=tenant_id,
+            tenant_id=resolved_tenant_id,
             plan="none",
             status="none",
             current_period_end=None,
@@ -267,14 +270,14 @@ async def get_subscription(
 
             mapping["status"] = status
             mapping["current_period_end"] = current_period_end or ""
-            _state_mod._store_subscription_mapping(tenant_id, mapping)
+            _state_mod._store_subscription_mapping(resolved_tenant_id, mapping)
         except stripe.error.StripeError as exc:  # pragma: no cover - network/API errors
-            logger.warning("subscription_retrieve_failed", tenant_id=tenant_id, error=str(exc))
+            logger.warning("subscription_retrieve_failed", tenant_id=resolved_tenant_id, error=str(exc))
 
     limits = PLANS.get(plan_id, {}).get("limits", {})
 
     return SubscriptionStatus(
-        tenant_id=tenant_id,
+        tenant_id=resolved_tenant_id,
         plan=plan_id,
         status=status,
         current_period_end=current_period_end,
