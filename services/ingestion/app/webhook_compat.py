@@ -141,21 +141,15 @@ async def ingest_events(
                     kdes=event.kdes,
                     alerts=alerts,
                 )
-                savepoint.commit()
-
-                results.append(EventResult(
-                    traceability_lot_code=event.traceability_lot_code,
-                    cte_type=event.cte_type.value,
-                    status="accepted",
-                    event_id=store_result.event_id,
-                    sha256_hash=store_result.sha256_hash,
-                    chain_hash=store_result.chain_hash,
-                ))
-                accepted += 1
-                _publish_graph_sync(store_result.event_id, event, tenant_id)
 
                 # Canonical normalization + rule evaluation (best-effort).
-                # Separate savepoint: never blocks primary CTE persistence.
+                # Runs BEFORE the primary savepoint commits so a rule
+                # rejection (under RULES_ENGINE_ENFORCE=cte_only|all) can
+                # roll back the primary CTE write along with it.
+                # Canonical/rules internal errors are swallowed: the
+                # primary write still commits, preserving the prior
+                # best-effort behavior for tenants without seeded rules.
+                summary = None
                 canon_sp = db_session.begin_nested()
                 try:
                     from shared.canonical_event import normalize_webhook_event
@@ -163,7 +157,6 @@ async def ingest_events(
                     canonical = normalize_webhook_event(event, tenant_id)
                     canonical_store = CanonicalEventStore(db_session, dual_write=False)
                     canonical_store.persist_event(canonical)
-                    # Auto-evaluate rules
                     from shared.rules_engine import RulesEngine
                     engine = RulesEngine(db_session)
                     event_data = {
@@ -180,15 +173,60 @@ async def ingest_events(
                         "kdes": canonical.kdes,
                     }
                     summary = engine.evaluate_event(event_data, persist=True, tenant_id=tenant_id)
-                    # Auto-create exceptions from failures
-                    if not summary.compliant:
-                        from shared.exception_queue import ExceptionQueueService
-                        exc_svc = ExceptionQueueService(db_session)
-                        exc_svc.create_exceptions_from_evaluation(tenant_id, summary)
                     canon_sp.commit()
                 except (ImportError, ValueError, TypeError, RuntimeError) as canon_err:
                     canon_sp.rollback()
+                    summary = None
                     logger.warning("compat_canonical_write_skipped: %s", str(canon_err))
+
+                # Enforcement: if RULES_ENGINE_ENFORCE is set and the
+                # summary meets the reject policy, roll back the outer
+                # savepoint (undoes primary CTE + committed canonical +
+                # persisted eval rows) and emit a rejected result.
+                # Summary=None (canonical/rules skipped) never rejects —
+                # preserves prior behavior for every tenant when the
+                # flag is off or the rules path fails best-effort.
+                reject_reason: Optional[str] = None
+                if summary is not None:
+                    from shared.rules.enforcement import should_reject
+                    should, reject_reason = should_reject(summary)
+                    if should:
+                        savepoint.rollback()
+                        results.append(EventResult(
+                            traceability_lot_code=event.traceability_lot_code,
+                            cte_type=event.cte_type.value,
+                            status="rejected",
+                            errors=[f"rule_violation: {reject_reason}"],
+                        ))
+                        rejected += 1
+                        continue
+
+                # Accepted path. Savepoint commits the primary CTE write.
+                savepoint.commit()
+                results.append(EventResult(
+                    traceability_lot_code=event.traceability_lot_code,
+                    cte_type=event.cte_type.value,
+                    status="accepted",
+                    event_id=store_result.event_id,
+                    sha256_hash=store_result.sha256_hash,
+                    chain_hash=store_result.chain_hash,
+                ))
+                accepted += 1
+                _publish_graph_sync(store_result.event_id, event, tenant_id)
+
+                # Non-blocking failures → exception queue. Separate
+                # savepoint so an exception-queue write failure doesn't
+                # unwind the accepted CTE persist.
+                if summary is not None and not summary.compliant:
+                    exc_sp = db_session.begin_nested()
+                    try:
+                        from shared.exception_queue import ExceptionQueueService
+                        exc_svc = ExceptionQueueService(db_session)
+                        exc_svc.create_exceptions_from_evaluation(tenant_id, summary)
+                        exc_sp.commit()
+                    except (ImportError, ValueError, TypeError, RuntimeError) as exc_err:
+                        exc_sp.rollback()
+                        logger.warning("compat_exception_queue_skipped: %s", str(exc_err))
             except (ValueError, TypeError, RuntimeError) as exc:
                 savepoint.rollback()
                 logger.error("compat_persistence_failed: %s", str(exc))
