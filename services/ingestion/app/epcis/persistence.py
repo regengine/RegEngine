@@ -661,6 +661,66 @@ def _persist_prepared_event_in_session(
     alerts = prepared["alerts"]
     kdes = prepared["kdes"]
 
+    # Pre-eval rules enforcement gate (Phase 0 #1d).
+    # Runs BEFORE the primary CTE write so a reject can prevent the
+    # event from ever being persisted. Uses persist=False to avoid
+    # writing eval rows that would be orphaned on a rejection.
+    #
+    # Short-circuits on OFF mode (current prod default) to avoid the
+    # eval CPU cost on every ingested event. EPCIS is the hot path.
+    #
+    # Canonical-normalization / engine errors are swallowed and
+    # treated as no-verdict — a transient bug in the rules subsystem
+    # must not take down ingestion for every tenant. This matches the
+    # best-effort pattern the threaded canonical block below already
+    # uses (#1335).
+    from shared.rules.enforcement import current_mode, should_reject, EnforcementMode  # noqa: PLC0415
+    if current_mode() != EnforcementMode.OFF:
+        _preeval_summary = None
+        try:
+            from shared.canonical_event import normalize_epcis_event  # noqa: PLC0415
+            from shared.rules_engine import RulesEngine  # noqa: PLC0415
+            _pre_canonical = normalize_epcis_event(event, tenant_id)
+            _pre_engine = RulesEngine(db_session)
+            _pre_event_data = {
+                "event_id": str(_pre_canonical.event_id),
+                "event_type": _pre_canonical.event_type.value,
+                "traceability_lot_code": _pre_canonical.traceability_lot_code,
+                "product_reference": _pre_canonical.product_reference,
+                "quantity": _pre_canonical.quantity,
+                "unit_of_measure": _pre_canonical.unit_of_measure,
+                "from_facility_reference": _pre_canonical.from_facility_reference,
+                "to_facility_reference": _pre_canonical.to_facility_reference,
+                "from_entity_reference": _pre_canonical.from_entity_reference,
+                "to_entity_reference": _pre_canonical.to_entity_reference,
+                "kdes": _pre_canonical.kdes,
+            }
+            _preeval_summary = _pre_engine.evaluate_event(
+                _pre_event_data, persist=False, tenant_id=tenant_id,
+            )
+        except (ImportError, ValueError, TypeError, RuntimeError,
+                AttributeError, KeyError) as _pre_err:
+            logger.warning(
+                "epcis_rules_preeval_skipped: %s", str(_pre_err),
+            )
+
+        if _preeval_summary is not None:
+            _reject, _reason = should_reject(_preeval_summary)
+            if _reject:
+                # Raise HTTPException so the caller's db_session.rollback()
+                # unwinds any in-flight state and the HTTP layer returns
+                # a structured 422. For the atomic-batch caller this
+                # rolls back the entire batch; partial-mode callers use
+                # the single-event path and get per-event semantics.
+                raise HTTPException(
+                    status_code=422,
+                    detail={
+                        "error": "rule_violation",
+                        "reason": _reason,
+                        "tenant_id": tenant_id,
+                    },
+                )
+
     persistence = CTEPersistence(db_session)
     result = persistence.store_event(
         tenant_id=tenant_id,
