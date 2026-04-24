@@ -117,12 +117,12 @@ class TestSignupEmailOracle:
             session_store=ss,
         )
 
-        # Must be a JSONResponse (200) — NOT a TokenResponse or HTTPException
+        # Must be a JSONResponse (202) — NOT a TokenResponse or HTTPException
         from starlette.responses import JSONResponse
         assert isinstance(result, JSONResponse), (
             f"Expected JSONResponse for existing email, got {type(result)}"
         )
-        assert result.status_code == 200
+        assert result.status_code == 202
 
     @pytest.mark.asyncio
     async def test_existing_email_response_body_identical_to_new_email(self, monkeypatch):
@@ -158,9 +158,10 @@ class TestSignupEmailOracle:
         )
 
     @pytest.mark.asyncio
-    async def test_new_email_signup_still_succeeds_returns_tokens(self, monkeypatch):
-        """Sanity: a new email still gets the normal TokenResponse."""
+    async def test_new_email_signup_returns_same_generic_body(self, monkeypatch):
+        """A new email gets the same response shape as an existing email."""
         from services.admin.app import auth_routes
+        import json as json_mod
 
         monkeypatch.setattr(auth_routes, "get_supabase", lambda: None)
         monkeypatch.setattr(auth_routes.AuditLogger, "log_event", lambda *a, **k: None)
@@ -180,9 +181,10 @@ class TestSignupEmailOracle:
             session_store=ss,
         )
 
-        assert isinstance(result, auth_routes.TokenResponse)
-        assert result.access_token
-        assert result.refresh_token
+        from starlette.responses import JSONResponse
+        assert isinstance(result, JSONResponse)
+        assert result.status_code == 202
+        assert set(json_mod.loads(result.body).keys()) == {"detail"}
 
 
 # ── #1090 — Signup race: Supabase after flush ─────────────────────────────────
@@ -263,8 +265,8 @@ class TestSignupRace:
 
         from starlette.responses import JSONResponse
         assert isinstance(result, JSONResponse)
-        assert result.status_code == 200, (
-            f"Concurrent signup should return 200, got {result.status_code}"
+        assert result.status_code == 202, (
+            f"Concurrent signup should return 202, got {result.status_code}"
         )
 
     @pytest.mark.asyncio

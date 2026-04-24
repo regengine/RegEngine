@@ -28,6 +28,20 @@ logger = structlog.get_logger("auth_dependency")
 # Global session store instance (singleton)
 _session_store: Optional[RedisSessionStore] = None
 
+
+def _parse_token_version(value: object) -> Optional[int]:
+    """Parse token-version values from JWT/app_metadata/ORM rows."""
+    if value is None or isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str) and value.strip():
+        try:
+            return int(value)
+        except ValueError:
+            return None
+    return None
+
 def get_session_store() -> RedisSessionStore:
     """Dependency injection for Redis session store.
     
@@ -54,6 +68,7 @@ async def get_current_user(
     
     user_id = None
     tenant_id = None
+    token_version_claim: Optional[int] = None
 
     # 1. Try Supabase Auth First (Production Path)
     sb = get_supabase()
@@ -71,6 +86,10 @@ async def get_current_user(
                 # which tenant they act as from the browser.
                 app_meta = getattr(sb_user, "app_metadata", None) or {}
                 tenant_id = app_meta.get("tenant_id")
+                tv_raw = app_meta.get("tv")
+                if tv_raw is None:
+                    tv_raw = app_meta.get("token_version")
+                token_version_claim = _parse_token_version(tv_raw)
 
                 # User existence verified at line 101 below (db.get raises if missing)
         except (OSError, TimeoutError, ConnectionError, ValueError, AttributeError) as e:
@@ -83,7 +102,6 @@ async def get_current_user(
 
     # 2. Fallback to Local JWT (Legacy / Dev Path)
     # Only reached in dev, or if Supabase is not configured, or explicit opt-in
-    token_version_claim: Optional[int] = None
     if not user_id:
         try:
             payload = decode_access_token(token)
@@ -93,12 +111,7 @@ async def get_current_user(
             # #1349 / #1375 — capture the version the token was minted against.
             # The live user row carries the current version; a mismatch means
             # this token was invalidated by a password reset or logout-all.
-            tv_raw = payload.get("tv")
-            if tv_raw is not None:
-                try:
-                    token_version_claim = int(tv_raw)
-                except (TypeError, ValueError):
-                    token_version_claim = None
+            token_version_claim = _parse_token_version(payload.get("tv"))
 
             if user_id is None:
                 raise credentials_exception
@@ -151,8 +164,8 @@ async def get_current_user(
     # SECURITY (#1860): enforce token_version. /auth/logout-all and
     # /auth/reset-password bump user.token_version expecting this check;
     # without it, stolen access tokens survive both for their full TTL.
+    user_tv = _parse_token_version(getattr(user, "token_version", None)) or 0
     if token_version_claim is not None:
-        user_tv = int(getattr(user, "token_version", 0) or 0)
         if token_version_claim < user_tv:
             logger.warning(
                 "stale_token_version_rejected",
@@ -161,6 +174,13 @@ async def get_current_user(
                 user_tv=user_tv,
             )
             raise credentials_exception
+    elif user_tv > 0:
+        logger.warning(
+            "missing_token_version_rejected",
+            user_id=user_id,
+            user_tv=user_tv,
+        )
+        raise credentials_exception
 
     logger.info("user_authenticated", user_id=user_id)
 

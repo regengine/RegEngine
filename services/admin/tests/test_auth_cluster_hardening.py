@@ -851,6 +851,107 @@ async def test_get_current_user_accepts_matching_tv(monkeypatch):
     assert out is user
 
 
+@pytest.mark.asyncio
+async def test_get_current_user_rejects_stale_supabase_tv_claim(monkeypatch):
+    """Supabase-authenticated requests must enforce app_metadata tv too."""
+    from fastapi import HTTPException
+    from services.admin.app import dependencies
+
+    user_id = uuid.uuid4()
+    tenant_id = uuid.uuid4()
+
+    sb_user = SimpleNamespace(
+        id=str(user_id),
+        app_metadata={"tenant_id": str(tenant_id), "tv": 0},
+    )
+    sb = SimpleNamespace(
+        auth=SimpleNamespace(get_user=MagicMock(return_value=SimpleNamespace(user=sb_user)))
+    )
+    monkeypatch.setattr(dependencies, "get_supabase", lambda: sb)
+
+    user = SimpleNamespace(
+        id=user_id,
+        email="u@e",
+        is_sysadmin=False,
+        status="active",
+        token_version=1,
+    )
+    db = MagicMock()
+    db.bind = None
+    db.get.return_value = user
+
+    with pytest.raises(HTTPException) as exc:
+        await dependencies.get_current_user(token="supabase-token", db=db)
+    assert exc.value.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_get_current_user_accepts_matching_supabase_tv_claim(monkeypatch):
+    from services.admin.app import dependencies
+
+    user_id = uuid.uuid4()
+    tenant_id = uuid.uuid4()
+
+    sb_user = SimpleNamespace(
+        id=str(user_id),
+        app_metadata={"tenant_id": str(tenant_id), "token_version": 3},
+    )
+    sb = SimpleNamespace(
+        auth=SimpleNamespace(get_user=MagicMock(return_value=SimpleNamespace(user=sb_user)))
+    )
+    monkeypatch.setattr(dependencies, "get_supabase", lambda: sb)
+
+    user = SimpleNamespace(
+        id=user_id,
+        email="u@e",
+        is_sysadmin=False,
+        status="active",
+        token_version=3,
+    )
+    membership = SimpleNamespace(is_active=True)
+    db = MagicMock()
+    db.bind = None
+    db.get.return_value = user
+    db.execute.return_value.scalar_one_or_none.return_value = membership
+    db.execute.return_value.scalars.return_value.all.return_value = [membership]
+
+    out = await dependencies.get_current_user(token="supabase-token", db=db)
+    assert out is user
+
+
+@pytest.mark.asyncio
+async def test_get_current_user_rejects_missing_supabase_tv_after_bump(monkeypatch):
+    from fastapi import HTTPException
+    from services.admin.app import dependencies
+
+    user_id = uuid.uuid4()
+    tenant_id = uuid.uuid4()
+
+    sb_user = SimpleNamespace(
+        id=str(user_id),
+        app_metadata={"tenant_id": str(tenant_id)},
+    )
+    sb = SimpleNamespace(
+        auth=SimpleNamespace(get_user=MagicMock(return_value=SimpleNamespace(user=sb_user)))
+    )
+    monkeypatch.setattr(dependencies, "get_supabase", lambda: sb)
+
+    user = SimpleNamespace(
+        id=user_id,
+        email="u@e",
+        is_sysadmin=False,
+        status="active",
+        token_version=1,
+    )
+    db = MagicMock()
+    db.bind = None
+    db.get.return_value = user
+
+    with pytest.raises(HTTPException) as exc:
+        await dependencies.get_current_user(token="supabase-token", db=db)
+    assert exc.value.status_code == 401
+
+
 # ─────────────────────────────────────────────────────────────────────
 # Session store — revoke_all_for_user drops refresh-token mapping
 # ─────────────────────────────────────────────────────────────────────
