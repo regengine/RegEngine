@@ -23,7 +23,7 @@ def _setup_kwargs() -> dict[str, ast.AST]:
 def test_sdk_import_and_client_constructor() -> None:
     client = RegEngineClient(api_key="rge_test")
     try:
-        assert client.api_key == "rge_test"
+        assert client.api_key == "rge_test"  # pragma: allowlist secret
     finally:
         client._session.close()
 

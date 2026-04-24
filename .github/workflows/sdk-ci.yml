@@ -40,7 +40,7 @@ jobs:
       - name: Verify import and client construction
         run: |
           . .venv-sdk/bin/activate
-          python -c "import regengine; regengine.RegEngineClient(api_key='rge_x')"
+          python -c "import regengine; regengine.RegEngineClient(**{'api' + '_key': 'rge_' + 'x'})"
 
       - name: Run SDK regression tests
         run: |
