@@ -303,19 +303,16 @@ async def _cleanup_supabase_user(user_id: UUID) -> None:
         logger.warning("supabase_orphan_cleanup_failed", user_id=str(user_id), error=str(exc))
 
 
-def _slugify_tenant_name(name: str) -> str:
-    base = re.sub(r"[^a-z0-9]+", "-", name.strip().lower()).strip("-")
-    return base or "tenant"
-
-
-def _ensure_unique_tenant_slug(db: Session, tenant_name: str) -> str:
-    base_slug = _slugify_tenant_name(tenant_name)
-    slug = base_slug
-    suffix = 2
-    while db.execute(select(TenantModel).where(TenantModel.slug == slug)).scalar_one_or_none():
-        slug = f"{base_slug}-{suffix}"
-        suffix += 1
-    return slug
+# Slug helpers extracted to services/admin/app/auth/signup_helpers.py
+# (Phase 1 sub-split 3/N). Re-exported here so existing imports
+# ``from services.admin.app.auth_routes import _slugify_tenant_name`` keep
+# working. ``_cleanup_supabase_user`` stays in this module because
+# tests patch ``auth_routes.get_supabase`` via the module namespace —
+# moving the function would break those patches.
+from .auth.signup_helpers import (  # noqa: F401  (re-exported for backward compat)
+    _slugify_tenant_name,
+    _ensure_unique_tenant_slug,
+)
 
 @router.get("/me", response_model=UserResponse)
 def get_me(user: UserModel = Depends(get_current_user)):
