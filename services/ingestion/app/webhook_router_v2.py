@@ -760,6 +760,92 @@ def _rules_preeval_reject(event: IngestEvent, db_session, tenant_id: str):
     return reject, reason, summary
 
 
+def _persist_canonical_and_eval(
+    db_session,
+    event: IngestEvent,
+    tenant_id: str,
+    precomputed_summary,
+) -> None:
+    """Persist canonical event + write rule eval rows + create exception
+    queue entries for non-compliant verdicts.
+
+    Module-level so the happy-path threaded closure and the fallback-
+    path inline block can share a single implementation, AND so the
+    routing logic (use ``persist_summary`` when the pre-computed summary
+    is available, else fall back to ``evaluate_event(persist=True)``)
+    can be unit-tested without mounting the full ``ingest_events`` route.
+
+    Routing rules (verified by ``test_persist_canonical_and_eval``):
+      - ``precomputed_summary`` is non-None AND has results →
+        ``RulesEngine.persist_summary`` writes the eval rows. No
+        re-evaluation. This is the fast path under
+        ``RULES_ENGINE_ENFORCE=cte_only|all``.
+      - ``precomputed_summary`` is None OR has empty ``.results`` →
+        ``RulesEngine.evaluate_event(persist=True)`` re-runs and
+        persists. Default production path under ``OFF`` mode and
+        fallback for no-verdict / pre-eval-error cases.
+      - In both paths, ``not summary.compliant`` triggers
+        ``ExceptionQueueService.create_exceptions_from_evaluation``
+        for non-blocking failure visibility.
+
+    Anchors the eval rows on the canonical event_id we just persisted
+    (``str(canonical.event_id)``), not on whatever ID the pre-eval
+    canonical happened to have. ``normalize_webhook_event`` mints a
+    fresh UUID per call.
+
+    Caller is responsible for catching exceptions raised by this
+    function — the helper does not swallow errors so the caller can
+    decide between "abort the request" and "log and continue" based
+    on context (the happy-path threaded block uses
+    ``try/except Exception`` to keep the response unblocked; the
+    fallback path uses a narrow exception list and logs to
+    ``canonical_write_skipped_fallback``).
+    """
+    from shared.canonical_persistence import CanonicalEventStore  # noqa: PLC0415
+    from shared.rules_engine import RulesEngine  # noqa: PLC0415
+
+    canonical = normalize_webhook_event(event, tenant_id)
+    store = CanonicalEventStore(db_session, dual_write=False, skip_chain_write=True)
+    store.persist_event(canonical)
+    engine = RulesEngine(db_session)
+
+    if precomputed_summary is not None and precomputed_summary.results:
+        # Fast path: reuse the pre-computed evaluation. Single rule run
+        # per accepted event under enforcement instead of two.
+        engine.persist_summary(
+            precomputed_summary,
+            tenant_id=tenant_id,
+            event_id=str(canonical.event_id),
+        )
+        summary = precomputed_summary
+    else:
+        # Fallback: pre-eval skipped (OFF mode), errored, or returned a
+        # no-verdict summary with no results to persist. Re-evaluate so
+        # the eval rows still get written. This branch must remain
+        # bit-for-bit identical to pre-Phase-0 behavior — it's the
+        # default production path while the flag is off.
+        event_data = {
+            "event_id": str(canonical.event_id),
+            "event_type": canonical.event_type.value,
+            "traceability_lot_code": canonical.traceability_lot_code,
+            "product_reference": canonical.product_reference,
+            "quantity": canonical.quantity,
+            "unit_of_measure": canonical.unit_of_measure,
+            "from_facility_reference": canonical.from_facility_reference,
+            "to_facility_reference": canonical.to_facility_reference,
+            "from_entity_reference": canonical.from_entity_reference,
+            "to_entity_reference": canonical.to_entity_reference,
+            "kdes": canonical.kdes,
+        }
+        summary = engine.evaluate_event(event_data, persist=True, tenant_id=tenant_id)
+
+    if not summary.compliant:
+        from shared.exception_queue import ExceptionQueueService  # noqa: PLC0415
+        ExceptionQueueService(db_session).create_exceptions_from_evaluation(
+            tenant_id, summary
+        )
+
+
 def _publish_graph_sync(event_id: str, event: IngestEvent, tenant_id: str) -> None:
     """Push a CTE creation event to Redis for Neo4j graph sync.
 
@@ -1047,58 +1133,17 @@ async def ingest_events(
 
                     # Capture loop-bound vars in default kwargs so the
                     # threaded closure sees the per-event values rather
-                    # than the last loop iteration's bindings.
+                    # than the last loop iteration's bindings. Body lives
+                    # in the module-level ``_persist_canonical_and_eval``
+                    # helper so it's unit-testable without mounting the
+                    # full route — see test_webhook_router_v2_canonical_helper.py.
                     def _do_canonical_write(
                         _event=event,
                         _precomputed=precomputed_summary,
                     ) -> None:
-                        from shared.canonical_persistence import CanonicalEventStore  # noqa: PLC0415
-                        from shared.rules_engine import RulesEngine  # noqa: PLC0415
-                        _canonical = normalize_webhook_event(_event, tenant_id)
-                        _store = CanonicalEventStore(db_session, dual_write=False, skip_chain_write=True)
-                        _store.persist_event(_canonical)
-                        _engine = RulesEngine(db_session)
-                        if _precomputed is not None and _precomputed.results:
-                            # Fast path: pre-eval already evaluated this event
-                            # (RULES_ENGINE_ENFORCE != off). Persist the
-                            # pre-computed results directly instead of
-                            # re-running every rule. Anchor the rows on
-                            # the canonical event_id we just persisted —
-                            # pre-eval generated its own canonical with a
-                            # different ID, so use the new one.
-                            _engine.persist_summary(
-                                _precomputed,
-                                tenant_id=tenant_id,
-                                event_id=str(_canonical.event_id),
-                            )
-                            _summary = _precomputed
-                        else:
-                            # No pre-computed summary — pre-eval was
-                            # skipped (OFF mode or pre-eval errored).
-                            # Fall back to today's behavior: re-evaluate
-                            # with persist=True. This branch is the
-                            # default production path while the flag is
-                            # off, so it must remain bit-for-bit identical
-                            # to pre-Phase-0 semantics.
-                            _event_data = {
-                                "event_id": str(_canonical.event_id),
-                                "event_type": _canonical.event_type.value,
-                                "traceability_lot_code": _canonical.traceability_lot_code,
-                                "product_reference": _canonical.product_reference,
-                                "quantity": _canonical.quantity,
-                                "unit_of_measure": _canonical.unit_of_measure,
-                                "from_facility_reference": _canonical.from_facility_reference,
-                                "to_facility_reference": _canonical.to_facility_reference,
-                                "from_entity_reference": _canonical.from_entity_reference,
-                                "to_entity_reference": _canonical.to_entity_reference,
-                                "kdes": _canonical.kdes,
-                            }
-                            _summary = _engine.evaluate_event(_event_data, persist=True, tenant_id=tenant_id)
-                        if not _summary.compliant:
-                            from shared.exception_queue import ExceptionQueueService  # noqa: PLC0415
-                            ExceptionQueueService(db_session).create_exceptions_from_evaluation(
-                                tenant_id, _summary
-                            )
+                        _persist_canonical_and_eval(
+                            db_session, _event, tenant_id, _precomputed,
+                        )
 
                     # Run in a daemon thread so join(timeout=) returns promptly
                     # if the canonical write is slow — the thread continues in
@@ -1191,43 +1236,17 @@ async def ingest_events(
                         ))
                         accepted += 1
 
-                        # Canonical normalization + rule evaluation (mirrors batch happy path).
-                        # Reuses the pre-computed summary from the fallback's
-                        # pre-eval call when available — same double-eval
-                        # avoidance as the batch path.
+                        # Canonical normalization + rule evaluation. Inline
+                        # (not threaded) since we already lost the batch
+                        # latency budget by hitting this fallback.
+                        # Body matches the happy-path threaded block —
+                        # both call ``_persist_canonical_and_eval`` so the
+                        # routing logic (persist_summary fast path vs.
+                        # evaluate_event fallback) lives in one place.
                         try:
-                            from shared.canonical_persistence import CanonicalEventStore
-                            canonical = normalize_webhook_event(event, tenant_id)
-                            canonical_store = CanonicalEventStore(db_session, dual_write=False, skip_chain_write=True)
-                            canonical_store.persist_event(canonical)
-                            from shared.rules_engine import RulesEngine
-                            engine = RulesEngine(db_session)
-                            if _fb_summary is not None and _fb_summary.results:
-                                engine.persist_summary(
-                                    _fb_summary,
-                                    tenant_id=tenant_id,
-                                    event_id=str(canonical.event_id),
-                                )
-                                summary = _fb_summary
-                            else:
-                                event_data = {
-                                    "event_id": str(canonical.event_id),
-                                    "event_type": canonical.event_type.value,
-                                    "traceability_lot_code": canonical.traceability_lot_code,
-                                    "product_reference": canonical.product_reference,
-                                    "quantity": canonical.quantity,
-                                    "unit_of_measure": canonical.unit_of_measure,
-                                    "from_facility_reference": canonical.from_facility_reference,
-                                    "to_facility_reference": canonical.to_facility_reference,
-                                    "from_entity_reference": canonical.from_entity_reference,
-                                    "to_entity_reference": canonical.to_entity_reference,
-                                    "kdes": canonical.kdes,
-                                }
-                                summary = engine.evaluate_event(event_data, persist=True, tenant_id=tenant_id)
-                            if not summary.compliant:
-                                from shared.exception_queue import ExceptionQueueService
-                                exc_svc = ExceptionQueueService(db_session)
-                                exc_svc.create_exceptions_from_evaluation(tenant_id, summary)
+                            _persist_canonical_and_eval(
+                                db_session, event, tenant_id, _fb_summary,
+                            )
                         except (ImportError, SQLAlchemyError, ValueError, TypeError, RuntimeError, KeyError, AttributeError) as canon_err:
                             logger.warning("canonical_write_skipped_fallback: %s", str(canon_err))
 
