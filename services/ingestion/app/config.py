@@ -1,6 +1,7 @@
 """Configuration for the ingestion service."""
 
 import logging
+import os
 import warnings
 from functools import lru_cache
 from typing import Optional
@@ -53,15 +54,17 @@ class Settings(ObjectStorageMixin, BaseServiceSettings):
 def get_settings() -> Settings:
     """Return cached settings instance.
 
-    Warns loudly if API_KEY is not configured in a production-like environment
-    so operators notice immediately instead of silently falling back.
+    Warns loudly if no supported API key environment variable is configured
+    in a production-like environment so operators notice immediately instead
+    of silently falling back.
     """
     from shared.env import is_production
     settings = Settings()
     _is_prod = is_production()
-    if settings.api_key is None and _is_prod:
+    configured_api_key = settings.api_key or os.environ.get("REGENGINE_API_KEY")
+    if not configured_api_key and _is_prod:
         msg = (
-            "API_KEY env var is not set in production. "
+            "REGENGINE_API_KEY/API_KEY env var is not set in production. "
             "Webhook ingestion will reject all requests until configured."
         )
         _logger.warning(msg)
