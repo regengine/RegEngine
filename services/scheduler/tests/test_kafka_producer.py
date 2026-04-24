@@ -86,7 +86,7 @@ class TestEmitEnforcementChange:
 
     def test_returns_false_on_kafka_error(self, producer, mock_kafka):
         mock_instance, _ = mock_kafka
-        from kafka.errors import KafkaError
+        from shared.kafka_compat import KafkaError
         mock_instance.send.side_effect = KafkaError("Broker down")
         result = producer.emit_enforcement_change(_make_item())
         assert result is False

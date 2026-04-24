@@ -7,8 +7,7 @@ from functools import lru_cache
 from typing import Optional
 
 import structlog
-from kafka import KafkaProducer as KafkaProducerLib
-from kafka.errors import KafkaError
+from shared.kafka_compat import KafkaError, KafkaProducerCompat as KafkaProducerLib
 
 from shared.observability.kafka_propagation import inject_correlation_headers_tuples
 
@@ -44,7 +43,7 @@ class KafkaEventProducer:
           exponential-ish backoff on transient broker errors
         - ``max_in_flight_requests_per_connection=5`` (was 1) — with
           retries>0 and acks=all this is still ordered per partition
-          via kafka-python's sequence-numbering
+          via Confluent's producer ordering
         - ``request_timeout_ms=30000``
         """
         if self._producer is None:

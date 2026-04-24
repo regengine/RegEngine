@@ -7,7 +7,7 @@ this, a trace that starts as an HTTP request (admin → produce) ends at the
 first broker hop — downstream logs in graph / nlp / admin-review-consumer
 have no way to stitch back to the originating request.
 
-Usage on the producer side (`kafka-python`)::
+Usage on the producer side (legacy producer API)::
 
     from shared.observability.kafka_propagation import inject_correlation_headers
 
@@ -89,7 +89,7 @@ def inject_correlation_headers(
 
     Returns:
         A list of ``(name, utf-8-bytes)`` tuples compatible with both the
-        ``kafka-python`` and ``confluent-kafka`` producer APIs.
+        the legacy and ``confluent-kafka`` producer APIs.
     """
     headers: List[KafkaHeader] = []
     # Preserve pre-existing headers first
@@ -140,8 +140,7 @@ def extract_correlation_headers(
 ) -> Tuple[Optional[str], Optional[str]]:
     """Pull ``(correlation_id, tenant_id)`` out of a Kafka message's headers.
 
-    Handles both the kafka-python list-of-tuples format and the
-    confluent-kafka list-of-tuples format (both are effectively identical).
+    Handles the Kafka list-of-tuples header format used by Confluent.
     Values may be bytes or strings; we decode utf-8 tolerantly.
     """
     if not headers:

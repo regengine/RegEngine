@@ -52,14 +52,12 @@ def kafka_health_check(
         {"status": "available", "broker_count": 1}
         {"status": "unavailable", "error": "..."}
 
-    Works with both ``confluent-kafka`` and ``kafka-python`` libraries,
-    preferring whichever is installed.
+    Uses the repo-standard ``confluent-kafka`` client.
     """
     servers = bootstrap_servers or os.environ.get(
         "KAFKA_BOOTSTRAP_SERVERS", "redpanda:9092"
     )
 
-    # Try confluent-kafka first (used by ingestion service)
     try:
         from confluent_kafka.admin import AdminClient
 
@@ -72,29 +70,8 @@ def kafka_health_check(
         logger.info("kafka_health_ok", brokers=broker_count)
         return {"status": "available", "broker_count": broker_count}
     except ImportError:
-        pass
-    except Exception as exc:
-        logger.warning("kafka_health_unavailable", error=str(exc))
-        return {"status": "unavailable", "error": str(exc)}
-
-    # Fallback to kafka-python
-    try:
-        from kafka.admin import KafkaAdminClient
-
-        admin = KafkaAdminClient(
-            bootstrap_servers=servers,
-            request_timeout_ms=int(timeout * 1000),
-        )
-        try:
-            brokers = admin.describe_cluster()
-            broker_count = len(brokers.get("brokers", []))
-            logger.info("kafka_health_ok", brokers=broker_count)
-            return {"status": "available", "broker_count": broker_count}
-        finally:
-            admin.close()
-    except ImportError:
-        logger.warning("kafka_libraries_not_installed")
-        return {"status": "unavailable", "error": "no kafka library installed"}
+        logger.warning("confluent_kafka_not_installed")
+        return {"status": "unavailable", "error": "confluent-kafka not installed"}
     except Exception as exc:
         logger.warning("kafka_health_unavailable", error=str(exc))
         return {"status": "unavailable", "error": str(exc)}
@@ -111,11 +88,11 @@ def ensure_topic(
     replication_factor: int = 1,
     *,
     min_insync_replicas: int | None = None,
-    kafka_library: str = "kafka-python",
+    kafka_library: str = "confluent-kafka",
 ) -> None:
     """Create a Kafka topic idempotently.
 
-    Supports both ``kafka-python`` and ``confluent-kafka`` admin clients.
+    Uses the repo-standard ``confluent-kafka`` admin client.
     If the topic already exists, this is a no-op.
 
     Args:
@@ -123,40 +100,15 @@ def ensure_topic(
             Defaults to None (inherits broker default). Set to 2 in production
             with multi-broker clusters so acks=all actually requires 2+ replicas.
     """
-    if kafka_library == "confluent-kafka":
-        _ensure_topic_confluent(topic, bootstrap_servers, num_partitions, replication_factor, min_insync_replicas)
-    else:
-        _ensure_topic_kafka_python(topic, bootstrap_servers, num_partitions, replication_factor, min_insync_replicas)
-
-
-def _ensure_topic_kafka_python(
-    topic: str, bootstrap: str, partitions: int, replication: int,
-    min_isr: int | None = None,
-) -> None:
-    """kafka-python based topic creation."""
-    try:
-        from kafka.admin import KafkaAdminClient, NewTopic
-        from kafka.errors import TopicAlreadyExistsError
-
-        topic_configs = {}
-        if min_isr is not None:
-            topic_configs["min.insync.replicas"] = str(min_isr)
-
-        admin = KafkaAdminClient(bootstrap_servers=bootstrap)
-        try:
-            admin.create_topics([NewTopic(
-                topic, num_partitions=partitions, replication_factor=replication,
-                topic_configs=topic_configs if topic_configs else None,
-            )])
-            logger.info("topic_created", topic=topic)
-        except TopicAlreadyExistsError:
-            pass
-        except Exception as exc:
-            logger.warning("topic_creation_failed", topic=topic, error=str(exc))
-        finally:
-            admin.close()
-    except ImportError:
-        logger.warning("kafka_python_not_installed", topic=topic)
+    if kafka_library != "confluent-kafka":
+        logger.warning("unsupported_kafka_library_ignored", kafka_library=kafka_library)
+    _ensure_topic_confluent(
+        topic,
+        bootstrap_servers,
+        num_partitions,
+        replication_factor,
+        min_insync_replicas,
+    )
 
 
 def _ensure_topic_confluent(
@@ -229,8 +181,8 @@ class DLQManager:
         if self._producer is None:
             with self._lock:
                 if self._producer is None:
-                    from kafka import KafkaProducer
-                    self._producer = KafkaProducer(
+                    from shared.kafka_compat import KafkaProducerCompat
+                    self._producer = KafkaProducerCompat(
                         bootstrap_servers=self._bootstrap,
                         value_serializer=lambda v: json.dumps(v).encode("utf-8"),
                     )

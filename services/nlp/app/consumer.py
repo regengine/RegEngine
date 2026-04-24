@@ -20,9 +20,14 @@ def _env_flag(name: str, default: bool = False) -> bool:
 
 import structlog
 from jsonschema import Draft7Validator, ValidationError
-from kafka import KafkaConsumer, KafkaProducer
-from kafka.admin import KafkaAdminClient, NewTopic
-from kafka.errors import KafkaTimeoutError, TopicAlreadyExistsError
+from confluent_kafka.admin import NewTopic
+from shared.kafka_compat import (
+    KafkaAdminClientCompat as KafkaAdminClient,
+    KafkaConsumerCompat as KafkaConsumer,
+    KafkaProducerCompat as KafkaProducer,
+    KafkaTimeoutError,
+    TopicAlreadyExistsError,
+)
 from opentelemetry import trace, propagate
 from prometheus_client import Counter
 from structlog.contextvars import get_contextvars
@@ -1064,7 +1069,7 @@ def _send_to_dlq(
             tenant_id=tenant_id,
             error=error,
         )
-    except (ConnectionError, TimeoutError, OSError, RuntimeError) as dlq_exc:
+    except (KafkaTimeoutError, ConnectionError, TimeoutError, OSError, RuntimeError) as dlq_exc:
         logger.error(
             "dlq_send_failed",
             document_id=doc_id,

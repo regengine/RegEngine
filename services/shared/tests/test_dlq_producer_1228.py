@@ -67,7 +67,7 @@ class TestDLQProducerConfluentBackend:
         assert headers["service"] == b"test-svc"
         mock_inner.poll.assert_called_once_with(0)
 
-    def test_send_kafka_python_backend(self):
+    def test_send_confluent_flag_false_still_uses_produce(self):
         mock_inner = MagicMock()
         with patch("shared.observability.dlq_producer.DLQProducer._init_producer"):
             dlq = DLQProducer.__new__(DLQProducer)
@@ -80,8 +80,8 @@ class TestDLQProducerConfluentBackend:
 
         dlq.send(b"msg", reason="timeout")
 
-        mock_inner.send.assert_called_once()
-        _, kwargs = mock_inner.send.call_args
+        mock_inner.produce.assert_called_once()
+        _, kwargs = mock_inner.produce.call_args
         assert kwargs["value"] == b"msg"
 
     def test_send_noop_when_no_producer(self, caplog):
@@ -109,7 +109,7 @@ class TestDLQProducerConfluentBackend:
         dlq.flush(timeout=3.0)
         mock_inner.flush.assert_called_once_with(3.0)
 
-    def test_close_kafka_python(self):
+    def test_close_confluent_flag_false_has_no_explicit_close(self):
         mock_inner = MagicMock()
         with patch("shared.observability.dlq_producer.DLQProducer._init_producer"):
             dlq = DLQProducer.__new__(DLQProducer)
@@ -121,7 +121,7 @@ class TestDLQProducerConfluentBackend:
             dlq._confluent = False
         dlq.close()
         mock_inner.flush.assert_called()
-        mock_inner.close.assert_called()
+        mock_inner.close.assert_not_called()
         assert dlq._producer is None
 
     def test_thread_safety(self):
