@@ -44,7 +44,6 @@ from app.consumer import run_consumer, stop_consumer
 from app.routes import router as nlp_router
 
 from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
 
 @asynccontextmanager
 async def lifespan(api_app: FastAPI):
@@ -68,8 +67,6 @@ async def lifespan(api_app: FastAPI):
     if consumer_thread is not None:
         stop_consumer()
         consumer_thread.join(timeout=5.0)
-
-from shared.cors import get_allowed_origins, should_allow_credentials
 
 from shared.env import is_production
 _is_prod = is_production()

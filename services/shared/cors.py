@@ -6,6 +6,21 @@ like wildcard origins with credentials enabled.
 import os
 from typing import List
 
+DEFAULT_ALLOWED_HEADERS = [
+    "Authorization",
+    "Content-Type",
+    "Idempotency-Key",
+    "X-Admin-Key",
+    "X-API-Version",
+    "X-Correlation-ID",
+    "X-Metrics-Key",
+    "X-RegEngine-API-Key",
+    "X-RegEngine-Tenant-ID",
+    "X-Request-ID",
+    "X-Requested-With",
+    "X-Tenant-ID",
+]
+
 
 def get_allowed_origins() -> List[str]:
     """Get CORS allowed origins from environment or sensible defaults.
@@ -37,6 +52,22 @@ def get_allowed_origins() -> List[str]:
         raise ValueError("CORS wildcard (*) not allowed in production")
 
     return origins
+
+
+def get_allowed_headers() -> List[str]:
+    """Get explicit CORS allowed headers.
+
+    Wildcard headers are not compatible with credentialed browser requests and
+    are rejected in production.
+    """
+    env = os.getenv("REGENGINE_ENV", "development")
+    headers_str = os.getenv("CORS_ALLOWED_HEADERS", ",".join(DEFAULT_ALLOWED_HEADERS))
+    headers = [header.strip() for header in headers_str.split(",") if header.strip()]
+
+    if env == "production" and "*" in headers:
+        raise ValueError("CORS wildcard (*) headers not allowed in production")
+
+    return headers
 
 
 def should_allow_credentials() -> bool:
