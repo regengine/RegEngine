@@ -206,85 +206,21 @@ async def _clear_lockout(session_store: RedisSessionStore, email: str) -> None:
     await client.delete(_lockout_key(email), _lockout_delay_key(email))
 
 
-async def _persist_session(
-    session_store: RedisSessionStore,
-    session_data: SessionData,
-    *,
-    context: str,
-    user_id: UUID,
-) -> None:
-    """Persist session to Redis with one retry. Raises 503 on failure.
-
-    A missing session record means the refresh token can never be validated,
-    creating a zombie session that silently expires and kicks the user out.
-    Failing fast with 503 is better than a half-working login.
-    """
-    last_exc: Optional[Exception] = None
-    for attempt in range(2):
-        try:
-            await session_store.create_session(session_data)
-            return
-        except Exception as exc:
-            last_exc = exc
-            if attempt == 0:
-                logger.warning(
-                    "session_store_retry",
-                    context=context,
-                    user_id=str(user_id),
-                    error=str(exc),
-                )
-                await asyncio.sleep(0.25)  # brief back-off before retry
-
-    # Both attempts failed
-    logger.error(
-        "session_store_unavailable",
-        context=context,
-        user_id=str(user_id),
-        error=str(last_exc),
-    )
-    raise HTTPException(
-        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-        detail="Session service temporarily unavailable. Please try again.",
-    )
-
-class LoginRequest(BaseModel):
-    email: str = Field(max_length=255)
-    password: str = Field(max_length=128)
-
-class TokenResponse(BaseModel):
-    access_token: str
-    token_type: str = "bearer"
-    refresh_token: str
-    tenant_id: Optional[UUID] = None
-    user: Dict
-    available_tenants: List[Dict]
-
-class RegisterRequest(BaseModel):
-    email: str = Field(max_length=255)
-    password: str = Field(max_length=128)
-    tenant_name: str = Field(max_length=100)
-    partner_tier: Optional[str] = Field(None, pattern=r"^(founding|standard)$")
-
-
-class SignupAcceptedResponse(BaseModel):
-    detail: str
-
-
-_SIGNUP_ACCEPTED_DETAIL = "Check your inbox for confirmation instructions."
-
-
-def _signup_accepted_response() -> JSONResponse:
-    return JSONResponse(
-        status_code=status.HTTP_202_ACCEPTED,
-        content=SignupAcceptedResponse(detail=_SIGNUP_ACCEPTED_DETAIL).model_dump(),
-    )
-
-
-class UserResponse(BaseModel):
-    id: UUID
-    email: str
-    is_sysadmin: bool
-    status: str
+# Pydantic schemas extracted to services/admin/app/auth/schemas.py and
+# _persist_session extracted to services/admin/app/auth/session_helpers.py
+# (Phase 1 sub-split 2/N). Re-exported here so existing
+# ``from services.admin.app.auth_routes import LoginRequest`` / ``ar._persist_session``
+# imports continue to work unchanged.
+from .auth.schemas import (  # noqa: F401  (re-exported for backward compat)
+    LoginRequest,
+    TokenResponse,
+    RegisterRequest,
+    SignupAcceptedResponse,
+    UserResponse,
+    _SIGNUP_ACCEPTED_DETAIL,
+    _signup_accepted_response,
+)
+from .auth.session_helpers import _persist_session  # noqa: F401
 
 
 async def _cleanup_supabase_user(user_id: UUID) -> None:
