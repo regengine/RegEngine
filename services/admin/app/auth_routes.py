@@ -4,7 +4,6 @@ from sqlalchemy.orm import Session
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from datetime import timedelta, datetime, timezone
-import inspect
 import structlog
 from pydantic import BaseModel, Field
 from typing import List, Dict, Optional
@@ -38,253 +37,46 @@ import asyncio
 router = APIRouter(prefix="/auth", tags=["auth"])
 logger = structlog.get_logger("auth")
 
-# Per-email login attempt tracking (credential stuffing prevention)
-_EMAIL_ATTEMPT_LIMIT = 5
-_EMAIL_ATTEMPT_WINDOW = 900  # 15 minutes
+# Lockout + email-rate-limit helpers extracted to services/admin/app/auth/lockout.py
+# (Phase 1 — first auth/ sub-split).  Re-exported here so the existing
+# ``from services.admin.app.auth_routes import _progressive_delay_seconds`` imports
+# used by tests and other callers continue to work unchanged.
+from .auth.lockout import (  # noqa: F401  (re-exported for backward compat)
+    _EMAIL_ATTEMPT_LIMIT,
+    _EMAIL_ATTEMPT_WINDOW,
+    _LOCKOUT_THRESHOLD,
+    _LOCKOUT_DURATION,
+    _PROGRESSIVE_DELAY_START,
+    _PROGRESSIVE_DELAY_CAP_SECONDS,
+    _email_attempt_key,
+    _maybe_await,
+    _check_email_rate_limit,
+    _record_failed_login_attempt,
+    _clear_email_rate_limit,
+    _lockout_key,
+    _lockout_delay_key,
+    _progressive_delay_seconds,
+    _check_account_lockout,
+    _record_lockout_attempt,
+    _clear_lockout,
+)
 
 
-def _email_attempt_key(email: str) -> str:
-    return f"login_attempts:{email}"
-
-
-async def _maybe_await(result):
-    """Accept either a direct value or an awaitable from injected collaborators."""
-    if inspect.isawaitable(result):
-        return await result
-    return result
-
-
-async def _check_email_rate_limit(session_store: RedisSessionStore, email: str) -> None:
-    """Raise 401 if this email has exceeded the failed login attempt limit.
-
-    #1404 — previously raised 429 with a Retry-After header, which let an
-    attacker probe whether a given email address has an active account: after 5
-    attempts against victim@company.com the 429 response leaks "this email
-    exists." We now return 401 (indistinguishable from a wrong-password response)
-    with a short artificial delay to slow the attacker without advertising the
-    hit. The per-email counter is still maintained internally so the throttle
-    remains effective; we just don't advertise it via a distinct status code or
-    Retry-After header.
-    """
-    client = await session_store._get_client()
-    count_str = await client.get(_email_attempt_key(email))
-    if count_str and int(count_str) >= _EMAIL_ATTEMPT_LIMIT:
-        await asyncio.sleep(0.1)  # brief artificial delay; does NOT expose the limit
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect email or password",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-
-async def _record_failed_login_attempt(session_store: RedisSessionStore, email: str) -> None:
-    client = await session_store._get_client()
-    key = _email_attempt_key(email)
-    async with client.pipeline(transaction=False) as pipe:
-        pipe.incr(key)
-        pipe.expire(key, _EMAIL_ATTEMPT_WINDOW)
-        await pipe.execute()
-
-
-async def _clear_email_rate_limit(session_store: RedisSessionStore, email: str) -> None:
-    client = await session_store._get_client()
-    await client.delete(_email_attempt_key(email))
-
-
-# ── Account lockout (cumulative, cross-IP) — NIST AC-7 / OWASP A07 (#972) ──
-_LOCKOUT_THRESHOLD = 10
-_LOCKOUT_DURATION = 86400  # 24 hours
-_PROGRESSIVE_DELAY_START = 3  # start delays after 3rd cumulative failure
-# #1070 — raise the cap so the exponential stays meaningful past ~8
-# failures. At the old cap of 30s a patient attacker could drive
-# ~2,880 attempts/day against a single account before lockout. With
-# this cap the effective rate drops by an order of magnitude well
-# before the 10-attempt threshold.
-_PROGRESSIVE_DELAY_CAP_SECONDS = 300
-
-
-def _lockout_key(email: str) -> str:
-    return f"login_lockout:{email}"
-
-
-def _lockout_delay_key(email: str) -> str:
-    """Redis key whose TTL encodes the cool-down window for the email.
-
-    #1070: the old implementation enforced the progressive delay via
-    ``await asyncio.sleep(delay)`` inside ``_record_lockout_attempt``,
-    which holds the server worker open but does NOT throttle the
-    attacker — they can run N concurrent connections to defeat the
-    serial sleep. Persisting the deadline in Redis and gating the
-    endpoint on it makes the cool-down stateful across all
-    connections: every parallel attempt sees the same TTL and is
-    rejected with 429 / Retry-After until it elapses.
-    """
-    return f"login_lockout_delay:{email}"
-
-
-def _progressive_delay_seconds(count: int) -> int:
-    """Return the cool-down seconds a failing request should impose.
-
-    Returns 0 when we're below ``_PROGRESSIVE_DELAY_START`` (no
-    throttle yet). Otherwise exponential backoff, capped. Split out
-    of ``_record_lockout_attempt`` so tests can pin the table
-    directly — easier to reason about than observing via
-    ``asyncio.sleep`` timings.
-    """
-    if count < _PROGRESSIVE_DELAY_START:
-        return 0
-    return min(2 ** (count - _PROGRESSIVE_DELAY_START), _PROGRESSIVE_DELAY_CAP_SECONDS)
-
-
-async def _check_account_lockout(session_store: RedisSessionStore, email: str) -> None:
-    """Raise 423 if account is locked; raise 429 if still in cool-down.
-
-    Order matters: the 24-hour lockout is a harder stop than the
-    per-email progressive delay, and we want an attacker who crosses
-    the threshold to get the unambiguous 423 response rather than a
-    cycle of 429 Retry-After responses that could mislead them into
-    waiting for the short delay window to elapse.
-    """
-    client = await session_store._get_client()
-
-    # Hard lockout (threshold reached).
-    count_str = await client.get(_lockout_key(email))
-    if count_str and int(count_str) >= _LOCKOUT_THRESHOLD:
-        raise HTTPException(
-            status_code=status.HTTP_423_LOCKED,
-            detail="Account temporarily locked due to repeated failed login attempts. Contact support or wait 24 hours.",
-            headers={"Retry-After": str(_LOCKOUT_DURATION)},
-        )
-
-    # Progressive-delay cool-down — stateful across concurrent
-    # connections so parallel attempts cannot bypass it (#1070).
-    delay_ttl = await client.ttl(_lockout_delay_key(email))
-    if delay_ttl and delay_ttl > 0:
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail="Too many failed login attempts. Please wait before trying again.",
-            headers={"Retry-After": str(delay_ttl)},
-        )
-
-
-async def _record_lockout_attempt(session_store: RedisSessionStore, email: str) -> int:
-    """Increment the cumulative failure counter and arm the
-    progressive cool-down. Returns the new count.
-
-    #1070: the cool-down is now persisted as a Redis TTL rather than
-    enforced via ``asyncio.sleep`` on the failing worker. That swap
-    makes the delay apply to every connection that targets the same
-    email — serial or parallel — instead of only the one that tripped
-    it. The next call to ``_check_account_lockout`` observes the TTL
-    and raises 429 / Retry-After without any further DB work.
-    """
-    client = await session_store._get_client()
-    key = _lockout_key(email)
-    async with client.pipeline(transaction=False) as pipe:
-        pipe.incr(key)
-        pipe.expire(key, _LOCKOUT_DURATION)
-        results = await pipe.execute()
-    count = results[0]
-
-    # Arm the progressive delay via TTL — concurrent connections all
-    # see it, no asyncio.sleep to bypass by spawning more sockets.
-    delay = _progressive_delay_seconds(count)
-    if delay > 0:
-        await client.setex(_lockout_delay_key(email), delay, "1")
-
-    if count == _LOCKOUT_THRESHOLD:
-        logger.warning("account_locked", email=mask_email(email), cumulative_failures=count)
-
-    return count
-
-
-async def _clear_lockout(session_store: RedisSessionStore, email: str) -> None:
-    client = await session_store._get_client()
-    # Clear both the counter and the cool-down so a legitimate user
-    # who succeeds after a run of failures does not keep seeing 429
-    # for the remainder of the delay window.
-    await client.delete(_lockout_key(email), _lockout_delay_key(email))
-
-
-async def _persist_session(
-    session_store: RedisSessionStore,
-    session_data: SessionData,
-    *,
-    context: str,
-    user_id: UUID,
-) -> None:
-    """Persist session to Redis with one retry. Raises 503 on failure.
-
-    A missing session record means the refresh token can never be validated,
-    creating a zombie session that silently expires and kicks the user out.
-    Failing fast with 503 is better than a half-working login.
-    """
-    last_exc: Optional[Exception] = None
-    for attempt in range(2):
-        try:
-            await session_store.create_session(session_data)
-            return
-        except Exception as exc:
-            last_exc = exc
-            if attempt == 0:
-                logger.warning(
-                    "session_store_retry",
-                    context=context,
-                    user_id=str(user_id),
-                    error=str(exc),
-                )
-                await asyncio.sleep(0.25)  # brief back-off before retry
-
-    # Both attempts failed
-    logger.error(
-        "session_store_unavailable",
-        context=context,
-        user_id=str(user_id),
-        error=str(last_exc),
-    )
-    raise HTTPException(
-        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-        detail="Session service temporarily unavailable. Please try again.",
-    )
-
-class LoginRequest(BaseModel):
-    email: str = Field(max_length=255)
-    password: str = Field(max_length=128)
-
-class TokenResponse(BaseModel):
-    access_token: str
-    token_type: str = "bearer"
-    refresh_token: str
-    tenant_id: Optional[UUID] = None
-    user: Dict
-    available_tenants: List[Dict]
-
-class RegisterRequest(BaseModel):
-    email: str = Field(max_length=255)
-    password: str = Field(max_length=128)
-    tenant_name: str = Field(max_length=100)
-    partner_tier: Optional[str] = Field(None, pattern=r"^(founding|standard)$")
-
-
-class SignupAcceptedResponse(BaseModel):
-    detail: str
-
-
-_SIGNUP_ACCEPTED_DETAIL = "Check your inbox for confirmation instructions."
-
-
-def _signup_accepted_response() -> JSONResponse:
-    return JSONResponse(
-        status_code=status.HTTP_202_ACCEPTED,
-        content=SignupAcceptedResponse(detail=_SIGNUP_ACCEPTED_DETAIL).model_dump(),
-    )
-
-
-class UserResponse(BaseModel):
-    id: UUID
-    email: str
-    is_sysadmin: bool
-    status: str
+# Pydantic schemas extracted to services/admin/app/auth/schemas.py and
+# _persist_session extracted to services/admin/app/auth/session_helpers.py
+# (Phase 1 sub-split 2/N). Re-exported here so existing
+# ``from services.admin.app.auth_routes import LoginRequest`` / ``ar._persist_session``
+# imports continue to work unchanged.
+from .auth.schemas import (  # noqa: F401  (re-exported for backward compat)
+    LoginRequest,
+    TokenResponse,
+    RegisterRequest,
+    SignupAcceptedResponse,
+    UserResponse,
+    _SIGNUP_ACCEPTED_DETAIL,
+    _signup_accepted_response,
+)
+from .auth.session_helpers import _persist_session  # noqa: F401
 
 
 async def _cleanup_supabase_user(user_id: UUID) -> None:
@@ -303,19 +95,16 @@ async def _cleanup_supabase_user(user_id: UUID) -> None:
         logger.warning("supabase_orphan_cleanup_failed", user_id=str(user_id), error=str(exc))
 
 
-def _slugify_tenant_name(name: str) -> str:
-    base = re.sub(r"[^a-z0-9]+", "-", name.strip().lower()).strip("-")
-    return base or "tenant"
-
-
-def _ensure_unique_tenant_slug(db: Session, tenant_name: str) -> str:
-    base_slug = _slugify_tenant_name(tenant_name)
-    slug = base_slug
-    suffix = 2
-    while db.execute(select(TenantModel).where(TenantModel.slug == slug)).scalar_one_or_none():
-        slug = f"{base_slug}-{suffix}"
-        suffix += 1
-    return slug
+# Slug helpers extracted to services/admin/app/auth/signup_helpers.py
+# (Phase 1 sub-split 3/N). Re-exported here so existing imports
+# ``from services.admin.app.auth_routes import _slugify_tenant_name`` keep
+# working. ``_cleanup_supabase_user`` stays in this module because
+# tests patch ``auth_routes.get_supabase`` via the module namespace —
+# moving the function would break those patches.
+from .auth.signup_helpers import (  # noqa: F401  (re-exported for backward compat)
+    _slugify_tenant_name,
+    _ensure_unique_tenant_slug,
+)
 
 @router.get("/me", response_model=UserResponse)
 def get_me(user: UserModel = Depends(get_current_user)):

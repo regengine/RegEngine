@@ -16,6 +16,7 @@ on:
       - 'requirements.lock'
       - 'scripts/**'
       - '.github/workflows/backend-ci.yml'
+      - '.github/workflows/deploy.yml'
   pull_request:
     branches: [main]
     paths:
@@ -31,6 +32,7 @@ on:
       - 'requirements.lock'
       - 'scripts/**'
       - '.github/workflows/backend-ci.yml'
+      - '.github/workflows/deploy.yml'
 
 # Cancel in-progress runs for the same branch/PR
 concurrency:
