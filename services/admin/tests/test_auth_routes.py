@@ -244,7 +244,7 @@ class TestSignupExistingEmail:
                 ar.signup.__wrapped__(payload, req, db=db_session, session_store=mock_session_store)
             )
             # Route returns generic JSONResponse(202) for existing emails (enumeration guard)
-            assert result.status_code == 200
+            assert result.status_code == 202
 
 
 # ---------------------------------------------------------------------------
@@ -291,7 +291,7 @@ class TestSignupDbFlushBeforeSupabase:
                 ar.signup.__wrapped__(payload, req, db=db_session, session_store=mock_session_store)
             )
 
-        assert result.status_code == 200
+        assert result.status_code == 202
         # Supabase create_user must NOT have been called
         mock_sb.auth.admin.create_user.assert_not_called()
 

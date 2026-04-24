@@ -279,6 +279,29 @@ class TestUpdateSession:
         args = setex_calls[0].args
         assert args[1] == 60
 
+    @pytest.mark.asyncio
+    async def test_new_token_mapping_written_without_old_hash(self, store, mock_redis):
+        """A claimed token has already been removed via GETDEL, so refresh
+        rotation must still write the new token mapping even when the caller
+        has no old_token_hash to delete."""
+        mock_redis.exists = AsyncMock(return_value=1)
+        mock_redis.ttl = AsyncMock(return_value=120)
+        session_id = uuid.uuid4()
+
+        result = await store.update_session(
+            session_id,
+            {"refresh_token_hash": "new-hash"},
+            new_token_hash="new-hash",
+        )
+
+        assert result is True
+        pipe = mock_redis.pipeline.return_value
+        pipe.setex.assert_awaited_once_with(
+            store._token_hash_key("new-hash"),
+            120,
+            str(session_id),
+        )
+
 
 # ---------------------------------------------------------------------------
 # list_user_sessions — lines 419, 434-438

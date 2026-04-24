@@ -265,6 +265,21 @@ class RegisterRequest(BaseModel):
     tenant_name: str = Field(max_length=100)
     partner_tier: Optional[str] = Field(None, pattern=r"^(founding|standard)$")
 
+
+class SignupAcceptedResponse(BaseModel):
+    detail: str
+
+
+_SIGNUP_ACCEPTED_DETAIL = "Check your inbox for confirmation instructions."
+
+
+def _signup_accepted_response() -> JSONResponse:
+    return JSONResponse(
+        status_code=status.HTTP_202_ACCEPTED,
+        content=SignupAcceptedResponse(detail=_SIGNUP_ACCEPTED_DETAIL).model_dump(),
+    )
+
+
 class UserResponse(BaseModel):
     id: UUID
     email: str
@@ -455,7 +470,11 @@ async def login(
     return response
 
 
-@router.post("/signup", response_model=TokenResponse)
+@router.post(
+    "/signup",
+    response_model=SignupAcceptedResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+)
 @limiter.limit("5/minute")
 async def signup(
     payload: RegisterRequest,
@@ -496,16 +515,11 @@ async def signup(
         select(UserModel).where(UserModel.email == normalized_email)
     ).scalar_one_or_none()
     if existing_user:
-        # Return the same generic success response as a successful signup to prevent email
-        # enumeration (closes #1400). We do NOT send a confirmation email here
-        # to avoid email-bombing the existing user. A "someone tried to register
-        # with your email" notification to the existing user is a nice-to-have
-        # tracked in #1400 but is intentionally omitted here.
+        # Return the exact same accepted response as successful signup to
+        # prevent email enumeration (#1861). We do NOT send a confirmation
+        # email here to avoid email-bombing the existing user.
         logger.info("signup_duplicate_masked", email=mask_email(normalized_email))
-        return JSONResponse(
-            status_code=200,
-            content={"detail": "Check your inbox for confirmation instructions."},
-        )
+        return _signup_accepted_response()
 
     try:
         validate_password(payload.password, user_context={"email": normalized_email})
@@ -530,10 +544,7 @@ async def signup(
     except IntegrityError:
         db.rollback()
         logger.info("signup_duplicate_race_rejected", email=mask_email(normalized_email))
-        return JSONResponse(
-            status_code=200,
-            content={"detail": "Check your inbox for confirmation instructions."},
-        )
+        return _signup_accepted_response()
 
     # #1090 — Supabase provisioning happens AFTER db.flush() succeeds.  If
     # Supabase fails we roll back the DB transaction so the caller can retry.
@@ -739,7 +750,11 @@ async def signup(
         logger.warning("signup_side_effects_failed", user_id=str(new_user.id), error=str(e))
         db.rollback()
 
-    return response
+    # Do not return tokens from signup (#1861). Returning a TokenResponse for
+    # new emails but a message for existing emails made account enumeration
+    # trivial via response-body shape. The user can authenticate through
+    # /auth/login after account creation.
+    return _signup_accepted_response()
 
 
 
@@ -779,6 +794,51 @@ async def refresh_session(
                 await _maybe_await(
                     session_store.revoke_all_for_family(reused_session.family_id)
                 )
+                try:
+                    audit_tenant_id = db.execute(
+                        select(MembershipModel.tenant_id)
+                        .where(
+                            MembershipModel.user_id == reused_session.user_id,
+                            MembershipModel.is_active == True,  # noqa: E712
+                        )
+                        .limit(1)
+                    ).scalar_one_or_none()
+                    if audit_tenant_id:
+                        AuditLogger.log_event(
+                            db,
+                            tenant_id=audit_tenant_id,
+                            event_type="auth.refresh_token_reuse",
+                            action="refresh_token.reuse_detected",
+                            event_category="authentication",
+                            severity="critical",
+                            actor_id=reused_session.user_id,
+                            actor_ip=request.client.host if request.client else None,
+                            actor_ua=request.headers.get("User-Agent"),
+                            resource_type="session_family",
+                            resource_id=str(reused_session.family_id),
+                            endpoint="/auth/refresh",
+                            metadata={
+                                "session_id": str(reused_session_id),
+                                "token_hash_prefix": input_hash[:8],
+                                "response": "session_family_revoked",
+                            },
+                        )
+                        db.commit()
+                    else:
+                        logger.warning(
+                            "refresh_token_reuse_audit_skipped_no_tenant",
+                            session_id=str(reused_session_id),
+                            family_id=str(reused_session.family_id),
+                            user_id=str(reused_session.user_id),
+                        )
+                except Exception as exc:
+                    db.rollback()
+                    logger.warning(
+                        "refresh_token_reuse_audit_failed",
+                        session_id=str(reused_session_id),
+                        family_id=str(reused_session.family_id),
+                        error=str(exc),
+                    )
                 logger.warning(
                     "refresh_token_reuse_detected",
                     session_id=str(reused_session_id),
@@ -820,6 +880,7 @@ async def refresh_session(
             "expires_at": (datetime.now(timezone.utc) + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)).isoformat()
         },
         new_token_hash=new_hash,
+        old_token_hash=input_hash,
     ))
 
     # SECURITY (#1859): tombstone the consumed hash so a replay can be

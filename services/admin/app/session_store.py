@@ -395,10 +395,12 @@ class RedisSessionStore:
             if updates:
                 await pipe.hset(session_key, mapping=updates)
             
-            # Rotate token hash mapping if needed
-            if new_token_hash and old_token_hash:
-                # Delete old mapping
+            # Rotate token hash mapping if needed. ``claim_session_by_token``
+            # has usually already removed the old mapping via GETDEL, but
+            # deleting it again is harmless and keeps direct callers safe.
+            if old_token_hash:
                 await pipe.delete(self._token_hash_key(old_token_hash))
+            if new_token_hash:
                 # Create new mapping
                 await pipe.setex(
                     self._token_hash_key(new_token_hash),

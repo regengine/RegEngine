@@ -28,14 +28,21 @@ function SignupForm() {
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [acceptedDetail, setAcceptedDetail] = useState<string | null>(null);
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError(null);
+    setAcceptedDetail(null);
     setIsLoading(true);
 
     try {
       const response = await apiClient.signup(email, password, tenantName, partnerTier || undefined);
+
+      if (!('access_token' in response)) {
+        setAcceptedDetail(response.detail);
+        return;
+      }
 
       // Set RegEngine JWT session FIRST (sets re_access_token cookie + React state)
       await login(response.access_token, response.user, response.tenant_id);
@@ -151,6 +158,14 @@ function SignupForm() {
             </CardDescription>
           </CardHeader>
           <CardContent>
+            {acceptedDetail ? (
+              <div
+                className="rounded-md border border-re-brand/30 bg-re-brand-muted px-3 py-3 text-sm text-re-brand-light"
+                role="status"
+              >
+                {acceptedDetail}
+              </div>
+            ) : null}
             <form className="space-y-4" onSubmit={handleSubmit}>
               {error && (
                 <div
