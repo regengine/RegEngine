@@ -431,6 +431,12 @@ export interface LoginResponse {
     available_tenants: Array<{ id: string; name: string; slug: string }>;
 }
 
+export interface SignupAcceptedResponse {
+    detail: string;
+}
+
+export type SignupResponse = LoginResponse | SignupAcceptedResponse;
+
 
 // Analysis Summary
 export interface AnalysisRisk {

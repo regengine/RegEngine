@@ -10,6 +10,7 @@ import type {
   Industry,
   TenantResponse,
   LoginResponse,
+  SignupResponse,
   User,
   Role,
   Invite,
@@ -474,7 +475,7 @@ class APIClient {
   }
 
   // Auth API
-  async signup(email: string, password: string, tenantName: string, partnerTier?: string): Promise<LoginResponse> {
+  async signup(email: string, password: string, tenantName: string, partnerTier?: string): Promise<SignupResponse> {
     const body: Record<string, string> = { email, password, tenant_name: tenantName };
     if (partnerTier) body.partner_tier = partnerTier;
     const { data } = await this.adminClient.post('/auth/signup', body);
