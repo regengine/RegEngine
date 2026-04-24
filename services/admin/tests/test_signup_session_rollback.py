@@ -128,8 +128,8 @@ async def test_signup_happy_path_commits_after_session_persist(monkeypatch):
     assert "db.commit" in call_order, (
         f"expected a db.commit after Redis persist; saw {call_order}"
     )
-    assert result.access_token
-    assert result.refresh_token
+    assert result.status_code == 202
+    assert b"Check your inbox" in result.body
     assert db.rollback.call_count == 0
     session_store.create_session.assert_awaited_once()
 
@@ -208,8 +208,8 @@ async def test_retry_after_redis_failure_is_not_blocked_by_409(monkeypatch):
     session_store_ok.create_session = AsyncMock(side_effect=lambda sd: sd)
 
     result = await _call_signup(db, session_store_ok, email="retry@example.com")
-    assert result.access_token
-    assert result.refresh_token
+    assert result.status_code == 202
+    assert b"Check your inbox" in result.body
     session_store_ok.create_session.assert_awaited_once()
 
 
@@ -644,8 +644,8 @@ async def test_redis_create_session_applies_expire_to_every_key(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_duplicate_email_returns_200_not_409(monkeypatch):
-    """POST /auth/signup with an already-registered email must return 200,
+async def test_duplicate_email_returns_202_not_409(monkeypatch):
+    """POST /auth/signup with an already-registered email must return 202,
     not 409, to prevent email enumeration (closes #1400).
 
     The response body must contain a generic confirmation message
@@ -676,12 +676,12 @@ async def test_duplicate_email_returns_200_not_409(monkeypatch):
         session_store=session_store,
     )
 
-    # Must be a JSONResponse (not a TokenResponse) with status 200.
+    # Must be a JSONResponse (not a TokenResponse) with status 202.
     assert isinstance(result, JSONResponse), (
         f"Expected JSONResponse for duplicate email, got {type(result)}"
     )
-    assert result.status_code == 200, (
-        f"Expected 200 for duplicate email to mask enumeration, got {result.status_code}"
+    assert result.status_code == 202, (
+        f"Expected 202 for duplicate email to mask enumeration, got {result.status_code}"
     )
     # DB must not have been modified.
     db.add.assert_not_called()

@@ -549,6 +549,10 @@ class TestRefreshToken:
         assert result.refresh_token != raw_token
         payload = decode_access_token(result.access_token)
         assert payload["sub"] == str(user.id)
+        session_store.update_session.assert_awaited_once()
+        assert session_store.update_session.await_args.kwargs["new_token_hash"] == hash_token(result.refresh_token)
+        assert session_store.update_session.await_args.kwargs["old_token_hash"] == hash_token(raw_token)
+        session_store.mark_token_used.assert_awaited_once()
 
     @pytest.mark.asyncio
     async def test_refresh_invalid_token_raises_401(self):
@@ -565,6 +569,44 @@ class TestRefreshToken:
                 session_store=session_store,
             )
         assert exc.value.status_code == 401
+
+    @pytest.mark.asyncio
+    async def test_refresh_reuse_revokes_family_and_audits(self, monkeypatch):
+        user = _make_user(email="u@x.com", password="pw")
+        tenant = _make_tenant()
+        membership = _make_membership(user, tenant)
+        session, raw_token = self._make_session(user.id)
+
+        session_store = _make_session_store()
+        session_store.claim_session_by_token = AsyncMock(return_value=None)
+        session_store.check_token_reuse = AsyncMock(return_value=session.id)
+        session_store.get_session = AsyncMock(return_value=session)
+        session_store.revoke_all_for_family = AsyncMock(return_value=1)
+
+        db = _make_db_with_user(user, tenant, membership)
+        db.execute.return_value.scalar_one_or_none.return_value = tenant.id
+
+        audit_calls = []
+        monkeypatch.setattr(
+            ar.AuditLogger,
+            "log_event",
+            lambda *args, **kwargs: audit_calls.append(kwargs),
+        )
+
+        with pytest.raises(HTTPException) as exc:
+            await ar.refresh_session.__wrapped__(
+                payload=RefreshRequest(refresh_token=raw_token),
+                request=_make_request(headers={"user-agent": "pytest"}),
+                db=db,
+                session_store=session_store,
+            )
+
+        assert exc.value.status_code == 401
+        assert "reuse" in exc.value.detail.lower()
+        session_store.revoke_all_for_family.assert_awaited_once_with(session.family_id)
+        assert audit_calls
+        assert audit_calls[0]["event_type"] == "auth.refresh_token_reuse"
+        assert audit_calls[0]["severity"] == "critical"
 
     @pytest.mark.asyncio
     async def test_refresh_revoked_session_raises_401(self):
@@ -1119,7 +1161,7 @@ class TestSignup:
             db=db,
             session_store=session_store,
         )
-        assert result.status_code == 200
+        assert result.status_code == 202
         assert b"Check your inbox" in result.body
 
     @pytest.mark.asyncio
@@ -1142,7 +1184,7 @@ class TestSignup:
         assert exc.value.status_code == 400
 
     @pytest.mark.asyncio
-    async def test_signup_happy_path_returns_tokens(self, monkeypatch):
+    async def test_signup_happy_path_returns_generic_accepted(self, monkeypatch):
         monkeypatch.setattr(ar, "get_supabase", lambda: None)
         monkeypatch.setattr(ar, "AuditLogger", MagicMock())
         monkeypatch.setattr(ar, "emit_funnel_event", MagicMock())
@@ -1168,8 +1210,8 @@ class TestSignup:
             session_store=session_store,
         )
 
-        assert result.access_token
-        assert result.refresh_token
+        assert result.status_code == 202
+        assert b"Check your inbox" in result.body
 
     @pytest.mark.asyncio
     async def test_signup_empty_tenant_name_raises_400(self, monkeypatch):
