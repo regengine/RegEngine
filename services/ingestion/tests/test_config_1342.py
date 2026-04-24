@@ -194,6 +194,17 @@ class TestGetSettingsProductionGuardrails:
         assert api_warnings == []
         assert s.api_key == "valid-key"
 
+    def test_regengine_api_key_present_in_production_no_warning(self, _clear_env, monkeypatch):
+        import shared.env as shared_env
+        monkeypatch.setattr(shared_env, "is_production", lambda: True)
+        monkeypatch.setenv("REGENGINE_API_KEY", "valid-key")
+        with warnings.catch_warnings(record=True) as recorded:
+            warnings.simplefilter("always")
+            s = get_settings()
+        api_warnings = [w for w in recorded if "API_KEY" in str(w.message)]
+        assert api_warnings == []
+        assert s.api_key is None
+
     def test_missing_api_key_in_dev_no_warning(self, _clear_env, monkeypatch):
         import shared.env as shared_env
         monkeypatch.setattr(shared_env, "is_production", lambda: False)

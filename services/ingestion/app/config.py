@@ -7,6 +7,7 @@ from typing import Optional
 
 from pydantic import Field
 from shared.base_config import BaseServiceSettings, ObjectStorageMixin
+from shared.api_key_env import has_configured_api_key
 
 _logger = logging.getLogger(__name__)
 
@@ -53,15 +54,16 @@ class Settings(ObjectStorageMixin, BaseServiceSettings):
 def get_settings() -> Settings:
     """Return cached settings instance.
 
-    Warns loudly if API_KEY is not configured in a production-like environment
+    Warns loudly if no supported API key env var is configured in a
+    production-like environment
     so operators notice immediately instead of silently falling back.
     """
     from shared.env import is_production
     settings = Settings()
     _is_prod = is_production()
-    if settings.api_key is None and _is_prod:
+    if not has_configured_api_key() and _is_prod:
         msg = (
-            "API_KEY env var is not set in production. "
+            "REGENGINE_API_KEY/API_KEY env var is not set in production. "
             "Webhook ingestion will reject all requests until configured."
         )
         _logger.warning(msg)

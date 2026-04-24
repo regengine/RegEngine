@@ -76,6 +76,7 @@ def _strip_env(monkeypatch):
         "INGESTION_RBAC_RATE_LIMITS",
         "INGESTION_RBAC_RATE_LIMIT_DEFAULT_RPM",
         "INGESTION_RBAC_RATE_LIMIT_WINDOW_SECONDS",
+        "REGENGINE_API_KEY",
         "API_KEY",
     ):
         monkeypatch.delenv(var, raising=False)
@@ -559,11 +560,32 @@ class TestGetIngestionPrincipal:
         client = TestClient(app)
         resp = client.get(
             "/whoami",
-            headers={"X-RegEngine-API-Key": "master-secret"},
+            headers={
+                "X-RegEngine-API-Key": "master-secret",
+                "X-Tenant-ID": "11111111-2222-3333-4444-555555555555",
+            },
         )
         assert resp.status_code == 200
         assert resp.json()["auth_mode"] == "legacy_master"
-        assert resp.json()["scopes"] == ["*"]
+        assert "*" in resp.json()["scopes"]
+        assert resp.json()["tenant_id"] == "11111111-2222-3333-4444-555555555555"
+
+    def test_regengine_master_key_accepted(self, _strip_env, monkeypatch):
+        from app import config as cfg
+        cfg.get_settings.cache_clear()
+        monkeypatch.setenv("REGENGINE_API_KEY", "master-secret")
+        app = _build_app()
+        client = TestClient(app)
+        resp = client.get(
+            "/whoami",
+            headers={
+                "X-RegEngine-API-Key": "master-secret",
+                "X-Tenant-ID": "11111111-2222-3333-4444-555555555555",
+            },
+        )
+        assert resp.status_code == 200
+        assert resp.json()["auth_mode"] == "legacy_master"
+        assert resp.json()["tenant_id"] == "11111111-2222-3333-4444-555555555555"
 
     def test_missing_header_with_api_key_returns_401(
         self, _strip_env, monkeypatch
