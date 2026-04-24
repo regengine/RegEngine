@@ -199,13 +199,18 @@ def init_db() -> None:
 
 def get_session() -> Iterator[Session]:
     """Provide a SQLAlchemy session for FastAPI dependencies.
-    
+
     This returns a session connected to the Admin DB for core tables.
     """
     session = SessionLocal()
     try:
         yield session
     finally:
+        # rollback() is a no-op if no transaction is active; when a prior
+        # query aborted the transaction it clears the InFailedSqlTransaction
+        # state so the next request checking out this pooled connection
+        # does not inherit it.
+        session.rollback()
         session.close()
 
 
@@ -223,13 +228,14 @@ def get_tenant_session(
             )
         yield session
     finally:
+        session.rollback()
         session.close()
 
 
 # Async session support (wraps sync session for FastAPI async routes)
 async def get_async_session() -> AsyncIterator[Session]:
     """Provide an async-compatible SQLAlchemy session (Admin DB).
-    
+
     Note: This wraps the synchronous session. For true async,
     use asyncpg with SQLAlchemy 2.0 async engine.
     """
@@ -237,6 +243,7 @@ async def get_async_session() -> AsyncIterator[Session]:
     try:
         yield session
     finally:
+        session.rollback()
         session.close()
 
 

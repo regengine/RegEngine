@@ -15,6 +15,7 @@ from uuid import UUID
 
 import structlog
 from sqlalchemy import select, desc
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from .sqlalchemy_models import AuditLogModel
@@ -189,7 +190,22 @@ class AuditLogger:
             )
             return entry.id
 
-        except (ValueError, RuntimeError, OSError, AttributeError, TypeError, KeyError) as e:
+        except (
+            ValueError,
+            RuntimeError,
+            OSError,
+            AttributeError,
+            TypeError,
+            KeyError,
+            SQLAlchemyError,
+        ) as e:
+            # SQLAlchemyError covers ProgrammingError from schema drift
+            # (e.g. audit_logs column type mismatch): without it, a failure
+            # in _get_prev_hash or db.flush() propagates into the caller's
+            # transaction, aborting subsequent queries with
+            # InFailedSqlTransaction. Catching here keeps audit logging
+            # best-effort and non-poisoning; the schema issue is the
+            # root-cause fix (see alembic v065).
             logger.error(
                 "audit_logging_failed",
                 error=str(e),
