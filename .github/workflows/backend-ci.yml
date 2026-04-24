@@ -297,6 +297,25 @@ jobs:
       - name: Guard against new orphan migrations
         run: python scripts/check_orphan_migrations.py
 
+  # ── Dep version drift guard (hard gate) ─────────────────
+  # Scans services/*/requirements*.txt to ensure no per-service file
+  # lowers the floor for shared packages below pyproject.toml. Prevents
+  # the pydantic-settings 2.1 vs 2.6 class of drift — see #1886.
+  dep-version-check:
+    name: Dep version drift guard
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+
+      - name: Setup Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Check for dependency version drift
+        run: python scripts/check_dep_versions.py
+
   # ── Docker Build (consolidated monolith) ─────────────────
   # Production deploys a single consolidated monolith built from the
   # repo-root Dockerfile — see server/main.py and railway.toml. The per-
@@ -350,7 +369,7 @@ jobs:
   ci-status:
     name: CI Status Gate
     if: always()
-    needs: [test, lint, lint-shared, docker-build, security, rls-fallback-check, alembic-revision-check]
+    needs: [test, lint, lint-shared, docker-build, security, rls-fallback-check, alembic-revision-check, dep-version-check]
     runs-on: ubuntu-latest
     steps:
       - name: Check results
@@ -362,6 +381,7 @@ jobs:
           echo "Security:          ${{ needs.security.result }}"
           echo "RLS fallback:      ${{ needs.rls-fallback-check.result }}"
           echo "Alembic rev IDs:   ${{ needs.alembic-revision-check.result }}"
+          echo "Dep drift guard:   ${{ needs.dep-version-check.result }}"
           # Lint is now blocking — flake8 F821 (undefined name) would
           # have caught PR #1482's NLP NameError class of bugs if this
           # gate had been enforcing. Promoting lint to a hard gate so
@@ -371,8 +391,9 @@ jobs:
              || "${{ needs.lint-shared.result }}" == "failure" \
              || "${{ needs.security.result }}" == "failure" \
              || "${{ needs.rls-fallback-check.result }}" == "failure" \
-             || "${{ needs.alembic-revision-check.result }}" == "failure" ]]; then
-            echo "::error::Test, Lint, Security Audit, RLS fallback, or Alembic revision ID guard failed"
+             || "${{ needs.alembic-revision-check.result }}" == "failure" \
+             || "${{ needs.dep-version-check.result }}" == "failure" ]]; then
+            echo "::error::Test, Lint, Security Audit, RLS fallback, Alembic revision ID, or dep version drift guard failed"
             exit 1
           fi
           echo "All checks passed"
