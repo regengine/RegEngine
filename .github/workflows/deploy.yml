@@ -16,6 +16,7 @@ on:
       - 'requirements.in'
       - 'requirements.lock'
       - 'scripts/run-migrations.sh'
+      - '.github/workflows/deploy.yml'
   workflow_dispatch:
 
 permissions:
