@@ -710,6 +710,48 @@ def _neo4j_sync_max_queue() -> int:
         return 100_000
 
 
+def _rules_preeval_reject(event: IngestEvent, db_session, tenant_id: str) -> tuple[bool, Optional[str]]:
+    """Pre-evaluate rules to decide whether the event should be rejected
+    under the current ``RULES_ENGINE_ENFORCE`` policy.
+
+    Runs ``engine.evaluate_event(persist=False)`` so the decision is made
+    without writing eval rows — a reject can exclude the event from the
+    batch without polluting the transaction. Canonical normalization or
+    rule evaluation errors are logged and treated as no-verdict (never
+    reject) so a transient module-level bug can't take down ingestion
+    for every tenant.
+
+    Returns ``(reject, reason)`` where ``reason`` is a short string
+    suitable for the ``EventResult.errors`` field, or ``None`` when not
+    rejecting.
+    """
+    try:
+        canonical = normalize_webhook_event(event, tenant_id)
+        from shared.rules_engine import RulesEngine  # noqa: PLC0415
+        engine = RulesEngine(db_session)
+        event_data = {
+            "event_id": str(canonical.event_id),
+            "event_type": canonical.event_type.value,
+            "traceability_lot_code": canonical.traceability_lot_code,
+            "product_reference": canonical.product_reference,
+            "quantity": canonical.quantity,
+            "unit_of_measure": canonical.unit_of_measure,
+            "from_facility_reference": canonical.from_facility_reference,
+            "to_facility_reference": canonical.to_facility_reference,
+            "from_entity_reference": canonical.from_entity_reference,
+            "to_entity_reference": canonical.to_entity_reference,
+            "kdes": canonical.kdes,
+        }
+        summary = engine.evaluate_event(event_data, persist=False, tenant_id=tenant_id)
+    except (ImportError, SQLAlchemyError, ValueError, TypeError, RuntimeError,
+            AttributeError, KeyError) as err:
+        logger.warning("rules_preeval_skipped", extra={"error": str(err)})
+        return False, None
+
+    from shared.rules.enforcement import should_reject  # noqa: PLC0415
+    return should_reject(summary)
+
+
 def _publish_graph_sync(event_id: str, event: IngestEvent, tenant_id: str) -> None:
     """Push a CTE creation event to Redis for Neo4j graph sync.
 
@@ -916,6 +958,30 @@ async def ingest_events(
             alerts = _generate_alerts(event)
             valid_events.append((event, alerts))
 
+        # --- Phase 2a: Rules enforcement partition ---
+        # Under RULES_ENGINE_ENFORCE=cte_only|all, exclude events whose
+        # rules verdict says reject BEFORE they hit the batch store.
+        # Runs a non-persisting eval per event; decision logic is in
+        # ``shared.rules.enforcement.should_reject``. When ENFORCE=off
+        # (default) every call returns (False, None) and the loop is a
+        # no-op. No-verdict summaries (no rules loaded, non-FTL, etc.)
+        # never reject — see EvaluationSummary.compliant docstring.
+        if valid_events:
+            _filtered: list = []
+            for _event, _alerts in valid_events:
+                _reject, _reason = _rules_preeval_reject(_event, db_session, tenant_id)
+                if _reject:
+                    results.append(EventResult(
+                        traceability_lot_code=_event.traceability_lot_code,
+                        cte_type=_event.cte_type.value,
+                        status="rejected",
+                        errors=[f"rule_violation: {_reason}"],
+                    ))
+                    rejected += 1
+                    continue
+                _filtered.append((_event, _alerts))
+            valid_events = _filtered
+
         # --- Phase 2: Batch persist all valid events ---
         if valid_events:
             batch_dicts = []
@@ -1037,6 +1103,23 @@ async def ingest_events(
                 )
                 # Fall back to per-event persistence
                 for event, alerts in valid_events:
+                    # Enforcement: same pre-eval gate as the happy path.
+                    # Events that were pre-eval rejected above never
+                    # reach this fallback (they were stripped from
+                    # valid_events), but running the check again here
+                    # is cheap insurance — if the batch path ever
+                    # mutates valid_events in flight, the fallback
+                    # still honors the enforcement policy.
+                    _fb_reject, _fb_reason = _rules_preeval_reject(event, db_session, tenant_id)
+                    if _fb_reject:
+                        results.append(EventResult(
+                            traceability_lot_code=event.traceability_lot_code,
+                            cte_type=event.cte_type.value,
+                            status="rejected",
+                            errors=[f"rule_violation: {_fb_reason}"],
+                        ))
+                        rejected += 1
+                        continue
                     try:
                         store_result = persistence.store_event(
                             tenant_id=tenant_id,
