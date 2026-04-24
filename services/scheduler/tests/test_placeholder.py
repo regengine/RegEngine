@@ -58,7 +58,8 @@ class TestSchedulerDirectoryStructure:
 
     def test_requirements_file_exists(self):
         service_dir = Path(__file__).resolve().parent.parent
-        assert (service_dir / "requirements.txt").is_file(), "Missing requirements.txt"
+        repo_root = service_dir.parent.parent
+        assert (repo_root / "requirements.lock").is_file(), "Missing root requirements.lock"
 
     def test_config_module_exists(self):
         service_dir = Path(__file__).resolve().parent.parent

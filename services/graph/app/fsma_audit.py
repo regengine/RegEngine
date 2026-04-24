@@ -47,7 +47,10 @@ def _get_audit_db_engine():
                 if db_url.startswith("postgresql://")
                 else db_url
             )
-            _db_engine = create_engine(url, pool_pre_ping=True, pool_size=2, max_overflow=4)
+            engine_kwargs = {"pool_pre_ping": True}
+            if not url.startswith("sqlite"):
+                engine_kwargs.update(pool_size=2, max_overflow=4)
+            _db_engine = create_engine(url, **engine_kwargs)
             return _db_engine
         except Exception as e:
             logging.getLogger("fsma_audit").warning("Failed to create audit DB engine: %s", e)

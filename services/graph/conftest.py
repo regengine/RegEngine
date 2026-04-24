@@ -15,7 +15,13 @@ os.environ.setdefault("NEO4J_PASSWORD", "test-password-for-ci")
 # Fixed HMAC key so producer / consumer round-trips work in unit
 # tests without hitting a real KMS / secret store (#1078).
 os.environ.setdefault("KAFKA_EVENT_SIGNING_KEY", "test-nlp-kafka-signing-key-ci-only")
+os.environ.setdefault("AUTH_SECRET_KEY", "graph-test-auth-secret-key")
 os.environ.setdefault("AUTH_TEST_BYPASS_TOKEN", "test-bypass-token-for-pytest")
+os.environ.setdefault(
+    "AUTH_TEST_BYPASS_TENANT_ID",
+    "11111111-1111-1111-1111-111111111111",
+)
+os.environ.setdefault("REGENGINE_ENV", "test")
 os.environ.setdefault("ENVIRONMENT", "test")
 os.environ.setdefault("LOG_LEVEL", "WARNING")
 

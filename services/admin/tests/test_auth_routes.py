@@ -96,18 +96,24 @@ def mock_session_store():
     redis_client.set = AsyncMock(return_value=True)
     redis_client.setex = AsyncMock(return_value=True)
     redis_client.delete = AsyncMock(return_value=1)
+    mock_pipe = AsyncMock(
+        execute=AsyncMock(return_value=[0, True]),
+    )
+    mock_pipe.incr = MagicMock()
+    mock_pipe.expire = MagicMock()
     redis_client.pipeline = MagicMock(return_value=AsyncMock(
-        __aenter__=AsyncMock(return_value=AsyncMock(
-            incr=AsyncMock(),
-            expire=AsyncMock(),
-            execute=AsyncMock(return_value=[0, True]),
-        )),
+        __aenter__=AsyncMock(return_value=mock_pipe),
         __aexit__=AsyncMock(return_value=False),
     ))
     store._get_client = AsyncMock(return_value=redis_client)
     store.create_session = AsyncMock(return_value=None)
     store.claim_session_by_token = AsyncMock()
     store.update_session = AsyncMock(return_value=None)
+    store.mark_token_used = AsyncMock(return_value=None)
+    store.check_token_reuse = AsyncMock(return_value=None)
+    store.get_session = AsyncMock(return_value=None)
+    store.revoke_all_for_family = AsyncMock(return_value=0)
+    store.revoke_all_user_sessions = AsyncMock(return_value=0)
     store.delete_sessions_for_user = AsyncMock(return_value=0)
     store.get_sessions_for_user = AsyncMock(return_value=[])
     return store
@@ -164,7 +170,7 @@ class TestLoginHappyPath:
             db_session.execute.side_effect = side_effect
 
             result = asyncio.get_event_loop().run_until_complete(
-                login(payload, req, db=db_session, session_store=mock_session_store)
+                login.__wrapped__(payload, req, db=db_session, session_store=mock_session_store)
             )
             assert result.access_token
             assert result.refresh_token
@@ -200,7 +206,7 @@ class TestLoginBadCredentials:
 
             with pytest.raises(HTTPException) as exc_info:
                 asyncio.get_event_loop().run_until_complete(
-                    login(payload, req, db=db_session, session_store=mock_session_store)
+                    login.__wrapped__(payload, req, db=db_session, session_store=mock_session_store)
                 )
             assert exc_info.value.status_code == 401
             assert "Incorrect" in exc_info.value.detail
@@ -223,8 +229,6 @@ class TestSignupExistingEmail:
 
         with (
             patch("services.admin.app.auth_routes.get_supabase", return_value=None),
-            patch("services.admin.app.auth_routes._check_signup_ip_rate_limit", new=AsyncMock()),
-            patch("services.admin.app.auth_routes._record_signup_ip_attempt", new=AsyncMock()),
         ):
             req = MagicMock()
             req.headers = {"User-Agent": "pytest"}
@@ -239,7 +243,7 @@ class TestSignupExistingEmail:
             result = asyncio.get_event_loop().run_until_complete(
                 ar.signup.__wrapped__(payload, req, db=db_session, session_store=mock_session_store)
             )
-            # Route returns JSONResponse(200) for existing emails (enumeration guard)
+            # Route returns generic JSONResponse(202) for existing emails (enumeration guard)
             assert result.status_code == 200
 
 
@@ -272,8 +276,6 @@ class TestSignupDbFlushBeforeSupabase:
             patch("services.admin.app.auth_routes.get_supabase", return_value=mock_sb),
             patch("services.admin.app.auth_routes.validate_password", return_value=None),
             patch("services.admin.app.auth_routes.get_password_hash", return_value="hashed"),
-            patch("services.admin.app.auth_routes._check_signup_ip_rate_limit", new=AsyncMock()),
-            patch("services.admin.app.auth_routes._record_signup_ip_attempt", new=AsyncMock()),
         ):
             req = MagicMock()
             req.headers = {"User-Agent": "pytest"}
@@ -285,12 +287,11 @@ class TestSignupDbFlushBeforeSupabase:
             payload.tenant_name = "Acme"
             payload.partner_tier = None
 
-            with pytest.raises(HTTPException) as exc_info:
-                asyncio.get_event_loop().run_until_complete(
-                    ar.signup.__wrapped__(payload, req, db=db_session, session_store=mock_session_store)
-                )
+            result = asyncio.get_event_loop().run_until_complete(
+                ar.signup.__wrapped__(payload, req, db=db_session, session_store=mock_session_store)
+            )
 
-        assert exc_info.value.status_code == 409
+        assert result.status_code == 200
         # Supabase create_user must NOT have been called
         mock_sb.auth.admin.create_user.assert_not_called()
 
@@ -325,7 +326,13 @@ class TestChangePasswordRevokeSessions:
             payload.new_password = "NewPass1!"
 
             asyncio.get_event_loop().run_until_complete(
-                change_password(payload, req, db=db_session, current_user=user, session_store=mock_session_store)
+                change_password.__wrapped__(
+                    payload,
+                    req,
+                    db=db_session,
+                    current_user=user,
+                    session_store=mock_session_store,
+                )
             )
 
             # token_version must have been incremented so old tokens are rejected
@@ -341,6 +348,8 @@ class TestChangePasswordRevokeSessions:
 class TestTokenRefresh:
     def test_refresh_returns_new_access_token(self, mock_session_store):
         user = _make_user()
+        tenant = _make_tenant()
+        membership = _make_membership(user.id, tenant.id)
         sd = _make_session_data(user.id)
 
         mock_session_store.claim_session_by_token = AsyncMock(return_value=sd)
@@ -348,6 +357,7 @@ class TestTokenRefresh:
 
         db_session = MagicMock()
         db_session.get.return_value = user
+        db_session.execute.return_value.scalars.return_value.all.return_value = [membership]
 
         with (
             patch("services.admin.app.auth_routes.decode_access_token", return_value={"tenant_id": None, "tid": None}),
@@ -364,7 +374,7 @@ class TestTokenRefresh:
             payload.refresh_token = "valid-refresh-token"
 
             result = asyncio.get_event_loop().run_until_complete(
-                refresh_session(payload, req, db=db_session, session_store=mock_session_store)
+                refresh_session.__wrapped__(payload, req, db=db_session, session_store=mock_session_store)
             )
             assert result.access_token == "new-access-token"
 

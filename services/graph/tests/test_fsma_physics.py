@@ -5,6 +5,7 @@ Sprint 3: Physics Engine (Time & Mass)
 Tests for temporal ordering validation and mass conservation checks.
 """
 
+import os
 import sys
 from dataclasses import asdict
 from pathlib import Path
@@ -14,6 +15,12 @@ import pytest
 from fastapi.testclient import TestClient
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent / "shared"))
+
+_AUTH_HEADERS = {
+    "X-RegEngine-API-Key": os.getenv(
+        "AUTH_TEST_BYPASS_TOKEN", "test-bypass-token-for-pytest"
+    )
+}
 
 
 # ============================================================================
@@ -400,7 +407,7 @@ class TestMassBalanceEndpointReturns501:
         client = TestClient(app)
         response = client.get(
             "/v1/fsma/mass-balance/LOT-001",
-            headers={"X-RegEngine-API-Key": "test-key"},
+            headers=_AUTH_HEADERS,
         )
         assert response.status_code == 501
 
@@ -424,7 +431,7 @@ class TestMassBalanceEndpointReturns501:
         client = TestClient(app)
         response = client.get(
             "/v1/fsma/mass-balance/event/evt-001",
-            headers={"X-RegEngine-API-Key": "test-key"},
+            headers=_AUTH_HEADERS,
         )
         assert response.status_code == 501
 
@@ -507,7 +514,7 @@ class TestTraceForwardWithPhysicsEngine:
 
         response = client.get(
             "/v1/fsma/trace/forward/LOT-001",
-            headers={"X-RegEngine-API-Key": "test-key"},
+            headers=_AUTH_HEADERS,
         )
 
         assert response.status_code == 200
@@ -541,7 +548,7 @@ class TestTraceForwardWithPhysicsEngine:
 
         response = client.get(
             "/v1/fsma/trace/forward/LOT-001",
-            headers={"X-RegEngine-API-Key": "test-key"},
+            headers=_AUTH_HEADERS,
         )
 
         assert response.status_code == 200
@@ -574,7 +581,7 @@ class TestTraceForwardWithPhysicsEngine:
 
         response = client.get(
             "/v1/fsma/trace/forward/LOT-001?enforce_time_arrow=false",
-            headers={"X-RegEngine-API-Key": "test-key"},
+            headers=_AUTH_HEADERS,
         )
 
         assert response.status_code == 200

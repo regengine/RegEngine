@@ -78,7 +78,7 @@ def _upsert_drill_row(engine, drill: "RecallDrill") -> None:
                         (task_type, payload, status, tenant_id, created_at,
                          started_at, completed_at)
                     VALUES
-                        ('recall_drill', :payload::jsonb, :queue_status,
+                        ('recall_drill', CAST(:payload AS jsonb), :queue_status,
                          :tenant_id, :created_at, :started_at, :completed_at)
                     ON CONFLICT DO NOTHING
                 """),
@@ -114,7 +114,7 @@ def _update_drill_row(engine, drill: "RecallDrill") -> None:
             conn.execute(
                 _text("""
                     UPDATE fsma.task_queue
-                    SET payload       = :payload::jsonb,
+                    SET payload       = CAST(:payload AS jsonb),
                         status        = :queue_status,
                         started_at    = :started_at,
                         completed_at  = :completed_at

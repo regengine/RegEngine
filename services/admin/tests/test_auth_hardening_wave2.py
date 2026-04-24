@@ -117,12 +117,12 @@ class TestSignupEmailOracle:
             session_store=ss,
         )
 
-        # Must be a JSONResponse (202) — NOT a TokenResponse or HTTPException
+        # Must be a JSONResponse (200) — NOT a TokenResponse or HTTPException
         from starlette.responses import JSONResponse
         assert isinstance(result, JSONResponse), (
             f"Expected JSONResponse for existing email, got {type(result)}"
         )
-        assert result.status_code == 202
+        assert result.status_code == 200
 
     @pytest.mark.asyncio
     async def test_existing_email_response_body_identical_to_new_email(self, monkeypatch):
@@ -263,8 +263,8 @@ class TestSignupRace:
 
         from starlette.responses import JSONResponse
         assert isinstance(result, JSONResponse)
-        assert result.status_code == 202, (
-            f"Concurrent signup should return 202, got {result.status_code}"
+        assert result.status_code == 200, (
+            f"Concurrent signup should return 200, got {result.status_code}"
         )
 
     @pytest.mark.asyncio

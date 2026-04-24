@@ -1,3 +1,4 @@
+import os
 import uuid
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -7,6 +8,12 @@ from fastapi.testclient import TestClient
 from services.graph.app.routers.fsma.traceability import router as traceability_router
 from shared.auth import require_api_key
 from shared.middleware import get_current_tenant_id
+
+_AUTH_HEADERS = {
+    "X-RegEngine-API-Key": os.getenv(
+        "AUTH_TEST_BYPASS_TOKEN", "test-bypass-token-for-pytest"
+    )
+}
 
 
 def _build_app() -> FastAPI:
@@ -49,7 +56,7 @@ def test_search_events_with_filters_and_cursor_pagination():
                 "product_contains=lettuce&facility_contains=Supplier%20X&"
                 "cte_type=receiving&limit=2"
             ),
-            headers={"X-RegEngine-API-Key": "test-key"},
+            headers=_AUTH_HEADERS,
         )
 
     assert response.status_code == 200

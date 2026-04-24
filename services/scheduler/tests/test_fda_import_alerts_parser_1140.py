@@ -298,7 +298,7 @@ class TestFDAImportAlertsParser_Issue1140:
                 def raise_for_status(self) -> None:
                     return None
 
-            def fake_get(url, timeout=None):
+            def fake_get(url, timeout=None, **kwargs):
                 assert url == FDA_IMPORT_ALERTS_URL
                 return _MockResponse()
 
@@ -326,7 +326,7 @@ class TestFDAImportAlertsParser_Issue1140:
                     return None
 
             monkeypatch.setattr(
-                scraper.session, "get", lambda url, timeout=None: _MockResponse()
+                scraper.session, "get", lambda url, timeout=None, **kwargs: _MockResponse()
             )
 
             result = scraper.scrape()

@@ -245,7 +245,10 @@ def _pop_pending_subscription_update(
             raw = client.getdel(key)  # type: ignore[attr-defined]
         except (AttributeError, redis.ResponseError):
             # Older redis-py or server — fall back to pipeline GET+DEL.
-            pipe = client.pipeline()
+            pipeline_factory = getattr(client, "pipeline", None)
+            if pipeline_factory is None:
+                return None
+            pipe = pipeline_factory()
             pipe.get(key)
             pipe.delete(key)
             results = pipe.execute()

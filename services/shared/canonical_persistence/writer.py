@@ -43,8 +43,21 @@ class CanonicalEventStore:
         self.dual_write = dual_write
         self.skip_chain_write = skip_chain_write
 
+    def _session_dialect_name(self) -> str:
+        bind = getattr(self.session, "bind", None)
+        if bind is None:
+            try:
+                bind = self.session.get_bind()
+            except Exception:
+                return ""
+        dialect = getattr(bind, "dialect", None)
+        name = getattr(dialect, "name", "") if dialect is not None else ""
+        return str(name or "").lower()
+
     def set_tenant_context(self, tenant_id: str) -> None:
         """Set the RLS tenant context for this session."""
+        if self._session_dialect_name() == "sqlite":
+            return
         self.session.execute(
             text("SET LOCAL app.tenant_id = :tid"),
             {"tid": tenant_id},
@@ -69,6 +82,8 @@ class CanonicalEventStore:
         expects.  Collisions across tenants are harmless — they just
         serialize unrelated tenants occasionally, never cross-write.
         """
+        if self._session_dialect_name() == "sqlite":
+            return
         self.session.execute(
             text("SELECT pg_advisory_xact_lock(hashtext(:tid))"),
             {"tid": tenant_id},

@@ -341,12 +341,12 @@ class TestRecoveryCodeHelpers:
         codes = mfa_module.generate_recovery_codes(count=3)
         assert len(codes) == 3
 
-    def test_hash_is_deterministic_over_normalization(self):
-        """Hash(abcd-efgh) == Hash(ABCDEFGH) thanks to normalization."""
-        a = mfa_module.hash_recovery_code("abcd-efgh")
-        b = mfa_module.hash_recovery_code("ABCDEFGH")
-        c = mfa_module.hash_recovery_code(" abcd_efgh ")
-        assert a == b == c
+    def test_hash_verifies_normalized_equivalents(self):
+        """Argon2 hashes are salted, but verification normalizes input first."""
+        hashed = mfa_module.hash_recovery_code("ABCDEFGH")
+
+        assert mfa_module.verify_recovery_code("abcd-efgh", hashed)
+        assert mfa_module.verify_recovery_code(" abcd_efgh ", hashed)
 
     def test_verify_recovery_code_true_and_false(self):
         h = mfa_module.hash_recovery_code("ABCD-EFGH")

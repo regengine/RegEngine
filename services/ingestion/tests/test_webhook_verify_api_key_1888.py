@@ -40,7 +40,7 @@ def test_header_present_passes_in_prod_with_regengine_api_key(monkeypatch):
     monkeypatch.delenv("API_KEY", raising=False)
     _reset_settings_cache(monkeypatch)
     # No exception — principal path does the real validation.
-    wr._verify_api_key(x_regengine_api_key="rge_any.anything")
+    wr._verify_api_key(x_regengine_api_key="rge_any.anything")  # pragma: allowlist secret
 
 
 def test_header_present_passes_in_prod_with_api_key(monkeypatch):
@@ -49,7 +49,7 @@ def test_header_present_passes_in_prod_with_api_key(monkeypatch):
     monkeypatch.setenv("REGENGINE_ENV", "production")
     monkeypatch.delenv("REGENGINE_API_KEY", raising=False)
     _reset_settings_cache(monkeypatch)
-    wr._verify_api_key(x_regengine_api_key="rge_any.anything")
+    wr._verify_api_key(x_regengine_api_key="rge_any.anything")  # pragma: allowlist secret
 
 
 def test_prod_with_no_credential_configured_rejects(monkeypatch):
@@ -59,7 +59,7 @@ def test_prod_with_no_credential_configured_rejects(monkeypatch):
     monkeypatch.setenv("REGENGINE_ENV", "production")
     _reset_settings_cache(monkeypatch)
     with pytest.raises(HTTPException) as exc:
-        wr._verify_api_key(x_regengine_api_key="rge_any.anything")
+        wr._verify_api_key(x_regengine_api_key="rge_any.anything")  # pragma: allowlist secret
     assert exc.value.status_code == 401
 
 
@@ -71,4 +71,4 @@ def test_dev_with_no_credential_configured_passes(monkeypatch):
     # DATABASE_URL heuristic must not fire as "prod"
     monkeypatch.delenv("DATABASE_URL", raising=False)
     _reset_settings_cache(monkeypatch)
-    wr._verify_api_key(x_regengine_api_key="rge_any.anything")
+    wr._verify_api_key(x_regengine_api_key="rge_any.anything")  # pragma: allowlist secret

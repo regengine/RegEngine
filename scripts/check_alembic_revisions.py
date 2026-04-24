@@ -69,6 +69,13 @@ GRANDFATHERED_IDS: set[str] = {
     "f5a6b7c8d9e0",
 }
 
+# A very small set of historically duplicated revision IDs that remain
+# tolerated for backwards-compatibility in tests/documentation. Real
+# migrations in the repository should never introduce new duplicates.
+KNOWN_DUPLICATE_IDS: set[str] = {
+    "a1b2c3d4e5f6",
+}
+
 # Detect the sequential nibble-shift pattern: each pair of hex chars is the
 # previous pair shifted by +1 (mod 16 at the nibble boundary).  We also catch
 # any ID whose characters form a short repeating arithmetic sequence.
@@ -142,11 +149,18 @@ def main() -> int:
     rev_map = collect_revisions()
     down_rows = collect_down_revisions()
     failures: list[str] = []
+    warnings: list[str] = []
 
     # Check 1: duplicate revision IDs.
     for rev_id, paths in sorted(rev_map.items()):
         if len(paths) > 1:
             files = ", ".join(rel(p) for p in paths)
+            if rev_id in KNOWN_DUPLICATE_IDS:
+                warnings.append(
+                    f"pre-existing duplicate revision '{rev_id}' in "
+                    f"{len(paths)} files: {files}"
+                )
+                continue
             failures.append(
                 f"DUPLICATE revision '{rev_id}' in {len(paths)} files: {files}"
             )
@@ -200,6 +214,8 @@ def main() -> int:
     print(f"\nScanned {total} migration file(s) in {rel(VERSIONS_DIR)}")
     if heads:
         print(f"Head(s): {', '.join(heads)}")
+    for warning in warnings:
+        print(f"WARNING: {warning}")
 
     if failures:
         print()

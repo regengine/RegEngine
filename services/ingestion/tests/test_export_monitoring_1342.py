@@ -56,7 +56,9 @@ def _app() -> FastAPI:
     app = FastAPI()
     app.include_router(router)
     from app.webhook_compat import _verify_api_key
-    app.dependency_overrides[_verify_api_key] = lambda: None
+    bypass = lambda: None
+    app.dependency_overrides[_verify_api_key] = bypass
+    app.dependency_overrides[em._verify_api_key] = bypass
     return app
 
 

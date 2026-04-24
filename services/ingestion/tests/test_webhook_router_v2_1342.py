@@ -271,6 +271,7 @@ def _install_shared_stubs(
 def _build_app() -> FastAPI:
     app = FastAPI()
     app.include_router(wr.router)
+    app.dependency_overrides[wr._verify_api_key] = lambda: None
     app.dependency_overrides[get_ingestion_principal] = lambda: IngestionPrincipal(
         key_id="test-key",
         scopes=["*"],
@@ -294,8 +295,10 @@ def _client(
     # Defang rate limiting everywhere it matters.
     monkeypatch.setattr(wr, "consume_tenant_rate_limit", lambda **_kw: (True, 999))
     monkeypatch.setattr("app.authz.consume_tenant_rate_limit", lambda **_kw: (True, 999))
-    # No API-key gate.
+    # Route-level API-key presence is covered separately; these route tests
+    # focus on ingest behavior once auth has resolved a principal.
     monkeypatch.delenv("API_KEY", raising=False)
+    monkeypatch.delenv("REGENGINE_API_KEY", raising=False)
     monkeypatch.delenv("WEBHOOK_HMAC_SECRET", raising=False)
 
     app = _build_app()
@@ -330,14 +333,12 @@ class TestSmallHelpers:
         monkeypatch.setattr(wr, "get_settings", lambda: _S())
         wr._verify_api_key("correct-key")  # must not raise
 
-    def test_verify_api_key_rejects_mismatch(self, monkeypatch):
+    def test_verify_api_key_defers_key_validation_to_principal(self, monkeypatch):
         class _S:
             api_key = "correct-key"
 
         monkeypatch.setattr(wr, "get_settings", lambda: _S())
-        with pytest.raises(Exception) as exc:
-            wr._verify_api_key("wrong-key")
-        assert "401" in str(exc.value) or "Invalid" in str(exc.value.detail)
+        wr._verify_api_key("wrong-key")  # principal validation happens later
 
     def test_verify_api_key_no_configured_key_non_prod_ok(self, monkeypatch):
         class _S:
@@ -345,7 +346,7 @@ class TestSmallHelpers:
 
         monkeypatch.setattr(wr, "get_settings", lambda: _S())
         monkeypatch.setattr(wr, "_is_production", lambda: False)
-        wr._verify_api_key(None)  # no raise
+        wr._verify_api_key("any-key")  # no raise
 
     def test_verify_api_key_production_without_configured_key_rejects(self, monkeypatch):
         class _S:

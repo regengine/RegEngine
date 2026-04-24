@@ -20,10 +20,7 @@ def neo4j_container():
 @pytest.fixture
 def neo4j_driver(neo4j_container):
     """Provide a Neo4j driver pointing to the test container."""
-    driver = GraphDatabase.driver(
-        neo4j_container.get_connection_url(),
-        auth=("neo4j", "neo4j")  # testcontainers default auth
-    )
+    driver = neo4j_container.get_driver()
     yield driver
     driver.close()
 

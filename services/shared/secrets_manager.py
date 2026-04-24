@@ -95,7 +95,7 @@ class SecretsManager:
         Returns:
             Dict with uri, username, password
         """
-        uri = os.getenv("NEO4J_URI", "")
+        uri = os.getenv("NEO4J_URI") or os.getenv("NEO4J_URL", "")
         if not uri:
             logger.warning("NEO4J_URI not set, defaulting to localhost (dev only)")
             uri = "bolt://localhost:7687"

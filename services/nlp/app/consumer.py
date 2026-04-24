@@ -1856,5 +1856,15 @@ def _run_consumer_loop(consumer: KafkaConsumer, producer: KafkaProducer) -> None
                             headers=kafka_headers,
                             tenant_id=tenant_id,
                         )
+                        try:
+                            producer.flush(timeout=5.0)
+                        except KafkaTimeoutError:
+                            logger.error(
+                                "dlq_flush_timeout",
+                                offset=record.offset,
+                                topic=record.topic,
+                                stage="processing_error",
+                            )
+                            continue  # do NOT commit — force redelivery
                         consumer.commit()
                         MESSAGES_COUNTER.labels(status="error").inc()

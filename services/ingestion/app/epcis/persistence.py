@@ -733,7 +733,10 @@ def _persist_prepared_event_in_session(
                 timeout_s=_timeout_s,
             )
         elif _epcis_exc:
-            logger.warning("epcis_canonical_write_skipped", error=str(_epcis_exc[0]))
+            logger.warning(
+                "epcis_canonical_write_skipped: %s",
+                _epcis_exc[0],
+            )
 
     status_code = 200 if result.idempotent else 201
     return (

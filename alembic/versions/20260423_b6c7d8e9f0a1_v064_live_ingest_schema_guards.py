@@ -13,7 +13,7 @@ from typing import Sequence, Union
 
 from alembic import op
 
-revision: str = "b6c7d8e9f0a1"
+revision: str = "b6c7d8e9f0a1"  # pragma: allowlist secret
 down_revision: Union[str, Sequence[str], None] = "85cebda8e7f7"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None

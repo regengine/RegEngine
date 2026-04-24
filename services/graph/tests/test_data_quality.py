@@ -381,7 +381,7 @@ class TestOrphanDetectionTenantScoping:
 
         import asyncio
 
-        asyncio.get_event_loop().run_until_complete(
+        asyncio.run(
             find_orphaned_lots(mock_client, tenant_id="tenant-a", days_stagnant=30)
         )
 
