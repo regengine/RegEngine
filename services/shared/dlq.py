@@ -5,8 +5,8 @@ from a stable top-level path:
 
     from shared.dlq import DLQProducer
 
-The implementation lives in shared.observability.dlq_producer and handles both
-confluent-kafka and kafka-python backends transparently.
+The implementation lives in shared.observability.dlq_producer and uses the
+repo-standard confluent-kafka client.
 """
 
 from shared.observability.dlq_producer import DLQProducer

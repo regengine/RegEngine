@@ -57,7 +57,7 @@ def _instrument_downstream_clients() -> None:
     to call this helper from both ``add_observability`` and ``setup_standalone_observability``
     without risk of double-instrumentation.
 
-    Note on Kafka: the project uses confluent-kafka / kafka-python-ng.  A stable
+    Note on Kafka: the project uses confluent-kafka.  A stable
     opentelemetry-instrumentation-confluent-kafka package is not yet available at the
     same version pin (1.41.0 / 0.62b0) used by the rest of the OTel stack, and
     Kafka is slated for removal as part of the monolith migration.  Correlation-ID

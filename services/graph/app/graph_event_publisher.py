@@ -2,7 +2,7 @@ import json
 import logging
 import os
 
-from kafka import KafkaProducer
+from shared.kafka_compat import KafkaProducerCompat as KafkaProducer
 
 from shared.observability.kafka_propagation import inject_correlation_headers_tuples
 

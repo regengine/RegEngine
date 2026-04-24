@@ -219,7 +219,7 @@ def test_bind_correlation_context_respects_mint_flag():
 
 
 def test_extract_correlation_headers_handles_string_values():
-    """confluent-kafka sometimes returns str, kafka-python returns bytes. Handle both."""
+    """Some Kafka test doubles return str while real clients return bytes. Handle both."""
     from shared.observability.kafka_propagation import extract_correlation_headers
 
     headers = [

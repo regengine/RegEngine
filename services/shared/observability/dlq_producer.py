@@ -31,8 +31,8 @@ logger = structlog.get_logger("shared.dlq_producer")
 class DLQProducer:
     """Thread-safe DLQ producer wrapper.
 
-    Wraps a Kafka producer (confluent-kafka or kafka-python) behind a uniform
-    interface so callers do not need to know which library is in use.  The
+    Wraps a Confluent Kafka producer behind a uniform interface so callers do
+    not need to know the client details. The
     instance is created once at service startup and shared across threads via
     a lock.
     """
@@ -58,9 +58,7 @@ class DLQProducer:
     def _init_producer(self) -> None:
         """Create the underlying Kafka producer.
 
-        Tries confluent-kafka first (used by graph service); falls back to
-        kafka-python (used by admin/nlp) so the shared module works in both
-        environments without adding a hard dependency on either library.
+        Creates the repo-standard confluent-kafka producer.
         """
         try:
             from confluent_kafka import Producer  # type: ignore[import]
@@ -69,31 +67,10 @@ class DLQProducer:
             self._confluent = True
             logger.info("dlq_producer_initialized", backend="confluent", topic=self._topic)
         except ImportError:
-            pass
-
-        if self._producer is None:
-            try:
-                import json
-                from kafka import KafkaProducer  # type: ignore[import]
-
-                self._producer = KafkaProducer(
-                    bootstrap_servers=self._bootstrap,
-                    value_serializer=lambda v: (
-                        v if isinstance(v, bytes) else json.dumps(v).encode("utf-8")
-                    ),
-                )
-                self._confluent = False
-                logger.info(
-                    "dlq_producer_initialized", backend="kafka-python", topic=self._topic
-                )
-            except ImportError:
-                logger.error(
-                    "dlq_producer_no_kafka_library",
-                    detail=(
-                        "Neither confluent-kafka nor kafka-python is installed. "
-                        "DLQ messages cannot be delivered."
-                    ),
-                )
+            logger.error(
+                "dlq_producer_no_kafka_library",
+                detail="confluent-kafka is not installed. DLQ messages cannot be delivered.",
+            )
 
     # ------------------------------------------------------------------
     # Public API
@@ -133,19 +110,12 @@ class DLQProducer:
 
         try:
             with self._lock:
-                if self._confluent:
-                    self._producer.produce(  # type: ignore[union-attr]
-                        self._topic,
-                        value=value,
-                        headers=built_headers,
-                    )
-                    self._producer.poll(0)  # type: ignore[union-attr]
-                else:
-                    self._producer.send(  # type: ignore[union-attr]
-                        self._topic,
-                        value=value,
-                        headers=[(k, v) for k, v in built_headers],
-                    )
+                self._producer.produce(  # type: ignore[union-attr]
+                    self._topic,
+                    value=value,
+                    headers=built_headers,
+                )
+                self._producer.poll(0)  # type: ignore[union-attr]
             logger.info(
                 "dlq_message_sent",
                 topic=self._topic,
@@ -166,10 +136,7 @@ class DLQProducer:
             return
         try:
             with self._lock:
-                if self._confluent:
-                    self._producer.flush(timeout)  # type: ignore[union-attr]
-                else:
-                    self._producer.flush(timeout=timeout)  # type: ignore[union-attr]
+                self._producer.flush(timeout)  # type: ignore[union-attr]
             logger.info("dlq_producer_flushed", topic=self._topic)
         except Exception as exc:  # pragma: no cover - infra dependent
             logger.error("dlq_producer_flush_failed", error=str(exc))
@@ -181,8 +148,6 @@ class DLQProducer:
             return
         try:
             with self._lock:
-                if not self._confluent:
-                    self._producer.close(timeout=2.0)  # type: ignore[union-attr]
                 # confluent-kafka Producer has no explicit close(); GC handles it.
                 self._producer = None
             logger.info("dlq_producer_closed", topic=self._topic)

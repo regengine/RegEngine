@@ -64,7 +64,7 @@ def _install_run_consumer_mocks(
     flush_raises: bool,
 ) -> tuple[MagicMock, MagicMock]:
     """Patch run_consumer's infra dependencies and return (consumer, producer) mocks."""
-    from kafka.errors import KafkaTimeoutError as _KafkaTimeoutError
+    from shared.kafka_compat import KafkaTimeoutError as _KafkaTimeoutError
 
     # Reset shutdown so other tests that may have flipped it don't prevent us
     # from running the loop even once.

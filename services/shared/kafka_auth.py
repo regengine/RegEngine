@@ -18,7 +18,7 @@ Design:
 
 * **Serializer-agnostic.** We canonicalize the *dict* form (sorted keys,
   compact separators) rather than the raw bytes. This means both
-  ``kafka-python`` (JSON ``value_serializer``) and ``confluent-kafka``
+  the legacy JSON producer path and ``confluent-kafka``
   (custom ``value.deserializer``) consumers can verify the same
   producer's messages without having to agree on a specific byte-level
   encoding. The only requirement is that the dict survives the
@@ -65,7 +65,7 @@ logger = structlog.get_logger("shared.kafka_auth")
 
 
 # Kafka header names. Lower-case ASCII is safest across clients;
-# ``kafka-python`` and ``confluent-kafka`` both preserve case but some
+# Kafka clients preserve case but some
 # brokers normalize, so we stick to a conservative convention.
 HEADER_SIGNATURE = "x-evt-sig"
 HEADER_PRODUCER_SERVICE = "x-producer-service"
@@ -256,7 +256,7 @@ def sign_event(
 def _normalize_header_value(value: Any) -> str | None:
     """Coerce a Kafka header value to str.
 
-    ``kafka-python`` yields bytes; ``confluent-kafka`` yields bytes
+    Kafka clients should yield bytes
     too (or None for missing). We accept str for convenience in tests.
     """
     if value is None:

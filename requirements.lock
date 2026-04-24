@@ -1549,10 +1549,6 @@ jsonschema-specifications==2025.9.1 \
     --hash=sha256:98802fee3a11ee76ecaca44429fda8a41bff98b00a0f2838151b113f210cc6fe \
     --hash=sha256:b540987f239e745613c7a9176f3edb72b832a4ac465cf02712288397832b5e8d
     # via jsonschema
-kafka-python-ng==2.2.3 \
-    --hash=sha256:adc6e82147c441ca4ae1f22e291fc08efab0d10971cbd4aa1481d2ffa38e9480 \
-    --hash=sha256:f79f28e10ade9b5a9860b2ec15b7cc8dc510d5702f5a399430478cff5f93a05a
-    # via -r requirements.in
 langchain==1.2.15 \
     --hash=sha256:1717b6719daefae90b2728314a5e2a117ff916291e2862595b6c3d6fba33d652 \
     --hash=sha256:e349db349cb3e9550c4044077cf90a1717691756cc236438404b23500e615874
