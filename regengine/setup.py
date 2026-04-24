@@ -39,6 +39,7 @@ setup(
     packages=find_packages(),
     python_requires=">=3.8",
     install_requires=[
+        "httpx>=0.27,<1.0",
         "requests>=2.28.0",
     ],
     extras_require={
