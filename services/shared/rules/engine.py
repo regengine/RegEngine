@@ -319,6 +319,57 @@ class RulesEngine:
 
         return summary
 
+    def persist_summary(
+        self,
+        summary: EvaluationSummary,
+        *,
+        tenant_id: str,
+        event_id: Optional[str] = None,
+    ) -> None:
+        """Persist a pre-computed ``EvaluationSummary`` without re-evaluating.
+
+        Public wrapper around the same persistence path used by
+        ``evaluate_event(persist=True)`` — exposed so callers that have already
+        run the rules can write the resulting rows once instead of evaluating
+        twice.
+
+        Use case: ingestion paths that pre-evaluate rules with ``persist=False``
+        to make a reject decision before primary store, then need to write
+        the eval rows to ``fsma.rule_evaluations`` after the primary commit.
+        Without this method the post-commit block had to re-call
+        ``evaluate_event(persist=True)``, doubling rules-engine work on the
+        hot path under ``RULES_ENGINE_ENFORCE=cte_only|all``.
+
+        Args:
+            summary: Pre-computed ``EvaluationSummary``. Empty / no-verdict
+                summaries are accepted and produce no DB writes (the
+                underlying helper short-circuits on empty results).
+            tenant_id: REQUIRED — written to every row and to the eval-error
+                marker on failure. Must come from the authenticated context,
+                NEVER from the summary or the event payload (#1344 invariant).
+            event_id: The canonical event ID the rows reference. Defaults to
+                ``summary.event_id`` when not supplied — convenient for the
+                common case where the summary was returned by
+                ``evaluate_event`` against this engine.
+
+        Returns:
+            None. On DB failure the inner savepoint rolls back and the
+            ``traceability_events`` row is marked with ``evaluation_error``;
+            the exception is swallowed so callers don't observe a partial
+            persistence state. Mirrors the exact behavior of
+            ``_persist_evaluations``.
+        """
+        resolved_event_id = event_id or summary.event_id
+        if not resolved_event_id:
+            # No event_id available — refuse rather than write rows with an
+            # empty FK that the rules-eval queries can't join back. Better
+            # to surface the misuse than silently lose results.
+            raise ValueError(
+                "persist_summary requires an event_id (either as kwarg or on "
+                "summary.event_id)"
+            )
+        self._persist_evaluations(tenant_id, resolved_event_id, summary.results)
+
     def evaluate_events_batch(
         self,
         events: List[Dict[str, Any]],
