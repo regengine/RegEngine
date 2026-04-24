@@ -72,6 +72,11 @@ def _make_response(status_code: int, headers: dict = None, text: str = "") -> Ma
     return r
 
 
+@pytest.fixture(autouse=True)
+def _allow_mock_webhook_urls(monkeypatch):
+    monkeypatch.setattr("app.notifications.validate_url", lambda _url: None)
+
+
 # ── Retry-After header parsing ───────────────────────────────────────────────
 
 

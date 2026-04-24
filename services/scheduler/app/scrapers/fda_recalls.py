@@ -7,6 +7,7 @@ These are critical safety alerts that often require 24-hour response.
 from __future__ import annotations
 
 import time
+import re
 from datetime import datetime, timezone
 from typing import List, Optional
 
@@ -152,10 +153,10 @@ class FDARecallsScraper(BaseScraper):
 
         # Determine severity from classification
         classification = result.get("classification", "")
-        if "Class I" in classification:
-            severity = EnforcementSeverity.CRITICAL
-        elif "Class II" in classification:
+        if re.search(r"\bCLASS\s+II\b", classification, flags=re.IGNORECASE):
             severity = EnforcementSeverity.HIGH
+        elif re.search(r"\bCLASS\s+I\b", classification, flags=re.IGNORECASE):
+            severity = EnforcementSeverity.CRITICAL
         else:
             severity = EnforcementSeverity.MEDIUM
 

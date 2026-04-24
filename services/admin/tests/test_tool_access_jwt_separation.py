@@ -163,7 +163,11 @@ def test_decode_access_token_accepts_legacy_tokens_without_aud():
     from app.auth_utils import ALGORITHM, SECRET_KEY, decode_access_token
 
     legacy = pyjwt.encode(
-        {"sub": "legacy-user", "tenant_id": "legacy-tenant"},
+        {
+            "sub": "legacy-user",
+            "tenant_id": "legacy-tenant",
+            "jti": "legacy-session-jti",
+        },
         SECRET_KEY,
         algorithm=ALGORITHM,
     )

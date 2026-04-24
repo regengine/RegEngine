@@ -136,6 +136,18 @@ _revoked_jtis: TTLCache[str, bool] = TTLCache(
 _revocation_redis = None  # set by lifespan init
 
 
+def _remember_revoked_jti(jti: str) -> None:
+    """Cache a revoked JTI in whichever local container tests have installed."""
+    if hasattr(_revoked_jtis, "__setitem__"):
+        _revoked_jtis[jti] = True
+        return
+    add = getattr(_revoked_jtis, "add", None)
+    if callable(add):
+        add(jti)
+        return
+    raise TypeError("_revoked_jtis must support item assignment or add()")
+
+
 def _sync_keys_from_registry(signing_key, verification_keys) -> None:
     """Cache registry keys into module-level state for sync access.
 
@@ -310,7 +322,7 @@ async def check_revoked_async(jti: str) -> bool:
     if _revocation_redis:
         try:
             if await _revocation_redis.sismember("regengine:jwt:revoked", jti):
-                _revoked_jtis[jti] = True
+                _remember_revoked_jti(jti)
                 return True
         except Exception as exc:  # pragma: no cover — Redis best-effort
             # If Redis is transiently unreachable, fall back to
@@ -327,7 +339,7 @@ async def revoke_token(jti: str, ttl_seconds: Optional[int] = None) -> None:
     if ttl_seconds is None:
         ttl_seconds = ACCESS_TOKEN_EXPIRE_MINUTES * 60
 
-    _revoked_jtis[jti] = True
+    _remember_revoked_jti(jti)
     _logger.warning("jwt_token_revoked: jti=%s", jti)
 
     if _revocation_redis:

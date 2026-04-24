@@ -8,7 +8,7 @@ Covers:
   - Refresh token tampered → 401
   - Suspended tenant → login still succeeds but tenant_status reflected
   - Disabled user account → 403
-  - Email rate-limit: exceeded → 429
+  - Email rate-limit: exceeded → 401
   - Account lockout: threshold reached → 423
   - Password reset: missing auth → 401; no supabase → 503; happy path
   - Change password: wrong current → 401; happy path
@@ -17,7 +17,7 @@ Covers:
   - /register: disabled when users exist; happy path
   - /me endpoint
   - /unlock admin endpoint
-  - Signup: duplicate email → 409; happy path
+  - Signup: duplicate email → generic 200; happy path
   - Internal helpers: _slugify_tenant_name, _ensure_unique_tenant_slug,
     _progressive_delay_seconds, _email_attempt_key, _lockout_key
 """
@@ -143,10 +143,13 @@ def _make_session_store(*, redis_client: MagicMock | None = None) -> MagicMock:
     store.create_session = AsyncMock(return_value=None)
     store.get_session = AsyncMock(return_value=None)
     store.claim_session_by_token = AsyncMock(return_value=None)
+    store.check_token_reuse = AsyncMock(return_value=None)
     store.update_session = AsyncMock(return_value=None)
+    store.mark_token_used = AsyncMock(return_value=None)
     store.revoke_session = AsyncMock(return_value=None)
     store.revoke_all_user_sessions = AsyncMock(return_value=0)
     store.revoke_all_for_user = AsyncMock(return_value=0)
+    store.revoke_all_for_family = AsyncMock(return_value=0)
     store.list_user_sessions = AsyncMock(return_value=[])
     store.delete_session = AsyncMock(return_value=None)
     return store
@@ -431,8 +434,8 @@ class TestLogin:
         assert payload["tv"] == 3
 
     @pytest.mark.asyncio
-    async def test_login_rate_limited_raises_429(self, monkeypatch):
-        """If the email attempt counter is at limit, login returns 429."""
+    async def test_login_rate_limited_raises_401(self, monkeypatch):
+        """If the email attempt counter is at limit, login returns generic 401."""
         client = _make_redis_client()
         client.get = AsyncMock(return_value=str(_EMAIL_ATTEMPT_LIMIT))
         client.ttl = AsyncMock(return_value=-2)  # no lockout delay
@@ -446,7 +449,7 @@ class TestLogin:
                 db=db,
                 session_store=session_store,
             )
-        assert exc.value.status_code == 429
+        assert exc.value.status_code == 401
 
     @pytest.mark.asyncio
     async def test_login_locked_account_raises_423(self, monkeypatch):
@@ -1011,7 +1014,7 @@ class TestConfirmPassword:
         assert "jti" in payload
 
     @pytest.mark.asyncio
-    async def test_confirm_rate_limited_raises_429(self, monkeypatch):
+    async def test_confirm_rate_limited_raises_401(self, monkeypatch):
         user = _make_user(email="u@x.com", password="pw")
         client = _make_redis_client()
         client.get = AsyncMock(return_value=str(_EMAIL_ATTEMPT_LIMIT))
@@ -1027,7 +1030,7 @@ class TestConfirmPassword:
                 db=db,
                 session_store=session_store,
             )
-        assert exc.value.status_code == 429
+        assert exc.value.status_code == 401
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -1101,23 +1104,23 @@ class TestRegisterInitialAdmin:
 
 class TestSignup:
     @pytest.mark.asyncio
-    async def test_signup_duplicate_email_raises_409(self, monkeypatch):
+    async def test_signup_duplicate_email_returns_generic_success(self, monkeypatch):
         existing = _make_user(email="existing@x.com")
         db = _make_db_with_user(existing)
         session_store = _make_session_store()
 
-        with pytest.raises(HTTPException) as exc:
-            await ar.signup.__wrapped__(
-                payload=RegisterRequest(
-                    email="existing@x.com",
-                    password="StrongPass-9!",
-                    tenant_name="Acme",
-                ),
-                request=_make_request(),
-                db=db,
-                session_store=session_store,
-            )
-        assert exc.value.status_code == 409
+        result = await ar.signup.__wrapped__(
+            payload=RegisterRequest(
+                email="existing@x.com",
+                password="StrongPass-9!",
+                tenant_name="Acme",
+            ),
+            request=_make_request(),
+            db=db,
+            session_store=session_store,
+        )
+        assert result.status_code == 200
+        assert b"Check your inbox" in result.body
 
     @pytest.mark.asyncio
     async def test_signup_weak_password_raises_400(self, monkeypatch):
@@ -1224,14 +1227,14 @@ class TestSignup:
 
 class TestRateLimitHelpers:
     @pytest.mark.asyncio
-    async def test_check_email_rate_limit_raises_429_at_limit(self):
+    async def test_check_email_rate_limit_raises_401_at_limit(self):
         client = _make_redis_client()
         client.get = AsyncMock(return_value=str(_EMAIL_ATTEMPT_LIMIT))
         session_store = _make_session_store(redis_client=client)
 
         with pytest.raises(HTTPException) as exc:
             await ar._check_email_rate_limit(session_store, "u@x.com")
-        assert exc.value.status_code == 429
+        assert exc.value.status_code == 401
 
     @pytest.mark.asyncio
     async def test_check_email_rate_limit_passes_below_limit(self):

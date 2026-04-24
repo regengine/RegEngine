@@ -105,7 +105,7 @@ _shutdown_event = threading.Event()
 _last_poll_time: Optional[datetime] = None
 _consumer_started_at: Optional[datetime] = None
 # DLQ producer — shared singleton (#1228)
-_dlq: Optional[DLQProducer] = None
+_dlq_producer: Optional[DLQProducer] = None
 
 
 def _ensure_topic(topic: str, bootstrap_servers: str) -> None:
@@ -128,18 +128,18 @@ def _ensure_topic(topic: str, bootstrap_servers: str) -> None:
 
 def _init_dlq_producer(bootstrap: str) -> DLQProducer:
     """Get or create the shared DLQ producer singleton (#1228)."""
-    global _dlq
-    _dlq = get_dlq_producer(
+    global _dlq_producer
+    _dlq_producer = get_dlq_producer(
         topic=TOPIC_DLQ,
         bootstrap_servers=bootstrap,
         service_name="admin-review-consumer",
     )
-    return _dlq
+    return _dlq_producer
 
 
 def _send_to_dlq(bootstrap: str, event: Any, error: str, headers: list | None = None) -> None:
     """Send failed message to dead letter queue."""
-    producer = _dlq or _init_dlq_producer(bootstrap)
+    producer = _dlq_producer or _init_dlq_producer(bootstrap)
     try:
         if isinstance(event, dict):
             dlq_payload = json.dumps({
@@ -209,18 +209,21 @@ def stop_consumer() -> None:
 def _cleanup_dlq_producer() -> None:
     """Flush then close the shared DLQ producer on shutdown (#1228).
 
-    Delegates to DLQProducer.close() which flushes then tears down the
-    underlying Kafka client.  Exceptions are absorbed so shutdown always
-    completes even if the broker is unreachable.
+    Flush is called explicitly before close so shutdown ordering stays visible
+    to the tests and mirrors the graph consumer behavior.
     """
-    global _dlq
-    if _dlq is not None:
+    global _dlq_producer
+    if _dlq_producer is not None:
         try:
-            _dlq.close()
-            logger.info("dlq_producer_flushed_on_shutdown")
+            _dlq_producer.flush(timeout=2.0)
         except Exception as exc:  # pragma: no cover - infra
             logger.exception("dlq_flush_on_shutdown_failed", error=str(exc))
-        _dlq = None
+        try:
+            _dlq_producer.close()
+            logger.info("dlq_producer_flushed_on_shutdown")
+        except Exception as exc:  # pragma: no cover - infra
+            logger.exception("dlq_close_on_shutdown_failed", error=str(exc))
+        _dlq_producer = None
 
 
 # Configurable staleness threshold (seconds)

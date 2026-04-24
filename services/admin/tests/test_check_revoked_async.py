@@ -79,13 +79,13 @@ def test_check_revoked_rejects_on_in_memory_hit(monkeypatch):
         auth_utils._check_revoked({"jti": jti, "sub": "u1"})
 
 
-def test_check_revoked_legacy_token_without_jti_passes(monkeypatch):
+def test_check_revoked_legacy_token_without_jti_passes_with_rollback_env(monkeypatch):
     """Tokens minted before the jti claim existed have no individual
-    revocation handle — the sync fast-path must let them through so
-    auth doesn't regress on existing sessions."""
+    revocation handle — the explicit rollback env preserves the old behavior."""
     from services.admin.app import auth_utils
 
     monkeypatch.setattr(auth_utils, "_revoked_jtis", set())
+    monkeypatch.setenv("AUTH_ALLOW_LEGACY_JTI_FREE", "true")
     payload = {"sub": "u1"}  # no jti
     assert auth_utils._check_revoked(payload) is payload
 

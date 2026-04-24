@@ -620,6 +620,8 @@ class TestAuth:
     def test_missing_api_key_returns_401(self, monkeypatch: pytest.MonkeyPatch):
         """When API_KEY is configured but no key header is sent, expect 401."""
         monkeypatch.setenv("API_KEY", "real-secret-key")
+        from app import config as cfg
+        cfg.get_settings.cache_clear()
 
         app = FastAPI()
         app.include_router(rules_router)

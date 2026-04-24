@@ -2,7 +2,9 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status, Request
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from datetime import timedelta, datetime, timezone
+import inspect
 import structlog
 from pydantic import BaseModel, Field
 from typing import List, Dict, Optional
@@ -43,6 +45,13 @@ _EMAIL_ATTEMPT_WINDOW = 900  # 15 minutes
 
 def _email_attempt_key(email: str) -> str:
     return f"login_attempts:{email}"
+
+
+async def _maybe_await(result):
+    """Accept either a direct value or an awaitable from injected collaborators."""
+    if inspect.isawaitable(result):
+        return await result
+    return result
 
 
 async def _check_email_rate_limit(session_store: RedisSessionStore, email: str) -> None:
@@ -487,7 +496,7 @@ async def signup(
         select(UserModel).where(UserModel.email == normalized_email)
     ).scalar_one_or_none()
     if existing_user:
-        # Return the same 2xx response as a successful signup to prevent email
+        # Return the same generic success response as a successful signup to prevent email
         # enumeration (closes #1400). We do NOT send a confirmation email here
         # to avoid email-bombing the existing user. A "someone tried to register
         # with your email" notification to the existing user is a nice-to-have
@@ -495,7 +504,7 @@ async def signup(
         logger.info("signup_duplicate_masked", email=mask_email(normalized_email))
         return JSONResponse(
             status_code=200,
-            content={"message": "If this email isn't already registered, you'll receive a confirmation email shortly."},
+            content={"detail": "Check your inbox for confirmation instructions."},
         )
 
     try:
@@ -516,7 +525,15 @@ async def signup(
         status="active",
     )
     db.add(new_user)
-    db.flush()
+    try:
+        db.flush()
+    except IntegrityError:
+        db.rollback()
+        logger.info("signup_duplicate_race_rejected", email=mask_email(normalized_email))
+        return JSONResponse(
+            status_code=200,
+            content={"detail": "Check your inbox for confirmation instructions."},
+        )
 
     # #1090 — Supabase provisioning happens AFTER db.flush() succeeds.  If
     # Supabase fails we roll back the DB transaction so the caller can retry.
@@ -751,11 +768,17 @@ async def refresh_session(
         # token reuse — either a theft replay or a double-spend. Revoke the
         # entire session family so the thief (and victim) are forced to
         # re-authenticate, and emit a high-severity audit signal.
-        reused_session_id = await session_store.check_token_reuse(input_hash)
+        reused_session_id = await _maybe_await(
+            session_store.check_token_reuse(input_hash)
+        )
         if reused_session_id is not None:
-            reused_session = await session_store.get_session(reused_session_id)
+            reused_session = await _maybe_await(
+                session_store.get_session(reused_session_id)
+            )
             if reused_session is not None:
-                await session_store.revoke_all_for_family(reused_session.family_id)
+                await _maybe_await(
+                    session_store.revoke_all_for_family(reused_session.family_id)
+                )
                 logger.warning(
                     "refresh_token_reuse_detected",
                     session_id=str(reused_session_id),
@@ -788,7 +811,8 @@ async def refresh_session(
 
     # Update session with new token hash and timestamps.
     # old_token_hash already deleted by claim_session_by_token (GETDEL).
-    await session_store.update_session(
+    await _maybe_await(
+        session_store.update_session(
         session.id,
         {
             "refresh_token_hash": new_hash,
@@ -796,15 +820,17 @@ async def refresh_session(
             "expires_at": (datetime.now(timezone.utc) + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)).isoformat()
         },
         new_token_hash=new_hash,
-    )
+    ))
 
     # SECURITY (#1859): tombstone the consumed hash so a replay can be
     # detected as reuse (not just "unknown token"). TTL matches refresh
     # expiration so the tombstone outlives any legitimate replay window.
-    await session_store.mark_token_used(
-        input_hash,
-        session.id,
-        ttl_seconds=REFRESH_TOKEN_EXPIRE_DAYS * 24 * 3600,
+    await _maybe_await(
+        session_store.mark_token_used(
+            input_hash,
+            session.id,
+            ttl_seconds=REFRESH_TOKEN_EXPIRE_DAYS * 24 * 3600,
+        )
     )
 
     # Re-issue Access Token
@@ -1129,6 +1155,7 @@ async def change_password(
         raise HTTPException(status_code=400, detail=exc.message)
 
     user.password_hash = get_password_hash(payload.new_password)
+    user.token_version = int(getattr(user, "token_version", 0) or 0) + 1
 
     # #1089 — Supabase sync must succeed before we commit the DB change.
     # Previously a Supabase failure was swallowed and the DB was committed,

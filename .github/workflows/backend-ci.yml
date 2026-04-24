@@ -4,20 +4,32 @@ on:
   push:
     branches: [main, develop]
     paths:
+      - 'alembic/**'
+      - 'server/**'
       - 'services/**'
       - 'shared/**'
       - 'kernel/**'
       - 'plugins/fsma/**'
+      - 'Dockerfile'
+      - 'railway.toml'
       - 'requirements.in'
       - 'requirements.lock'
+      - 'scripts/**'
       - '.github/workflows/backend-ci.yml'
   pull_request:
     branches: [main]
     paths:
+      - 'alembic/**'
+      - 'server/**'
       - 'services/**'
       - 'shared/**'
+      - 'kernel/**'
+      - 'plugins/fsma/**'
+      - 'Dockerfile'
+      - 'railway.toml'
       - 'requirements.in'
       - 'requirements.lock'
+      - 'scripts/**'
       - '.github/workflows/backend-ci.yml'
 
 # Cancel in-progress runs for the same branch/PR

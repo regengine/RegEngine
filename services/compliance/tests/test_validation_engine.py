@@ -9,6 +9,7 @@ Covers:
 """
 
 import sys
+import os
 from pathlib import Path
 from uuid import uuid4
 
@@ -19,6 +20,11 @@ for key in _to_remove:
     del sys.modules[key]
 sys.path.insert(0, str(service_dir))
 
+os.environ.setdefault("DATABASE_URL", "sqlite:///:memory:")
+os.environ.setdefault("REGENGINE_ENV", "test")
+os.environ.setdefault("AUTH_TEST_BYPASS_TOKEN", "test-bypass-token-validation-engine")
+os.environ.setdefault("AUTH_SECRET_KEY", "test-secret-key-validation-engine")
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -26,7 +32,7 @@ from main import app
 
 client = TestClient(app)
 
-API_KEY = "test-key-12345"
+API_KEY = os.environ["AUTH_TEST_BYPASS_TOKEN"]
 
 
 def _headers(tenant_id: str | None = None) -> dict:
@@ -52,6 +58,15 @@ def _valid_config(**overrides) -> dict:
     return base
 
 
+def _payload(config: dict | None = None, *, strict: bool | None = None) -> dict:
+    payload = {"ftl_commodity": "leafy_greens"}
+    if config is not None:
+        payload["config"] = config
+    if strict is not None:
+        payload["strict"] = strict
+    return payload
+
+
 # ─── Validation: happy path ────────────────────────────────────────────
 
 
@@ -59,7 +74,7 @@ class TestValidationHappyPath:
     def test_fully_valid_config_passes(self):
         resp = client.post(
             "/validate",
-            json={"config": _valid_config()},
+            json=_payload(_valid_config()),
             headers=_headers(),
         )
         assert resp.status_code == 200
@@ -74,7 +89,7 @@ class TestValidationHappyPath:
         )
         resp = client.post(
             "/validate",
-            json={"config": config},
+            json=_payload(config),
             headers=_headers(),
         )
         body = resp.json()
@@ -94,7 +109,7 @@ class TestValidationHappyPath:
                 config["prior_source_tlc"] = "TLC-PRIOR"
             resp = client.post(
                 "/validate",
-                json={"config": config},
+                json=_payload(config),
                 headers=_headers(),
             )
             body = resp.json()
@@ -103,7 +118,7 @@ class TestValidationHappyPath:
     def test_cte_type_case_insensitive(self):
         resp = client.post(
             "/validate",
-            json={"config": _valid_config(cte_type="shipping")},
+            json=_payload(_valid_config(cte_type="shipping")),
             headers=_headers(),
         )
         assert resp.json()["valid"] is True
@@ -118,7 +133,7 @@ class TestRequiredFieldValidation:
         del config["tlc"]
         resp = client.post(
             "/validate",
-            json={"config": config},
+            json=_payload(config),
             headers=_headers(),
         )
         body = resp.json()
@@ -132,7 +147,7 @@ class TestRequiredFieldValidation:
         config = _valid_config(tlc=None)
         resp = client.post(
             "/validate",
-            json={"config": config},
+            json=_payload(config),
             headers=_headers(),
         )
         body = resp.json()
@@ -145,7 +160,7 @@ class TestRequiredFieldValidation:
         """Empty config should report errors for every required field."""
         resp = client.post(
             "/validate",
-            json={"config": {}},
+            json=_payload({}),
             headers=_headers(),
         )
         body = resp.json()
@@ -159,7 +174,7 @@ class TestRequiredFieldValidation:
         del config["responsible_party_contact"]
         resp = client.post(
             "/validate",
-            json={"config": config},
+            json=_payload(config),
             headers=_headers(),
         )
         body = resp.json()
@@ -171,7 +186,7 @@ class TestRequiredFieldValidation:
         config = _valid_config(responsible_party_contact=None)
         resp = client.post(
             "/validate",
-            json={"config": config},
+            json=_payload(config),
             headers=_headers(),
         )
         body = resp.json()
@@ -185,7 +200,7 @@ class TestRequiredFieldValidation:
         config = _valid_config(tlc="")
         resp = client.post(
             "/validate",
-            json={"config": config},
+            json=_payload(config),
             headers=_headers(),
         )
         body = resp.json()
@@ -205,7 +220,7 @@ class TestCTETypeValidation:
         config = _valid_config(cte_type="INVALID_TYPE")
         resp = client.post(
             "/validate",
-            json={"config": config},
+            json=_payload(config),
             headers=_headers(),
         )
         body = resp.json()
@@ -219,7 +234,7 @@ class TestCTETypeValidation:
         config = _valid_config(cte_type=123)
         resp = client.post(
             "/validate",
-            json={"config": config},
+            json=_payload(config),
             headers=_headers(),
         )
         # Should not 500 — graceful handling
@@ -235,7 +250,7 @@ class TestReceivingCTEValidation:
         # Intentionally omit prior_source_tlc
         resp = client.post(
             "/validate",
-            json={"config": config},
+            json=_payload(config),
             headers=_headers(),
         )
         body = resp.json()
@@ -247,7 +262,7 @@ class TestReceivingCTEValidation:
         config = _valid_config(cte_type="RECEIVING", prior_source_tlc=None)
         resp = client.post(
             "/validate",
-            json={"config": config},
+            json=_payload(config),
             headers=_headers(),
         )
         body = resp.json()
@@ -260,7 +275,7 @@ class TestReceivingCTEValidation:
         config = _valid_config(cte_type="RECEIVING", prior_source_tlc="TLC-PRIOR-001")
         resp = client.post(
             "/validate",
-            json={"config": config},
+            json=_payload(config),
             headers=_headers(),
         )
         assert resp.json()["valid"] is True
@@ -269,7 +284,7 @@ class TestReceivingCTEValidation:
         config = _valid_config(cte_type="SHIPPING")
         resp = client.post(
             "/validate",
-            json={"config": config},
+            json=_payload(config),
             headers=_headers(),
         )
         body = resp.json()
@@ -288,7 +303,7 @@ class TestWarningsAndStrictMode:
         # (it's also required, so use a config that has required fields but not lot_size_unit)
         resp = client.post(
             "/validate",
-            json={"config": _valid_config()},
+            json=_payload(_valid_config()),
             headers=_headers(),
         )
         body = resp.json()
@@ -300,7 +315,7 @@ class TestWarningsAndStrictMode:
     def test_warnings_have_suggestions(self):
         resp = client.post(
             "/validate",
-            json={"config": _valid_config()},
+            json=_payload(_valid_config()),
             headers=_headers(),
         )
         for w in resp.json()["warnings"]:
@@ -310,7 +325,7 @@ class TestWarningsAndStrictMode:
     def test_strict_mode_converts_warnings_to_errors(self):
         resp = client.post(
             "/validate",
-            json={"config": _valid_config(), "strict": True},
+            json=_payload(_valid_config(), strict=True),
             headers=_headers(),
         )
         body = resp.json()
@@ -322,7 +337,7 @@ class TestWarningsAndStrictMode:
     def test_non_strict_mode_keeps_warnings_separate(self):
         resp = client.post(
             "/validate",
-            json={"config": _valid_config(), "strict": False},
+            json=_payload(_valid_config(), strict=False),
             headers=_headers(),
         )
         body = resp.json()

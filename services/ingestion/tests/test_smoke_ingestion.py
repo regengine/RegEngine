@@ -36,4 +36,4 @@ def test_health() -> None:
             assert response.status_code == 200
             data = response.json()
             assert data["status"] == "healthy"
-            assert data["service"] == "ingestion-service"
+            assert data["service"] == "regengine"

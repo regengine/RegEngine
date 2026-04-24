@@ -2,6 +2,7 @@
 Tests for Mobile Field Capture CTE Ingestion Endpoint.
 """
 
+import os
 import sys
 import uuid
 from pathlib import Path
@@ -13,6 +14,12 @@ from fastapi.testclient import TestClient
 
 # Add local path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
+
+_AUTH_HEADERS = {
+    "X-RegEngine-API-Key": os.getenv(
+        "AUTH_TEST_BYPASS_TOKEN", "test-bypass-token-for-pytest"
+    )
+}
 
 # =============================================================================
 # FIXTURES
@@ -72,13 +79,23 @@ def test_log_traceability_event_success(mock_neo4j_client, mock_validation):
         "gtin": "10614141000019"
     }
     
-    response = client.post("/event", json=payload)
+    with patch("shared.canonical_persistence.CanonicalEventStore") as mock_store_cls, \
+         patch("shared.database.SessionLocal") as mock_session_local:
+        mock_db = MagicMock()
+        mock_session_local.return_value = mock_db
+
+        response = client.post("/event", json=payload, headers=_AUTH_HEADERS)
 
     assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.json()}"
     data = response.json()
     assert data["status"] == "success"
     assert "event_id" in data
     assert data["tlc"] == "TLC-2024-001"
+
+    mock_store_cls.assert_called_once_with(mock_db, dual_write=True)
+    mock_store_cls.return_value.persist_event.assert_called_once()
+    mock_db.commit.assert_called_once()
+    mock_db.close.assert_called_once()
     
     # Check that persistence was triggered correctly
     mock_run = mock_neo4j_client.session.return_value.__aenter__.return_value.run
@@ -108,7 +125,7 @@ def test_log_traceability_event_missing_responsible_party_contact(mock_neo4j_cli
         # responsible_party_contact intentionally omitted
     }
 
-    response = client.post("/event", json=payload)
+    response = client.post("/event", json=payload, headers=_AUTH_HEADERS)
 
     assert response.status_code == 422, f"Expected 422, got {response.status_code}: {response.json()}"
 
@@ -143,7 +160,7 @@ def test_log_traceability_event_invalid_tlc(mock_neo4j_client, mock_validation):
         "responsible_party_contact": "Jane Doe, 555-0100, jane@example.com",
     }
     
-    response = client.post("/event", json=payload)
+    response = client.post("/event", json=payload, headers=_AUTH_HEADERS)
 
     assert response.status_code == 400, f"Expected 400, got {response.status_code}: {response.json()}"
     assert "Invalid TLC" in response.json()["detail"]
