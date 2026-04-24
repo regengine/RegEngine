@@ -318,3 +318,105 @@ def test_export_denied_without_fda_export_scope(monkeypatch: pytest.MonkeyPatch)
 
     assert response.status_code == 403
     assert "requires 'fda.export'" in response.json()["detail"]
+
+
+def test_export_denied_cross_tenant(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Regression test: a principal scoped to tenant A MUST NOT be able to
+    export tenant B's traceability data by passing ``?tenant_id=B``.
+
+    The cross-tenant check lives in ``require_permission`` (authz.py) and
+    compares ``principal.tenant_id`` to the tenant context derived from
+    the query/header. FDA export is the highest-value endpoint guarded by
+    that check — a cross-tenant bypass here would let any authenticated
+    customer pull another customer's full FSMA traceability graph, which
+    is a P0 multi-tenant data-leak.
+
+    The wildcard-scope carve-out (``"*" in principal.scopes``) intentionally
+    does NOT apply to this test — we're asserting the default, non-sysadmin
+    path. A sibling test elsewhere in the suite covers the wildcard case.
+    """
+    app = FastAPI()
+    app.include_router(fda_router)
+
+    # Principal scoped to tenant A with fda.export permission.
+    tenant_a = "00000000-0000-0000-0000-00000000000a"
+    tenant_b = "00000000-0000-0000-0000-00000000000b"
+    app.dependency_overrides[get_ingestion_principal] = lambda: IngestionPrincipal(
+        key_id="tenant-a-key",
+        scopes=["fda.export"],  # valid scope, but no wildcard
+        tenant_id=tenant_a,
+        auth_mode="test",
+    )
+
+    # Bypass subscription gate (test-only; mirrors the ``client`` fixture).
+    from app.subscription_gate import require_active_subscription
+    app.dependency_overrides[require_active_subscription] = lambda: None
+
+    _install_fake_dependencies(
+        monkeypatch,
+        session_factory=lambda: _FakeSession(),
+        persistence_cls=_FakePersistence,
+    )
+
+    with TestClient(app) as test_client:
+        response = test_client.get(
+            "/api/v1/fda/export",
+            params={
+                "tenant_id": tenant_b,  # <-- mismatch with principal.tenant_id
+                "tlc": "TLC-2026-001",
+            },
+        )
+
+    assert response.status_code == 403, (
+        f"Cross-tenant FDA export must 403 but got {response.status_code}: {response.text}"
+    )
+    assert "Tenant mismatch" in response.json()["detail"]
+
+
+def test_export_denied_cross_tenant_via_header(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Sibling to test_export_denied_cross_tenant covering the ``X-Tenant-ID``
+    header as the tenant-carrier instead of the query param.
+
+    ``_requested_tenant_context`` in authz.py accepts either source; the
+    cross-tenant check must fire on either. Without this test, a caller
+    could circumvent the query-param check by switching to a header.
+    """
+    app = FastAPI()
+    app.include_router(fda_router)
+
+    tenant_a = "00000000-0000-0000-0000-00000000000a"
+    tenant_b = "00000000-0000-0000-0000-00000000000b"
+    app.dependency_overrides[get_ingestion_principal] = lambda: IngestionPrincipal(
+        key_id="tenant-a-key",
+        scopes=["fda.export"],
+        tenant_id=tenant_a,
+        auth_mode="test",
+    )
+    from app.subscription_gate import require_active_subscription
+    app.dependency_overrides[require_active_subscription] = lambda: None
+
+    _install_fake_dependencies(
+        monkeypatch,
+        session_factory=lambda: _FakeSession(),
+        persistence_cls=_FakePersistence,
+    )
+
+    with TestClient(app) as test_client:
+        response = test_client.get(
+            "/api/v1/fda/export",
+            params={
+                # Query and header disagree — _requested_tenant_context
+                # rejects the conflict before even reaching the tenant check.
+                "tenant_id": tenant_a,
+                "tlc": "TLC-2026-001",
+            },
+            headers={"X-Tenant-ID": tenant_b},
+        )
+
+    # Either 400 (conflicting tenant context) or 403 (tenant mismatch) is
+    # acceptable — both refuse cross-tenant access. The important negative
+    # is that the request MUST NOT produce a 200 with tenant B's data.
+    assert response.status_code in (400, 403), (
+        f"Conflicting tenant context must be rejected but got {response.status_code}: "
+        f"{response.text}"
+    )
