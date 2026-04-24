@@ -60,10 +60,13 @@ jobs:
           ref: ${{ github.sha }}
           running-workflow-name: 'Wait for CI'
           repo-token: ${{ secrets.GITHUB_TOKEN }}
-          # Match the CI Status Gate jobs from backend-ci.yml and frontend-ci.yml.
+          # Match whichever CI Status Gate jobs are created for this path set.
           # GitHub Checks API returns job names, not "workflow / job" format.
+          # Backend CI can take several minutes to create its summary gate
+          # while matrix jobs are still queued, so keep discovery patient.
           check-regexp: 'CI Status Gate'
           wait-interval: 30
+          checks-discovery-timeout: 900
           allowed-conclusions: success
 
   deploy:
