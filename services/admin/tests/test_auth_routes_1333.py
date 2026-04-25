@@ -1408,7 +1408,8 @@ class TestSourceGuardrails:
         )
 
     def test_refresh_uses_claim_session_by_token(self):
-        assert "claim_session_by_token" in self._text, (
+        refresh_src = Path(__file__).resolve().parent.parent / "app" / "auth" / "refresh_router.py"
+        assert "claim_session_by_token" in refresh_src.read_text(), (
             "refresh must use atomic claim_session_by_token to prevent race conditions"
         )
 

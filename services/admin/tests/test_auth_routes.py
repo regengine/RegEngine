@@ -357,8 +357,8 @@ class TestTokenRefresh:
         db_session.execute.return_value.scalars.return_value.all.return_value = [membership]
 
         with (
-            patch("services.admin.app.auth_routes.decode_access_token", return_value={"tenant_id": None, "tid": None}),
-            patch("services.admin.app.auth_routes.create_access_token", return_value="new-access-token"),
+            patch("services.admin.app.auth.refresh_router.decode_access_token", return_value={"tenant_id": None, "tid": None}),
+            patch("services.admin.app.auth.refresh_router.create_access_token", return_value="new-access-token"),
         ):
             from services.admin.app.auth_routes import refresh_session
             import asyncio
