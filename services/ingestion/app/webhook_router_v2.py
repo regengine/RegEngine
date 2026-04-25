@@ -721,10 +721,22 @@ def _rules_preeval_reject(event: IngestEvent, db_session, tenant_id: str) -> tup
     reject) so a transient module-level bug can't take down ingestion
     for every tenant.
 
+    Short-circuits on OFF mode — skips normalization + eval entirely
+    so the default production path pays no added latency. Without this
+    guard every webhook ingest would re-normalize and re-evaluate even
+    though ``should_reject`` would always return ``(False, None)``;
+    the threaded post-commit block still does its own eval with
+    ``persist=True``, so under enforcement we pay for the double eval
+    intentionally. Under OFF we must not.
+
     Returns ``(reject, reason)`` where ``reason`` is a short string
     suitable for the ``EventResult.errors`` field, or ``None`` when not
     rejecting.
     """
+    from shared.rules.enforcement import current_mode, should_reject, EnforcementMode  # noqa: PLC0415
+    if current_mode() == EnforcementMode.OFF:
+        return False, None
+
     try:
         canonical = normalize_webhook_event(event, tenant_id)
         from shared.rules_engine import RulesEngine  # noqa: PLC0415
@@ -748,7 +760,6 @@ def _rules_preeval_reject(event: IngestEvent, db_session, tenant_id: str) -> tup
         logger.warning("rules_preeval_skipped", extra={"error": str(err)})
         return False, None
 
-    from shared.rules.enforcement import should_reject  # noqa: PLC0415
     return should_reject(summary)
 
 

@@ -143,6 +143,49 @@ class TestPreEvalOff:
         assert reject is False
         assert reason is None
 
+    def test_off_mode_short_circuits_before_normalize(self, monkeypatch, _make_event):
+        """Under OFF mode the helper MUST skip normalization + eval entirely
+        — every webhook request would otherwise pay the added latency even
+        though the verdict is always accept. The existing post-commit
+        threaded block still does its own eval with ``persist=True``, so
+        without this short-circuit we'd run canonical+eval twice per
+        accepted event on the hot path — a 2x latency regression vs. the
+        pre-Phase-0 behavior.
+        """
+        calls: dict = {"normalize": 0, "evaluate": 0}
+
+        def _normalize_spy(event, tenant_id):
+            calls["normalize"] += 1
+            return SimpleNamespace(
+                event_id="cev-1",
+                event_type=SimpleNamespace(value=event.cte_type.value),
+                traceability_lot_code=event.traceability_lot_code,
+                product_reference=None, quantity=event.quantity,
+                unit_of_measure=event.unit_of_measure,
+                from_facility_reference=None, to_facility_reference=None,
+                from_entity_reference=None, to_entity_reference=None,
+                kdes=event.kdes,
+            )
+
+        class _SpyEngine:
+            def __init__(self, db_session):
+                pass
+            def evaluate_event(self, event_data, persist, tenant_id):
+                calls["evaluate"] += 1
+                return _critical_summary()
+
+        monkeypatch.setattr(wrv2, "normalize_webhook_event", _normalize_spy)
+        re_mod = ModuleType("shared.rules_engine")
+        re_mod.RulesEngine = _SpyEngine
+        monkeypatch.setitem(sys.modules, "shared.rules_engine", re_mod)
+
+        reject, reason = wrv2._rules_preeval_reject(_make_event, db_session=None, tenant_id="t")
+
+        assert reject is False
+        assert reason is None
+        assert calls["normalize"] == 0, "normalize must be skipped in OFF mode"
+        assert calls["evaluate"] == 0, "evaluate must be skipped in OFF mode"
+
 
 # ---------------------------------------------------------------------------
 # CTE_ONLY mode
