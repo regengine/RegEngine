@@ -43,12 +43,6 @@ sys.path.insert(0, str(repo_root / "services" / "admin"))
 
 import services.admin.app.auth_routes as ar
 import services.admin.app.auth.login_router as _login_router_mod
-import services.admin.app.auth.signup_router as _signup_router_mod
-import services.admin.app.auth.sessions_router as _sessions_router_mod
-import services.admin.app.auth.register_router as _register_router_mod
-import services.admin.app.auth.change_password_router as _change_password_router_mod
-import services.admin.app.auth.reset_password_router as _reset_password_router_mod
-import services.admin.app.auth.confirm_router as _confirm_router_mod
 from services.admin.app.auth_routes import (
     LoginRequest,
     RegisterRequest,
