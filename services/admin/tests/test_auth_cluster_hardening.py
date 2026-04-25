@@ -456,15 +456,20 @@ def test_auth_confirm_has_rate_limit_decorator():
     source (which can't be renamed without editing the file).
     """
     import services.admin.app.auth_routes as ar
+    import services.admin.app.auth.confirm_router as _confirm
 
     # Evidence 1: SlowAPI replaced the function with its async wrapper.
+    # ``ar.confirm_password`` is re-exported from the confirm sub-module
+    # (Phase 1 split — see ``services/admin/app/auth/confirm_router.py``).
     assert hasattr(ar.confirm_password, "__wrapped__"), (
         "/auth/confirm lost its SlowAPI wrapper — decorator missing"
     )
 
-    # Evidence 2: module source defines a 5/minute limit right above confirm_password.
+    # Evidence 2: confirm_router source defines a 5/minute limit right above
+    # confirm_password. After the Phase 1 split the route body lives in the
+    # sub-module, not in auth_routes.py — inspect the sub-module instead.
     import inspect
-    module_src = inspect.getsource(ar)
+    module_src = inspect.getsource(_confirm)
     # Find the @limiter.limit decorator that precedes the confirm_password route.
     idx = module_src.find("async def confirm_password(")
     assert idx != -1

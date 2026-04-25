@@ -49,6 +49,7 @@ sys.path.insert(0, str(repo_root / "services" / "admin"))
 
 # Defer import until env is set up to avoid picking up bad module state.
 from services.admin.app import auth_routes as ar  # noqa: E402
+from services.admin.app.auth import reset_password_router as _rpr  # noqa: E402
 
 
 # ── Helpers ─────────────────────────────────────────────────────────────────
@@ -346,7 +347,7 @@ async def test_reset_password_rejects_password_session_token(monkeypatch):
     fake_sb = SimpleNamespace(
         auth=SimpleNamespace(get_user=lambda _t: fake_user_response)
     )
-    monkeypatch.setattr(auth_routes, "get_supabase", lambda: fake_sb)
+    monkeypatch.setattr(_rpr, "get_supabase", lambda: fake_sb)
 
     password_token = _mint_unsigned_supabase_token(amr_methods=["password"])
 
@@ -389,7 +390,7 @@ async def test_reset_password_accepts_fresh_otp_token(monkeypatch):
             admin=admin_ns,
         )
     )
-    monkeypatch.setattr(auth_routes, "get_supabase", lambda: fake_sb)
+    monkeypatch.setattr(_rpr, "get_supabase", lambda: fake_sb)
 
     recovery_token = _mint_unsigned_supabase_token(amr_methods=["otp"])
 
@@ -413,7 +414,7 @@ async def test_reset_password_accepts_fresh_otp_token(monkeypatch):
 
     # Elevation revocation helper — make it a no-op.
     monkeypatch.setattr(
-        auth_routes,
+        _rpr,
         "_revoke_all_elevation_tokens_for_user",
         AsyncMock(return_value=0),
     )
@@ -449,7 +450,7 @@ async def test_reset_password_rejects_stale_otp_token(monkeypatch):
             get_user=lambda _t: SimpleNamespace(user=fake_user)
         )
     )
-    monkeypatch.setattr(auth_routes, "get_supabase", lambda: fake_sb)
+    monkeypatch.setattr(_rpr, "get_supabase", lambda: fake_sb)
 
     stale_token = _mint_unsigned_supabase_token(
         amr_methods=["otp"],
@@ -485,7 +486,7 @@ async def test_reset_password_rejects_replayed_otp_token(monkeypatch):
             get_user=lambda _t: SimpleNamespace(user=fake_user)
         )
     )
-    monkeypatch.setattr(auth_routes, "get_supabase", lambda: fake_sb)
+    monkeypatch.setattr(_rpr, "get_supabase", lambda: fake_sb)
 
     recovery_token = _mint_unsigned_supabase_token(
         amr_methods=["otp"], jti="single-use-test-jti"

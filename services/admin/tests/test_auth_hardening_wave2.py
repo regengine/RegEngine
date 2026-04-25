@@ -196,9 +196,10 @@ class TestSignupRace:
     @pytest.mark.asyncio
     async def test_supabase_called_after_db_flush(self, monkeypatch):
         from services.admin.app import auth_routes
+        from services.admin.app.auth import signup_router as _sr
 
         monkeypatch.setattr(auth_routes.AuditLogger, "log_event", lambda *a, **k: None)
-        monkeypatch.setattr(auth_routes, "emit_funnel_event", lambda **k: None)
+        monkeypatch.setattr(_sr, "emit_funnel_event", lambda **k: None)
 
         call_order: list[str] = []
 
@@ -215,7 +216,7 @@ class TestSignupRace:
             return fake_sb_response
 
         fake_sb.auth.admin.create_user = _create_user
-        monkeypatch.setattr(auth_routes, "get_supabase", lambda: fake_sb)
+        monkeypatch.setattr(_sr, "get_supabase", lambda: fake_sb)
 
         ss = _make_session_store()
 
@@ -381,6 +382,7 @@ class TestRefreshTenantStatus:
     @pytest.mark.asyncio
     async def test_refresh_uses_real_tenant_status_not_hardcoded(self, monkeypatch):
         from services.admin.app import auth_routes
+        from services.admin.app.auth import refresh_router as _rr
         from services.admin.app.auth_utils import create_refresh_token, hash_token
 
         db, user, tenant_id, tenant_row = self._make_refresh_db(tenant_status="suspended")
@@ -417,7 +419,7 @@ class TestRefreshTenantStatus:
             captured.append(dict(data))
             return "fake.access.token"
 
-        monkeypatch.setattr(auth_routes, "create_access_token", _capture_token)
+        monkeypatch.setattr(_rr, "create_access_token", _capture_token)
 
         payload = auth_routes.RefreshRequest(refresh_token=raw_rt)
         req = _make_request(headers={"authorization": "Bearer old.jwt.token"})
@@ -440,6 +442,7 @@ class TestRefreshTenantStatus:
     @pytest.mark.asyncio
     async def test_refresh_tenant_status_active_when_tenant_is_active(self, monkeypatch):
         from services.admin.app import auth_routes
+        from services.admin.app.auth import refresh_router as _rr
         from services.admin.app.auth_utils import create_refresh_token, hash_token
 
         db, user, tenant_id, tenant_row = self._make_refresh_db(tenant_status="active")
@@ -473,7 +476,7 @@ class TestRefreshTenantStatus:
             captured.append(dict(data))
             return "fake.access.token"
 
-        monkeypatch.setattr(auth_routes, "create_access_token", _capture_token)
+        monkeypatch.setattr(_rr, "create_access_token", _capture_token)
 
         await auth_routes.refresh_session.__wrapped__(
             payload=auth_routes.RefreshRequest(refresh_token=raw_rt),
@@ -503,6 +506,7 @@ class TestChangePasswordRevoke:
     @pytest.mark.asyncio
     async def test_change_password_revokes_other_sessions(self, monkeypatch):
         from services.admin.app import auth_routes
+        from services.admin.app.auth import change_password_router as _cpr
 
         user = self._make_user()
 
@@ -510,14 +514,14 @@ class TestChangePasswordRevoke:
         db.get.return_value = user
         db.commit.return_value = None
 
-        monkeypatch.setattr(auth_routes, "verify_password", lambda pw, h: True)
-        monkeypatch.setattr(auth_routes, "validate_password", lambda pw, user_context=None: None)
-        monkeypatch.setattr(auth_routes, "get_password_hash", lambda pw: "new_hash")
+        monkeypatch.setattr(_cpr, "verify_password", lambda pw, h: True)
+        monkeypatch.setattr(_cpr, "validate_password", lambda pw, user_context=None: None)
+        monkeypatch.setattr(_cpr, "get_password_hash", lambda pw: "new_hash")
         # Supabase succeeds
         fake_sb = MagicMock()
         fake_sb.auth.admin.update_user_by_id.return_value = None
-        monkeypatch.setattr(auth_routes, "get_supabase", lambda: fake_sb)
-        monkeypatch.setattr(auth_routes, "_revoke_all_elevation_tokens_for_user", AsyncMock(return_value=0))
+        monkeypatch.setattr(_cpr, "get_supabase", lambda: fake_sb)
+        monkeypatch.setattr(_cpr, "_revoke_all_elevation_tokens_for_user", AsyncMock(return_value=0))
 
         ss = MagicMock()
         ss.revoke_all_user_sessions = AsyncMock(return_value=3)
@@ -544,6 +548,7 @@ class TestChangePasswordRevoke:
     async def test_change_password_keeps_current_session_when_sid_in_token(self, monkeypatch):
         """If the access token carries a 'sid' claim, that session must be excluded."""
         from services.admin.app import auth_routes
+        from services.admin.app.auth import change_password_router as _cpr
 
         user = self._make_user()
         current_sid = uuid_mod.uuid4()
@@ -552,16 +557,16 @@ class TestChangePasswordRevoke:
         db.get.return_value = user
         db.commit.return_value = None
 
-        monkeypatch.setattr(auth_routes, "verify_password", lambda pw, h: True)
-        monkeypatch.setattr(auth_routes, "validate_password", lambda pw, user_context=None: None)
-        monkeypatch.setattr(auth_routes, "get_password_hash", lambda pw: "new_hash")
+        monkeypatch.setattr(_cpr, "verify_password", lambda pw, h: True)
+        monkeypatch.setattr(_cpr, "validate_password", lambda pw, user_context=None: None)
+        monkeypatch.setattr(_cpr, "get_password_hash", lambda pw: "new_hash")
         fake_sb = MagicMock()
-        monkeypatch.setattr(auth_routes, "get_supabase", lambda: fake_sb)
-        monkeypatch.setattr(auth_routes, "_revoke_all_elevation_tokens_for_user", AsyncMock(return_value=0))
+        monkeypatch.setattr(_cpr, "get_supabase", lambda: fake_sb)
+        monkeypatch.setattr(_cpr, "_revoke_all_elevation_tokens_for_user", AsyncMock(return_value=0))
 
         # decode_access_token returns a payload with 'sid'
         monkeypatch.setattr(
-            auth_routes,
+            _cpr,
             "decode_access_token",
             lambda token: {"sub": str(user.id), "sid": str(current_sid)},
         )
@@ -605,23 +610,24 @@ class TestSupabaseSyncFail:
     @pytest.mark.asyncio
     async def test_supabase_sync_fail_returns_503(self, monkeypatch):
         from services.admin.app import auth_routes
+        from services.admin.app.auth import change_password_router as _cpr
 
         user = self._make_user()
 
         db = MagicMock()
         db.get.return_value = user
 
-        monkeypatch.setattr(auth_routes, "verify_password", lambda pw, h: True)
-        monkeypatch.setattr(auth_routes, "validate_password", lambda pw, user_context=None: None)
-        monkeypatch.setattr(auth_routes, "get_password_hash", lambda pw: "new_hash")
+        monkeypatch.setattr(_cpr, "verify_password", lambda pw, h: True)
+        monkeypatch.setattr(_cpr, "validate_password", lambda pw, user_context=None: None)
+        monkeypatch.setattr(_cpr, "get_password_hash", lambda pw: "new_hash")
 
         fake_sb = MagicMock()
         fake_sb.auth.admin.update_user_by_id.side_effect = RuntimeError("Supabase unavailable")
-        monkeypatch.setattr(auth_routes, "get_supabase", lambda: fake_sb)
+        monkeypatch.setattr(_cpr, "get_supabase", lambda: fake_sb)
 
         ss = MagicMock()
         ss.revoke_all_user_sessions = AsyncMock(return_value=0)
-        monkeypatch.setattr(auth_routes, "_revoke_all_elevation_tokens_for_user", AsyncMock(return_value=0))
+        monkeypatch.setattr(_cpr, "_revoke_all_elevation_tokens_for_user", AsyncMock(return_value=0))
 
         with pytest.raises(HTTPException) as exc_info:
             await auth_routes.change_password.__wrapped__(
@@ -643,22 +649,23 @@ class TestSupabaseSyncFail:
     async def test_supabase_sync_fail_no_db_commit(self, monkeypatch):
         """DB must NOT be committed when Supabase sync fails (#1089)."""
         from services.admin.app import auth_routes
+        from services.admin.app.auth import change_password_router as _cpr
 
         user = self._make_user()
 
         db = MagicMock()
         db.get.return_value = user
 
-        monkeypatch.setattr(auth_routes, "verify_password", lambda pw, h: True)
-        monkeypatch.setattr(auth_routes, "validate_password", lambda pw, user_context=None: None)
-        monkeypatch.setattr(auth_routes, "get_password_hash", lambda pw: "new_hash")
+        monkeypatch.setattr(_cpr, "verify_password", lambda pw, h: True)
+        monkeypatch.setattr(_cpr, "validate_password", lambda pw, user_context=None: None)
+        monkeypatch.setattr(_cpr, "get_password_hash", lambda pw: "new_hash")
 
         fake_sb = MagicMock()
         fake_sb.auth.admin.update_user_by_id.side_effect = ConnectionError("timeout")
-        monkeypatch.setattr(auth_routes, "get_supabase", lambda: fake_sb)
+        monkeypatch.setattr(_cpr, "get_supabase", lambda: fake_sb)
 
         ss = MagicMock()
-        monkeypatch.setattr(auth_routes, "_revoke_all_elevation_tokens_for_user", AsyncMock(return_value=0))
+        monkeypatch.setattr(_cpr, "_revoke_all_elevation_tokens_for_user", AsyncMock(return_value=0))
 
         with pytest.raises(HTTPException) as exc_info:
             await auth_routes.change_password.__wrapped__(
@@ -681,6 +688,7 @@ class TestSupabaseSyncFail:
     async def test_supabase_sync_success_commits_db(self, monkeypatch):
         """When Supabase sync succeeds, the DB commit must still happen."""
         from services.admin.app import auth_routes
+        from services.admin.app.auth import change_password_router as _cpr
 
         user = self._make_user()
 
@@ -688,14 +696,14 @@ class TestSupabaseSyncFail:
         db.get.return_value = user
         db.commit.return_value = None
 
-        monkeypatch.setattr(auth_routes, "verify_password", lambda pw, h: True)
-        monkeypatch.setattr(auth_routes, "validate_password", lambda pw, user_context=None: None)
-        monkeypatch.setattr(auth_routes, "get_password_hash", lambda pw: "new_hash")
+        monkeypatch.setattr(_cpr, "verify_password", lambda pw, h: True)
+        monkeypatch.setattr(_cpr, "validate_password", lambda pw, user_context=None: None)
+        monkeypatch.setattr(_cpr, "get_password_hash", lambda pw: "new_hash")
 
         fake_sb = MagicMock()
         fake_sb.auth.admin.update_user_by_id.return_value = None  # success
-        monkeypatch.setattr(auth_routes, "get_supabase", lambda: fake_sb)
-        monkeypatch.setattr(auth_routes, "_revoke_all_elevation_tokens_for_user", AsyncMock(return_value=0))
+        monkeypatch.setattr(_cpr, "get_supabase", lambda: fake_sb)
+        monkeypatch.setattr(_cpr, "_revoke_all_elevation_tokens_for_user", AsyncMock(return_value=0))
 
         ss = MagicMock()
         ss.revoke_all_user_sessions = AsyncMock(return_value=0)
