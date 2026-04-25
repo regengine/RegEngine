@@ -19,15 +19,15 @@ from sqlalchemy import text
 
 from shared.database import get_db_safe
 
-from services.ingestion.app.epcis.extraction import _extract_lot_data
-from services.ingestion.app.epcis.normalization import (
+from .extraction import _extract_lot_data
+from .normalization import (
     _compliance_alerts,
     _event_idempotency_key,
     _extract_kdes,
     _kde_completeness,
     _normalize_epcis_to_cte,
 )
-from services.ingestion.app.epcis.validation import (
+from .validation import (
     _default_product_description,
     _enforce_mandatory_gln_check_digits,
     _validate_as_fsma_event,

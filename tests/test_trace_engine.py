@@ -1,5 +1,5 @@
 """
-Unit tests for the in-memory lot trace engine (sandbox_router._trace_in_memory).
+Unit tests for the in-memory lot trace engine.
 
 Tests cover:
     - Forward (downstream) tracing following same-lot + transformation links
@@ -14,7 +14,8 @@ from __future__ import annotations
 
 import pytest
 
-from app.sandbox_router import _trace_in_memory, _parse_csv_to_events
+from app.sandbox.csv_parser import _parse_csv_to_events
+from app.sandbox.tracer import _trace_in_memory
 
 
 # ---------------------------------------------------------------------------

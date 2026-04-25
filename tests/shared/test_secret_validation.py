@@ -18,13 +18,13 @@ validate_env = validate_env_module.validate_env
 def base_env(**overrides):
     env = {
         "REGENGINE_ENV": "production",
-        "AUTH_SECRET_KEY": "auth-secret-with-enough-entropy",
-        "ADMIN_MASTER_KEY": "admin-master-key-with-enough-entropy",
-        "POSTGRES_PASSWORD": "postgres-password-with-enough-entropy",
+        "AUTH_SECRET_KEY": "auth-secret-with-enough-entropy",  # pragma: allowlist secret
+        "ADMIN_MASTER_KEY": "admin-master-key-with-enough-entropy",  # pragma: allowlist secret
+        "POSTGRES_PASSWORD": "postgres-password-with-enough-entropy",  # pragma: allowlist secret
         "AUTH_TEST_BYPASS_TOKEN": "",
-        "SCHEDULER_API_KEY": "scheduler-key-with-enough-entropy",
-        "OBJECT_STORAGE_ACCESS_KEY_ID": "prod-access-key",
-        "OBJECT_STORAGE_SECRET_ACCESS_KEY": "prod-secret-key-with-enough-entropy",
+        "SCHEDULER_API_KEY": "scheduler-key-with-enough-entropy",  # pragma: allowlist secret
+        "OBJECT_STORAGE_ACCESS_KEY_ID": "prod-access-key",  # pragma: allowlist secret
+        "OBJECT_STORAGE_SECRET_ACCESS_KEY": "prod-secret-key-with-enough-entropy",  # pragma: allowlist secret
     }
     env.update(overrides)
     return env
@@ -71,7 +71,7 @@ class TestEnvValidation:
         result = validate_env(
             env=base_env(
                 REGENGINE_ENV="development",
-                POSTGRES_PASSWORD="password",
+                POSTGRES_PASSWORD="password",  # pragma: allowlist secret
                 SCHEDULER_API_KEY="",
                 OBJECT_STORAGE_ACCESS_KEY_ID="",
                 OBJECT_STORAGE_SECRET_ACCESS_KEY="",

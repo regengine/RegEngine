@@ -47,7 +47,7 @@ from app.authz import IngestionPrincipal, get_ingestion_principal
 # because __init__ re-exports it — use the submodule path instead.
 import app.fda_export.router as router_module
 from app.fda_export.router import router as fda_router
-from app.fda_export_router import _generate_csv
+from app.fda_export_service import _generate_csv
 from app.subscription_gate import require_active_subscription
 
 import shared.cte_persistence as shared_cte_persistence

@@ -199,8 +199,8 @@ describe('cookie-managed credential passthrough', () => {
             { authorization: 'Bearer cookie-managed' },
             {
                 re_access_token: 'real-token',
-                re_api_key: 'real-api-key',
-                re_admin_key: 'real-admin-key',
+                re_api_key: 'real-api-key', // pragma: allowlist secret
+                re_admin_key: 'real-admin-key', // pragma: allowlist secret
             },
         );
 

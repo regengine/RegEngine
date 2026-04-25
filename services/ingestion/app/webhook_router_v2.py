@@ -669,7 +669,7 @@ def get_graph_sync_stats() -> dict:
     return {"successes": _graph_sync_successes, "failures": _graph_sync_failures}
 
 
-# #1378 — Neo4j sync producer gating (mirrors shared.canonical_persistence.migration).
+# #1378 — Neo4j sync producer gating (mirrors shared.canonical_persistence.legacy_dual_write).
 #
 # The consumer (services/graph/scripts/fsma_sync_worker.py) is not started
 # by any deployment manifest (Dockerfile, docker-compose, railway.toml).
@@ -861,7 +861,7 @@ def _persist_canonical_and_eval(
 def _publish_graph_sync(event_id: str, event: IngestEvent, tenant_id: str) -> None:
     """Push a CTE creation event to Redis for Neo4j graph sync.
 
-    Behaviour matrix (#1378 — matches shared.canonical_persistence.migration):
+    Behaviour matrix (#1378 — matches shared.canonical_persistence.legacy_dual_write):
 
     - ``ENABLE_NEO4J_SYNC`` not set (default) → no-op. The consumer at
       ``services/graph/scripts/fsma_sync_worker.py`` is not in any

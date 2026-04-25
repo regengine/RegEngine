@@ -68,7 +68,7 @@ Note: ``fsma.compliance_alerts`` is **not** in scope — V053 already
 replaced its V31 policy with a ``tenant_isolation_alerts`` policy;
 that table's ``tenant_id`` column was added by a prior migration.
 
-Revision ID: a1b2c3d4e5f6
+Revision ID: abc565b7dc47
 Revises: f0a1b2c3d4e5
 Create Date: 2026-04-24
 """
@@ -78,7 +78,7 @@ from typing import Sequence, Union
 from alembic import op
 
 
-revision: str = "a1b2c3d4e5f6"  # pragma: allowlist secret
+revision: str = "abc565b7dc47"  # pragma: allowlist secret
 down_revision: Union[str, Sequence[str], None] = "f0a1b2c3d4e5"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
