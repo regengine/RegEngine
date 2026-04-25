@@ -721,17 +721,22 @@ def _rules_preeval_reject(event: IngestEvent, db_session, tenant_id: str):
     reject) so a transient module-level bug can't take down ingestion
     for every tenant.
 
-    Returns ``(reject, reason, summary)``:
-      * ``reject``: True when the caller must reject the event.
-      * ``reason``: short string suitable for ``EventResult.errors``,
-        or None when not rejecting.
-      * ``summary``: the ``EvaluationSummary`` produced by pre-eval, or
-        None when pre-eval was skipped (canonical/eval errored).
-        Returned so callers can hand it back to the post-commit
-        persistence path via ``engine.persist_summary`` and avoid
-        re-evaluating the rules — eliminates the double-eval that
-        otherwise lands when ``RULES_ENGINE_ENFORCE != off``.
+    Short-circuits on OFF mode — skips normalization + eval entirely
+    so the default production path pays no added latency. Without this
+    guard every webhook ingest would re-normalize and re-evaluate even
+    though ``should_reject`` would always return ``(False, None)``;
+    the threaded post-commit block still does its own eval with
+    ``persist=True``, so under enforcement we pay for the double eval
+    intentionally. Under OFF we must not.
+
+    Returns ``(reject, reason)`` where ``reason`` is a short string
+    suitable for the ``EventResult.errors`` field, or ``None`` when not
+    rejecting.
     """
+    from shared.rules.enforcement import current_mode, should_reject, EnforcementMode  # noqa: PLC0415
+    if current_mode() == EnforcementMode.OFF:
+        return False, None
+
     try:
         canonical = normalize_webhook_event(event, tenant_id)
         from shared.rules_engine import RulesEngine  # noqa: PLC0415
@@ -755,9 +760,7 @@ def _rules_preeval_reject(event: IngestEvent, db_session, tenant_id: str):
         logger.warning("rules_preeval_skipped", extra={"error": str(err)})
         return False, None, None
 
-    from shared.rules.enforcement import should_reject  # noqa: PLC0415
-    reject, reason = should_reject(summary)
-    return reject, reason, summary
+    return should_reject(summary)
 
 
 def _publish_graph_sync(event_id: str, event: IngestEvent, tenant_id: str) -> None:
