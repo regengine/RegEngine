@@ -226,12 +226,12 @@ app.include_router(webhook_router, tags=["Webhooks"])
 
 # Sandbox Evaluation (stateless, no auth, no persistence)
 if _router_enabled("sandbox"):
-    from app.sandbox_router import router as sandbox_router
+    from app.sandbox.router import router as sandbox_router
     app.include_router(sandbox_router)
 
 # FDA 24-Hour Export
 if _router_enabled("fda_export"):
-    from app.fda_export_router import router as fda_export_router
+    from app.fda_export.router import router as fda_export_router
     app.include_router(fda_export_router, tags=["FDA Exports"])
 
 
@@ -285,7 +285,7 @@ if _router_enabled("export"):
 
 # EPCIS 2.0 Ingestion
 if _router_enabled("epcis_ingestion"):
-    from app.epcis_ingestion import router as epcis_ingestion_router
+    from app.epcis.router import router as epcis_ingestion_router
     app.include_router(epcis_ingestion_router, tags=["EPCIS"])
 
 

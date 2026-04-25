@@ -1,15 +1,13 @@
 """
-Tests for #1293: canonical_persistence/migration.py rename to legacy_dual_write.py.
+Tests for the canonical_persistence legacy dual-write module.
 
 Verifies:
   - Import from legacy_dual_write works.
-  - Import from migration (deprecated shim) still works with a DeprecationWarning.
   - validate_tables_exist raises RuntimeError when tables are absent.
   - validate_tables_exist passes when tables are present.
 """
 from __future__ import annotations
 
-import warnings
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -28,19 +26,6 @@ def test_legacy_dual_write_importable():
         publish_graph_sync,
         stage_graph_sync,
     )
-
-
-def test_migration_shim_importable_with_deprecation_warning():
-    """The old 'migration' name still imports but emits a DeprecationWarning."""
-    with warnings.catch_warnings(record=True) as caught:
-        warnings.simplefilter("always")
-        from shared.canonical_persistence import migration  # noqa: F401
-
-    deprecation_warnings = [w for w in caught if issubclass(w.category, DeprecationWarning)]
-    assert deprecation_warnings, "Expected a DeprecationWarning from the migration shim"
-    msg = str(deprecation_warnings[0].message)
-    assert "legacy_dual_write" in msg, f"Warning should mention legacy_dual_write, got: {msg}"
-    assert "1293" in msg, f"Warning should reference issue #1293, got: {msg}"
 
 
 # ---------------------------------------------------------------------------

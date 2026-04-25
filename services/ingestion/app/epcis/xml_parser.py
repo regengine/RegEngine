@@ -323,7 +323,7 @@ def _parse_epcis_xml(raw: bytes | str) -> list[dict]:
     # #1151: gate extracted events through the EPCIS structural validator.
     # Imported lazily to avoid a circular import (validation.py imports
     # from extraction.py which is sibling to this module).
-    from services.ingestion.app.epcis.validation import _validate_epcis
+    from .validation import _validate_epcis
 
     strict = _strict_fsma_validation()
     validation_errors: list[dict] = []

@@ -16,10 +16,10 @@ from pydantic import BaseModel, Field
 from app.shared.tenant_resolution import resolve_tenant_id
 from app.webhook_compat import _verify_api_key
 
-from services.ingestion.app.epcis.normalization import (
+from .normalization import (
     _normalize_epcis_to_cte,
 )
-from services.ingestion.app.epcis.persistence import (
+from .persistence import (
     _allow_in_memory_fallback,
     _batch_transactional,
     _fallback_store_for,
@@ -28,10 +28,10 @@ from services.ingestion.app.epcis.persistence import (
     _ingest_single_event,
     _list_events_from_db,
 )
-from services.ingestion.app.epcis.validation import (
+from .validation import (
     _validate_epcis,
 )
-from services.ingestion.app.epcis.xml_parser import (
+from .xml_parser import (
     _is_xml_content,
     _parse_epcis_xml,
 )

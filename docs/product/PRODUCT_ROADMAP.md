@@ -11,7 +11,7 @@ Convert FSMA free-tool traffic into paid adoption while improving production rel
 
 - Durable FSMA persistence and hash-chain verification in `services/shared/cte_persistence.py`.
 - Webhook ingestion V2 in `services/ingestion/app/webhook_router_v2.py`.
-- FDA export and verification endpoints in `services/ingestion/app/fda_export_router.py`.
+- FDA export and verification endpoints in `services/ingestion/app/fda_export/router.py`.
 - FSMA graph routers in `services/graph/app/routers/fsma/`.
 - Supplier onboarding flow in `frontend/src/app/onboarding/supplier-flow/`.
 - Free tools and readiness flows in `frontend/src/app/tools/` plus landing routes.
