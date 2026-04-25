@@ -225,7 +225,7 @@ class TestSignupExistingEmail:
         db_session.execute.return_value.scalar_one_or_none.return_value = existing_user
 
         with (
-            patch("services.admin.app.auth_routes.get_supabase", return_value=None),
+            patch("services.admin.app.auth.signup_router.get_supabase", return_value=None),
         ):
             req = MagicMock()
             req.headers = {"User-Agent": "pytest"}
@@ -270,9 +270,9 @@ class TestSignupDbFlushBeforeSupabase:
         mock_sb = MagicMock()
 
         with (
-            patch("services.admin.app.auth_routes.get_supabase", return_value=mock_sb),
-            patch("services.admin.app.auth_routes.validate_password", return_value=None),
-            patch("services.admin.app.auth_routes.get_password_hash", return_value="hashed"),
+            patch("services.admin.app.auth.signup_router.get_supabase", return_value=mock_sb),
+            patch("services.admin.app.auth.signup_router.validate_password", return_value=None),
+            patch("services.admin.app.auth.signup_router.get_password_hash", return_value="hashed"),
         ):
             req = MagicMock()
             req.headers = {"User-Agent": "pytest"}

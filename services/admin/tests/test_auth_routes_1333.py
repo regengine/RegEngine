@@ -43,6 +43,7 @@ sys.path.insert(0, str(repo_root / "services" / "admin"))
 
 import services.admin.app.auth_routes as ar
 import services.admin.app.auth.login_router as _login_router_mod
+import services.admin.app.auth.signup_router as _signup_router_mod
 from services.admin.app.auth_routes import (
     LoginRequest,
     RegisterRequest,
@@ -1186,9 +1187,9 @@ class TestSignup:
 
     @pytest.mark.asyncio
     async def test_signup_happy_path_returns_generic_accepted(self, monkeypatch):
-        monkeypatch.setattr(ar, "get_supabase", lambda: None)
-        monkeypatch.setattr(ar, "AuditLogger", MagicMock())
-        monkeypatch.setattr(ar, "emit_funnel_event", MagicMock())
+        monkeypatch.setattr(_signup_router_mod, "get_supabase", lambda: None)
+        monkeypatch.setattr(_signup_router_mod, "AuditLogger", MagicMock())
+        monkeypatch.setattr(_signup_router_mod, "emit_funnel_event", MagicMock())
 
         db = MagicMock()
         db.execute.return_value.scalar_one_or_none.return_value = None
@@ -1236,7 +1237,7 @@ class TestSignup:
     @pytest.mark.asyncio
     async def test_signup_redis_failure_rolls_back_db(self, monkeypatch):
         """If Redis create_session fails, DB is rolled back and 503 is raised."""
-        monkeypatch.setattr(ar, "get_supabase", lambda: None)
+        monkeypatch.setattr(_signup_router_mod, "get_supabase", lambda: None)
 
         db = MagicMock()
         db.execute.return_value.scalar_one_or_none.return_value = None
