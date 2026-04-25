@@ -674,9 +674,14 @@ def _persist_prepared_event_in_session(
     # must not take down ingestion for every tenant. This matches the
     # best-effort pattern the threaded canonical block below already
     # uses (#1335).
+    #
+    # ``_preeval_summary`` is hoisted to function scope so the threaded
+    # canonical-write block below can reuse it via
+    # ``RulesEngine.persist_summary`` instead of re-running every rule
+    # — eliminates the double-eval that lands when the flag flips on.
+    _preeval_summary = None
     from shared.rules.enforcement import current_mode, should_reject, EnforcementMode  # noqa: PLC0415
     if current_mode() != EnforcementMode.OFF:
-        _preeval_summary = None
         try:
             from shared.canonical_event import normalize_epcis_event  # noqa: PLC0415
             from shared.rules_engine import RulesEngine  # noqa: PLC0415
@@ -750,7 +755,13 @@ def _persist_prepared_event_in_session(
         import threading as _threading  # noqa: PLC0415
         _timeout_s = float(os.environ.get("CANONICAL_DUAL_WRITE_TIMEOUT_S", "5"))
 
-        def _epcis_canonical_write() -> None:
+        # Capture ``_preeval_summary`` via default-kwarg trick so the
+        # threaded closure sees the per-event value rather than whatever
+        # the surrounding scope has at thread-start time. (Defensive —
+        # this function ingests one event so there's no loop variable,
+        # but the default-kwarg pattern is a low-cost guard against the
+        # closure capturing a future reassignment of the outer var.)
+        def _epcis_canonical_write(_precomputed=_preeval_summary) -> None:
             from shared.canonical_event import normalize_epcis_event  # noqa: PLC0415
             from shared.canonical_persistence import CanonicalEventStore  # noqa: PLC0415
             from shared.rules_engine import RulesEngine  # noqa: PLC0415
@@ -759,20 +770,38 @@ def _persist_prepared_event_in_session(
             _store.set_tenant_context(tenant_id)
             _store.persist_event(_canonical)
             _engine = RulesEngine(db_session)
-            _event_data = {
-                "event_id": str(_canonical.event_id),
-                "event_type": _canonical.event_type.value,
-                "traceability_lot_code": _canonical.traceability_lot_code,
-                "product_reference": _canonical.product_reference,
-                "quantity": _canonical.quantity,
-                "unit_of_measure": _canonical.unit_of_measure,
-                "from_facility_reference": _canonical.from_facility_reference,
-                "to_facility_reference": _canonical.to_facility_reference,
-                "from_entity_reference": _canonical.from_entity_reference,
-                "to_entity_reference": _canonical.to_entity_reference,
-                "kdes": _canonical.kdes,
-            }
-            _engine.evaluate_event(_event_data, persist=True, tenant_id=tenant_id)
+            if _precomputed is not None and _precomputed.results:
+                # Fast path: pre-eval already evaluated this event under
+                # enforcement. Persist the pre-computed results directly
+                # via persist_summary instead of re-running every rule.
+                # Anchor the rows on the canonical event_id we just
+                # persisted — pre-eval generated its own canonical with
+                # a different ID, so use the new one.
+                _engine.persist_summary(
+                    _precomputed,
+                    tenant_id=tenant_id,
+                    event_id=str(_canonical.event_id),
+                )
+            else:
+                # Fallback: pre-eval skipped (OFF mode or pre-eval errored)
+                # OR returned a no-verdict summary with no results to
+                # persist. Re-evaluate with persist=True — bit-for-bit
+                # identical to pre-Phase-0 EPCIS behavior on the default
+                # production path.
+                _event_data = {
+                    "event_id": str(_canonical.event_id),
+                    "event_type": _canonical.event_type.value,
+                    "traceability_lot_code": _canonical.traceability_lot_code,
+                    "product_reference": _canonical.product_reference,
+                    "quantity": _canonical.quantity,
+                    "unit_of_measure": _canonical.unit_of_measure,
+                    "from_facility_reference": _canonical.from_facility_reference,
+                    "to_facility_reference": _canonical.to_facility_reference,
+                    "from_entity_reference": _canonical.from_entity_reference,
+                    "to_entity_reference": _canonical.to_entity_reference,
+                    "kdes": _canonical.kdes,
+                }
+                _engine.evaluate_event(_event_data, persist=True, tenant_id=tenant_id)
 
         import threading  # noqa: PLC0415
         _epcis_exc: list[BaseException] = []
