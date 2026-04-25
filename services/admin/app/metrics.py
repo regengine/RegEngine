@@ -23,6 +23,8 @@ from sqlalchemy.orm import Session
 
 from .database import SessionLocal
 from .sqlalchemy_models import ReviewItemModel, TenantModel
+
+from shared.tenant_context import set_tenant_guc
 from .webhook_outbox import (
     SIGNATURE_HEADER,
     enqueue_webhook,
@@ -274,10 +276,7 @@ class HallucinationTracker:
                 # against the fallback engine.
                 dialect = getattr(getattr(session, "bind", None), "dialect", None)
                 if dialect is None or dialect.name == "postgresql":
-                    session.execute(
-                        text("SET LOCAL app.tenant_id = :tid"),
-                        {"tid": str(tenant_id)},
-                    )
+                    set_tenant_guc(session, str(tenant_id))
             yield session
             session.commit()
         except SQLAlchemyError:
