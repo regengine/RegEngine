@@ -369,20 +369,28 @@ class TestIssue1344TenantIsolation:
 
 
 # ===========================================================================
-# #1203 — orphaned /validate endpoint is removed
+# #1203 + #1105 — /validate lifecycle
 # ===========================================================================
+#
+# Timeline:
+#   2026-04-17 (#1203): /validate removed from compliance service as orphaned
+#                       (no backend caller, no ``useValidateConfig`` consumers)
+#   2026-04-20 (#1105): /validate restored with strict FTL-commodity gating —
+#                       requests without ``ftl_commodity`` are rejected with
+#                       ``E_NON_FTL_FOOD`` rather than returning a false-positive
+#                       compliance stamp. See ``services/compliance/app/routes.py``
+#                       lines 165-172 and 195-213 for the explicit history note.
+#
+# This class locks the post-#1105 invariant: the route IS registered (asserted
+# implicitly by the FTL-gating tests in ``test_validator_ftl_scoping_1105.py``),
+# but it is NOT promoted in the compliance root listing until the deeper
+# rule-engine wiring (#1203 option-2 rewire) is done. Promoting it earlier
+# would advertise an endpoint whose validation logic is still partial.
 
-
-class TestIssue1203ValidateEndpointRemoval:
-    def test_validate_route_removed_from_compliance_service(self):
-        """The orphaned /validate route must no longer be registered."""
-        from services.compliance.main import app as compliance_app
-
-        routes = {getattr(r, "path", None) for r in compliance_app.routes}
-        assert "/validate" not in routes, (
-            "Orphaned /validate endpoint resurfaced — see #1203. "
-            "If you are wiring it into ingestion, do that first."
-        )
+class TestValidateEndpointNotPromotedAtRoot:
+    """Pin the post-#1105 status quo: ``/validate`` is registered for FTL gating
+    (see ``test_validator_ftl_scoping_1105.py``) but must not be advertised in
+    the compliance service's root JSON until the rule-engine wiring is complete."""
 
     def test_validate_not_in_compliance_root_listing(self):
         """The root JSON must not advertise /validate as a key endpoint."""
@@ -393,4 +401,9 @@ class TestIssue1203ValidateEndpointRemoval:
             resp = client.get("/")
         assert resp.status_code == 200
         key_endpoints = resp.json().get("key_endpoints", {})
-        assert "validate" not in key_endpoints
+        assert "validate" not in key_endpoints, (
+            "/validate is registered (per #1105) but should not appear in "
+            "the root key_endpoints listing until the deeper rule-engine "
+            "wiring lands (#1203 option-2 rewire). Advertising it now would "
+            "imply the validation surface is complete when only FTL gating is."
+        )
