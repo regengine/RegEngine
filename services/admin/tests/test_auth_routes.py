@@ -225,7 +225,7 @@ class TestSignupExistingEmail:
         db_session.execute.return_value.scalar_one_or_none.return_value = existing_user
 
         with (
-            patch("services.admin.app.auth_routes.get_supabase", return_value=None),
+            patch("services.admin.app.auth.signup_router.get_supabase", return_value=None),
         ):
             req = MagicMock()
             req.headers = {"User-Agent": "pytest"}
@@ -270,9 +270,9 @@ class TestSignupDbFlushBeforeSupabase:
         mock_sb = MagicMock()
 
         with (
-            patch("services.admin.app.auth_routes.get_supabase", return_value=mock_sb),
-            patch("services.admin.app.auth_routes.validate_password", return_value=None),
-            patch("services.admin.app.auth_routes.get_password_hash", return_value="hashed"),
+            patch("services.admin.app.auth.signup_router.get_supabase", return_value=mock_sb),
+            patch("services.admin.app.auth.signup_router.validate_password", return_value=None),
+            patch("services.admin.app.auth.signup_router.get_password_hash", return_value="hashed"),
         ):
             req = MagicMock()
             req.headers = {"User-Agent": "pytest"}
@@ -308,11 +308,11 @@ class TestChangePasswordRevokeSessions:
         db_session.commit.return_value = None
 
         with (
-            patch("services.admin.app.auth_routes.verify_password", return_value=True),
-            patch("services.admin.app.auth_routes.validate_password", return_value=None),
-            patch("services.admin.app.auth_routes.get_password_hash", return_value="new-hash"),
-            patch("services.admin.app.auth_routes.get_supabase", return_value=None),
-            patch("services.admin.app.auth_routes._revoke_all_elevation_tokens_for_user", new=AsyncMock()),
+            patch("services.admin.app.auth.change_password_router.verify_password", return_value=True),
+            patch("services.admin.app.auth.change_password_router.validate_password", return_value=None),
+            patch("services.admin.app.auth.change_password_router.get_password_hash", return_value="new-hash"),
+            patch("services.admin.app.auth.change_password_router.get_supabase", return_value=None),
+            patch("services.admin.app.auth.change_password_router._revoke_all_elevation_tokens_for_user", new=AsyncMock()),
         ):
             from services.admin.app.auth_routes import change_password
             import asyncio
@@ -357,8 +357,8 @@ class TestTokenRefresh:
         db_session.execute.return_value.scalars.return_value.all.return_value = [membership]
 
         with (
-            patch("services.admin.app.auth_routes.decode_access_token", return_value={"tenant_id": None, "tid": None}),
-            patch("services.admin.app.auth_routes.create_access_token", return_value="new-access-token"),
+            patch("services.admin.app.auth.refresh_router.decode_access_token", return_value={"tenant_id": None, "tid": None}),
+            patch("services.admin.app.auth.refresh_router.create_access_token", return_value="new-access-token"),
         ):
             from services.admin.app.auth_routes import refresh_session
             import asyncio
