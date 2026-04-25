@@ -222,10 +222,8 @@ def get_tenant_session(
     session = SessionLocal()
     try:
         if tenant_id and _engine.dialect.name != "sqlite":
-            session.execute(
-                text("SET LOCAL app.tenant_id = :tenant"),
-                {"tenant": tenant_id},
-            )
+            from shared.tenant_context import set_tenant_guc  # noqa: PLC0415
+            set_tenant_guc(session, tenant_id)
         yield session
     finally:
         session.rollback()
