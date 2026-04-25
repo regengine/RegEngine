@@ -44,6 +44,7 @@ sys.path.insert(0, str(repo_root / "services" / "admin"))
 import services.admin.app.auth_routes as ar
 import services.admin.app.auth.login_router as _login_router_mod
 import services.admin.app.auth.signup_router as _signup_router_mod
+import services.admin.app.auth.sessions_router as _sessions_router_mod
 from services.admin.app.auth_routes import (
     LoginRequest,
     RegisterRequest,
@@ -785,7 +786,7 @@ class TestSessionManagement:
         db.get = MagicMock(return_value=user)
 
         monkeypatch.setattr(
-            ar,
+            _sessions_router_mod,
             "_revoke_all_elevation_tokens_for_user",
             AsyncMock(return_value=0),
         )

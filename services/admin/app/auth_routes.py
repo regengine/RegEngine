@@ -129,6 +129,23 @@ from .auth.refresh_router import refresh_session, RefreshRequest  # noqa: F401
 from .auth import refresh_router as _refresh_router_mod
 router.include_router(_refresh_router_mod.router)
 
+# Elevation constants + _revoke_all_elevation_tokens_for_user moved to
+# auth/elevation_helpers.py so sessions_router can import them without
+# a circular dependency. Re-imported here so change_password / reset_password
+# (still in this module) and test patches on ``ar`` continue to work.
+from .auth.elevation_helpers import (  # noqa: F401
+    _ELEVATION_JTI_KEY_PREFIX,
+    _ELEVATION_TOKEN_TTL_SECONDS,
+    _revoke_all_elevation_tokens_for_user,
+)
+
+# Sessions cluster extracted to services/admin/app/auth/sessions_router.py
+# (Phase 1 sub-split 7/N).  Re-exported here so existing imports and
+# ``ar.list_sessions / ar.revoke_session / ar.revoke_all_sessions`` calls work.
+from .auth.sessions_router import list_sessions, revoke_session, revoke_all_sessions  # noqa: F401
+from .auth import sessions_router as _sessions_router_mod
+router.include_router(_sessions_router_mod.router)
+
 @router.get("/me", response_model=UserResponse)
 def get_me(user: UserModel = Depends(get_current_user)):
     """Get current user context (verifies token and tenant context)."""
@@ -143,93 +160,6 @@ def check_perm(
     return {"message": "Permission granted", "user": user.email}
 
 
-@router.get("/sessions", response_model=SessionListResponse, dependencies=[Depends(get_current_user)])
-async def list_sessions(
-    pagination: PaginationParams = Depends(),
-    current_user: UserModel = Depends(get_current_user),
-    session_store: RedisSessionStore = Depends(get_session_store),
-):
-    # Get all active sessions for user from Redis
-    sessions = await session_store.list_user_sessions(current_user.id, active_only=True)
-    total = len(sessions)
-    sessions = sessions[pagination.skip : pagination.skip + pagination.limit]
-
-    return {
-        "items": [
-            {
-                "id": str(s.id),
-                "created_at": s.created_at.isoformat(),
-                "last_used_at": s.last_used_at.isoformat(),
-                "user_agent": s.user_agent,
-                "ip_address": s.ip_address,
-            }
-            for s in sessions
-        ],
-        "total": total,
-        "skip": pagination.skip,
-        "limit": pagination.limit,
-    }
-
-@router.post("/sessions/{session_id}/revoke", response_model=SessionRevokeResponse, dependencies=[Depends(get_current_user)])
-async def revoke_session(
-    session_id: UUID,
-    current_user: UserModel = Depends(get_current_user),
-    session_store: RedisSessionStore = Depends(get_session_store)
-):
-    # Get session from Redis
-    session = await session_store.get_session(session_id)
-    
-    if not session or session.user_id != current_user.id:
-        raise HTTPException(status_code=404, detail="Session not found")
-    
-    # Revoke in Redis
-    await session_store.revoke_session(session_id)
-    
-    logger.info("session_revoked", session_id=str(session_id), user_id=str(current_user.id))
-    
-    return {"status": "revoked"}
-
-@router.post("/logout-all", response_model=RevokeAllSessionsResponse, dependencies=[Depends(get_current_user)])
-async def revoke_all_sessions(
-    current_user: UserModel = Depends(get_current_user),
-    db: Session = Depends(get_session),
-    session_store: RedisSessionStore = Depends(get_session_store),
-):
-    """Revoke every session + access token for the calling user.
-
-    #1375 — previous implementation only flipped is_revoked on the Redis session
-    row, so outstanding access tokens kept working until their natural 60-min
-    expiry. We now ALSO bump users.token_version so get_current_user rejects any
-    access token minted before this call. The same mechanism is used by
-    /auth/reset-password (#1349).
-    """
-    # 1. Revoke Redis session rows (future /refresh attempts will 401).
-    count = await session_store.revoke_all_user_sessions(current_user.id)
-
-    # 2. Bump token_version to kill outstanding access tokens immediately.
-    user = db.get(UserModel, current_user.id)
-    if user is not None:
-        current_version = int(getattr(user, "token_version", 0) or 0)
-        user.token_version = current_version + 1
-        db.commit()
-        new_version = user.token_version
-    else:
-        new_version = None
-
-    # 3. Revoke any outstanding elevation tokens too.
-    elevation_revoked = await _revoke_all_elevation_tokens_for_user(
-        session_store, current_user.id
-    )
-
-    logger.info(
-        "all_sessions_revoked",
-        user_id=str(current_user.id),
-        count=count,
-        elevation_tokens_revoked=elevation_revoked,
-        new_token_version=new_version,
-    )
-
-    return {"status": "success", "revoked_count": count}
 
 
 
@@ -745,10 +675,6 @@ class ConfirmPasswordRequest(BaseModel):
 
 # #1380 — elevation-token jtis live in this Redis key for the token's full TTL.
 # require_reauth consults the set; password-change / reset bulk-revoke by user.
-_ELEVATION_JTI_KEY_PREFIX = "elevation_jti:"
-_ELEVATION_TOKEN_TTL_SECONDS = 300  # 5 minutes — matches token exp_delta below
-
-
 def _elevation_jti_key(jti: str) -> str:
     return f"{_ELEVATION_JTI_KEY_PREFIX}{jti}"
 
@@ -845,34 +771,6 @@ async def confirm_password(
         jti=elevation_jti,
     )
     return {"elevation_token": elevation_token, "expires_in": _ELEVATION_TOKEN_TTL_SECONDS}
-
-
-async def _revoke_all_elevation_tokens_for_user(
-    session_store: RedisSessionStore, user_id: UUID
-) -> int:
-    """Scan the elevation-jti keyspace and delete entries belonging to this user.
-
-    Called from password change / reset paths so that a 5-minute elevation token
-    minted at T+0 cannot outlive a password change at T+1 (#1380).
-    """
-    try:
-        client = await session_store._get_client()
-        cursor = 0
-        revoked = 0
-        pattern = f"{_ELEVATION_JTI_KEY_PREFIX}*"
-        while True:
-            cursor, keys = await client.scan(cursor=cursor, match=pattern, count=200)
-            for key in keys:
-                val = await client.get(key)
-                if val == str(user_id):
-                    await client.delete(key)
-                    revoked += 1
-            if cursor == 0:
-                break
-        return revoked
-    except Exception as exc:
-        logger.warning("elevation_revoke_all_failed", user_id=str(user_id), error=str(exc))
-        return 0
 
 
 async def require_reauth(
