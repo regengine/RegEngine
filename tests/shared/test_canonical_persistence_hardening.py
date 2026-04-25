@@ -426,10 +426,16 @@ class TestCompleteIngestionRunTenantScope_Issue1263:
         session = FakeSession()
         session.add_rule(r"UPDATE fsma\.ingestion_runs", _RowcountResult(rowcount=1))
 
+        # Use a real UUID — the canonical ``set_tenant_guc`` helper now
+        # validates ``tenant_id`` up front (Phase B / #1934). Synthetic
+        # non-UUID strings would raise ValueError before any SQL runs,
+        # which is louder than the prior silent "set a non-UUID GUC and
+        # break RLS comparisons" failure mode.
+        TENANT = "22222222-2222-2222-2222-222222222222"
         store = self._new_store(session)
         store.complete_ingestion_run(
-            run_id="run-id",
-            tenant_id="tenant-id",
+            run_id="11111111-1111-1111-1111-111111111111",
+            tenant_id=TENANT,
             accepted=1,
             rejected=0,
         )
@@ -440,7 +446,7 @@ class TestCompleteIngestionRunTenantScope_Issue1263:
             "defence-in-depth guard against future refactors"
         )
         # The RLS bind must be the same tenant as the UPDATE bind.
-        assert any(p.get("tid") == "tenant-id" for _, p in rls_calls)
+        assert any(p.get("tid") == TENANT for _, p in rls_calls)
 
     def test_no_row_matched_raises(self):
         """When the UPDATE matches 0 rows, the method must fail loud.
@@ -455,8 +461,8 @@ class TestCompleteIngestionRunTenantScope_Issue1263:
         store = self._new_store(session)
         with pytest.raises(ValueError, match=r"#1263"):
             store.complete_ingestion_run(
-                run_id="nonexistent-or-cross-tenant",
-                tenant_id="tenant-id",
+                run_id="11111111-1111-1111-1111-111111111111",
+                tenant_id="22222222-2222-2222-2222-222222222222",
                 accepted=1,
                 rejected=0,
             )

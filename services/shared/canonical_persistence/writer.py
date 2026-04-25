@@ -55,13 +55,28 @@ class CanonicalEventStore:
         return str(name or "").lower()
 
     def set_tenant_context(self, tenant_id: str) -> None:
-        """Set the RLS tenant context for this session."""
+        """Set the RLS tenant context for this session.
+
+        Delegates to ``services.shared.tenant_context.set_tenant_guc`` —
+        the canonical Phase B primitive (#1934). Behavior-preserving for
+        valid UUIDs (same ``SET LOCAL app.tenant_id = :tid`` SQL with
+        the same parameterized binding); the helper additionally
+        validates ``tenant_id`` is a UUID up front and raises
+        ``ValueError`` on bad input rather than silently setting a
+        non-UUID GUC that would break every
+        ``get_tenant_context()::UUID`` comparison in RLS.
+
+        SQLite escape hatch: ``SET LOCAL`` is Postgres-specific and
+        the SQLite test fallback (#1478) doesn't enforce RLS anyway,
+        so we no-op early for that dialect. UUID validation is
+        intentionally skipped on the SQLite branch because tests
+        routinely pass synthetic non-UUID identifiers and the RLS
+        check would be a no-op regardless.
+        """
         if self._session_dialect_name() == "sqlite":
             return
-        self.session.execute(
-            text("SET LOCAL app.tenant_id = :tid"),
-            {"tid": tenant_id},
-        )
+        from services.shared.tenant_context import set_tenant_guc  # noqa: PLC0415
+        set_tenant_guc(self.session, tenant_id)
 
     # ------------------------------------------------------------------
     # Per-tenant Chain Serialization (fix #1251)

@@ -281,6 +281,27 @@ jobs:
       - name: Check for fail-open RLS fallbacks in migrations
         run: python scripts/check_rls_fallback.py
 
+  # ── tenant_id UUID-only guard (hard gate) ────────────────
+  # Five tables drifted to ``tenant_id TEXT/VARCHAR`` instead of UUID,
+  # silently breaking RLS policies that compare against
+  # ``get_tenant_context()`` (which returns UUID). v067 standardized
+  # the live schema; this guard rejects new migrations that would
+  # reintroduce the drift.
+  tenant-id-uuid-check:
+    name: tenant_id UUID-only guard
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+
+      - name: Setup Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Check for tenant_id TEXT/VARCHAR drift in migrations
+        run: python scripts/check_tenant_id_uuid_only.py
+
   # ── Alembic revision ID guard (hard gate) ────────────────
   # Rejects new migrations that use handcrafted sequential revision IDs or
   # introduce duplicate revision IDs (either would corrupt the migration DAG).
@@ -481,7 +502,7 @@ jobs:
   ci-status:
     name: CI Status Gate
     if: always()
-    needs: [test, lint, lint-shared, docker-build, security, rls-fallback-check, alembic-revision-check, dep-version-check]
+    needs: [test, lint, lint-shared, docker-build, security, rls-fallback-check, alembic-revision-check, dep-version-check, tenant-id-uuid-check]
     runs-on: ubuntu-latest
     steps:
       - name: Check results
@@ -494,6 +515,7 @@ jobs:
           echo "RLS fallback:      ${{ needs.rls-fallback-check.result }}"
           echo "Alembic rev IDs:   ${{ needs.alembic-revision-check.result }}"
           echo "Dep drift guard:   ${{ needs.dep-version-check.result }}"
+          echo "tenant_id UUID:    ${{ needs.tenant-id-uuid-check.result }}"
           # Lint is now blocking — flake8 F821 (undefined name) would
           # have caught PR #1482's NLP NameError class of bugs if this
           # gate had been enforcing. Promoting lint to a hard gate so
@@ -504,8 +526,9 @@ jobs:
              || "${{ needs.security.result }}" == "failure" \
              || "${{ needs.rls-fallback-check.result }}" == "failure" \
              || "${{ needs.alembic-revision-check.result }}" == "failure" \
-             || "${{ needs.dep-version-check.result }}" == "failure" ]]; then
-            echo "::error::Test, Lint, Security Audit, RLS fallback, Alembic revision ID, or dep version drift guard failed"
+             || "${{ needs.dep-version-check.result }}" == "failure" \
+             || "${{ needs.tenant-id-uuid-check.result }}" == "failure" ]]; then
+            echo "::error::Test, Lint, Security Audit, RLS fallback, Alembic revision ID, dep version drift, or tenant_id UUID guard failed"
             exit 1
           fi
           echo "All checks passed"
