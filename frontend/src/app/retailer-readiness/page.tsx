@@ -1,5 +1,6 @@
 'use client';
 
+import { fetchWithCsrf } from '@/lib/fetch-with-csrf';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import FSMAChecklist from '@/components/fsma-checklist';
 import { FSMA_204_DEADLINE_ISO, daysUntilFSMA204 } from '@/lib/fsma-tools-data';
@@ -134,7 +135,7 @@ export default function RetailerSuppliersPage() {
             const payload = { email, companyName, date: new Date().toISOString() };
 
             try {
-                const res = await fetch('/api/v1/assessments/retailer-readiness', {
+                const res = await fetchWithCsrf('/api/v1/assessments/retailer-readiness', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(payload),

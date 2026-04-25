@@ -111,7 +111,7 @@ export function DemoBanner({ isLoggedIn }) {
         <strong>Interactive walkthrough</strong> — Steps 1-2 preview how your buyers invite you. Steps 3-8 are the guided setup you complete after signup.
       </div>
       <a
-        href="/login?redirect=/onboarding/supplier-flow"
+        href="/login?redirect=/onboarding/setup/welcome"
         style={{
           padding: "6px 16px",
           borderRadius: 6,

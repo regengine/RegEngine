@@ -43,7 +43,7 @@ Shared code lives in [services/shared/](services/shared/) (56 top-level modules;
 
 ## Quickstart
 
-Prerequisites: Python **3.11 or 3.12** (3.13 not yet supported — see [pyproject.toml](pyproject.toml)), Node 24+, Docker, `pnpm`.
+Prerequisites: Python **3.11 or 3.12** (3.13 not yet supported — see [pyproject.toml](pyproject.toml)), Node 24+, Docker, and `npm`.
 
 ```bash
 # 1. Python deps
@@ -51,9 +51,9 @@ python3 -m venv venv && source venv/bin/activate
 pip install -r requirements.lock
 
 # 2. Frontend deps
-cd frontend && pnpm install && cd ..
+cd frontend && npm install && cd ..
 
-# 3. Local infra (Postgres, Redis, Neo4j, Redpanda)
+# 3. Local infra (Postgres only)
 #    requires POSTGRES_PASSWORD in the environment
 docker compose -f docker-compose.dev.yml up -d
 
@@ -65,7 +65,7 @@ alembic upgrade head
 uvicorn services.ingestion.main:app --reload --port 8002
 
 # 6. Start the frontend
-cd frontend && pnpm dev
+cd frontend && npm run dev
 ```
 
 The `regengine-service-runner` skill wraps start/stop/tail workflows for all services.

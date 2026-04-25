@@ -1,3 +1,4 @@
+import { fetchWithCsrf } from '@/lib/fetch-with-csrf';
 
 import { useEffect, useState } from 'react';
 import { markScanSynced, markPhotoSynced, getPendingUploads, cleanupSyncedRecords } from '@/lib/db';
@@ -36,7 +37,7 @@ export function useSync() {
                 try {
                     if (scan.payload) {
                         // Structured payload saved by FieldCaptureClient — replay directly
-                        const response = await fetch(`${getServiceURL('ingestion')}/api/v1/webhooks/ingest`, {
+                        const response = await fetchWithCsrf(`${getServiceURL('ingestion')}/api/v1/webhooks/ingest`, {
                             method: 'POST',
                             credentials: 'include', // Send HTTP-only cookies
                             headers: {
@@ -62,7 +63,7 @@ export function useSync() {
                                 kdes: { raw_scan: scan.content },
                             }],
                         };
-                        const response = await fetch(`${getServiceURL('ingestion')}/api/v1/webhooks/ingest`, {
+                        const response = await fetchWithCsrf(`${getServiceURL('ingestion')}/api/v1/webhooks/ingest`, {
                             method: 'POST',
                             credentials: 'include', // Send HTTP-only cookies
                             headers: {

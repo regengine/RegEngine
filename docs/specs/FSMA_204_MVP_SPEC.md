@@ -1,5 +1,10 @@
 # FSMA 204 MVP Specification (Glass Box)
 
+> Status: legacy planning spec. The current production spine is
+> ingestion -> canonical PostgreSQL traceability events -> compliance
+> evaluation -> audit output -> FDA export. Neo4j/Kafka sections below are
+> retained as legacy integration notes, not the source of truth for new work.
+
 ## Scope and Goals
 - Deliver demo-ready FSMA 204 traceability with 24-hour FDA spreadsheet, mock recall, and visual E2E trace.
 - Phase focus: Shipping CTE first (fastest path to one-up/one-down), then compliance/reporting, then mock recall/visualizer.
@@ -22,7 +27,7 @@
 **Additional useful KDEs (optional for enrichment):**
 - SKU/GTIN, Batch aliases, PO number, BOL number, Carrier, ASN/Invoice IDs, Document hash, Confidence scores.
 
-## Graph Schema (Neo4j)
+## Legacy Graph Schema (Neo4j)
 - Nodes
   - `Lot { tlc }`
   - `TraceEvent { type, date }` (type = "SHIPPING" for Phase 1)
@@ -37,7 +42,7 @@
   - `MERGE (e)-[:SHIPPED_TO]->(to)`
 - Extension hooks: add properties for quantity, unit, product_description on `TraceEvent` or edge metadata if needed; support multi-tenant via existing `Neo4jClient` patterns.
 
-## Kafka Contract (fsma.events.extracted)
+## Legacy Kafka Contract (fsma.events.extracted)
 - Topic: `fsma.events.extracted`
 - Message schema (JSON):
   { 

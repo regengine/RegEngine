@@ -1,5 +1,6 @@
 'use client';
 
+import { fetchWithCsrf } from '@/lib/fetch-with-csrf';
 import { useState } from 'react';
 import Link from "next/link";
 import { Mail, MessageSquare, Clock, Send, CheckCircle, AlertCircle } from "lucide-react";
@@ -15,7 +16,7 @@ export default function ContactPage() {
     e.preventDefault();
     setStatus('submitting');
     try {
-      const res = await fetch('/api/v1/contact', {
+      const res = await fetchWithCsrf('/api/v1/contact', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(form),

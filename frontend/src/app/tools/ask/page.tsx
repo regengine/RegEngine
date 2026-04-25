@@ -1,5 +1,6 @@
 'use client';
 
+import { fetchWithCsrf } from '@/lib/fetch-with-csrf';
 import { useState } from 'react';
 import { Zap, ArrowRight, AlertTriangle, Check, Clock, Database } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -341,7 +342,7 @@ export default function AskPage() {
 
     try {
       // Attempt to call the live NLP service via the server-side proxy.
-      const response = await fetch('/api/nlp/ask', {
+      const response = await fetchWithCsrf('/api/nlp/ask', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ query: finalQuery, limit: 50 }),

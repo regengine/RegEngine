@@ -316,7 +316,7 @@ export default function LoginPage() {
 
                         <div className="mt-8 flex flex-wrap items-center gap-3 text-xs text-[var(--re-text-muted)]">
                             <span>New to RegEngine?</span>
-                            <Link href="/onboarding/supplier-flow" className="inline-flex items-center gap-1 rounded-full border border-[var(--re-brand)]/40 px-3 py-1 font-semibold text-[var(--re-brand)] transition hover:bg-[var(--re-brand)]/10">
+                            <Link href="/onboarding" className="inline-flex items-center gap-1 rounded-full border border-[var(--re-brand)]/40 px-3 py-1 font-semibold text-[var(--re-brand)] transition hover:bg-[var(--re-brand)]/10">
                                 Get Started (Supplier Flow)
                                 <ArrowRight className="h-3 w-3" />
                             </Link>

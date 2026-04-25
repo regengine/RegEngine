@@ -1,5 +1,6 @@
 "use client";
 
+import { fetchWithCsrf } from '@/lib/fetch-with-csrf';
 import { useState } from "react";
 import { motion } from "framer-motion";
 
@@ -30,7 +31,7 @@ export default function ComplianceStatusPage() {
 
     const handleAcknowledge = async (alertId: string) => {
         try {
-            const response = await fetch(`/api/ingestion/api/v1/compliance/alerts/${tenantId}/${alertId}/acknowledge`, {
+            const response = await fetchWithCsrf(`/api/ingestion/api/v1/compliance/alerts/${tenantId}/${alertId}/acknowledge`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json", "X-RegEngine-API-Key": apiKey || "" },
                 body: JSON.stringify({ user_id: userId }),
@@ -44,7 +45,7 @@ export default function ComplianceStatusPage() {
 
     const handleResolve = async (alertId: string, notes: string) => {
         try {
-            const response = await fetch(`/api/ingestion/api/v1/compliance/alerts/${tenantId}/${alertId}/resolve`, {
+            const response = await fetchWithCsrf(`/api/ingestion/api/v1/compliance/alerts/${tenantId}/${alertId}/resolve`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json", "X-RegEngine-API-Key": apiKey || "" },
                 body: JSON.stringify({ user_id: userId, notes }),

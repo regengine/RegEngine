@@ -1,5 +1,6 @@
 'use client';
 
+import { fetchWithCsrf } from '@/lib/fetch-with-csrf';
 import { useState } from 'react';
 import { ArrowRight, CheckCircle2 } from 'lucide-react';
 
@@ -22,7 +23,7 @@ export default function AlphaSignupForm() {
         setIsSubmitting(true);
         setError('');
         try {
-            const res = await fetch('/api/alpha-signup', {
+            const res = await fetchWithCsrf('/api/alpha-signup', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({

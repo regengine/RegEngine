@@ -1,5 +1,6 @@
 'use client';
 
+import { fetchWithCsrf } from '@/lib/fetch-with-csrf';
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
@@ -56,7 +57,7 @@ const ROLE_CONFIG: Record<string, { icon: React.ElementType; color: string; labe
 async function apiFetchTeam(tenantId: string, apiKey: string): Promise<TeamResponse> {
     const { getServiceURL } = await import('@/lib/api-config');
     const base = getServiceURL('ingestion');
-    const res = await fetch(`${base}/api/v1/team/${tenantId}`, {
+    const res = await fetchWithCsrf(`${base}/api/v1/team/${tenantId}`, {
         headers: { 'Content-Type': 'application/json', 'X-RegEngine-API-Key': apiKey },
     });
     if (!res.ok) throw new Error(`API error: ${res.status} ${res.statusText}`);
@@ -66,7 +67,7 @@ async function apiFetchTeam(tenantId: string, apiKey: string): Promise<TeamRespo
 async function apiInviteMember(tenantId: string, apiKey: string, name: string, email: string, role: string): Promise<void> {
     const { getServiceURL } = await import('@/lib/api-config');
     const base = getServiceURL('ingestion');
-    const res = await fetch(`${base}/api/v1/team/${tenantId}/invite`, {
+    const res = await fetchWithCsrf(`${base}/api/v1/team/${tenantId}/invite`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-RegEngine-API-Key': apiKey },
         body: JSON.stringify({ name, email, role }),

@@ -9,6 +9,7 @@
  */
 
 import { getServiceURL } from './api-config';
+import { fetchWithCsrf } from './fetch-with-csrf';
 
 const BASE = () => getServiceURL('ingestion');
 
@@ -20,7 +21,7 @@ async function apiFetch<T>(path: string, _apiKey: string, options: RequestInit =
 
     for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
         try {
-            const res = await fetch(`${BASE()}${path}`, {
+            const res = await fetchWithCsrf(`${BASE()}${path}`, {
                 ...options,
                 credentials: 'include', // Send HTTP-only cookies
                 headers: {

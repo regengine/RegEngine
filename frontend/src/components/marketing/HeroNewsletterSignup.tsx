@@ -1,5 +1,6 @@
 'use client';
 
+import { fetchWithCsrf } from '@/lib/fetch-with-csrf';
 import { useState } from 'react';
 import { ArrowRight, CheckCircle2, Loader2 } from 'lucide-react';
 
@@ -16,7 +17,7 @@ export function HeroNewsletterSignup() {
     if (!email.trim()) return;
     setStatus('loading');
     try {
-      const res = await fetch('/api/newsletter', {
+      const res = await fetchWithCsrf('/api/newsletter', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: email.trim() }),

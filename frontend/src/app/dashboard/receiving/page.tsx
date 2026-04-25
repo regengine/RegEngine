@@ -1,5 +1,6 @@
 'use client';
 
+import { fetchWithCsrf } from '@/lib/fetch-with-csrf';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import {
@@ -141,7 +142,7 @@ export default function ReceivingDockPage() {
     const lookupGtin = useCallback(async (gtin: string) => {
         if (!apiKey || !tenantId || gtin.length < 8) return;
         try {
-            const res = await fetch(
+            const res = await fetchWithCsrf(
                 `${getServiceURL('ingestion')}/api/v1/products/${tenantId}/lookup?gtin=${gtin}`,
                 { headers: { 'X-RegEngine-API-Key': apiKey } },
             );
@@ -185,7 +186,7 @@ export default function ReceivingDockPage() {
                 },
             }));
 
-            const res = await fetch(`${getServiceURL('ingestion')}/api/v1/webhooks/ingest`, {
+            const res = await fetchWithCsrf(`${getServiceURL('ingestion')}/api/v1/webhooks/ingest`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

@@ -1,5 +1,6 @@
 'use client';
 
+import { fetchWithCsrf } from '@/lib/fetch-with-csrf';
 import { useState, useCallback, useRef } from 'react';
 import {
   Search, GitBranch, ArrowUpRight, ArrowDownRight,
@@ -109,7 +110,7 @@ export function TracePanel({ csv, availableTlcs, onHighlightEvent }: TracePanelP
     setTraceResult(null);
 
     try {
-      const res = await fetch('/api/ingestion/api/v1/sandbox/trace', {
+      const res = await fetchWithCsrf('/api/ingestion/api/v1/sandbox/trace', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ csv, tlc: code, direction, max_depth: 10 }),

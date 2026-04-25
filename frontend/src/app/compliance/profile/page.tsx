@@ -1,5 +1,6 @@
 "use client";
 
+import { fetchWithCsrf } from '@/lib/fetch-with-csrf';
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 
@@ -72,7 +73,7 @@ export default function ProductProfilePage() {
 
     const fetchProfile = async () => {
         try {
-            const response = await fetch(`/api/v1/compliance/profile/${tenantId}`, {
+            const response = await fetchWithCsrf(`/api/v1/compliance/profile/${tenantId}`, {
                 headers: {
                     'X-RegEngine-API-Key': apiKey || '',
                     'X-Tenant-ID': tenantId,
@@ -95,7 +96,7 @@ export default function ProductProfilePage() {
     const saveProfile = async () => {
         setSaving(true);
         try {
-            const response = await fetch(`/api/v1/compliance/profile/${tenantId}`, {
+            const response = await fetchWithCsrf(`/api/v1/compliance/profile/${tenantId}`, {
                 method: "PUT",
                 headers: {
                     "Content-Type": "application/json",

@@ -1,5 +1,6 @@
 'use client';
 
+import { fetchWithCsrf } from '@/lib/fetch-with-csrf';
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import {
   createColumnHelper,
@@ -235,7 +236,7 @@ export function SandboxGrid({ initialCsv, initialResult, onBack }: SandboxGridPr
 
     setIsEvaluating(true);
     try {
-      const res = await fetch('/api/ingestion/api/v1/sandbox/evaluate', {
+      const res = await fetchWithCsrf('/api/ingestion/api/v1/sandbox/evaluate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ csv }),

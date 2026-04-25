@@ -1,5 +1,6 @@
 'use client';
 
+import { fetchWithCsrf } from '@/lib/fetch-with-csrf';
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
@@ -61,7 +62,7 @@ const FTL_CATEGORIES = [
 async function apiFetchProducts(tenantId: string, apiKey: string): Promise<ProductCatalogResponse> {
     const { getServiceURL } = await import('@/lib/api-config');
     const base = getServiceURL('ingestion');
-    const res = await fetch(`${base}/api/v1/products/${tenantId}`, {
+    const res = await fetchWithCsrf(`${base}/api/v1/products/${tenantId}`, {
         headers: { 'Content-Type': 'application/json', 'X-RegEngine-API-Key': apiKey },
     });
     if (!res.ok) throw new Error(`API error: ${res.status} ${res.statusText}`);
@@ -71,7 +72,7 @@ async function apiFetchProducts(tenantId: string, apiKey: string): Promise<Produ
 async function apiAddProduct(tenantId: string, apiKey: string, name: string, category: string, sku: string): Promise<void> {
     const { getServiceURL } = await import('@/lib/api-config');
     const base = getServiceURL('ingestion');
-    const res = await fetch(`${base}/api/v1/products/${tenantId}`, {
+    const res = await fetchWithCsrf(`${base}/api/v1/products/${tenantId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-RegEngine-API-Key': apiKey },
         body: JSON.stringify({ name, category, sku: sku || undefined }),

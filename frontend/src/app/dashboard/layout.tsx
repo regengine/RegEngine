@@ -60,7 +60,7 @@ const TOP_ITEMS: NavItem[] = [
     { label: 'Overview', href: '/dashboard', icon: Activity },
     { label: 'Compliance', href: '/dashboard/compliance', icon: BarChart3 },
     { label: 'Alerts', href: '/dashboard/alerts', icon: Bell },
-    { label: 'Import Data', href: '/tools/data-import', icon: FileSpreadsheet },
+    { label: 'Import Data', href: '/ingest', icon: FileSpreadsheet },
     { label: 'Export', href: '/dashboard/export-jobs', icon: Archive },
 ];
 
