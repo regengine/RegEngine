@@ -55,14 +55,30 @@ class _FakeCanonicalEventStore:
 
 
 class _FakeEngine:
-    # Class var so test cases can set the summary returned by evaluate_event.
+    # Class vars so test cases can read counts after the function under test
+    # has finished running its threaded canonical block (the daemon thread
+    # is joined on the main thread before the function returns, so all
+    # call-count assertions are deterministic).
     summary_to_return: Any = None
+    evaluate_event_call_count: int = 0
+    evaluate_event_persist_true_count: int = 0
+    persist_summary_calls: list = []
 
     def __init__(self, db_session: Any) -> None:
         self.db_session = db_session
 
     def evaluate_event(self, event_data: dict, persist: bool, tenant_id: str) -> Any:
+        _FakeEngine.evaluate_event_call_count += 1
+        if persist:
+            _FakeEngine.evaluate_event_persist_true_count += 1
         return _FakeEngine.summary_to_return
+
+    def persist_summary(self, summary: Any, *, tenant_id: str, event_id=None) -> None:
+        _FakeEngine.persist_summary_calls.append({
+            "summary": summary,
+            "tenant_id": tenant_id,
+            "event_id": event_id,
+        })
 
 
 def _fake_normalize_epcis_event(event: Any, tenant_id: str) -> Any:
@@ -88,6 +104,9 @@ def _install_fakes(monkeypatch: pytest.MonkeyPatch) -> None:
     _FakeCTEPersistence.last_called = False
     _FakeCTEPersistence.last_instance = None
     _FakeEngine.summary_to_return = None
+    _FakeEngine.evaluate_event_call_count = 0
+    _FakeEngine.evaluate_event_persist_true_count = 0
+    _FakeEngine.persist_summary_calls = []
 
     import shared.cte_persistence as _cte_mod
     import shared.canonical_event as _canon_mod
@@ -288,3 +307,132 @@ class TestEnforceAll:
         )
         assert status in (200, 201)
         assert _FakeCTEPersistence.last_called is True
+
+
+# ---------------------------------------------------------------------------
+# Threaded post-commit block — uses pre-computed summary instead of
+# re-evaluating. This is the actual fix for the double-eval regression.
+# ---------------------------------------------------------------------------
+
+class TestThreadedBlockReusesPreComputedSummary:
+    """Under enforcement, the post-commit threaded canonical block must
+    persist the pre-computed summary via ``RulesEngine.persist_summary``
+    instead of re-running ``evaluate_event(persist=True)``. Otherwise
+    every accepted event under enforcement pays for two full rule
+    evaluations on the hot path.
+
+    The threaded block uses ``threading.Thread.join(timeout=...)`` on the
+    main thread, so by the time the function under test returns, the
+    daemon thread has either finished or timed out — call counts on
+    class-var counters are deterministic.
+    """
+
+    @pytest.fixture(autouse=True)
+    def _cte_only(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("RULES_ENGINE_ENFORCE", "cte_only")
+
+    def test_compliant_uses_persist_summary_not_reevaluate(self) -> None:
+        """Compliant event under enforcement → pre-eval runs (1 evaluate
+        call, persist=False) → primary store → threaded block calls
+        persist_summary, NOT evaluate_event again.
+
+        Expected counts:
+          - evaluate_event total: 1 (pre-eval only)
+          - evaluate_event persist=True: 0 (the fix — no re-evaluation)
+          - persist_summary calls: 1 (threaded block uses pre-computed)
+        """
+        _FakeEngine.summary_to_return = _compliant_summary()
+        from app.epcis import persistence as persistence_mod
+        payload, status = persistence_mod._persist_prepared_event_in_session(
+            db_session=MagicMock(), tenant_id="t-1", prepared=_make_prepared(),
+        )
+        assert status in (200, 201)
+        assert _FakeEngine.evaluate_event_call_count == 1, (
+            f"expected 1 evaluate_event call (pre-eval only), "
+            f"got {_FakeEngine.evaluate_event_call_count} — re-eval regression"
+        )
+        assert _FakeEngine.evaluate_event_persist_true_count == 0, (
+            f"threaded block should NOT call evaluate_event(persist=True) "
+            f"when a pre-computed summary is available; called "
+            f"{_FakeEngine.evaluate_event_persist_true_count} times"
+        )
+        assert len(_FakeEngine.persist_summary_calls) == 1, (
+            f"expected 1 persist_summary call, "
+            f"got {len(_FakeEngine.persist_summary_calls)}"
+        )
+
+    def test_warning_only_uses_persist_summary_not_reevaluate(self) -> None:
+        """Warning-only failure under cte_only mode → accept + threaded
+        block uses persist_summary. Same single-eval pattern as compliant."""
+        _FakeEngine.summary_to_return = _warning_only_summary()
+        from app.epcis import persistence as persistence_mod
+        payload, status = persistence_mod._persist_prepared_event_in_session(
+            db_session=MagicMock(), tenant_id="t-1", prepared=_make_prepared(),
+        )
+        assert status in (200, 201)
+        assert _FakeEngine.evaluate_event_persist_true_count == 0
+        assert len(_FakeEngine.persist_summary_calls) == 1
+
+    def test_persist_summary_anchors_on_threaded_canonical_event_id(self) -> None:
+        """persist_summary must be called with the threaded block's
+        canonical event_id — the rows must reference the canonical event
+        we actually persisted, not the pre-eval throwaway. Both calls
+        to ``normalize_epcis_event`` produce the same fake event_id in
+        this test, so we can only assert non-empty here; the contract
+        under real ``normalize_epcis_event`` (which mints UUIDs) is
+        enforced by the implementation passing
+        ``event_id=str(_canonical.event_id)`` from the threaded block.
+        """
+        _FakeEngine.summary_to_return = _compliant_summary()
+        from app.epcis import persistence as persistence_mod
+        persistence_mod._persist_prepared_event_in_session(
+            db_session=MagicMock(), tenant_id="t-1", prepared=_make_prepared(),
+        )
+        assert len(_FakeEngine.persist_summary_calls) == 1
+        call = _FakeEngine.persist_summary_calls[0]
+        assert call["event_id"] is not None
+        assert call["event_id"] != ""
+        assert call["tenant_id"] == "t-1"
+
+
+class TestThreadedBlockFallbackWhenNoPreComputedSummary:
+    """When pre-eval is skipped (OFF mode) or returns a no-verdict / errored
+    summary, the threaded block must fall back to the pre-Phase-0 behavior
+    of ``evaluate_event(persist=True)``. This branch is the default
+    production path while ``RULES_ENGINE_ENFORCE=off``, so it must remain
+    bit-for-bit identical to the prior implementation."""
+
+    def test_off_mode_falls_back_to_evaluate_event(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """OFF mode short-circuits pre-eval (returns summary=None), so the
+        threaded block re-evaluates with persist=True. Single eval total."""
+        monkeypatch.setenv("RULES_ENGINE_ENFORCE", "off")
+        _FakeEngine.summary_to_return = _compliant_summary()
+        from app.epcis import persistence as persistence_mod
+        payload, status = persistence_mod._persist_prepared_event_in_session(
+            db_session=MagicMock(), tenant_id="t-1", prepared=_make_prepared(),
+        )
+        assert status in (200, 201)
+        # Pre-eval skipped (OFF short-circuit), threaded block evaluated once.
+        assert _FakeEngine.evaluate_event_call_count == 1
+        assert _FakeEngine.evaluate_event_persist_true_count == 1
+        assert len(_FakeEngine.persist_summary_calls) == 0, (
+            "OFF mode must NOT call persist_summary — no pre-computed "
+            "summary exists, so the fallback branch handles persistence "
+            "via evaluate_event(persist=True)"
+        )
+
+    def test_no_verdict_summary_falls_back_to_evaluate_event(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """no_verdict_reason summary has empty .results — persist_summary
+        would be a no-op against it. Threaded block falls through to
+        evaluate_event so the eval rows actually get written."""
+        monkeypatch.setenv("RULES_ENGINE_ENFORCE", "cte_only")
+        _FakeEngine.summary_to_return = _no_verdict_summary()
+        from app.epcis import persistence as persistence_mod
+        payload, status = persistence_mod._persist_prepared_event_in_session(
+            db_session=MagicMock(), tenant_id="t-1", prepared=_make_prepared(),
+        )
+        assert status in (200, 201)
+        # Pre-eval ran (1 call) + threaded block re-evaluated to write rows.
+        assert _FakeEngine.evaluate_event_call_count == 2
+        assert _FakeEngine.evaluate_event_persist_true_count == 1
+        assert len(_FakeEngine.persist_summary_calls) == 0
