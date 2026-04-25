@@ -758,9 +758,8 @@ class SchedulerService:
 
                 for tid in tenant_ids:
                     # Set tenant context for RLS before per-tenant queries
-                    db.execute(__import__("sqlalchemy").text(
-                        "SET LOCAL app.tenant_id = :tid"
-                    ), {"tid": tid})
+                    from shared.tenant_context import set_tenant_guc  # noqa: PLC0415
+                    set_tenant_guc(db, tid)
                     cases = workflow.check_deadline_status(tid)
                     overdue = [c for c in cases if c["urgency"] == "overdue"]
                     critical = [c for c in cases if c["urgency"] == "critical"]
