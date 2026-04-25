@@ -48,7 +48,49 @@ class DatabaseManager:
             self.conn = None
     
     def set_tenant_context(self, tenant_id: str) -> None:
-        """Set tenant context for RLS."""
+        """Set tenant context for RLS via the Postgres SECURITY DEFINER helper.
+
+        Intentionally does NOT delegate to
+        ``services.shared.tenant_context.set_tenant_guc`` (the Phase B
+        canonical primitive, #1934). The other tenant-context callers
+        in the codebase (CTEPersistence #1935, CanonicalEventStore
+        #1936, ExceptionQueueService #1938) all run on top of a
+        SQLAlchemy Session inside an explicit transaction, where
+        ``SET LOCAL app.tenant_id = :tid`` (transaction-scoped) is the
+        right shape.
+
+        ``DatabaseManager`` is structurally different on two axes:
+
+        1. **Raw psycopg connection, not SQLAlchemy.** The session
+           parameter ``set_tenant_guc`` expects (an object with
+           ``.execute(text(...), params)``) doesn't match this layer's
+           ``conn.cursor().execute(sql, tuple)`` API.
+
+        2. **``autocommit = True``** (set in ``connect()`` above).
+           Every statement is its own transaction. ``SET LOCAL`` only
+           takes effect within the current transaction and resets on
+           COMMIT — under autocommit it would set then immediately
+           reset on the implicit commit. Effectively a no-op.
+
+        The SECURITY DEFINER function ``set_tenant_context(uuid)``
+        defined in ``services/admin/migrations/V3__tenant_isolation.sql``
+        uses ``set_config('app.tenant_id', ..., FALSE)`` which is
+        session-scoped — the right shape under autocommit, where the
+        connection is the unit of context.
+
+        Pool-bleed safety (the reason Phase B exists) is not a concern
+        here because ``DatabaseManager`` opens a per-instance dedicated
+        connection in ``connect()`` and closes it in ``close()`` /
+        ``__exit__``. There is no connection pool; the GUC dies with
+        the connection.
+
+        If this code path ever switches to SQLAlchemy or to a pooled
+        connection model, revisit — the right migration would be the
+        full set: drop autocommit, wrap requests in explicit
+        transactions, switch to a SQLAlchemy session, then delegate
+        to ``set_tenant_guc``. Out of scope for the Phase B per-call-
+        site sweep.
+        """
         if not self.conn:
             self.connect()
         with self.conn.cursor() as cur:
