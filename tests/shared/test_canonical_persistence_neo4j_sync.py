@@ -2,7 +2,7 @@
 Regression tests for #1378 — Neo4j graph-sync Redis queue grows
 unbounded in production.
 
-``shared.canonical_persistence.migration.publish_graph_sync`` used
+``shared.canonical_persistence.legacy_dual_write.publish_graph_sync`` used
 to unconditionally ``rpush`` one message per canonical event to the
 ``neo4j-sync`` Redis list, but the consumer
 (``services/graph/scripts/fsma_sync_worker.py``) is not referenced

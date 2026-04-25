@@ -12,7 +12,7 @@ from typing import Any
 
 from fastapi import HTTPException
 
-from services.ingestion.app.epcis.extraction import _extract_lot_data
+from .extraction import _extract_lot_data
 
 logger = logging.getLogger("epcis-ingestion")
 

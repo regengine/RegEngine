@@ -113,7 +113,7 @@ install_metrics(app, service_name="nlp-service")
 app.include_router(nlp_router, prefix="/api/v1", tags=["Text Analysis"])
 
 # Standardized Health & Readiness (Phase 17)
-from shared.health import HealthCheck, install_health_router
+from shared.observability.health import HealthCheck, install_health_router
 
 health = HealthCheck(service_name="nlp-service")
 install_health_router(app, service_name="nlp-service", health_check=health)
