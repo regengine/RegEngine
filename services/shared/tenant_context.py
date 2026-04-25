@@ -253,25 +253,56 @@ def set_tenant_guc(session: Any, tenant_id: str) -> None:
     work to a tenant — RLS-enforced reads, RLS-enforced writes, anything
     that calls ``get_tenant_context()`` — must call this first.
 
+    SQL form: ``SELECT set_config('app.tenant_id', :tid, true)``.
+
+    Why ``set_config(..., true)`` instead of ``SET LOCAL app.tenant_id =
+    :tid``:
+
+      * Both are transaction-scoped — Postgres documents
+        ``set_config(name, value, TRUE)`` as "almost equivalent" to
+        ``SET LOCAL`` (the only difference is that ``set_config`` returns
+        the value being set; we don't read the return).
+      * Postgres does NOT allow parameter placeholders in the
+        ``SET``/``SET LOCAL`` syntax. Under psycopg the driver does
+        client-side substitution that papers over this for
+        ``text("SET LOCAL ... = :tid")``, but under **asyncpg the
+        same call fails with ``syntax error at or near "$1"``** (see
+        #1879). ``set_config`` is a regular function call — bound
+        parameters work in both drivers.
+      * Single primitive that works everywhere (sync + async sessions)
+        unifies the previously-bifurcated callsites:
+        ``services/shared/api_key_store.py`` was the third
+        Phase-B carve-out (#1942) BECAUSE the old ``SET LOCAL`` form
+        crashed under asyncpg; with this form, that carve-out is
+        unblocked.
+
     Args:
-        session: A SQLAlchemy ``Session`` (sync) or any object with an
-                 ``execute(stmt, params)`` method that takes a SQLAlchemy
-                 ``text()`` clause and a binding dict. The async session
-                 path is intentionally *not* supported here — async DB
-                 work needs ``set_tenant_guc_async`` (see below).
+        session: A SQLAlchemy ``Session`` / ``AsyncSession`` (call
+                 ``await session.execute(...)`` for the async case
+                 — pass any object whose ``.execute(stmt, params)``
+                 method accepts a SQLAlchemy ``text()`` clause and a
+                 binding dict).
         tenant_id: A UUID string. Validated client-side before binding;
                    non-UUID values raise ``ValueError`` before any SQL
-                   runs. The bind itself is parameterized so SQL injection
-                   is impossible regardless of input shape, but the
-                   client-side check makes the failure mode loud rather
-                   than "RLS returns 0 rows for unclear reasons."
+                   runs. The bind itself is parameterized so SQL
+                   injection is impossible regardless of input shape;
+                   the client-side check makes the failure mode loud
+                   rather than "RLS returns 0 rows for unclear reasons."
 
     Raises:
         ValueError: ``tenant_id`` is empty, not a string, or not a
                     valid UUID.
 
     Returns:
-        None.
+        Whatever ``session.execute(...)`` returns. For sync sessions
+        that's a ``Result`` object the caller can ignore. For async
+        sessions (``AsyncSession``) that's a **coroutine the caller
+        MUST await** before the GUC write lands; the helper itself is
+        synchronous so it can't await internally. Sync callers can
+        treat the return as if it were ``None``; async callers do
+        ``await set_tenant_guc(...)`` (or the equivalent
+        ``hasattr(result, "__await__")`` check if the session type
+        is mixed).
     """
     if not isinstance(tenant_id, str) or not tenant_id:
         raise ValueError(
@@ -285,8 +316,14 @@ def set_tenant_guc(session: Any, tenant_id: str) -> None:
             f"tenant_id is not a valid UUID: {tenant_id!r}"
         ) from exc
 
-    session.execute(
-        text("SET LOCAL app.tenant_id = :tid"),
+    # Return whatever ``session.execute(...)`` returns. Sync sessions
+    # return a ``Result`` object (caller can ignore); async sessions
+    # return a coroutine that the caller MUST await before the GUC
+    # write lands. Returning the value lets the same primitive serve
+    # both worlds — see ``services/shared/api_key_store.py`` for the
+    # async ``await`` pattern.
+    return session.execute(
+        text("SELECT set_config('app.tenant_id', :tid, true)"),
         {"tid": tenant_id},
     )
 

@@ -332,20 +332,33 @@ class DatabaseAPIKeyStore:
     async def _set_context(self, session: AsyncSession, tenant_id: Optional[str]) -> None:
         """Set tenant context for RLS if provided.
 
-        Uses Postgres' ``set_config(name, value, is_local=true)`` rather than
-        ``SET LOCAL …`` because Postgres does not allow parameter placeholders
-        in ``SET``/``SET LOCAL`` — a parameterized ``SET LOCAL`` fails with
-        ``syntax error at or near "$1"`` (#1879). ``set_config`` is a regular
-        function call that accepts bound parameters normally, so this path
-        stays parameterized (no SQL injection surface) and no longer relies on
-        string interpolation even though ``tenant_id`` is already UUID-validated.
+        Delegates to ``services.shared.tenant_context.set_tenant_guc`` —
+        the canonical Phase B primitive, now async-compatible. Both
+        forms (``SET LOCAL`` vs. ``SELECT set_config('app.tenant_id',
+        :tid, true)``) are transaction-scoped per Postgres docs; the
+        helper emits the latter so the same primitive works under
+        psycopg (sync) and asyncpg (async). See #1879 for the
+        original async-incompat issue.
+
+        ``set_tenant_guc`` is a sync function but its body issues
+        ``session.execute(...)``. Under an ``AsyncSession`` that
+        execute returns an awaitable that must be awaited before the
+        GUC write actually lands. We do that here.
+
+        UUID validation happens inside ``set_tenant_guc``; the local
+        ``_validate_uuid`` call below is now redundant but kept as a
+        belt-and-suspenders guard.
         """
         if tenant_id:
             self._validate_uuid(tenant_id)
-            await session.execute(
-                text("SELECT set_config('app.tenant_id', :tid, true)"),
-                {"tid": tenant_id},
-            )
+            from shared.tenant_context import set_tenant_guc  # noqa: PLC0415
+            result = set_tenant_guc(session, tenant_id)
+            # Async session: ``execute()`` returns a coroutine; await it
+            # so the GUC write actually lands before subsequent queries.
+            # Sync session: ``execute()`` returns a Result object directly,
+            # nothing to await.
+            if result is not None and hasattr(result, "__await__"):
+                await result
 
     async def create_key(
         self,
