@@ -44,11 +44,13 @@ or body, the dependency raises ``HTTPException(409)`` with error code
 from __future__ import annotations
 
 import os
+import uuid as _uuid
 from dataclasses import dataclass
-from typing import Optional
+from typing import Any, Optional
 
 import structlog
 from fastapi import HTTPException, Request, status
+from sqlalchemy import text
 
 logger = structlog.get_logger("tenant_context")
 
@@ -211,3 +213,96 @@ def is_production() -> bool:
     Returns True unless REGENGINE_ENV is explicitly 'development' or 'test'.
     """
     return os.getenv("REGENGINE_ENV", "production").lower() not in {"development", "test"}
+
+
+# ---------------------------------------------------------------------------
+# DB session GUC helpers (Phase B of tenant-isolation convergence)
+# ---------------------------------------------------------------------------
+#
+# Postgres RLS policies reference the ``app.tenant_id`` GUC via the canonical
+# helper ``get_tenant_context()`` (returns UUID). Every tenant-scoped DB
+# operation must set this GUC on the session before doing any work, or RLS
+# either returns no rows (fail-hard policies post-v056) or — under the
+# legacy fail-open V3 form that v056/v059 superseded — falls back to the
+# sandbox tenant.
+#
+# Today there are at least 8 places that set ``app.tenant_id`` via ad-hoc
+# code (``set_tenant_context`` methods on CTEPersistence /
+# CanonicalEventStore / ExceptionQueueService, inline ``SET LOCAL`` in
+# canonical_router and a few admin paths, plus a SECURITY DEFINER SQL
+# function called from ``DatabaseManager.set_tenant_context``). Each
+# implementation is correct in isolation but the duplication is a
+# maintenance hazard — a future bug fix to the GUC name or scope has to be
+# applied in eight places.
+#
+# These helpers are the canonical primitive: every caller that needs to
+# set the GUC should use ``set_tenant_guc(session, tenant_id)``. Future
+# sprints migrate the existing ad-hoc call sites one service at a time.
+#
+# Scope is ``SET LOCAL`` (transaction-scoped, auto-resets at COMMIT/ROLLBACK)
+# — never session-scoped. Pool-bleed safety relies on this: a connection
+# returned to the pool should not carry a tenant_id from a prior request.
+# ``services/admin/app/database.py`` ALSO registers a pool-checkout listener
+# that proactively clears the GUC; that's the second layer of defense.
+
+
+def set_tenant_guc(session: Any, tenant_id: str) -> None:
+    """Set ``app.tenant_id`` on the session at TRANSACTION scope.
+
+    Canonical primitive. Every code path that needs to scope subsequent DB
+    work to a tenant — RLS-enforced reads, RLS-enforced writes, anything
+    that calls ``get_tenant_context()`` — must call this first.
+
+    Args:
+        session: A SQLAlchemy ``Session`` (sync) or any object with an
+                 ``execute(stmt, params)`` method that takes a SQLAlchemy
+                 ``text()`` clause and a binding dict. The async session
+                 path is intentionally *not* supported here — async DB
+                 work needs ``set_tenant_guc_async`` (see below).
+        tenant_id: A UUID string. Validated client-side before binding;
+                   non-UUID values raise ``ValueError`` before any SQL
+                   runs. The bind itself is parameterized so SQL injection
+                   is impossible regardless of input shape, but the
+                   client-side check makes the failure mode loud rather
+                   than "RLS returns 0 rows for unclear reasons."
+
+    Raises:
+        ValueError: ``tenant_id`` is empty, not a string, or not a
+                    valid UUID.
+
+    Returns:
+        None.
+    """
+    if not isinstance(tenant_id, str) or not tenant_id:
+        raise ValueError(
+            "tenant_id must be a non-empty UUID string; "
+            f"got {type(tenant_id).__name__!s}={tenant_id!r}"
+        )
+    try:
+        _uuid.UUID(tenant_id)
+    except (ValueError, AttributeError) as exc:
+        raise ValueError(
+            f"tenant_id is not a valid UUID: {tenant_id!r}"
+        ) from exc
+
+    session.execute(
+        text("SET LOCAL app.tenant_id = :tid"),
+        {"tid": tenant_id},
+    )
+
+
+def apply_tenant_context(session: Any, ctx: TenantContext) -> None:
+    """Apply a resolved ``TenantContext`` to a DB session.
+
+    Convenience wrapper over ``set_tenant_guc`` for the common case where
+    a FastAPI handler receives a ``TenantContext`` from
+    ``Depends(resolve_tenant_context)`` and wants to scope its session
+    work to that tenant. Equivalent to::
+
+        set_tenant_guc(session, ctx.tenant_id)
+
+    Provided so the canonical pattern is one line and reads as a single
+    intent — "apply this resolved tenant context to my DB session" — at
+    every call site.
+    """
+    set_tenant_guc(session, ctx.tenant_id)
