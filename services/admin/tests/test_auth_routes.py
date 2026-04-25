@@ -136,14 +136,12 @@ class TestLoginHappyPath:
         db_session.commit.return_value = None
 
         with (
-            patch("services.admin.app.auth_routes.get_session", return_value=iter([db_session])),
-            patch("services.admin.app.auth_routes.get_session_store", return_value=iter([mock_session_store])),
-            patch("services.admin.app.auth_routes.verify_login", return_value=True),
-            patch("services.admin.app.auth_routes.get_supabase", return_value=None),
-            patch("services.admin.app.auth_routes.emit_funnel_event", new=AsyncMock()),
-            patch("services.admin.app.auth_routes.AuditLogger.log_event", return_value=None),
+            patch("services.admin.app.auth.login_router.get_session", return_value=iter([db_session])),
+            patch("services.admin.app.auth.login_router.get_session_store", return_value=iter([mock_session_store])),
+            patch("services.admin.app.auth.login_router.verify_login", return_value=True),
+            patch("services.admin.app.auth.login_router.AuditLogger.log_event", return_value=None),
         ):
-            from services.admin.app.auth_routes import login
+            from services.admin.app.auth.login_router import login
             import asyncio
 
             req = MagicMock()
@@ -190,10 +188,9 @@ class TestLoginBadCredentials:
         db_session.execute.return_value.scalar_one_or_none.return_value = user
 
         with (
-            patch("services.admin.app.auth_routes.verify_login", return_value=False),
-            patch("services.admin.app.auth_routes.get_supabase", return_value=None),
+            patch("services.admin.app.auth.login_router.verify_login", return_value=False),
         ):
-            from services.admin.app.auth_routes import login
+            from services.admin.app.auth.login_router import login
             import asyncio
 
             req = MagicMock()

@@ -186,7 +186,8 @@ def test_login_route_records_failed_attempt_for_both_branches():
     headers."""
     from pathlib import Path
 
-    src = Path(__file__).resolve().parent.parent / "app" / "auth_routes.py"
+    # login handler lives in auth/login_router.py after the Phase 1 split
+    src = Path(__file__).resolve().parent.parent / "app" / "auth" / "login_router.py"
     text = src.read_text()
 
     # The handler should have a SINGLE fail block that runs both
