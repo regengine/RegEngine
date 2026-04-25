@@ -70,6 +70,7 @@ from app.supplier_cte_service import (  # noqa: E402
     _as_utc,
     _bridge_to_canonical,
     _iso_utc,
+    _normalize_supplier_cte_type,
     _persist_supplier_cte_event,
 )
 
@@ -401,6 +402,15 @@ class TestPersistSupplierCteEventEmptyTlc:
             )
         assert excinfo.value.status_code == 400
         assert "Unsupported cte_type" in excinfo.value.detail
+
+
+class TestSupplierCteTypeAliases:
+
+    def test_canonical_transformation_alias_maps_to_supplier_type(self):
+        assert _normalize_supplier_cte_type("transformation") == "transforming"
+
+    def test_canonical_first_land_based_receiving_alias_maps_to_supplier_type(self):
+        assert _normalize_supplier_cte_type("first_land_based_receiving") == "first_receiver"
 
 
 # Tracks GitHub issue #1342.

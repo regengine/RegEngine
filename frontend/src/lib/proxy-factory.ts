@@ -36,6 +36,13 @@ export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'OPTIONS'
 
 const DEFAULT_METHODS: HttpMethod[] = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'];
 const METHODS_WITHOUT_BODY: ReadonlySet<HttpMethod> = new Set(['GET', 'OPTIONS']);
+const COOKIE_MANAGED_PLACEHOLDER = 'cookie-managed';
+const CREDENTIAL_HEADER_NAMES = new Set([
+    'authorization',
+    'x-api-key',
+    'x-admin-key',
+    'x-regengine-api-key',
+]);
 
 // ---------------------------------------------------------------------------
 // Handler export shape
@@ -67,6 +74,21 @@ function buildMethodHandlers(
         };
     }
     return result;
+}
+
+function isCookieManagedHeader(name: string, value: string): boolean {
+    const normalizedName = name.toLowerCase();
+    if (!CREDENTIAL_HEADER_NAMES.has(normalizedName)) {
+        return false;
+    }
+
+    const normalizedValue = value.trim().toLowerCase();
+    if (normalizedName === 'authorization') {
+        return normalizedValue === COOKIE_MANAGED_PLACEHOLDER ||
+            normalizedValue === `bearer ${COOKIE_MANAGED_PLACEHOLDER}`;
+    }
+
+    return normalizedValue === COOKIE_MANAGED_PLACEHOLDER;
 }
 
 // ---------------------------------------------------------------------------
@@ -342,7 +364,7 @@ export function passthroughRequestHeaders(
 ): Headers {
     for (const name of names) {
         const value = request.headers.get(name);
-        if (value) headers.set(name, value);
+        if (value && !isCookieManagedHeader(name, value)) headers.set(name, value);
     }
     return headers;
 }
@@ -366,12 +388,23 @@ export function applyCookieCredentials(
     options: { respectExistingAuthHeader?: boolean } = {},
 ): Headers {
     const cookieAccessToken = request.cookies.get('re_access_token')?.value;
-    const existingAuth = request.headers.get('authorization');
-    if (cookieAccessToken && !(options.respectExistingAuthHeader && existingAuth)) {
+    const headerAuth = headers.get('authorization');
+    if (headerAuth && isCookieManagedHeader('authorization', headerAuth)) {
+        headers.delete('authorization');
+    }
+    const existingAuth = headers.get('authorization') || request.headers.get('authorization');
+    const hasUsableExistingAuth = Boolean(
+        existingAuth && !isCookieManagedHeader('authorization', existingAuth),
+    );
+    if (cookieAccessToken && !(options.respectExistingAuthHeader && hasUsableExistingAuth)) {
         headers.set('authorization', `Bearer ${cookieAccessToken}`);
     }
 
-    if (!headers.has('x-regengine-api-key')) {
+    const existingApiKey = headers.get('x-regengine-api-key');
+    if (existingApiKey && isCookieManagedHeader('x-regengine-api-key', existingApiKey)) {
+        headers.delete('x-regengine-api-key');
+    }
+    if (!existingApiKey || isCookieManagedHeader('x-regengine-api-key', existingApiKey)) {
         const cookieApiKey = request.cookies.get('re_api_key')?.value;
         const serverApiKey = cookieApiKey || process.env.REGENGINE_API_KEY || '';
         if (serverApiKey) {
@@ -379,7 +412,11 @@ export function applyCookieCredentials(
         }
     }
 
-    if (!headers.has('x-admin-key')) {
+    const existingAdminKey = headers.get('x-admin-key');
+    if (existingAdminKey && isCookieManagedHeader('x-admin-key', existingAdminKey)) {
+        headers.delete('x-admin-key');
+    }
+    if (!existingAdminKey || isCookieManagedHeader('x-admin-key', existingAdminKey)) {
         const cookieAdminKey = request.cookies.get('re_admin_key')?.value;
         if (cookieAdminKey) {
             headers.set('x-admin-key', cookieAdminKey);
