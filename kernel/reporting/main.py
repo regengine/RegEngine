@@ -49,10 +49,7 @@ ensure_shared_importable()
 from shared.auth import require_api_key, APIKey
 from shared.middleware import TenantContextMiddleware, RequestIDMiddleware, get_current_tenant_id
 from shared.tenant_rate_limiting import TenantRateLimitMiddleware
-from shared.health import (
-    HealthChecker,
-    create_neo4j_check,
-)
+from shared.observability.health import HealthCheck
 
 
 # CORS configuration
@@ -123,27 +120,14 @@ analysis_engine = AnalysisEngine()
 
 @app.get("/health")
 async def health_check():
-    """Deep health check endpoint with dependency verification."""
-    
-    checker = HealthChecker(service_name="compliance-api", version="1.0.0")
-    
-    # Add Neo4j check (optional - compliance may work without graph)
-    # Add Neo4j check (optional - compliance may work without graph)
-    if settings.neo4j_uri:
-        checker.add_check("neo4j", create_neo4j_check(
-            settings.neo4j_uri, 
-            settings.neo4j_user, 
-            settings.neo4j_password
-        ))
-    
-    result = await checker.check_all(timeout=3.0)
-    
-    # Add service-specific info
-    response = result.to_dict()
+    """Basic health check endpoint."""
+
+    checker = HealthCheck(service_name="compliance-api")
+    response = await checker.check()
     response["checklists_loaded"] = len(engine.checklists)
-    
+
     from fastapi.responses import JSONResponse
-    status_code = 200 if result.status.value == "healthy" else 503
+    status_code = 200 if response["status"] == "healthy" else 503
     return JSONResponse(content=response, status_code=status_code)
 
 

@@ -1,0 +1,85 @@
+name: Legacy Code Scan
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "frontend/**"
+      - "kernel/**"
+      - "services/**"
+      - "scripts/**"
+      - "tests/**"
+      - "docs/**"
+      - ".github/workflows/legacy-code-scan.yml"
+  push:
+    branches: [main]
+    paths:
+      - "frontend/**"
+      - "kernel/**"
+      - "services/**"
+      - "scripts/**"
+      - "tests/**"
+      - "docs/**"
+      - ".github/workflows/legacy-code-scan.yml"
+  schedule:
+    - cron: "17 11 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: legacy-code-scan-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: "20"
+  PYTHON_VERSION: "3.11"
+
+jobs:
+  legacy-patterns:
+    name: Legacy Pattern Guard
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+
+      - name: Setup Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Block known legacy files and imports
+        run: python3 scripts/check_legacy_dead_code.py
+
+  frontend-unused-files:
+    name: Frontend Unused File Guard
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e  # v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Setup Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install frontend dependencies
+        run: |
+          cd frontend
+          npm ci
+
+      - name: Generate Knip report
+        run: |
+          cd frontend
+          npx --yes knip@6.7.0 --reporter json > ../knip-report.json || true
+
+      - name: Fail on whole unused frontend files
+        run: python3 scripts/check_legacy_dead_code.py --skip-patterns --knip-json knip-report.json
