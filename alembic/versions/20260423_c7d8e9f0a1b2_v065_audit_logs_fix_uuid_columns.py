@@ -105,6 +105,24 @@ def _alter_column_uuid_to_text(column: str) -> str:
 
 
 def upgrade() -> None:
+    # Drop the RLS policy BEFORE altering column types. PostgreSQL does not
+    # allow ``ALTER COLUMN TYPE`` on a column that is referenced by an active
+    # policy definition — the ALTER fails with:
+    #   "cannot alter type of a column used in a policy definition"
+    # Dropping the policy first unblocks the type changes; we recreate it
+    # immediately after with the corrected (cast-free) expression.
+    op.execute(
+        """
+        DO $
+        BEGIN
+            IF to_regclass('public.audit_logs') IS NULL THEN
+                RETURN;
+            END IF;
+            DROP POLICY IF EXISTS tenant_isolation_audit ON public.audit_logs;
+        END$;
+        """
+    )
+
     for column in _COLUMNS_TO_FIX:
         op.execute(_alter_column_text_to_uuid(column))
 
@@ -113,15 +131,14 @@ def upgrade() -> None:
     # redundant and masks future drift if it sneaks back in.
     op.execute(
         """
-        DO $$
+        DO $
         BEGIN
             IF to_regclass('public.audit_logs') IS NULL THEN
                 RETURN;
             END IF;
-            DROP POLICY IF EXISTS tenant_isolation_audit ON public.audit_logs;
             CREATE POLICY tenant_isolation_audit ON public.audit_logs
                 FOR ALL USING (tenant_id = get_tenant_context());
-        END$$;
+        END$;
         """
     )
 
