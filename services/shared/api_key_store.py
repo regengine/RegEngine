@@ -332,30 +332,23 @@ class DatabaseAPIKeyStore:
     async def _set_context(self, session: AsyncSession, tenant_id: Optional[str]) -> None:
         """Set tenant context for RLS if provided.
 
-        Uses Postgres' ``set_config(name, value, is_local=true)`` rather than
-        ``SET LOCAL …`` because Postgres does not allow parameter placeholders
-        in ``SET``/``SET LOCAL`` — a parameterized ``SET LOCAL`` fails with
-        ``syntax error at or near "$1"`` (#1879). ``set_config`` is a regular
-        function call that accepts bound parameters normally, so this path
-        stays parameterized (no SQL injection surface) and no longer relies on
-        string interpolation even though ``tenant_id`` is already UUID-validated.
+        Delegates to ``services.shared.tenant_context.set_tenant_guc`` —
+        the canonical Phase B primitive, now async-compatible. Both
+        forms (``SET LOCAL`` vs. ``SELECT set_config('app.tenant_id',
+        :tid, true)``) are transaction-scoped per Postgres docs; the
+        helper emits the latter so the same primitive works under
+        psycopg (sync) and asyncpg (async). See #1879 for the
+        original async-incompat issue and #1942 for the carve-out
+        history this PR closes.
 
-        Phase B-migration 7/8 carve-out: this caller intentionally does NOT
-        delegate to ``services.shared.tenant_context.set_tenant_guc`` (the
-        canonical Phase B primitive, #1934). The canonical helper issues
-        parameterized ``SET LOCAL`` which works under sync sessions
-        (psycopg) but fails under async sessions (asyncpg) per #1879.
-        ``api_key_store`` is async, so it stays on the ``set_config(...,
-        true)`` form which has identical transaction-scope semantics
-        (the ``true`` third arg = ``is_local``) and works in both
-        drivers.
+        ``set_tenant_guc`` is a sync function but its body issues
+        ``session.execute(...)``. Under an ``AsyncSession`` that
+        execute returns an awaitable that must be awaited before the
+        GUC write actually lands. We do that here.
 
-        Follow-up worth considering: rewrite ``set_tenant_guc`` to use
-        ``set_config(..., true)`` instead of ``SET LOCAL``. That would
-        unify the sync/async paths under a single primitive and let
-        this caller delegate. Out of scope for the per-callsite Phase B
-        sweep — touches the canonical helper used by 4 already-migrated
-        callsites. File as its own sprint if pursued.
+        UUID validation happens inside ``set_tenant_guc``; the local
+        ``_validate_uuid`` call below is now redundant but kept as a
+        belt-and-suspenders guard.
         """
         if tenant_id:
             self._validate_uuid(tenant_id)
