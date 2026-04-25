@@ -190,7 +190,7 @@ def _db_get_catalog(tenant_id: str, category: str | None = None) -> list[Product
                 text(
                     "SELECT id, name, description, gtin, sku, ftl_category, ftl_covered, "
                     "unit_of_measure, created_at "
-                    "FROM fsma.products WHERE org_id = CAST(:tid AS uuid) AND ftl_category = :cat ORDER BY name"
+                    "FROM fsma.products WHERE tenant_id = CAST(:tid AS uuid) AND ftl_category = :cat ORDER BY name"
                 ),
                 {"tid": tenant_id, "cat": category},
             ).fetchall()
@@ -199,7 +199,7 @@ def _db_get_catalog(tenant_id: str, category: str | None = None) -> list[Product
                 text(
                     "SELECT id, name, description, gtin, sku, ftl_category, ftl_covered, "
                     "unit_of_measure, created_at "
-                    "FROM fsma.products WHERE org_id = CAST(:tid AS uuid) ORDER BY name"
+                    "FROM fsma.products WHERE tenant_id = CAST(:tid AS uuid) ORDER BY name"
                 ),
                 {"tid": tenant_id},
             ).fetchall()
@@ -229,12 +229,12 @@ def _db_add_product(tenant_id: str, product: Product) -> bool:
         db.execute(
             text("""
                 INSERT INTO fsma.products
-                    (org_id, name, ftl_category, ftl_covered, sku, gtin,
+                    (tenant_id, org_id, name, ftl_category, ftl_covered, sku, gtin,
                      description, unit_of_measure)
                 VALUES
-                    (CAST(:tid AS uuid), :name, :cat, :ftl, :sku, :gtin,
+                    (CAST(:tid AS uuid), CAST(:tid AS uuid), :name, :cat, :ftl, :sku, :gtin,
                      :desc, :uom)
-                ON CONFLICT (org_id, gtin)
+                ON CONFLICT (tenant_id, gtin) WHERE gtin IS NOT NULL AND gtin != ''
                 DO UPDATE SET
                     name = EXCLUDED.name,
                     ftl_category = EXCLUDED.ftl_category,
@@ -273,7 +273,7 @@ def _db_lookup_by_gtin(tenant_id: str, gtin: str) -> Product | None:
             text(
                 "SELECT id, name, description, gtin, sku, ftl_category, ftl_covered, "
                 "unit_of_measure, created_at "
-                "FROM fsma.products WHERE org_id = CAST(:tid AS uuid) AND gtin = :gtin LIMIT 1"
+                "FROM fsma.products WHERE tenant_id = CAST(:tid AS uuid) AND gtin = :gtin LIMIT 1"
             ),
             {"tid": tenant_id, "gtin": gtin},
         ).fetchone()
@@ -304,10 +304,10 @@ def learn_from_event(tenant_id: str, event: dict) -> None:
         db.execute(
             text("""
                 INSERT INTO fsma.products
-                    (org_id, name, description, gtin, ftl_covered, ftl_category)
+                    (tenant_id, org_id, name, description, gtin, ftl_covered, ftl_category)
                 VALUES
-                    (CAST(:tid AS uuid), :name, :name, :gtin, true, '')
-                ON CONFLICT (org_id, gtin)
+                    (CAST(:tid AS uuid), CAST(:tid AS uuid), :name, :name, :gtin, true, '')
+                ON CONFLICT (tenant_id, gtin) WHERE gtin IS NOT NULL AND gtin != ''
                 DO UPDATE SET
                     name = COALESCE(NULLIF(EXCLUDED.name, ''), fsma.products.name),
                     updated_at = now()
