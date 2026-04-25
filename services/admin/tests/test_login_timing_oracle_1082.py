@@ -162,20 +162,40 @@ def test_login_route_uses_verify_login_symbol():
     ``verify_password(payload.password, user.password_hash)`` the
     short-circuit on ``not user`` comes back. Assert the imported
     symbol is present in the source so that regression is caught at
-    collect time."""
+    collect time.
+
+    After the Phase 1 split (PR #1948), the login handler lives in
+    ``services/admin/app/auth/login_router.py``; the legacy
+    ``auth_routes.py`` shim re-exports the symbol but the actual
+    timing-oracle defense is in the sub-module.
+    """
     from pathlib import Path
 
-    src = Path(__file__).resolve().parent.parent / "app" / "auth_routes.py"
-    text = src.read_text()
-    assert "verify_login" in text, (
-        "auth_routes.py must import and use verify_login() for the "
-        "/login check (see #1082). The old verify_password call "
+    auth_app_dir = Path(__file__).resolve().parent.parent / "app"
+    shim_text = (auth_app_dir / "auth_routes.py").read_text()
+    login_text = (auth_app_dir / "auth" / "login_router.py").read_text()
+
+    # The login handler in the sub-module must use verify_login.
+    assert "verify_login" in login_text, (
+        "auth/login_router.py must import and use verify_login() for "
+        "the /login check (see #1082). The old verify_password call "
         "short-circuits when user is None and leaks existence via "
         "response timing."
     )
-    # And the import itself must come from auth_utils.
-    assert "from .auth_utils import" in text
-    assert "verify_login" in text.split("from .auth_utils import", 1)[1].split("\n", 1)[0]
+    # The import itself must come from auth_utils — multi-line tolerant.
+    assert "from ..auth_utils import" in login_text
+    import_after = login_text.split("from ..auth_utils import", 1)[1]
+    # Take everything until the next top-level ``from``/``import`` or
+    # blank-line-separated section so multi-line ``(...)`` imports work.
+    end = import_after.find("\n\n")
+    if end == -1:
+        end = len(import_after)
+    assert "verify_login" in import_after[:end]
+
+    # The shim must still re-export verify_login so the legacy
+    # ``from services.admin.app.auth_routes import verify_login`` keeps
+    # working (#1948 split — back-compat shim).
+    assert "verify_login" in shim_text
 
 
 def test_login_route_records_failed_attempt_for_both_branches():

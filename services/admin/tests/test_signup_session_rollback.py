@@ -98,12 +98,13 @@ def _call_signup(db, session_store, *, email: str = "new@example.com"):
 async def test_signup_happy_path_commits_after_session_persist(monkeypatch):
     """Happy path: Redis persists, then DB commits, then response is returned."""
     from services.admin.app import auth_routes
+    from services.admin.app.auth import signup_router as _sr
 
     # No Supabase — keep the test hermetic.
-    monkeypatch.setattr(auth_routes, "get_supabase", lambda: None)
+    monkeypatch.setattr(_sr, "get_supabase", lambda: None)
     # Best-effort side-effects at the tail of signup — make them no-ops.
     monkeypatch.setattr(auth_routes.AuditLogger, "log_event", lambda *a, **k: None)
-    monkeypatch.setattr(auth_routes, "emit_funnel_event", lambda **k: None)
+    monkeypatch.setattr(_sr, "emit_funnel_event", lambda **k: None)
 
     db = _make_db_no_existing_user()
     call_order: list[str] = []
@@ -145,10 +146,11 @@ async def test_signup_rolls_back_db_when_redis_persist_fails(monkeypatch):
       * NOT call ``db.commit()``.
     """
     from services.admin.app import auth_routes
+    from services.admin.app.auth import signup_router as _sr
 
-    monkeypatch.setattr(auth_routes, "get_supabase", lambda: None)
+    monkeypatch.setattr(_sr, "get_supabase", lambda: None)
     monkeypatch.setattr(auth_routes.AuditLogger, "log_event", lambda *a, **k: None)
-    monkeypatch.setattr(auth_routes, "emit_funnel_event", lambda **k: None)
+    monkeypatch.setattr(_sr, "emit_funnel_event", lambda **k: None)
     # Eliminate the retry back-off so the test stays fast.
     monkeypatch.setattr(auth_routes.asyncio, "sleep", AsyncMock(return_value=None))
 
@@ -180,10 +182,11 @@ async def test_retry_after_redis_failure_is_not_blocked_by_409(monkeypatch):
     was rolled back). The second attempt should succeed, not raise 409.
     """
     from services.admin.app import auth_routes
+    from services.admin.app.auth import signup_router as _sr
 
-    monkeypatch.setattr(auth_routes, "get_supabase", lambda: None)
+    monkeypatch.setattr(_sr, "get_supabase", lambda: None)
     monkeypatch.setattr(auth_routes.AuditLogger, "log_event", lambda *a, **k: None)
-    monkeypatch.setattr(auth_routes, "emit_funnel_event", lambda **k: None)
+    monkeypatch.setattr(_sr, "emit_funnel_event", lambda **k: None)
     monkeypatch.setattr(auth_routes.asyncio, "sleep", AsyncMock(return_value=None))
 
     db = _make_db_no_existing_user()
@@ -223,10 +226,11 @@ async def test_db_commit_failure_deletes_persisted_redis_session(monkeypatch):
     just rolled back). The fix deletes it best-effort.
     """
     from services.admin.app import auth_routes
+    from services.admin.app.auth import signup_router as _sr
 
-    monkeypatch.setattr(auth_routes, "get_supabase", lambda: None)
+    monkeypatch.setattr(_sr, "get_supabase", lambda: None)
     monkeypatch.setattr(auth_routes.AuditLogger, "log_event", lambda *a, **k: None)
-    monkeypatch.setattr(auth_routes, "emit_funnel_event", lambda **k: None)
+    monkeypatch.setattr(_sr, "emit_funnel_event", lambda **k: None)
 
     db = _make_db_no_existing_user()
     db.commit.side_effect = RuntimeError("db connection reset")
@@ -265,10 +269,11 @@ async def test_correlated_redis_failure_does_not_mask_original_db_error(
         dangling Redis session (bounded by TTL — see TTL test below).
     """
     from services.admin.app import auth_routes
+    from services.admin.app.auth import signup_router as _sr
 
-    monkeypatch.setattr(auth_routes, "get_supabase", lambda: None)
+    monkeypatch.setattr(_sr, "get_supabase", lambda: None)
     monkeypatch.setattr(auth_routes.AuditLogger, "log_event", lambda *a, **k: None)
-    monkeypatch.setattr(auth_routes, "emit_funnel_event", lambda **k: None)
+    monkeypatch.setattr(_sr, "emit_funnel_event", lambda **k: None)
 
     db = _make_db_no_existing_user()
     db_error = RuntimeError("db connection reset mid-commit")
@@ -313,10 +318,11 @@ async def test_correlated_redis_failure_logs_residual_orphan(monkeypatch):
     can target this failure mode specifically.
     """
     from services.admin.app import auth_routes
+    from services.admin.app.auth import signup_router as _sr
 
-    monkeypatch.setattr(auth_routes, "get_supabase", lambda: None)
+    monkeypatch.setattr(_sr, "get_supabase", lambda: None)
     monkeypatch.setattr(auth_routes.AuditLogger, "log_event", lambda *a, **k: None)
-    monkeypatch.setattr(auth_routes, "emit_funnel_event", lambda **k: None)
+    monkeypatch.setattr(_sr, "emit_funnel_event", lambda **k: None)
 
     # Intercept structlog warnings on the auth logger. structlog is not
     # globally configured in this test env (no ``structlog.configure``),
@@ -327,7 +333,7 @@ async def test_correlated_redis_failure_logs_residual_orphan(monkeypatch):
     def _capture_warning(event: str, **kwargs):
         captured.append((event, kwargs))
 
-    monkeypatch.setattr(auth_routes.logger, "warning", _capture_warning)
+    monkeypatch.setattr(_sr.logger, "warning", _capture_warning)
 
     db = _make_db_no_existing_user()
     db.commit.side_effect = RuntimeError("db connection reset")
@@ -379,11 +385,12 @@ async def test_signup_session_has_bounded_ttl(monkeypatch):
     from datetime import datetime, timezone
 
     from services.admin.app import auth_routes
+    from services.admin.app.auth import signup_router as _sr
     from services.admin.app.session_store import RedisSessionStore
 
-    monkeypatch.setattr(auth_routes, "get_supabase", lambda: None)
+    monkeypatch.setattr(_sr, "get_supabase", lambda: None)
     monkeypatch.setattr(auth_routes.AuditLogger, "log_event", lambda *a, **k: None)
-    monkeypatch.setattr(auth_routes, "emit_funnel_event", lambda **k: None)
+    monkeypatch.setattr(_sr, "emit_funnel_event", lambda **k: None)
 
     db = _make_db_no_existing_user()
 
@@ -436,6 +443,7 @@ async def test_supabase_orphan_deleted_when_db_commit_fails(monkeypatch):
     so the Supabase account does not persist without a matching DB record.
     """
     from services.admin.app import auth_routes
+    from services.admin.app.auth import signup_router as _sr
 
     # Inject a fake Supabase client that records the user_id created.
     fake_sb_user_id = str(uuid_mod.uuid4())
@@ -457,9 +465,9 @@ async def test_supabase_orphan_deleted_when_db_commit_fails(monkeypatch):
     class FakeSupabase:
         auth = FakeSupabaseAuth()
 
-    monkeypatch.setattr(auth_routes, "get_supabase", lambda: FakeSupabase())
+    monkeypatch.setattr(_sr, "get_supabase", lambda: FakeSupabase())
     monkeypatch.setattr(auth_routes.AuditLogger, "log_event", lambda *a, **k: None)
-    monkeypatch.setattr(auth_routes, "emit_funnel_event", lambda **k: None)
+    monkeypatch.setattr(_sr, "emit_funnel_event", lambda **k: None)
 
     db = _make_db_no_existing_user()
     db.commit.side_effect = RuntimeError("unique violation — duplicate email")
@@ -486,10 +494,11 @@ async def test_supabase_not_created_when_supabase_is_unavailable_and_db_fails(
     cleanup should be attempted, and the DB commit failure still propagates.
     """
     from services.admin.app import auth_routes
+    from services.admin.app.auth import signup_router as _sr
 
-    monkeypatch.setattr(auth_routes, "get_supabase", lambda: None)
+    monkeypatch.setattr(_sr, "get_supabase", lambda: None)
     monkeypatch.setattr(auth_routes.AuditLogger, "log_event", lambda *a, **k: None)
-    monkeypatch.setattr(auth_routes, "emit_funnel_event", lambda **k: None)
+    monkeypatch.setattr(_sr, "emit_funnel_event", lambda **k: None)
 
     db = _make_db_no_existing_user()
     db.commit.side_effect = RuntimeError("unique violation")
@@ -514,6 +523,7 @@ async def test_supabase_orphan_cleanup_failure_is_logged_and_original_error_prop
     original DB commit exception must still propagate to the caller.
     """
     from services.admin.app import auth_routes
+    from services.admin.app.auth import signup_router as _sr
 
     fake_sb_user_id = str(uuid_mod.uuid4())
     fake_sb_user = SimpleNamespace(id=fake_sb_user_id)
@@ -532,16 +542,16 @@ async def test_supabase_orphan_cleanup_failure_is_logged_and_original_error_prop
     class FakeSupabase:
         auth = FakeSupabaseAuth()
 
-    monkeypatch.setattr(auth_routes, "get_supabase", lambda: FakeSupabase())
+    monkeypatch.setattr(_sr, "get_supabase", lambda: FakeSupabase())
     monkeypatch.setattr(auth_routes.AuditLogger, "log_event", lambda *a, **k: None)
-    monkeypatch.setattr(auth_routes, "emit_funnel_event", lambda **k: None)
+    monkeypatch.setattr(_sr, "emit_funnel_event", lambda **k: None)
 
     captured: list[tuple[str, dict]] = []
 
     def _capture_warning(event: str, **kwargs):
         captured.append((event, kwargs))
 
-    monkeypatch.setattr(auth_routes.logger, "warning", _capture_warning)
+    monkeypatch.setattr(_sr.logger, "warning", _capture_warning)
 
     db = _make_db_no_existing_user()
     db_error = RuntimeError("db commit failed")
@@ -654,6 +664,7 @@ async def test_duplicate_email_returns_202_not_409(monkeypatch):
     """
     from fastapi.responses import JSONResponse
     from services.admin.app import auth_routes
+    from services.admin.app.auth import signup_router as _sr
     from services.admin.app.auth_routes import RegisterRequest, signup
 
     # DB mock whose email lookup returns an existing user.
