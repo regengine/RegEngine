@@ -42,6 +42,7 @@ sys.path.insert(0, str(repo_root))
 sys.path.insert(0, str(repo_root / "services" / "admin"))
 
 import services.admin.app.auth_routes as ar
+import services.admin.app.auth.login_router as _login_router_mod
 from services.admin.app.auth_routes import (
     LoginRequest,
     RegisterRequest,
@@ -334,8 +335,8 @@ class TestLogin:
         db = _make_db_with_user(user, tenant, membership)
         session_store = _make_session_store()
 
-        # Patch AuditLogger so it doesn't blow up
-        monkeypatch.setattr(ar, "AuditLogger", MagicMock())
+        # Patch AuditLogger in the module that owns the login handler
+        monkeypatch.setattr(_login_router_mod, "AuditLogger", MagicMock())
 
         result = await ar.login.__wrapped__(
             payload=LoginRequest(email="U@Example.com", password="pass123"),
@@ -357,7 +358,7 @@ class TestLogin:
         membership = _make_membership(user, tenant)
         db = _make_db_with_user(user, tenant, membership)
         session_store = _make_session_store()
-        monkeypatch.setattr(ar, "AuditLogger", MagicMock())
+        monkeypatch.setattr(_login_router_mod, "AuditLogger", MagicMock())
 
         result = await ar.login.__wrapped__(
             payload=LoginRequest(email="  USER@EXAMPLE.COM  ", password="pw"),
@@ -419,7 +420,7 @@ class TestLogin:
         membership = _make_membership(user, tenant)
         db = _make_db_with_user(user, tenant, membership)
         session_store = _make_session_store()
-        monkeypatch.setattr(ar, "AuditLogger", MagicMock())
+        monkeypatch.setattr(_login_router_mod, "AuditLogger", MagicMock())
 
         result = await ar.login.__wrapped__(
             payload=LoginRequest(email="u@x.com", password="pw"),
