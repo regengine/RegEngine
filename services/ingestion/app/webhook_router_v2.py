@@ -710,7 +710,7 @@ def _neo4j_sync_max_queue() -> int:
         return 100_000
 
 
-def _rules_preeval_reject(event: IngestEvent, db_session, tenant_id: str) -> tuple[bool, Optional[str]]:
+def _rules_preeval_reject(event: IngestEvent, db_session, tenant_id: str):
     """Pre-evaluate rules to decide whether the event should be rejected
     under the current ``RULES_ENGINE_ENFORCE`` policy.
 
@@ -758,7 +758,7 @@ def _rules_preeval_reject(event: IngestEvent, db_session, tenant_id: str) -> tup
     except (ImportError, SQLAlchemyError, ValueError, TypeError, RuntimeError,
             AttributeError, KeyError) as err:
         logger.warning("rules_preeval_skipped", extra={"error": str(err)})
-        return False, None
+        return False, None, None
 
     return should_reject(summary)
 
@@ -977,10 +977,17 @@ async def ingest_events(
         # (default) every call returns (False, None) and the loop is a
         # no-op. No-verdict summaries (no rules loaded, non-FTL, etc.)
         # never reject — see EvaluationSummary.compliant docstring.
+        # ``pre_eval_summaries`` is a parallel list to ``valid_events`` after
+        # the filter — same length, same order, ``None`` entries for events
+        # whose pre-eval skipped (OFF mode, canonical/eval error). The
+        # threaded post-commit block uses the captured summary instead of
+        # re-evaluating, eliminating the double-eval regression
+        # (services/shared/rules/engine.py:persist_summary).
+        pre_eval_summaries: list = []
         if valid_events:
             _filtered: list = []
             for _event, _alerts in valid_events:
-                _reject, _reason = _rules_preeval_reject(_event, db_session, tenant_id)
+                _reject, _reason, _summary = _rules_preeval_reject(_event, db_session, tenant_id)
                 if _reject:
                     results.append(EventResult(
                         traceability_lot_code=_event.traceability_lot_code,
@@ -991,6 +998,7 @@ async def ingest_events(
                     rejected += 1
                     continue
                 _filtered.append((_event, _alerts))
+                pre_eval_summaries.append(_summary)
             valid_events = _filtered
 
         # --- Phase 2: Batch persist all valid events ---
@@ -1018,7 +1026,9 @@ async def ingest_events(
                     source=payload.source,
                 )
 
-                for store_result, event in zip(store_results, event_objs):
+                for store_result, event, precomputed_summary in zip(
+                    store_results, event_objs, pre_eval_summaries
+                ):
                     results.append(EventResult(
                         traceability_lot_code=event.traceability_lot_code,
                         cte_type=event.cte_type.value,
@@ -1038,27 +1048,55 @@ async def ingest_events(
                         os.environ.get("CANONICAL_DUAL_WRITE_TIMEOUT_S", "5")
                     )
 
-                    def _do_canonical_write() -> None:
+                    # Capture loop-bound vars in default kwargs so the
+                    # threaded closure sees the per-event values rather
+                    # than the last loop iteration's bindings.
+                    def _do_canonical_write(
+                        _event=event,
+                        _precomputed=precomputed_summary,
+                    ) -> None:
                         from shared.canonical_persistence import CanonicalEventStore  # noqa: PLC0415
                         from shared.rules_engine import RulesEngine  # noqa: PLC0415
-                        _canonical = normalize_webhook_event(event, tenant_id)
+                        _canonical = normalize_webhook_event(_event, tenant_id)
                         _store = CanonicalEventStore(db_session, dual_write=False, skip_chain_write=True)
                         _store.persist_event(_canonical)
                         _engine = RulesEngine(db_session)
-                        _event_data = {
-                            "event_id": str(_canonical.event_id),
-                            "event_type": _canonical.event_type.value,
-                            "traceability_lot_code": _canonical.traceability_lot_code,
-                            "product_reference": _canonical.product_reference,
-                            "quantity": _canonical.quantity,
-                            "unit_of_measure": _canonical.unit_of_measure,
-                            "from_facility_reference": _canonical.from_facility_reference,
-                            "to_facility_reference": _canonical.to_facility_reference,
-                            "from_entity_reference": _canonical.from_entity_reference,
-                            "to_entity_reference": _canonical.to_entity_reference,
-                            "kdes": _canonical.kdes,
-                        }
-                        _summary = _engine.evaluate_event(_event_data, persist=True, tenant_id=tenant_id)
+                        if _precomputed is not None and _precomputed.results:
+                            # Fast path: pre-eval already evaluated this event
+                            # (RULES_ENGINE_ENFORCE != off). Persist the
+                            # pre-computed results directly instead of
+                            # re-running every rule. Anchor the rows on
+                            # the canonical event_id we just persisted —
+                            # pre-eval generated its own canonical with a
+                            # different ID, so use the new one.
+                            _engine.persist_summary(
+                                _precomputed,
+                                tenant_id=tenant_id,
+                                event_id=str(_canonical.event_id),
+                            )
+                            _summary = _precomputed
+                        else:
+                            # No pre-computed summary — pre-eval was
+                            # skipped (OFF mode or pre-eval errored).
+                            # Fall back to today's behavior: re-evaluate
+                            # with persist=True. This branch is the
+                            # default production path while the flag is
+                            # off, so it must remain bit-for-bit identical
+                            # to pre-Phase-0 semantics.
+                            _event_data = {
+                                "event_id": str(_canonical.event_id),
+                                "event_type": _canonical.event_type.value,
+                                "traceability_lot_code": _canonical.traceability_lot_code,
+                                "product_reference": _canonical.product_reference,
+                                "quantity": _canonical.quantity,
+                                "unit_of_measure": _canonical.unit_of_measure,
+                                "from_facility_reference": _canonical.from_facility_reference,
+                                "to_facility_reference": _canonical.to_facility_reference,
+                                "from_entity_reference": _canonical.from_entity_reference,
+                                "to_entity_reference": _canonical.to_entity_reference,
+                                "kdes": _canonical.kdes,
+                            }
+                            _summary = _engine.evaluate_event(_event_data, persist=True, tenant_id=tenant_id)
                         if not _summary.compliant:
                             from shared.exception_queue import ExceptionQueueService  # noqa: PLC0415
                             ExceptionQueueService(db_session).create_exceptions_from_evaluation(
@@ -1121,7 +1159,7 @@ async def ingest_events(
                     # is cheap insurance — if the batch path ever
                     # mutates valid_events in flight, the fallback
                     # still honors the enforcement policy.
-                    _fb_reject, _fb_reason = _rules_preeval_reject(event, db_session, tenant_id)
+                    _fb_reject, _fb_reason, _fb_summary = _rules_preeval_reject(event, db_session, tenant_id)
                     if _fb_reject:
                         results.append(EventResult(
                             traceability_lot_code=event.traceability_lot_code,
@@ -1156,7 +1194,10 @@ async def ingest_events(
                         ))
                         accepted += 1
 
-                        # Canonical normalization + rule evaluation (mirrors batch happy path)
+                        # Canonical normalization + rule evaluation (mirrors batch happy path).
+                        # Reuses the pre-computed summary from the fallback's
+                        # pre-eval call when available — same double-eval
+                        # avoidance as the batch path.
                         try:
                             from shared.canonical_persistence import CanonicalEventStore
                             canonical = normalize_webhook_event(event, tenant_id)
@@ -1164,20 +1205,28 @@ async def ingest_events(
                             canonical_store.persist_event(canonical)
                             from shared.rules_engine import RulesEngine
                             engine = RulesEngine(db_session)
-                            event_data = {
-                                "event_id": str(canonical.event_id),
-                                "event_type": canonical.event_type.value,
-                                "traceability_lot_code": canonical.traceability_lot_code,
-                                "product_reference": canonical.product_reference,
-                                "quantity": canonical.quantity,
-                                "unit_of_measure": canonical.unit_of_measure,
-                                "from_facility_reference": canonical.from_facility_reference,
-                                "to_facility_reference": canonical.to_facility_reference,
-                                "from_entity_reference": canonical.from_entity_reference,
-                                "to_entity_reference": canonical.to_entity_reference,
-                                "kdes": canonical.kdes,
-                            }
-                            summary = engine.evaluate_event(event_data, persist=True, tenant_id=tenant_id)
+                            if _fb_summary is not None and _fb_summary.results:
+                                engine.persist_summary(
+                                    _fb_summary,
+                                    tenant_id=tenant_id,
+                                    event_id=str(canonical.event_id),
+                                )
+                                summary = _fb_summary
+                            else:
+                                event_data = {
+                                    "event_id": str(canonical.event_id),
+                                    "event_type": canonical.event_type.value,
+                                    "traceability_lot_code": canonical.traceability_lot_code,
+                                    "product_reference": canonical.product_reference,
+                                    "quantity": canonical.quantity,
+                                    "unit_of_measure": canonical.unit_of_measure,
+                                    "from_facility_reference": canonical.from_facility_reference,
+                                    "to_facility_reference": canonical.to_facility_reference,
+                                    "from_entity_reference": canonical.from_entity_reference,
+                                    "to_entity_reference": canonical.to_entity_reference,
+                                    "kdes": canonical.kdes,
+                                }
+                                summary = engine.evaluate_event(event_data, persist=True, tenant_id=tenant_id)
                             if not summary.compliant:
                                 from shared.exception_queue import ExceptionQueueService
                                 exc_svc = ExceptionQueueService(db_session)

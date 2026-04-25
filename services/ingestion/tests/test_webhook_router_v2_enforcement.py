@@ -139,7 +139,7 @@ class TestPreEvalOff:
 
     def test_critical_failure_does_not_reject(self, monkeypatch, _make_event):
         _install(monkeypatch, summary=_critical_summary())
-        reject, reason = wrv2._rules_preeval_reject(_make_event, db_session=None, tenant_id="t")
+        reject, reason, _summary_unused = wrv2._rules_preeval_reject(_make_event, db_session=None, tenant_id="t")
         assert reject is False
         assert reason is None
 
@@ -199,14 +199,14 @@ class TestPreEvalCteOnly:
 
     def test_critical_failure_rejects_with_rule_id_in_reason(self, monkeypatch, _make_event):
         _install(monkeypatch, summary=_critical_summary())
-        reject, reason = wrv2._rules_preeval_reject(_make_event, db_session=None, tenant_id="t")
+        reject, reason, _summary_unused = wrv2._rules_preeval_reject(_make_event, db_session=None, tenant_id="t")
         assert reject is True
         assert "CTE_REQ_HARVEST_DATE" in reason
         assert "harvest_date missing" in reason
 
     def test_warning_only_does_not_reject(self, monkeypatch, _make_event):
         _install(monkeypatch, summary=_warning_only_summary())
-        reject, reason = wrv2._rules_preeval_reject(_make_event, db_session=None, tenant_id="t")
+        reject, reason, _summary_unused = wrv2._rules_preeval_reject(_make_event, db_session=None, tenant_id="t")
         assert reject is False
         assert reason is None
 
@@ -215,13 +215,13 @@ class TestPreEvalCteOnly:
         Blocking here would break ingestion for every tenant without
         seeded rules or non-FTL products."""
         _install(monkeypatch, summary=_no_verdict_summary())
-        reject, reason = wrv2._rules_preeval_reject(_make_event, db_session=None, tenant_id="t")
+        reject, reason, _summary_unused = wrv2._rules_preeval_reject(_make_event, db_session=None, tenant_id="t")
         assert reject is False
         assert reason is None
 
     def test_compliant_does_not_reject(self, monkeypatch, _make_event):
         _install(monkeypatch, summary=_compliant_summary())
-        reject, _ = wrv2._rules_preeval_reject(_make_event, db_session=None, tenant_id="t")
+        reject, _, _summary_unused = wrv2._rules_preeval_reject(_make_event, db_session=None, tenant_id="t")
         assert reject is False
 
     def test_canonical_error_does_not_reject(self, monkeypatch, _make_event):
@@ -234,7 +234,7 @@ class TestPreEvalCteOnly:
             summary=_critical_summary(),  # would reject if eval ran
             canonical_raises=RuntimeError("canonical broken"),
         )
-        reject, reason = wrv2._rules_preeval_reject(_make_event, db_session=None, tenant_id="t")
+        reject, reason, _summary_unused = wrv2._rules_preeval_reject(_make_event, db_session=None, tenant_id="t")
         assert reject is False
         assert reason is None
 
@@ -253,16 +253,96 @@ class TestPreEvalAll:
         """ALL mode is stricter than CTE_ONLY: warning-severity fails
         ALSO reject."""
         _install(monkeypatch, summary=_warning_only_summary())
-        reject, reason = wrv2._rules_preeval_reject(_make_event, db_session=None, tenant_id="t")
+        reject, reason, _summary_unused = wrv2._rules_preeval_reject(_make_event, db_session=None, tenant_id="t")
         assert reject is True
         assert "R_WARN" in reason
 
     def test_compliant_still_accepts(self, monkeypatch, _make_event):
         _install(monkeypatch, summary=_compliant_summary())
-        reject, _ = wrv2._rules_preeval_reject(_make_event, db_session=None, tenant_id="t")
+        reject, _, _summary_unused = wrv2._rules_preeval_reject(_make_event, db_session=None, tenant_id="t")
         assert reject is False
 
     def test_no_verdict_still_accepts(self, monkeypatch, _make_event):
         _install(monkeypatch, summary=_no_verdict_summary())
-        reject, _ = wrv2._rules_preeval_reject(_make_event, db_session=None, tenant_id="t")
+        reject, _, _summary_unused = wrv2._rules_preeval_reject(_make_event, db_session=None, tenant_id="t")
         assert reject is False
+
+
+# ---------------------------------------------------------------------------
+# Summary return — proves the third tuple slot lets callers reuse the
+# pre-eval result instead of forcing a re-evaluation in the post-commit
+# threaded block. Closes the double-eval regression.
+# ---------------------------------------------------------------------------
+
+class TestPreEvalReturnsSummary:
+    """The helper returns ``(reject, reason, summary)`` so the threaded
+    post-commit canonical block can persist the pre-computed evaluation
+    via ``RulesEngine.persist_summary`` instead of running every rule a
+    second time."""
+
+    def test_summary_returned_under_enforcement(self, monkeypatch, _make_event):
+        """Under cte_only, the summary slot is populated so the threaded
+        block can reuse it. Without this, every accepted event under
+        enforcement would pay for two full rules evaluations on the hot
+        path — a 2x CPU regression vs. the OFF-mode default."""
+        monkeypatch.setenv("RULES_ENGINE_ENFORCE", "cte_only")
+        crit = _critical_summary()
+        _install(monkeypatch, summary=crit)
+        reject, reason, summary = wrv2._rules_preeval_reject(
+            _make_event, db_session=None, tenant_id="t"
+        )
+        # Even though this case rejects, the summary is still returned —
+        # callers might log or audit it before short-circuiting.
+        assert reject is True
+        assert summary is crit, "helper must hand the engine's summary back unchanged"
+
+    def test_summary_returned_when_compliant(self, monkeypatch, _make_event):
+        """Compliant events under enforcement: helper accepts AND returns
+        the summary. The threaded block uses it via persist_summary."""
+        monkeypatch.setenv("RULES_ENGINE_ENFORCE", "cte_only")
+        compliant = _compliant_summary()
+        _install(monkeypatch, summary=compliant)
+        reject, reason, summary = wrv2._rules_preeval_reject(
+            _make_event, db_session=None, tenant_id="t"
+        )
+        assert reject is False
+        assert reason is None
+        assert summary is compliant
+
+    def test_summary_none_under_off_mode(self, monkeypatch, _make_event):
+        """OFF mode — pre-eval still runs (the OFF short-circuit is in
+        a separate review-fix PR); when it runs, the summary is returned.
+        Once the short-circuit lands the helper returns ``(False, None, None)``
+        without invoking the engine, so summary is None — the test below
+        accepts both shapes during the migration window."""
+        monkeypatch.setenv("RULES_ENGINE_ENFORCE", "off")
+        _install(monkeypatch, summary=_critical_summary())
+        reject, reason, summary = wrv2._rules_preeval_reject(
+            _make_event, db_session=None, tenant_id="t"
+        )
+        assert reject is False
+        assert reason is None
+        # Summary may be None (post-short-circuit) or the critical summary
+        # (pre-short-circuit). Either is OK — the threaded block falls
+        # back to evaluate_event when summary is None or has no results.
+
+    def test_summary_none_when_canonical_errors(self, monkeypatch, _make_event):
+        """When canonical normalization raises, the helper logs and
+        returns ``(False, None, None)`` — preserves best-effort semantics
+        and signals the threaded block to fall back to evaluate_event."""
+        monkeypatch.setenv("RULES_ENGINE_ENFORCE", "cte_only")
+        _install(
+            monkeypatch,
+            summary=_critical_summary(),  # would reject if eval ran
+            canonical_raises=RuntimeError("canonical broken"),
+        )
+        reject, reason, summary = wrv2._rules_preeval_reject(
+            _make_event, db_session=None, tenant_id="t"
+        )
+        assert reject is False
+        assert reason is None
+        assert summary is None, (
+            "canonical/eval errors must produce summary=None so the "
+            "threaded block falls back to re-evaluation rather than "
+            "persisting an empty result set"
+        )
