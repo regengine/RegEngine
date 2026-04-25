@@ -61,7 +61,7 @@ class _RecordingSession:
 
 class TestSetTenantGucHappy:
 
-    def test_issues_set_local_with_correct_binding(self):
+    def test_issues_set_config_with_correct_binding(self):
         session = _RecordingSession()
         tid = "11111111-1111-1111-1111-111111111111"
 
@@ -69,20 +69,42 @@ class TestSetTenantGucHappy:
 
         assert len(session.calls) == 1
         sql, params = session.calls[0]
-        assert "SET LOCAL app.tenant_id" in sql
+        # Either form should reference the GUC name and accept the
+        # parameterized tenant_id — keep the assertion focused on what
+        # the contract actually is, not which SQL form Postgres is
+        # equivalencing internally.
+        assert "app.tenant_id" in sql
         assert params == {"tid": tid}
 
-    def test_uses_set_local_not_set_session(self):
+    def test_uses_transaction_scoped_set_config(self):
         """Transaction-scoped scope is load-bearing — pool-bleed safety
-        relies on the GUC auto-resetting at COMMIT/ROLLBACK. The legacy
-        V3 SQL function used ``set_config(..., FALSE)`` which is
-        session-scoped; that pattern is dangerous under pool reuse and
-        must not be reintroduced via this helper."""
+        relies on the GUC auto-resetting at COMMIT/ROLLBACK.
+
+        The helper now emits ``SELECT set_config('app.tenant_id', :tid,
+        true)`` (the ``true`` = is_local => transaction-scoped). This
+        replaces the prior ``SET LOCAL`` form because Postgres rejects
+        parameterized ``SET LOCAL`` under asyncpg with ``syntax error
+        at or near "$1"`` (#1879); ``set_config`` is a regular function
+        call so the parameterized binding works in both psycopg and
+        asyncpg drivers.
+
+        The legacy V3 SQL function used ``set_config(..., false)``
+        which is session-scoped — that pattern is dangerous under pool
+        reuse (see ``services/admin/app/database.py`` security note on
+        #1381) and MUST NOT be emitted by this helper.
+        """
         session = _RecordingSession()
         set_tenant_guc(session, "22222222-2222-2222-2222-222222222222")
         sql = session.calls[0][0]
-        assert "SET LOCAL" in sql
-        assert "set_config" not in sql
+        # Must use set_config with is_local=true (the third arg).
+        assert "set_config" in sql
+        assert "'app.tenant_id'" in sql
+        assert "true" in sql
+        # Must NOT use the dangerous session-scoped form.
+        assert "false" not in sql.lower(), (
+            f"helper must use set_config(..., true) for transaction scope; "
+            f"got: {sql!r}"
+        )
 
     def test_calling_twice_in_same_transaction_is_fine(self):
         """Idempotent at the call site — handlers that re-resolve

@@ -359,10 +359,14 @@ class DatabaseAPIKeyStore:
         """
         if tenant_id:
             self._validate_uuid(tenant_id)
-            await session.execute(
-                text("SELECT set_config('app.tenant_id', :tid, true)"),
-                {"tid": tenant_id},
-            )
+            from shared.tenant_context import set_tenant_guc  # noqa: PLC0415
+            result = set_tenant_guc(session, tenant_id)
+            # Async session: ``execute()`` returns a coroutine; await it
+            # so the GUC write actually lands before subsequent queries.
+            # Sync session: ``execute()`` returns a Result object directly,
+            # nothing to await.
+            if result is not None and hasattr(result, "__await__"):
+                await result
 
     async def create_key(
         self,

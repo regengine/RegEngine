@@ -570,7 +570,7 @@ class TestTraceForward:
         assert body["truncated"] is False
         # SET LOCAL pragma was issued.
         sql, params = session.calls[0]
-        assert "SET LOCAL app.tenant_id" in sql
+        assert "app.tenant_id" in sql
         assert params == {"tid": TENANT_ID}
         # Store was called with the resolved tenant.
         assert stub.forward_calls == [(TENANT_ID, "TLC-EMPTY", 5, 10000)]
@@ -654,7 +654,7 @@ class TestTraceBackward:
         assert body["truncated"] is False
         # Pragma issued.
         sql, _ = session.calls[0]
-        assert "SET LOCAL app.tenant_id" in sql
+        assert "app.tenant_id" in sql
         assert stub.backward_calls == [(TENANT_ID, "TLC-EMPTY", 5, 10000)]
 
     def test_populated_links_use_input_quantity_and_unit(
