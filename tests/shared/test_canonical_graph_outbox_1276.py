@@ -6,7 +6,7 @@ committed, so a rollback after the call still left the
 worker then applied it, producing a ghost graph node for a canonical
 row that was never durable.
 
-Fix: introduce ``shared.canonical_persistence.migration.stage_graph_sync``
+Fix: introduce ``shared.canonical_persistence.legacy_dual_write.stage_graph_sync``
 which stages the event on ``session.info`` and installs SQLAlchemy
 ``after_commit`` / ``after_rollback`` listeners. Publish happens only
 after the commit succeeds; rollback discards the staged events.

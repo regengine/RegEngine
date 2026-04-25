@@ -136,7 +136,7 @@ ORDER BY traceability_lot_code, event_type;
 
 ### 3.1 Generate via API
 
-The primary export endpoint is `GET /api/v1/fda/export` on the ingestion service (`services/ingestion/app/fda_export_router.py`):
+The primary export endpoint is `GET /api/v1/fda/export` on the ingestion service (`services/ingestion/app/fda_export/router.py`):
 
 ```bash
 # Single TLC export (most common in a recall)
@@ -212,7 +212,7 @@ curl -G "https://<railway-url>/api/v1/fda/export/all" \
   -o fda_full_export.zip
 ```
 
-> **Warning:** The `/export/all` endpoint has a hard limit of 10,000 events per query (`query_all_events(..., limit=10000)` in `fda_export_router.py:267`). For tenants with more events, filter by date range or event type to stay under the limit.
+> **Warning:** The `/export/all` endpoint has a hard limit of 10,000 events per query (`query_all_events(..., limit=10000)` in `services/ingestion/app/fda_export/router.py`). For tenants with more events, filter by date range or event type to stay under the limit.
 
 ---
 
@@ -524,7 +524,7 @@ curl -G "https://<railway-url>/api/v1/fda/export" \
   -o fda_export.csv
 ```
 
-**Option C: Export in batches by TLC.** The `/export/all` endpoint deduplicates by fetching per-TLC batches of 50 (`fda_export_router.py:272-274`). If this is too slow, export one TLC at a time using `/export?tlc=<each_tlc>`.
+**Option C: Export in batches by TLC.** The `/export/all` endpoint deduplicates by fetching per-TLC batches of 50 (`services/ingestion/app/fda_export/router.py`). If this is too slow, export one TLC at a time using `/export?tlc=<each_tlc>`.
 
 **Option D: Direct SQL export (emergency).** See [Section 9](#9-emergency-manual-export).
 
@@ -745,7 +745,7 @@ INSERT INTO fsma.fda_export_log (
 
 | File | What It Does |
 |------|-------------|
-| `services/ingestion/app/fda_export_router.py` | HTTP endpoints for FDA export |
+| `services/ingestion/app/fda_export/router.py` | HTTP endpoints for FDA export |
 | `services/ingestion/app/fda_export_service.py` | CSV/PDF/ZIP generation, FDA column spec, completeness analysis |
 | `services/ingestion/app/request_workflow_router.py` | Request lifecycle endpoints (blockers, submit, signoffs) |
 | `services/shared/request_workflow/assembly.py` | `check_blocking_defects()` (7 checks), `add_signoff()`, `check_deadline_status()` |
