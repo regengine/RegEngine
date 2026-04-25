@@ -339,6 +339,23 @@ class DatabaseAPIKeyStore:
         function call that accepts bound parameters normally, so this path
         stays parameterized (no SQL injection surface) and no longer relies on
         string interpolation even though ``tenant_id`` is already UUID-validated.
+
+        Phase B-migration 7/8 carve-out: this caller intentionally does NOT
+        delegate to ``services.shared.tenant_context.set_tenant_guc`` (the
+        canonical Phase B primitive, #1934). The canonical helper issues
+        parameterized ``SET LOCAL`` which works under sync sessions
+        (psycopg) but fails under async sessions (asyncpg) per #1879.
+        ``api_key_store`` is async, so it stays on the ``set_config(...,
+        true)`` form which has identical transaction-scope semantics
+        (the ``true`` third arg = ``is_local``) and works in both
+        drivers.
+
+        Follow-up worth considering: rewrite ``set_tenant_guc`` to use
+        ``set_config(..., true)`` instead of ``SET LOCAL``. That would
+        unify the sync/async paths under a single primitive and let
+        this caller delegate. Out of scope for the per-callsite Phase B
+        sweep — touches the canonical helper used by 4 already-migrated
+        callsites. File as its own sprint if pursued.
         """
         if tenant_id:
             self._validate_uuid(tenant_id)

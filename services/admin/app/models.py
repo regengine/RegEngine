@@ -351,18 +351,49 @@ class ResetPasswordResponse(BaseModel):
 
 
 class TenantContext:
-    """Helper class for managing tenant context in database sessions."""
+    """Helper class for managing tenant context in database sessions.
+
+    NOTE on the Phase B canonical helper (``services.shared.tenant_context.set_tenant_guc``):
+    these methods deliberately do NOT delegate to it. They use the
+    SECURITY DEFINER SQL functions (``set_tenant_context(uuid)``,
+    ``set_admin_context(bool)``, ``set_config(..., FALSE)``) which are
+    SESSION-scoped — the GUC persists for the lifetime of the
+    connection, not just the current transaction.
+
+    Why session-scoped intentionally (do not "fix" without a full sweep):
+
+      * Admin handlers commonly commit + start a new transaction mid-
+        request (e.g. write the user, separately commit the audit log).
+        Transaction-scoped ``SET LOCAL`` would die at the first commit;
+        every subsequent query would run with no tenant context and
+        either return zero rows (fail-hard RLS) or trip the legacy
+        fail-open fallback (since superseded by v056/v059, but the
+        change still represents a behavior delta).
+      * The pool-bleed risk that motivates Phase B (the #1381 class of
+        bug) is mitigated for THIS module by the connect/checkout
+        listener in ``services/admin/app/database.py`` which clears
+        ``app.tenant_id`` BEFORE every request sees a connection. See
+        the security note at the top of that file for the full rationale.
+
+    For NEW code in admin: prefer ``get_tenant_session`` (also in
+    ``services/admin/app/database.py``) which uses ``SET LOCAL`` and
+    is auto-cleared on COMMIT/ROLLBACK. The Phase B-migration plan
+    explicitly carved this caller out as "investigated, intentionally
+    not migrated" — see the PR description for migration 6/8.
+    """
 
     @staticmethod
     def set_tenant_context(session, tenant_id: UUID) -> None:
-        """Set tenant context for PostgreSQL RLS.
+        """Set tenant context for PostgreSQL RLS (session-scoped).
 
         Args:
             session: SQLAlchemy session
             tenant_id: Tenant UUID
 
-        This sets the PostgreSQL session variable that RLS policies use
-        to enforce tenant isolation.
+        Sets ``app.tenant_id`` for the duration of the connection (NOT
+        the transaction). See class docstring for why session-scope is
+        intentional here and why ``set_tenant_guc`` (transaction-scope)
+        is NOT the right migration target for this caller.
         """
         session.execute(
             text("SELECT set_tenant_context(:tid)"),
