@@ -312,14 +312,20 @@ class CTEPersistence:
         """Set the RLS tenant context for this session.
 
         Uses ``app.tenant_id`` — the single namespace read by
-        ``get_tenant_context()`` and all RLS policies.  Previously this
+        ``get_tenant_context()`` and all RLS policies. Previously this
         method set ``regengine.tenant_id`` which was **never** checked by
         any RLS policy, silently bypassing tenant isolation.
+
+        Delegates to ``services.shared.tenant_context.set_tenant_guc`` —
+        the canonical Phase B primitive (#1934). Behavior-preserving for
+        valid UUIDs (same ``SET LOCAL app.tenant_id = :tid`` SQL with the
+        same parameterized binding); the helper additionally validates
+        ``tenant_id`` is a UUID up front and raises ``ValueError`` on
+        bad input rather than silently setting a non-UUID GUC that would
+        break every ``get_tenant_context()::UUID`` comparison in RLS.
         """
-        self.session.execute(
-            text("SET LOCAL app.tenant_id = :tid"),
-            {"tid": tenant_id},
-        )
+        from services.shared.tenant_context import set_tenant_guc  # noqa: PLC0415
+        set_tenant_guc(self.session, tenant_id)
 
     # ------------------------------------------------------------------
     # Per-tenant Chain Serialization (fix #1332)
