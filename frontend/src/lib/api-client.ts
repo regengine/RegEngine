@@ -45,6 +45,19 @@ import type {
 } from '@/types/labels';
 import type { ReviewItem } from '@/types/review';
 
+const COOKIE_MANAGED_PLACEHOLDER = 'cookie-managed';
+
+function isCookieManagedCredential(value: string | null | undefined): boolean {
+  return value?.trim().toLowerCase() === COOKIE_MANAGED_PLACEHOLDER;
+}
+
+function credentialHeader(name: string, value: string | null | undefined): Record<string, string> {
+  if (!value || isCookieManagedCredential(value)) {
+    return {};
+  }
+  return { [name]: value };
+}
+
 export interface SystemStatusResponse {
   overall_status: 'healthy' | 'degraded' | 'unhealthy';
   services: {
@@ -116,8 +129,9 @@ class APIClient {
       // API key is NO LONGER injected here — it lives in HTTP-only cookies
       // and the server-side proxy reads it. This prevents XSS from stealing keys.
 
-      // Add Bearer Token if available (placeholder value is fine — proxy reads cookie)
-      if (this.accessToken) {
+      // Real bearer tokens are forwarded. The cookie-managed placeholder is
+      // intentionally omitted so the proxy can inject the HTTP-only cookie.
+      if (this.accessToken && !isCookieManagedCredential(this.accessToken)) {
         config.headers['Authorization'] = `Bearer ${this.accessToken}`;
       }
 
@@ -225,7 +239,7 @@ class APIClient {
         description: params.description,
         tenant_id: params.tenantId,
       },
-      { headers: { 'X-Admin-Key': adminKey } },
+      { headers: credentialHeader('X-Admin-Key', adminKey) },
     );
     return data;
   }
@@ -237,21 +251,21 @@ class APIClient {
         name: 'Developer Portal Generated Key',
         tenant_id: tenantId,
       },
-      { headers: { 'X-Admin-Key': adminKey } },
+      { headers: credentialHeader('X-Admin-Key', adminKey) },
     );
     return data;
   }
 
   async listAPIKeys(adminKey: string): Promise<APIKeyResponse[]> {
     const { data } = await this.adminClient.get('/v1/admin/keys', {
-      headers: { 'X-Admin-Key': adminKey },
+      headers: credentialHeader('X-Admin-Key', adminKey),
     });
     return data;
   }
 
   async revokeAPIKey(adminKey: string, keyId: string): Promise<void> {
     await this.adminClient.delete(`/v1/admin/keys/${keyId}`, {
-      headers: { 'X-Admin-Key': adminKey },
+      headers: credentialHeader('X-Admin-Key', adminKey),
     });
   }
 
@@ -262,13 +276,11 @@ class APIClient {
   }
 
   async ingestURL(apiKey: string, url: string, sourceSystem: string = 'generic'): Promise<IngestURLResponse> {
-    // Make a direct axios call to avoid interceptor header conflicts
-    const baseUrl = getServiceURL('ingestion');
-    const response = await axios.post<IngestURLResponse>(
-      `${baseUrl}/v1/ingest/url`,
+    const response = await this.ingestionClient.post<IngestURLResponse>(
+      '/v1/ingest/url',
       { url, source_system: sourceSystem },
       {
-        headers: { 'X-RegEngine-API-Key': apiKey },
+        headers: credentialHeader('X-RegEngine-API-Key', apiKey),
         timeout: 30000
       }
     );
@@ -285,15 +297,11 @@ class APIClient {
       formData.append('cte_type', cteType);
     }
 
-    const baseUrl = getServiceURL('ingestion');
-    const response = await axios.post<IngestURLResponse>(
-      `${baseUrl}/api/v1/ingest/csv`,
+    const response = await this.ingestionClient.post<IngestURLResponse>(
+      '/api/v1/ingest/csv',
       formData,
       {
-        headers: {
-          'X-RegEngine-API-Key': apiKey,
-          'Content-Type': 'multipart/form-data'
-        },
+        headers: credentialHeader('X-RegEngine-API-Key', apiKey),
         timeout: 300000 // Longer timeout for large files (5 minutes)
       }
     );
@@ -362,7 +370,7 @@ class APIClient {
 
   async getDocumentAnalysis(documentId: string, apiKey: string): Promise<AnalysisSummary> {
     const { data } = await this.ingestionClient.get(`/v1/ingest/documents/${documentId}/analysis`, {
-      headers: { 'X-RegEngine-API-Key': apiKey }
+      headers: credentialHeader('X-RegEngine-API-Key', apiKey)
     });
     return data;
   }
@@ -408,13 +416,12 @@ class APIClient {
     source: string = 'sample_data',
     tenantId: string = 'default',
   ): Promise<{ total: number; accepted: number; rejected: number }> {
-    const baseUrl = getServiceURL('ingestion');
-    const { data } = await axios.post(
-      `${baseUrl}/api/v1/webhooks/ingest`,
+    const { data } = await this.ingestionClient.post(
+      '/api/v1/webhooks/ingest',
       { source, tenant_id: tenantId, events },
       {
         headers: {
-          'X-RegEngine-API-Key': apiKey,
+          ...credentialHeader('X-RegEngine-API-Key', apiKey),
           'Content-Type': 'application/json',
         },
         timeout: 120000,
@@ -427,7 +434,7 @@ class APIClient {
     const { data } = await this.adminClient.post(
       '/v1/admin/tenants',
       { name },
-      { headers: { 'X-Admin-Key': adminKey } },
+      { headers: credentialHeader('X-Admin-Key', adminKey) },
     );
     return data;
   }
@@ -437,7 +444,7 @@ class APIClient {
     // Call Admin API directly
     const { data } = await this.adminClient.get('/v1/admin/review/flagged-extractions', {
       params: { status },
-      headers: { 'X-Admin-Key': adminKey }
+      headers: credentialHeader('X-Admin-Key', adminKey)
     });
 
     // The backend returns: review_id, text_raw, extraction
@@ -462,7 +469,7 @@ class APIClient {
     // Route through the Next.js proxy at /api/review/[...path] which maps
     // /api/review/{id}/approve → /v1/admin/review/flagged-extractions/{id}/approve
     await this.adminClient.post(`/v1/admin/review/flagged-extractions/${itemId}/approve`, {}, {
-      headers: { 'X-Admin-Key': adminKey }
+      headers: credentialHeader('X-Admin-Key', adminKey)
     });
   }
 
@@ -470,7 +477,7 @@ class APIClient {
     // Route through the Next.js proxy at /api/review/[...path] which maps
     // /api/review/{id}/reject → /v1/admin/review/flagged-extractions/{id}/reject
     await this.adminClient.post(`/v1/admin/review/flagged-extractions/${itemId}/reject`, {}, {
-      headers: { 'X-Admin-Key': adminKey }
+      headers: credentialHeader('X-Admin-Key', adminKey)
     });
   }
 

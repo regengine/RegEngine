@@ -57,6 +57,7 @@ from app.supplier_onboarding_routes import (
 
 TENANT_ID = UUID("00000000-0000-0000-0000-000000000001")
 USER_ID = UUID("00000000-0000-0000-0000-000000000002")
+OTHER_USER_ID = UUID("00000000-0000-0000-0000-000000000003")
 
 
 # ---------------------------------------------------------------------------
@@ -89,6 +90,8 @@ def db() -> Session:
     session.add(TenantModel(id=TENANT_ID, name="T", slug="t", status="active", settings={}))
     session.add(UserModel(id=USER_ID, email="u@example.com",
                           password_hash="x", status="active", is_sysadmin=False))
+    session.add(UserModel(id=OTHER_USER_ID, email="other@example.com",
+                          password_hash="x", status="active", is_sysadmin=False))
     session.commit()
     try:
         yield session
@@ -99,9 +102,13 @@ def db() -> Session:
         engine.dispose()
 
 
-def _make_facility(db: Session, name: str = "Farm A") -> SupplierFacilityModel:
+def _make_facility(
+    db: Session,
+    name: str = "Farm A",
+    supplier_user_id: UUID = USER_ID,
+) -> SupplierFacilityModel:
     f = SupplierFacilityModel(
-        tenant_id=TENANT_ID, supplier_user_id=USER_ID,
+        tenant_id=TENANT_ID, supplier_user_id=supplier_user_id,
         name=name, street="1 Main St", city="Salinas",
         state="CA", postal_code="93901", roles=["Grower"],
     )
@@ -120,10 +127,14 @@ def _make_ftl_category(db: Session, facility_id: UUID,
     db.flush()
 
 
-def _make_lot(db: Session, facility_id: UUID,
-              tlc_code: str = "TLC-001") -> SupplierTraceabilityLotModel:
+def _make_lot(
+    db: Session,
+    facility_id: UUID,
+    tlc_code: str = "TLC-001",
+    supplier_user_id: UUID = USER_ID,
+) -> SupplierTraceabilityLotModel:
     lot = SupplierTraceabilityLotModel(
-        tenant_id=TENANT_ID, supplier_user_id=USER_ID,
+        tenant_id=TENANT_ID, supplier_user_id=supplier_user_id,
         facility_id=facility_id, tlc_code=tlc_code,
         product_description="Spinach", status="active",
     )
@@ -137,7 +148,8 @@ _event_seq = [0]
 
 def _make_event(db: Session, facility_id: UUID, lot_id: UUID,
                 cte_type: str = "harvesting",
-                event_time: datetime | None = None) -> SupplierCTEEventModel:
+                event_time: datetime | None = None,
+                supplier_user_id: UUID = USER_ID) -> SupplierCTEEventModel:
     import hashlib, json
     _event_seq[0] += 1
     event_time = event_time or datetime.now(timezone.utc)
@@ -145,7 +157,7 @@ def _make_event(db: Session, facility_id: UUID, lot_id: UUID,
     payload_sha256 = hashlib.sha256(json.dumps(payload).encode()).hexdigest()
     merkle_hash = hashlib.sha256(f"merkle-{_event_seq[0]}".encode()).hexdigest()
     e = SupplierCTEEventModel(
-        tenant_id=TENANT_ID, supplier_user_id=USER_ID,
+        tenant_id=TENANT_ID, supplier_user_id=supplier_user_id,
         facility_id=facility_id, lot_id=lot_id,
         cte_type=cte_type, event_time=event_time,
         payload_sha256=payload_sha256,
@@ -319,6 +331,25 @@ class TestBuildFdaExportRows:
         )
         assert len(rows) == 1
         assert rows[0]["tlc_code"] == "TLC-A"
+
+    def test_none_supplier_scope_returns_tenant_wide_tlc_rows(self, db: Session):
+        """A TLC trace query with supplier_user_id=None spans suppliers in the tenant."""
+        f1 = _make_facility(db, name="Farm A", supplier_user_id=USER_ID)
+        f2 = _make_facility(db, name="Cooler B", supplier_user_id=OTHER_USER_ID)
+        lot = _make_lot(db, f1.id, tlc_code="TLC-SHARED", supplier_user_id=USER_ID)
+        _make_event(db, f1.id, lot.id, cte_type="harvesting", supplier_user_id=USER_ID)
+        _make_event(db, f2.id, lot.id, cte_type="cooling", supplier_user_id=OTHER_USER_ID)
+        db.commit()
+
+        rows = _build_fda_export_rows(
+            db,
+            **{
+                **self._base_export_kwargs(tlc_code="TLC-SHARED"),
+                "supplier_user_id": None,
+            },
+        )
+
+        assert {row["facility_name"] for row in rows} == {"Farm A", "Cooler B"}
 
     def test_start_time_filter_applied(self, db: Session):
         """Line 691: start_time filter excludes older events."""
