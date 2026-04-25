@@ -308,11 +308,11 @@ class TestChangePasswordRevokeSessions:
         db_session.commit.return_value = None
 
         with (
-            patch("services.admin.app.auth_routes.verify_password", return_value=True),
-            patch("services.admin.app.auth_routes.validate_password", return_value=None),
-            patch("services.admin.app.auth_routes.get_password_hash", return_value="new-hash"),
-            patch("services.admin.app.auth_routes.get_supabase", return_value=None),
-            patch("services.admin.app.auth_routes._revoke_all_elevation_tokens_for_user", new=AsyncMock()),
+            patch("services.admin.app.auth.change_password_router.verify_password", return_value=True),
+            patch("services.admin.app.auth.change_password_router.validate_password", return_value=None),
+            patch("services.admin.app.auth.change_password_router.get_password_hash", return_value="new-hash"),
+            patch("services.admin.app.auth.change_password_router.get_supabase", return_value=None),
+            patch("services.admin.app.auth.change_password_router._revoke_all_elevation_tokens_for_user", new=AsyncMock()),
         ):
             from services.admin.app.auth_routes import change_password
             import asyncio

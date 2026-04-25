@@ -45,6 +45,10 @@ import services.admin.app.auth_routes as ar
 import services.admin.app.auth.login_router as _login_router_mod
 import services.admin.app.auth.signup_router as _signup_router_mod
 import services.admin.app.auth.sessions_router as _sessions_router_mod
+import services.admin.app.auth.register_router as _register_router_mod
+import services.admin.app.auth.change_password_router as _change_password_router_mod
+import services.admin.app.auth.reset_password_router as _reset_password_router_mod
+import services.admin.app.auth.confirm_router as _confirm_router_mod
 from services.admin.app.auth_routes import (
     LoginRequest,
     RegisterRequest,
@@ -827,7 +831,7 @@ class TestPasswordReset:
     @pytest.mark.asyncio
     async def test_reset_no_supabase_raises_503(self, monkeypatch):
         """If Supabase client unavailable → 503."""
-        monkeypatch.setattr(ar, "get_supabase", lambda: None)
+        monkeypatch.setattr(_reset_password_router_mod, "get_supabase", lambda: None)
 
         request = _make_request(headers={
             "authorization": "Bearer some-token",
@@ -853,7 +857,7 @@ class TestPasswordReset:
                 get_user=MagicMock(side_effect=RuntimeError("bad token"))
             )
         )
-        monkeypatch.setattr(ar, "get_supabase", lambda: fake_sb)
+        monkeypatch.setattr(_reset_password_router_mod, "get_supabase", lambda: fake_sb)
 
         request = _make_request(headers={
             "authorization": "Bearer garbage-token",
@@ -892,7 +896,7 @@ class TestPasswordReset:
                 admin=SimpleNamespace(update_user_by_id=MagicMock(return_value=None)),
             )
         )
-        monkeypatch.setattr(ar, "get_supabase", lambda: fake_sb)
+        monkeypatch.setattr(_reset_password_router_mod, "get_supabase", lambda: fake_sb)
 
         user = _make_user(email="reset@example.com", password="old-pass", token_version=1)
         db = _make_db_with_user(user)
@@ -904,7 +908,7 @@ class TestPasswordReset:
         session_store.revoke_all_for_user = AsyncMock(return_value=2)
 
         monkeypatch.setattr(
-            ar,
+            _reset_password_router_mod,
             "_revoke_all_elevation_tokens_for_user",
             AsyncMock(return_value=0),
         )
@@ -956,9 +960,9 @@ class TestChangePassword:
 
     @pytest.mark.asyncio
     async def test_change_password_happy_path(self, monkeypatch):
-        monkeypatch.setattr(ar, "get_supabase", lambda: None)
+        monkeypatch.setattr(_change_password_router_mod, "get_supabase", lambda: None)
         monkeypatch.setattr(
-            ar,
+            _change_password_router_mod,
             "_revoke_all_elevation_tokens_for_user",
             AsyncMock(return_value=0),
         )
@@ -1036,9 +1040,6 @@ class TestConfirmPassword:
         db = MagicMock()
         db.execute.return_value.scalars.return_value.first.return_value = membership
 
-        # Patch TenantContext to return None so it falls through to membership lookup
-        monkeypatch.setattr(ar, "AuditLogger", MagicMock())
-
         session_store = _make_session_store()
 
         result = await ar.confirm_password.__wrapped__(
@@ -1108,7 +1109,7 @@ class TestRegisterInitialAdmin:
         db.flush = MagicMock()
         db.commit = MagicMock()
 
-        monkeypatch.setattr(ar, "AuditLogger", MagicMock())
+        monkeypatch.setattr(_register_router_mod, "AuditLogger", MagicMock())
 
         result = ar.register_initial_admin(
             payload=RegisterRequest(
@@ -1415,7 +1416,8 @@ class TestSourceGuardrails:
         )
 
     def test_logout_all_bumps_token_version(self):
-        assert "token_version" in self._text, (
+        _sessions_src = Path(__file__).resolve().parent.parent / "app" / "auth" / "sessions_router.py"
+        assert "token_version" in _sessions_src.read_text(), (
             "logout-all must bump token_version to kill outstanding access tokens (#1375)"
         )
 
