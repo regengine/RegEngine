@@ -182,7 +182,7 @@ export function GettingStartedCard() {
             {/* Guided walkthrough link */}
             <div className="mt-3 pt-3 border-t border-[var(--re-surface-border)]">
               <Link
-                href="/onboarding/supplier-flow"
+                href="/onboarding/setup/welcome"
                 className="text-xs text-[var(--re-text-muted)] hover:text-[var(--re-brand)] transition-colors"
               >
                 Prefer a guided tutorial? Take the full walkthrough &rarr;

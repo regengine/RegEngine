@@ -1,5 +1,6 @@
 'use client';
 
+import { fetchWithCsrf } from '@/lib/fetch-with-csrf';
 import { useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Archive, Download, ShieldCheck, Clock, PlusCircle, Link2Off } from 'lucide-react';
@@ -22,7 +23,7 @@ export default function ExportJobsPage() {
     const { data: exportResponse, isLoading: jobsLoading } = useQuery({
         queryKey: ['export-jobs'],
         queryFn: async () => {
-            const response = await fetch('/api/fsma/customer-readiness/export-jobs', {
+            const response = await fetchWithCsrf('/api/fsma/customer-readiness/export-jobs', {
                 headers: { 'X-RegEngine-API-Key': apiKey || '' },
             });
             if (!response.ok) return { jobs: [], meta: { status: 'error' } };
@@ -43,7 +44,7 @@ export default function ExportJobsPage() {
 
     const createJobMutation = useMutation({
         mutationFn: async () => {
-            const response = await fetch('/api/fsma/customer-readiness/export-jobs', {
+            const response = await fetchWithCsrf('/api/fsma/customer-readiness/export-jobs', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'X-RegEngine-API-Key': apiKey || '' },
                 body: JSON.stringify({

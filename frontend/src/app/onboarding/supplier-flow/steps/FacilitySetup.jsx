@@ -116,7 +116,7 @@ export default function FacilitySetup({ setView, onFacilityCreated, onEvent, isL
 
         {!isLoggedIn && (
           <div style={{ marginTop: 12, fontSize: 12, color: GRAY }}>
-            <a href="/login?redirect=/onboarding/supplier-flow" style={{ color: ACCENT, fontWeight: 600 }}>Log in</a> to register your facility and start recording CTE events.
+            <a href="/login?redirect=/onboarding/setup/welcome" style={{ color: ACCENT, fontWeight: 600 }}>Log in</a> to register your facility and start recording CTE events.
           </div>
         )}
 

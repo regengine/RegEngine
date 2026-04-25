@@ -1,5 +1,6 @@
 'use client';
 
+import { fetchWithCsrf } from '@/lib/fetch-with-csrf';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
@@ -96,7 +97,7 @@ export default function ResetPasswordClient() {
                 ? `${process.env.NEXT_PUBLIC_API_BASE_URL}/admin`
                 : '/api/admin';
 
-            const res = await fetch(`${adminBase}/auth/reset-password`, {
+            const res = await fetchWithCsrf(`${adminBase}/auth/reset-password`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

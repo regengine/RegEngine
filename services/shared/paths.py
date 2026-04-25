@@ -4,7 +4,7 @@ Centralised path resolution for RegEngine services.
 Instead of fragile ``Path(__file__).parent.parent…`` chains scattered
 across every service, import helpers from here.
 
-Environment variables (set automatically in Docker via docker-compose.yml):
+Environment variables (set automatically in Docker or service settings):
     SERVICE_ROOT  – absolute path to the service directory  (e.g. /app)
     PROJECT_ROOT  – absolute path to the repository root     (e.g. /code)
 
@@ -28,11 +28,14 @@ def project_root() -> Path:
     env = os.getenv("PROJECT_ROOT")
     if env:
         return Path(env).resolve()
-    # Heuristic: walk up from this file until we find ``docker-compose.yml``
+    # Heuristic: walk up from this file until we find a repository marker.
     candidate = Path(__file__).resolve().parent  # shared/
     for _ in range(6):
         candidate = candidate.parent
-        if (candidate / "docker-compose.yml").exists():
+        if (
+            (candidate / "docker-compose.dev.yml").exists()
+            or (candidate / "pyproject.toml").exists()
+        ):
             return candidate
     # Ultimate fallback – assume shared/ lives at <root>/services/shared/
     return Path(__file__).resolve().parent.parent.parent

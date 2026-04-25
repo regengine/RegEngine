@@ -38,8 +38,12 @@ _KNOWN_WEAK_VALUES: set[str] = {
     "secret",
     "admin",
     "test",
+    "demo",
+    "default",
     "dev",
     "development",
+    "change-me-in-production",
+    "neo4j",
     "replace_me",
     "replace-me",
     "placeholder",
@@ -61,7 +65,6 @@ _ALWAYS_REQUIRED: list[str] = [
     "AUTH_SECRET_KEY",
     "ADMIN_MASTER_KEY",
     "POSTGRES_PASSWORD",
-    "NEO4J_PASSWORD",
     "AUTH_TEST_BYPASS_TOKEN",  # must be SET — value may be empty (disabled)
 ]
 
@@ -83,6 +86,7 @@ _CREDENTIAL_VARS: list[str] = [
     "POSTGRES_PASSWORD",
     "NEO4J_PASSWORD",
     "SCHEDULER_API_KEY",
+    "OBJECT_STORAGE_ACCESS_KEY_ID",
     "MINIO_ROOT_PASSWORD",
     "OBJECT_STORAGE_SECRET_ACCESS_KEY",
     "GRAFANA_PASSWORD",

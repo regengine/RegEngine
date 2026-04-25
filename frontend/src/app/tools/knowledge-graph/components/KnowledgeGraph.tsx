@@ -1,5 +1,6 @@
 'use client';
 
+import { fetchWithCsrf } from '@/lib/fetch-with-csrf';
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -369,7 +370,7 @@ export function SupplyChainKnowledgeGraphBuilder() {
         setQueryLoading(true);
 
         try {
-            const response = await fetch(`${getServiceURL("nlp")}/api/v1/query/traceability`, {
+            const response = await fetchWithCsrf(`${getServiceURL("nlp")}/api/v1/query/traceability`, {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",

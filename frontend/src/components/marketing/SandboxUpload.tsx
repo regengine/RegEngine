@@ -1,5 +1,6 @@
 'use client';
 
+import { fetchWithCsrf } from '@/lib/fetch-with-csrf';
 import { useState, useRef, useEffect, useCallback } from 'react';
 import {
   AlertTriangle, CheckCircle2, Loader2, Upload, XCircle,
@@ -199,7 +200,7 @@ export function SandboxUpload() {
     setShareUrl(null);
 
     try {
-      const res = await fetch('/api/ingestion/api/v1/sandbox/evaluate', {
+      const res = await fetchWithCsrf('/api/ingestion/api/v1/sandbox/evaluate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -300,7 +301,7 @@ export function SandboxUpload() {
     if (!result || !csvText.trim()) return;
     setIsSharing(true);
     try {
-      const res = await fetch('/api/ingestion/api/v1/sandbox/share', {
+      const res = await fetchWithCsrf('/api/ingestion/api/v1/sandbox/share', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ csv: csvText, result }),

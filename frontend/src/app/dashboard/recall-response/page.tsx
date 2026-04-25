@@ -211,7 +211,7 @@ export default function RecallResponsePage() {
               </CardHeader>
               <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <Button variant="outline" asChild>
-                  <Link href="/tools/data-import">
+                  <Link href="/ingest">
                     <FileText className="w-4 h-4 mr-2" />
                     Import Missing Records
                   </Link>

@@ -1,5 +1,6 @@
 'use client';
 
+import { fetchWithCsrf } from '@/lib/fetch-with-csrf';
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
@@ -74,7 +75,7 @@ const CHANNEL_ICONS: Record<string, React.ElementType> = {
 async function apiFetchPrefs(tenantId: string, apiKey: string): Promise<NotificationPreferences> {
     const { getServiceURL } = await import('@/lib/api-config');
     const base = getServiceURL('ingestion');
-    const res = await fetch(`${base}/api/v1/notifications/${tenantId}/preferences`, {
+    const res = await fetchWithCsrf(`${base}/api/v1/notifications/${tenantId}/preferences`, {
         headers: { 'Content-Type': 'application/json', 'X-RegEngine-API-Key': apiKey },
     });
     if (!res.ok) throw new Error(`API error: ${res.status} ${res.statusText}`);
@@ -84,7 +85,7 @@ async function apiFetchPrefs(tenantId: string, apiKey: string): Promise<Notifica
 async function apiSavePrefs(tenantId: string, apiKey: string, prefs: Partial<NotificationPreferences>): Promise<void> {
     const { getServiceURL } = await import('@/lib/api-config');
     const base = getServiceURL('ingestion');
-    const res = await fetch(`${base}/api/v1/notifications/${tenantId}/preferences`, {
+    const res = await fetchWithCsrf(`${base}/api/v1/notifications/${tenantId}/preferences`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', 'X-RegEngine-API-Key': apiKey },
         body: JSON.stringify(prefs),

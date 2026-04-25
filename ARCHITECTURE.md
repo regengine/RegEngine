@@ -8,11 +8,11 @@ RegEngine runs as **6 independent microservices** behind a Next.js frontend. Eac
 
 | Service | Port | Purpose | Tests |
 |---------|------|---------|-------|
-| `services/admin` | 8001 | Tenant management, API keys, user auth, bulk upload | 15 files |
+| `services/admin` | 8400 | Tenant management, API keys, user auth, bulk upload | 15 files |
 | `services/ingestion` | 8002 | Webhook ingestion, CTE/KDE validation, EPCIS normalization | 31 files |
 | `services/compliance` | 8500 | Compliance scoring, rule evaluation, export generation | 2 files |
-| `services/graph` | 8003 | Knowledge graph, identity resolution, supply chain queries | 15 files |
-| `services/nlp` | 8004 | Document ingestion, regulatory text extraction | 9 files |
+| `services/graph` | 8200 | Knowledge graph, identity resolution, supply chain queries | 15 files |
+| `services/nlp` | 8100 | Document ingestion, regulatory text extraction | 9 files |
 | `services/scheduler` | 8005 | Cron jobs, recall drills, export scheduling | 4 files |
 
 ## Shared Code
@@ -21,7 +21,7 @@ RegEngine runs as **6 independent microservices** behind a Next.js frontend. Eac
 
 ## Frontend
 
-Next.js App Router deployed to Vercel. Proxies API calls to backend services via `next.config.js` rewrites and `/api/proxy` route.
+Next.js App Router deployed to Vercel. Browser API calls should use service route handlers such as `/api/admin/[...path]`, `/api/ingestion/[...path]`, `/api/compliance/[...path]`, and `/api/graph/[...path]`. The generic `/api/proxy` route is legacy-only and accepts relative RegEngine API paths only.
 
 ## Infrastructure
 

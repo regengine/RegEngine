@@ -10,6 +10,7 @@ import {
     isCsrfExempt,
 } from '@/lib/csrf';
 import { buildCsp } from '@/lib/csp';
+import { isAuthenticatedAppRoute } from '@/lib/app-routes';
 
 // ---------------------------------------------------------------------------
 // Sysadmin status cache — avoids a DB query on every /sysadmin/* request.
@@ -107,32 +108,6 @@ const GATED_DEV_ROUTES = [
     '/playground',
 ];
 
-// Authenticated app routes — require a valid session.
-const AUTHENTICATED_APP_ROUTES = [
-    '/dashboard',
-    '/admin',
-    '/sysadmin',
-    '/fsma',
-    '/settings',
-    '/onboarding',
-    '/owner',
-    // Control Plane pages — contain operational data, must be auth-gated
-    '/rules',
-    '/records',
-    '/exceptions',
-    '/requests',
-    '/identity',
-    '/review',
-    '/audit',
-    '/incidents',
-    '/controls',
-    '/trace',
-    // Compliance subsystem
-    '/compliance',
-    // Ingestion
-    '/ingest',
-];
-
 // All docs are public — developer evaluation requires accessible documentation.
 const PUBLIC_DOCS = [
     '/docs',
@@ -155,12 +130,6 @@ function isGatedRoute(pathname: string): boolean {
 
 function isPublicDoc(pathname: string): boolean {
     return PUBLIC_DOCS.some(route => pathname === route);
-}
-
-function isAuthenticatedAppRoute(pathname: string): boolean {
-    return AUTHENTICATED_APP_ROUTES.some(route =>
-        pathname === route || pathname.startsWith(route + '/')
-    );
 }
 
 /**

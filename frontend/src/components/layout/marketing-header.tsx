@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
+import { shouldHideMarketingChrome } from '@/lib/app-routes';
 import { RegEngineWordmark } from '@/components/layout/regengine-wordmark';
 import { DesktopNav, MobileMenu, MobileHamburger } from '@/components/layout/header';
 
@@ -17,11 +18,7 @@ export function MarketingHeader() {
     const { user, isAuthenticated, isHydrated } = useAuth();
     // Only show logged-in state when auth is fully verified
     const showLoggedIn = isHydrated && isAuthenticated && !!user;
-    const hideHeader =
-        pathname === '/mobile/capture' ||
-        pathname === '/fsma/field-capture' ||
-        pathname.startsWith('/dashboard') ||
-        pathname.startsWith('/onboarding');
+    const hideHeader = shouldHideMarketingChrome(pathname);
 
     // Close mobile menu on route change
     useEffect(() => {

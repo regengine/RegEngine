@@ -154,7 +154,7 @@ export default function ComplianceVerticalsPage() {
                                                 <Link href="/docs/fsma-204">View FSMA Controls</Link>
                                             </Button>
                                             <Button asChild className="bg-[var(--re-brand)] hover:bg-[var(--re-brand-dark)] text-white">
-                                                <Link href="/onboarding/supplier-flow">Start Guided Setup</Link>
+                                                <Link href="/onboarding">Start Guided Setup</Link>
                                             </Button>
                                         </div>
                                     </div>

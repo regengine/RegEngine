@@ -1,5 +1,6 @@
 'use client';
 
+import { fetchWithCsrf } from '@/lib/fetch-with-csrf';
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { PlayCircle, ShieldAlert, TimerReset, FileText, Link2Off } from 'lucide-react';
@@ -19,7 +20,7 @@ export default function RecallDrillsPage() {
     const { data: drillsResponse, isLoading: runsLoading } = useQuery({
         queryKey: ['recall-drills'],
         queryFn: async () => {
-            const response = await fetch('/api/fsma/customer-readiness/recall-drills', {
+            const response = await fetchWithCsrf('/api/fsma/customer-readiness/recall-drills', {
                 headers: { 'X-RegEngine-API-Key': apiKey || '' },
             });
             if (!response.ok) return { items: [], meta: { status: 'error' } };
@@ -36,7 +37,7 @@ export default function RecallDrillsPage() {
 
     const startDrillMutation = useMutation({
         mutationFn: async () => {
-            const response = await fetch('/api/fsma/customer-readiness/recall-drills', {
+            const response = await fetchWithCsrf('/api/fsma/customer-readiness/recall-drills', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'X-RegEngine-API-Key': apiKey || '' },
                 body: JSON.stringify({

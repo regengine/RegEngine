@@ -520,7 +520,7 @@ export default function HeartbeatPage() {
                                                 Import traceability events or contact support if this is unexpected.
                                             </p>
                                             <div className="flex gap-3 mt-5">
-                                                <Link href="/tools/data-import">
+                                                <Link href="/ingest">
                                                     <Button size="sm" className="gap-1.5 bg-[var(--re-brand)] hover:bg-[var(--re-brand-dark)] text-white">
                                                         <Upload className="h-3.5 w-3.5" /> Import Data
                                                     </Button>
@@ -595,7 +595,7 @@ export default function HeartbeatPage() {
                                                 </div>
                                                 <p className="text-sm font-medium mb-1">No data yet</p>
                                                 <p className="text-xs text-muted-foreground/60 mb-3">Import traceability events to get started</p>
-                                                <Link href="/tools/data-import">
+                                                <Link href="/ingest">
                                                     <Button size="sm" className="gap-1.5 bg-[var(--re-brand)] hover:bg-[var(--re-brand-dark)] text-white">
                                                         <Upload className="h-3.5 w-3.5" /> Import Data
                                                     </Button>

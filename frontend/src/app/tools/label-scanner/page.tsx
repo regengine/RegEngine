@@ -1,5 +1,6 @@
 'use client';
 
+import { fetchWithCsrf } from '@/lib/fetch-with-csrf';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { EmailGate } from '@/components/tools/EmailGate';
@@ -121,7 +122,7 @@ export default function LabelScannerPage() {
             const formData = new FormData();
             formData.append('file', imageFile);
 
-            const res = await fetch('/api/ingestion/api/v1/vision/analyze-label', {
+            const res = await fetchWithCsrf('/api/ingestion/api/v1/vision/analyze-label', {
                 method: 'POST',
                 body: formData,
             });
@@ -200,7 +201,7 @@ export default function LabelScannerPage() {
             if (apiKey) headers['X-RegEngine-API-Key'] = apiKey;
             if (tenantId) headers['X-Tenant-ID'] = tenantId;
 
-            const res = await fetch(`${getServiceURL('ingestion')}/api/v1/webhooks/ingest`, {
+            const res = await fetchWithCsrf(`${getServiceURL('ingestion')}/api/v1/webhooks/ingest`, {
                 method: 'POST',
                 headers,
                 body: JSON.stringify(payload),

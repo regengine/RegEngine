@@ -19,6 +19,7 @@ import {
 import { useAuth } from '@/lib/auth-context';
 import { useTenant } from '@/lib/tenant-context';
 import { getServiceURL } from '@/lib/api-config';
+import { fetchWithCsrf } from '@/lib/fetch-with-csrf';
 
 type ServiceName = 'ingestion' | 'admin' | 'compliance' | 'graph';
 
@@ -32,7 +33,7 @@ async function authFetch<T>(
     options: RequestInit = {},
 ): Promise<T> {
     const base = getServiceURL(service);
-    const res = await fetch(`${base}${path}`, {
+    const res = await fetchWithCsrf(`${base}${path}`, {
         ...options,
         credentials: 'include', // Send cookies to same-origin proxies
         headers: {
