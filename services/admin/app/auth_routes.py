@@ -9,7 +9,6 @@ from pydantic import BaseModel, Field
 from typing import List, Dict, Optional
 from uuid import UUID
 import uuid
-import re
 import time
 
 import jwt as _jwt
