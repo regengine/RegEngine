@@ -179,7 +179,7 @@ class TestPreEvalOff:
         re_mod.RulesEngine = _SpyEngine
         monkeypatch.setitem(sys.modules, "shared.rules_engine", re_mod)
 
-        reject, reason = wrv2._rules_preeval_reject(_make_event, db_session=None, tenant_id="t")
+        reject, reason, _summary_unused = wrv2._rules_preeval_reject(_make_event, db_session=None, tenant_id="t")
 
         assert reject is False
         assert reason is None
