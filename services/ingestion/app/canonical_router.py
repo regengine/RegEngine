@@ -32,6 +32,7 @@ from pydantic import BaseModel, Field
 from app.authz import require_permission, IngestionPrincipal
 from app.tenant_validation import validate_tenant_id, resolve_tenant
 from shared.canonical_persistence import CanonicalEventStore
+from shared.tenant_context import set_tenant_guc
 from shared.database import get_db_session
 
 # Backwards-compat alias: tests override this private name via
@@ -466,7 +467,7 @@ def trace_forward(
     if db_session is None:
         raise HTTPException(status_code=503, detail="Database unavailable")
     tid = resolve_tenant(tenant_id, principal)
-    db_session.execute(text("SET LOCAL app.tenant_id = :tid"), {"tid": tid})
+    set_tenant_guc(db_session, tid)
 
     store = CanonicalEventStore(db_session, dual_write=False)
     # #1282: trace_forward now returns (links, truncated). ``truncated``
@@ -509,7 +510,7 @@ def trace_backward(
     if db_session is None:
         raise HTTPException(status_code=503, detail="Database unavailable")
     tid = resolve_tenant(tenant_id, principal)
-    db_session.execute(text("SET LOCAL app.tenant_id = :tid"), {"tid": tid})
+    set_tenant_guc(db_session, tid)
 
     store = CanonicalEventStore(db_session, dual_write=False)
     # #1282: trace_backward now returns (links, truncated). See
