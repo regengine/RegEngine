@@ -113,13 +113,13 @@ def upgrade() -> None:
     # immediately after with the corrected (cast-free) expression.
     op.execute(
         """
-        DO $
+        DO $$
         BEGIN
             IF to_regclass('public.audit_logs') IS NULL THEN
                 RETURN;
             END IF;
             DROP POLICY IF EXISTS tenant_isolation_audit ON public.audit_logs;
-        END$;
+        END$$;
         """
     )
 
@@ -131,14 +131,14 @@ def upgrade() -> None:
     # redundant and masks future drift if it sneaks back in.
     op.execute(
         """
-        DO $
+        DO $$
         BEGIN
             IF to_regclass('public.audit_logs') IS NULL THEN
                 RETURN;
             END IF;
             CREATE POLICY tenant_isolation_audit ON public.audit_logs
                 FOR ALL USING (tenant_id = get_tenant_context());
-        END$;
+        END$$;
         """
     )
 
