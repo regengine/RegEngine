@@ -210,12 +210,17 @@ def _scrub_drop_alter_recreate(
         """
 
     if policy_name and policy_using_clause:
+        # Escape single quotes — the USING clause embeds ``current_setting(
+        # 'app.tenant_id', true)`` whose apostrophes would otherwise close
+        # the outer EXECUTE string literal early. Doubling them is the
+        # standard PL/pgSQL escape inside a single-quoted SQL string.
+        escaped_using = policy_using_clause.replace("'", "''")
         drop_policy_sql = (
             f"EXECUTE 'DROP POLICY IF EXISTS {policy_name} ON {fq_table}';"
         )
         recreate_policy_sql = (
             f"EXECUTE 'CREATE POLICY {policy_name} ON {fq_table} "
-            f"USING {policy_using_clause}';"
+            f"USING {escaped_using}';"
         )
     else:
         drop_policy_sql = "-- no RLS policy on this column at v067 time"
@@ -265,12 +270,16 @@ def _alter_uuid_to_text(
     fq_table = f"{schema}.{table}"
 
     if policy_name and policy_using_clause:
+        # Same single-quote escape as ``_scrub_drop_alter_recreate`` — the
+        # USING clause apostrophes must be doubled so they survive
+        # embedding inside the outer EXECUTE string literal.
+        escaped_using = policy_using_clause.replace("'", "''")
         drop_policy_sql = (
             f"EXECUTE 'DROP POLICY IF EXISTS {policy_name} ON {fq_table}';"
         )
         recreate_policy_sql = (
             f"EXECUTE 'CREATE POLICY {policy_name} ON {fq_table} "
-            f"USING {policy_using_clause}';"
+            f"USING {escaped_using}';"
         )
     else:
         drop_policy_sql = "-- no RLS policy on this column at v067 time"
@@ -315,3 +324,4 @@ def downgrade() -> None:
         op.execute(
             _alter_uuid_to_text(schema, table, column, policy_name, policy_using)
         )
+
