@@ -8,12 +8,13 @@ import {
   Thermometer,
   Calculator,
   CheckCircle2,
+  AlertTriangle,
+  Clock,
   FileText,
   Database,
   Shield,
   Zap,
   Code2,
-  BarChart3,
 } from "lucide-react";
 import { DataTransformDemo } from "@/components/marketing/DataTransformDemo";
 import { SandboxUpload } from "@/components/marketing/SandboxUpload";
@@ -37,15 +38,17 @@ export const metadata: Metadata = {
   openGraph: {
     title: "RegEngine — Food Traceability That Protects Your Brand",
     description:
-      "Respond to recall requests in minutes. Satisfy Walmart, Kroger, and Costco supplier requirements. Build supply chain visibility that protects your brand.",
+      "FSMA 204 Food Traceability Compliance",
     url: "https://regengine.co",
     type: "website",
+    images: [{ url: "/og-image.png", width: 1200, height: 630, alt: "RegEngine FSMA 204 traceability compliance" }],
   },
   twitter: {
     card: "summary_large_image",
     title: "RegEngine — Food Traceability That Protects Your Brand",
     description:
-      "Supply chain traceability infrastructure for food companies. Recall response in minutes, not days.",
+      "Supply chain traceability infrastructure for food companies.",
+    images: ["/og-image.png"],
   },
 };
 
@@ -60,18 +63,37 @@ const TRUST_SIGNALS = [
   "Built for FSMA 204",
 ];
 
-const VALUE_STATS = [
+const OPERATIONAL_STATS = [
   {
     value: "1hr 40min",
     label: "Average recall response time with RegEngine — vs. days with manual processes",
   },
   {
-    value: "8–12 hrs/week",
+    value: "8+ hrs",
     label: "Traceability labor saved per facility on average",
   },
   {
     value: "Walmart · Costco · Kroger",
     label: "Major retailers actively requiring supplier traceability documentation",
+    compact: true,
+  },
+];
+
+const BRAND_PROTECTION_CARDS = [
+  {
+    icon: Clock,
+    title: "Recall response in minutes, not days",
+    desc: "The FDA gives you 24 hours. Manual spreadsheet processes average 3–5 days. RegEngine gets you there in under 2.",
+  },
+  {
+    icon: ShieldCheck,
+    title: "Retailer requirements are here now",
+    desc: "Walmart, Kroger, Costco, and Target require traceability from suppliers. One failed audit means shelf removal.",
+  },
+  {
+    icon: AlertTriangle,
+    title: "One contamination incident costs millions",
+    desc: "Brand damage from a slow recall response dwarfs the cost of prevention. Traceability is brand insurance.",
   },
 ];
 
@@ -187,27 +209,32 @@ export default function RegEngineLanding() {
             <div className="inline-flex items-center gap-2 bg-[var(--re-brand-muted)] border border-[var(--re-brand)]/20 rounded-full px-4 py-1.5 mb-6">
               <span className="w-1.5 h-1.5 rounded-full bg-[var(--re-brand)] animate-pulse" />
               <span className="font-mono text-xs font-medium text-[var(--re-brand)] tracking-wide">
-                Supply chain traceability infrastructure
+                FSMA 204 Food Traceability Compliance
               </span>
             </div>
 
             <h1 className="font-display text-[clamp(2rem,5vw,3.25rem)] font-bold text-[var(--re-text-primary)] leading-[1.1] tracking-tight mb-6">
-              Supply chain traceability that protects your&nbsp;brand.
+              Supply chain traceability that protects your brand.
             </h1>
 
             <p className="text-lg text-[var(--re-text-secondary)] leading-relaxed mb-8 max-w-[520px]">
-              RegEngine gives food companies the visibility to respond to recalls in minutes,
-              satisfy Walmart and Kroger supplier requirements, and turn traceability into a
-              competitive advantage — not a weekend fire drill.
+              Respond to recall requests in minutes, satisfy Walmart and Kroger supplier requirements,
+              and build the visibility your brand depends on.
             </p>
 
-            <div className="flex flex-col sm:flex-row gap-3 mb-8">
+            <div className="flex flex-col sm:flex-row sm:flex-wrap gap-3 mb-8">
               <Link
                 href="/retailer-readiness"
                 className="group relative inline-flex items-center justify-center gap-2 bg-[var(--re-brand)] text-white px-7 py-3.5 rounded-lg text-sm font-semibold transition-all duration-200 hover:bg-[var(--re-brand-dark)] hover:shadow-re-glow active:scale-[0.98] min-h-[48px]"
               >
-                Check Your Readiness (Free)
+                Start Your Workspace
                 <ArrowRight className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-0.5" />
+              </Link>
+              <Link
+                href="/retailer-readiness"
+                className="inline-flex items-center justify-center gap-2 border border-[var(--re-border-default)] text-[var(--re-text-primary)] px-7 py-3.5 rounded-lg text-sm font-medium transition-all duration-200 hover:border-[var(--re-brand)] hover:text-[var(--re-brand)] min-h-[48px]"
+              >
+                Check Your Readiness (Free)
               </Link>
               <Link
                 href="/docs"
@@ -267,8 +294,8 @@ export default function RegEngineLanding() {
                         </span>
                         <span className={`text-[0.6rem] font-semibold px-1.5 py-0.5 rounded-full border ${
                           row.color === "blue"
-                            ? "bg-re-info-muted0/10 text-re-info border-re-info/20"
-                            : "bg-re-brand-muted text-re-brand border-re-brand/20"
+                            ? "bg-blue-500/10 text-blue-400 border-blue-500/20"
+                            : "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
                         }`}>
                           {row.badge}
                         </span>
@@ -288,7 +315,7 @@ export default function RegEngineLanding() {
         </div>
       </section>
 
-      {/* ── VALUE PROPOSITION SECTION ── */}
+      {/* ── OPERATIONAL VALUE / BRAND PROTECTION ── */}
       <section className="border-y border-[var(--re-surface-border)] bg-[var(--re-surface-card)]">
         <div className="max-w-[1200px] mx-auto px-4 sm:px-6 py-12 sm:py-16">
           <div className="text-center mb-10">
@@ -301,12 +328,14 @@ export default function RegEngineLanding() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
-            {VALUE_STATS.map((stat) => (
+            {OPERATIONAL_STATS.map((stat) => (
               <div
                 key={stat.label}
                 className="text-center p-6 rounded-xl border border-[var(--re-surface-border)] bg-[var(--re-surface-base)]"
               >
-                <p className="font-display text-2xl sm:text-3xl font-bold text-[var(--re-brand)] mb-2">
+                <p className={`font-display font-bold text-[var(--re-brand)] mb-2 ${
+                  stat.compact ? "text-xl sm:text-2xl" : "text-2xl sm:text-3xl"
+                }`}>
                   {stat.value}
                 </p>
                 <p className="text-sm text-[var(--re-text-secondary)] leading-relaxed">
@@ -317,31 +346,15 @@ export default function RegEngineLanding() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {[
-              {
-                icon: Zap,
-                title: "Recall response in minutes, not days",
-                desc: "The FDA gives you 24 hours. Manual spreadsheet processes average 3–5 days. RegEngine gets you there in under 2.",
-              },
-              {
-                icon: BarChart3,
-                title: "Retailer requirements are here now",
-                desc: "Walmart, Kroger, Costco, and Target require traceability from suppliers. One failed audit means shelf removal.",
-              },
-              {
-                icon: Shield,
-                title: "One contamination incident costs millions",
-                desc: "Brand damage from a slow recall response dwarfs the cost of prevention. Traceability is brand insurance.",
-              },
-            ].map((point) => (
-              <div key={point.title} className="flex gap-3 p-4 rounded-lg">
-                <point.icon className="h-5 w-5 text-[var(--re-brand)] shrink-0 mt-0.5" />
+            {BRAND_PROTECTION_CARDS.map((problem) => (
+              <div key={problem.title} className="flex gap-3 p-4 rounded-lg">
+                <problem.icon className="h-5 w-5 text-[var(--re-brand)] shrink-0 mt-0.5" />
                 <div>
                   <h3 className="text-sm font-semibold text-[var(--re-text-primary)] mb-1">
-                    {point.title}
+                    {problem.title}
                   </h3>
                   <p className="text-xs text-[var(--re-text-tertiary)] leading-relaxed">
-                    {point.desc}
+                    {problem.desc}
                   </p>
                 </div>
               </div>
@@ -532,9 +545,6 @@ export default function RegEngineLanding() {
           <p className="text-[var(--re-text-secondary)]">
             Founding partner rates, billed annually. Monthly billing available at checkout. Cancel anytime.
           </p>
-          <p className="text-xs text-[var(--re-text-muted)] mt-1">
-            Prices shown billed annually. Monthly billing also available.
-          </p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 max-w-[900px] mx-auto mb-8">
@@ -561,7 +571,6 @@ export default function RegEngineLanding() {
                   {tier.price}
                 </span>
                 <span className="text-sm text-[var(--re-text-muted)]">{tier.period}</span>
-                <span className="block text-xs text-[var(--re-text-disabled)] mt-0.5">billed annually</span>
               </p>
               <ul className="space-y-2">
                 {tier.features.map((feature) => (
@@ -590,13 +599,13 @@ export default function RegEngineLanding() {
       <section className="bg-[var(--re-surface-elevated)] border-t border-[var(--re-surface-border)]">
         <div className="max-w-[1200px] mx-auto px-4 sm:px-6 py-16 sm:py-24 text-center">
           <p className="font-mono text-xs font-medium text-[var(--re-brand)] uppercase tracking-widest mb-4">
-            Protect your brand. Satisfy your retailers.
+            FSMA 204 compliance deadline: July 20, 2028
           </p>
           <h2 className="font-display text-[clamp(1.75rem,4vw,2.75rem)] font-bold text-[var(--re-text-primary)] tracking-tight leading-tight mb-4 max-w-[700px] mx-auto">
             Know exactly where every lot has been — before anyone asks.
           </h2>
           <p className="text-[var(--re-text-secondary)] max-w-[520px] mx-auto leading-relaxed mb-8">
-            Get your free readiness score in 3 minutes. See where your traceability gaps are and how fast RegEngine can close them — including FSMA 204 compliance.
+            Protect your brand. Satisfy your retailers. Get your free readiness score in 3 minutes, including FSMA 204 compliance gaps.
           </p>
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
             <Link
