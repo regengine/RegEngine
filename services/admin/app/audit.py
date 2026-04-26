@@ -204,8 +204,9 @@ class AuditLogger:
             # in _get_prev_hash or db.flush() propagates into the caller's
             # transaction, aborting subsequent queries with
             # InFailedSqlTransaction. Catching here keeps audit logging
-            # best-effort and non-poisoning; the schema issue is the
-            # root-cause fix (see alembic v065).
+            # best-effort; callers that continue using the same Session
+            # after a None result must rollback before further writes. The
+            # schema issues are root-cause fixed in Alembic v065/v070.
             logger.error(
                 "audit_logging_failed",
                 error=str(e),

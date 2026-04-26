@@ -63,11 +63,11 @@ jobs:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
           # Match whichever CI Status Gate jobs are created for this path set.
           # GitHub Checks API returns job names, not "workflow / job" format.
-          # Backend CI can take several minutes to create its summary gate
-          # while matrix jobs are still queued, so keep discovery patient.
+          # Backend CI and cold frontend installs can take longer than 15m to
+          # create their summary gates, so keep discovery patient.
           check-regexp: 'CI Status Gate'
           wait-interval: 30
-          checks-discovery-timeout: 900
+          checks-discovery-timeout: 2700
           allowed-conclusions: success
 
   deploy:

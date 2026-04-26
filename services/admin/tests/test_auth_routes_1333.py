@@ -376,6 +376,32 @@ class TestLogin:
         assert result.user["email"] == "user@example.com"
 
     @pytest.mark.asyncio
+    async def test_login_audit_failure_does_not_poison_last_login(self, monkeypatch):
+        """Audit failures are best-effort and must not break token issuance."""
+        user = _make_user(email="u@example.com", password="pass123")
+        tenant = _make_tenant()
+        membership = _make_membership(user, tenant)
+        db = _make_db_with_user(user, tenant, membership)
+        session_store = _make_session_store()
+
+        audit_logger = MagicMock()
+        audit_logger.log_event.return_value = None
+        monkeypatch.setattr(_login_router_mod, "AuditLogger", audit_logger)
+
+        result = await ar.login.__wrapped__(
+            payload=LoginRequest(email="u@example.com", password="pass123"),
+            request=_make_request(),
+            db=db,
+            session_store=session_store,
+        )
+
+        assert result.access_token
+        assert result.refresh_token
+        assert user.last_login_at is not None
+        db.rollback.assert_called_once()
+        db.commit.assert_called_once()
+
+    @pytest.mark.asyncio
     async def test_login_wrong_password_raises_401(self, monkeypatch):
         user = _make_user(email="u@x.com", password="correct")
         db = _make_db_with_user(user)
