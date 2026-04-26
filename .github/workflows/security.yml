@@ -74,7 +74,7 @@ jobs:
         # Prints the current baseline contents as a JSON report so reviewers
         # can see what's been accepted as a known false positive. Purely
         # informational — does not gate the build.
-        run: detect-secrets audit --report .secrets.baseline
+        run: detect-secrets audit --report .secrets.baseline || true
 
   # ──────────────────────────────────────────────
   # 2. SAST (Semgrep — CLI, not deprecated action)
