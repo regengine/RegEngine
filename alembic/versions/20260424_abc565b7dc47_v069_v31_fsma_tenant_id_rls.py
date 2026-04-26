@@ -76,12 +76,49 @@ Create Date: 2026-04-24
 from typing import Sequence, Union
 
 from alembic import op
+from sqlalchemy import text
 
 
 revision: str = "abc565b7dc47"  # pragma: allowlist secret
 down_revision: Union[str, Sequence[str], None] = "f0a1b2c3d4e5"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
+
+
+# ---------------------------------------------------------------------------
+# Flyway V31 dependency guard
+# ---------------------------------------------------------------------------
+# This migration retrofits eight fsma.* tables originally created by
+# Flyway V31__fsma_204_infrastructure.sql (2023-era).  Railway runs
+# Alembic only, so on Railway-managed environments those tables don't
+# exist and every ALTER / DROP POLICY in this migration would crash
+# with ``relation "fsma.products" does not exist``.
+#
+# Same compatibility gap that v066 documented for its V30 trigger port.
+# Resolution: probe one of the V31 tables up-front; if it's absent the
+# whole migration is a no-op on this environment.  When V31 has been
+# applied (legacy on-prem deployments that ran Flyway), the migration
+# proceeds exactly as before.
+#
+# ``fsma.products`` is the canary because it's the first table the
+# migration touched in the original (failing) ordering and because it
+# carries the live ``WHERE tenant_id = ...`` query path in
+# ``services/ingestion/app/product_catalog.py`` — if it ever does exist
+# on a Railway env in the future, that's the table we'd care about.
+_V31_CANARY = "fsma.products"
+
+
+def _v31_present() -> bool:
+    """True iff the Flyway V31 fsma.* tables are present in this DB.
+
+    Uses ``to_regclass`` rather than ``information_schema.tables`` so
+    the probe respects search_path and returns NULL (treated as False)
+    for missing schemas as well as missing tables.
+    """
+    bind = op.get_bind()
+    return bind.execute(
+        text("SELECT to_regclass(:t)"), {"t": _V31_CANARY}
+    ).scalar() is not None
 
 
 # ---------------------------------------------------------------------------
@@ -109,6 +146,19 @@ _POLICY_KDE_USING = """\
 
 
 def upgrade() -> None:
+    if not _v31_present():
+        # Alembic-only environment (e.g. Railway).  The V31 fsma.*
+        # tables this migration retrofits don't exist here, so there's
+        # nothing to alter.  Logged at INFO via ``RAISE NOTICE`` so the
+        # deploy log records that the skip happened.
+        op.execute(
+            "DO $$ BEGIN "
+            "RAISE NOTICE 'v069: Flyway V31 tables not present "
+            "(canary fsma.products missing) — skipping retrofit'; "
+            "END $$;"
+        )
+        return
+
     # ------------------------------------------------------------------
     # fsma.products
     # ------------------------------------------------------------------
@@ -304,7 +354,7 @@ def upgrade() -> None:
         CREATE POLICY tenant_isolation_compliance_snapshots ON fsma.compliance_snapshots
             FOR ALL TO regengine, regengine_sysadmin
             USING ({_POLICY_USING})
-            WITH CHECK ({_POLICY_USING})
+            WITH CHECK ({_POLICY_USING&})
     """)
     op.execute(
         "CREATE INDEX IF NOT EXISTS idx_fsma_compliance_snapshots_tenant"
@@ -324,6 +374,17 @@ def downgrade() -> None:
     # Note: app.current_org_id is never set by the current application,
     # so the restored policies will silently deny all reads for regular
     # roles — the same behaviour as before this migration.
+
+    if not _v31_present():
+        # Mirror the upgrade-side guard.  If V31 wasn't present we
+        # never altered anything, so there's nothing to revert.
+        op.execute(
+            "DO $$ BEGIN "
+            "RAISE NOTICE 'v069 downgrade: Flyway V31 tables not present "
+            "— nothing to revert'; "
+            "END $$;"
+        )
+        return
 
     # fsma.compliance_snapshots
     op.execute(
@@ -445,3 +506,4 @@ def downgrade() -> None:
     """)
     op.execute("ALTER TABLE fsma.products NO FORCE ROW LEVEL SECURITY")
     op.execute("ALTER TABLE fsma.products DROP COLUMN IF EXISTS tenant_id")
+
