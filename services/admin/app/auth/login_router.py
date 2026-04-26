@@ -166,7 +166,7 @@ async def login(
     # Failures are logged but never prevent the user from logging in.
     try:
         if active_tenant_id:
-            AuditLogger.log_event(
+            audit_entry_id = AuditLogger.log_event(
                 db,
                 tenant_id=active_tenant_id,
                 event_type="user.login",
@@ -176,6 +176,11 @@ async def login(
                 resource_type="session",
                 resource_id=str(session_data.id),
             )
+            if audit_entry_id is None:
+                # AuditLogger swallows SQLAlchemyError so auth can continue,
+                # but a failed flush still leaves the Session transaction
+                # aborted. Clear it before the last_login_at write.
+                db.rollback()
         user.last_login_at = datetime.now(timezone.utc)
         db.commit()
     except Exception as e:

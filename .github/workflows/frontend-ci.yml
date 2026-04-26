@@ -145,7 +145,7 @@ jobs:
   ci-status:
     name: CI Status Gate
     if: always()
-    needs: [build, lint, test, security, e2e]
+    needs: [build, lint, test, security]
     runs-on: ubuntu-latest
     steps:
       - name: Check results
@@ -154,11 +154,15 @@ jobs:
           echo "Lint:     ${{ needs.lint.result }}"
           echo "Tests:    ${{ needs.test.result }}"
           echo "Security: ${{ needs.security.result }}"
-          if [[ "${{ needs.build.result }}" == "failure" ]]; then
-            echo "::error::Build failed"
+          echo "E2E:      advisory (runs separately)"
+          if [[ "${{ needs.build.result }}" == "failure" \
+             || "${{ needs.lint.result }}" == "failure" \
+             || "${{ needs.test.result }}" == "failure" \
+             || "${{ needs.security.result }}" == "failure" ]]; then
+            echo "::error::Build, lint, unit tests, or security audit failed"
             exit 1
           fi
-          echo "✅ All checks passed"
+          echo "All blocking frontend checks passed"
 
   # ── E2E Tests (Playwright) ───────────────────────────────
   e2e:
