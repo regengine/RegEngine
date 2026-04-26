@@ -38,17 +38,10 @@ export default function sitemap(): MetadataRoute.Sitemap {
         'data-import',
         'readiness-assessment',
         'fsma-unified',
-        // Authenticated-UX tools with standalone public landing pages
-        'label-scanner',
-        'scan',
-        'ask',
-        'export',
-        'notice-validator',
-        'obligation-scanner',
     ].map((tool) => ({
         url: `${baseUrl}/tools/${tool}`,
         changeFrequency: 'monthly' as const,
-        priority: 0.8,
+        priority: 0.7,
     }));
 
     // Content pages (high SEO value)
@@ -66,46 +59,16 @@ export default function sitemap(): MetadataRoute.Sitemap {
         { url: `${baseUrl}/blog/fsma-204-cte-kde-guide`, changeFrequency: 'monthly' as const, priority: 0.8 },
     ];
 
-    // Competitor comparison pages
-    const comparePages = [
-        'foodlogiq',
-        'tracegains',
-        'repositrak',
-    ].map((competitor) => ({
-        url: `${baseUrl}/compare/${competitor}`,
-        changeFrequency: 'monthly' as const,
-        priority: 0.8,
-    }));
-
-    // Per-CTE SEO landing pages
-    const ctePages = [
-        'harvesting',
-        'cooling',
-        'initial_packing',
-        'shipping',
-        'receiving',
-        'transformation',
-        'first_land_based_receiving',
-    ].map((cte) => ({
-        url: `${baseUrl}/fsma-204/${cte}`,
-        changeFrequency: 'monthly' as const,
-        priority: 0.8,
-    }));
-
-    // Interactive demo
-    const demoPages = [
-        { url: `${baseUrl}/demo`, changeFrequency: 'monthly' as const, priority: 0.9 },
-    ];
-
     // Resource pages
     const resourcePages = [
         { url: `${baseUrl}/tools`, changeFrequency: 'monthly' as const, priority: 0.8 },
         { url: `${baseUrl}/retailer-readiness`, changeFrequency: 'monthly' as const, priority: 0.7 },
         { url: `${baseUrl}/docs`, changeFrequency: 'monthly' as const, priority: 0.7 },
         { url: `${baseUrl}/docs/fsma-204`, changeFrequency: 'monthly' as const, priority: 0.6 },
+        { url: `${baseUrl}/verticals/food-safety`, changeFrequency: 'monthly' as const, priority: 0.6 },
     ];
 
-    return [...marketingPages, ...contentPages, ...comparePages, ...ctePages, ...demoPages, ...toolPages, ...resourcePages].map((page) => ({
+    return [...marketingPages, ...contentPages, ...toolPages, ...resourcePages].map((page) => ({
         ...page,
         lastModified: now,
     }));

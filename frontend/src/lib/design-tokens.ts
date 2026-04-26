@@ -17,8 +17,8 @@ export const tokens = {
 
     // ─── TEXT COLORS ───
     text: '#c8d1dc',                            // Primary text
-    textMuted: '#64748b',                       // Secondary/muted text
-    textDim: '#475569',                         // Tertiary/dimmed text
+    textMuted: '#8b9bb5',                       // Secondary/muted text
+    textDim: '#94a3b8',                         // Tertiary/dimmed text
     heading: '#e2e8f0',                         // Headings and emphasis
 
     // ─── ACCENT COLORS ───
@@ -29,16 +29,18 @@ export const tokens = {
 
     // ─── STATUS COLORS ───
     warning: '#f59e0b',                         // Amber warning
-    warningBg: 'rgba(245,158,11,0.1)',          // Warning background
-    warningBorder: 'rgba(245,158,11,0.2)',      // Warning border
+    warningBg: '#f59e0b14',                     // Warning background
+    warningBorder: '#f59e0b26',                 // Warning border
     danger: '#ef4444',                          // Red danger/error
-    dangerBg: 'rgba(239,68,68,0.1)',            // Danger background
+    dangerBg: '#ef444414',                      // Danger background
     success: '#10b981',                         // Green success (same as accent)
-    successBg: 'rgba(16,185,129,0.1)',          // Success background
+    successBg: '#10b98114',                     // Success background
 
     // ─── TYPOGRAPHY ───
-    fontSans: "var(--font-instrument-sans), -apple-system, BlinkMacSystemFont, sans-serif",
-    fontMono: "var(--font-jetbrains-mono), monospace",
+    fontSans: "'Inter', system-ui, -apple-system, sans-serif",
+    fontDisplay: "'Outfit', system-ui, -apple-system, sans-serif",
+    fontSerif: "'Fraunces', Georgia, serif",
+    fontMono: "'JetBrains Mono', monospace",
 
     // ─── SPACING ───
     maxWidth: '1120px',                         // Standard content max-width

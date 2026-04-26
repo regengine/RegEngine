@@ -49,16 +49,16 @@ export function RegEngineWordmark({
             {showText ? (
                 <span
                     style={{
-                        fontFamily: "var(--font-instrument-sans), -apple-system, BlinkMacSystemFont, sans-serif",
+                        fontFamily: "var(--re-font-display)",
                         fontSize: `${config.text}px`,
                         lineHeight: 1,
-                        letterSpacing: '-0.02em',
+                        letterSpacing: 0,
                         fontWeight: 700,
                         color: 'var(--re-text-primary)',
                         ...textStyle,
                     }}
                 >
-                    Reg<span style={{ color: 'var(--re-brand)' }}>Engine</span>
+                    RegEngine
                 </span>
             ) : null}
         </span>

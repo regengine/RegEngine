@@ -4,7 +4,6 @@ import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
-import { shouldHideMarketingChrome } from '@/lib/app-routes';
 import { RegEngineWordmark } from '@/components/layout/regengine-wordmark';
 import { DesktopNav, MobileMenu, MobileHamburger } from '@/components/layout/header';
 
@@ -18,7 +17,11 @@ export function MarketingHeader() {
     const { user, isAuthenticated, isHydrated } = useAuth();
     // Only show logged-in state when auth is fully verified
     const showLoggedIn = isHydrated && isAuthenticated && !!user;
-    const hideHeader = shouldHideMarketingChrome(pathname);
+    const hideHeader =
+        pathname === '/mobile/capture' ||
+        pathname === '/fsma/field-capture' ||
+        pathname.startsWith('/dashboard') ||
+        pathname.startsWith('/onboarding');
 
     // Close mobile menu on route change
     useEffect(() => {
@@ -44,6 +47,9 @@ export function MarketingHeader() {
     };
 
     const handleToolsLeave = () => {
+        if (toolsWrapperRef.current?.contains(document.activeElement)) {
+            return;
+        }
         if (closeTimeoutRef.current) {
             clearTimeout(closeTimeoutRef.current);
         }
@@ -123,7 +129,7 @@ export function MarketingHeader() {
         <>
             <nav
                 aria-label="Main navigation"
-                className="sticky top-0 z-50 backdrop-blur-[16px]"
+                className="sticky top-0 z-[var(--re-z-nav)] backdrop-blur-[16px]"
                 style={{
                     borderBottom: "1px solid var(--re-nav-border)",
                     WebkitBackdropFilter: "blur(16px)",
@@ -162,17 +168,6 @@ export function MarketingHeader() {
                 setMobileOpen={setMobileOpen}
             />
 
-            {/* Responsive CSS */}
-            <style jsx>{`
-                @media (max-width: 768px) {
-                    .marketing-desktop-nav {
-                        display: none !important;
-                    }
-                    .marketing-mobile-toggle {
-                        display: flex !important;
-                    }
-                }
-            `}</style>
         </>
     );
 }

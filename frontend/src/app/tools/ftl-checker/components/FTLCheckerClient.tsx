@@ -68,8 +68,8 @@ const T = {
     success: 'var(--re-brand)',
     successBg: 'var(--re-brand-muted)',
     successBorder: 'var(--re-brand-muted)',
-    sans: "var(--font-instrument-sans), -apple-system, BlinkMacSystemFont, sans-serif",
-    mono: "var(--font-jetbrains-mono), monospace",
+    sans: 'var(--re-font-sans)',
+    mono: 'var(--re-font-mono)',
 };
 
 // ============================================================
@@ -342,8 +342,8 @@ const FTL_CATEGORIES = [
         name: 'Fresh Soft Cheese',
         category: 'Dairy',
         icon: Milk,
-        examples: 'Queso fresco, ricotta, mascarpone, cream cheese, panela, boursin',
-        exclusions: 'Hard cheeses per 21 CFR 133.150 (e.g., cheddar, parmesan, aged cotija) are excluded from the FTL. Cottage cheese is exempt (finalized April 2026; listed on IMS List, §1.1305(d)).',
+        examples: 'Queso fresco, ricotta, mascarpone, cottage cheese, cream cheese, panela, boursin',
+        exclusions: 'Hard cheeses per 21 CFR 133.150 (e.g., cheddar, parmesan, aged cotija) are excluded from the FTL',
         covered: true,
         outbreakFrequency: 'HIGH',
         ctes: ['Receiving', 'Transformation', 'Shipping'],
@@ -697,10 +697,6 @@ export function FTLCheckerClient() {
 
     return (
         <div className="ftl-root" style={{ minHeight: '100vh', background: T.bg, fontFamily: T.sans, color: T.textBody, padding: '24px' }}>
-            <style>{`
-                .ftl-results-layout { grid-template-columns: 1fr; }
-                @media (min-width: 768px) { .ftl-results-layout { grid-template-columns: 1fr 340px; } }
-            `}</style>
             <div style={{ maxWidth: '1000px', margin: '0 auto' }}>
                 <Breadcrumbs
                     items={[
@@ -709,7 +705,7 @@ export function FTLCheckerClient() {
                     ]}
                 />
             </div>
-            {/* Fonts loaded globally via next/font/google in layout.tsx (#792) */}
+            <link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
 
             {/* Noise Overlay */}
             <div style={{ position: 'fixed', inset: 0, opacity: 0.015, pointerEvents: 'none', zIndex: 1, backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E")`, backgroundSize: '128px 128px' }} />
@@ -936,7 +932,7 @@ export function FTLCheckerClient() {
                                     </div>
                                 }
                             >
-                            <div className="ftl-results-layout" style={{ display: 'grid', gap: '24px' }}>
+                            <div className="ftl-results-layout" style={{ display: 'grid', gap: '24px', gridTemplateColumns: '1fr 340px' }}>
                                 {/* Main Result Card */}
                                 <div className="ftl-section-card" style={{ padding: '32px', background: T.surface, border: `1px solid ${T.border}`, borderRadius: '16px' }}>
                                     <div className="ftl-results-header" style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '24px' }}>

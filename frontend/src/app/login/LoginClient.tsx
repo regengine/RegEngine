@@ -65,6 +65,22 @@ function resolveSafeNextPath(nextPath: string | null): string | null {
     return trimmed;
 }
 
+function getStoredTenantId(): string | null {
+    if (typeof window === 'undefined') {
+        return null;
+    }
+
+    try {
+        const storage = window.localStorage;
+        if (!storage || typeof storage.getItem !== 'function') {
+            return null;
+        }
+        return storage.getItem('regengine_tenant_id');
+    } catch {
+        return null;
+    }
+}
+
 export default function LoginPage() {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
@@ -73,28 +89,13 @@ export default function LoginPage() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const nextParam = searchParams.get('next');
-    const { login, user, isHydrated, clearCredentials } = useAuth();
+    const { login, user, isHydrated } = useAuth();
 
-    // Receives an email string from QALoginPresets (dynamically loaded chunk).
-    // The email→preset mapping lives exclusively in that chunk so test addresses
-    // are absent from the production bundle.
-    const applyPreset = useCallback((email: string) => {
-        setEmail(email);
+    const applyPreset = useCallback((presetEmail: string) => {
+        setEmail(presetEmail);
         setPassword('');
         setError(null);
     }, []);
-
-    // When middleware redirects here with session_expired, clear the stale
-    // Supabase session so the user gets a clean login form without redirect loops.
-    useEffect(() => {
-        const errorParam = searchParams.get('error');
-        if (errorParam === 'session_expired' || errorParam === 'token_invalid') {
-            import('@/lib/supabase/client').then(({ createSupabaseBrowserClient }) => {
-                const sb = createSupabaseBrowserClient();
-                sb.auth.signOut().catch(() => {});
-            });
-        }
-    }, [searchParams]);
 
     useEffect(() => {
         if (!isHydrated || !user) {
@@ -120,7 +121,7 @@ export default function LoginPage() {
         }
 
         // Check onboarding status — redirect to setup if incomplete
-        const tid = typeof window !== 'undefined' ? localStorage.getItem('regengine_tenant_id') : null;
+        const tid = getStoredTenantId();
         if (tid) {
             apiClient.getOnboardingStatus(tid).then((status) => {
                 if (!status.is_complete) {
@@ -151,12 +152,6 @@ export default function LoginPage() {
         setIsLoading(true);
         setError(null);
 
-        // #1077 Snapshot the error param that was present when this attempt
-        // started. Rapid retries can cause a late success-handler to fire
-        // after the URL has been re-decorated with a newer ?error= -- only
-        // strip the param we saw, not whatever is currently there.
-        const attemptErrorParam = searchParams.get('error');
-
         try {
             const response = await apiClient.login(email, password);
 
@@ -182,51 +177,22 @@ export default function LoginPage() {
             const supabase = createSupabaseBrowserClient();
             const { error: sbError } = await supabase.auth.signInWithPassword({ email, password });
             if (sbError) {
-                // #1072 Supabase auth failed — RegEngine credentials matched
-                // but Supabase did not (out-of-sync passwords, Supabase flaky,
-                // user absent in Supabase). The RegEngine JWT cookie is set,
-                // so the user thinks login "worked" — but middleware enforces
-                // cross-auth (#538) and will bounce any protected nav to
-                // /login?error=session_expired, producing the classic
-                // "login is broken" redirect loop.
-                //
-                // Surface the failure in the form rather than silently
-                // proceeding. Structured log so support can correlate in
-                // telemetry.
-                console.error('[login] Supabase session sync failed', {
-                    message: sbError.message,
-                    status: sbError.status,
-                    code: sbError.code,
-                });
-                setError(
-                    "We signed you in, but couldn't establish your secure " +
-                    'session. Please try again — if the problem persists, ' +
-                    'reset your password or contact support.',
-                );
-                // Clear the half-set cookies so the retry is clean and the
-                // user isn't stuck in a half-authenticated state that the
-                // middleware will reject on the next nav.
-                clearCredentials();
-                setIsLoading(false);
-                return;
+                // Supabase auth failed — this means the user exists in RegEngine
+                // but not in Supabase, or passwords are out of sync. Log it and
+                // surface the issue rather than silently breaking middleware.
+                console.error('[login] Supabase session sync failed:', sbError.message);
+                // Don't throw — the RegEngine JWT is set and the user can still
+                // reach public/free-tool routes. But protected routes will fail
+                // until Supabase session is established.
             }
 
-            // Clear the specific error param that was present when this
-            // attempt started (e.g. ?error=session_expired from middleware)
-            // so the redirect useEffect doesn't block navigation after a
-            // successful re-login.
-            //
-            // #1077: Only strip the snapshotted value, not whatever is
-            // currently on the URL. In a rapid retry scenario, attempt #1's
-            // success handler firing after attempt #2 wrote a fresh
-            // ?error=... would otherwise erase the new error and leave the
-            // user staring at a blank form with no feedback.
-            if (attemptErrorParam) {
-                const url = new URL(window.location.href);
-                if (url.searchParams.get('error') === attemptErrorParam) {
-                    url.searchParams.delete('error');
-                    router.replace(url.pathname + url.search);
-                }
+            // Clear any error params (e.g. ?error=session_expired) left by
+            // middleware so the redirect useEffect doesn't block navigation
+            // after a successful re-login.
+            const url = new URL(window.location.href);
+            if (url.searchParams.has('error')) {
+                url.searchParams.delete('error');
+                router.replace(url.pathname + url.search);
             }
 
             // Ensure the middleware picks up the newly-set cookie before
@@ -316,7 +282,7 @@ export default function LoginPage() {
 
                         <div className="mt-8 flex flex-wrap items-center gap-3 text-xs text-[var(--re-text-muted)]">
                             <span>New to RegEngine?</span>
-                            <Link href="/onboarding" className="inline-flex items-center gap-1 rounded-full border border-[var(--re-brand)]/40 px-3 py-1 font-semibold text-[var(--re-brand)] transition hover:bg-[var(--re-brand)]/10">
+                            <Link href="/onboarding/supplier-flow" className="inline-flex items-center gap-1 rounded-full border border-[var(--re-brand)]/40 px-3 py-1 font-semibold text-[var(--re-brand)] transition hover:bg-[var(--re-brand)]/10">
                                 Get Started (Supplier Flow)
                                 <ArrowRight className="h-3 w-3" />
                             </Link>
@@ -337,22 +303,22 @@ export default function LoginPage() {
                         </CardHeader>
                         <CardContent>
                             {searchParams.get('error') === 'auth_config' && (
-                                <div className="mb-4 rounded-md border border-re-warning bg-re-warning-muted p-3 text-sm text-re-warning dark:border-re-warning dark:bg-re-warning/10 dark:text-re-warning">
+                                <div className="mb-4 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-700 dark:border-amber-800 dark:bg-amber-900/10 dark:text-amber-400">
                                     Authentication is misconfigured (AUTH_SECRET_KEY not set). Contact your administrator.
                                 </div>
                             )}
                             {searchParams.get('error') === 'token_invalid' && (
-                                <div className="mb-4 rounded-md border border-re-warning bg-re-warning-muted p-3 text-sm text-re-warning dark:border-re-warning dark:bg-re-warning/10 dark:text-re-warning">
+                                <div className="mb-4 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-700 dark:border-amber-800 dark:bg-amber-900/10 dark:text-amber-400">
                                     Your session could not be verified. Please sign in again.
                                 </div>
                             )}
                             {searchParams.get('error') === 'session_expired' && (
-                                <div className="mb-4 rounded-md border border-blue-200 bg-re-info-muted p-3 text-sm text-re-info dark:border-blue-800 dark:bg-re-info/10 dark:text-re-info">
+                                <div className="mb-4 rounded-md border border-blue-200 bg-blue-50 p-3 text-sm text-blue-700 dark:border-blue-800 dark:bg-blue-900/10 dark:text-blue-400">
                                     Your session has expired. Please sign in again.
                                 </div>
                             )}
                             {searchParams.get('error') === 'auth_failed' && (
-                                <div className="mb-4 rounded-md border border-re-danger bg-re-danger-muted p-3 text-sm text-re-danger dark:border-re-danger dark:bg-re-danger/10 dark:text-re-danger">
+                                <div className="mb-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-800 dark:bg-red-900/10 dark:text-red-400">
                                     Password reset link has expired or is invalid.{' '}
                                     <Link href="/forgot-password" className="font-medium underline underline-offset-2">
                                         Request a new one →
@@ -365,7 +331,7 @@ export default function LoginPage() {
                                         id="login-error"
                                         role="alert"
                                         aria-live="polite"
-                                        className="animate-in fade-in slide-in-from-top-2 rounded-md border border-re-danger bg-re-danger-muted p-3 text-sm text-re-danger dark:border-re-danger dark:bg-re-danger/10"
+                                        className="animate-in fade-in slide-in-from-top-2 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-500 dark:border-red-800 dark:bg-red-900/10"
                                     >
                                         {error}
                                     </div>

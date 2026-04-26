@@ -32,28 +32,18 @@ vi.mock('@/lib/auth-context', () => ({
 vi.mock('@/lib/api-client', () => ({
     apiClient: {
         login: vi.fn(),
-        getOnboardingStatus: vi.fn().mockResolvedValue({ is_complete: true }),
+        getOnboardingStatus: vi.fn(),
     },
 }));
 
-// Mock the Supabase browser client so LoginClient's #538 session-sync call
-// resolves synchronously without touching the network (jsdom can't reach the
-// real Supabase backend, and the placeholder creds return a rejected promise
-// which surfaces as a user-visible error after #1072).
-//
-// The default happy-path mock returns { error: null }; individual tests can
-// override via `(createSupabaseBrowserClient as any).mockReturnValueOnce(...)`.
-vi.mock('@/lib/supabase/client', () => {
-    const signInWithPassword = vi.fn().mockResolvedValue({ error: null });
-    const signOut = vi.fn().mockResolvedValue({ error: null });
-    const createSupabaseBrowserClient = vi.fn(() => ({
-        auth: { signInWithPassword, signOut },
-    }));
-    return {
-        createSupabaseBrowserClient,
-        __mocks: { signInWithPassword, signOut },
-    };
-});
+// Mock Supabase session sync so login tests stay local and deterministic.
+vi.mock('@/lib/supabase/client', () => ({
+    createSupabaseBrowserClient: vi.fn(() => ({
+        auth: {
+            signInWithPassword: vi.fn().mockResolvedValue({ error: null }),
+        },
+    })),
+}));
 
 describe('LoginPage', () => {
     const mockPush = vi.fn();
@@ -62,7 +52,7 @@ describe('LoginPage', () => {
     const mockSearchParamGet = vi.fn();
 
     // Track the current auth state so mockLogin can trigger user update
-    let authState: { user: any; login: any; isHydrated: boolean; clearCredentials?: any };
+    let authState: { user: any; login: any; isHydrated: boolean };
     const mockLogin = vi.fn().mockImplementation(async (_token: string, user: any, _tenantId?: string) => {
         // Simulate what the real login does: update user state
         authState.user = user;
@@ -72,15 +62,6 @@ describe('LoginPage', () => {
 
     beforeEach(() => {
         vi.clearAllMocks();
-        // Mock localStorage for onboarding check in LoginClient useEffect
-        vi.stubGlobal('localStorage', {
-            getItem: vi.fn().mockReturnValue(null),
-            setItem: vi.fn(),
-            removeItem: vi.fn(),
-            clear: vi.fn(),
-            length: 0,
-            key: vi.fn(),
-        });
         (useRouter as any).mockReturnValue({
             push: mockPush,
             replace: mockReplace,
@@ -93,6 +74,10 @@ describe('LoginPage', () => {
         (useSearchParams as any).mockReturnValue({ get: mockSearchParamGet });
         authState = { login: mockLogin, user: null, isHydrated: true };
         (useAuth as any).mockReturnValue(authState);
+        (apiClient.getOnboardingStatus as any).mockResolvedValue({ is_complete: true });
+        if (typeof window !== 'undefined' && window.localStorage?.clear) {
+            window.localStorage.clear();
+        }
     });
 
     describe('Rendering', () => {
@@ -464,50 +449,6 @@ describe('LoginPage', () => {
             await waitFor(() => {
                 expect(screen.queryByRole('alert')).not.toBeInTheDocument();
             });
-        });
-
-        // #1072: when the Supabase session-sync fails after a successful
-        // RegEngine login, the old code swallowed the error to console.
-        // The user thought login worked, then hit a /login?error=session_expired
-        // redirect loop on the next nav. The fix surfaces an error in the form
-        // and clears the half-set credentials so the retry is clean.
-        it('surfaces an error when Supabase session-sync fails after RegEngine login (#1072)', async () => {
-            const user = userEvent.setup();
-            const clearCredentials = vi.fn();
-            authState.clearCredentials = clearCredentials;
-            (useAuth as any).mockReturnValue(authState);
-
-            (apiClient.login as any).mockResolvedValueOnce({
-                access_token: 'token',
-                user: { id: '123', email: 'test@example.com', is_sysadmin: false },
-                tenant_id: 'tenant-123',
-            });
-
-            // Override the Supabase mock for just this test to reject the
-            // signInWithPassword call with a realistic error shape.
-            const supabaseModule = await import('@/lib/supabase/client');
-            const supabaseMocks = (supabaseModule as unknown as {
-                __mocks: { signInWithPassword: ReturnType<typeof vi.fn> };
-            }).__mocks;
-            supabaseMocks.signInWithPassword.mockResolvedValueOnce({
-                error: { message: 'Invalid credentials', status: 400, code: 'invalid_credentials' },
-            });
-
-            render(<LoginPage />);
-
-            await user.type(screen.getByLabelText(/email/i), 'test@example.com');
-            await user.type(screen.getByLabelText(/password/i), 'password');
-            await user.click(screen.getByRole('button', { name: /sign in/i }));
-
-            // An alert should surface in the form (not silently swallowed).
-            await waitFor(() => {
-                expect(screen.getByRole('alert')).toHaveTextContent(
-                    /couldn't establish your secure session/i,
-                );
-            });
-            // The half-authenticated state should be torn down so the next
-            // retry starts clean.
-            expect(clearCredentials).toHaveBeenCalled();
         });
     });
 

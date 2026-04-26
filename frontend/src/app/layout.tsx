@@ -1,50 +1,11 @@
 import { headers } from 'next/headers'
 import { Providers } from '@/lib/providers'
-import { stringifyForScript } from '@/lib/json-ld'
 import './globals.css'
 import { MarketingHeader } from '@/components/layout/marketing-header'
 import { AuthAwareFooter } from '@/components/layout/auth-aware-footer'
 import { AccessibilityWidget } from '@/components/accessibility/AccessibilityWidget'
 import { CookieBanner } from '@/components/cookie-consent/CookieBanner'
-import { GoogleAnalytics } from '@/components/analytics/GoogleAnalytics'
 import type { Metadata, Viewport } from 'next'
-import { Outfit, Inter, Fraunces, JetBrains_Mono, Instrument_Sans } from 'next/font/google'
-
-const outfit = Outfit({
-  subsets: ['latin'],
-  weight: ['400', '500', '600', '700'],
-  display: 'swap',
-  variable: '--font-outfit',
-})
-
-const inter = Inter({
-  subsets: ['latin'],
-  weight: ['400', '500', '600', '700'],
-  display: 'swap',
-  variable: '--font-inter',
-})
-
-const fraunces = Fraunces({
-  subsets: ['latin'],
-  weight: ['300', '400', '500', '700'],
-  style: ['normal', 'italic'],
-  display: 'swap',
-  variable: '--font-fraunces',
-})
-
-const jetbrainsMono = JetBrains_Mono({
-  subsets: ['latin'],
-  weight: ['400', '500'],
-  display: 'swap',
-  variable: '--font-jetbrains-mono',
-})
-
-const instrumentSans = Instrument_Sans({
-  subsets: ['latin'],
-  weight: ['400', '500', '600', '700'],
-  display: 'swap',
-  variable: '--font-instrument-sans',
-})
 
 // Analytics are mounted by CookieBanner only after the user accepts consent (#552).
 const enableVercelAnalytics = process.env.VERCEL === '1' || Boolean(process.env.NEXT_PUBLIC_VERCEL_ANALYTICS_ID)
@@ -58,8 +19,8 @@ export const viewport: Viewport = {
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://regengine.co'),
-  title: 'RegEngine — FSMA 204 Food Traceability Compliance',
-  description: 'Meet FDA and retailer traceability deadlines. Ingest supplier data, verify chain of custody, and export audit-ready records in minutes.',
+  title: 'RegEngine — Food Traceability That Protects Your Brand',
+  description: 'Supply chain traceability infrastructure for food companies. Respond to recall requests in minutes, satisfy Walmart and Kroger supplier requirements, and build the visibility your brand depends on.',
   icons: {
     icon: '/icon.png',
     apple: '/icon.png',
@@ -68,19 +29,12 @@ export const metadata: Metadata = {
     canonical: './',
   },
   openGraph: {
-    title: 'RegEngine — FSMA 204 Food Traceability Compliance',
-    description: 'Meet FDA and retailer traceability deadlines. Ingest supplier data, verify chain of custody, and export audit-ready records in minutes.',
+    title: 'RegEngine — Food Traceability That Protects Your Brand',
+    description: 'FSMA 204 Food Traceability Compliance',
     siteName: 'RegEngine',
     url: 'https://regengine.co',
     type: 'website',
-  },
-  twitter: {
-    card: 'summary_large_image',
-    title: 'RegEngine — FSMA 204 Food Traceability Compliance',
-    description: 'Meet FDA and retailer traceability deadlines. Ingest supplier data, verify chain of custody, and export audit-ready records in minutes.',
-  },
-  verification: {
-    google: 'AaGncRw3D_Qa40yoaX50kcpMvan5bTfHf5XzpHHzuFY',
+    images: [{ url: '/og-image.png', width: 1200, height: 630, alt: 'RegEngine FSMA 204 traceability compliance' }],
   },
 }
 
@@ -97,6 +51,12 @@ export default async function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link
+          href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,500;0,9..144,700;1,9..144,400&family=JetBrains+Mono:wght@400;500&display=swap"
+          rel="stylesheet"
+        />
         {/* PWA manifest (#568) */}
         <link rel="manifest" href="/manifest.json" />
         {/* OpenDyslexic font is lazy-loaded by AccessibilityWidget when needed */}
@@ -107,7 +67,7 @@ export default async function RootLayout({
           nonce={nonce}
           type="application/ld+json"
           dangerouslySetInnerHTML={{
-            __html: stringifyForScript({
+            __html: JSON.stringify({
               '@context': 'https://schema.org',
               '@type': 'Organization',
               name: 'RegEngine',
@@ -124,7 +84,7 @@ export default async function RootLayout({
           nonce={nonce}
           type="application/ld+json"
           dangerouslySetInnerHTML={{
-            __html: stringifyForScript({
+            __html: JSON.stringify({
               '@context': 'https://schema.org',
               '@type': 'WebSite',
               name: 'RegEngine',
@@ -138,7 +98,7 @@ export default async function RootLayout({
           nonce={nonce}
           type="application/ld+json"
           dangerouslySetInnerHTML={{
-            __html: stringifyForScript({
+            __html: JSON.stringify({
               '@context': 'https://schema.org',
               '@type': 'BreadcrumbList',
               itemListElement: [
@@ -159,7 +119,7 @@ export default async function RootLayout({
           nonce={nonce}
           type="application/ld+json"
           dangerouslySetInnerHTML={{
-            __html: stringifyForScript({
+            __html: JSON.stringify({
               '@context': 'https://schema.org',
               '@type': 'Product',
               name: 'RegEngine FSMA 204 Compliance Platform',
@@ -186,7 +146,7 @@ export default async function RootLayout({
         />
       </head>
       <body
-        className={`min-h-screen flex flex-col bg-background text-foreground ${outfit.variable} ${inter.variable} ${fraunces.variable} ${jetbrainsMono.variable} ${instrumentSans.variable}`}
+        className="min-h-screen flex flex-col bg-background text-foreground"
         suppressHydrationWarning
       >
         <a
@@ -204,21 +164,6 @@ export default async function RootLayout({
         </Providers>
         <AccessibilityWidget />
         <CookieBanner enableAnalytics={enableVercelAnalytics} />
-        <GoogleAnalytics />
-        {/*
-          Service-worker registration.
-          CSP enforces `script-src 'self' 'nonce-...' 'strict-dynamic'`, so any
-          inline <script> without the matching nonce is blocked by the browser.
-          Without the nonce, navigator.serviceWorker.register('/sw.js') never
-          runs and the offline-capable field capture (public/sw.js) silently
-          fails in production. (#1097)
-        */}
-        <script
-          nonce={nonce}
-          dangerouslySetInnerHTML={{
-            __html: `if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('/sw.js')})}`,
-          }}
-        />
       </body>
     </html>
   )
