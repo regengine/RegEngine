@@ -354,7 +354,7 @@ def upgrade() -> None:
         CREATE POLICY tenant_isolation_compliance_snapshots ON fsma.compliance_snapshots
             FOR ALL TO regengine, regengine_sysadmin
             USING ({_POLICY_USING})
-            WITH CHECK ({_POLICY_USING&})
+            WITH CHECK ({_POLICY_USING})
     """)
     op.execute(
         "CREATE INDEX IF NOT EXISTS idx_fsma_compliance_snapshots_tenant"
