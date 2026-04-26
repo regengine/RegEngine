@@ -78,21 +78,21 @@ export function CookieBanner({ enableAnalytics }: CookieBannerProps) {
           role="dialog"
           aria-modal="false"
           aria-label="Cookie consent"
-          className="fixed bottom-0 left-0 right-0 z-[9999] flex justify-center px-4 pb-4 sm:pb-6 pointer-events-none"
+          className="fixed bottom-2 left-2 right-2 z-[9999] pointer-events-none sm:bottom-5 sm:left-auto sm:right-5"
         >
           <div
-            className="pointer-events-auto w-full max-w-[680px] rounded-2xl border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] shadow-[0_8px_40px_rgba(0,0,0,0.24)] p-5 sm:p-6"
+            className="pointer-events-auto w-full rounded-xl border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] shadow-[0_8px_32px_rgba(0,0,0,0.22)] sm:max-w-[420px]"
           >
-            <div className="flex items-start gap-4">
+            <div className="flex items-start gap-2.5 p-3 sm:gap-3 sm:p-4">
               {/* Icon */}
-              <div className="flex-shrink-0 flex h-10 w-10 items-center justify-center rounded-xl border border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)]">
-                <Cookie className="h-5 w-5 text-[var(--re-brand)]" />
+              <div className="flex-shrink-0 flex h-7 w-7 items-center justify-center rounded-lg border border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)] sm:h-8 sm:w-8">
+                <Cookie className="h-3.5 w-3.5 text-[var(--re-brand)] sm:h-4 sm:w-4" />
               </div>
 
               {/* Content */}
               <div className="flex-1 min-w-0">
-                <div className="flex items-start justify-between gap-2 mb-1.5">
-                  <h2 className="text-[15px] font-semibold text-[var(--re-text-primary)]">
+                <div className="flex items-start justify-between gap-2 mb-0.5 sm:mb-1">
+                  <h2 className="text-sm font-semibold text-[var(--re-text-primary)]">
                     We use cookies
                   </h2>
                   {/* Dismiss button — only shown when a preference is already stored */}
@@ -107,11 +107,14 @@ export function CookieBanner({ enableAnalytics }: CookieBannerProps) {
                   )}
                 </div>
 
-                <p className="text-[13px] text-[var(--re-text-muted)] leading-relaxed mb-4">
-                  We use essential cookies for authentication and session management. We&apos;d also
-                  like to use analytics cookies (Vercel Analytics) to understand how the product is
-                  used — no advertising or third-party tracking. You can change your preference at
-                  any time from the footer.{' '}
+                <p className="mb-2 text-[11px] leading-snug text-[var(--re-text-muted)] sm:mb-3 sm:text-xs sm:leading-relaxed">
+                  <span className="sm:hidden">
+                    Essential sessions. Analytics only if accepted.
+                  </span>
+                  <span className="hidden sm:inline">
+                    Essential cookies keep sessions working. Analytics only run if you accept, with no
+                    advertising tracking. Change this anytime in the footer.
+                  </span>{' '}
                   <Link
                     href="/privacy"
                     className="text-[var(--re-brand)] underline hover:opacity-90"
@@ -122,18 +125,20 @@ export function CookieBanner({ enableAnalytics }: CookieBannerProps) {
                 </p>
 
                 {/* Buttons — Accept first, Decline second (GDPR: no hierarchy via styling) */}
-                <div className="flex flex-wrap gap-2">
+                <div className="grid grid-cols-2 gap-2">
                   <button
                     onClick={handleAccept}
-                    className="inline-flex items-center px-4 py-2 rounded-lg bg-[var(--re-brand)] text-white text-[13px] font-semibold hover:opacity-90 transition-opacity focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--re-brand)]"
+                    className="inline-flex min-h-8 items-center justify-center rounded-lg bg-[var(--re-brand)] px-2 py-1.5 text-xs font-semibold text-white transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--re-brand)] sm:min-h-9 sm:px-3 sm:py-2"
                   >
-                    Accept analytics cookies
+                    <span className="sm:hidden">Accept</span>
+                    <span className="hidden sm:inline">Accept analytics</span>
                   </button>
                   <button
                     onClick={handleDecline}
-                    className="inline-flex items-center px-4 py-2 rounded-lg border border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)] text-[var(--re-text-secondary)] text-[13px] font-semibold hover:border-[var(--re-text-muted)] transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--re-brand)]"
+                    className="inline-flex min-h-8 items-center justify-center rounded-lg border border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)] px-2 py-1.5 text-xs font-semibold text-[var(--re-text-secondary)] transition-colors hover:border-[var(--re-text-muted)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--re-brand)] sm:min-h-9 sm:px-3 sm:py-2"
                   >
-                    Essential cookies only
+                    <span className="sm:hidden">Essential</span>
+                    <span className="hidden sm:inline">Essential only</span>
                   </button>
                 </div>
               </div>
