@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { MARKETING_PRIMARY_NAV, MARKETING_FREE_TOOLS } from '@/components/layout/marketing-nav';
+import { MARKETING_ALL_TOOLS_LINK, MARKETING_PRIMARY_NAV, MARKETING_FREE_TOOLS } from '@/components/layout/marketing-nav';
 import { RegEngineWordmark } from '@/components/layout/regengine-wordmark';
 import { ThemeToggle } from '@/components/layout/theme-toggle';
 import { MobileMenuCTA } from './MobileMenuCTA';
@@ -15,13 +15,14 @@ export function MobileMenu({ user, showLoggedIn, pathname, mobileOpen, setMobile
                 style={{
                     position: "fixed",
                     inset: 0,
-                    zIndex: 49,
+                    zIndex: "var(--re-z-sticky)",
                     background: "rgba(0,0,0,0.5)",
                     backdropFilter: "blur(4px)",
                     WebkitBackdropFilter: "blur(4px)",
                     opacity: mobileOpen ? 1 : 0,
+                    visibility: mobileOpen ? "visible" : "hidden",
                     pointerEvents: mobileOpen ? "auto" : "none",
-                    transition: "opacity 0.3s cubic-bezier(0.16, 1, 0.3, 1)",
+                    transition: "opacity 0.3s cubic-bezier(0.16, 1, 0.3, 1), visibility 0.3s",
                 }}
                 onClick={() => setMobileOpen(false)}
                 aria-hidden="true"
@@ -31,7 +32,8 @@ export function MobileMenu({ user, showLoggedIn, pathname, mobileOpen, setMobile
             <div
                 className="marketing-mobile-drawer"
                 role="dialog"
-                aria-modal={mobileOpen}
+                aria-modal={mobileOpen ? true : undefined}
+                aria-hidden={!mobileOpen}
                 aria-label="Navigation menu"
                 style={{
                     position: "fixed",
@@ -39,11 +41,13 @@ export function MobileMenu({ user, showLoggedIn, pathname, mobileOpen, setMobile
                     right: 0,
                     bottom: 0,
                     width: "min(320px, 85vw)",
-                    zIndex: 51,
+                    zIndex: "var(--re-z-modal)",
                     background: "var(--re-mobile-menu-bg)",
                     borderLeft: "1px solid var(--re-mobile-border)",
                     transform: mobileOpen ? "translateX(0)" : "translateX(100%)",
-                    transition: "transform 0.35s cubic-bezier(0.16, 1, 0.3, 1)",
+                    visibility: mobileOpen ? "visible" : "hidden",
+                    pointerEvents: mobileOpen ? "auto" : "none",
+                    transition: "transform 0.35s cubic-bezier(0.16, 1, 0.3, 1), visibility 0.35s",
                     overflowY: "auto",
                     WebkitOverflowScrolling: "touch",
                     display: "flex",
@@ -89,7 +93,7 @@ export function MobileMenu({ user, showLoggedIn, pathname, mobileOpen, setMobile
 
                 {/* Primary Nav Links */}
                 <div style={{ padding: "8px 12px" }}>
-                    {(showLoggedIn ? [
+                    {(user ? [
                         { label: 'Dashboard', href: '/dashboard' },
                         { label: 'Heartbeat', href: '/dashboard/heartbeat' },
                         { label: 'Compliance', href: '/dashboard/compliance' },
@@ -136,7 +140,7 @@ export function MobileMenu({ user, showLoggedIn, pathname, mobileOpen, setMobile
                     }}>
                         FSMA 204 Compliance Tools
                     </div>
-                    {MARKETING_FREE_TOOLS.map((tool) => (
+                    {[...MARKETING_FREE_TOOLS, MARKETING_ALL_TOOLS_LINK].map((tool) => (
                         <Link
                             key={tool.href}
                             href={tool.href}
@@ -153,30 +157,31 @@ export function MobileMenu({ user, showLoggedIn, pathname, mobileOpen, setMobile
                                 WebkitTapHighlightColor: "transparent",
                             }}
                         >
-                            <span aria-hidden="true" style={{ fontSize: "18px", width: "24px", textAlign: "center" }}>{tool.emoji}</span>
+                            <span
+                                aria-hidden="true"
+                                style={{
+                                    width: "32px",
+                                    height: "32px",
+                                    borderRadius: "10px",
+                                    border: "1px solid var(--re-brand-muted)",
+                                    background: "var(--re-brand-muted)",
+                                    color: "var(--re-brand)",
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                    flexShrink: 0,
+                                }}
+                            >
+                                <tool.icon size={16} strokeWidth={2} />
+                            </span>
                             <div>
-                                <div style={{ fontSize: "14px", fontWeight: 500, color: "var(--re-text-primary)" }}>{tool.label}</div>
+                                <div style={{ fontSize: "14px", fontWeight: tool.href === "/tools" ? 600 : 500, color: tool.href === "/tools" ? "var(--re-brand)" : "var(--re-text-primary)" }}>
+                                    {tool.href === "/tools" ? `${tool.label} →` : tool.label}
+                                </div>
                                 <div style={{ fontSize: "12px", color: "var(--re-text-muted)", lineHeight: 1.3 }}>{tool.desc}</div>
                             </div>
                         </Link>
                     ))}
-                    <Link
-                        href="/tools"
-                        onClick={() => setMobileOpen(false)}
-                        style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: "12px",
-                            padding: "12px",
-                            textDecoration: "none",
-                            borderRadius: "10px",
-                            minHeight: "48px",
-                            WebkitTapHighlightColor: "transparent",
-                        }}
-                    >
-                        <span aria-hidden="true" style={{ fontSize: "18px", width: "24px", textAlign: "center" }}>&#129520;</span>
-                        <div style={{ fontSize: "14px", fontWeight: 600, color: "var(--re-brand)" }}>View All Tools &rarr;</div>
-                    </Link>
                 </div>
 
                 {/* Divider */}

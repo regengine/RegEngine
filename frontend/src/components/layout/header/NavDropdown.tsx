@@ -1,7 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import { MARKETING_FREE_TOOLS } from '@/components/layout/marketing-nav';
+import { ChevronDown } from 'lucide-react';
+import { MARKETING_ALL_TOOLS_LINK, MARKETING_FREE_TOOLS } from '@/components/layout/marketing-nav';
 import type { ToolsDropdownProps } from './types';
 
 export function NavDropdown({
@@ -14,6 +15,8 @@ export function NavDropdown({
     handleToolsKeyDown,
     focusFirstToolsItem,
 }: ToolsDropdownProps) {
+    const AllToolsIcon = MARKETING_ALL_TOOLS_LINK.icon;
+
     return (
         <div
             ref={toolsWrapperRef}
@@ -28,7 +31,13 @@ export function NavDropdown({
                 aria-expanded={toolsOpen}
                 aria-haspopup="true"
                 aria-controls="tools-dropdown"
-                onClick={() => setToolsOpen((open: boolean) => !open)}
+                onClick={() => {
+                    if (toolsOpen) {
+                        setToolsOpen(false);
+                    } else {
+                        handleToolsEnter();
+                    }
+                }}
                 onKeyDown={(e) => {
                     if (e.key === 'Escape') {
                         setToolsOpen(false);
@@ -48,15 +57,25 @@ export function NavDropdown({
                     color: "var(--re-surface-base)",
                     background: "var(--re-brand)",
                     padding: "7px 16px",
-                    borderRadius: "6px",
+                    borderRadius: "var(--re-radius-lg)",
                     textDecoration: "none",
-                    transition: "all 0.2s",
+                    transition: "all var(--re-transition-normal)",
                     cursor: "pointer",
-                    display: "inline-block",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "6px",
                     border: "none",
                 }}
             >
-                Free Tools &#9662;
+                Free Tools
+                <ChevronDown
+                    aria-hidden="true"
+                    size={14}
+                    style={{
+                        transition: "transform var(--re-transition-normal)",
+                        transform: toolsOpen ? "rotate(180deg)" : "rotate(0)",
+                    }}
+                />
             </button>
             <div
                 data-tools-dropdown
@@ -70,10 +89,11 @@ export function NavDropdown({
                     border: "none",
                     borderRadius: "10px",
                     opacity: toolsOpen ? 1 : 0,
+                    visibility: toolsOpen ? "visible" : "hidden",
                     pointerEvents: toolsOpen ? "auto" : "none",
                     transform: toolsOpen ? "translateY(0)" : "translateY(10px)",
-                    transition: "all 0.3s cubic-bezier(0.16, 1, 0.3, 1)",
-                    zIndex: 100,
+                    transition: "opacity var(--re-transition-slow), transform var(--re-transition-slow), visibility var(--re-transition-slow)",
+                    zIndex: "var(--re-z-popover)",
                 }}
             >
                 <div
@@ -87,7 +107,7 @@ export function NavDropdown({
                         borderRadius: "12px",
                         padding: "8px 0",
                         minWidth: "280px",
-                        backdropFilter: "blur(24px)",
+                        backdropFilter: "blur(16px)",
                         boxShadow: "var(--re-nav-dropdown-shadow)",
                     }}
                 >
@@ -105,7 +125,12 @@ export function NavDropdown({
                             onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = "var(--re-nav-hover)")}
                             onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.background = "transparent")}
                         >
-                            <span aria-hidden="true" className="text-sm">{tool.emoji}</span>
+                            <span
+                                aria-hidden="true"
+                                className="flex h-8 w-8 items-center justify-center rounded-lg border border-[var(--re-brand)]/20 bg-[var(--re-brand-muted)] text-[var(--re-brand)]"
+                            >
+                                <tool.icon size={15} strokeWidth={2} />
+                            </span>
                             <div>
                                 <div className="text-[13px] font-medium text-re-text-primary">{tool.label}</div>
                                 <div className="text-[11px] text-re-text-muted">{tool.desc}</div>
@@ -114,7 +139,7 @@ export function NavDropdown({
                     ))}
                     <div style={{ height: "1px", background: "var(--re-nav-divider)", margin: "6px 12px" }} />
                     <Link
-                        href="/tools"
+                        href={MARKETING_ALL_TOOLS_LINK.href}
                         role="menuitem"
                         tabIndex={toolsOpen ? 0 : -1}
                         className="flex items-center gap-2.5 py-2.5 px-4 no-underline transition-[background] duration-150"
@@ -122,10 +147,15 @@ export function NavDropdown({
                         onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = "var(--re-nav-hover)")}
                         onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.background = "transparent")}
                     >
-                        <span aria-hidden="true" className="text-sm">&#129520;</span>
+                        <span
+                            aria-hidden="true"
+                            className="flex h-8 w-8 items-center justify-center rounded-lg border border-[var(--re-brand)]/20 bg-[var(--re-brand-muted)] text-[var(--re-brand)]"
+                        >
+                            <AllToolsIcon size={15} strokeWidth={2} />
+                        </span>
                         <div>
-                            <div className="text-[13px] font-semibold text-re-brand">View All Tools &rarr;</div>
-                            <div className="text-[11px] text-re-text-muted">Explore the compliance toolkit</div>
+                            <div className="text-[13px] font-semibold text-re-brand">{MARKETING_ALL_TOOLS_LINK.label} &rarr;</div>
+                            <div className="text-[11px] text-re-text-muted">{MARKETING_ALL_TOOLS_LINK.desc}</div>
                         </div>
                     </Link>
                 </div>

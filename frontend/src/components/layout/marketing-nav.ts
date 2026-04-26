@@ -1,10 +1,13 @@
+import { Calculator, LayoutGrid, Leaf, ShieldCheck } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
+
 export type MarketingNavLink = {
     label: string;
     href: string;
 };
 
 export type MarketingToolLink = {
-    emoji: string;
+    icon: LucideIcon;
     label: string;
     desc: string;
     href: string;
@@ -19,13 +22,20 @@ export const MARKETING_PRIMARY_NAV: MarketingNavLink[] = [
 ];
 
 export const MARKETING_FREE_TOOLS: MarketingToolLink[] = [
-    { emoji: "🥬", label: "FTL Checker", desc: "Verify FDA Food Traceability List coverage", href: "/tools/ftl-checker" },
-    { emoji: "🛡️", label: "Recall Readiness", desc: "Assess your recall response capability", href: "/tools/recall-readiness" },
-    { emoji: "📊", label: "ROI Calculator", desc: "Calculate your compliance cost savings", href: "/tools/roi-calculator" },
+    { icon: Leaf, label: "FTL Checker", desc: "Verify FDA Food Traceability List coverage", href: "/tools/ftl-checker" },
+    { icon: ShieldCheck, label: "Recall Readiness", desc: "Assess your recall response capability", href: "/tools/recall-readiness" },
+    { icon: Calculator, label: "ROI Calculator", desc: "Calculate your compliance cost savings", href: "/tools/roi-calculator" },
 ];
 
+export const MARKETING_ALL_TOOLS_LINK: MarketingToolLink = {
+    icon: LayoutGrid,
+    label: "View All Tools",
+    desc: "Explore the compliance toolkit",
+    href: "/tools",
+};
+
 export const MARKETING_FOOTER_PRODUCT_LINKS: MarketingNavLink[] = [
-    ...MARKETING_PRIMARY_NAV,
+    { label: "Pricing", href: "/pricing" },
     { label: "Case Studies", href: "/case-studies" },
     { label: "Integrations", href: "/docs/api" },
     { label: "Get Started", href: "/onboarding" },
