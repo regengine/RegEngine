@@ -150,14 +150,10 @@ const nextConfig = {
                 permanent: true,
             },
             // /about page now exists — redirect removed
-            // /developer and /developers → /developer/portal (fix 404s)
+            // Keep the singular typo trap, but do not mask the real public
+            // /developers page by redirecting it into the broken portal route.
             {
                 source: '/developer',
-                destination: '/developer/portal',
-                permanent: true,
-            },
-            {
-                source: '/developers',
                 destination: '/developer/portal',
                 permanent: true,
             },
