@@ -116,7 +116,8 @@ jobs:
           psql -h localhost -U postgres -d regengine_contract -v ON_ERROR_STOP=1 \
             -c "DO \$\$ BEGIN CREATE ROLE regengine LOGIN; EXCEPTION WHEN duplicate_object THEN NULL; END \$\$;" \
             -c "DO \$\$ BEGIN CREATE ROLE regengine_sysadmin LOGIN INHERIT; EXCEPTION WHEN duplicate_object THEN NULL; END \$\$;" \
-            -c "GRANT regengine TO regengine_sysadmin;"
+            -c "GRANT regengine TO regengine_sysadmin;" \
+            -c "CREATE OR REPLACE FUNCTION get_tenant_context() RETURNS UUID AS \$\$ DECLARE tid TEXT; BEGIN tid := NULLIF(current_setting('app.tenant_id', TRUE), ''); IF tid IS NULL THEN RAISE EXCEPTION 'app.tenant_id not set - tenant context required for RLS'; END IF; RETURN tid::UUID; END; \$\$ LANGUAGE plpgsql;"
 
       - name: Apply RegEngine migrations
         working-directory: regengine
