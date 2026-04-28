@@ -270,7 +270,7 @@ async def health():
     import asyncio
     import os
     from fastapi.responses import JSONResponse
-    from shared.health import HealthCheck
+    from shared.observability.health import HealthCheck
 
     checker = HealthCheck(service_name="admin-api")
 
@@ -530,5 +530,4 @@ async def get_funnel_metrics(
     """Return aggregate tenant funnel counts and stage conversion rates."""
     stages = get_funnel_stage_metrics(db_session=db)
     return FunnelResponse(stages=[FunnelStageResponse(**stage) for stage in stages])
-
 

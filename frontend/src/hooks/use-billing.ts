@@ -7,6 +7,7 @@
 
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { getServiceURL } from '@/lib/api-config';
+import { fetchWithCsrf } from '@/lib/fetch-with-csrf';
 
 // Billing queries are proxied through the admin Next.js API route to avoid
 // CORS issues and to keep credentials server-side. The dead port 8800 is
@@ -18,7 +19,7 @@ const BILLING_API_BASE = '/api/admin';
 
 async function billingFetch<T>(path: string, options?: RequestInit): Promise<T> {
     const url = `${BILLING_API_BASE}${path}`;
-    const res = await fetch(url, {
+    const res = await fetchWithCsrf(url, {
         headers: {
             'Content-Type': 'application/json',
             ...options?.headers,
@@ -62,7 +63,7 @@ async function createIngestionCheckout(
     const { tenantId, customerEmail } = getCheckoutContext();
     const billingCycle = params.billing_cycle || 'annual';
     // Credentials are in HTTP-only cookies — proxy injects them
-    const res = await fetch(`${getServiceURL('ingestion')}/api/v1/billing/checkout`, {
+    const res = await fetchWithCsrf(`${getServiceURL('ingestion')}/api/v1/billing/checkout`, {
         method: 'POST',
         credentials: 'include',
         headers: {

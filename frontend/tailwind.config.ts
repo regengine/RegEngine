@@ -1,7 +1,7 @@
 import type { Config } from "tailwindcss"
 
 const config = {
-    darkMode: "class",
+    darkMode: ["class"],
     content: [
         './pages/**/*.{ts,tsx}',
         './components/**/*.{ts,tsx}',
@@ -19,10 +19,10 @@ const config = {
         },
         extend: {
             fontFamily: {
-                sans: ["var(--font-inter)", "system-ui", "-apple-system", "sans-serif"],
-                display: ["var(--font-outfit)", "system-ui", "-apple-system", "sans-serif"],
-                serif: ["var(--font-fraunces)", "Georgia", "serif"],
-                mono: ["var(--font-jetbrains-mono)", "'Fira Code'", "monospace"],
+                sans: ["var(--re-font-sans)"],
+                display: ["var(--re-font-display)"],
+                serif: ["var(--re-font-serif)"],
+                mono: ["var(--re-font-mono)"],
             },
             colors: {
                 border: "hsl(var(--border))",

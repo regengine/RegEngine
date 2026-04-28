@@ -402,7 +402,7 @@ export default function ComplianceDashboardPage() {
                                             <span className="text-[9px] text-muted-foreground">24-hr simulation</span>
                                         </Button>
                                     </Link>
-                                    <Link href="/tools/data-import">
+                                    <Link href="/ingest">
                                         <Button variant="outline" className="w-full h-auto min-h-[56px] py-3 flex flex-col gap-1.5 rounded-xl active:scale-[0.97] hover:border-[var(--re-brand)] transition-colors">
                                             <Upload className="h-5 w-5 text-[var(--re-brand)]" />
                                             <span className="text-xs font-medium">Import Data</span>
@@ -499,7 +499,7 @@ export default function ComplianceDashboardPage() {
                                         <Activity className="h-4 w-4 text-[var(--re-brand)]" />
                                         Traceability Summary
                                     </CardTitle>
-                                    <Link href="/tools/data-import">
+                                    <Link href="/ingest">
                                         <Button variant="ghost" size="sm" className="text-xs h-8 active:scale-[0.97]">
                                             Import More <ArrowRight className="ml-1 h-3 w-3" />
                                         </Button>
@@ -581,7 +581,7 @@ export default function ComplianceDashboardPage() {
                             Start tracking your FSMA 204 readiness by importing traceability data or scanning product labels.
                         </p>
                         <div className="flex gap-3 mt-6">
-                            <Link href="/tools/data-import">
+                            <Link href="/ingest">
                                 <Button variant="outline" size="sm">
                                     <Upload className="mr-1.5 h-3.5 w-3.5" /> Import Data
                                 </Button>

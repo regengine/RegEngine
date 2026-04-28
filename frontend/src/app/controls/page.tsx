@@ -1,5 +1,6 @@
 'use client';
 
+import { fetchWithCsrf } from '@/lib/fetch-with-csrf';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
@@ -41,7 +42,7 @@ export default function MyControlsPage() {
 
   const fetchControls = async () => {
     try {
-      const response = await fetch('/api/controls/controls', {
+      const response = await fetchWithCsrf('/api/controls/controls', {
         headers: {
           'X-RegEngine-API-Key': apiKey || ''
         }
@@ -58,7 +59,7 @@ export default function MyControlsPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const response = await fetch('/api/controls/controls', {
+      const response = await fetchWithCsrf('/api/controls/controls', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -81,7 +82,7 @@ export default function MyControlsPage() {
     if (!confirm('Are you sure you want to delete this control?')) return;
 
     try {
-      await fetch(`/api/controls/controls/${controlId}`, {
+      await fetchWithCsrf(`/api/controls/controls/${controlId}`, {
         method: 'DELETE',
         headers: {
           'X-RegEngine-API-Key': apiKey || ''

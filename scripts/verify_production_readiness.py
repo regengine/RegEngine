@@ -5,7 +5,7 @@ Production Readiness Verification Script for RegEngine
 This script verifies that all critical production-ready fixes are in place:
 1. Texas scraper uses inheritance from GenericRSSScraper
 2. Correlation ID middleware is implemented
-3. Rate limiting enforces Redis in production
+3. Brute-force rate limiting supports Redis-backed shared counters
 4. Railway deployment workflow is configured
 
 Usage:
@@ -165,7 +165,7 @@ class ProductionReadinessVerifier:
     def check_correlation_middleware(self) -> VerificationResult:
         """Verify correlation ID middleware is implemented."""
         name = "Correlation ID Middleware"
-        file_path = self.repo_root / "shared/correlation.py"
+        file_path = self.repo_root / "services/shared/observability/correlation.py"
 
         if not file_path.exists():
             return VerificationResult(
@@ -215,9 +215,9 @@ class ProductionReadinessVerifier:
             )
 
     def check_rate_limit_security(self) -> VerificationResult:
-        """Verify rate limiting enforces Redis in production."""
-        name = "Rate Limiting Security (Production Redis Enforcement)"
-        file_path = self.repo_root / "shared/rate_limit.py"
+        """Verify brute-force rate limiting can use shared Redis counters."""
+        name = "Rate Limiting Security (Shared Redis Counters)"
+        file_path = self.repo_root / "services/shared/rate_limit.py"
 
         if not file_path.exists():
             return VerificationResult(
@@ -231,41 +231,33 @@ class ProductionReadinessVerifier:
             with open(file_path, "r") as f:
                 content = f.read()
 
-            # Check for production enforcement logic
-            # Look for the security check pattern
-            patterns = [
-                r'REGENGINE_ENV.*production',
-                r'REDIS_URL.*required.*production',
-                r'RuntimeError.*production',
+            required_components = [
+                ("BruteForceLimiter", "Shared brute-force limiter class"),
+                ("REGENGINE_REDIS_URL", "Primary Redis env var"),
+                ("REDIS_URL", "Fallback Redis env var"),
+                ("record_failure", "Failure counter mutation"),
+                ("is_redis_backed", "Operational visibility for shared-store status"),
             ]
 
-            matches = []
-            for pattern in patterns:
-                if re.search(pattern, content, re.IGNORECASE):
-                    matches.append(pattern)
+            missing = [
+                f"{needle} ({description})"
+                for needle, description in required_components
+                if needle not in content
+            ]
 
-            if len(matches) >= 2:
-                # Check if it's in get_rate_limiter function
-                if "get_rate_limiter" in content:
-                    return VerificationResult(
-                        name,
-                        True,
-                        "Production Redis enforcement is active",
-                        f"Application will fail to start in production without REDIS_URL",
-                    )
-                else:
-                    return VerificationResult(
-                        name,
-                        False,
-                        "Production check exists but not in get_rate_limiter",
-                        "Security check should be in get_rate_limiter function",
-                    )
+            if not missing:
+                return VerificationResult(
+                    name,
+                    True,
+                    "Redis-backed brute-force limiter is implemented",
+                    f"Location: {file_path.relative_to(self.repo_root)}",
+                )
             else:
                 return VerificationResult(
                     name,
                     False,
-                    "Production Redis enforcement not found",
-                    f"Found {len(matches)}/3 expected patterns",
+                    "Shared Redis counter implementation is incomplete",
+                    f"Missing: {', '.join(missing)}",
                 )
 
         except Exception as e:

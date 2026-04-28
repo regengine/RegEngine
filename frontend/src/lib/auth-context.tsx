@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { User } from '@/types/api';
 import { apiClient } from './api-client';
+import { fetchWithCsrf } from './fetch-with-csrf';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 
 interface AuthContextType {
@@ -81,7 +82,7 @@ async function setSessionCookies(params: {
   if (params.user) body.user = params.user;
   if (Object.keys(body).length === 0) return true;
   try {
-    const res = await fetch('/api/session', {
+    const res = await fetchWithCsrf('/api/session', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
@@ -104,7 +105,7 @@ async function setSessionCookies(params: {
 /** Clear all session cookies via /api/session DELETE. */
 function clearSessionCookies() {
   if (typeof window === 'undefined') return;
-  fetch('/api/session', { method: 'DELETE' }).catch(() => {});
+  fetchWithCsrf('/api/session', { method: 'DELETE' }).catch(() => {});
 }
 
 /** Check current session via /api/session GET — never returns raw tokens. */
@@ -491,7 +492,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Best-effort persist to backend so state survives across devices
       const tid = localStorage.getItem(STORAGE_KEYS.TENANT_ID);
       if (tid) {
-        fetch(`/api/admin/v1/tenants/${tid}/settings`, {
+        fetchWithCsrf(`/api/admin/v1/tenants/${tid}/settings`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'include',

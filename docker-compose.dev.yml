@@ -4,7 +4,7 @@
 # Production uses Supabase (Postgres 17). This provides a local Postgres
 # for running tests and backend services without a Supabase project.
 #
-# For Neo4j, Redis, MinIO (legacy services), use docker-compose.yml instead.
+# Legacy infrastructure is intentionally not part of the default dev stack.
 
 services:
   postgres:

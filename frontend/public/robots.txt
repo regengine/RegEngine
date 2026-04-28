@@ -13,4 +13,4 @@ Disallow: /sysadmin/
 Disallow: /developer/portal/
 
 # Sitemap location
-Sitemap: https://www.regengine.co/sitemap.xml
+Sitemap: https://regengine.co/sitemap.xml

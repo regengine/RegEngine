@@ -1,5 +1,6 @@
 'use client';
 
+import { fetchWithCsrf } from '@/lib/fetch-with-csrf';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
@@ -43,7 +44,7 @@ export function PricingCheckoutButton({
         setError(null);
 
         try {
-            const response = await fetch('/api/billing/checkout', {
+            const response = await fetchWithCsrf('/api/billing/checkout', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({

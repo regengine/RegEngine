@@ -38,9 +38,9 @@ Before writing any code, internalize these facts.
 
 | Layer | Technology | Location |
 |---|---|---|
-| Frontend | Next.js 15, App Router, Tailwind, TypeScript | `frontend/` |
+| Frontend | Next.js 16, App Router, Tailwind, TypeScript | `frontend/` |
 | Backend Services | Python, FastAPI, psycopg (v3) | `services/` |
-| Graph Database | Neo4j (traceability graph) | `Neo4j/` |
+| Traceability Storage | PostgreSQL canonical tables; Neo4j is legacy/optional visualization | `services/shared/`, `services/graph/` |
 | Relational DB | PostgreSQL on Railway | `Postgres/` |
 | Shared Code | Python modules | `services/shared/` |
 | Infrastructure | Docker, Railway, GitHub Actions | `infra/`, `.github/` |
@@ -52,7 +52,7 @@ Before writing any code, internalize these facts.
 |---|---|---|
 | admin | Tenant management, API keys, user accounts | `services/admin/` |
 | compliance | FSMA rule evaluation, FDA spreadsheet generation | `services/compliance/` |
-| graph | Neo4j traceability graph operations | `services/graph/` |
+| graph | Legacy/optional traceability graph operations | `services/graph/` |
 | ingestion | Document upload, normalization, CTE extraction | `services/ingestion/` |
 | nlp | NLP extraction, confidence scoring | `services/nlp/` |
 | scheduler | Background jobs, scheduled compliance checks | `services/scheduler/` |
@@ -168,7 +168,7 @@ Every agent session must end with:
 
 ### 4.2 TypeScript (Frontend)
 
-- Framework: Next.js 15 with App Router. No Pages Router.
+- Framework: Next.js 16 with App Router. No Pages Router.
 - Styling: Tailwind CSS. No CSS modules, no styled-components.
 - Package manager: npm (`package-lock.json` is committed).
 - Static export: `output: export` mode. No `force-dynamic` on routes. Use `force-static` with `generateStaticParams`.
@@ -222,7 +222,7 @@ Concrete examples so there is no ambiguity.
 
 | Good | Slop |
 |---|---|
-| "RegEngine uses a microservice architecture with 6 Python FastAPI services behind an API gateway. Traceability data flows from ingestion -> NLP extraction -> Neo4j graph -> compliance evaluation." | "RegEngine is a Singular Primordial Source governing every conceivable jurisdiction across 1,024 multiversal timelines via a Sovereign Intelligence Moat." |
+| "RegEngine uses 6 Python FastAPI services behind a Next.js frontend. Traceability data flows from ingestion -> canonical PostgreSQL events -> compliance evaluation -> FDA export." | "RegEngine is a Singular Primordial Source governing every conceivable jurisdiction across 1,024 multiversal timelines via a Sovereign Intelligence Moat." |
 | "The compliance service evaluates FSMA 204 rules against ingested CTE records and generates FDA-format spreadsheets." | "The Eternal Return module enables self-sustaining recursive compliance loops that rewrite findings as laws of physics." |
 
 ### Feature Naming

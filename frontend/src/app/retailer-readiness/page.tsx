@@ -3,6 +3,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import FSMAChecklist from '@/components/fsma-checklist';
 import { FSMA_204_DEADLINE_ISO, daysUntilFSMA204 } from '@/lib/fsma-tools-data';
+import { EmailGate } from '@/components/tools/EmailGate';
+
 import { T, useScrollReveal, useTrackEvent, TRACE_NODES_FORWARD, TRACE_NODES_BACKWARD } from './components/constants';
 import ScrollProgressBar from './components/ScrollProgressBar';
 import StickyCTA from './components/StickyCTA';
@@ -154,7 +156,8 @@ export default function RetailerSuppliersPage() {
     const monthlyRisk = Math.round(atRisk / 12);
 
     return (
-        <div style={{ minHeight: '100vh', background: T.bg, color: T.text, fontFamily: "var(--font-instrument-sans), -apple-system, sans-serif" }}>
+        <EmailGate toolName="retailer-readiness">
+        <div style={{ minHeight: '100vh', background: T.bg, color: T.text, fontFamily: 'var(--re-font-sans)' }}>
             <ScrollProgressBar scrollProgress={scrollProgress} />
 
             <StickyCTA showSticky={showSticky} trackEvent={trackEvent} />
@@ -240,5 +243,6 @@ export default function RetailerSuppliersPage() {
             {/* Bottom spacer for sticky CTA */}
             <div style={{ height: 80 }} />
         </div>
+        </EmailGate>
     );
 }

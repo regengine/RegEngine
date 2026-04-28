@@ -47,6 +47,9 @@ export function MarketingHeader() {
     };
 
     const handleToolsLeave = () => {
+        if (toolsWrapperRef.current?.contains(document.activeElement)) {
+            return;
+        }
         if (closeTimeoutRef.current) {
             clearTimeout(closeTimeoutRef.current);
         }
@@ -126,7 +129,7 @@ export function MarketingHeader() {
         <>
             <nav
                 aria-label="Main navigation"
-                className="sticky top-0 z-50 backdrop-blur-[16px]"
+                className="sticky top-0 z-[var(--re-z-nav)] backdrop-blur-[16px]"
                 style={{
                     borderBottom: "1px solid var(--re-nav-border)",
                     WebkitBackdropFilter: "blur(16px)",
@@ -165,17 +168,6 @@ export function MarketingHeader() {
                 setMobileOpen={setMobileOpen}
             />
 
-            {/* Responsive CSS */}
-            <style jsx>{`
-                @media (max-width: 768px) {
-                    .marketing-desktop-nav {
-                        display: none !important;
-                    }
-                    .marketing-mobile-toggle {
-                        display: flex !important;
-                    }
-                }
-            `}</style>
         </>
     );
 }

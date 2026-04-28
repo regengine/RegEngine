@@ -104,7 +104,7 @@ async def root():
     }
 
 # Standardized Health & Readiness (Phase 17)
-from shared.health import HealthCheck, install_health_router
+from shared.observability.health import HealthCheck, install_health_router
 
 health = HealthCheck(service_name="graph-service")
 install_health_router(app, service_name="graph-service", health_check=health)

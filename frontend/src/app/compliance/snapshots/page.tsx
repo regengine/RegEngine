@@ -1,5 +1,6 @@
 'use client';
 
+import { fetchWithCsrf } from '@/lib/fetch-with-csrf';
 import { useState, useEffect } from 'react';
 import { useTenant } from '@/lib/tenant-context';
 import { useAuth } from '@/lib/auth-context';
@@ -119,7 +120,7 @@ export default function SnapshotsPage() {
     const fetchSnapshots = async () => {
         setFetchError(null);
         try {
-            const response = await fetch(`/api/admin/v1/compliance/snapshots/${tenantId}`);
+            const response = await fetchWithCsrf(`/api/admin/v1/compliance/snapshots/${tenantId}`);
             if (response.ok) {
                 const data = await response.json();
                 if (Array.isArray(data)) {
@@ -146,7 +147,7 @@ export default function SnapshotsPage() {
 
         setCreating(true);
         try {
-            const response = await fetch(`/api/admin/v1/compliance/snapshots/${tenantId}`, {
+            const response = await fetchWithCsrf(`/api/admin/v1/compliance/snapshots/${tenantId}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -173,7 +174,7 @@ export default function SnapshotsPage() {
         if (!attestingSnapshotId || !attestName.trim() || !attestTitle.trim()) return;
 
         try {
-            const response = await fetch(`/api/admin/v1/compliance/snapshots/${tenantId}/${attestingSnapshotId}/attest`, {
+            const response = await fetchWithCsrf(`/api/admin/v1/compliance/snapshots/${tenantId}/${attestingSnapshotId}/attest`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -196,7 +197,7 @@ export default function SnapshotsPage() {
 
     const verifySnapshot = async (snapshotId: string) => {
         try {
-            const response = await fetch(
+            const response = await fetchWithCsrf(
                 `/api/admin/v1/compliance/snapshots/${tenantId}/${snapshotId}/verify?verified_by=${encodeURIComponent(userEmail)}`
             );
 
@@ -213,7 +214,7 @@ export default function SnapshotsPage() {
 
     const downloadAuditPack = async (snapshotId: string, snapshotName: string) => {
         try {
-            const response = await fetch(
+            const response = await fetchWithCsrf(
                 `/api/admin/v1/compliance/snapshots/${tenantId}/${snapshotId}/audit-pack`
             );
 
@@ -236,7 +237,7 @@ export default function SnapshotsPage() {
 
     const exportSnapshot = async (snapshotId: string, snapshotName: string) => {
         try {
-            const response = await fetch(
+            const response = await fetchWithCsrf(
                 `/api/admin/v1/compliance/snapshots/${tenantId}/${snapshotId}/export`
             );
 
@@ -344,7 +345,7 @@ export default function SnapshotsPage() {
 
     const refreezeSnapshot = async (snapshotId: string) => {
         try {
-            const response = await fetch(
+            const response = await fetchWithCsrf(
                 `/api/admin/v1/compliance/snapshots/${tenantId}/${snapshotId}/refreeze`,
                 {
                     method: 'POST',
@@ -363,7 +364,7 @@ export default function SnapshotsPage() {
 
     const getFdaResponse = async (snapshotId: string) => {
         try {
-            const response = await fetch(
+            const response = await fetchWithCsrf(
                 `/api/admin/v1/compliance/snapshots/${tenantId}/${snapshotId}/fda-response`
             );
 
@@ -389,7 +390,7 @@ export default function SnapshotsPage() {
         if (selectedForDiff.length !== 2) return;
 
         try {
-            const response = await fetch(
+            const response = await fetchWithCsrf(
                 `/api/admin/v1/compliance/snapshots/${tenantId}/diff?snapshot_a=${selectedForDiff[0]}&snapshot_b=${selectedForDiff[1]}`
             );
 

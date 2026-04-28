@@ -2,6 +2,7 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/lib/auth-context';
+import { fetchWithCsrf } from '@/lib/fetch-with-csrf';
 import { POLL_CONTROL_PLANE_MS, POLL_DATA_MS, POLL_METRICS_MS } from '@/lib/polling-config';
 
 // ---------------------------------------------------------------------------
@@ -22,7 +23,7 @@ async function cpFetch<T>(
   options?: RequestInit,
 ): Promise<CpResult<T>> {
   const url = `${INGESTION_API}${endpoint}`;
-  const response = await fetch(url, {
+  const response = await fetchWithCsrf(url, {
     ...options,
     credentials: 'include', // Send HTTP-only cookies to same-origin proxy
     headers: {

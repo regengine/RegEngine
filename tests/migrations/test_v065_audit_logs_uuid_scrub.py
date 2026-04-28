@@ -46,7 +46,6 @@ import pytest
 testcontainers = pytest.importorskip("testcontainers")  # noqa: F841
 pytest.importorskip("testcontainers.postgres")
 
-from docker.errors import DockerException  # noqa: E402
 from sqlalchemy import create_engine, text  # noqa: E402
 from testcontainers.postgres import PostgresContainer  # noqa: E402
 
@@ -72,25 +71,19 @@ def _load_v065_module():
 
 
 def _apply_v065(conn, v065) -> None:
-    """Apply v065's full upgrade sequence on an open SQLAlchemy connection."""
+    """Apply v065's full upgrade sequence on an open SQLAlchemy connection.
+
+    Mirrors the ordering in ``v065.upgrade()``:
+      1. create scrub helper
+      2. drop the v056 policy (so the ALTERs aren't blocked by it)
+      3. scrub + ALTER each column
+      4. re-issue the policy without the ``::uuid`` cast
+    """
     conn.execute(text(v065._CREATE_IS_VALID_UUID_FN))
+    conn.execute(text(v065._DROP_POLICY_SQL))
     for column, is_nullable in v065._COLUMNS_TO_FIX:
         conn.execute(text(v065._scrub_and_alter_text_to_uuid(column, is_nullable)))
-    conn.execute(
-        text(
-            """
-            DO $$
-            BEGIN
-                IF to_regclass('public.audit_logs') IS NULL THEN
-                    RETURN;
-                END IF;
-                DROP POLICY IF EXISTS tenant_isolation_audit ON public.audit_logs;
-                CREATE POLICY tenant_isolation_audit ON public.audit_logs
-                    FOR ALL USING (tenant_id = get_tenant_context());
-            END$$;
-            """
-        )
-    )
+    conn.execute(text(v065._CREATE_POLICY_NO_CAST_SQL))
 
 
 # Static UUIDs let the assertions reference exact values rather than
@@ -103,13 +96,7 @@ GOOD_REQUEST = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
 
 @pytest.fixture(scope="module")
 def pg_engine():
-    try:
-        container = PostgresContainer("postgres:16")
-        pg = container.start()
-    except DockerException as exc:
-        pytest.skip(f"PostgresContainer unavailable: {exc}")
-
-    try:
+    with PostgresContainer("postgres:16") as pg:
         engine = create_engine(pg.get_connection_url(), future=True)
         with engine.begin() as conn:
             # Minimal stand-in for ``get_tenant_context()`` so the v056-style
@@ -125,24 +112,8 @@ def pg_engine():
                     """
                 )
             )
-            # Legacy schema: text, not uuid — this is what v065 must repair.
-            conn.execute(
-                text(
-                    """
-                    CREATE TABLE public.audit_logs (
-                        id BIGSERIAL PRIMARY KEY,
-                        tenant_id text NOT NULL,
-                        actor_id text NULL,
-                        request_id text NULL,
-                        integrity_hash text NOT NULL
-                    )
-                    """
-                )
-            )
         yield engine
         engine.dispose()
-    finally:
-        container.stop()
 
 
 @pytest.fixture
@@ -150,12 +121,10 @@ def seed_audit_rows(pg_engine):
     """Insert a representative mix of good and bad rows, return their ids.
 
     Uses a separate fixture per test so each test runs against a fresh
-    table state. The teardown TRUNCATEs after the test (the table at
-    this point may already be uuid-typed and append-only-safe — TRUNCATE
-    sidesteps both).
+    table state. Each test seeds via DROP + CREATE + INSERT, so there's no
+    cross-test leakage even though the engine is module-scoped.
     """
     with pg_engine.begin() as conn:
-        # Reset to legacy text schema in case a prior test mutated it.
         conn.execute(text("DROP TABLE IF EXISTS public.audit_logs"))
         conn.execute(
             text(
@@ -199,8 +168,6 @@ def seed_audit_rows(pg_engine):
             ).scalar_one()
             ids.append(row_id)
     yield ids
-    # Teardown: TRUNCATE works even after the table flips to uuid /
-    # append-only.
     with pg_engine.begin() as conn:
         conn.execute(text("DROP TABLE IF EXISTS public.audit_logs"))
 

@@ -210,7 +210,7 @@ class FSMASyncWorker:
 
         #1197: demonstrates the schema_version dispatch pattern. We do
         NOT call ``parse_traceability_event`` here because the publisher
-        (``canonical_persistence.migration.publish_graph_sync``) sends a
+        (``canonical_persistence.legacy_dual_write.publish_graph_sync``) sends a
         subset dict rather than a full event — the required-field set
         does not line up. Instead we peek at ``schema_version`` and
         refuse unknown versions, so a future envelope bump (v2+) with

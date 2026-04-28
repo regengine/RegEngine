@@ -144,7 +144,7 @@ When creating or refactoring service entrypoints, follow this pattern instead of
 4. Traceability queries
    - Graph FSMA routers under `services/graph/app/routers/fsma/`.
 5. FDA export + verification
-   - Router: `services/ingestion/app/fda_export_router.py`
+   - Router: `services/ingestion/app/fda_export/router.py`
    - Endpoints include export, export history, and export verification.
 
 ## Data Stores

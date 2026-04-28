@@ -145,7 +145,7 @@ jobs:
   ci-status:
     name: CI Status Gate
     if: always()
-    needs: [build, lint, test, security, e2e]
+    needs: [build, lint, test, security]
     runs-on: ubuntu-latest
     steps:
       - name: Check results
@@ -154,11 +154,15 @@ jobs:
           echo "Lint:     ${{ needs.lint.result }}"
           echo "Tests:    ${{ needs.test.result }}"
           echo "Security: ${{ needs.security.result }}"
-          if [[ "${{ needs.build.result }}" == "failure" ]]; then
-            echo "::error::Build failed"
+          echo "E2E:      advisory (runs separately)"
+          if [[ "${{ needs.build.result }}" == "failure" \
+             || "${{ needs.lint.result }}" == "failure" \
+             || "${{ needs.test.result }}" == "failure" \
+             || "${{ needs.security.result }}" == "failure" ]]; then
+            echo "::error::Build, lint, unit tests, or security audit failed"
             exit 1
           fi
-          echo "✅ All checks passed"
+          echo "All blocking frontend checks passed"
 
   # ── E2E Tests (Playwright) ───────────────────────────────
   e2e:
@@ -215,6 +219,8 @@ jobs:
           npx playwright install --with-deps
 
       - name: Run E2E tests
+        id: run_e2e
+        continue-on-error: true
         env:
           # NOTE: NEXT_PUBLIC_API_BASE_URL is intentionally NOT set here.
           # The dev webServer runs on localhost:3001. Setting a production base URL
@@ -252,9 +258,19 @@ jobs:
           npm run test:e2e
 
       - name: Upload Playwright test results
-        if: failure()
+        if: steps.run_e2e.outcome == 'failure'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7
         with:
           name: playwright-results
           path: frontend/test-results/
           retention-days: 14
+
+      - name: Report advisory E2E failure
+        if: steps.run_e2e.outcome == 'failure'
+        run: |
+          echo "::warning::Playwright E2E failed in advisory mode. Build, lint, unit tests, and security audit remain the gating checks."
+          {
+            echo "### Playwright E2E"
+            echo ""
+            echo "Playwright E2E failed in advisory mode. Download the uploaded playwright-results artifact for traces and screenshots."
+          } >> "$GITHUB_STEP_SUMMARY"

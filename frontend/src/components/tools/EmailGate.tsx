@@ -1,5 +1,6 @@
 'use client';
 
+import { fetchWithCsrf } from '@/lib/fetch-with-csrf';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Mail, ArrowRight, Loader2, ChevronDown, ChevronUp } from 'lucide-react';
 
@@ -32,7 +33,7 @@ export function EmailGate({ toolName, children }: EmailGateProps) {
 
     // Check cookie on mount
     useEffect(() => {
-        fetch('/api/tools/check-access')
+        fetchWithCsrf('/api/tools/check-access')
             .then((res) => res.json())
             .then((data) => setStep(data.hasAccess ? 'verified' : 'email'))
             .catch(() => setStep('email'));
@@ -57,7 +58,7 @@ export function EmailGate({ toolName, children }: EmailGateProps) {
             setLoading(true);
 
             try {
-                const res = await fetch('/api/tools/verify', {
+                const res = await fetchWithCsrf('/api/tools/verify', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -92,7 +93,7 @@ export function EmailGate({ toolName, children }: EmailGateProps) {
             setLoading(true);
 
             try {
-                const res = await fetch('/api/tools/verify', {
+                const res = await fetchWithCsrf('/api/tools/verify', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -136,7 +137,7 @@ export function EmailGate({ toolName, children }: EmailGateProps) {
         setLoading(true);
 
         try {
-            const res = await fetch('/api/tools/verify', {
+            const res = await fetchWithCsrf('/api/tools/verify', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({

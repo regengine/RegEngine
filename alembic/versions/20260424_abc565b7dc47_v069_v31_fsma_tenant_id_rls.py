@@ -506,3 +506,4 @@ def downgrade() -> None:
     """)
     op.execute("ALTER TABLE fsma.products NO FORCE ROW LEVEL SECURITY")
     op.execute("ALTER TABLE fsma.products DROP COLUMN IF EXISTS tenant_id")
+

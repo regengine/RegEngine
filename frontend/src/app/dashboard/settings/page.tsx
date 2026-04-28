@@ -1,5 +1,6 @@
 'use client';
 
+import { fetchWithCsrf } from '@/lib/fetch-with-csrf';
 import React, { useState, useEffect, useCallback } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
@@ -89,7 +90,7 @@ export default function SettingsPage() {
         queryFn: async () => {
             const { getServiceURL } = await import('@/lib/api-config');
             const base = getServiceURL('ingestion');
-            const res = await fetch(`${base}/api/v1/integrations/${tenantId}`, {
+            const res = await fetchWithCsrf(`${base}/api/v1/integrations/${tenantId}`, {
                 headers: { 'Content-Type': 'application/json', 'X-RegEngine-API-Key': apiKey! },
             });
             if (!res.ok) return null;
@@ -120,7 +121,7 @@ export default function SettingsPage() {
         mutationFn: async () => {
             const { getServiceURL } = await import('@/lib/api-config');
             const base = getServiceURL('ingestion');
-            const res = await fetch(`${base}/api/v1/settings/${tenantId}/profile`, {
+            const res = await fetchWithCsrf(`${base}/api/v1/settings/${tenantId}/profile`, {
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json',

@@ -1,5 +1,6 @@
 'use client';
 
+import { fetchWithCsrf } from '@/lib/fetch-with-csrf';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import type {
   TraceResult,
@@ -32,7 +33,7 @@ async function fsmaFetch<T>(
 ): Promise<T> {
   const url = `${GRAPH_API_BASE}${endpoint}`;
 
-  const response = await fetch(url, {
+  const response = await fetchWithCsrf(url, {
     ...options,
     credentials: 'include', // Send HTTP-only cookies
     headers: {
@@ -81,7 +82,7 @@ export function useTimeline(tlc: string, apiKey: string, enabled = true) {
 export function useExportTrace(apiKey: string) {
   return useMutation({
     mutationFn: async ({ tlc, direction }: { tlc: string; direction: 'forward' | 'backward' }) => {
-      const response = await fetch(
+      const response = await fetchWithCsrf(
         `${GRAPH_API_BASE}/export/trace/${encodeURIComponent(tlc)}?direction=${direction}`,
         {
           credentials: 'include',
@@ -105,7 +106,7 @@ export function useExportTrace(apiKey: string) {
 export function useExportRecallContacts(apiKey: string) {
   return useMutation({
     mutationFn: async (tlc: string) => {
-      const response = await fetch(
+      const response = await fetchWithCsrf(
         `${GRAPH_API_BASE}/export/recall-contacts/${encodeURIComponent(tlc)}`,
         {
           credentials: 'include',
@@ -307,7 +308,7 @@ export function useFSMAHealth() {
   return useQuery({
     queryKey: ['fsma', 'health'],
     queryFn: async () => {
-      const response = await fetch(`${GRAPH_API_BASE}/metrics/health`);
+      const response = await fetchWithCsrf(`${GRAPH_API_BASE}/metrics/health`);
       if (!response.ok) throw new Error('FSMA service unhealthy');
       return response.json();
     },
@@ -344,7 +345,7 @@ export function useOrphanedLots(apiKey: string) {
 export function useExportComplianceReport(apiKey: string) {
   return useMutation({
     mutationFn: async () => {
-      const response = await fetch(`${GRAPH_API_BASE}/export/gaps`, {
+      const response = await fetchWithCsrf(`${GRAPH_API_BASE}/export/gaps`, {
         headers: {
           'X-RegEngine-API-Key': apiKey,
         },
@@ -377,7 +378,7 @@ export function useFTLCategories() {
     queryKey: ['fsma', 'wizard', 'ftl-categories'],
     queryFn: async () => {
       const url = `${GRAPH_API_BASE}/wizard/ftl-categories`;
-      const response = await fetch(url);
+      const response = await fetchWithCsrf(url);
       if (!response.ok) throw new Error(`FTL categories fetch failed: ${response.status}`);
       return response.json();
     },
@@ -395,7 +396,7 @@ export function useCheckApplicability(selections: string[]) {
     queryKey: ['fsma', 'wizard', 'applicability', selections],
     queryFn: async () => {
       const url = `${GRAPH_API_BASE}/wizard/applicability`;
-      const response = await fetch(url, {
+      const response = await fetchWithCsrf(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ selections }),
@@ -418,7 +419,7 @@ export function useCheckExemptions(answers: Record<string, boolean>) {
     queryKey: ['fsma', 'wizard', 'exemptions', answers],
     queryFn: async () => {
       const url = `${GRAPH_API_BASE}/wizard/exemptions`;
-      const response = await fetch(url, {
+      const response = await fetchWithCsrf(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ answers }),

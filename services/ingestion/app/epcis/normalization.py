@@ -14,7 +14,7 @@ from typing import Any
 
 from fastapi import HTTPException
 
-from services.ingestion.app.epcis.extraction import (
+from .extraction import (
     _extract_location_id,
     _extract_lot_data,
     _extract_party_id,

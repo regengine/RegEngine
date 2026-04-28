@@ -29,6 +29,16 @@ SUPPORTED_CTE_TYPES = {
     "first_receiver",
 }
 
+CTE_TYPE_ALIASES = {
+    "transformation": "transforming",
+    "first_land_based_receiving": "first_receiver",
+}
+
+
+def _normalize_supplier_cte_type(cte_type: str) -> str:
+    normalized = cte_type.strip().lower()
+    return CTE_TYPE_ALIASES.get(normalized, normalized)
+
 
 def _iso_utc(value: datetime) -> str:
     if value.tzinfo is None:
@@ -169,7 +179,7 @@ def _persist_supplier_cte_event(
     kde_data: dict[str, Any],
     obligation_ids: list[str],
 ) -> tuple[SupplierCTEEventModel, SupplierTraceabilityLotModel]:
-    normalized_cte_type = cte_type.strip().lower()
+    normalized_cte_type = _normalize_supplier_cte_type(cte_type)
     if normalized_cte_type not in SUPPORTED_CTE_TYPES:
         raise HTTPException(status_code=400, detail=f"Unsupported cte_type: {cte_type}")
 
@@ -192,7 +202,6 @@ def _persist_supplier_cte_event(
     lot = db.execute(
         select(SupplierTraceabilityLotModel).where(
             SupplierTraceabilityLotModel.tenant_id == tenant_id,
-            SupplierTraceabilityLotModel.supplier_user_id == current_user.id,
             SupplierTraceabilityLotModel.tlc_code == normalized_tlc_code,
         )
     ).scalar_one_or_none()

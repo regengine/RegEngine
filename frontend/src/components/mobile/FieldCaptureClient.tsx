@@ -1,5 +1,6 @@
 'use client';
 
+import { fetchWithCsrf } from '@/lib/fetch-with-csrf';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, Camera, Loader2, Package, Scan, Wifi, WifiOff } from 'lucide-react';
@@ -96,7 +97,7 @@ export function FieldCaptureClient() {
         const loadCatalog = async () => {
             if (!apiKey || !tenantId) return;
             try {
-                const response = await fetch(`${getServiceURL('ingestion')}/api/v1/products/${tenantId}`, {
+                const response = await fetchWithCsrf(`${getServiceURL('ingestion')}/api/v1/products/${tenantId}`, {
                     headers: {
                         'Content-Type': 'application/json',
                         'X-RegEngine-API-Key': apiKey,
@@ -157,7 +158,7 @@ export function FieldCaptureClient() {
                 ],
             };
 
-            const response = await fetch(`${getServiceURL('ingestion')}/api/v1/webhooks/ingest`, {
+            const response = await fetchWithCsrf(`${getServiceURL('ingestion')}/api/v1/webhooks/ingest`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -263,7 +264,7 @@ export function FieldCaptureClient() {
     const handleCapture = async (imageData: string) => {
         setCapturedImages((prev) => [imageData, ...prev]);
 
-        const res = await fetch(imageData);
+        const res = await fetchWithCsrf(imageData);
         const blob = await res.blob();
 
         if (!isOnline) {
@@ -285,7 +286,7 @@ export function FieldCaptureClient() {
 
             toast({ title: 'Analyzing Label...', description: 'Running computer vision extraction.' });
 
-            const visionRes = await fetch(`${getServiceURL('ingestion')}/api/v1/vision/analyze-label`, {
+            const visionRes = await fetchWithCsrf(`${getServiceURL('ingestion')}/api/v1/vision/analyze-label`, {
                 method: 'POST',
                 body: formData,
             });
@@ -318,7 +319,7 @@ export function FieldCaptureClient() {
                             },
                         }],
                     };
-                    const ingestRes = await fetch(`${getServiceURL('ingestion')}/api/v1/webhooks/ingest`, {
+                    const ingestRes = await fetchWithCsrf(`${getServiceURL('ingestion')}/api/v1/webhooks/ingest`, {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',

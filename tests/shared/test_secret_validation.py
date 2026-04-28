@@ -1,186 +1,107 @@
 """
-SEC-004: Tests for secret validation script.
-Tests the check_required_secrets.sh behavior.
+SEC-004: Tests for current environment validation.
 """
 
-import subprocess
-import os
-import pytest
 from pathlib import Path
+import importlib.util
+import sys
 
-SCRIPT_PATH = Path(__file__).parent.parent.parent / "scripts" / "check_required_secrets.sh"
+ROOT = Path(__file__).parent.parent.parent
+SPEC = importlib.util.spec_from_file_location("validate_env", ROOT / "scripts" / "validate_env.py")
+assert SPEC and SPEC.loader
+validate_env_module = importlib.util.module_from_spec(SPEC)
+sys.modules[SPEC.name] = validate_env_module
+SPEC.loader.exec_module(validate_env_module)
+validate_env = validate_env_module.validate_env
 
 
-class TestSecretValidationScript:
-    """Test the secret validation script behavior."""
+def base_env(**overrides):
+    env = {
+        "REGENGINE_ENV": "production",
+        "AUTH_SECRET_KEY": "auth-secret-with-enough-entropy",  # pragma: allowlist secret
+        "ADMIN_MASTER_KEY": "admin-master-key-with-enough-entropy",  # pragma: allowlist secret
+        "POSTGRES_PASSWORD": "postgres-password-with-enough-entropy",  # pragma: allowlist secret
+        "AUTH_TEST_BYPASS_TOKEN": "",
+        "SCHEDULER_API_KEY": "scheduler-key-with-enough-entropy",  # pragma: allowlist secret
+        "OBJECT_STORAGE_ACCESS_KEY_ID": "prod-access-key",  # pragma: allowlist secret
+        "OBJECT_STORAGE_SECRET_ACCESS_KEY": "prod-secret-key-with-enough-entropy",  # pragma: allowlist secret
+    }
+    env.update(overrides)
+    return env
 
-    def test_script_exists_and_is_executable(self):
-        """Script file should exist and be executable."""
-        assert SCRIPT_PATH.exists(), f"Script not found at {SCRIPT_PATH}"
-        assert os.access(SCRIPT_PATH, os.X_OK), "Script is not executable"
 
-    def test_fails_with_no_secrets_in_production(self):
-        """Script should fail when required secrets are missing in production."""
-        env = os.environ.copy()
-        env["REGENGINE_ENV"] = "production"
-        env.pop("NEO4J_PASSWORD", None)
-        env.pop("ADMIN_MASTER_KEY", None)
-        env.pop("REGENGINE_SKIP_SECRET_CHECK", None)
+class TestEnvValidation:
+    def test_fails_with_missing_production_secrets(self):
+        result = validate_env(env={"REGENGINE_ENV": "production"})
 
-        result = subprocess.run(
-            ["bash", str(SCRIPT_PATH)],
-            env=env,
-            capture_output=True,
-            text=True,
-        )
+        assert not result.ok
+        assert any("AUTH_SECRET_KEY" in error for error in result.errors)
+        assert any("OBJECT_STORAGE_SECRET_ACCESS_KEY" in error for error in result.errors)
 
-        assert result.returncode == 1, f"Should fail in production without secrets. Output: {result.stdout}"
-        assert "ERROR" in result.stdout or "error" in result.stdout.lower()
+    def test_passes_with_valid_production_secrets(self):
+        result = validate_env(env=base_env())
 
-    def test_warns_but_continues_in_development_without_secrets(self):
-        """Script should warn but continue in development mode without secrets."""
-        env = os.environ.copy()
-        env["REGENGINE_ENV"] = "development"
-        env.pop("NEO4J_PASSWORD", None)
-        env.pop("ADMIN_MASTER_KEY", None)
-        env.pop("REGENGINE_SKIP_SECRET_CHECK", None)
+        assert result.ok
 
-        result = subprocess.run(
-            ["bash", str(SCRIPT_PATH)],
-            env=env,
-            capture_output=True,
-            text=True,
-        )
-
-        # Development mode should exit 0 even with warnings
-        assert result.returncode == 0, f"Should continue in development. Output: {result.stdout}"
-
-    def test_passes_with_valid_secrets(self):
-        """Script should pass when all required secrets are set properly."""
-        env = os.environ.copy()
-        env["REGENGINE_ENV"] = "production"
-        env["NEO4J_PASSWORD"] = "my-super-secure-neo4j-pwd-123"
-        env["ADMIN_MASTER_KEY"] = "my-super-secure-admin-key-456"
-        env["OBJECT_STORAGE_ACCESS_KEY_ID"] = "prod-access-key"
-        env["OBJECT_STORAGE_SECRET_ACCESS_KEY"] = "prod-secret-key-123"
-        env.pop("REGENGINE_SKIP_SECRET_CHECK", None)
-
-        result = subprocess.run(
-            ["bash", str(SCRIPT_PATH)],
-            env=env,
-            capture_output=True,
-            text=True,
-        )
-
-        assert result.returncode == 0, f"Should pass with valid secrets. Output: {result.stdout}"
-        assert "passed" in result.stdout.lower() or "✓" in result.stdout
-
-    def test_fails_with_default_password_patterns(self):
-        """Script should reject passwords matching insecure patterns."""
-        # Only exact matches of insecure values should be rejected
-        insecure_values = [
+    def test_rejects_weak_values_in_production(self):
+        for insecure_value in [
             "change-me-in-production",
             "password",
             "secret",
             "test",
             "demo",
             "default",
-            "neo4j",  # default neo4j password
-        ]
+            "neo4j",
+        ]:
+            result = validate_env(env=base_env(POSTGRES_PASSWORD=insecure_value))
+            assert not result.ok, f"Should reject insecure value {insecure_value!r}"
 
-        for insecure_value in insecure_values:
-            env = os.environ.copy()
-            env["REGENGINE_ENV"] = "production"
-            env["NEO4J_PASSWORD"] = insecure_value
-            env["ADMIN_MASTER_KEY"] = "valid-admin-key-here-secure"
-            env["OBJECT_STORAGE_ACCESS_KEY_ID"] = "prod-access-key"
-            env["OBJECT_STORAGE_SECRET_ACCESS_KEY"] = "prod-secret-key-123"
-            env.pop("REGENGINE_SKIP_SECRET_CHECK", None)
-
-            result = subprocess.run(
-                ["bash", str(SCRIPT_PATH)],
-                env=env,
-                capture_output=True,
-                text=True,
+    def test_rejects_test_object_storage_credentials_in_production(self):
+        result = validate_env(
+            env=base_env(
+                OBJECT_STORAGE_ACCESS_KEY_ID="test",
+                OBJECT_STORAGE_SECRET_ACCESS_KEY="test",
             )
-
-            assert result.returncode == 1, f"Should reject insecure value '{insecure_value}'. Output: {result.stdout}"
-
-    def test_skip_check_bypasses_validation(self):
-        """REGENGINE_SKIP_SECRET_CHECK=true should bypass all checks."""
-        env = os.environ.copy()
-        env["REGENGINE_ENV"] = "production"
-        env["REGENGINE_SKIP_SECRET_CHECK"] = "true"
-        env.pop("NEO4J_PASSWORD", None)
-        env.pop("ADMIN_MASTER_KEY", None)
-
-        result = subprocess.run(
-            ["bash", str(SCRIPT_PATH)],
-            env=env,
-            capture_output=True,
-            text=True,
         )
 
-        assert result.returncode == 0, f"Should bypass with skip flag. Output: {result.stdout}"
-        assert "bypassed" in result.stdout.lower() or "skip" in result.stdout.lower()
+        assert not result.ok
+        assert any("OBJECT_STORAGE" in error for error in result.errors)
 
-    def test_detects_test_object_storage_credentials_in_production(self):
-        """Should reject 'test' object storage credentials in production."""
-        env = os.environ.copy()
-        env["REGENGINE_ENV"] = "production"
-        env["NEO4J_PASSWORD"] = "valid-password-here"
-        env["ADMIN_MASTER_KEY"] = "valid-admin-key-here"
-        env["OBJECT_STORAGE_ACCESS_KEY_ID"] = "test"
-        env["OBJECT_STORAGE_SECRET_ACCESS_KEY"] = "test"
-        env.pop("REGENGINE_SKIP_SECRET_CHECK", None)
-
-        result = subprocess.run(
-            ["bash", str(SCRIPT_PATH)],
-            env=env,
-            capture_output=True,
-            text=True,
+    def test_warns_for_weak_values_in_development(self):
+        result = validate_env(
+            env=base_env(
+                REGENGINE_ENV="development",
+                POSTGRES_PASSWORD="password",  # pragma: allowlist secret
+                SCHEDULER_API_KEY="",
+                OBJECT_STORAGE_ACCESS_KEY_ID="",
+                OBJECT_STORAGE_SECRET_ACCESS_KEY="",
+            )
         )
 
-        assert result.returncode == 1, f"Should reject 'test' object storage creds in production. Output: {result.stdout}"
+        assert result.ok
+        assert result.warnings
 
 
 class TestEnvExample:
-    """Test the .env.example file (docker-compose.yml checks deleted alongside
-    the file itself — see CONSOLIDATION.md / #1429)."""
-
     def test_env_example_has_no_real_secrets(self):
-        """The .env.example file should not contain real secret values."""
         env_example_path = Path(__file__).parent.parent.parent / ".env.example"
         content = env_example_path.read_text()
 
-        # Check that required fields are empty or have placeholder text
-        lines = content.split("\n")
-        for line in lines:
-            if line.startswith("NEO4J_PASSWORD="):
-                value = line.split("=", 1)[1].strip()
-                assert value == "" or "your-" in value.lower() or value.startswith("#"), \
-                    f"NEO4J_PASSWORD should be empty in example: {line}"
+        for line in content.split("\n"):
             if line.startswith("ADMIN_MASTER_KEY="):
                 value = line.split("=", 1)[1].strip()
                 assert value == "" or "your-" in value.lower() or value.startswith("#"), \
                     f"ADMIN_MASTER_KEY should be empty in example: {line}"
 
 
-class TestDevComposeOverride:
-    """Test docker-compose.dev.yml provides development defaults."""
-
+class TestDevCompose:
     def test_dev_compose_exists(self):
-        """Development compose override should exist."""
         dev_compose_path = Path(__file__).parent.parent.parent / "docker-compose.dev.yml"
         assert dev_compose_path.exists(), "docker-compose.dev.yml should exist"
 
-    def test_dev_compose_has_dev_credentials(self):
-        """Development compose should provide non-production credentials."""
-        dev_compose_path = Path(__file__).parent.parent.parent / "docker-compose.dev.yml"
-        content = dev_compose_path.read_text()
+    def test_dev_compose_is_postgres_only(self):
+        content = (Path(__file__).parent.parent.parent / "docker-compose.dev.yml").read_text()
 
-        # Should contain development-specific values
-        assert "dev-" in content or "not-for-prod" in content, \
-            "Dev compose should have clearly labeled dev credentials"
-        assert "REGENGINE_SKIP_SECRET_CHECK" in content, \
-            "Dev compose should skip secret checks"
+        assert "postgres:" in content
+        assert "redpanda" not in content.lower()
+        assert "neo4j" not in content.lower()

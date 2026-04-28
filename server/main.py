@@ -198,11 +198,11 @@ if _router_enabled("sources"):
     app.include_router(sources_router)
 
 if _router_enabled("sandbox"):
-    from services.ingestion.app.sandbox_router import router as sandbox_router
+    from services.ingestion.app.sandbox.router import router as sandbox_router
     app.include_router(sandbox_router)
 
 if _router_enabled("fda_export"):
-    from services.ingestion.app.fda_export_router import router as fda_export_router
+    from services.ingestion.app.fda_export.router import router as fda_export_router
     app.include_router(fda_export_router, tags=["FDA Exports"])
 
 if _router_enabled("csv"):
@@ -238,7 +238,7 @@ if _router_enabled("export"):
     app.include_router(export_router, tags=["Data Export"])
 
 if _router_enabled("epcis_ingestion"):
-    from services.ingestion.app.epcis_ingestion import router as epcis_ingestion_router
+    from services.ingestion.app.epcis.router import router as epcis_ingestion_router
     app.include_router(epcis_ingestion_router, tags=["EPCIS"])
 
 if _router_enabled("qr_decoder"):

@@ -30,7 +30,7 @@ from shared.rate_limit import add_rate_limiting
 from shared.observability import add_observability
 from shared.observability.fastapi_metrics import install_metrics
 from shared.error_handling import install_exception_handlers
-from shared.health import HealthCheck, install_health_router
+from shared.observability.health import HealthCheck, install_health_router
 from shared.middleware import RequestIDMiddleware
 from shared.observability.correlation import CorrelationIdMiddleware
 from shared.tenant_rate_limiting import TenantRateLimitMiddleware

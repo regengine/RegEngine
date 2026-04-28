@@ -44,7 +44,7 @@ from typing import Any, Dict, List, Optional, Tuple
 # ---------------------------------------------------------------------------
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
-BACKEND_FILE = REPO_ROOT / "services" / "ingestion" / "app" / "sandbox_router.py"
+BACKEND_FILE = REPO_ROOT / "services" / "ingestion" / "app" / "sandbox" / "router.py"
 TRACE_PANEL = REPO_ROOT / "frontend" / "src" / "components" / "marketing" / "sandbox-grid" / "TracePanel.tsx"
 GRID_COMPONENT = REPO_ROOT / "frontend" / "src" / "components" / "marketing" / "sandbox-grid" / "SandboxGrid.tsx"
 GRID_TOOLBAR = REPO_ROOT / "frontend" / "src" / "components" / "marketing" / "sandbox-grid" / "GridToolbar.tsx"
@@ -208,7 +208,8 @@ def audit_engine_correctness(report: AuditReport):
 
     # Import the trace engine
     try:
-        from app.sandbox_router import _trace_in_memory, _parse_csv_to_events
+        from app.sandbox.csv_parser import _parse_csv_to_events
+        from app.sandbox.tracer import _trace_in_memory
         imported = True
     except Exception as e:
         imported = False
@@ -341,7 +342,7 @@ def audit_api_contract(report: AuditReport):
 
     # --- B1: Pydantic models exist (4 pts) ---
     try:
-        from app.sandbox_router import (
+        from app.sandbox.models import (
             TraceNode, TraceEdge, TraceGraphResponse, SandboxTraceRequest,
         )
         ok = True

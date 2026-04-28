@@ -656,7 +656,7 @@ def _build_fda_export_rows(
     db: Session,
     *,
     tenant_id: uuid_module.UUID,
-    supplier_user_id: uuid_module.UUID,
+    supplier_user_id: uuid_module.UUID | None,
     facility_id: uuid_module.UUID | None,
     tlc_code: str | None,
     start_time: datetime | None,
@@ -672,13 +672,17 @@ def _build_fda_export_rows(
         .join(SupplierFacilityModel, SupplierFacilityModel.id == SupplierCTEEventModel.facility_id)
         .where(
             SupplierCTEEventModel.tenant_id == tenant_id,
-            SupplierCTEEventModel.supplier_user_id == supplier_user_id,
             SupplierTraceabilityLotModel.tenant_id == tenant_id,
-            SupplierTraceabilityLotModel.supplier_user_id == supplier_user_id,
             SupplierFacilityModel.tenant_id == tenant_id,
-            SupplierFacilityModel.supplier_user_id == supplier_user_id,
         )
     )
+
+    if supplier_user_id is not None:
+        event_query = event_query.where(
+            SupplierCTEEventModel.supplier_user_id == supplier_user_id,
+            SupplierTraceabilityLotModel.supplier_user_id == supplier_user_id,
+            SupplierFacilityModel.supplier_user_id == supplier_user_id,
+        )
 
     if facility_id is not None:
         event_query = event_query.where(SupplierCTEEventModel.facility_id == facility_id)

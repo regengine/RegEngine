@@ -35,10 +35,6 @@ Before starting, ensure you have the following installed:
   - Check: `node --version`
   - [Install Node.js](https://nodejs.org/)
 
-- **Make** (optional, for convenience commands)
-  - macOS/Linux: Usually pre-installed
-  - Windows: Install via [Chocolatey](https://chocolatey.org/) or use direct commands
-
 ### System Requirements
 
 - **RAM**: 8GB minimum, 16GB recommended
@@ -66,68 +62,67 @@ cp .env.example .env
 
 ### Step 3: Generate Required Secrets
 
-Open `.env` in your text editor and set the following **REQUIRED** secrets:
+Open `.env` in your text editor and set at least the secrets required by the
+current local dev stack:
 
 ```bash
-# Generate Neo4j password
-openssl rand -base64 32
-# Copy the output and paste it as NEO4J_PASSWORD in .env
+# Local Postgres password used by docker-compose.dev.yml
+python -c "import secrets; print(secrets.token_urlsafe(32))"
+# Copy the output and paste it as POSTGRES_PASSWORD in .env
 
 # Generate Admin Master Key
 openssl rand -hex 32
 # Copy the output and paste it as ADMIN_MASTER_KEY in .env
+
+# JWT/CSRF signing secret shared by backend and frontend
+python -c "import secrets; print(secrets.token_urlsafe(64))"
+# Copy the output and paste it as AUTH_SECRET_KEY in .env
 ```
 
 Your `.env` file should look like this:
 
 ```bash
 # REQUIRED SECRETS
-NEO4J_PASSWORD=your_generated_password_here
+POSTGRES_PASSWORD=your_generated_postgres_password_here
 ADMIN_MASTER_KEY=your_generated_master_key_here
+AUTH_SECRET_KEY=your_generated_auth_secret_here
 
-# AWS Credentials (for LocalStack - local development only)
-AWS_ACCESS_KEY_ID=test
-AWS_SECRET_ACCESS_KEY=test
+# Object storage credentials are required only when you run ingestion/object
+# storage services locally. Use test values only with a local mock.
+OBJECT_STORAGE_ACCESS_KEY_ID=test
+OBJECT_STORAGE_SECRET_ACCESS_KEY=test
 
 # Environment
 REGENGINE_ENV=development
 ```
 
-> **Note**: The AWS credentials "test/test" are ONLY for LocalStack (local S3 mock). Never use these in production.
+> **Note**: The object storage credentials "test/test" are ONLY for a local
+> S3-compatible mock. Never use these in production.
 
 ---
 
 ## Start Backend Services
 
-### Step 1: Start All Services
+### Step 1: Start Local Postgres
 
 ```bash
-# Start the local stack
-docker compose up --build -d
+# Start local Postgres
+docker compose -f docker-compose.dev.yml up -d
 ```
 
-This will start all backend services:
-- **PostgreSQL** (port 5432) - Relational database with RLS
-- **Redis** (port 6379) - Caching and rate limiting
-- **Neo4j** (ports 7474, 7687) - Knowledge graph database
-- **Redpanda** (port 9092) - Event streaming (Kafka-compatible)
-- **LocalStack** (port 4566) - Local AWS S3 mock
-- **Ollama** (port 11434) - Local LLM inference
-- **Admin API** (port 8400) - Tenant management
-- **Ingestion Service** (port 8000) - Document ingestion
-- **NLP Service** (port 8100) - ML extraction
-- **Graph Service** (port 8200) - Graph operations
-- **Compliance API** (port 8500) - Compliance evaluation
-- **Kafka UI** (port 8080) - Stream monitoring
+This starts the minimal local infrastructure used by the current dev setup:
+- **PostgreSQL** (port 5432) - relational database with RLS
+
+Run backend services locally from the repo after Postgres is healthy.
 
 ### Step 2: Wait for Services to Initialize
 
 ```bash
 # Check service status
-docker compose ps
+docker compose -f docker-compose.dev.yml ps
 
 # Watch logs (optional)
-docker compose logs -f
+docker compose -f docker-compose.dev.yml logs -f
 ```
 
 **Expected startup time**: 30-90 seconds on first run (longer if pulling images)
@@ -135,27 +130,16 @@ docker compose logs -f
 ### Step 3: Verify Services Are Healthy
 
 ```bash
-# Check Admin API
-curl http://localhost:8400/health
-
-# Check Ingestion Service
-curl http://localhost:8000/health
-
-# Check NLP Service
-curl http://localhost:8100/health
-
-# Check Graph Service
-curl http://localhost:8200/health
+# Check local Postgres
+docker compose -f docker-compose.dev.yml exec postgres pg_isready -U regengine
 ```
 
-All should return `{"status":"ok"}` or similar.
+Postgres should report `accepting connections`.
 
-### Step 4: Initialize LocalStack S3 Buckets
+### Step 4: Optional Object Storage Buckets
 
 ```bash
-make init-local
-
-# OR manually
+# When running a local S3-compatible object storage service, create buckets manually:
 aws --endpoint-url=http://localhost:4566 s3 mb s3://reg-engine-raw-data-dev
 aws --endpoint-url=http://localhost:4566 s3 mb s3://reg-engine-processed-data-dev
 ```
@@ -263,7 +247,7 @@ Replace `YOUR_TENANT_ID` with the tenant ID from Step 5.
 
 ## Test the Complete Product Flow
 
-Now let's test the entire RegEngine pipeline: **Ingestion → NLP Extraction → Graph Storage → API Query**
+Now let's test the current local pipeline: **Ingestion → PostgreSQL persistence → API query**
 
 ### Step 1: Prepare Your API Key
 
@@ -280,7 +264,7 @@ export API_KEY=$REGENGINE_API_KEY
 
 ```bash
 # Ingest a sample regulatory document URL
-curl -X POST http://localhost:8000/ingest/url \
+curl -X POST http://localhost:8002/api/v1/ingest/url \
   -H "Content-Type: application/json" \
   -H "X-RegEngine-API-Key: $API_KEY" \
   -d '{
@@ -298,60 +282,28 @@ curl -X POST http://localhost:8000/ingest/url \
 }
 ```
 
-### Step 3: Monitor Kafka Events
+### Step 3: Verify Ingested Data
 
 ```bash
-# Watch the normalized events topic
-make consume-normalized
-
-# OR manually
-docker exec -it $(docker ps -qf name=redpanda) rpk topic consume ingest.normalized -n 1
+# Confirm the ingestion service is healthy
+curl http://localhost:8002/health | jq
 ```
 
-You should see a normalized text event with the document content.
+For the current minimal local stack, traceability data is written to PostgreSQL
+by the running backend service. Kafka/Redpanda and Neo4j are legacy optional
+components and are not started by `docker-compose.dev.yml`.
 
-### Step 4: Check Kafka UI
+### Step 4: Query Current APIs
 
-Open **http://localhost:8080** in your browser to:
-- View topics: `ingest.normalized`, `nlp.extracted`, `graph.update`
-- Inspect messages
-- Monitor consumer lag
-
-### Step 5: Query the Knowledge Graph
-
-After a few seconds (allow time for NLP processing), query the graph:
+Query the services you started locally:
 
 ```bash
-# List all tenant controls
+# Ingestion health
+curl http://localhost:8002/health | jq
+
+# Compliance health, if the compliance service is running
 curl -H "X-RegEngine-API-Key: $API_KEY" \
-  http://localhost:8000/overlay/controls | jq
-
-# List tenant products
-curl -H "X-RegEngine-API-Key: $API_KEY" \
-  http://localhost:8000/overlay/products | jq
-
-# Get compliance gaps
-curl -H "X-RegEngine-API-Key: $API_KEY" \
-  http://localhost:8300/gaps | jq
-```
-
-### Step 6: Explore Neo4j Browser
-
-1. Open **http://localhost:7474** in your browser
-2. Login with:
-   - Username: `neo4j`
-   - Password: (your `NEO4J_PASSWORD` from `.env`)
-3. Run Cypher queries:
-
-```cypher
-// View all tenant data
-MATCH (n) RETURN n LIMIT 25;
-
-// View controls
-MATCH (c:Control) RETURN c LIMIT 10;
-
-// View relationships
-MATCH (c:Control)-[r]->(p:Product) RETURN c, r, p;
+  http://localhost:8500/health | jq
 ```
 
 ---
@@ -416,7 +368,7 @@ Here's a summary of all available endpoints and UIs:
 | Service | URL | Documentation |
 |---------|-----|---------------|
 | **Admin API** | http://localhost:8400 | http://localhost:8400/docs |
-| **Ingestion API** | http://localhost:8000 | http://localhost:8000/docs |
+| **Ingestion API** | http://localhost:8002 | http://localhost:8002/docs |
 | **NLP Service** | http://localhost:8100 | http://localhost:8100/docs |
 | **Graph Service** | http://localhost:8200 | http://localhost:8200/docs |
 | **Compliance API** | http://localhost:8500 | http://localhost:8500/docs |
@@ -426,16 +378,12 @@ Here's a summary of all available endpoints and UIs:
 | UI | URL | Purpose |
 |----|-----|---------|
 | **Frontend Dashboard** | http://localhost:3000 | Main React dashboard |
-| **Neo4j Browser** | http://localhost:7474 | Knowledge graph explorer |
-| **Kafka UI** | http://localhost:8080 | Event stream monitoring |
 
 ### Database Connections
 
 | Database | Connection String |
 |----------|-------------------|
-| **PostgreSQL** | `postgresql://regengine:regengine@localhost:5432/regengine` |
-| **Redis** | `redis://localhost:6379/0` |
-| **Neo4j** | `bolt://localhost:7687` (user: `neo4j`, password: from `.env`) |
+| **PostgreSQL** | `postgresql://regengine:<POSTGRES_PASSWORD>@localhost:5432/regengine` |
 
 ---
 
@@ -452,28 +400,28 @@ Here's a summary of all available endpoints and UIs:
 docker ps
 
 # View service logs
-docker compose logs -f admin-api
-docker compose logs -f ingestion-service
+docker compose -f docker-compose.dev.yml logs -f postgres
 
 # Check environment variables are set
-cat .env | grep NEO4J_PASSWORD
+cat .env | grep POSTGRES_PASSWORD
 cat .env | grep ADMIN_MASTER_KEY
+cat .env | grep AUTH_SECRET_KEY
 
 # Restart services
-docker compose down -v  # Remove volumes
-docker compose up --build -d
+docker compose -f docker-compose.dev.yml down -v  # Remove volumes
+docker compose -f docker-compose.dev.yml up -d
 ```
 
 ### "Missing Required Secret" Error
 
-**Problem**: Docker Compose fails with `NEO4J_PASSWORD must be set` or similar
+**Problem**: Docker Compose fails with `POSTGRES_PASSWORD must be set` or similar
 
 **Solution**:
 
 1. Edit `.env` file
 2. Generate secrets as described in [Initial Setup](#step-3-generate-required-secrets)
 3. Save the file
-4. Restart services: `docker compose up -d`
+4. Restart services: `docker compose -f docker-compose.dev.yml up -d`
 
 ### Ollama Model Not Downloading
 
@@ -519,24 +467,21 @@ npm run dev
 3. **List your tenants**: `python scripts/regctl/tenant.py list`
 4. **Create new API key**: Recreate tenant or manually generate
 
-### Neo4j Connection Refused
+### Service Cannot Connect to Postgres
 
-**Problem**: Graph service can't connect to Neo4j
+**Problem**: A backend service cannot connect to the local database
 
 **Solutions**:
 
 ```bash
-# Check Neo4j is running
-docker ps | grep neo4j
+# Check Postgres is running
+docker compose -f docker-compose.dev.yml ps
 
-# Check Neo4j logs
-docker compose logs neo4j
+# Check Postgres logs
+docker compose -f docker-compose.dev.yml logs postgres
 
-# Verify password in .env matches
-docker exec -it $(docker ps -qf name=neo4j) cypher-shell -u neo4j -p YOUR_PASSWORD "RETURN 1;"
-
-# Restart Neo4j
-docker compose restart neo4j
+# Restart Postgres
+docker compose -f docker-compose.dev.yml restart postgres
 ```
 
 ### Out of Disk Space
@@ -556,23 +501,19 @@ docker system df
 docker compose down -v
 ```
 
-### Kafka Topics Not Created
+### Events Not Appearing in the Dashboard
 
-**Problem**: Events aren't flowing through the system
+**Problem**: Events were submitted but dashboard pages do not update
 
 **Solutions**:
 
 ```bash
-# Check Redpanda is healthy
-docker compose logs redpanda
+# Confirm ingestion and compliance services are both running
+curl http://localhost:8002/health | jq
+curl http://localhost:8500/health | jq
 
-# List topics
-docker exec -it $(docker ps -qf name=redpanda) rpk topic list
-
-# Manually create topics
-docker exec -it $(docker ps -qf name=redpanda) rpk topic create ingest.normalized
-docker exec -it $(docker ps -qf name=redpanda) rpk topic create nlp.extracted
-docker exec -it $(docker ps -qf name=redpanda) rpk topic create graph.update
+# Confirm migrations were applied
+alembic upgrade head
 ```
 
 ### Frontend Can't Connect to Backend
@@ -582,7 +523,7 @@ docker exec -it $(docker ps -qf name=redpanda) rpk topic create graph.update
 **Solutions**:
 
 1. **Check CORS**: Ensure backend allows `localhost:3000`
-2. **Verify API is running**: `curl http://localhost:8000/health`
+2. **Verify API is running**: `curl http://localhost:8002/health`
 3. **Check frontend env**: Look for `NEXT_PUBLIC_API_URL` in frontend config
 4. **Browser console**: Open DevTools → Console for detailed errors
 
@@ -593,7 +534,7 @@ docker exec -it $(docker ps -qf name=redpanda) rpk topic create graph.update
 Now that you have RegEngine running locally:
 
 1. **Explore the API Documentation**
-   - Visit http://localhost:8000/docs (Swagger UI)
+   - Visit http://localhost:8002/docs (Swagger UI)
    - Try the interactive API explorer
 
 2. **Test Different Frameworks**
@@ -605,7 +546,7 @@ Now that you have RegEngine running locally:
    - Test different source systems
 
 4. **Build Custom Queries**
-   - Learn Cypher (Neo4j query language)
+   - Query PostgreSQL traceability tables
    - Create compliance reports
 
 5. **Develop New Features**
@@ -618,17 +559,17 @@ Now that you have RegEngine running locally:
 ## Quick Reference Commands
 
 ```bash
-# Start everything
-docker compose up --build -d
+# Start local Postgres
+docker compose -f docker-compose.dev.yml up -d
 
-# Stop everything
-make down
+# Stop local Postgres
+docker compose -f docker-compose.dev.yml down
 
 # View logs
-docker compose logs -f [service-name]
+docker compose -f docker-compose.dev.yml logs -f postgres
 
 # Restart a service
-docker compose restart [service-name]
+docker compose -f docker-compose.dev.yml restart postgres
 
 # Create tenant
 python scripts/regctl/tenant.py create "Company Name" --demo-mode

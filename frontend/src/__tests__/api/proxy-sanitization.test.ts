@@ -14,6 +14,20 @@
 
 import { describe, it, expect } from 'vitest';
 import { sanitizePath, validateUuid, safeSegment } from '@/lib/api-proxy';
+import { applyCookieCredentials, passthroughRequestHeaders } from '@/lib/proxy-factory';
+import type { NextRequest } from 'next/server';
+
+function makeProxyRequest(headers: Record<string, string>, cookies: Record<string, string> = {}): NextRequest {
+    return {
+        headers: new Headers(headers),
+        cookies: {
+            get: (name: string) => {
+                const value = cookies[name];
+                return value ? { name, value } : undefined;
+            },
+        },
+    } as unknown as NextRequest;
+}
 
 describe('sanitizePath (catch-all [...path] proxies)', () => {
     it('joins valid path segments with slashes', () => {
@@ -149,5 +163,51 @@ describe('URL shape: forwarded URLs for malicious input should not include the a
         expect(forwardedUrl).toBe(
             'https://api.example.com/v1/compliance/snapshots/6ba7b810-9dad-41d1-a0b4-00c04fd430c8',
         );
+    });
+});
+
+describe('cookie-managed credential passthrough', () => {
+    it('does not forward placeholder credentials from client headers', () => {
+        const outgoing = new Headers();
+        const request = makeProxyRequest({
+            authorization: 'Bearer cookie-managed',
+            'x-regengine-api-key': 'cookie-managed',
+            'x-admin-key': 'cookie-managed',
+            'x-tenant-id': 'tenant-123',
+        });
+
+        passthroughRequestHeaders(outgoing, request, [
+            'authorization',
+            'x-regengine-api-key',
+            'x-admin-key',
+            'x-tenant-id',
+        ]);
+
+        expect(outgoing.has('authorization')).toBe(false);
+        expect(outgoing.has('x-regengine-api-key')).toBe(false);
+        expect(outgoing.has('x-admin-key')).toBe(false);
+        expect(outgoing.get('x-tenant-id')).toBe('tenant-123');
+    });
+
+    it('overrides placeholder auth with HTTP-only cookie credentials', () => {
+        const outgoing = new Headers({
+            authorization: 'Bearer cookie-managed',
+            'x-regengine-api-key': 'cookie-managed',
+            'x-admin-key': 'cookie-managed',
+        });
+        const request = makeProxyRequest(
+            { authorization: 'Bearer cookie-managed' },
+            {
+                re_access_token: 'real-token',
+                re_api_key: 'real-api-key', // pragma: allowlist secret
+                re_admin_key: 'real-admin-key', // pragma: allowlist secret
+            },
+        );
+
+        applyCookieCredentials(outgoing, request, { respectExistingAuthHeader: true });
+
+        expect(outgoing.get('authorization')).toBe('Bearer real-token');
+        expect(outgoing.get('x-regengine-api-key')).toBe('real-api-key');
+        expect(outgoing.get('x-admin-key')).toBe('real-admin-key');
     });
 });

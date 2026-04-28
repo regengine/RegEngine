@@ -4,7 +4,7 @@
     "metadata": {
         "name": "RegEngine Design System",
         "description": "Centralized design tokens for the RegEngine platform",
-        "updated": "2026-02-10"
+        "updated": "2026-04-26"
     },
     "colors": {
         "brand": {
@@ -22,8 +22,8 @@
             "primary": "#f8fafc",
             "secondary": "#c8d1dc",
             "tertiary": "#94a3b8",
-            "muted": "#64748b",
-            "disabled": "#475569"
+            "muted": "#8b9bb5",
+            "disabled": "#6b7a8d"
         },
         "border": {
             "default": "#1e293b",
@@ -31,14 +31,22 @@
             "strong": "#475569"
         },
         "status": {
-            "success": "#22c55e",
-            "successMuted": "rgba(34, 197, 94, 0.15)",
+            "success": "#10b981",
+            "successMuted": "#10b98126",
+            "successBg": "#10b98114",
+            "successBorder": "#10b98126",
             "warning": "#f59e0b",
-            "warningMuted": "rgba(245, 158, 11, 0.15)",
+            "warningMuted": "#f59e0b26",
+            "warningBg": "#f59e0b14",
+            "warningBorder": "#f59e0b26",
             "danger": "#ef4444",
-            "dangerMuted": "rgba(239, 68, 68, 0.15)",
-            "info": "#60a5fa",
-            "infoMuted": "rgba(96, 165, 250, 0.15)"
+            "dangerMuted": "#ef444426",
+            "dangerBg": "#ef444414",
+            "dangerBorder": "#ef444426",
+            "info": "#3b82f6",
+            "infoMuted": "#3b82f626",
+            "infoBg": "#3b82f614",
+            "infoBorder": "#3b82f626"
         },
         "accent": {
             "blue": "#3b82f6",
@@ -68,7 +76,9 @@
     },
     "typography": {
         "fontFamily": {
-            "sans": "'Instrument Sans', system-ui, -apple-system, sans-serif",
+            "sans": "'Inter', system-ui, -apple-system, sans-serif",
+            "display": "'Outfit', system-ui, -apple-system, sans-serif",
+            "serif": "'Fraunces', Georgia, serif",
             "mono": "'JetBrains Mono', 'Fira Code', monospace"
         },
         "fontSize": {
@@ -141,12 +151,12 @@
         }
     },
     "shadows": {
-        "sm": "0 1px 2px 0 rgba(0, 0, 0, 0.3)",
-        "md": "0 4px 6px -1px rgba(0, 0, 0, 0.4), 0 2px 4px -2px rgba(0, 0, 0, 0.3)",
-        "lg": "0 10px 15px -3px rgba(0, 0, 0, 0.5), 0 4px 6px -4px rgba(0, 0, 0, 0.4)",
+        "sm": "0 1px 2px 0 #0000004d",
+        "md": "0 4px 6px -1px #0006, 0 2px 4px -2px #0000004d",
+        "lg": "0 10px 15px -3px #00000080, 0 4px 6px -4px #0006",
         "xl": "0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.4)",
-        "glow": "0 0 20px rgba(16, 185, 129, 0.15)",
-        "glowStrong": "0 0 40px rgba(16, 185, 129, 0.25)"
+        "glow": "0 0 20px #10b98126",
+        "glowStrong": "0 0 40px #10b98140"
     },
     "radii": {
         "none": "0",

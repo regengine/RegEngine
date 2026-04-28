@@ -37,7 +37,7 @@ The current product wedge in this repository is food and beverage traceability u
 
 ### 3.2 FDA Export and Verification
 
-Router: `services/ingestion/app/fda_export_router.py`
+Router: `services/ingestion/app/fda_export/router.py`
 
 Implemented export surfaces include:
 

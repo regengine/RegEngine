@@ -37,7 +37,7 @@ This document breaks down the 8 critical compliance gaps identified in the audit
 2. Create FLBR CSV template in `/sessions/gracious-cool-bell/mnt/RegEngine/services/ingestion/app/csv_templates.py`:
    - Required columns: TLC, product, quantity, receiving_date, receiving_time, receiving_location, receiving_GLN, immediate_previous_supplier, immediate_previous_location, temperature_celsius
    - Add example row showing proper format
-3. Add FLBR to FDA export columns mapping in `fda_export_router.py` (lines 725-735)
+3. Add FLBR to FDA export columns mapping in `services/ingestion/app/fda_export/router.py`
 4. Add FLBR bizStep URI to EPCIS export in `epcis_export.py` (line 206: add `elif cte_type == "flbr"`)
 5. Add FLBR to recall_report.py scoring (line 42: `cte_types_coverage` calculation)
 6. Update compliance_score.py CTE coverage weighting to include FLBR
@@ -58,7 +58,7 @@ This document breaks down the 8 critical compliance gaps identified in the audit
 
 ### Task 1.2: Implement Event Entry Time Capture
 
-**Location:** `/sessions/gracious-cool-bell/mnt/RegEngine/services/ingestion/models/cte_model.py`, csv_templates.py, fda_export_router.py
+**Location:** `services/ingestion/models/cte_model.py`, `services/ingestion/app/csv_templates.py`, `services/ingestion/app/fda_export/router.py`
 **Complexity:** MEDIUM
 **Effort:** 12-14 hours
 **Owner:** Backend engineer
@@ -140,7 +140,7 @@ This document breaks down the 8 critical compliance gaps identified in the audit
 
 ### Task 1.4: Implement Chain Verification in Export Flow
 
-**Location:** `fda_export_router.py`, `epcis_export.py`, new module: `chain_verifier.py`
+**Location:** `services/ingestion/app/fda_export/router.py`, `services/ingestion/app/epcis_export.py`, new module: `chain_verifier.py`
 **Complexity:** HIGH
 **Effort:** 18-22 hours
 **Owner:** Backend engineer (cryptography experience helpful)
@@ -189,7 +189,7 @@ This document breaks down the 8 critical compliance gaps identified in the audit
 
 ### Task 1.5: Consolidate Demo Mode Disclaimers
 
-**Location:** `recall_report.py`, `epcis_export.py`, `recall_simulations.py`, `fda_export_router.py`
+**Location:** `recall_report.py`, `epcis_export.py`, `recall_simulations.py`, `services/ingestion/app/fda_export/router.py`
 **Complexity:** LOW
 **Effort:** 6-8 hours
 **Owner:** Any engineer
@@ -199,7 +199,7 @@ This document breaks down the 8 critical compliance gaps identified in the audit
 - recall_report.py shows disclaimer when demo_mode=true
 - epcis_export.py has sample data but no disclaimer in response
 - recall_simulations.py always illustrative but disclaimer buried in response
-- fda_export_router.py shows warning in README but not in JSON
+- `services/ingestion/app/fda_export/router.py` shows warning in README but not in JSON
 
 **Steps:**
 1. Create standardized disclaimer constant: `/sessions/gracious-cool-bell/mnt/RegEngine/services/ingestion/config/disclaimers.py`
@@ -222,7 +222,7 @@ This document breaks down the 8 critical compliance gaps identified in the audit
 4. Update recall_simulations.py:
    - Rename `is_illustrative` → `uses_synthetic_metrics`
    - Always include SYNTHETIC_METRICS_DISCLAIMER in response
-5. Update fda_export_router.py:
+5. Update `services/ingestion/app/fda_export/router.py`:
    - Add disclaimer to JSON response metadata (not just README.txt)
    - Only include if exporting fewer than 10 events (threshold for demo)
 6. Create UI component (frontend integration task):
