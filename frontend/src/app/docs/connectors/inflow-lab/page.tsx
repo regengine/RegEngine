@@ -1,10 +1,12 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import {
+  Activity,
   ArrowLeft,
   ArrowRight,
   CheckCircle2,
   Code2,
+  FlaskConical,
   GitBranch,
   ShieldCheck,
   Terminal,
@@ -48,6 +50,20 @@ cp .env.example .env
 # Set RE_API_BASE_URL, RE_API_KEY, and RE_TENANT_ID
 python -m pytest`;
 
+const statusFacts = [
+  ["Public slug", "inflow-lab"],
+  ["Backend id", "inflow_lab"],
+  ["Repository", "regengine/inflow-lab"],
+  ["CI contract", "Live ingest"],
+];
+
+const livePath = [
+  ["Simulator", "Builds RegEngine-shaped FSMA 204 CTE batches"],
+  ["Webhook ingest", "POST /api/v1/webhooks/ingest"],
+  ["Alias resolution", "inflow-lab resolves to inflow_lab"],
+  ["RegEngine", "Validates, stores, and source-tags events"],
+];
+
 const connectionSteps = [
   "Inflow Lab generates RegEngine-shaped FSMA 204 CTE payloads.",
   "The simulator posts batches to /api/v1/webhooks/ingest with source set to inflow-lab.",
@@ -65,29 +81,32 @@ export default function InflowLabDocsPage() {
               Back to integrations
             </Link>
 
-            <div className={styles.pills}>
-              <span className={styles.pilotPill}>
-                <Terminal aria-hidden="true" size={14} />
-                Pilot connector
-              </span>
-              <span>Webhook</span>
-              <span>Contract CI</span>
-            </div>
-
-            <h1>Inflow Lab Connector</h1>
+            <p className={styles.kicker}>Pilot connector</p>
+            <h1>Inflow Lab</h1>
             <p>
               Inflow Lab is RegEngine&apos;s FSMA 204 simulator for webhook contract tests, sales demos, and developer validation. It sends traceability events into the same ingest API used by customer integrations.
             </p>
+            <dl className={styles.statusGrid}>
+              {statusFacts.map(([label, value]) => (
+                <div key={label}>
+                  <dt>{label}</dt>
+                  <dd>{value}</dd>
+                </div>
+              ))}
+            </dl>
           </div>
 
           <aside className={styles.pathPanel}>
-            <p className={styles.eyebrow}>Live path</p>
-            {[
-              ["Simulator", "source: inflow-lab"],
-              ["Webhook ingest", "signed batch POST"],
-              ["Validation", "FSMA 204 event checks"],
-              ["Dashboard", "source-tagged records"],
-            ].map(([label, detail], index) => (
+            <div className={styles.panelHeader}>
+              <span>
+                <FlaskConical aria-hidden="true" size={19} />
+              </span>
+              <div>
+                <p className={styles.eyebrow}>Live path</p>
+                <h2>Simulator to ingest</h2>
+              </div>
+            </div>
+            {livePath.map(([label, detail], index) => (
               <div key={label} className={styles.pathStep}>
                 <span>{index + 1}</span>
                 <div>
@@ -120,10 +139,10 @@ export default function InflowLabDocsPage() {
           <section className={styles.card}>
             <h2>
               <Code2 aria-hidden="true" size={21} />
-              Webhook payload
+              Signed webhook payload
             </h2>
             <p>
-              Use <code>source: &quot;inflow-lab&quot;</code> so dashboard and audit surfaces can distinguish simulator traffic from generic webhook submissions.
+              Use <code>source: &quot;inflow-lab&quot;</code> so dashboard and audit surfaces can distinguish simulator traffic from generic webhook submissions. Backend routes resolve that public slug to canonical connector id <code>inflow_lab</code>.
             </p>
             <div className={styles.codeBlock}>
               <div>POST /api/v1/webhooks/ingest</div>
@@ -136,10 +155,10 @@ export default function InflowLabDocsPage() {
           <section className={styles.card}>
             <h2>
               <GitBranch aria-hidden="true" size={21} />
-              Local simulator
+              Local and CI usage
             </h2>
             <p>
-              The simulator lives in the RegEngine GitHub organization at <code>regengine/inflow-lab</code>. Use it locally for partner demos and CI contract validation.
+              The simulator lives in the RegEngine GitHub organization. Run it locally for partner demos; the RegEngine workflow pins the repo and runs live ingest contract validation in CI.
             </p>
             <div className={styles.codeBlock}>
               <div>Local setup</div>
@@ -160,6 +179,17 @@ export default function InflowLabDocsPage() {
               <p>Inflow Lab is a simulator and developer tool, not a production vendor data source.</p>
               <p>Hosted access is intentionally separate from this connector tile until a design partner asks for it or it becomes part of the weekly sales motion.</p>
               <p>Cross-repo contract CI should pin the simulator commit that RegEngine expects, then run a live ingest assertion against the local service.</p>
+            </div>
+          </section>
+
+          <section className={styles.card}>
+            <h2>
+              <Activity aria-hidden="true" size={21} />
+              Decision posture
+            </h2>
+            <div className={styles.notes}>
+              <p>Keep Inflow Lab as a local/demo simulator until a design partner asks for hosted access.</p>
+              <p>Promote the connector tile and docs as proof of developer workflow, not as a customer production integration.</p>
             </div>
           </section>
 
