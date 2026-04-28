@@ -164,6 +164,7 @@ jobs:
         env:
           REGENGINE_DATA_DIR: /tmp/inflow-lab-data
           REGENGINE_CORS_ORIGINS: http://127.0.0.1:8010
+          REGENGINE_WEBHOOK_HMAC_SECRET: ${{ env.CONTRACT_HMAC_SECRET }}
           PYTHONDONTWRITEBYTECODE: 1
         run: |
           python -m uvicorn app.main:app --host 127.0.0.1 --port 8010 > /tmp/inflow-lab.log 2>&1 &
