@@ -189,7 +189,7 @@ jobs:
           REGENGINE_REMOTE_USERNAME: unused
           REGENGINE_REMOTE_PASSWORD: unused  # pragma: allowlist secret
           REGENGINE_REMOTE_TENANT: inflow-contract
-          REGENGINE_LIVE_ENDPOINT: http://127.0.0.1:8002/api/v1/webhooks/ingest
+          REGENGINE_LIVE_ENDPOINT: http://localhost:8002/api/v1/webhooks/ingest
           REGENGINE_LIVE_API_KEY: ${{ env.CONTRACT_API_KEY }}
           REGENGINE_LIVE_TENANT_ID: ${{ env.CONTRACT_TENANT_ID }}
           REGENGINE_WEBHOOK_HMAC_SECRET: ${{ env.CONTRACT_HMAC_SECRET }}
@@ -237,7 +237,7 @@ jobs:
                   hashlib.sha256,
               ).hexdigest()
               response = client.post(
-                  "http://127.0.0.1:8002/api/v1/webhooks/ingest",
+                  "http://localhost:8002/api/v1/webhooks/ingest",
                   headers={
                       "Content-Type": "application/json",
                       "X-RegEngine-API-Key": api_key,
