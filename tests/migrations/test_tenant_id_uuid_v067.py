@@ -24,6 +24,7 @@ Run via:
 """
 from __future__ import annotations
 
+import importlib.util
 from pathlib import Path
 
 import pytest
@@ -31,6 +32,7 @@ import pytest
 testcontainers = pytest.importorskip("testcontainers")  # noqa: F841
 pytest.importorskip("testcontainers.postgres")
 
+from docker.errors import DockerException  # noqa: E402
 from sqlalchemy import create_engine, text  # noqa: E402
 from testcontainers.postgres import PostgresContainer  # noqa: E402
 
@@ -42,50 +44,15 @@ MIGRATION_FILE = (
 )
 
 
-def _extract_upgrade_sql() -> str:
-    """Pull the SQL from the migration's upgrade() body.
-
-    The migration calls ``op.execute(_alter_text_or_varchar_to_uuid(...))``
-    four times. We can't import the module directly because it imports
-    alembic.op which needs an env. Instead exec the file's helper
-    function in isolation by reading + eval-ing the relevant bits.
-    """
-    src = MIGRATION_FILE.read_text(encoding="utf-8")
-    namespace: dict = {}
-    # Strip the alembic op import + the upgrade/downgrade bodies that
-    # depend on it; keep only the standalone helper functions and the
-    # _COLUMNS_TO_FIX constant.
-    code_to_eval = []
-    in_func = False
-    keep_func: bool = False
-    for line in src.splitlines():
-        if line.startswith("def upgrade") or line.startswith("def downgrade"):
-            in_func = True
-            keep_func = False
-            continue
-        if line.startswith("def "):
-            in_func = True
-            keep_func = True
-            code_to_eval.append(line)
-            continue
-        if in_func:
-            if line and not line.startswith((" ", "\t")):
-                in_func = False
-            elif keep_func:
-                code_to_eval.append(line)
-                continue
-            else:
-                continue
-        # Top-level code we keep
-        if line.startswith("_COLUMNS_TO_FIX") or line.startswith("    ("):
-            code_to_eval.append(line)
-        elif line.startswith("]"):
-            code_to_eval.append(line)
-    exec("\n".join(code_to_eval), namespace)
-    out: list[str] = []
-    for schema, table, column in namespace["_COLUMNS_TO_FIX"]:
-        out.append(namespace["_alter_text_or_varchar_to_uuid"](schema, table, column))
-    return "\n".join(out)
+def _load_v067_module():
+    """Import the v067 migration module without running Alembic."""
+    spec = importlib.util.spec_from_file_location(
+        "v067_tenant_id_uuid_standardization", MIGRATION_FILE
+    )
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 _TARGET_COLUMNS = [
@@ -98,10 +65,18 @@ _TARGET_COLUMNS = [
 
 @pytest.fixture(scope="module")
 def pg_engine():
-    with PostgresContainer("postgres:16") as pg:
+    try:
+        container = PostgresContainer("postgres:16")
+        pg = container.start()
+    except DockerException as exc:
+        pytest.skip(f"PostgresContainer unavailable: {exc}")
+
+    try:
         engine = create_engine(pg.get_connection_url(), future=True)
         yield engine
         engine.dispose()
+    finally:
+        container.stop()
 
 
 def _create_pre_v067_tables(engine):
@@ -150,9 +125,11 @@ def _create_pre_v067_tables(engine):
 
 
 def _apply_migration(engine):
-    sql = _extract_upgrade_sql()
+    v067 = _load_v067_module()
     with engine.begin() as conn:
-        conn.execute(text(sql))
+        conn.execute(text(v067._CREATE_IS_VALID_UUID_FN))
+        for fix in v067._FIXES:
+            conn.execute(text(v067._scrub_drop_alter_recreate(*fix)))
 
 
 def _column_type(engine, schema: str, table: str, column: str) -> str:

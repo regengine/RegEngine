@@ -61,7 +61,7 @@ with engine.connect() as conn:
         if remaining <= 0:
             # Surface the holder so the operator can kill it or unlock manually.
             holder = conn.execute(text(
-                \"SELECT pid, application_name, state, state_change \"
+                \"SELECT a.pid, a.application_name, a.state, a.state_change \"
                 \"FROM pg_stat_activity a JOIN pg_locks l ON l.pid = a.pid \"
                 \"WHERE l.locktype = 'advisory' AND l.objid = ${MIGRATION_LOCK_ID}\"
             )).fetchall()
