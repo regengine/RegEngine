@@ -58,7 +58,7 @@
 
 ### 1C. OpenAPI Metadata Drift — "Little inconsistencies auditors use to decide trust"
 
-**Problem:** Admin service contact URL points to `github.com/regengine/regengine` (wrong org — actual is `PetrefiedThunder/RegEngine` or should be `regengine.co`). Other services have no license/contact metadata. LICENSE says proprietary.
+**Problem:** Admin service contact URL points to the wrong repository URL. Other services have no license/contact metadata. LICENSE says proprietary.
 
 **Execution (20 minutes):**
 1. Fix admin/main.py contact URL → `https://regengine.co`

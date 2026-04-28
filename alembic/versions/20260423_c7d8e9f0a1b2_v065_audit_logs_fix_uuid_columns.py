@@ -107,7 +107,7 @@ _CREATE_IS_VALID_UUID_FN = """
     EXCEPTION
         WHEN invalid_text_representation THEN
             RETURN FALSE;
-    END
+    END;
     $fn$;
 """
 

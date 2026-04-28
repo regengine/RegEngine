@@ -212,7 +212,7 @@ def upgrade() -> None:
                 CREATE TRIGGER {trigger}
                     AFTER INSERT OR UPDATE OR DELETE ON {table}
                     FOR EACH ROW EXECUTE FUNCTION audit.log_sysadmin_access();
-            EXCEPTION WHEN undefined_table THEN
+            EXCEPTION WHEN undefined_table OR invalid_schema_name THEN
                 RAISE NOTICE 'Table {table} does not exist - skipping RLS';
             END $$
         """)
@@ -232,7 +232,7 @@ def upgrade() -> None:
             CREATE TRIGGER trg_audit_sysadmin_users
                 AFTER INSERT OR UPDATE OR DELETE ON users
                 FOR EACH ROW EXECUTE FUNCTION audit.log_sysadmin_access();
-        EXCEPTION WHEN undefined_table THEN
+        EXCEPTION WHEN undefined_table OR invalid_schema_name THEN
             RAISE NOTICE 'Table users does not exist - skipping RLS';
         END $$
     """)
@@ -251,7 +251,7 @@ def upgrade() -> None:
                 CREATE POLICY {policy} ON {table}
                     FOR ALL USING (tenant_id = get_tenant_context());
                 ALTER TABLE {table} FORCE ROW LEVEL SECURITY;
-            EXCEPTION WHEN undefined_table THEN
+            EXCEPTION WHEN undefined_table OR invalid_schema_name THEN
                 RAISE NOTICE 'Table {table} does not exist - skipping';
             END $$
         """)
@@ -337,7 +337,7 @@ def upgrade() -> None:
                 CREATE TRIGGER {trigger}
                     AFTER INSERT OR UPDATE OR DELETE ON {table}
                     FOR EACH ROW EXECUTE FUNCTION audit.log_sysadmin_access();
-            EXCEPTION WHEN undefined_table THEN
+            EXCEPTION WHEN undefined_table OR invalid_schema_name THEN
                 RAISE NOTICE 'Table {table} does not exist - skipping RLS';
             END $$
         """)

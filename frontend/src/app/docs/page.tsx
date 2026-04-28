@@ -100,6 +100,7 @@ const subPages = [
   { title: 'Authentication', href: '/docs/authentication', icon: Key, description: 'API keys, tenant headers, and security' },
   { title: 'API Reference', href: '/docs/api', icon: Code2, description: 'Full endpoint reference with schemas' },
   { title: 'Webhooks', href: '/docs/webhooks', icon: Webhook, description: 'Real-time event notifications' },
+  { title: 'Inflow Lab', href: '/docs/connectors/inflow-lab', icon: Terminal, description: 'Simulator setup and source tagging' },
   { title: 'Error Codes', href: '/docs/errors', icon: AlertTriangle, description: 'Error responses and troubleshooting' },
   { title: 'Rate Limits', href: '/docs/rate-limits', icon: Clock, description: 'Request limits and throttling policies' },
   { title: 'SDKs', href: '/docs/sdks', icon: Package, description: 'Client libraries for Python, Node.js, and more' },

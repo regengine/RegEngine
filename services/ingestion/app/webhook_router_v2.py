@@ -784,6 +784,7 @@ def _persist_canonical_and_eval(
     event: IngestEvent,
     tenant_id: str,
     precomputed_summary,
+    source: str = "webhook_api",
 ) -> None:
     """Persist canonical event + write rule eval rows + create exception
     queue entries for non-compliant verdicts.
@@ -823,7 +824,7 @@ def _persist_canonical_and_eval(
     from shared.canonical_persistence import CanonicalEventStore  # noqa: PLC0415
     from shared.rules_engine import RulesEngine  # noqa: PLC0415
 
-    canonical = normalize_webhook_event(event, tenant_id)
+    canonical = normalize_webhook_event(event, tenant_id, source=source)
     store = CanonicalEventStore(db_session, dual_write=False, skip_chain_write=True)
     store.persist_event(canonical)
     engine = RulesEngine(db_session)
@@ -1153,9 +1154,10 @@ async def ingest_events(
                     def _do_canonical_write(
                         _event=event,
                         _precomputed=precomputed_summary,
+                        _source=payload.source,
                     ) -> None:
                         _persist_canonical_and_eval(
-                            db_session, _event, tenant_id, _precomputed,
+                            db_session, _event, tenant_id, _precomputed, source=_source,
                         )
 
                     # Run in a daemon thread so join(timeout=) returns promptly
@@ -1258,7 +1260,7 @@ async def ingest_events(
                         # evaluate_event fallback) lives in one place.
                         try:
                             _persist_canonical_and_eval(
-                                db_session, event, tenant_id, _fb_summary,
+                                db_session, event, tenant_id, _fb_summary, source=payload.source,
                             )
                         except (ImportError, SQLAlchemyError, ValueError, TypeError, RuntimeError, KeyError, AttributeError) as canon_err:
                             logger.warning("canonical_write_skipped_fallback: %s", str(canon_err))

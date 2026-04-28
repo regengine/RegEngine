@@ -715,6 +715,7 @@ def normalize_webhook_event(
     if raw_payload is None:
         raw_payload = {
             "cte_type": event.cte_type.value if hasattr(event.cte_type, "value") else event.cte_type,
+            "source": source,
             "traceability_lot_code": event.traceability_lot_code,
             "product_description": event.product_description,
             "quantity": event.quantity,
@@ -729,6 +730,7 @@ def normalize_webhook_event(
 
     # Extract facility references from KDEs
     kdes = dict(event.kdes) if event.kdes else {}
+    kdes.setdefault("ingest_source", source)
 
     # Promote input_traceability_lot_codes into kdes so _create_transformation_links()
     # can find them under the expected "input_lot_codes" key.  The webhook model keeps

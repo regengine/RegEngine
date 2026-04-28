@@ -18,6 +18,7 @@ from .food_safety import (
     FoodDocsConnector,
     TiveConnector,
 )
+from .inflow_lab import InflowLabConnector
 
 
 def register_all_connectors() -> None:
@@ -38,3 +39,6 @@ def register_all_connectors() -> None:
 
     # Generic (covers SAP, NetSuite, Fishbowl, QuickBooks)
     register_connector("csv_sftp", CSVSFTPConnector)
+
+    # Developer / simulator integrations
+    register_connector("inflow_lab", InflowLabConnector)
