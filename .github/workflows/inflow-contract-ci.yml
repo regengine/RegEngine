@@ -197,6 +197,9 @@ jobs:
       - name: Dump service logs on failure
         if: failure()
         run: |
+          echo "== Inflow Lab stored events =="
+          curl -fsS -H "X-RegEngine-Tenant: inflow-contract" "http://127.0.0.1:8010/api/events?limit=5" || true
+          echo
           echo "== RegEngine ingestion log =="
           cat /tmp/regengine-ingestion.log || true
           echo "== Inflow Lab log =="
