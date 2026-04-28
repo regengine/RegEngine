@@ -1,0 +1,577 @@
+.page {
+    min-height: 100vh;
+    background: hsl(var(--background));
+    color: hsl(var(--foreground));
+    padding: 2rem 1rem 3rem;
+}
+
+.shell {
+    width: min(100%, 80rem);
+    margin: 0 auto;
+    display: grid;
+    gap: 1.5rem;
+}
+
+.header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+.title {
+    display: flex;
+    align-items: center;
+    gap: .75rem;
+    margin: 0;
+    font-size: clamp(1.35rem, 2vw, 1.75rem);
+    line-height: 1.15;
+    font-weight: 700;
+    color: var(--re-text-primary);
+}
+
+.titleIcon {
+    width: 1.5rem;
+    height: 1.5rem;
+    color: var(--re-brand);
+}
+
+.lede {
+    margin: .45rem 0 0;
+    max-width: 56rem;
+    font-size: .92rem;
+    line-height: 1.55;
+    color: var(--re-text-tertiary);
+}
+
+.refreshButton,
+.primaryAction,
+.secondaryAction {
+    min-height: 2.5rem;
+    border-radius: .5rem;
+    white-space: nowrap;
+}
+
+.buttonIcon {
+    width: 1rem;
+    height: 1rem;
+    margin-right: .45rem;
+}
+
+.buttonIconRight {
+    width: 1rem;
+    height: 1rem;
+    margin-left: .45rem;
+}
+
+.statsGrid {
+    display: grid;
+    gap: .8rem;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.statCard,
+.card,
+.factCard,
+.inflowPanel,
+.queueItem,
+.emptyBox,
+.infoBox {
+    border: 1px solid var(--re-border-default);
+    background: var(--re-surface-elevated);
+}
+
+.statCard {
+    border-radius: .6rem;
+    padding: 1rem;
+}
+
+.statLabel,
+.factLabel,
+.categoryTitle,
+.queueStatus {
+    font-size: .68rem;
+    line-height: 1.2;
+    text-transform: uppercase;
+    letter-spacing: .08em;
+    color: var(--re-text-tertiary);
+}
+
+.statValue {
+    margin-top: .5rem;
+    font-size: 1.65rem;
+    line-height: 1;
+    font-weight: 700;
+    color: var(--re-text-primary);
+}
+
+.statCopy,
+.muted,
+.cardDescription,
+.registryCopy,
+.pathItemDetail,
+.queueDetail {
+    color: var(--re-text-tertiary);
+}
+
+.statCopy {
+    margin: .45rem 0 0;
+    font-size: .8rem;
+    line-height: 1.45;
+}
+
+.inflowPanel {
+    overflow: hidden;
+    border-color: color-mix(in srgb, var(--re-brand) 28%, var(--re-border-default));
+    border-radius: .75rem;
+    background: color-mix(in srgb, var(--re-brand) 5%, var(--re-surface-card));
+}
+
+.inflowGrid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.05fr) minmax(20rem, .95fr);
+}
+
+.inflowMain,
+.pathPanel {
+    padding: 1.5rem;
+}
+
+.pathPanel {
+    border-left: 1px solid var(--re-border-default);
+    background: color-mix(in srgb, var(--re-surface-base) 76%, transparent);
+}
+
+.connectorHeading,
+.pathHeader,
+.queueItemBody,
+.queueHeading,
+.registryName,
+.evidenceCell,
+.actionRow,
+.badgeGroup {
+    display: flex;
+    align-items: center;
+    gap: .75rem;
+}
+
+.connectorIcon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.5rem;
+    height: 2.5rem;
+    flex: 0 0 auto;
+    border-radius: .6rem;
+    background: var(--re-brand);
+    color: white;
+}
+
+.connectorSvg {
+    width: 1.2rem;
+    height: 1.2rem;
+}
+
+.sectionTitle,
+.cardTitle,
+.pathTitle {
+    margin: 0;
+    color: var(--re-text-primary);
+    font-weight: 700;
+}
+
+.sectionTitle {
+    font-size: 1.15rem;
+}
+
+.muted {
+    margin: .15rem 0 0;
+    font-size: .78rem;
+}
+
+.inflowCopy {
+    margin: 1rem 0 0;
+    max-width: 56rem;
+    color: var(--re-text-secondary);
+    font-size: .92rem;
+    line-height: 1.65;
+}
+
+.inflowCopy code {
+    border-radius: .35rem;
+    background: color-mix(in srgb, var(--re-surface-base) 80%, white 4%);
+    padding: .08rem .3rem;
+    font-size: .78rem;
+}
+
+.factGrid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: .6rem;
+    margin-top: 1.25rem;
+}
+
+.factCard {
+    border-radius: .55rem;
+    padding: .8rem;
+    background: color-mix(in srgb, var(--re-surface-base) 72%, transparent);
+}
+
+.factValue {
+    margin-top: .35rem;
+    color: var(--re-text-primary);
+    font-size: .9rem;
+    font-weight: 600;
+    overflow-wrap: anywhere;
+}
+
+.actionRow {
+    flex-wrap: wrap;
+    margin-top: 1.25rem;
+}
+
+.primaryAction {
+    background: var(--re-brand) !important;
+    color: white !important;
+}
+
+.secondaryAction {
+    color: var(--re-text-primary);
+}
+
+.pathHeader {
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 1rem;
+}
+
+.pathTitle,
+.cardTitle {
+    font-size: 1rem;
+}
+
+.verifiedBadge {
+    display: inline-flex;
+    align-items: center;
+    gap: .35rem;
+    border: 1px solid color-mix(in srgb, var(--re-success) 32%, transparent);
+    border-radius: 999px;
+    padding: .35rem .6rem;
+    color: var(--re-success);
+    background: color-mix(in srgb, var(--re-success) 10%, transparent);
+    font-size: .64rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .08em;
+}
+
+.badgeIcon,
+.evidenceIcon {
+    width: .8rem;
+    height: .8rem;
+}
+
+.pathList {
+    display: grid;
+    gap: .35rem;
+}
+
+.pathItem {
+    display: grid;
+    grid-template-columns: 1.5rem minmax(0, 1fr);
+    gap: .8rem;
+}
+
+.pathRail {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.pathNumber {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.35rem;
+    height: 1.35rem;
+    border: 1px solid color-mix(in srgb, var(--re-brand) 35%, transparent);
+    border-radius: 999px;
+    color: var(--re-brand);
+    background: color-mix(in srgb, var(--re-brand) 8%, transparent);
+    font-size: .7rem;
+    font-weight: 700;
+}
+
+.pathLine {
+    width: 1px;
+    height: 1.7rem;
+    background: var(--re-border-default);
+}
+
+.pathText {
+    padding-bottom: .55rem;
+}
+
+.pathItemTitle {
+    color: var(--re-text-primary);
+    font-size: .9rem;
+    font-weight: 600;
+}
+
+.pathItemDetail {
+    margin-top: .1rem;
+    font-size: .78rem;
+}
+
+.card {
+    border-radius: .75rem;
+    overflow: hidden;
+}
+
+.cardHeader {
+    padding: 1.25rem 1.5rem 0;
+}
+
+.cardDescription {
+    margin: .35rem 0 0;
+    font-size: .86rem;
+    line-height: 1.5;
+}
+
+.cardContent,
+.queueContent {
+    display: grid;
+    gap: 1.25rem;
+    padding: 1.25rem 1.5rem 1.5rem;
+}
+
+.categoryBlock {
+    display: grid;
+    gap: .55rem;
+}
+
+.registryTable {
+    overflow: hidden;
+    border: 1px solid var(--re-border-default);
+    border-radius: .6rem;
+}
+
+.registryRow {
+    display: grid;
+    grid-template-columns: minmax(0, 1.1fr) minmax(12rem, .8fr) minmax(13rem, .9fr);
+    gap: 1rem;
+    align-items: center;
+    padding: .85rem;
+    border-bottom: 1px solid var(--re-border-default);
+    background: var(--re-surface-card);
+}
+
+.registryRow:last-child {
+    border-bottom: 0;
+}
+
+.registryRowFeatured {
+    background: color-mix(in srgb, var(--re-brand) 7%, var(--re-surface-card));
+}
+
+.registryNameCell {
+    min-width: 0;
+}
+
+.registryName {
+    color: var(--re-text-primary);
+    font-size: .9rem;
+    font-weight: 700;
+}
+
+.inlineIcon {
+    width: 1rem;
+    height: 1rem;
+    color: var(--re-brand);
+    flex: 0 0 auto;
+}
+
+.registryCopy {
+    margin: .35rem 0 0;
+    font-size: .78rem;
+    line-height: 1.45;
+}
+
+.badgeGroup {
+    flex-wrap: wrap;
+}
+
+.metaBadge {
+    border: 1px solid var(--re-border-default);
+    border-radius: .4rem;
+    background: var(--re-surface-base);
+    color: var(--re-text-tertiary);
+    padding: .35rem .5rem;
+    font-size: .64rem;
+    font-weight: 700;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+}
+
+.evidenceCell {
+    justify-content: space-between;
+    color: var(--re-text-tertiary);
+    font-size: .78rem;
+}
+
+.evidenceLink {
+    display: inline-flex;
+    align-items: center;
+    gap: .3rem;
+    color: var(--re-brand);
+    text-decoration: none;
+}
+
+.evidenceLink:hover {
+    text-decoration: underline;
+}
+
+.warningBox,
+.errorBox,
+.emptyBox,
+.infoBox,
+.queueItem {
+    border-radius: .6rem;
+    padding: 1rem;
+    font-size: .88rem;
+    line-height: 1.5;
+}
+
+.warningBox {
+    border: 1px solid color-mix(in srgb, var(--re-warning) 28%, transparent);
+    color: var(--re-warning);
+    background: color-mix(in srgb, var(--re-warning) 8%, transparent);
+}
+
+.errorBox {
+    border: 1px solid color-mix(in srgb, var(--re-danger) 28%, transparent);
+    color: var(--re-danger);
+    background: color-mix(in srgb, var(--re-danger) 8%, transparent);
+}
+
+.emptyBox,
+.infoBox {
+    color: var(--re-text-tertiary);
+}
+
+.infoBox {
+    display: flex;
+    align-items: flex-start;
+    gap: .55rem;
+}
+
+.infoIconWarning,
+.infoIconBrand {
+    width: 1rem;
+    height: 1rem;
+    margin-top: .15rem;
+    flex: 0 0 auto;
+}
+
+.infoIconWarning {
+    color: var(--re-warning);
+}
+
+.infoIconBrand {
+    color: var(--re-brand);
+}
+
+.queueItemBody {
+    justify-content: space-between;
+    align-items: flex-start;
+}
+
+.queueHeading {
+    flex-wrap: wrap;
+}
+
+.queueSource {
+    color: var(--re-text-primary);
+    font-size: .9rem;
+    font-weight: 700;
+}
+
+.mappingLine {
+    margin-top: .45rem;
+    color: var(--re-text-tertiary);
+    font-size: .86rem;
+    overflow-wrap: anywhere;
+}
+
+.mappingLine strong {
+    color: var(--re-text-primary);
+}
+
+.queueDetail {
+    margin: .45rem 0 0;
+    font-size: .84rem;
+}
+
+.queueIcon {
+    width: 1rem;
+    height: 1rem;
+    color: var(--re-brand);
+    flex: 0 0 auto;
+}
+
+@media (max-width: 900px) {
+    .header,
+    .queueItemBody,
+    .pathHeader {
+        flex-direction: column;
+    }
+
+    .refreshButton,
+    .primaryAction,
+    .secondaryAction {
+        width: 100%;
+    }
+
+    .statsGrid,
+    .inflowGrid,
+    .registryRow {
+        grid-template-columns: 1fr;
+    }
+
+    .pathPanel {
+        border-left: 0;
+        border-top: 1px solid var(--re-border-default);
+    }
+
+    .evidenceCell {
+        align-items: flex-start;
+    }
+}
+
+@media (max-width: 560px) {
+    .page {
+        padding: 1.25rem .75rem 5rem;
+    }
+
+    .factGrid {
+        grid-template-columns: 1fr;
+    }
+
+    .inflowMain,
+    .pathPanel,
+    .cardHeader,
+    .cardContent,
+    .queueContent {
+        padding-inline: 1rem;
+    }
+
+    .actionRow,
+    .badgeGroup {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .title {
+        font-size: 1.35rem;
+    }
+}
