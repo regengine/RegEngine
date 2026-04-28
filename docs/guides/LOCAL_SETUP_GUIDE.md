@@ -53,7 +53,7 @@ Before starting, ensure you have the following installed:
 
 ```bash
 # If you haven't already
-git clone https://github.com/PetrefiedThunder/RegEngine.git
+git clone https://github.com/regengine/RegEngine.git
 cd RegEngine
 ```
 
@@ -650,7 +650,7 @@ make pytest
 
 ## Support & Documentation
 
-- **Project Repository**: https://github.com/PetrefiedThunder/RegEngine
+- **Project Repository**: https://github.com/regengine/RegEngine
 - **Product Roadmap**: [PRODUCT_ROADMAP.md](PRODUCT_ROADMAP.md)
 - **Deployment Guide**: [DEPLOYMENT.md](DEPLOYMENT.md)
 - **API Authentication**: [AUTHENTICATION.md](AUTHENTICATION.md)

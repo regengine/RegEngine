@@ -63,7 +63,7 @@ After rotating all credentials, scrub the old values from git history:
 brew install bfg
 
 # Clone a fresh mirror
-git clone --mirror https://github.com/PetrefiedThunder/RegEngine.git regengine-mirror
+git clone --mirror https://github.com/regengine/RegEngine.git regengine-mirror
 cd regengine-mirror
 
 # Create a file with the secrets to remove (one per line)

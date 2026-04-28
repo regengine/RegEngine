@@ -33,7 +33,7 @@ concurrency:
 
 env:
   PYTHON_VERSION: '3.11'
-  INFLOW_LAB_REPOSITORY: PetrefiedThunder/regengine_codex_workspace
+  INFLOW_LAB_REPOSITORY: regengine/inflow-lab
   INFLOW_LAB_REF: 8dc9e89dfc41eda4d9acd3f4f8a30c6e2968f52c
   CONTRACT_TENANT_ID: 11111111-1111-1111-1111-111111111111
   CONTRACT_API_KEY: ci-inflow-contract-key

@@ -1,36 +1,26 @@
-# GitHub Org Migration Runbook
+# GitHub Org Migration Record
 
-Target state:
+Completed: 2026-04-28
+
+Current ownership:
 
 - GitHub org: `regengine`
 - Main repo: `regengine/RegEngine`
 - Simulator repo: `regengine/inflow-lab`
 
-## Preconditions
+## Completed Steps
 
-- The GitHub account performing the transfer can create/manage the `regengine` org.
-- The account has admin permissions on:
-  - `PetrefiedThunder/RegEngine`
-  - `PetrefiedThunder/regengine_codex_workspace`
-- Local `gh` auth has org administration scope:
-
-```bash
-gh auth refresh -h github.com -s admin:org -s repo -s workflow
-```
-
-## Steps
-
-1. Create the `regengine` organization in GitHub.
-2. Transfer `PetrefiedThunder/RegEngine` to `regengine/RegEngine`.
-3. Transfer `PetrefiedThunder/regengine_codex_workspace` to the org.
-4. Rename `regengine/regengine_codex_workspace` to `regengine/inflow-lab`.
-5. Update the Inflow contract workflow repository target:
+1. Created the `regengine` GitHub organization.
+2. Transferred `PetrefiedThunder/RegEngine` to `regengine/RegEngine`.
+3. Transferred `PetrefiedThunder/regengine_codex_workspace` to the org.
+4. Renamed the simulator repo to `regengine/inflow-lab`.
+5. Updated RegEngine's Inflow contract workflow to target:
 
 ```yaml
 INFLOW_LAB_REPOSITORY: regengine/inflow-lab
 ```
 
-6. Verify redirects and checkouts:
+## Verification
 
 ```bash
 gh repo view regengine/RegEngine --json nameWithOwner,url,defaultBranchRef
@@ -39,10 +29,15 @@ git ls-remote https://github.com/regengine/RegEngine.git HEAD
 git ls-remote https://github.com/regengine/inflow-lab.git HEAD
 ```
 
-7. Audit public references:
+## Follow-Up Audits
+
+Historical audit docs may still contain old `PetrefiedThunder/RegEngine`
+issue links. GitHub redirects those links after transfer, so they do not
+need bulk rewriting unless a document is product-facing or actively used
+by automation.
+
+For active references, use:
 
 ```bash
 rg -n "PetrefiedThunder/regengine_codex_workspace|regengine_codex_workspace|PetrefiedThunder/RegEngine" .
 ```
-
-Update remaining references that are product-facing, docs-facing, or CI-facing.

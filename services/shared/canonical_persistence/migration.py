@@ -5,7 +5,7 @@ Import ``shared.canonical_persistence.legacy_dual_write`` instead.
 This shim exists only for backward compatibility and will be removed once
 all callers are updated.
 
-Tracked: https://github.com/PetrefiedThunder/RegEngine/issues/1293
+Tracked: https://github.com/regengine/RegEngine/issues/1293
 """
 # Re-export everything from the canonical location so existing imports keep
 # working without any change.
@@ -28,7 +28,7 @@ import warnings as _warnings
 _warnings.warn(
     "shared.canonical_persistence.migration is deprecated — "
     "import from shared.canonical_persistence.legacy_dual_write instead. "
-    "See https://github.com/PetrefiedThunder/RegEngine/issues/1293",
+    "See https://github.com/regengine/RegEngine/issues/1293",
     DeprecationWarning,
     stacklevel=2,
 )
