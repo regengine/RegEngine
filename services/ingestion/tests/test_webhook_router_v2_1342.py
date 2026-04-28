@@ -261,7 +261,7 @@ def _install_shared_stubs(
             self.kdes = {}
 
     monkeypatch.setattr(
-        wr, "normalize_webhook_event", lambda event, tenant_id: _FakeCanonical(event.traceability_lot_code)
+        wr, "normalize_webhook_event", lambda event, tenant_id, **_: _FakeCanonical(event.traceability_lot_code)
     )
     monkeypatch.setattr(wr, "emit_funnel_event", lambda **_kw: None)
 

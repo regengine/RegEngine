@@ -85,7 +85,7 @@ class _FakeExceptionQueueService:
         })
 
 
-def _fake_normalize_webhook_event(event: Any, tenant_id: str) -> Any:
+def _fake_normalize_webhook_event(event: Any, tenant_id: str, **_: Any) -> Any:
     """Stub that returns a fresh canonical with a per-call unique event_id.
 
     The real ``normalize_webhook_event`` mints a UUID per call. Our tests

@@ -1,6 +1,12 @@
 -- V041: Extend organizations table with multi-tenant profile fields
 -- Adds type, contact, and FEI number columns for proper tenant management
 
+CREATE TABLE IF NOT EXISTS fsma.organizations (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name TEXT NOT NULL DEFAULT 'Default Organization',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 DO $$
 BEGIN
     -- Add org type column

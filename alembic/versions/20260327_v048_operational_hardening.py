@@ -89,7 +89,9 @@ def upgrade() -> None:
     # --- RLS policies ---
     op.execute("""
         ALTER TABLE fsma.fda_sla_requests ENABLE ROW LEVEL SECURITY;
+        ALTER TABLE fsma.fda_sla_requests FORCE ROW LEVEL SECURITY;
         ALTER TABLE fsma.chain_verification_log ENABLE ROW LEVEL SECURITY;
+        ALTER TABLE fsma.chain_verification_log FORCE ROW LEVEL SECURITY;
 
         DO $$ BEGIN
             CREATE POLICY tenant_isolation_sla ON fsma.fda_sla_requests

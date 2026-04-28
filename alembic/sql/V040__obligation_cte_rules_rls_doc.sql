@@ -6,7 +6,7 @@
 -- because the data is system-wide reference data, not tenant-specific.
 --
 -- Tenant scoping happens at query time via JOINs:
---   WHERE o.tenant_id = CAST(:tid AS uuid)
+--   WHERE o.tenant_id = CAST(<tenant id> AS uuid)
 -- This JOIN to the obligations table (which IS tenant-scoped) ensures
 -- only the requesting tenant's obligations are returned.
 --

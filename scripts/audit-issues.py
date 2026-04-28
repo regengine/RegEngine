@@ -13,7 +13,7 @@ except ImportError:
     print("pip install PyGithub")
     sys.exit(1)
 
-REPO = "PetrefiedThunder/RegEngine"
+REPO = "regengine/RegEngine"
 TOKEN = os.environ.get("GITHUB_TOKEN")
 if not TOKEN:
     print("Set GITHUB_TOKEN env var first.")

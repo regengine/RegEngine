@@ -155,7 +155,7 @@ _CREATE_IS_VALID_UUID_FN = """
     EXCEPTION
         WHEN invalid_text_representation THEN
             RETURN FALSE;
-    END
+    END;
     $fn$;
 """
 
@@ -315,6 +315,29 @@ def upgrade() -> None:
     op.execute(_CREATE_IS_VALID_UUID_FN)
     for fix in _FIXES:
         op.execute(_scrub_drop_alter_recreate(*fix))
+    op.execute(
+        """
+        DO $$
+        BEGIN
+            IF to_regclass('fsma.fsma_audit_trail') IS NOT NULL THEN
+                DELETE FROM fsma.fsma_audit_trail WHERE tenant_id IS NULL;
+                ALTER TABLE fsma.fsma_audit_trail
+                    ALTER COLUMN tenant_id SET NOT NULL;
+                ALTER TABLE fsma.fsma_audit_trail FORCE ROW LEVEL SECURITY;
+            END IF;
+
+            IF to_regclass('fsma.task_queue') IS NOT NULL THEN
+                DELETE FROM fsma.task_queue WHERE tenant_id IS NULL;
+                ALTER TABLE fsma.task_queue
+                    ALTER COLUMN tenant_id SET NOT NULL;
+                ALTER TABLE fsma.task_queue FORCE ROW LEVEL SECURITY;
+                DROP POLICY IF EXISTS tenant_isolation_tasks ON fsma.task_queue;
+                CREATE POLICY tenant_isolation_tasks ON fsma.task_queue
+                    USING (tenant_id = get_tenant_context());
+            END IF;
+        END$$;
+        """
+    )
 
 
 def downgrade() -> None:
@@ -324,4 +347,3 @@ def downgrade() -> None:
         op.execute(
             _alter_uuid_to_text(schema, table, column, policy_name, policy_using)
         )
-

@@ -1,6 +1,6 @@
 # This module performs dual-writes to the legacy cte_persistence path.
 # It is NOT an Alembic migration. See alembic/versions/ for schema creation.
-# Tracked: https://github.com/PetrefiedThunder/RegEngine/issues/1293
+# Tracked: https://github.com/regengine/RegEngine/issues/1293
 """
 TEMPORARY: Legacy dual-write and graph sync code.
 

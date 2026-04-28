@@ -61,6 +61,13 @@ SAMPLE_TABLES = [
 ]
 
 
+def _set_tenant_context(conn, tenant_id: uuid.UUID) -> None:
+    conn.execute(
+        text("SELECT set_config('app.tenant_id', :tid, false)"),
+        {"tid": str(tenant_id)},
+    )
+
+
 @pytest.fixture(scope="module")
 def pg_engine() -> Iterator[Engine]:
     """Spin up a disposable PostgreSQL container, apply the relevant
@@ -134,6 +141,8 @@ def _bootstrap_schema(engine: Engine) -> None:
                 tenant_id uuid NOT NULL
             )
         """))
+        for tbl, _, _ in SAMPLE_TABLES:
+            conn.execute(text(f"GRANT SELECT ON {tbl} TO authenticated"))
 
 
 def _apply_v059_pattern(engine: Engine) -> None:
@@ -180,7 +189,8 @@ def test_same_tenant_context_sees_row(pg_engine: Engine, table: str, cols: str, 
         conn.execute(text(f"INSERT INTO {table} ({cols}) VALUES ({vals})"), {"tid": tenant_a})
 
     with pg_engine.connect() as conn:
-        conn.execute(text("SET app.tenant_id = :tid"), {"tid": str(tenant_a)})
+        _set_tenant_context(conn, tenant_a)
+        conn.execute(text("SET ROLE authenticated"))
         count = conn.execute(
             text(f"SELECT COUNT(*) FROM {table} WHERE tenant_id = :tid"),
             {"tid": tenant_a},
@@ -197,7 +207,8 @@ def test_cross_tenant_context_hides_row(pg_engine: Engine, table: str, cols: str
         conn.execute(text(f"INSERT INTO {table} ({cols}) VALUES ({vals})"), {"tid": tenant_a})
 
     with pg_engine.connect() as conn:
-        conn.execute(text("SET app.tenant_id = :tid"), {"tid": str(tenant_b)})
+        _set_tenant_context(conn, tenant_b)
+        conn.execute(text("SET ROLE authenticated"))
         count = conn.execute(text(f"SELECT COUNT(*) FROM {table}")).scalar()
         assert count == 0, (
             f"{table}: cross-tenant row leaked — got {count} rows under wrong tenant "
@@ -215,6 +226,7 @@ def test_unset_tenant_context_raises(pg_engine: Engine, table: str, cols: str, v
     with pg_engine.connect() as conn:
         # Explicitly RESET to ensure no prior transaction leaked a setting.
         conn.execute(text("RESET app.tenant_id"))
+        conn.execute(text("SET ROLE authenticated"))
         with pytest.raises((InternalError, ProgrammingError)) as exc_info:
             conn.execute(text(f"SELECT COUNT(*) FROM {table}")).scalar()
         # Should be our specific RAISE from get_tenant_context().
@@ -237,7 +249,8 @@ def test_fallback_uuid_context_sees_no_sandbox_data(pg_engine: Engine):
         )
 
     with pg_engine.connect() as conn:
-        conn.execute(text("SET app.tenant_id = :tid"), {"tid": str(sandbox)})
+        _set_tenant_context(conn, sandbox)
+        conn.execute(text("SET ROLE authenticated"))
         count = conn.execute(text("SELECT COUNT(*) FROM pcos_companies")).scalar()
         assert count == 0, (
             f"Using the fallback UUID as tenant context exposed {count} real-tenant row(s). "

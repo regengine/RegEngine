@@ -50,6 +50,9 @@ depends_on: Union[str, Sequence[str], None] = None
 def upgrade() -> None:
     op.execute(
         """
+        DO $$
+        BEGIN
+        IF to_regclass('public.users') IS NOT NULL THEN
         ALTER TABLE users
             ADD COLUMN IF NOT EXISTS token_version INTEGER NOT NULL DEFAULT 0;
 
@@ -60,6 +63,8 @@ def upgrade() -> None:
             'Monotonic counter. Bumped on password reset / logout-all to invalidate outstanding JWTs (#1349, #1375).';
         COMMENT ON COLUMN users.mfa_secret_ciphertext IS
             'Fernet-encrypted TOTP seed. Falls back to users.mfa_secret if NULL (#1376). Requires MFA_ENCRYPTION_KEY env var.';
+        END IF;
+        END $$;
         """
     )
 
@@ -67,7 +72,12 @@ def upgrade() -> None:
 def downgrade() -> None:
     op.execute(
         """
+        DO $$
+        BEGIN
+        IF to_regclass('public.users') IS NOT NULL THEN
         ALTER TABLE users DROP COLUMN IF EXISTS mfa_secret_ciphertext;
         ALTER TABLE users DROP COLUMN IF EXISTS token_version;
+        END IF;
+        END $$;
         """
     )

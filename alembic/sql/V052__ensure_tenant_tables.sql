@@ -123,5 +123,11 @@ CREATE INDEX IF NOT EXISTS idx_tenant_data_ns ON fsma.tenant_data(tenant_id, nam
 
 -- RLS on tenant_data
 ALTER TABLE fsma.tenant_data ENABLE ROW LEVEL SECURITY;
-CREATE POLICY IF NOT EXISTS tenant_data_isolation ON fsma.tenant_data
-    USING (tenant_id = current_setting('app.tenant_id', true)::uuid);
+ALTER TABLE fsma.tenant_data FORCE ROW LEVEL SECURITY;
+DO $$
+BEGIN
+    CREATE POLICY tenant_data_isolation ON fsma.tenant_data
+        USING (tenant_id = current_setting('app.tenant_id', true)::uuid);
+EXCEPTION WHEN duplicate_object THEN
+    NULL;
+END $$;
