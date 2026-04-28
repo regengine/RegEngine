@@ -1,0 +1,322 @@
+.page {
+  min-height: 100vh;
+  background: #f5f7f2;
+  color: #13231f;
+  font-family: var(--re-font-sans, Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif);
+}
+
+.hero {
+  border-bottom: 1px solid #d9e2d9;
+  background: #fbfcf7;
+}
+
+.heroInner {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 400px;
+  gap: 2rem;
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 3.5rem 2rem;
+}
+
+.backLink,
+.apiLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #174b38;
+  font-size: 0.9rem;
+  font-weight: 750;
+  text-decoration: none;
+}
+
+.backLink {
+  margin-bottom: 1.5rem;
+}
+
+.pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 1.25rem;
+}
+
+.pills span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.35rem 0.75rem;
+  border: 1px solid #d9e3da;
+  border-radius: 999px;
+  background: #fff;
+  color: #596d63;
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.pills .pilotPill {
+  border-color: #bae6fd;
+  background: #f0f9ff;
+  color: #075985;
+}
+
+.hero h1 {
+  margin: 0;
+  color: #10201c;
+  font-size: clamp(2.4rem, 4.6vw, 3.25rem);
+  font-weight: 760;
+  line-height: 1.05;
+}
+
+.hero p,
+.card p,
+.notes p {
+  color: #52635c;
+  line-height: 1.65;
+}
+
+.hero p {
+  max-width: 760px;
+  margin: 1.25rem 0 0;
+  font-size: 1.05rem;
+}
+
+.pathPanel,
+.card {
+  border: 1px solid #d5dfd6;
+  border-radius: 1rem;
+  background: #fff;
+  box-shadow: 0 12px 34px rgb(33 55 44 / 7%);
+}
+
+.pathPanel {
+  padding: 1.25rem;
+}
+
+.eyebrow {
+  margin: 0 0 1rem;
+  color: #2c6b4f;
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.pathStep {
+  display: flex;
+  gap: 0.75rem;
+  padding: 0.85rem;
+  border: 1px solid #dce5dc;
+  border-radius: 0.85rem;
+  background: #f7faf6;
+}
+
+.pathStep + .pathStep {
+  margin-top: 0.75rem;
+}
+
+.pathStep > span {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 999px;
+  background: #174b38;
+  color: #fff;
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.pathStep strong {
+  display: block;
+  color: #10201c;
+  font-size: 0.93rem;
+}
+
+.pathStep p {
+  margin: 0.2rem 0 0;
+  color: #60726a;
+  font-size: 0.82rem;
+  overflow-wrap: anywhere;
+}
+
+.content {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 1.5rem;
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 3rem 2rem;
+}
+
+.mainColumn,
+.sideColumn {
+  display: grid;
+  align-content: start;
+  gap: 1.5rem;
+  min-width: 0;
+}
+
+.sideColumn {
+  position: sticky;
+  top: 2rem;
+}
+
+.card {
+  padding: 1.5rem;
+}
+
+.card h2 {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  margin: 0;
+  color: #10201c;
+  font-size: 1.25rem;
+  font-weight: 760;
+}
+
+.card h2 svg {
+  color: #174b38;
+  flex: 0 0 auto;
+}
+
+.card > p {
+  margin: 0.85rem 0 0;
+  font-size: 0.94rem;
+}
+
+.card code {
+  padding: 0.08rem 0.35rem;
+  border-radius: 0.35rem;
+  background: #edf4ee;
+  color: #174b38;
+  font-family: var(--re-font-mono, "SFMono-Regular", Consolas, monospace);
+  font-size: 0.88em;
+}
+
+.checkList {
+  display: grid;
+  gap: 0.75rem;
+  margin-top: 1.25rem;
+}
+
+.checkList div {
+  display: flex;
+  gap: 0.75rem;
+  padding: 0.95rem;
+  border: 1px solid #e1e9e1;
+  border-radius: 0.85rem;
+  background: #f9fbf7;
+}
+
+.checkList svg {
+  flex: 0 0 auto;
+  margin-top: 0.1rem;
+  color: #2c6b4f;
+}
+
+.checkList p {
+  margin: 0;
+  font-size: 0.93rem;
+}
+
+.codeBlock {
+  overflow: hidden;
+  margin-top: 1.25rem;
+  border: 1px solid #263d35;
+  border-radius: 0.85rem;
+  background: #10201c;
+}
+
+.codeBlock > div {
+  padding: 0.6rem 0.85rem;
+  border-bottom: 1px solid rgb(255 255 255 / 10%);
+  color: #a8c8ba;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.codeBlock pre {
+  max-width: 100%;
+  margin: 0;
+  overflow-x: auto;
+  padding: 1rem;
+  color: #dff4e8;
+  font-family: var(--re-font-mono, "SFMono-Regular", Consolas, monospace);
+  font-size: 0.76rem;
+  line-height: 1.55;
+}
+
+.codeBlock code {
+  padding: 0;
+  background: transparent;
+  color: inherit;
+}
+
+.notes {
+  display: grid;
+  gap: 0.9rem;
+  margin-top: 1rem;
+}
+
+.notes p {
+  margin: 0;
+  font-size: 0.92rem;
+}
+
+.apiLink {
+  justify-content: space-between;
+  padding: 1.1rem 1.25rem;
+  border: 1px solid #cbd8cf;
+  border-radius: 1rem;
+  background: #eef4ee;
+}
+
+.apiLink:hover {
+  border-color: #94b79e;
+  background: #fff;
+}
+
+@media (max-width: 980px) {
+  .heroInner,
+  .content {
+    grid-template-columns: 1fr;
+    padding-left: 1.25rem;
+    padding-right: 1.25rem;
+  }
+
+  .sideColumn {
+    position: static;
+  }
+}
+
+@media (max-width: 560px) {
+  .heroInner {
+    padding-top: 2rem;
+    padding-bottom: 2rem;
+  }
+
+  .hero h1 {
+    font-size: 2.15rem;
+  }
+
+  .hero p {
+    font-size: 0.98rem;
+  }
+
+  .content {
+    padding-top: 2rem;
+  }
+
+  .card {
+    padding: 1.1rem;
+  }
+}
