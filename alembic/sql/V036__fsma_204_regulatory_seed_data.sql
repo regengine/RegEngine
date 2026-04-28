@@ -5,6 +5,48 @@
 
 BEGIN;
 
+-- Create regulatory control-plane tables if the pre-baseline chain has not
+-- already created them. Older Flyway deployments had these tables before
+-- V036; a true Alembic fresh DB starts from zero and needs them here before
+-- the seed data below can run.
+CREATE TABLE IF NOT EXISTS regulations (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id UUID NOT NULL,
+    source_name TEXT NOT NULL,
+    citation TEXT NOT NULL,
+    section TEXT,
+    text TEXT NOT NULL,
+    effective_date DATE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS obligations (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id UUID NOT NULL,
+    regulation_id UUID REFERENCES regulations(id) ON DELETE CASCADE,
+    obligation_text TEXT,
+    title TEXT,
+    description TEXT,
+    risk_category TEXT,
+    status TEXT DEFAULT 'active',
+    due_date DATE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS controls (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id UUID NOT NULL,
+    obligation_id UUID REFERENCES obligations(id) ON DELETE CASCADE,
+    control_name TEXT,
+    title TEXT,
+    description TEXT,
+    control_type TEXT,
+    frequency TEXT,
+    threshold_value TEXT,
+    status TEXT DEFAULT 'active',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 -- Create food_traceability_list table if not exists
 CREATE TABLE IF NOT EXISTS food_traceability_list (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
