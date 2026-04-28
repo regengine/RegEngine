@@ -109,6 +109,15 @@ jobs:
         working-directory: inflow-lab
         run: pip install -r requirements.txt
 
+      - name: Prepare RegEngine database roles
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h localhost -U postgres -d regengine_contract -v ON_ERROR_STOP=1 \
+            -c "DO \$\$ BEGIN CREATE ROLE regengine LOGIN; EXCEPTION WHEN duplicate_object THEN NULL; END \$\$;" \
+            -c "DO \$\$ BEGIN CREATE ROLE regengine_sysadmin LOGIN INHERIT; EXCEPTION WHEN duplicate_object THEN NULL; END \$\$;" \
+            -c "GRANT regengine TO regengine_sysadmin;"
+
       - name: Apply RegEngine migrations
         working-directory: regengine
         env:
