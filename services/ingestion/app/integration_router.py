@@ -90,9 +90,11 @@ async def configure_connector(
     from shared.external_connectors.registry import (
         get_connector_class,
         get_or_create_connector,
+        resolve_connector_id,
     )
 
-    cls = get_connector_class(config_req.connector_id)
+    connector_id = resolve_connector_id(config_req.connector_id)
+    cls = get_connector_class(connector_id)
     if cls is None:
         raise HTTPException(
             status_code=404,
@@ -103,19 +105,21 @@ async def configure_connector(
     # falling back to the connector's class name rather than hardcoding "unknown".
     _category = "unknown"
     try:
-        _info = cls(ConnectorConfig(
-            connector_id=config_req.connector_id,
-            display_name=config_req.connector_id,
-            category="unknown",
-        )).get_connector_info()
+        _info = cls(
+            ConnectorConfig(
+                connector_id=connector_id,
+                display_name=connector_id,
+                category="unknown",
+            )
+        ).get_connector_info()
         _category = _info.get("category", cls.__name__.lower())
     except Exception:
         logger.debug("Connector info lookup failed", exc_info=True)
         _category = cls.__name__.lower()
 
     config = ConnectorConfig(
-        connector_id=config_req.connector_id,
-        display_name=config_req.connector_id,
+        connector_id=connector_id,
+        display_name=connector_id,
         category=_category,
         api_key=config_req.api_key or "",
         api_secret=config_req.api_secret or "",
@@ -127,10 +131,10 @@ async def configure_connector(
         extra=config_req.extra,
     )
 
-    connector = get_or_create_connector(tenant_id, config_req.connector_id, config)
+    connector = get_or_create_connector(tenant_id, connector_id, config)
     return {
         "configured": True,
-        "connector_id": config_req.connector_id,
+        "connector_id": connector_id,
         "status": connector.status.value,
     }
 
@@ -145,9 +149,13 @@ async def test_connection(
     _: None = Depends(_verify_api_key),
 ):
     """Test that a configured connector can reach its external system."""
-    from shared.external_connectors.registry import get_tenant_connectors
+    from shared.external_connectors.registry import (
+        get_tenant_connectors,
+        resolve_connector_id,
+    )
 
     connectors = get_tenant_connectors(tenant_id)
+    connector_id = resolve_connector_id(connector_id)
     connector = connectors.get(connector_id)
     if not connector:
         raise HTTPException(
@@ -177,10 +185,14 @@ async def trigger_sync(
     Fetches events from the external system and ingests them
     into RegEngine's CTE pipeline.
     """
-    from shared.external_connectors.registry import get_tenant_connectors
+    from shared.external_connectors.registry import (
+        get_tenant_connectors,
+        resolve_connector_id,
+    )
 
     connectors = get_tenant_connectors(tenant_id)
-    connector = connectors.get(sync_req.connector_id)
+    connector_id = resolve_connector_id(sync_req.connector_id)
+    connector = connectors.get(connector_id)
     if not connector:
         raise HTTPException(
             status_code=404,
@@ -269,9 +281,13 @@ async def receive_webhook(
     Note: This endpoint does NOT require API key auth — it uses
     the connector's webhook secret for verification instead.
     """
-    from shared.external_connectors.registry import get_tenant_connectors
+    from shared.external_connectors.registry import (
+        get_tenant_connectors,
+        resolve_connector_id,
+    )
 
     connectors = get_tenant_connectors(tenant_id)
+    connector_id = resolve_connector_id(connector_id)
     connector = connectors.get(connector_id)
     if not connector:
         raise HTTPException(
@@ -312,6 +328,10 @@ async def disconnect_connector(
     _: None = Depends(_verify_api_key),
 ):
     """Remove a configured connector for a tenant."""
-    from shared.external_connectors.registry import remove_connector
+    from shared.external_connectors.registry import (
+        remove_connector,
+        resolve_connector_id,
+    )
+    connector_id = resolve_connector_id(connector_id)
     remove_connector(tenant_id, connector_id)
     return {"disconnected": True, "connector_id": connector_id}

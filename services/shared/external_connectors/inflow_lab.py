@@ -84,6 +84,8 @@ class InflowLabConnector(IntegrationConnector):
     def get_connector_info(self) -> Dict[str, Any]:
         return {
             "id": "inflow_lab",
+            "slug": "inflow-lab",
+            "aliases": ["inflow-lab"],
             "name": "Inflow Lab",
             "category": "developer",
             "description": (

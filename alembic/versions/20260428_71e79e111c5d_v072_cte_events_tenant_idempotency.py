@@ -6,7 +6,7 @@ databases had only the legacy single-column idempotency constraint/index,
 so live webhook ingest could reach the database and then fail with
 ``no unique or exclusion constraint matching the ON CONFLICT specification``.
 
-Revision ID: 1a2b3c4d5e6f
+Revision ID: 71e79e111c5d
 Revises: 9d60e8724725
 Create Date: 2026-04-28
 """
@@ -15,7 +15,7 @@ from typing import Sequence, Union
 from alembic import op
 
 
-revision: str = "1a2b3c4d5e6f"  # pragma: allowlist secret
+revision: str = "71e79e111c5d"  # pragma: allowlist secret
 down_revision: Union[str, Sequence[str], None] = "9d60e8724725"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None

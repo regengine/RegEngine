@@ -41,4 +41,4 @@ def register_all_connectors() -> None:
     register_connector("csv_sftp", CSVSFTPConnector)
 
     # Developer / simulator integrations
-    register_connector("inflow_lab", InflowLabConnector)
+    register_connector("inflow_lab", InflowLabConnector, aliases=("inflow-lab",))

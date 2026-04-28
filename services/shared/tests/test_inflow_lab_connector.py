@@ -36,6 +36,8 @@ def test_inflow_lab_metadata_points_to_docs() -> None:
     info = connector.get_connector_info()
 
     assert info["id"] == "inflow_lab"
+    assert info["slug"] == "inflow-lab"
+    assert "inflow-lab" in info["aliases"]
     assert info["name"] == "Inflow Lab"
     assert info["category"] == "developer"
     assert info["auth_type"] == "none"
@@ -79,3 +81,4 @@ def test_register_all_includes_inflow_lab() -> None:
     register_all_connectors()
 
     assert get_connector_class("inflow_lab") is InflowLabConnector
+    assert get_connector_class("inflow-lab") is InflowLabConnector
