@@ -133,6 +133,7 @@ jobs:
           ADMIN_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/regengine_contract  # pragma: allowlist secret
           REDIS_URL: redis://localhost:6379/0
           REGENGINE_ENV: test
+          API_KEY: ${{ env.CONTRACT_API_KEY }}
           AUTH_TEST_BYPASS_TOKEN: ${{ env.CONTRACT_API_KEY }}
           AUTH_TEST_BYPASS_TENANT_ID: ${{ env.CONTRACT_TENANT_ID }}
           SUBSCRIPTION_GATE_FAIL_OPEN: 'true'

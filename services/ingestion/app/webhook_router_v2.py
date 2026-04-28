@@ -950,6 +950,7 @@ async def ingest_events(
     payload: WebhookPayload,
     principal: IngestionPrincipal = Depends(require_permission("webhooks.ingest")),
     x_regengine_api_key: Optional[str] = Header(default=None, alias="X-RegEngine-API-Key"),
+    x_tenant_id: Optional[str] = Header(default=None, alias="X-Tenant-ID"),
     _auth: None = Depends(_verify_api_key),
     # #1243: HMAC signature check runs in parallel with the API-key check.
     # A leaked key alone is no longer sufficient to forge events when
@@ -979,6 +980,10 @@ async def ingest_events(
     # Fallback: use tenant from RBAC principal if available
     if not tenant_id and principal.tenant_id:
         tenant_id = principal.tenant_id
+    # Header fallback supports signed webhook clients that keep tenant context
+    # out of the payload body, including Inflow Lab's live delivery client.
+    if not tenant_id and x_tenant_id:
+        tenant_id = x_tenant_id
     if not tenant_id:
         logger.error("Webhook rejected: no tenant_id resolved")
         raise HTTPException(status_code=400, detail="Tenant context required")
