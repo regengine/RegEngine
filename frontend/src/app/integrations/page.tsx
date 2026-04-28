@@ -1,9 +1,23 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import {
-  ArrowRight, CheckCircle, Clock, Code, Shield, ShoppingCart,
-  Thermometer, FileSpreadsheet, Truck, Server, Webhook, Anchor,
+  ArrowRight,
+  Code,
+  ExternalLink,
+  FileSpreadsheet,
+  FlaskConical,
+  Shield,
+  ShoppingCart,
+  Thermometer,
+  Webhook,
 } from "lucide-react";
+import {
+  CAPABILITY_REGISTRY,
+  DELIVERY_MODE_LABELS,
+  STATUS_LABELS,
+  type CapabilityCategory,
+  type CustomerVisibleStatus,
+} from "@/lib/customer-readiness";
 
 export const metadata: Metadata = {
   title: "Integrations — Connect Your Supply Chain to RegEngine",
@@ -11,46 +25,27 @@ export const metadata: Metadata = {
     "RegEngine integrates with ERPs, food safety platforms, retailers, IoT sensors, and custom systems. CSV, API, webhook, and SFTP ingestion.",
 };
 
-interface Integration {
-  name: string;
-  category: string;
-  description: string;
-  status: "connected" | "available" | "coming_soon";
-  icon: typeof Shield;
-}
-
-const INTEGRATIONS: Integration[] = [
-  // Food Safety
-  { name: "SafetyCulture (iAuditor)", category: "Food Safety", description: "Sync audit results and inspection data automatically", status: "available", icon: Shield },
-  { name: "FoodReady", category: "Food Safety", description: "Import food safety plans and HACCP documentation", status: "available", icon: Shield },
-  { name: "FoodDocs", category: "Food Safety", description: "Connect food safety management system data", status: "available", icon: Shield },
-  { name: "Tive", category: "IoT / Cold Chain", description: "Real-time temperature and location tracking for shipments", status: "available", icon: Thermometer },
-
-  // Retailers
-  { name: "Walmart GDSN", category: "Retailer", description: "Sync traceability data with Walmart's GDSN requirements", status: "available", icon: ShoppingCart },
-  { name: "Kroger", category: "Retailer", description: "Meet Kroger's supplier traceability mandates", status: "available", icon: ShoppingCart },
-  { name: "Whole Foods", category: "Retailer", description: "Whole Foods supplier compliance integration", status: "available", icon: ShoppingCart },
-  { name: "Costco", category: "Retailer", description: "Costco food safety and traceability compliance", status: "available", icon: ShoppingCart },
-
-  // ERP
-  { name: "Produce Pro", category: "ERP", description: "Map Produce Pro transaction data to FSMA 204 CTEs", status: "coming_soon", icon: FileSpreadsheet },
-  { name: "SAP Business One", category: "ERP", description: "Import batch and inventory data from SAP B1 Service Layer", status: "coming_soon", icon: Server },
-  { name: "Aptean (Freshlynx)", category: "ERP", description: "Connect Aptean food & beverage ERP data", status: "coming_soon", icon: FileSpreadsheet },
-  { name: "Blue Yonder", category: "ERP", description: "Supply chain planning and execution data", status: "coming_soon", icon: Truck },
-
-  // Developer
-  { name: "CSV / SFTP", category: "Developer", description: "Upload CSV files or sync via scheduled SFTP transfers", status: "available", icon: FileSpreadsheet },
-  { name: "REST API", category: "Developer", description: "Full REST API with OpenAPI docs for custom integrations", status: "available", icon: Code },
-  { name: "Webhooks", category: "Developer", description: "Push CTE events in real time via webhook endpoints", status: "available", icon: Webhook },
-  { name: "EPCIS 2.0", category: "Developer", description: "GS1 EPCIS 2.0 event import and export", status: "available", icon: Anchor },
+const CATEGORIES: Array<{ id: CapabilityCategory; title: string; icon: typeof Shield }> = [
+  { id: "food_safety_iot", title: "Food safety & IoT", icon: Thermometer },
+  { id: "erp_warehouse", title: "ERP & warehouse", icon: FileSpreadsheet },
+  { id: "retailer_network", title: "Retailer exports", icon: ShoppingCart },
+  { id: "developer_api", title: "Developer APIs", icon: Code },
+  { id: "commercial", title: "Commercial programs", icon: Shield },
 ];
 
-const CATEGORIES = ["Food Safety", "Retailer", "IoT / Cold Chain", "ERP", "Developer"];
+const STATUS_BADGE: Record<CustomerVisibleStatus, string> = {
+  ga: "bg-emerald-500/15 text-emerald-300 border-emerald-500/25",
+  pilot: "bg-sky-500/15 text-sky-300 border-sky-500/25",
+  design_partner: "bg-fuchsia-500/15 text-fuchsia-300 border-fuchsia-500/25",
+  export_supported: "bg-cyan-500/15 text-cyan-300 border-cyan-500/25",
+  file_import_supported: "bg-indigo-500/15 text-indigo-300 border-indigo-500/25",
+  custom_scoped: "bg-amber-500/15 text-amber-300 border-amber-500/25",
+};
 
-const STATUS_BADGE = {
-  connected: { label: "Connected", className: "bg-green-500/15 text-green-400" },
-  available: { label: "Available", className: "bg-blue-500/15 text-blue-400" },
-  coming_soon: { label: "Coming Soon", className: "bg-amber-500/15 text-amber-400" },
+const ICONS_BY_ID: Record<string, typeof Shield> = {
+  "inflow-lab": FlaskConical,
+  "webhooks": Webhook,
+  "csv-sftp": FileSpreadsheet,
 };
 
 export default function IntegrationsPage() {
@@ -67,37 +62,54 @@ export default function IntegrationsPage() {
         </div>
 
         {/* Integration grid by category */}
-        {CATEGORIES.map((cat) => {
-          const items = INTEGRATIONS.filter((i) => i.category === cat);
+        {CATEGORIES.map((category) => {
+          const items = CAPABILITY_REGISTRY.filter((item) => item.category === category.id);
           if (items.length === 0) return null;
+          const CategoryIcon = category.icon;
+
           return (
-            <div key={cat} className="mb-10">
-              <h2 className="text-lg font-semibold mb-4 text-[var(--re-text-primary)]">{cat}</h2>
+            <section key={category.id} className="mb-10">
+              <h2 className="text-lg font-semibold mb-4 text-[var(--re-text-primary)] flex items-center gap-2">
+                <CategoryIcon className="h-5 w-5 text-[var(--re-brand)]" />
+                {category.title}
+              </h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {items.map((integration) => {
-                  const badge = STATUS_BADGE[integration.status];
+                  const IntegrationIcon = ICONS_BY_ID[integration.id] ?? category.icon;
+
                   return (
                     <div
-                      key={integration.name}
+                      key={integration.id}
                       className="bg-[var(--re-surface-card)] border border-[var(--re-surface-border)] rounded-xl p-5 flex items-start gap-4"
                     >
                       <div className="p-2.5 rounded-lg bg-[var(--re-surface-elevated)] flex-shrink-0">
-                        <integration.icon className="w-5 h-5 text-[var(--re-brand)]" />
+                        <IntegrationIcon className="w-5 h-5 text-[var(--re-brand)]" />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1">
+                        <div className="flex flex-wrap items-center gap-2 mb-1">
                           <h3 className="text-sm font-semibold">{integration.name}</h3>
-                          <span className={`text-[0.6rem] px-1.5 py-0.5 rounded-full font-medium ${badge.className}`}>
-                            {badge.label}
+                          <span className={`text-[0.6rem] px-1.5 py-0.5 rounded-full border font-medium ${STATUS_BADGE[integration.status]}`}>
+                            {STATUS_LABELS[integration.status]}
+                          </span>
+                          <span className="text-[0.6rem] px-1.5 py-0.5 rounded-full border border-white/10 bg-white/5 text-[var(--re-text-muted)] font-medium">
+                            {DELIVERY_MODE_LABELS[integration.delivery_mode]}
                           </span>
                         </div>
-                        <p className="text-[0.75rem] text-[var(--re-text-muted)]">{integration.description}</p>
+                        <p className="text-[0.75rem] text-[var(--re-text-muted)]">{integration.customer_copy}</p>
+                        {integration.evidence_url && (
+                          <Link
+                            href={integration.evidence_url}
+                            className="mt-3 inline-flex items-center gap-1 text-[0.72rem] font-medium text-[var(--re-brand)] hover:text-[var(--re-brand-light)]"
+                          >
+                            View details <ExternalLink className="h-3 w-3" />
+                          </Link>
+                        )}
                       </div>
                     </div>
                   );
                 })}
               </div>
-            </div>
+            </section>
           );
         })}
 
