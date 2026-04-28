@@ -86,7 +86,7 @@ def _make_event():
 
 def _install(monkeypatch, *, summary: EvaluationSummary, canonical_raises=None):
     """Stub normalize_webhook_event + RulesEngine to return the given summary."""
-    def _normalize(event, tenant_id):
+    def _normalize(event, tenant_id, **_kwargs):
         if canonical_raises is not None:
             raise canonical_raises
         return SimpleNamespace(
@@ -154,7 +154,7 @@ class TestPreEvalOff:
         """
         calls: dict = {"normalize": 0, "evaluate": 0}
 
-        def _normalize_spy(event, tenant_id):
+        def _normalize_spy(event, tenant_id, **_kwargs):
             calls["normalize"] += 1
             return SimpleNamespace(
                 event_id="cev-1",

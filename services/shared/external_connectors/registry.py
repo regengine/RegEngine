@@ -100,12 +100,26 @@ def get_all_integration_statuses(tenant_id: str) -> List[Dict]:
         if connector_id in active:
             statuses.append(active[connector_id].to_integration_status())
         else:
+            info = {}
+            try:
+                config = ConnectorConfig(
+                    connector_id=connector_id,
+                    display_name=connector_id,
+                    category="unknown",
+                )
+                info = cls(config).get_connector_info()
+            except Exception as exc:
+                logger.warning(
+                    "connector_status_info_failed id=%s error=%s",
+                    connector_id, str(exc),
+                )
             statuses.append({
                 "id": connector_id,
-                "name": connector_id,
-                "category": "unknown",
+                "name": info.get("name", connector_id),
+                "category": info.get("category", "unknown"),
                 "status": ConnectionStatus.DISCONNECTED.value,
                 "last_sync": None,
+                "docs_url": info.get("docs_url"),
             })
 
     return statuses
