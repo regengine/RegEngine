@@ -201,55 +201,6 @@ jobs:
           echo "== Inflow Lab stored events =="
           curl -fsS -H "X-RegEngine-Tenant: inflow-contract" "http://127.0.0.1:8010/api/events?limit=5" || true
           echo
-          echo "== Direct RegEngine replay diagnostic =="
-          python - <<'PY'
-          import hashlib
-          import hmac
-          import json
-          import os
-          import uuid
-
-          import httpx
-
-          tenant_id = os.environ["CONTRACT_TENANT_ID"]
-          api_key = os.environ["CONTRACT_API_KEY"]
-          secret = os.environ["CONTRACT_HMAC_SECRET"]
-
-          with httpx.Client(timeout=10.0) as client:
-              events_response = client.get(
-                  "http://127.0.0.1:8010/api/events?limit=1",
-                  headers={"X-RegEngine-Tenant": "inflow-contract"},
-              )
-              events_response.raise_for_status()
-              stored = events_response.json()["events"][0]
-              body = {
-                  "source": "live-trial-diagnostic",
-                  "events": [stored["event"]],
-              }
-              body_bytes = json.dumps(
-                  body,
-                  separators=(",", ":"),
-                  sort_keys=True,
-              ).encode("utf-8")
-              signature = hmac.new(
-                  secret.encode("utf-8"),
-                  body_bytes,
-                  hashlib.sha256,
-              ).hexdigest()
-              response = client.post(
-                  "http://localhost:8002/api/v1/webhooks/ingest",
-                  headers={
-                      "Content-Type": "application/json",
-                      "X-RegEngine-API-Key": api_key,
-                      "X-Tenant-ID": tenant_id,
-                      "Idempotency-Key": f"diagnostic-{uuid.uuid4().hex}",
-                      "X-Webhook-Signature": f"sha256={signature}",
-                  },
-                  content=body_bytes,
-              )
-              print(f"status={response.status_code}")
-              print(response.text[:1000])
-          PY
           echo "== RegEngine ingestion log =="
           cat /tmp/regengine-ingestion.log || true
           echo "== Inflow Lab log =="
