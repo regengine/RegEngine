@@ -2,13 +2,12 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import {
   ArrowRight,
-  CheckCircle2,
+  Activity,
   Code,
   DatabaseZap,
   ExternalLink,
   FileSpreadsheet,
   FlaskConical,
-  GitBranch,
   PackageCheck,
   Shield,
   ShoppingCart,
@@ -60,6 +59,19 @@ const ICONS_BY_ID: Record<string, typeof Shield> = {
 
 const inflow = CAPABILITY_REGISTRY.find((item) => item.id === "inflow-lab");
 
+const proofStats = [
+  ["Connector slug", "inflow-lab"],
+  ["Backend id", "inflow_lab"],
+  ["CI coverage", "Live ingest"],
+];
+
+const inflowPath = [
+  ["Simulator", "Generates FSMA 204 CTE batches"],
+  ["Signed webhook", "POST /api/v1/webhooks/ingest"],
+  ["Registry alias", "inflow-lab -> inflow_lab"],
+  ["RegEngine", "Validates, stores, and tags events"],
+];
+
 function statusClass(status: CustomerVisibleStatus) {
   return `${styles.pill} ${styles[`status_${status}`]}`;
 }
@@ -76,17 +88,14 @@ export default function IntegrationsPage() {
       <section className={styles.hero}>
         <div className={styles.heroInner}>
           <div className={styles.heroCopy}>
-            <div className={styles.kicker}>
-              <CheckCircle2 aria-hidden="true" size={16} />
-              RegEngine readiness registry
-            </div>
-            <h1>Integrations that prove FSMA 204 data can move</h1>
+            <p className={styles.kicker}>RegEngine integrations</p>
+            <h1>Integration registry</h1>
             <p>
-              Connect simulator events, source-system files, customer APIs, and retailer export packages without overstating what is live. Every entry below is tied to the readiness registry used for diligence and product planning.
+              A compact view of what can send data into RegEngine, what is only export-ready, and what still needs guided implementation. Inflow Lab is the live simulator path for webhook demos and contract CI.
             </p>
             <div className={styles.actions}>
               <Link href="/docs/connectors/inflow-lab" className={styles.primaryButton}>
-                View Inflow Lab
+                Open Inflow docs
                 <ArrowRight aria-hidden="true" size={16} />
               </Link>
               <Link href="/docs/api" className={styles.secondaryButton}>
@@ -94,29 +103,34 @@ export default function IntegrationsPage() {
                 API docs
               </Link>
             </div>
+            <dl className={styles.proofGrid}>
+              {proofStats.map(([label, value]) => (
+                <div key={label}>
+                  <dt>{label}</dt>
+                  <dd>{value}</dd>
+                </div>
+              ))}
+            </dl>
           </div>
 
           {inflow && (
             <aside className={styles.featurePanel}>
               <div className={styles.featureTop}>
-                <div>
-                  <div className={styles.featureIcon}>
-                    <FlaskConical aria-hidden="true" size={22} />
+                <div className={styles.featureTitle}>
+                  <span className={styles.featureIcon}>
+                    <FlaskConical aria-hidden="true" size={20} />
+                  </span>
+                  <div>
+                    <p className={styles.eyebrow}>Featured path</p>
+                    <h2>{inflow.name}</h2>
                   </div>
-                  <p className={styles.eyebrow}>Featured connector</p>
-                  <h2>{inflow.name}</h2>
                 </div>
                 <span className={statusClass(inflow.status)}>{STATUS_LABELS[inflow.status]}</span>
               </div>
               <p className={styles.featureCopy}>{inflow.customer_copy}</p>
 
               <div className={styles.flowBox}>
-                {[
-                  ["Inflow Lab", "source: inflow-lab"],
-                  ["Signed webhook", "POST /api/v1/webhooks/ingest"],
-                  ["RegEngine ingest", "validation + source attribution"],
-                  ["Audit surface", "demo-ready FSMA 204 events"],
-                ].map(([label, detail], index) => (
+                {inflowPath.map(([label, detail], index) => (
                   <div key={label} className={styles.flowStep}>
                     <span>{index + 1}</span>
                     <div>
@@ -137,8 +151,8 @@ export default function IntegrationsPage() {
                   <dd>regengine/inflow-lab</dd>
                 </div>
                 <div>
-                  <dt>Use</dt>
-                  <dd>Demos + contract CI</dd>
+                  <dt>Endpoint</dt>
+                  <dd>/webhooks/ingest</dd>
                 </div>
               </dl>
             </aside>
@@ -149,11 +163,10 @@ export default function IntegrationsPage() {
       <section className={styles.registry}>
         <div className={styles.registryHeader}>
           <div>
-            <p className={styles.eyebrow}>Registry</p>
             <h2>Current integration posture</h2>
           </div>
           <p>
-            Status labels are deliberately conservative: GA means generally available; Pilot and Custom Scoped mean guided implementation, validation, or design-partner work.
+            Status labels stay conservative. GA is usable today; Pilot means validated but guided; Custom Scoped means implementation work should be explicitly estimated.
           </p>
         </div>
 
@@ -183,7 +196,12 @@ export default function IntegrationsPage() {
                     const IntegrationIcon = ICONS_BY_ID[integration.id] ?? group.icon;
 
                     return (
-                      <article key={integration.id} className={styles.integrationRow}>
+                      <article
+                        key={integration.id}
+                        className={`${styles.integrationRow} ${
+                          integration.id === "inflow-lab" ? styles.featuredRow : ""
+                        }`}
+                      >
                         <div className={styles.integrationName}>
                           <span>
                             <IntegrationIcon aria-hidden="true" size={20} />
@@ -222,18 +240,18 @@ export default function IntegrationsPage() {
 
       <section className={styles.cta}>
         <div>
-          <h2>Need a source system scoped?</h2>
+          <h2>Need another source scoped?</h2>
           <p>
             Bring the ERP export, supplier file, or API shape into onboarding and RegEngine will map it against the FSMA 204 event model before promising a production connector.
           </p>
         </div>
         <div className={styles.actions}>
           <Link href="/contact" className={styles.primaryButton}>
-            Request an integration
+            Scope integration
             <ArrowRight aria-hidden="true" size={16} />
           </Link>
           <Link href="/trust" className={styles.secondaryButton}>
-            <GitBranch aria-hidden="true" size={16} />
+            <Activity aria-hidden="true" size={16} />
             View evidence
           </Link>
         </div>
