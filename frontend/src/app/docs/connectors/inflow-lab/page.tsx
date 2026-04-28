@@ -1,21 +1,21 @@
-import type { Metadata } from 'next';
-import Link from 'next/link';
-import { ArrowLeft, CheckCircle2, Code2, GitBranch, Terminal, Webhook } from 'lucide-react';
-import { T as _T } from '@/lib/design-tokens';
-
-const T = {
-  ..._T,
-  heading: 'var(--re-text-primary)',
-  text: 'var(--re-text-secondary)',
-  textMuted: 'var(--re-text-muted)',
-  surface: 'var(--re-surface-card)',
-  border: 'var(--re-surface-border)',
-};
+import type { Metadata } from "next";
+import Link from "next/link";
+import {
+  ArrowLeft,
+  ArrowRight,
+  CheckCircle2,
+  Code2,
+  GitBranch,
+  ShieldCheck,
+  Terminal,
+  Webhook,
+} from "lucide-react";
+import styles from "./page.module.css";
 
 export const metadata: Metadata = {
-  title: 'Inflow Lab Connector | RegEngine',
+  title: "Inflow Lab Connector | RegEngine",
   description:
-    'Use Inflow Lab to generate FSMA 204 webhook payloads for RegEngine demos, contract tests, and developer validation.',
+    "Use Inflow Lab to generate FSMA 204 webhook payloads for RegEngine demos, contract tests, and developer validation.",
 };
 
 const ingestExample = `curl -X POST https://api.regengine.co/api/v1/webhooks/ingest \\
@@ -48,101 +48,127 @@ cp .env.example .env
 # Set RE_API_BASE_URL, RE_API_KEY, and RE_TENANT_ID
 python -m pytest`;
 
+const connectionSteps = [
+  "Inflow Lab generates RegEngine-shaped FSMA 204 CTE payloads.",
+  "The simulator posts batches to /api/v1/webhooks/ingest with source set to inflow-lab.",
+  "RegEngine stores the events, preserves source attribution, and runs the same validation path used by production webhook traffic.",
+];
+
 export default function InflowLabDocsPage() {
   return (
-    <div className="min-h-screen bg-[var(--re-surface-base)] text-[var(--re-text-secondary)]">
-      <div style={{ borderBottom: `1px solid ${T.border}`, padding: '24px' }}>
-        <div className="max-w-[780px] mx-auto">
-          <Link
-            href="/docs"
-            className="inline-flex items-center gap-2 text-sm mb-4"
-            style={{ color: T.accent, textDecoration: 'none' }}
-          >
-            <ArrowLeft className="w-4 h-4" />
-            Back to Docs
-          </Link>
+    <main className={styles.page}>
+      <section className={styles.hero}>
+        <div className={styles.heroInner}>
+          <div>
+            <Link href="/integrations" className={styles.backLink}>
+              <ArrowLeft aria-hidden="true" size={16} />
+              Back to integrations
+            </Link>
 
-          <div className="flex items-center gap-3 mb-3">
-            <Terminal className="w-7 h-7 text-re-brand" />
-            <span className="text-[11px] font-semibold px-2.5 py-1 rounded" style={{ background: 'rgba(16,185,129,0.16)', color: T.accent }}>
-              Pilot
-            </span>
+            <div className={styles.pills}>
+              <span className={styles.pilotPill}>
+                <Terminal aria-hidden="true" size={14} />
+                Pilot connector
+              </span>
+              <span>Webhook</span>
+              <span>Contract CI</span>
+            </div>
+
+            <h1>Inflow Lab Connector</h1>
+            <p>
+              Inflow Lab is RegEngine&apos;s FSMA 204 simulator for webhook contract tests, sales demos, and developer validation. It sends traceability events into the same ingest API used by customer integrations.
+            </p>
           </div>
 
-          <h1 className="text-[1.75rem] sm:text-[2.5rem] font-bold text-[var(--re-text-primary)] mb-2">
-            Inflow Lab Connector
-          </h1>
-          <p className="text-re-text-muted text-base max-w-[680px]">
-            Inflow Lab is RegEngine's FSMA 204 simulator for webhook contract tests, sales demos, and developer validation. It sends traceability events into the same ingest API used by customer integrations.
-          </p>
-        </div>
-      </div>
-
-      <main className="max-w-[780px] mx-auto py-12 px-6">
-        <section className="mb-10">
-          <h2 className="text-[1.3rem] font-semibold text-[var(--re-text-primary)] mb-4">
-            <Webhook className="w-5 h-5 inline align-middle mr-2" />
-            How It Connects
-          </h2>
-          <div className="grid gap-3">
+          <aside className={styles.pathPanel}>
+            <p className={styles.eyebrow}>Live path</p>
             {[
-              'Inflow Lab generates RegEngine-shaped FSMA 204 CTE payloads.',
-              'The simulator posts batches to /api/v1/webhooks/ingest with source set to inflow-lab.',
-              'RegEngine stores the events, preserves source attribution, and runs the same validation path used by production webhook traffic.',
-            ].map((item) => (
-              <div key={item} className="flex gap-3 p-4 rounded-lg" style={{ background: T.surface, border: `1px solid ${T.border}` }}>
-                <CheckCircle2 className="w-5 h-5 shrink-0 mt-0.5 text-re-brand" />
-                <p className="text-sm text-re-text-muted">{item}</p>
+              ["Simulator", "source: inflow-lab"],
+              ["Webhook ingest", "signed batch POST"],
+              ["Validation", "FSMA 204 event checks"],
+              ["Dashboard", "source-tagged records"],
+            ].map(([label, detail], index) => (
+              <div key={label} className={styles.pathStep}>
+                <span>{index + 1}</span>
+                <div>
+                  <strong>{label}</strong>
+                  <p>{detail}</p>
+                </div>
               </div>
             ))}
-          </div>
-        </section>
+          </aside>
+        </div>
+      </section>
 
-        <section className="mb-10">
-          <h2 className="text-[1.3rem] font-semibold text-[var(--re-text-primary)] mb-4">
-            <Code2 className="w-5 h-5 inline align-middle mr-2" />
-            Webhook Payload
-          </h2>
-          <p className="text-sm text-re-text-muted mb-4">
-            Use <code className="px-1.5 py-0.5 rounded bg-black/30">source: "inflow-lab"</code> so dashboard and audit surfaces can distinguish simulator traffic from generic webhook submissions.
-          </p>
-          <div className="rounded-lg overflow-hidden" style={{ border: `1px solid ${T.border}` }}>
-            <div className="px-4 py-2 text-xs text-re-text-muted" style={{ background: 'rgba(255,255,255,0.05)', borderBottom: `1px solid ${T.border}` }}>
-              POST /api/v1/webhooks/ingest
+      <div className={styles.content}>
+        <div className={styles.mainColumn}>
+          <section className={styles.card}>
+            <h2>
+              <Webhook aria-hidden="true" size={21} />
+              How it connects
+            </h2>
+            <div className={styles.checkList}>
+              {connectionSteps.map((item) => (
+                <div key={item}>
+                  <CheckCircle2 aria-hidden="true" size={20} />
+                  <p>{item}</p>
+                </div>
+              ))}
             </div>
-            <pre className="m-0 p-4 text-[12px] leading-5 overflow-x-auto bg-black/60 text-re-text-muted">
-              <code>{ingestExample}</code>
-            </pre>
-          </div>
-        </section>
+          </section>
 
-        <section className="mb-10">
-          <h2 className="text-[1.3rem] font-semibold text-[var(--re-text-primary)] mb-4">
-            <GitBranch className="w-5 h-5 inline align-middle mr-2" />
-            Local Simulator
-          </h2>
-          <p className="text-sm text-re-text-muted mb-4">
-            The simulator lives in the RegEngine GitHub organization at <code className="px-1.5 py-0.5 rounded bg-black/30">regengine/inflow-lab</code>. Use it locally for partner demos and CI contract validation.
-          </p>
-          <div className="rounded-lg overflow-hidden" style={{ border: `1px solid ${T.border}` }}>
-            <div className="px-4 py-2 text-xs text-re-text-muted" style={{ background: 'rgba(255,255,255,0.05)', borderBottom: `1px solid ${T.border}` }}>
-              Local setup
+          <section className={styles.card}>
+            <h2>
+              <Code2 aria-hidden="true" size={21} />
+              Webhook payload
+            </h2>
+            <p>
+              Use <code>source: &quot;inflow-lab&quot;</code> so dashboard and audit surfaces can distinguish simulator traffic from generic webhook submissions.
+            </p>
+            <div className={styles.codeBlock}>
+              <div>POST /api/v1/webhooks/ingest</div>
+              <pre>
+                <code>{ingestExample}</code>
+              </pre>
             </div>
-            <pre className="m-0 p-4 text-[12px] leading-5 overflow-x-auto bg-black/60 text-re-text-muted">
-              <code>{localRun}</code>
-            </pre>
-          </div>
-        </section>
+          </section>
 
-        <section>
-          <h2 className="text-[1.3rem] font-semibold text-[var(--re-text-primary)] mb-4">Operational Notes</h2>
-          <div className="grid gap-3 text-sm text-re-text-muted">
-            <p>Inflow Lab is a simulator and developer tool, not a production vendor data source.</p>
-            <p>Hosted access is intentionally separate from this connector tile. Keep the local simulator path until a design partner explicitly asks for hosted access or it becomes part of weekly sales motion.</p>
-            <p>Cross-repo contract CI should pin the simulator commit that RegEngine expects, then run a live ingest assertion against the local service.</p>
-          </div>
-        </section>
-      </main>
-    </div>
+          <section className={styles.card}>
+            <h2>
+              <GitBranch aria-hidden="true" size={21} />
+              Local simulator
+            </h2>
+            <p>
+              The simulator lives in the RegEngine GitHub organization at <code>regengine/inflow-lab</code>. Use it locally for partner demos and CI contract validation.
+            </p>
+            <div className={styles.codeBlock}>
+              <div>Local setup</div>
+              <pre>
+                <code>{localRun}</code>
+              </pre>
+            </div>
+          </section>
+        </div>
+
+        <aside className={styles.sideColumn}>
+          <section className={styles.card}>
+            <h2>
+              <ShieldCheck aria-hidden="true" size={21} />
+              Operational notes
+            </h2>
+            <div className={styles.notes}>
+              <p>Inflow Lab is a simulator and developer tool, not a production vendor data source.</p>
+              <p>Hosted access is intentionally separate from this connector tile until a design partner asks for it or it becomes part of the weekly sales motion.</p>
+              <p>Cross-repo contract CI should pin the simulator commit that RegEngine expects, then run a live ingest assertion against the local service.</p>
+            </div>
+          </section>
+
+          <Link href="/docs/api" className={styles.apiLink}>
+            Open API docs
+            <ArrowRight aria-hidden="true" size={16} />
+          </Link>
+        </aside>
+      </div>
+    </main>
   );
 }
