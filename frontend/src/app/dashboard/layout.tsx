@@ -32,7 +32,7 @@ import {
     Fingerprint,
     ClipboardList,
     Eye,
-    Code2,
+    FlaskConical,
 } from 'lucide-react';
 
 // ---------------------------------------------------------------------------
@@ -66,6 +66,14 @@ const TOP_ITEMS: NavItem[] = [
 
 /** Collapsible sections (closed by default) */
 const COLLAPSIBLE_SECTIONS: CollapsibleSection[] = [
+    {
+        key: 'data-inflow',
+        title: 'Data Inflow',
+        items: [
+            { label: 'CSV/API Import', href: '/ingest', icon: FileSpreadsheet },
+            { label: 'Inflow Lab', href: '/dashboard/inflow-lab', icon: FlaskConical },
+        ],
+    },
     {
         key: 'fda-response',
         title: 'FDA Response',
