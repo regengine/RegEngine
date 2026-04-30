@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
     AlertTriangle,
@@ -148,6 +149,7 @@ cooling,TLC-FEED-001,Romaine Lettuce,120,cases,Salinas Cooling Hub,2026-04-26T18
 initial_packing,TLC-FEED-001,Romaine Lettuce,118,cases,Salinas Packhouse,2026-04-26T20:12:00Z,,,PACK-001
 shipping,TLC-FEED-001,Romaine Lettuce,118,cases,Salinas Packout Dock,2026-04-26T22:41:00Z,Salinas Packhouse,Bay Area DC,BOL-001
 receiving,TLC-FEED-001,Romaine Lettuce,118,cases,Bay Area DC,2026-04-27T02:04:00Z,Salinas Packout Dock,Bay Area DC,REC-001`;
+const FEEDER_SAVED_RUN_KEY = "regengine:inflow-lab:last-feeder-run";
 
 function servicePath(path: string) {
     return `${INFLOW_API}${path}`;
@@ -520,6 +522,7 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
     const [feederCsv, setFeederCsv] = useState(FEEDER_SAMPLE_CSV);
     const [feederResult, setFeederResult] = useState<SandboxEvaluationResult | null>(null);
     const [feederError, setFeederError] = useState<string | null>(null);
+    const [feederSavedAt, setFeederSavedAt] = useState<string | null>(null);
     const [isFeederEvaluating, setIsFeederEvaluating] = useState(false);
     const feederFileInputRef = useRef<HTMLInputElement>(null);
 
@@ -715,6 +718,7 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
             const result = (await response.json()) as SandboxEvaluationResult;
             const evaluatedEvents = result.events.map(sandboxEventToTraceEvent);
             setFeederResult(result);
+            setFeederSavedAt(null);
             setServiceEvents(evaluatedEvents);
             setServiceLineage(lineageByLotFromEvents(evaluatedEvents));
             setServiceStatus(null);
@@ -739,10 +743,26 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
         reader.onload = () => {
             setFeederCsv(String(reader.result || ""));
             setFeederResult(null);
+            setFeederSavedAt(null);
             setFeederError(null);
         };
         reader.onerror = () => setFeederError("Could not read the selected CSV file.");
         reader.readAsText(file);
+    };
+
+    const saveFeederRun = () => {
+        if (!feederResult) return;
+        const savedAt = new Date().toISOString();
+        window.localStorage.setItem(
+            FEEDER_SAVED_RUN_KEY,
+            JSON.stringify({
+                saved_at: savedAt,
+                csv: feederCsv,
+                result: feederResult,
+                source: "inflow-lab-data-feeder",
+            })
+        );
+        setFeederSavedAt(savedAt);
     };
 
     const traceLot = async () => {
@@ -1167,6 +1187,7 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
                                                 onChange={(event) => {
                                                     setFeederCsv(event.target.value);
                                                     setFeederResult(null);
+                                                    setFeederSavedAt(null);
                                                     setFeederError(null);
                                                 }}
                                                 className="mt-4 min-h-[260px] resize-y border-slate-300 bg-slate-50 font-mono text-xs leading-5 text-slate-900"
@@ -1265,6 +1286,54 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
                                                     </ul>
                                                 </div>
                                             ) : null}
+
+                                            <div className="rounded-lg border border-slate-200 bg-slate-950 p-4 text-white">
+                                                <div className="flex items-center gap-2">
+                                                    <Truck className="h-4 w-4 text-emerald-300" />
+                                                    <p className="text-sm font-semibold">Path to production</p>
+                                                </div>
+                                                <p className="mt-1 text-xs leading-5 text-slate-300">
+                                                    Move from free diagnosis to a monitored feed without treating sandbox rows as production evidence.
+                                                </p>
+                                                <div className="mt-4 space-y-3">
+                                                    {[
+                                                        ["1", "Diagnose free", feederResult ? `${feederResult.total_events} events evaluated` : "Evaluate CSV first"],
+                                                        ["2", "Save as test run", feederSavedAt ? `Saved ${formatServiceTime(feederSavedAt)}` : "Keep the sandbox result for handoff"],
+                                                        ["3", "Convert to import mapping", "Turn headers and CTE aliases into an import setup"],
+                                                        ["4", "Monitor live feed", "Watch connector health, failures, and exceptions"],
+                                                        ["5", "Generate evidence", "Export only authenticated, persisted records"],
+                                                    ].map(([step, title, detail]) => (
+                                                        <div key={step} className="grid grid-cols-[28px_minmax(0,1fr)] gap-3">
+                                                            <span className="flex h-7 w-7 items-center justify-center rounded-full bg-white/10 text-xs font-semibold text-emerald-200">
+                                                                {step}
+                                                            </span>
+                                                            <div>
+                                                                <p className="text-xs font-semibold text-white">{title}</p>
+                                                                <p className="mt-0.5 text-xs leading-5 text-slate-300">{detail}</p>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                                <div className="mt-4 grid gap-2">
+                                                    <Button
+                                                        className="h-9 bg-emerald-600 text-white hover:bg-emerald-700"
+                                                        onClick={saveFeederRun}
+                                                        disabled={!feederResult}
+                                                    >
+                                                        <ClipboardList className="mr-2 h-4 w-4" />
+                                                        Save test run
+                                                    </Button>
+                                                    <Button asChild variant="outline" className="h-9 border-white/20 bg-white/10 text-white hover:bg-white/15">
+                                                        <Link href="/ingest">Convert to import mapping</Link>
+                                                    </Button>
+                                                    <Button asChild variant="outline" className="h-9 border-white/20 bg-white/10 text-white hover:bg-white/15">
+                                                        <Link href="/dashboard/integrations">Monitor live feed</Link>
+                                                    </Button>
+                                                    <Button asChild variant="outline" className="h-9 border-white/20 bg-white/10 text-white hover:bg-white/15">
+                                                        <Link href="/dashboard/export-jobs">Generate evidence</Link>
+                                                    </Button>
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
                                 )}
