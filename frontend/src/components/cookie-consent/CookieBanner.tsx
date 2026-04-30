@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { Analytics } from '@vercel/analytics/react';
 import { SpeedInsights } from '@vercel/speed-insights/next';
 import { Cookie, X } from 'lucide-react';
@@ -10,6 +11,7 @@ import {
   setConsentCookie,
   type ConsentValue,
 } from '@/lib/cookie-consent';
+import { shouldHideMarketingChrome } from '@/lib/app-routes';
 
 interface CookieBannerProps {
   /** Only render Vercel Analytics + SpeedInsights when this is true (env gate). */
@@ -26,8 +28,10 @@ interface CookieBannerProps {
  * - Conditionally mounts Vercel Analytics only after "accepted".
  */
 export function CookieBanner({ enableAnalytics }: CookieBannerProps) {
+  const pathname = usePathname();
   const [consent, setConsent] = useState<ConsentValue | null | 'loading'>('loading');
   const [visible, setVisible] = useState(false);
+  const hideBanner = shouldHideMarketingChrome(pathname);
 
   // Read stored consent on mount
   useEffect(() => {
@@ -73,7 +77,7 @@ export function CookieBanner({ enableAnalytics }: CookieBannerProps) {
       )}
 
       {/* ── Cookie Banner ─────────────────────────────── */}
-      {visible && (
+      {visible && !hideBanner && (
         <div
           role="dialog"
           aria-modal="false"

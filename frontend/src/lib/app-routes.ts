@@ -29,6 +29,10 @@ export const AUTHENTICATED_APP_ROUTE_PREFIXES = [
 const CHROMELESS_EXACT_ROUTES = new Set([
     '/mobile/capture',
     '/fsma/field-capture',
+    '/login',
+    '/forgot-password',
+    '/reset-password',
+    '/auth/verify',
 ]);
 
 export function matchesRoutePrefix(pathname: string, prefixes: readonly string[]): boolean {

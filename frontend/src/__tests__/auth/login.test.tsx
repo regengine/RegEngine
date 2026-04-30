@@ -84,7 +84,7 @@ describe('LoginPage', () => {
         it('renders login form with all fields', () => {
             render(<LoginPage />);
 
-            expect(screen.getByRole('heading', { name: /welcome back/i })).toBeInTheDocument();
+            expect(screen.getByRole('heading', { name: /sign in/i })).toBeInTheDocument();
             expect(screen.getByLabelText(/email/i)).toBeInTheDocument();
             expect(screen.getByLabelText(/password/i)).toBeInTheDocument();
             expect(screen.getByRole('button', { name: /sign in/i })).toBeInTheDocument();
@@ -117,6 +117,10 @@ describe('LoginPage', () => {
 
         it('applies QA preset email without populating password', async () => {
             const user = userEvent.setup();
+            mockSearchParamGet.mockImplementation((key: string) => {
+                if (key === 'qa') return '1';
+                return null;
+            });
             render(<LoginPage />);
 
             const passwordInput = screen.getByLabelText(/password/i);
