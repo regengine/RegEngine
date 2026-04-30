@@ -128,7 +128,7 @@ pip install --require-hashes -r requirements.lock
 export POSTGRES_PASSWORD=regengine
 docker compose -f docker-compose.dev.yml up -d
 
-export DATABASE_URL=postgresql://regengine:regengine@localhost:5432/regengine
+export DATABASE_URL="postgresql://regengine:${POSTGRES_PASSWORD}@localhost:5432/regengine"
 alembic upgrade head
 ```
 
