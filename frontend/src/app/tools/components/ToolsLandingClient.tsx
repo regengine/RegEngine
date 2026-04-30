@@ -99,6 +99,15 @@ const TOOLS: Tool[] = [
         journeyStep: 7,
     },
     {
+        id: 'inflow-lab',
+        title: 'Inflow Lab',
+        description: 'Run a mock FSMA 204 inflow pipeline, trace lots, and export FDA-ready evidence from the connected simulator service.',
+        icon: FlaskConical,
+        category: 'simulate',
+        maturity: 'pilot',
+        featured: true,
+    },
+    {
         id: 'fsma-unified',
         title: 'Cold Chain Anomaly Detector',
         description: 'Run multi-algorithm detection on cold-chain data with precision/recall tuning and supplier risk scoring.',

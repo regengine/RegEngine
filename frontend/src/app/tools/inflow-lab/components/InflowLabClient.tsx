@@ -58,6 +58,106 @@ type LineageNode = {
     state: CteState;
 };
 
+type InflowHealth = {
+    ok?: boolean;
+    build?: { version?: string; commit_sha_short?: string };
+};
+
+type InflowStatus = {
+    running?: boolean;
+    config?: {
+        source?: string;
+        scenario?: string;
+        delivery?: { mode?: string; tenant_id?: string | null };
+    };
+    stats?: {
+        total_records?: number;
+        unique_lots?: number;
+        delivery?: {
+            posted?: number;
+            failed?: number;
+            generated?: number;
+            attempts?: number;
+            last_attempt_at?: string | null;
+            last_success_at?: string | null;
+        };
+    };
+};
+
+type InflowRecord = {
+    sequence_no: number;
+    destination_mode: string;
+    delivery_status: "generated" | "posted" | "failed";
+    delivery_attempts?: number;
+    event: {
+        cte_type: string;
+        traceability_lot_code: string;
+        product_description: string;
+        location_name: string;
+        timestamp: string;
+    };
+};
+
+type InflowLineagePayload = {
+    records?: InflowRecord[];
+};
+
+const INFLOW_API = "/api/inflow-lab";
+const REQUIRED_CTES = ["harvesting", "cooling", "initial_packing", "shipping", "receiving"];
+
+function servicePath(path: string) {
+    return `${INFLOW_API}${path}`;
+}
+
+async function inflowJson<T>(path: string, init?: RequestInit): Promise<T> {
+    const response = await fetch(servicePath(path), {
+        cache: "no-store",
+        headers: { "content-type": "application/json" },
+        ...init,
+    });
+    if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload.error || payload.detail || `Inflow Lab request failed: ${response.status}`);
+    }
+    return response.json();
+}
+
+function formatServiceTime(value: string) {
+    return new Date(value).toLocaleString(undefined, {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+    });
+}
+
+function toTraceEvent(record: InflowRecord): TraceEvent {
+    return {
+        id: record.sequence_no,
+        cte: record.event.cte_type,
+        lotCode: record.event.traceability_lot_code,
+        product: record.event.product_description,
+        location: record.event.location_name,
+        timestamp: formatServiceTime(record.event.timestamp),
+        mode: "simulation",
+        attempts: record.delivery_attempts || 0,
+    };
+}
+
+function toLineage(eventsForLot: TraceEvent[]): LineageNode[] {
+    const byCte = new Map(eventsForLot.map((event) => [event.cte, event]));
+    return REQUIRED_CTES.map((cte) => {
+        const event = byCte.get(cte);
+        return {
+            cte: cte.replaceAll("_", " "),
+            location: event?.location || "Not captured",
+            time: event?.timestamp || "Missing CTE",
+            state: event ? "complete" : "missing",
+        };
+    });
+}
+
 const tabs = ["Control room", "Lots", "Lineage", "Exports", "Event log", "Diagnostics"];
 
 const lotCodes = [
@@ -267,38 +367,78 @@ export function InflowLabClient() {
     const [selectedLot, setSelectedLot] = useState(lotCodes[0]);
     const [traceInput, setTraceInput] = useState(lotCodes[0]);
     const [runStage, setRunStage] = useState<RunStage>("complete");
+    const [health, setHealth] = useState<InflowHealth | null>(null);
+    const [serviceStatus, setServiceStatus] = useState<InflowStatus | null>(null);
+    const [serviceEvents, setServiceEvents] = useState<TraceEvent[]>([]);
+    const [serviceLineage, setServiceLineage] = useState<Record<string, LineageNode[]>>({});
+    const [serviceError, setServiceError] = useState<string | null>(null);
+    const [isBusy, setIsBusy] = useState(false);
     const [tenantId, setTenantId] = useState("local-demo");
-    const [scenarioPreset, setScenarioPreset] = useState("leafy-greens");
-    const [fixture, setFixture] = useState("leafy-greens-trace");
+    const [scenarioPreset, setScenarioPreset] = useState("leafy_greens_supplier");
+    const [fixture, setFixture] = useState("leafy_greens_trace");
     const [deliveryMode, setDeliveryMode] = useState("mock");
     const [source, setSource] = useState("codex-simulator");
-    const [exportPreset, setExportPreset] = useState("all-records");
+    const [exportPreset, setExportPreset] = useState("all_records");
     const [startDate, setStartDate] = useState("2026-04-26");
     const [endDate, setEndDate] = useState("2026-04-27");
 
+    const refreshService = async () => {
+        const [healthPayload, statusPayload, eventsPayload] = await Promise.all([
+            inflowJson<InflowHealth>("/api/healthz"),
+            inflowJson<InflowStatus>("/api/simulate/status"),
+            inflowJson<{ events?: InflowRecord[] }>("/api/events?limit=100"),
+        ]);
+        const nextEvents = (eventsPayload.events || []).map(toTraceEvent);
+        setHealth(healthPayload);
+        setServiceStatus(statusPayload);
+        setServiceEvents(nextEvents);
+        setServiceError(null);
+
+        const firstLot = nextEvents[0]?.lotCode;
+        if (firstLot && (!traceInput || traceInput === lotCodes[0])) {
+            setSelectedLot(firstLot);
+            setTraceInput(firstLot);
+        }
+    };
+
     const selectedEvents = useMemo(
-        () => events.filter((event) => event.lotCode === selectedLot),
-        [selectedLot]
+        () => (serviceEvents.length ? serviceEvents : events).filter((event) => event.lotCode === selectedLot),
+        [selectedLot, serviceEvents]
     );
 
-    const selectedLineage = lineageByLot[selectedLot] ?? [];
+    const activeEvents = serviceEvents.length ? serviceEvents : events;
+    const activeLineageByLot = serviceEvents.length ? serviceLineage : lineageByLot;
+    const selectedLineage = activeLineageByLot[selectedLot] ?? toLineage(selectedEvents);
     const selectedCompleteCount = selectedLineage.filter((node) => node.state === "complete").length;
     const selectedIsExportReady = selectedCompleteCount === selectedLineage.length;
     const hasGeneratedRecords = runStage !== "loaded";
-    const visibleEvents = hasGeneratedRecords ? events : [];
-    const visibleEventStatus = getEventStatus(runStage);
-    const deliveredCount = stageIndex[runStage] >= 2 ? events.length : 0;
-    const completeLots = lotCodes.filter((lotCode) => {
-        const lineage = lineageByLot[lotCode] ?? [];
+    const visibleEvents = hasGeneratedRecords ? activeEvents : [];
+    const visibleEventStatus = serviceEvents.length ? "posted" : getEventStatus(runStage);
+    const deliveredCount = serviceStatus?.stats?.delivery?.posted ?? (stageIndex[runStage] >= 2 ? activeEvents.length : 0);
+    const completeLots = Array.from(new Set(activeEvents.map((event) => event.lotCode))).filter((lotCode) => {
+        const lineage = activeLineageByLot[lotCode] ?? toLineage(activeEvents.filter((event) => event.lotCode === lotCode));
         return lineage.length > 0 && lineage.every((node) => node.state === "complete");
     }).length;
 
     useEffect(() => {
         document.body.dataset.inflowLab = "true";
+        refreshService().catch((error) => setServiceError(error instanceof Error ? error.message : "Inflow Lab service unavailable"));
         return () => {
             delete document.body.dataset.inflowLab;
         };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
+
+    useEffect(() => {
+        if (!serviceEvents.length || !selectedLot || serviceLineage[selectedLot]) return;
+
+        inflowJson<InflowLineagePayload>(`/api/lineage/${encodeURIComponent(selectedLot)}`)
+            .then((payload) => {
+                const lineageEvents = (payload.records || []).map(toTraceEvent);
+                setServiceLineage((current) => ({ ...current, [selectedLot]: toLineage(lineageEvents) }));
+            })
+            .catch((error) => setServiceError(error instanceof Error ? error.message : "Could not trace lot"));
+    }, [selectedLot, serviceEvents.length, serviceLineage]);
 
     const runStatusLabel =
         runStage === "exported"
@@ -311,9 +451,9 @@ export function InflowLabClient() {
 
     const uniqueLots = useMemo(
         () =>
-            lotCodes.map((lotCode) => {
-                const lotEvents = events.filter((event) => event.lotCode === lotCode);
-                const lineage = lineageByLot[lotCode] ?? [];
+            Array.from(new Set(activeEvents.map((event) => event.lotCode))).map((lotCode) => {
+                const lotEvents = activeEvents.filter((event) => event.lotCode === lotCode);
+                const lineage = activeLineageByLot[lotCode] ?? toLineage(lotEvents);
                 const product = lotEvents[0]?.product ?? "Unknown product";
                 const completeCount = lineage.filter((node) => node.state === "complete").length;
                 const complete = completeCount === lineage.length;
@@ -327,34 +467,103 @@ export function InflowLabClient() {
                     lastLocation: lotEvents[0]?.location ?? "No location",
                 };
             }),
-        []
+        [activeEvents, activeLineageByLot]
     );
 
-    const loadScenario = () => {
-        setRunStage("loaded");
-        setSelectedLot(lotCodes[0]);
-        setTraceInput(lotCodes[0]);
+    const loadScenario = async () => {
+        setIsBusy(true);
+        try {
+            await inflowJson(`/api/demo-fixtures/${fixture}/load`, {
+                method: "POST",
+                body: JSON.stringify({
+                    reset: true,
+                    source,
+                    delivery: { mode: deliveryMode, tenant_id: tenantId || null },
+                }),
+            });
+            await refreshService();
+            setRunStage("complete");
+        } catch (error) {
+            setServiceError(error instanceof Error ? error.message : "Could not load Inflow Lab fixture");
+            setRunStage("loaded");
+        } finally {
+            setIsBusy(false);
+        }
         setActiveTab("Control room");
     };
 
-    const runPipeline = () => {
+    const runPipeline = async () => {
+        setIsBusy(true);
         setRunStage("generating");
         setActiveTab("Control room");
-        window.setTimeout(() => setRunStage("delivering"), 450);
-        window.setTimeout(() => setRunStage("validating"), 900);
-        window.setTimeout(() => setRunStage("complete"), 1350);
+        try {
+            await inflowJson("/api/simulate/start", {
+                method: "POST",
+                body: JSON.stringify({
+                    config: {
+                        source,
+                        scenario: scenarioPreset,
+                        interval_seconds: 0.1,
+                        batch_size: 1,
+                        persist_path: "data/events.jsonl",
+                        delivery: { mode: deliveryMode, tenant_id: tenantId || null },
+                    },
+                }),
+            });
+            setRunStage("delivering");
+            await new Promise((resolve) => window.setTimeout(resolve, 700));
+            await inflowJson("/api/simulate/stop", { method: "POST" });
+            await refreshService();
+            setRunStage("complete");
+        } catch (error) {
+            setServiceError(error instanceof Error ? error.message : "Could not run Inflow Lab pipeline");
+            setRunStage("loaded");
+        } finally {
+            setIsBusy(false);
+        }
     };
 
-    const traceLot = () => {
-        if (lotCodes.includes(traceInput)) {
+    const resetServiceState = async () => {
+        setIsBusy(true);
+        try {
+            await inflowJson("/api/simulate/reset", {
+                method: "POST",
+                body: JSON.stringify({
+                    source,
+                    scenario: scenarioPreset,
+                    delivery: { mode: deliveryMode, tenant_id: tenantId || null },
+                }),
+            });
+            setServiceEvents([]);
+            setServiceLineage({});
+            await refreshService();
+            setRunStage("loaded");
+        } catch (error) {
+            setServiceError(error instanceof Error ? error.message : "Could not reset Inflow Lab state");
+        } finally {
+            setIsBusy(false);
+        }
+    };
+
+    const traceLot = async () => {
+        if (traceInput) {
             setSelectedLot(traceInput);
             setActiveTab("Lineage");
+        }
+        try {
+            const payload = await inflowJson<InflowLineagePayload>(`/api/lineage/${encodeURIComponent(traceInput)}`);
+            const lineageEvents = (payload.records || []).map(toTraceEvent);
+            setServiceLineage((current) => ({ ...current, [traceInput]: toLineage(lineageEvents) }));
+            setServiceError(null);
+        } catch (error) {
+            setServiceError(error instanceof Error ? error.message : "Could not trace lot");
         }
     };
 
     const traceLatestLot = () => {
-        setSelectedLot(lotCodes[0]);
-        setTraceInput(lotCodes[0]);
+        const latestLot = visibleEvents[0]?.lotCode || lotCodes[0];
+        setSelectedLot(latestLot);
+        setTraceInput(latestLot);
         setActiveTab("Lineage");
     };
 
@@ -362,6 +571,9 @@ export function InflowLabClient() {
         setRunStage("exported");
         setActiveTab("Exports");
     };
+
+    const csvExportHref = `${servicePath(`/api/mock/regengine/export/fda-request?preset=${exportPreset}&traceability_lot_code=${encodeURIComponent(traceInput)}&start_date=${startDate}&end_date=${endDate}`)}`;
+    const epcisExportHref = `${servicePath(`/api/mock/regengine/export/epcis?traceability_lot_code=${encodeURIComponent(traceInput)}&start_date=${startDate}&end_date=${endDate}`)}`;
 
     return (
         <main data-inflow-lab-app className="min-h-screen bg-[#f6f8f5] text-slate-950">
@@ -763,6 +975,7 @@ export function InflowLabClient() {
                                 variant="outline"
                                 className="h-10 border-white/20 bg-white/10 text-white hover:bg-white/15"
                                 onClick={loadScenario}
+                                disabled={isBusy}
                             >
                                 <RefreshCcw className="mr-2 h-4 w-4" />
                                 Load demo scenario
@@ -770,6 +983,7 @@ export function InflowLabClient() {
                             <Button
                                 className="h-10 bg-emerald-700 text-white hover:bg-emerald-800"
                                 onClick={runPipeline}
+                                disabled={isBusy}
                             >
                                 <Play className="mr-2 h-4 w-4" />
                                 Run pipeline
@@ -806,7 +1020,7 @@ export function InflowLabClient() {
                         </div>
                                 <div className="rounded-lg border border-white/10 bg-black/20 px-3 py-2">
                                     <span className="block font-medium text-white">Fixture</span>
-                                    {fixture === "leafy-greens-trace" ? "Leafy greens trace" : "Single batch"}
+                                    {fixture === "leafy_greens_trace" ? "Leafy greens trace" : "Fresh-cut transformation"}
                         </div>
                                 <div className="rounded-lg border border-white/10 bg-black/20 px-3 py-2">
                                     <span className="block font-medium text-white">Source</span>
@@ -816,6 +1030,12 @@ export function InflowLabClient() {
                         </div>
                     </div>
                 </section>
+
+                {serviceError && (
+                    <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                        Inflow Lab service connection: {serviceError}
+                    </div>
+                )}
 
                 <section className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_380px]">
                     <Card className="rounded-lg border-slate-200 bg-white shadow-sm">
@@ -876,15 +1096,17 @@ export function InflowLabClient() {
                                                     <label className="block text-xs font-medium text-slate-600">
                                                         Scenario preset
                                                         <select value={scenarioPreset} onChange={(event) => setScenarioPreset(event.target.value)} className="mt-1 h-9 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900">
-                                                            <option value="leafy-greens">Leafy greens supplier</option>
-                                                            <option value="single-batch">Single batch receiving</option>
+                                                            <option value="leafy_greens_supplier">Leafy greens supplier</option>
+                                                            <option value="fresh_cut_processor">Fresh-cut processor</option>
+                                                            <option value="retailer_readiness_demo">Retailer readiness demo</option>
                                                         </select>
                                                     </label>
                                                     <label className="block text-xs font-medium text-slate-600">
                                                         Fixture
                                                         <select value={fixture} onChange={(event) => setFixture(event.target.value)} className="mt-1 h-9 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900">
-                                                            <option value="leafy-greens-trace">Leafy greens trace</option>
-                                                            <option value="single-batch">Single batch</option>
+                                                            <option value="leafy_greens_trace">Leafy greens trace</option>
+                                                            <option value="fresh_cut_transformation">Fresh-cut transformation</option>
+                                                            <option value="retailer_handoff">Retailer handoff</option>
                                                         </select>
                                                     </label>
                                                     <label className="block text-xs font-medium text-slate-600">
@@ -928,10 +1150,10 @@ export function InflowLabClient() {
                                                             <Play className="mr-2 h-4 w-4" />
                                                             Start loop
                                                         </Button>
-                                                        <Button variant="outline" className="h-9 border-slate-300 bg-white">
+                                                        <Button variant="outline" className="h-9 border-slate-300 bg-white" disabled={isBusy}>
                                                             Stop
                                                         </Button>
-                                                        <Button variant="outline" className="h-9 border-slate-300 bg-white" onClick={loadScenario}>
+                                                        <Button variant="outline" className="h-9 border-slate-300 bg-white" onClick={resetServiceState} disabled={isBusy}>
                                                             Reset state
                                                         </Button>
                                                     </div>
@@ -971,9 +1193,11 @@ export function InflowLabClient() {
                                                         <label className="block text-xs font-medium text-slate-600">
                                                             Preset
                                                             <select value={exportPreset} onChange={(event) => setExportPreset(event.target.value)} className="mt-1 h-9 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900">
-                                                                <option value="all-records">All records</option>
-                                                                <option value="selected-lot">Selected lot</option>
-                                                                <option value="export-ready">Export-ready only</option>
+                                                                <option value="all_records">All records</option>
+                                                                <option value="lot_trace">Lot trace</option>
+                                                                <option value="shipment_handoff">Shipment handoff</option>
+                                                                <option value="receiving_log">Receiving log</option>
+                                                                <option value="transformation_batches">Transformation batches</option>
                                                             </select>
                                                         </label>
                                                         <label className="block text-xs font-medium text-slate-600">
@@ -995,11 +1219,11 @@ export function InflowLabClient() {
                                                     <p className="text-sm font-semibold">Evidence package</p>
                                                     <p className="mt-1 text-xs leading-5 text-slate-300">2 lots are export-ready. 1 partial lot remains visible as an exception, not silently included.</p>
                                                     <div className="mt-4 grid grid-cols-2 gap-2">
-                                                        <Button className="h-9 bg-emerald-600 text-white hover:bg-emerald-700" onClick={prepareExport}>
-                                                            Download CSV
+                                                        <Button asChild className="h-9 bg-emerald-600 text-white hover:bg-emerald-700">
+                                                            <a href={csvExportHref}>Download CSV</a>
                                                         </Button>
-                                                        <Button variant="outline" className="h-9 border-white/20 bg-white/10 text-white hover:bg-white/15">
-                                                            EPCIS JSON
+                                                        <Button asChild variant="outline" className="h-9 border-white/20 bg-white/10 text-white hover:bg-white/15">
+                                                            <a href={epcisExportHref}>EPCIS JSON</a>
                                                         </Button>
                                                     </div>
                                                 </div>
@@ -1161,8 +1385,8 @@ export function InflowLabClient() {
                                                 <p className="mt-1 text-xs leading-5 text-slate-500">
                                                     Includes the two complete lots and flags the partial lot for review.
                                                 </p>
-                                                <Button className="mt-4 h-9 bg-emerald-700 text-white hover:bg-emerald-800">
-                                                    Download CSV
+                                                <Button asChild className="mt-4 h-9 bg-emerald-700 text-white hover:bg-emerald-800">
+                                                    <a href={csvExportHref}>Download CSV</a>
                                                 </Button>
                                             </div>
                                             <div className="rounded-lg border border-slate-200 bg-white p-4">
@@ -1171,8 +1395,8 @@ export function InflowLabClient() {
                                                 <p className="mt-1 text-xs leading-5 text-slate-500">
                                                     Uses the same lot and date filters as the FDA package for interoperability testing.
                                                 </p>
-                                                <Button variant="outline" className="mt-4 h-9 border-slate-300 bg-white">
-                                                    Download EPCIS
+                                                <Button asChild variant="outline" className="mt-4 h-9 border-slate-300 bg-white">
+                                                    <a href={epcisExportHref}>Download EPCIS</a>
                                                 </Button>
                                             </div>
                                         </div>
@@ -1186,9 +1410,9 @@ export function InflowLabClient() {
                                                 ["Auth", "Off for local simulation"],
                                                 ["Storage", "Local JSONL"],
                                                 ["Persist path", "data/events.jsonl"],
-                                                ["Source", "Demo generator"],
-                                                ["Last success", runStage === "loaded" ? "Not run yet" : "Apr 27, 2026, 2:04 AM"],
-                                                ["Retry queue", "0 failed deliveries"],
+                                                ["Source", source],
+                                                ["Service build", health?.build?.commit_sha_short || health?.build?.version || "Not connected"],
+                                                ["Retry queue", `${serviceStatus?.stats?.delivery?.failed || 0} failed deliveries`],
                                             ].map(([label, value]) => (
                                                 <div key={label} className="rounded-lg border border-slate-200 bg-slate-50 p-3">
                                                     <p className="text-xs font-medium uppercase text-slate-500">{label}</p>
@@ -1255,9 +1479,9 @@ export function InflowLabClient() {
                             <CardContent className="space-y-3 p-4">
                                 {[
                                     ["Posted", String(deliveredCount)],
-                                    ["Failed", "0"],
-                                    ["Generated only", hasGeneratedRecords && deliveredCount === 0 ? String(events.length) : "0"],
-                                    ["Attempts", String(deliveredCount)],
+                                    ["Failed", String(serviceStatus?.stats?.delivery?.failed || 0)],
+                                    ["Generated only", String(serviceStatus?.stats?.delivery?.generated || 0)],
+                                    ["Attempts", String(serviceStatus?.stats?.delivery?.attempts || deliveredCount)],
                                 ].map(([label, value]) => (
                                     <div key={label} className="flex items-center justify-between rounded-md bg-slate-50 px-3 py-2">
                                         <span className="text-xs text-slate-500">{label}</span>

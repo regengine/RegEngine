@@ -31,6 +31,7 @@ const jsonLd = {
             { "@type": "ListItem", "position": 4, "url": "https://regengine.co/tools/cte-mapper", "name": "CTE Coverage Mapper" },
             { "@type": "ListItem", "position": 5, "url": "https://regengine.co/tools/recall-readiness", "name": "Recall Readiness Score" },
             { "@type": "ListItem", "position": 6, "url": "https://regengine.co/tools/roi-calculator", "name": "Regulatory ROI Calculator" },
+            { "@type": "ListItem", "position": 7, "url": "https://regengine.co/tools/inflow-lab", "name": "Inflow Lab" },
         ]
     }
 };
