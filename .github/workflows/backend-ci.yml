@@ -351,7 +351,7 @@ jobs:
       - name: Check for dependency version drift
         run: python scripts/check_dep_versions.py
 
-  # ── Ingestion full suite with xdist isolation (signal-only) ─
+  # ── Ingestion full suite with xdist isolation (hard gate) ─
   # Restores real signal from services/ingestion/tests. The existing
   # ``test`` matrix runs the ingestion suite single-process, where
   # module-level ``sys.modules[...]`` stubbing in 6 test files cascades
@@ -359,14 +359,10 @@ jobs:
   # each test file runs in its own worker process with a fresh
   # sys.modules, so the cascade can't form.
   #
-  # Signal-only (NOT in ci-status) until the excluded files are
-  # individually triaged. The excludes are the 6 poisoner files from
-  # the 2026-04-24 diagnosis + ``webhook_router_v2_1342`` (has ~22
-  # pre-existing solo failures worth separate triage under EPIC-J
-  # #1654). Full fix (rewrite module-level stubs to autouse fixtures
-  # with monkeypatch.setitem teardown) is scheduled for EPIC-J Sprint 4.
-  # See ``project_test_suite_isolation_2026_04_19.md`` for the full
-  # root-cause table.
+  # Hard gate: the previously excluded files now pass under
+  # ``--dist=loadfile`` and the job must block merges if ingestion
+  # regresses. See ``project_test_suite_isolation_2026_04_19.md`` for
+  # the original root-cause table.
   ingestion-full-suite:
     name: Ingestion full suite (xdist signal)
     runs-on: ubuntu-latest
@@ -437,16 +433,8 @@ jobs:
           # --dist=loadfile pins all tests from one file to one worker
           # process. Each worker has its own sys.modules, so module-level
           # stubbing can't poison other files.
-          # Excludes below are files known to fail solo (pre-existing
-          # real bugs) or to use module-level sys.modules stubbing that
-          # needs a proper rewrite under EPIC-J. Shrink this list as
-          # each file is triaged.
           pytest services/ingestion/tests \
             --dist=loadfile -n auto \
-            --ignore-glob='**/test_task_handlers_*.py' \
-            --ignore-glob='**/test_sandbox_router_1342.py' \
-            --ignore-glob='**/test_routes_health_metrics_1342.py' \
-            --ignore-glob='**/test_webhook_router_v2_1342.py' \
             -q --no-cov
 
   # ── Docker Build (consolidated monolith) ─────────────────
@@ -502,7 +490,7 @@ jobs:
   ci-status:
     name: CI Status Gate
     if: always()
-    needs: [test, lint, lint-shared, docker-build, security, rls-fallback-check, alembic-revision-check, dep-version-check, tenant-id-uuid-check]
+    needs: [test, lint, lint-shared, ingestion-full-suite, docker-build, security, rls-fallback-check, alembic-revision-check, dep-version-check, tenant-id-uuid-check]
     runs-on: ubuntu-latest
     steps:
       - name: Check results
@@ -510,6 +498,7 @@ jobs:
           echo "Test:              ${{ needs.test.result }}"
           echo "Lint:              ${{ needs.lint.result }}"
           echo "Lint shared/:      ${{ needs.lint-shared.result }}"
+          echo "Ingestion suite:   ${{ needs.ingestion-full-suite.result }}"
           echo "Docker:            ${{ needs.docker-build.result }}"
           echo "Security:          ${{ needs.security.result }}"
           echo "RLS fallback:      ${{ needs.rls-fallback-check.result }}"
@@ -523,12 +512,13 @@ jobs:
           if [[ "${{ needs.test.result }}" == "failure" \
              || "${{ needs.lint.result }}" == "failure" \
              || "${{ needs.lint-shared.result }}" == "failure" \
+             || "${{ needs.ingestion-full-suite.result }}" == "failure" \
              || "${{ needs.security.result }}" == "failure" \
              || "${{ needs.rls-fallback-check.result }}" == "failure" \
              || "${{ needs.alembic-revision-check.result }}" == "failure" \
              || "${{ needs.dep-version-check.result }}" == "failure" \
              || "${{ needs.tenant-id-uuid-check.result }}" == "failure" ]]; then
-            echo "::error::Test, Lint, Security Audit, RLS fallback, Alembic revision ID, dep version drift, or tenant_id UUID guard failed"
+            echo "::error::Test, Lint, Ingestion full suite, Security Audit, RLS fallback, Alembic revision ID, dep version drift, or tenant_id UUID guard failed"
             exit 1
           fi
           echo "All checks passed"
