@@ -36,6 +36,29 @@ const serviceRecords = [
     inflowRecord(6, partialLot, 'cooling'),
 ];
 
+const sandboxEvaluation = {
+    total_events: 1,
+    compliant_events: 1,
+    non_compliant_events: 0,
+    total_kde_errors: 0,
+    total_rule_failures: 0,
+    submission_blocked: false,
+    blocking_reasons: [],
+    events: [
+        {
+            event_index: 0,
+            cte_type: 'shipping',
+            traceability_lot_code: 'TLC-FEED-001',
+            product_description: 'Romaine Lettuce',
+            kde_errors: [],
+            rules_failed: 0,
+            rules_warned: 0,
+            compliant: true,
+            all_results: [],
+        },
+    ],
+};
+
 function jsonResponse(payload: unknown, init?: ResponseInit) {
     return Promise.resolve(
         new Response(JSON.stringify(payload), {
@@ -51,8 +74,41 @@ describe('Dashboard Inflow Lab', () => {
 
     beforeEach(() => {
         vi.clearAllMocks();
+        const localStore: Record<string, string> = {};
+        const sessionStore: Record<string, string> = {};
+        vi.stubGlobal('localStorage', {
+            getItem: vi.fn((key: string) => localStore[key] ?? null),
+            setItem: vi.fn((key: string, value: string) => {
+                localStore[key] = value;
+            }),
+            removeItem: vi.fn((key: string) => {
+                delete localStore[key];
+            }),
+            clear: vi.fn(() => {
+                Object.keys(localStore).forEach((key) => delete localStore[key]);
+            }),
+            length: 0,
+            key: vi.fn(() => null),
+        });
+        vi.stubGlobal('sessionStorage', {
+            getItem: vi.fn((key: string) => sessionStore[key] ?? null),
+            setItem: vi.fn((key: string, value: string) => {
+                sessionStore[key] = value;
+            }),
+            removeItem: vi.fn((key: string) => {
+                delete sessionStore[key];
+            }),
+            clear: vi.fn(() => {
+                Object.keys(sessionStore).forEach((key) => delete sessionStore[key]);
+            }),
+            length: 0,
+            key: vi.fn(() => null),
+        });
         mockFetch.mockImplementation((input: RequestInfo | URL) => {
             const url = String(input);
+            if (url.endsWith('/api/ingestion/api/v1/sandbox/evaluate')) {
+                return jsonResponse(sandboxEvaluation);
+            }
             if (url.endsWith('/api/healthz')) {
                 return jsonResponse({ ok: true, build: { version: 'test-build' } });
             }
@@ -84,12 +140,18 @@ describe('Dashboard Inflow Lab', () => {
         render(<DashboardInflowLabPage />);
 
         expect(screen.getByRole('heading', { name: 'Inflow Lab' })).toBeInTheDocument();
-        expect(screen.getByText('Test environment')).toBeInTheDocument();
+        expect(screen.getByText('Mock environment')).toBeInTheDocument();
+        expect(screen.getByText('Boundary active')).toBeInTheDocument();
+        expect(screen.getByText('Sandbox diagnosis')).toBeInTheDocument();
+        expect(screen.getByText('Mock Inflow Lab')).toBeInTheDocument();
+        expect(screen.getByText('Authenticated feed')).toBeInTheDocument();
+        expect(screen.getByText('Production evidence')).toBeInTheDocument();
+        expect(screen.getByText('Authenticated persisted records only')).toBeInTheDocument();
 
         await waitFor(() => {
             expect(screen.getAllByText('Connection ready').length).toBeGreaterThan(0);
         });
-        expect(screen.getAllByText('1 of 2 lots export ready').length).toBeGreaterThan(0);
+        expect(screen.getAllByText('1 of 2 lots test complete').length).toBeGreaterThan(0);
     });
 
     it('keeps tab navigation interactive and opens lineage from a selected lot', async () => {
@@ -104,10 +166,10 @@ describe('Dashboard Inflow Lab', () => {
 
         expect(screen.getByRole('button', { name: 'Lineage' })).toHaveAttribute('aria-pressed', 'true');
         expect(await screen.findByText(`Lineage for ${partialLot}`)).toBeInTheDocument();
-        expect(screen.getByText(/Capture missing KDE evidence for initial packing, shipping, DC receiving/i)).toBeInTheDocument();
+        expect(screen.getByText(/Capture missing KDE evidence for initial packing, shipping, DC receiving before this lot is counted as test complete/i)).toBeInTheDocument();
     });
 
-    it('shows export readiness copy that keeps partial lots visible but outside the ready package', async () => {
+    it('shows export preview copy that keeps partial lots outside production evidence', async () => {
         const user = userEvent.setup();
         render(<DashboardInflowLabPage />);
 
@@ -116,8 +178,9 @@ describe('Dashboard Inflow Lab', () => {
         await user.click(screen.getByRole('button', { name: 'Exports' }));
 
         expect(screen.getByText(/Selected lot is an exception/i)).toBeInTheDocument();
-        expect(screen.getByText(/Includes 1 ready lots\. 1 exception lots are flagged for review, not counted as ready/i)).toBeInTheDocument();
-        expect(screen.getByRole('link', { name: 'Download CSV' })).toHaveAttribute(
+        expect(screen.getByText(/Includes 1 test-complete lots\. 1 exception lots are flagged for review/i)).toBeInTheDocument();
+        expect(screen.getByText(/Production evidence is generated only from authenticated persisted records/i)).toBeInTheDocument();
+        expect(screen.getByRole('link', { name: 'Preview CSV' })).toHaveAttribute(
             'href',
             expect.stringContaining('/api/inflow-lab/api/mock/regengine/export/fda-request'),
         );
@@ -130,11 +193,36 @@ describe('Dashboard Inflow Lab', () => {
         await user.click(screen.getByRole('button', { name: 'Data feeder' }));
 
         expect(screen.getByText('Paste or upload inbound CSV')).toBeInTheDocument();
+        expect(screen.getByText(/public stateless sandbox evaluator/i)).toBeInTheDocument();
+        expect(screen.getByText(/without being stored or promoted to production ingestion/i)).toBeInTheDocument();
         expect(screen.getByText('Path to production')).toBeInTheDocument();
         expect(screen.getByText('Diagnose free')).toBeInTheDocument();
         expect(screen.getByText('Save as test run')).toBeInTheDocument();
+        expect(screen.getAllByText('Generate production evidence').length).toBeGreaterThan(0);
+        expect(screen.getByText('Use authenticated persisted records only')).toBeInTheDocument();
         expect(screen.getByRole('link', { name: 'Convert to import mapping' })).toHaveAttribute('href', '/ingest');
         expect(screen.getByRole('link', { name: 'Monitor live feed' })).toHaveAttribute('href', '/dashboard/integrations');
-        expect(screen.getByRole('link', { name: 'Generate evidence' })).toHaveAttribute('href', '/dashboard/export-jobs');
+        expect(screen.getByRole('link', { name: 'Generate production evidence' })).toHaveAttribute('href', '/dashboard/export-jobs');
+    });
+
+    it('saves evaluated feeder data as a test run without promoting it to evidence', async () => {
+        const user = userEvent.setup();
+        render(<DashboardInflowLabPage />);
+
+        await user.click(screen.getByRole('button', { name: 'Data feeder' }));
+        await user.click(screen.getByRole('button', { name: 'Evaluate data' }));
+
+        expect(await screen.findByText('1 events evaluated')).toBeInTheDocument();
+        await user.click(screen.getByRole('button', { name: 'Save test run' }));
+
+        const savedRun = JSON.parse(window.localStorage.getItem('regengine:inflow-lab:last-feeder-run') || '{}');
+        expect(savedRun).toMatchObject({
+            source: 'inflow-lab-data-feeder',
+            csv: expect.stringContaining('traceability_lot_code'),
+            result: sandboxEvaluation,
+        });
+        expect(savedRun.saved_at).toEqual(expect.any(String));
+        expect(window.sessionStorage.getItem('regengine:sandbox-handoff')).toBeNull();
+        expect(screen.getByText(/Saved /)).toBeInTheDocument();
     });
 });

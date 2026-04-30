@@ -69,7 +69,7 @@ export const metadata: Metadata = {
 /* ------------------------------------------------------------------ */
 
 const TRUST_SIGNALS = [
-  "First FDA-ready export in 48 hours",
+  "First evidence package in 48 hours",
   "1hr 40min recall response",
   "API-first",
   "Built for FSMA 204",
@@ -106,7 +106,7 @@ const COMMAND_TIMELINE = [
   {
     stage: "Retail handoff",
     facility: "Kroger + Walmart packets",
-    detail: "FDA export ready",
+    detail: "Evidence package assembled",
     time: "15:24",
     icon: Store,
     color: "var(--re-evidence)",
@@ -118,7 +118,7 @@ const HERO_STATUS_CARDS = [
   { label: "CTEs found", value: "12/12", color: "var(--re-decomposition)" },
   { label: "Supplier names", value: "Normalized", color: "var(--re-discovery)" },
   { label: "Chain links", value: "Verified", color: "var(--re-linkage)" },
-  { label: "Export pack", value: "FDA-ready", color: "var(--re-evidence)" },
+  { label: "Evidence pack", value: "Assembled", color: "var(--re-evidence)" },
 ];
 
 const OPERATIONAL_STATS = [
@@ -226,7 +226,7 @@ const FREE_TOOLS = [
   },
   {
     title: "Live Data Sandbox",
-    desc: "Paste your CSV. RegEngine evaluates it against FSMA 204 traceability requirements across all 7 CTE types. Nothing stored.",
+    desc: "Paste your CSV. RegEngine checks the CTEs present, shows missing KDEs and lineage gaps, and keeps results ephemeral.",
     href: "#sandbox",
     icon: Database,
     tag: "Try now",
@@ -248,8 +248,8 @@ const HOW_IT_WORKS = [
   },
   {
     step: "03",
-    title: "Export FDA-ready records",
-    desc: "Generate a complete audit package in minutes — not weeks. Ready for FDA, Walmart, or any retailer.",
+    title: "Package verified records",
+    desc: "Generate an evidence package from authenticated records in minutes, with sandbox findings kept separate from production exports.",
     icon: FileText,
   },
 ];
@@ -386,10 +386,10 @@ function TraceabilityCommandCenter() {
               <div className="mt-4 rounded-lg border border-emerald-300/25 bg-emerald-300/10 p-4">
                 <div className="mb-2 flex items-center gap-2 text-emerald-100">
                   <PackageCheck className="h-4 w-4" />
-                  <p className="text-sm font-semibold">FDA package assembled</p>
+                  <p className="text-sm font-semibold">Evidence package assembled</p>
                 </div>
                 <p className="text-xs leading-relaxed text-emerald-50/80">
-                  EPCIS 2.0 export, PDF summary, chain integrity hash, and retailer audit packet are ready to send.
+                  EPCIS 2.0 export, PDF summary, chain integrity hash, and retailer audit packet are assembled from verified records.
                 </p>
               </div>
             </div>
@@ -704,7 +704,7 @@ export default function RegEngineLanding() {
               How it works
             </p>
             <h2 className="font-display text-[clamp(1.5rem,3.5vw,2.25rem)] font-bold text-[var(--re-text-primary)] tracking-tight leading-tight max-w-[600px] mx-auto">
-              From messy data to FDA&#8209;ready in three steps.
+              From messy data to verified evidence in three steps.
             </h2>
           </div>
 
@@ -742,7 +742,7 @@ export default function RegEngineLanding() {
             See what happens to bad data
           </p>
           <h2 className="font-display text-[clamp(1.5rem,3.5vw,2.25rem)] font-bold text-[var(--re-text-primary)] tracking-tight leading-tight mb-3 max-w-[640px]">
-            Messy CSV in. Defensible FDA package out.
+            Messy CSV in. Defensible evidence package out.
           </h2>
           <p className="text-[var(--re-text-secondary)] max-w-[560px] leading-relaxed">
             Missing fields, duplicate lots, inconsistent supplier names — the kind of data you actually get. Watch RegEngine catch it all.
@@ -761,7 +761,7 @@ export default function RegEngineLanding() {
             Paste your data. See what breaks.
           </h2>
           <p className="text-[var(--re-text-secondary)] max-w-[560px] leading-relaxed">
-            Drop your CSV and RegEngine evaluates it against FSMA 204 traceability requirements across all 7 CTE types in real time. Nothing is stored.
+            Drop your CSV and RegEngine checks the CTEs present, explains missing KDEs and lineage gaps, and shows the correction path in real time. Nothing is stored.
           </p>
         </div>
         <SandboxUpload />

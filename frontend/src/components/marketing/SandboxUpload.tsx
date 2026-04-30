@@ -1,7 +1,7 @@
 'use client';
 
 import { fetchWithCsrf } from '@/lib/fetch-with-csrf';
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import {
   AlertTriangle, CheckCircle2, Loader2, Upload, XCircle,
   ShieldAlert, ChevronDown, ChevronUp, Download, Info, Pencil,
@@ -14,7 +14,9 @@ import { SandboxResultsCTA } from './sandbox-grid/SandboxResultsCTA';
 import { generateComplianceReport } from './sandbox-grid/SandboxPdfReport';
 import { NormalizationReview } from './NormalizationReview';
 import { ExportLeadGate } from './sandbox-grid/ExportLeadGate';
+import { buildSandboxRemediationPlan, summarizeSandboxDiagnosis } from './sandbox-grid/diagnosis';
 import { SANDBOX_SAMPLES, SAMPLE_CSV_DEFAULT } from './sandbox-samples';
+import { buildSandboxOperationalHandoff, saveSandboxOperationalHandoff } from './sandbox-handoff';
 
 interface RuleResult {
   rule_title: string;
@@ -128,7 +130,7 @@ export function SandboxUpload() {
   }
 
   // File drop/pick handler — supports multiple files
-  const handleFile = useCallback((file: File) => {
+  function handleFile(file: File) {
     if (file.size > MAX_FILE_SIZE) {
       setError(`File too large (${(file.size / 1024 / 1024).toFixed(1)}MB). Sandbox limit is 2MB.`);
       return;
@@ -153,7 +155,7 @@ export function SandboxUpload() {
       trackSandbox('FILE_UPLOAD', { file_name: file.name, file_size: file.size });
     };
     reader.readAsText(file);
-  }, []);
+  }
 
   // Close sample menu on outside click
   useEffect(() => {
@@ -258,6 +260,29 @@ export function SandboxUpload() {
     generateComplianceReport(result);
   }
 
+  function handleSaveTestRun() {
+    if (!result || !csvText.trim()) return;
+
+    try {
+      const handoff = buildSandboxOperationalHandoff({
+        csv: csvText,
+        result,
+        diagnosis,
+        corrections: remediationPlan,
+      });
+      saveSandboxOperationalHandoff(handoff);
+      trackSandbox('SAVE_TEST_RUN_HANDOFF', {
+        total_events: handoff.summary.totalEvents,
+        needs_work: handoff.summary.needsWork,
+        blockers: handoff.summary.blockers,
+        detected_columns: handoff.detectedColumns?.length || 0,
+      });
+      window.location.assign(`/login?next=${encodeURIComponent('/ingest?from=sandbox-handoff')}`);
+    } catch {
+      setError('Could not save this sandbox result as a test run. Please try again in this browser session.');
+    }
+  }
+
   function handleApplyNormalizations(changes: { field: string; original: string; normalized: string; action_type: string }[]) {
     if (!csvText) return;
     let updated = csvText;
@@ -328,6 +353,9 @@ export function SandboxUpload() {
     setShareCopied(true);
     setTimeout(() => setShareCopied(false), 2000);
   }
+
+  const diagnosis = result ? summarizeSandboxDiagnosis(result) : null;
+  const remediationPlan = result ? buildSandboxRemediationPlan(result) : [];
 
   return (
     <div className="w-full">
@@ -572,9 +600,9 @@ export function SandboxUpload() {
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               {[
                 { label: 'Events', value: result.total_events, color: 'text-[var(--re-text-primary)]' },
-                { label: 'Compliant', value: result.compliant_events, color: 'text-re-brand' },
-                { label: 'Non-compliant', value: result.non_compliant_events, color: result.non_compliant_events > 0 ? 'text-re-danger' : 'text-[var(--re-text-primary)]' },
-                { label: 'Rule Failures', value: result.total_rule_failures, color: result.total_rule_failures > 0 ? 'text-re-warning' : 'text-[var(--re-text-primary)]' },
+                { label: 'Passed checks', value: result.compliant_events, color: 'text-re-brand' },
+                { label: 'Need work', value: result.non_compliant_events, color: result.non_compliant_events > 0 ? 'text-re-danger' : 'text-[var(--re-text-primary)]' },
+                { label: 'Rule issues', value: result.total_rule_failures, color: result.total_rule_failures > 0 ? 'text-re-warning' : 'text-[var(--re-text-primary)]' },
               ].map((stat) => (
                 <div key={stat.label} className="bg-[var(--re-surface-elevated)] rounded-lg p-3 text-center">
                   <div className={`text-xl font-bold font-mono ${stat.color}`}>{stat.value}</div>
@@ -582,6 +610,78 @@ export function SandboxUpload() {
                 </div>
               ))}
             </div>
+
+            {/* Business diagnosis */}
+            {diagnosis && (
+              <div className={`rounded-xl border p-4 ${
+                diagnosis.status === 'blocked'
+                  ? 'border-re-danger/30 bg-re-danger-muted0/10'
+                  : diagnosis.status === 'needs_work'
+                    ? 'border-re-warning/30 bg-re-warning-muted0/10'
+                    : 'border-re-brand/30 bg-re-brand-muted'
+              }`}>
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      {diagnosis.status === 'clear'
+                        ? <CheckCircle2 className="h-5 w-5 text-re-brand" />
+                        : diagnosis.status === 'blocked'
+                          ? <ShieldAlert className="h-5 w-5 text-re-danger" />
+                          : <AlertTriangle className="h-5 w-5 text-re-warning" />}
+                      <h3 className="text-sm font-semibold text-[var(--re-text-primary)]">What RegEngine uncovered</h3>
+                    </div>
+                    <p className="mt-2 text-lg font-semibold text-[var(--re-text-primary)]">{diagnosis.headline}</p>
+                    <p className="mt-1 max-w-3xl text-[0.75rem] leading-5 text-[var(--re-text-secondary)]">{diagnosis.impact}</p>
+                  </div>
+                  <button
+                    onClick={() => { trackSandbox('OPEN_GRID_FROM_DIAGNOSIS', { defect_count: diagnosis.totalIssues }); setShowGrid(true); }}
+                    className="inline-flex items-center justify-center gap-2 rounded-lg bg-[var(--re-brand)] px-4 py-2 text-[0.75rem] font-semibold text-white transition-all hover:bg-[var(--re-brand-dark)] disabled:opacity-50"
+                    disabled={diagnosis.status === 'clear'}
+                  >
+                    <Pencil className="h-4 w-4" />
+                    Open correction grid
+                  </button>
+                </div>
+
+                <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+                  {diagnosis.buckets.map((bucket) => (
+                    <div key={bucket.id} className="rounded-lg border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] p-3">
+                      <div className={`font-mono text-lg font-bold ${
+                        bucket.tone === 'danger' ? 'text-re-danger'
+                          : bucket.tone === 'warning' ? 'text-re-warning'
+                            : bucket.tone === 'success' ? 'text-re-brand'
+                              : 'text-indigo-400'
+                      }`}>
+                        {bucket.count}
+                      </div>
+                      <div className="mt-0.5 text-[0.68rem] font-semibold text-[var(--re-text-primary)]">{bucket.label}</div>
+                      <p className="mt-1 text-[0.6rem] leading-4 text-[var(--re-text-muted)]">{bucket.description}</p>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="mt-4 rounded-lg border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] p-3">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="h-4 w-4 text-[var(--re-brand)]" />
+                    <span className="text-[0.75rem] font-semibold text-[var(--re-text-primary)]">Correction plan</span>
+                  </div>
+                  <div className="mt-3 grid gap-2 md:grid-cols-2">
+                    {remediationPlan.map((step, index) => (
+                      <div key={step.title} className="grid grid-cols-[24px_minmax(0,1fr)] gap-2 rounded-md bg-[var(--re-surface-elevated)] p-2">
+                        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[var(--re-brand)]/15 text-[0.65rem] font-bold text-[var(--re-brand)]">
+                          {index + 1}
+                        </span>
+                        <div>
+                          <p className="text-[0.68rem] font-semibold text-[var(--re-text-primary)]">{step.title}</p>
+                          <p className="mt-0.5 text-[0.6rem] leading-4 text-[var(--re-text-muted)]">{step.detail}</p>
+                          <p className="mt-1 text-[0.6rem] font-medium text-[var(--re-brand)]">{step.action}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Normalization Review — accept/reject individual, by event, or bulk */}
             {result.normalizations && result.normalizations.length > 0 && (
@@ -599,7 +699,7 @@ export function SandboxUpload() {
                   className="inline-flex items-center gap-2 bg-[var(--re-brand)] text-white px-4 py-2 rounded-lg text-[0.75rem] font-semibold transition-all hover:bg-[var(--re-brand-dark)] cursor-pointer"
                 >
                   <Pencil className="w-4 h-4" />
-                  Fix Issues in Spreadsheet
+                  Open correction grid
                 </button>
               )}
               <div className="ml-auto flex items-center gap-2">
@@ -622,6 +722,14 @@ export function SandboxUpload() {
                   </button>
                 )}
                 <button
+                  type="button"
+                  onClick={handleSaveTestRun}
+                  className="inline-flex items-center gap-2 bg-[var(--re-brand)] text-white px-4 py-2 rounded-lg text-[0.75rem] font-semibold transition-all hover:bg-[var(--re-brand-dark)] cursor-pointer"
+                >
+                  <Check className="w-4 h-4" />
+                  Save as test run
+                </button>
+                <button
                   onClick={() => { setLeadGateAction('pdf'); setLeadGateOpen(true); }}
                   className="inline-flex items-center gap-2 bg-white border border-re-border text-re-text-disabled px-4 py-2 rounded-lg text-[0.75rem] font-medium transition-all hover:bg-re-surface-card cursor-pointer"
                 >
@@ -637,7 +745,7 @@ export function SandboxUpload() {
                 <div className="flex items-center gap-2 mb-2">
                   <ShieldAlert className="w-5 h-5 text-re-danger" />
                   <span className="text-[0.8rem] font-semibold text-re-danger">
-                    FDA SUBMISSION BLOCKED — {result.blocking_reasons.length} critical defect{result.blocking_reasons.length !== 1 ? 's' : ''}
+                    IMPORT AND EVIDENCE BLOCKED — {result.blocking_reasons.length} critical defect{result.blocking_reasons.length !== 1 ? 's' : ''}
                   </span>
                 </div>
                 <ul className="space-y-1">
@@ -656,7 +764,7 @@ export function SandboxUpload() {
                 <div className="flex items-center gap-2">
                   <CheckCircle2 className="w-5 h-5 text-re-brand" />
                   <span className="text-[0.8rem] font-semibold text-re-brand">
-                    ALL EVENTS COMPLIANT — Ready for FDA submission
+                    SANDBOX CHECKS CLEAR — ready to save as a test run
                   </span>
                 </div>
               </div>
@@ -667,7 +775,7 @@ export function SandboxUpload() {
                 <div className="flex items-center gap-2">
                   <AlertTriangle className="w-5 h-5 text-re-warning" />
                   <span className="text-[0.8rem] font-semibold text-re-warning">
-                    {result.non_compliant_events} event{result.non_compliant_events !== 1 ? 's' : ''} need{result.non_compliant_events === 1 ? 's' : ''} attention — review issues below
+                    {result.non_compliant_events} event{result.non_compliant_events !== 1 ? 's' : ''} need{result.non_compliant_events === 1 ? 's' : ''} correction before this can become an import mapping
                   </span>
                 </div>
               </div>
@@ -877,29 +985,30 @@ export function SandboxUpload() {
               <div className="rounded-lg border border-indigo-500/30 bg-indigo-500/10 p-4">
                 <div className="flex items-center gap-2 mb-3">
                   <Info className="w-4 h-4 text-indigo-400" />
-                  <span className="text-[0.8rem] font-semibold text-indigo-300">How to Fix These Issues</span>
+                  <span className="text-[0.8rem] font-semibold text-indigo-300">Process to Correct the File</span>
                 </div>
                 <ol className="space-y-2 ml-1">
                   <li className="flex items-start gap-2 text-[0.7rem] text-[var(--re-text-secondary)]">
                     <span className="bg-indigo-500/20 text-indigo-300 rounded-full w-5 h-5 flex items-center justify-center text-[0.6rem] font-bold flex-shrink-0 mt-0.5">1</span>
-                    <span>Review the failed rules above &mdash; each includes the specific CFR citation and what&apos;s missing</span>
+                    <span>Start with the correction plan above, then open the spreadsheet grid to edit the exact highlighted cells</span>
                   </li>
                   <li className="flex items-start gap-2 text-[0.7rem] text-[var(--re-text-secondary)]">
                     <span className="bg-indigo-500/20 text-indigo-300 rounded-full w-5 h-5 flex items-center justify-center text-[0.6rem] font-bold flex-shrink-0 mt-0.5">2</span>
-                    <span>Update your CSV to add the missing fields or correct formatting</span>
+                    <span>Use mass fill for repeated KDE gaps and add rows when the lot trace is missing an event</span>
                   </li>
                   <li className="flex items-start gap-2 text-[0.7rem] text-[var(--re-text-secondary)]">
                     <span className="bg-indigo-500/20 text-indigo-300 rounded-full w-5 h-5 flex items-center justify-center text-[0.6rem] font-bold flex-shrink-0 mt-0.5">3</span>
-                    <span>Paste your corrected CSV above and re-evaluate</span>
+                    <span>Re-evaluate until blockers clear, then save the clean result as a test run before creating a production mapping</span>
                   </li>
                 </ol>
                 <div className="mt-3 pt-3 border-t border-indigo-500/20">
-                  <a
-                    href="/onboarding/bulk-upload"
+                  <button
+                    type="button"
+                    onClick={handleSaveTestRun}
                     className="text-[0.7rem] text-indigo-400 hover:text-indigo-300 hover:underline transition-colors"
                   >
-                    Ready to commit your data? Go to Bulk Upload &rarr;
-                  </a>
+                    Save this sandbox diagnosis as a test run for import mapping &rarr;
+                  </button>
                 </div>
               </div>
             )}

@@ -21,6 +21,7 @@ import { SandboxResultsCTA } from './SandboxResultsCTA';
 import { ExportLeadGate } from './ExportLeadGate';
 import { cellKey } from './types';
 import type { CellErrorMap, CellFixedSet } from './types';
+import { buildSandboxRemediationPlan, summarizeSandboxDiagnosis } from './diagnosis';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -200,6 +201,10 @@ export function SandboxGrid({ initialCsv, initialResult, onBack }: SandboxGridPr
   const totalDefects = useMemo(() => {
     return result.total_rule_failures + result.total_kde_errors;
   }, [result]);
+
+  const diagnosis = useMemo(() => summarizeSandboxDiagnosis(result, headers), [result, headers]);
+  const remediationPlan = useMemo(() => buildSandboxRemediationPlan(result, headers), [result, headers]);
+  const correctionWorklist = diagnosis.correctionWorklist.slice(0, 4);
 
   // Track "all clear" milestone
   useEffect(() => {
@@ -590,6 +595,87 @@ export function SandboxGrid({ initialCsv, initialResult, onBack }: SandboxGridPr
         onBack={onBack}
         onToggleTrace={() => setShowTrace((v) => !v)}
       />
+
+      <div className="border-b border-[var(--re-surface-border)] bg-[var(--re-surface-card)] px-4 py-3">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <p className="text-[0.72rem] font-semibold text-[var(--re-text-primary)]">{diagnosis.headline}</p>
+            <p className="mt-1 max-w-3xl text-[0.62rem] leading-4 text-[var(--re-text-muted)]">
+              Fix the cells and rows tied to each issue type; the evaluator re-runs after edits so you can prove the file is moving toward import-readiness.
+            </p>
+          </div>
+          <div className="grid grid-cols-5 gap-1.5">
+            {diagnosis.buckets.map((bucket) => (
+              <div key={bucket.id} className="min-w-20 rounded-md border border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)] px-2 py-1.5 text-center">
+                <div className={`font-mono text-[0.8rem] font-bold ${
+                  bucket.tone === 'danger' ? 'text-re-danger'
+                    : bucket.tone === 'warning' ? 'text-re-warning'
+                      : bucket.tone === 'success' ? 'text-re-brand'
+                        : 'text-indigo-400'
+                }`}>
+                  {bucket.count}
+                </div>
+                <div className="text-[0.52rem] leading-3 text-[var(--re-text-muted)]">{bucket.label}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="mt-3 flex flex-wrap gap-2">
+          {remediationPlan.map((step, index) => (
+            <div key={step.title} className="flex max-w-sm items-start gap-2 rounded-md bg-[var(--re-surface-elevated)] px-2.5 py-2">
+              <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[var(--re-brand)]/15 text-[0.6rem] font-bold text-[var(--re-brand)]">
+                {index + 1}
+              </span>
+              <div>
+                <p className="text-[0.6rem] font-semibold text-[var(--re-text-primary)]">{step.title}</p>
+                <p className="mt-0.5 text-[0.55rem] leading-3 text-[var(--re-text-muted)]">{step.action}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+        {correctionWorklist.length > 0 && (
+          <div className="mt-3 rounded-lg border border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)] p-2.5">
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <p className="text-[0.6rem] font-semibold uppercase tracking-wide text-[var(--re-text-secondary)]">
+                Row correction worklist
+              </p>
+              <p className="text-[0.55rem] text-[var(--re-text-muted)]">
+                {diagnosis.correctionWorklist.length} action{diagnosis.correctionWorklist.length === 1 ? '' : 's'} detected
+              </p>
+            </div>
+            <div className="grid gap-2 lg:grid-cols-2">
+              {correctionWorklist.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => item.rowIndex != null && item.targetColumn
+                    ? handleEditCellFromTooltip(item.rowIndex, item.targetColumn)
+                    : item.rowIndex != null
+                      ? document.querySelector(`[data-row-index="${item.rowIndex}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                      : undefined}
+                  className="flex items-start gap-2 rounded-md border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] px-2.5 py-2 text-left transition-colors hover:border-[var(--re-brand)]/50 hover:bg-[var(--re-surface-base)]"
+                >
+                  <span className={`mt-0.5 rounded px-1.5 py-0.5 font-mono text-[0.55rem] ${
+                    item.priority === 'blocker'
+                      ? 'bg-re-danger-muted0/15 text-re-danger'
+                      : item.priority === 'warning'
+                        ? 'bg-re-warning-muted0/15 text-re-warning'
+                        : 'bg-[var(--re-brand)]/15 text-[var(--re-brand)]'
+                  }`}>
+                    {item.rowNumber ? `R${item.rowNumber}` : 'FILE'}
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block text-[0.6rem] font-semibold text-[var(--re-text-primary)]">{item.title}</span>
+                    <span className="mt-0.5 block truncate text-[0.55rem] text-[var(--re-text-muted)]">
+                      {item.action} · {item.lotCode}
+                    </span>
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* Grid */}
       <div className="overflow-x-auto">
