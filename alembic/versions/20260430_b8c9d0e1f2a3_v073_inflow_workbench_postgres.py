@@ -176,18 +176,6 @@ def upgrade() -> None:
                 FOR EACH ROW EXECUTE FUNCTION fsma.prevent_inflow_workbench_evidence_update()
             """
         )
-    for table, trigger in (
-        ("inflow_workbench_runs", "trg_inflow_runs_no_truncate"),
-        ("inflow_workbench_commit_decisions", "trg_inflow_commit_decisions_no_truncate"),
-    ):
-        op.execute(f"DROP TRIGGER IF EXISTS {trigger} ON fsma.{table}")
-        op.execute(
-            f"""
-            CREATE TRIGGER {trigger}
-                BEFORE TRUNCATE ON fsma.{table}
-                FOR EACH STATEMENT EXECUTE FUNCTION fsma.prevent_inflow_workbench_evidence_update()
-            """
-        )
 
     _enable_rls("inflow_workbench_scenarios", "tenant_isolation_inflow_scenarios")
     _enable_rls("inflow_workbench_runs", "tenant_isolation_inflow_runs")
@@ -196,11 +184,6 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    for table, trigger in (
-        ("inflow_workbench_commit_decisions", "trg_inflow_commit_decisions_no_truncate"),
-        ("inflow_workbench_runs", "trg_inflow_runs_no_truncate"),
-    ):
-        op.execute(f"DROP TRIGGER IF EXISTS {trigger} ON fsma.{table}")
     for table, trigger in (
         ("inflow_workbench_commit_decisions", "trg_inflow_commit_decisions_append_only"),
         ("inflow_workbench_runs", "trg_inflow_runs_append_only"),

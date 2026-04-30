@@ -108,16 +108,6 @@ CREATE TRIGGER trg_inflow_commit_decisions_append_only
     BEFORE UPDATE OR DELETE ON fsma.inflow_workbench_commit_decisions
     FOR EACH ROW EXECUTE FUNCTION fsma.prevent_inflow_workbench_evidence_update();
 
-DROP TRIGGER IF EXISTS trg_inflow_runs_no_truncate ON fsma.inflow_workbench_runs;
-CREATE TRIGGER trg_inflow_runs_no_truncate
-    BEFORE TRUNCATE ON fsma.inflow_workbench_runs
-    FOR EACH STATEMENT EXECUTE FUNCTION fsma.prevent_inflow_workbench_evidence_update();
-
-DROP TRIGGER IF EXISTS trg_inflow_commit_decisions_no_truncate ON fsma.inflow_workbench_commit_decisions;
-CREATE TRIGGER trg_inflow_commit_decisions_no_truncate
-    BEFORE TRUNCATE ON fsma.inflow_workbench_commit_decisions
-    FOR EACH STATEMENT EXECUTE FUNCTION fsma.prevent_inflow_workbench_evidence_update();
-
 ALTER TABLE fsma.inflow_workbench_scenarios ENABLE ROW LEVEL SECURITY;
 ALTER TABLE fsma.inflow_workbench_scenarios FORCE ROW LEVEL SECURITY;
 ALTER TABLE fsma.inflow_workbench_runs ENABLE ROW LEVEL SECURITY;
