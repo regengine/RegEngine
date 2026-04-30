@@ -116,6 +116,7 @@ const CSRF_EXEMPT_PREFIXES = [
     '/api/session',
     '/api/ingestion/api/v1/sandbox/',
     // Public unauthenticated tool endpoints — add new entries explicitly.
+    '/api/inflow-lab/',
     '/api/tools/check-access',
     '/api/tools/verify',
 ];
