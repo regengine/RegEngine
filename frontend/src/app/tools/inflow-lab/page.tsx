@@ -2,12 +2,12 @@ import { Metadata } from "next";
 import { InflowLabClient } from "./components/InflowLabClient";
 
 export const metadata: Metadata = {
-    title: "RegEngine Inflow Lab | Sandbox and Mock Feed Boundary",
+    title: "RegEngine Inflow Lab | Supplier Data Preflight Workbench",
     description:
-        "Diagnose sandbox CSV data, run mock FSMA 204 feed checks, and keep production evidence limited to authenticated persisted records.",
+        "Preflight supplier traceability data, validate FSMA 204 CTE/KDE coverage, generate fix queues, replay scenarios, and gate production evidence commits.",
     openGraph: {
-        title: "RegEngine Inflow Lab",
-        description: "Operational boundary for sandbox diagnosis, mock feed validation, authenticated feed monitoring, and evidence handoff.",
+        title: "RegEngine Inflow Lab | Supplier Data Preflight Workbench",
+        description: "Inflow prepares supplier data before the Engine commits validated, tenant-scoped FSMA 204 evidence.",
         type: "website",
         url: "https://www.regengine.co/tools/inflow-lab",
     },

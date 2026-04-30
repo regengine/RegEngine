@@ -14,19 +14,18 @@ import {
   ScanLine,
   Shield,
   ShieldCheck,
-  Truck,
   Upload,
   Workflow,
 } from "lucide-react";
 
 export const metadata: Metadata = {
-  title: "Product | RegEngine — FSMA 204 Compliance Infrastructure",
+  title: "Product | RegEngine — Supplier Data Readiness + FSMA Evidence Engine",
   description:
-    "From CSV upload to FDA-ready export: data ingestion, real-time FSMA 204 validation, EPCIS 2.0 normalization, cryptographic audit trails, and compliance mapping against 21 CFR Part 1 Subpart S.",
+    "Preflight supplier traceability data, map fields into reusable profiles, validate FSMA 204 KDEs, gate production evidence commits, and produce FDA-ready exports.",
   openGraph: {
-    title: "Product | RegEngine — FSMA 204 Compliance Infrastructure",
+    title: "Product | RegEngine — Supplier Data Readiness + FSMA Evidence Engine",
     description:
-      "From CSV upload to FDA-ready export: data ingestion, real-time FSMA 204 validation, EPCIS 2.0 normalization, and cryptographic audit trails.",
+      "Inflow prepares supplier data. The Engine proves whether it is complete, compliant, trustworthy, and export-ready.",
     url: "https://regengine.co/product",
     type: "website",
   },
@@ -37,54 +36,54 @@ export const metadata: Metadata = {
 const FEATURES = [
   {
     Icon: Upload,
-    title: "Data Ingestion",
-    subtitle: "Get your data in, however it lives today",
+    title: "Supplier Data Readiness",
+    subtitle: "Get messy traceability data into shape before evidence",
     description:
-      "Upload CSV or Excel files with guided column mapping. Connect via REST API for automated pipelines. ERP connectors for SAP, Oracle, and NetSuite map your existing fields to FSMA 204 KDEs automatically.",
+      "Upload or simulate CSV, spreadsheet, EDI-style, API, and supplier portal records in Inflow before they touch production evidence. Saved integration profiles preserve supplier-specific field mappings so the same feed can be replayed and improved.",
     details: [
-      "CSV and Excel upload with smart column mapping",
-      "REST API with webhook notifications",
-      "ERP connectors (SAP, Oracle, NetSuite)",
-      "Batch and real-time ingestion modes",
+      "CSV, spreadsheet, API, EDI-style, and portal-shaped inputs",
+      "Saved supplier integration profiles",
+      "Validate-only preflight runs",
+      "Replayable scenarios for onboarding and contract tests",
     ],
   },
   {
     Icon: ScanLine,
-    title: "Real-Time Validation",
-    subtitle: "Every record checked against FSMA 204 rules",
+    title: "Preflight Validation",
+    subtitle: "Every record checked before it can become evidence",
     description:
-      "As data enters RegEngine, it is validated against the full FSMA 204 rule set: required Key Data Elements, location identifiers, lot code formats, and date integrity. Invalid records are flagged immediately with specific fix instructions.",
+      "The Engine evaluates each CTE against FSMA 204 KDE requirements, lot linkage expectations, malformed values, duplicate risks, and export readiness impact. Failures generate plain-language remediation work instead of disappearing into a rejected payload.",
     details: [
       "KDE completeness checks per CTE type",
-      "Location identifier validation (GLN, FDA FEI)",
-      "Lot code format and uniqueness verification",
-      "Date range and sequence integrity",
+      "Malformed value and duplicate-risk detection",
+      "Lot lineage and source-reference checks",
+      "Fix queue tasks with severity and impact",
     ],
   },
   {
     Icon: Layers,
-    title: "EPCIS 2.0 Normalization",
-    subtitle: "Your data, in the standard the FDA expects",
+    title: "Commit Gates",
+    subtitle: "Separate sandbox work from production evidence",
     description:
-      "RegEngine normalizes your traceability data into GS1 EPCIS 2.0 event format — the interoperability standard referenced by FDA guidance. Whether your data comes in as CSV rows or API payloads, it leaves as standards-compliant events.",
+      "RegEngine keeps simulation, preflight, staging, and production evidence decisions explicit. Production evidence requires authentication, tenant-scoped persistence, provenance, and clean readiness signals before records can support export.",
     details: [
-      "Automatic EPCIS 2.0 event structuring",
-      "GS1 identifier normalization (GTIN, SSCC, GLN)",
-      "Business context mapping (bizStep, disposition)",
-      "JSON-LD and XML export formats",
+      "Simulation and preflight stay safe",
+      "Staging runs can be tested before evidence",
+      "Production evidence requires provenance",
+      "Export eligibility is visible before commit",
     ],
   },
   {
     Icon: FileOutput,
-    title: "FDA-Ready Export Packages",
-    subtitle: "Respond to FDA requests in minutes, not weeks",
+    title: "Readiness Score + Export",
+    subtitle: "Know which lots are ready before the FDA asks",
     description:
-      "Generate complete sortable spreadsheets and structured data packages that match FDA 204 recordkeeping requirements. One click produces the exact output format an FDA investigator expects during an inspection or recall.",
+      "Readiness scores combine KDE completeness, rule outcomes, unresolved fixes, provenance, and export eligibility. Validated tenant-scoped records can then support FDA-ready sortable spreadsheets and structured export packages.",
     details: [
+      "Tenant, supplier, and lot-level readiness signals",
       "Sortable spreadsheet export (21 CFR \u00A7 1.1455 format)",
       "Structured electronic records (EPCIS 2.0)",
       "Traceability lot code event history",
-      "Facility and supply chain documentation bundles",
     ],
   },
   {
@@ -94,8 +93,8 @@ const FEATURES = [
     description:
       "Every compliance record is SHA-256 hashed at creation. Database triggers enforce immutability \u2014 no updates, no deletes. An independent open-source verification script lets auditors confirm data integrity without trusting RegEngine.",
     details: [
-      "SHA-256 hash chain on every record",
-      "Immutable audit trail (append-only, trigger-enforced)",
+      "SHA-256 hash chain on committed evidence",
+      "Append-only, trigger-enforced commit decisions",
       "Open-source verify_chain.py for independent verification",
       "Versioned corrections with full lineage tracking",
     ],
@@ -106,28 +105,28 @@ const FEATURES = [
 
 const PIPELINE_STAGES = [
   {
-    label: "Your Data",
-    sublabel: "CSV, API, ERP",
+    label: "Supplier Data",
+    sublabel: "CSV, EDI, API",
     Icon: FileSpreadsheet,
   },
   {
-    label: "RegEngine API",
-    sublabel: "FastAPI",
+    label: "Inflow Lab",
+    sublabel: "Preflight",
     Icon: Network,
   },
   {
-    label: "Validation Engine",
-    sublabel: "FSMA 204 Rules",
+    label: "Engine",
+    sublabel: "Rules + Fix Queue",
     Icon: ShieldCheck,
   },
   {
-    label: "PostgreSQL",
-    sublabel: "RLS + Audit Trail",
+    label: "Commit Gate",
+    sublabel: "Staging or Evidence",
     Icon: Database,
   },
   {
-    label: "FDA Export",
-    sublabel: "EPCIS 2.0 + CSV",
+    label: "Evidence + Export",
+    sublabel: "Postgres + FDA",
     Icon: FileCheck,
   },
 ];
@@ -209,14 +208,14 @@ export default function ProductPage() {
           Product
         </p>
         <h1 className="font-display text-3xl sm:text-4xl md:text-5xl font-bold text-[var(--re-text-primary)] leading-tight mb-5">
-          From your data to{" "}
+          From messy supplier data to{" "}
           <span className="text-[var(--re-brand)]">FDA-ready</span>{" "}
-          in one pipeline
+          evidence
         </h1>
         <p className="text-lg text-[var(--re-text-muted)] max-w-xl mx-auto leading-relaxed">
-          RegEngine ingests your traceability data, validates it against FSMA 204
-          rules in real time, normalizes it to EPCIS 2.0, and produces the exact
-          export packages the FDA expects.
+          Inflow prepares the data. The Engine proves it. RegEngine preflights
+          supplier feeds, creates fix queues, gates evidence commits, and produces
+          FDA-ready exports from validated tenant-scoped records.
         </p>
       </section>
 
@@ -226,8 +225,8 @@ export default function ProductPage() {
           How it works
         </h2>
         <p className="text-sm text-[var(--re-text-muted)] text-center mb-10 max-w-lg mx-auto">
-          A single pipeline from ingestion to FDA export. No manual steps, no
-          data re-entry.
+          A protected loop from supplier feed to evidence handoff. Simulation and
+          preflight stay separate from production records.
         </p>
 
         <div
@@ -331,8 +330,8 @@ export default function ProductPage() {
           What RegEngine does
         </h2>
         <p className="text-sm text-[var(--re-text-muted)] text-center mb-10 max-w-lg mx-auto">
-          Five capabilities that take you from raw traceability data to
-          FDA-ready compliance.
+          Five capabilities that take you from raw supplier data to readiness,
+          remediation, evidence, and export.
         </p>
 
         <div className="flex flex-col gap-6">
@@ -492,23 +491,23 @@ export default function ProductPage() {
           See it in action
         </h2>
         <p className="text-sm text-[var(--re-text-muted)] max-w-md mx-auto mb-8 leading-relaxed">
-          Start with the retailer readiness assessment to see where you stand,
-          or jump straight to pricing.
+          Bring one supplier feed. RegEngine will show what is ready, what is
+          blocked, and what must be fixed before production evidence commit.
         </p>
         <div className="flex gap-3 justify-center flex-wrap">
           <Link
-            href="/retailer-readiness"
+            href="/contact"
             className="inline-flex items-center gap-2 rounded-lg bg-[var(--re-brand)] px-6 py-3 text-sm font-semibold text-white hover:bg-[var(--re-brand-dark)] transition-all hover:-translate-y-0.5"
             style={{ boxShadow: "0 4px 16px var(--re-brand-muted)" }}
           >
-            <Truck className="w-4 h-4" />
-            Retailer readiness assessment
+            Book a free gap analysis
+            <ArrowRight className="w-4 h-4" />
           </Link>
           <Link
-            href="/pricing"
+            href="/tools/inflow-lab"
             className="inline-flex items-center gap-2 rounded-lg border border-[var(--re-surface-border)] px-6 py-3 text-sm font-semibold text-[var(--re-text-secondary)] hover:border-[var(--re-brand)]/30 transition-colors"
           >
-            View pricing
+            Try Inflow Lab
             <ArrowRight className="w-4 h-4" />
           </Link>
         </div>
