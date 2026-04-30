@@ -2,6 +2,8 @@
 
 RegEngine is a pre-production FSMA 204 traceability application. The codebase ingests food supply-chain records, normalizes them into CTE/KDE event data, stores tenant-scoped records in PostgreSQL, evaluates rule outcomes, and exposes audit/export surfaces for FDA traceability workflows.
 
+Current product wedge: Inflow prepares, Engine proves. Supplier and ERP data is preflighted, scored, routed into a fix queue, and gated before it becomes tenant-scoped traceability evidence.
+
 This README describes behavior that is visible in checked-in code, configuration, tests, and runbooks.
 
 ## Current Status
@@ -22,6 +24,8 @@ Verified product capabilities in the current tree:
 | CSV template download and CSV CTE ingest | [services/ingestion/app/csv_templates.py](services/ingestion/app/csv_templates.py) |
 | EPCIS ingest routes | [services/ingestion/app/epcis/router.py](services/ingestion/app/epcis/router.py) |
 | EDI ingest routes and parser modules | [services/ingestion/app/edi_ingestion/](services/ingestion/app/edi_ingestion/) |
+| Inflow Workbench preflight, readiness, fix queue, scenario library, and commit gate | [services/ingestion/app/inflow_workbench.py](services/ingestion/app/inflow_workbench.py) |
+| Supplier portal preflight before persistence | [services/ingestion/app/supplier_portal.py](services/ingestion/app/supplier_portal.py) |
 | CTE persistence, hash-chain storage, and verification | [services/shared/cte_persistence/core.py](services/shared/cte_persistence/core.py) |
 | Compliance score reads from stored FSMA CTE data | [services/ingestion/app/compliance_score.py](services/ingestion/app/compliance_score.py) |
 | FDA export routes | [services/ingestion/app/fda_export/router.py](services/ingestion/app/fda_export/router.py) |
@@ -35,13 +39,16 @@ Verified product capabilities in the current tree:
 
 ```text
 ingest source record
+  -> preflight in Inflow Workbench
   -> normalize to CTE/KDE shape
+  -> score readiness and route fix queue items
+  -> pass commit gate
   -> persist tenant-scoped event data
   -> evaluate rules
   -> expose compliance/audit/export views
 ```
 
-The strongest tested path is ingestion plus persisted CTE data plus compliance/export support. Graph, NLP, generic regulatory-intelligence, and document-ingestion modules are present, but they should not be treated as the core product contract without checking the relevant tests and deploy wiring.
+The strongest tested path is Inflow Workbench preflight plus persisted CTE data plus compliance/export support. Graph, NLP, generic regulatory-intelligence, and document-ingestion modules are present, but they should not be treated as the core product contract without checking the relevant tests and deploy wiring.
 
 ## Architecture
 

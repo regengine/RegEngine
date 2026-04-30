@@ -160,7 +160,7 @@ export default function PortalSubmissionPage() {
         setSubmitError(null);
 
         try {
-            const preflightResult = preflight?.status === 'ready' ? preflight : await runPreflight();
+            const preflightResult = await runPreflight();
             if (!preflightResult || preflightResult.status !== 'ready') {
                 setSubmitError(preflightResult?.message || 'Preflight must pass before submission.');
                 return;
@@ -169,6 +169,10 @@ export default function PortalSubmissionPage() {
                 `${baseUrl}/api/v1/portal/${portalId}/submit`,
                 submissionPayload(),
             );
+            if (data.status !== 'accepted') {
+                setSubmitError(data.message || 'Submission did not pass final validation.');
+                return;
+            }
             setResult(data);
         } catch (err: unknown) {
             if (axios.isAxiosError(err)) {

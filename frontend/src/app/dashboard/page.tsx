@@ -17,6 +17,7 @@ import { useSystemStatus, useSystemMetrics } from '@/hooks/use-api';
 import { SystemHealthWidget } from '@/components/dashboard/system-health-widget';
 import { MetricsOverviewWidget } from '@/components/dashboard/metrics-overview-widget';
 import { ScanHistoryWidget } from '@/components/dashboard/scan-history-widget';
+import { fetchWorkbenchReadinessSummary } from '@/lib/api-hooks';
 import {
     Shield,
     Upload,
@@ -36,6 +37,7 @@ import {
     Settings,
     CheckCircle2,
     WifiOff,
+    ClipboardCheck,
 } from 'lucide-react';
 import { GettingStartedCard } from '@/components/dashboard/getting-started-card';
 import { useOnboardingStatus } from '@/hooks/use-onboarding';
@@ -186,7 +188,7 @@ const DATA_INFLOW_ENTRY_POINTS = [
     {
         title: 'Inflow Lab',
         description: 'Use for FSMA 204 event simulation, webhook contract checks, and tagged demo traffic.',
-        href: '/dashboard/inflow-lab',
+        href: '/tools/inflow-lab',
         icon: FlaskConical,
         color: 'text-re-brand',
         bg: 'bg-re-brand-muted dark:bg-re-brand/30',
@@ -275,6 +277,13 @@ export default function DashboardPage() {
         enabled: !!effectiveTenantId && !!apiKey,
     });
     const pendingReviews = pendingReviewsData?.pending_reviews ?? 0;
+
+    const { data: workbenchReadiness } = useQuery({
+        queryKey: ['dashboard-workbench-readiness', effectiveTenantId],
+        queryFn: () => fetchWorkbenchReadinessSummary(effectiveTenantId || '', apiKey || ''),
+        enabled: !!effectiveTenantId && !!apiKey,
+        staleTime: 60_000,
+    });
 
     // Use real metrics from backend when available, fall back to zeros from hook
     const metrics = useMemo(() => {
@@ -367,6 +376,63 @@ export default function DashboardPage() {
                             <ScanHistoryWidget />
                         </div>
                     </div>
+
+                    <Card>
+                        <CardContent className="pt-4 sm:pt-5 pb-4">
+                            <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+                                <div className="flex items-start gap-3">
+                                    <div className="p-2.5 rounded-lg bg-re-brand-muted dark:bg-re-brand/30 flex-shrink-0">
+                                        <ClipboardCheck className="h-5 w-5 text-re-brand" />
+                                    </div>
+                                    <div className="min-w-0">
+                                        <div className="flex flex-wrap items-center gap-2">
+                                            <h2 className="text-base sm:text-lg font-semibold">Traceability Readiness</h2>
+                                            {workbenchReadiness?.export_eligible ? (
+                                                <Badge variant="outline" className="bg-re-success-muted text-re-success border-re-success">
+                                                    Export eligible
+                                                </Badge>
+                                            ) : (
+                                                <Badge variant="outline" className="bg-re-surface-elevated text-muted-foreground">
+                                                    Not export eligible
+                                                </Badge>
+                                            )}
+                                        </div>
+                                        <p className="text-xs sm:text-sm text-muted-foreground mt-1">
+                                            {workbenchReadiness?.label || 'No saved Inflow Workbench run yet.'}
+                                        </p>
+                                    </div>
+                                </div>
+                                <div className="grid grid-cols-3 gap-3 sm:gap-4 lg:min-w-[360px]">
+                                    <div>
+                                        <p className="text-xl sm:text-2xl font-bold">
+                                            {typeof workbenchReadiness?.score === 'number' ? workbenchReadiness.score : '—'}
+                                        </p>
+                                        <p className="text-[11px] sm:text-xs text-muted-foreground">Readiness</p>
+                                    </div>
+                                    <div>
+                                        <p className="text-xl sm:text-2xl font-bold">
+                                            {workbenchReadiness?.unresolved_fix_count ?? '—'}
+                                        </p>
+                                        <p className="text-[11px] sm:text-xs text-muted-foreground">Open Fixes</p>
+                                    </div>
+                                    <div>
+                                        <p className="text-xl sm:text-2xl font-bold truncate">
+                                            {workbenchReadiness?.source && workbenchReadiness.source !== 'none'
+                                                ? workbenchReadiness.source
+                                                : '—'}
+                                        </p>
+                                        <p className="text-[11px] sm:text-xs text-muted-foreground">Source</p>
+                                    </div>
+                                </div>
+                                <Link href="/tools/inflow-lab" className="w-full lg:w-auto">
+                                    <Button variant="outline" className="min-h-[44px] w-full lg:w-auto active:scale-[0.98] transition-transform">
+                                        Open Inflow Lab
+                                        <ArrowRight className="ml-2 h-4 w-4" />
+                                    </Button>
+                                </Link>
+                            </div>
+                        </CardContent>
+                    </Card>
 
                     {/* Quick Stats - Now tenant-specific */}
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
