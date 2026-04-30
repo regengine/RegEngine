@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 
 import { PageContainer } from '@/components/layout/page-container';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -21,6 +22,7 @@ import {
   Database,
   CheckCircle,
   AlertCircle,
+  AlertTriangle,
   Link2,
   Upload,
   ArrowRight,
@@ -33,6 +35,7 @@ import {
   Scale
 } from 'lucide-react';
 import { NormalizedDocumentViewer } from './NormalizedDocumentViewer';
+import { readSandboxHandoffFromSession } from './sandbox-handoff';
 
 const EXAMPLE_URLS = [
   {
@@ -60,6 +63,11 @@ const STATUS_PROGRESS: Record<string, number> = {
 };
 
 export default function IngestPage() {
+  const searchParams = useSearchParams();
+  const fromSandboxHandoff = searchParams.get('from') === 'sandbox-handoff';
+  const [sandboxHandoffResult] = useState(() =>
+    fromSandboxHandoff ? readSandboxHandoffFromSession() : null
+  );
   const { apiKey: storedApiKey, setApiKey: storeApiKey } = useAuth();
   const [url, setUrl] = useState('');
   const [apiKey, setApiKey] = useState('');
@@ -237,6 +245,118 @@ export default function IngestPage() {
               </div>
             </CardContent>
           </Card>
+
+          {fromSandboxHandoff && (
+            <Card className="mb-8 border-re-brand/40 bg-re-brand-muted/40 dark:bg-re-brand/10">
+              <CardHeader>
+                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+                  <div>
+                    <CardTitle className="flex items-center gap-2 text-lg">
+                      <FileText className="h-5 w-5 text-re-brand" />
+                      Sandbox import mapping handoff
+                    </CardTitle>
+                    <CardDescription className="mt-1.5">
+                      This is a saved test-run diagnosis. Map and correct it here before any authenticated feed or evidence workflow uses the data.
+                    </CardDescription>
+                  </div>
+                  <Badge variant="outline" className="w-fit bg-white/70 dark:bg-re-surface-card/70">
+                    Test run only
+                  </Badge>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {sandboxHandoffResult?.ok ? (
+                  <div className="space-y-5">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                      <div className="rounded-lg border bg-background/70 p-3">
+                        <div className="text-xs text-muted-foreground">Events detected</div>
+                        <div className="text-2xl font-bold mt-1">{sandboxHandoffResult.view.totalEvents}</div>
+                      </div>
+                      <div className="rounded-lg border bg-background/70 p-3">
+                        <div className="text-xs text-muted-foreground">Passed checks</div>
+                        <div className="text-2xl font-bold mt-1">{sandboxHandoffResult.view.passedChecks}</div>
+                      </div>
+                      <div className="rounded-lg border bg-background/70 p-3">
+                        <div className="text-xs text-muted-foreground">Needs work</div>
+                        <div className="text-2xl font-bold mt-1">{sandboxHandoffResult.view.needsWork}</div>
+                      </div>
+                      <div className="rounded-lg border bg-background/70 p-3">
+                        <div className="text-xs text-muted-foreground">Blockers</div>
+                        <div className="text-2xl font-bold mt-1">{sandboxHandoffResult.view.blockerCount}</div>
+                      </div>
+                    </div>
+
+                    <div>
+                      <div className="text-sm font-semibold">Detected columns</div>
+                      <div className="flex flex-wrap gap-2 mt-2">
+                        {sandboxHandoffResult.view.detectedColumns.length > 0 ? (
+                          sandboxHandoffResult.view.detectedColumns.map((column) => (
+                            <Badge key={column} variant="secondary" className="font-mono text-[11px]">
+                              {column}
+                            </Badge>
+                          ))
+                        ) : (
+                          <span className="text-sm text-muted-foreground">
+                            No headers were carried in the handoff. Confirm the source file before mapping.
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="rounded-lg border bg-background/70 p-4">
+                      <div className="flex items-start gap-3">
+                        {sandboxHandoffResult.view.blockerCount > 0 ? (
+                          <AlertTriangle className="h-5 w-5 text-re-warning mt-0.5" />
+                        ) : (
+                          <CheckCircle className="h-5 w-5 text-re-brand mt-0.5" />
+                        )}
+                        <div className="min-w-0">
+                          <div className="text-sm font-semibold">Next mapping action</div>
+                          <p className="text-sm text-muted-foreground mt-1">
+                            {sandboxHandoffResult.view.nextMappingAction}
+                          </p>
+                          {sandboxHandoffResult.view.blockers.length > 0 && (
+                            <ul className="text-sm text-muted-foreground mt-3 list-disc list-inside space-y-1">
+                              {sandboxHandoffResult.view.blockers.slice(0, 3).map((blocker) => (
+                                <li key={blocker}>{blocker}</li>
+                              ))}
+                            </ul>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col sm:flex-row gap-3">
+                      <Link href="/ingest/curation">
+                        <Button variant="outline">
+                          <ClipboardCheck className="h-4 w-4 mr-2" />
+                          Open Curation Queue
+                        </Button>
+                      </Link>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => setActiveTab('file')}
+                      >
+                        Continue File Mapping
+                        <ArrowRight className="ml-2 h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex items-start gap-3 rounded-lg border bg-background/70 p-4">
+                    <AlertTriangle className="h-5 w-5 text-re-warning mt-0.5" />
+                    <div>
+                      <div className="text-sm font-semibold">Sandbox handoff unavailable</div>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        {sandboxHandoffResult?.error ?? 'Return to the free sandbox and save a test run before opening import mapping.'}
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
 
           {/* No API Key Warning */}
           {!storedApiKey && (

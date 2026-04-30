@@ -4,7 +4,7 @@ import { InflowLabClient } from "@/app/tools/inflow-lab/components/InflowLabClie
 export const metadata: Metadata = {
     title: "Inflow Lab | RegEngine Dashboard",
     description:
-        "Simulate inbound FSMA 204 traceability records, validate delivery, trace lots, and prepare evidence exports from the RegEngine command center.",
+        "Separate sandbox diagnosis, mock feed validation, authenticated feed monitoring, and production evidence from the RegEngine command center.",
 };
 
 export default function DashboardInflowLabPage() {

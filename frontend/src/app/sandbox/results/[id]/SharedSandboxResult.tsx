@@ -4,6 +4,7 @@ import {
   AlertTriangle, CheckCircle2, XCircle, ShieldAlert,
   ChevronDown, ChevronUp, Download, Sparkles, ArrowRight, Link2,
 } from 'lucide-react';
+import Link from 'next/link';
 import { useState, useEffect } from 'react';
 import { usePostHog } from 'posthog-js/react';
 import { generateComplianceReport } from '@/components/marketing/sandbox-grid/SandboxPdfReport';
@@ -102,19 +103,19 @@ export function SharedSandboxResult({ result, shareId }: { result: SandboxResult
               Shared sandbox result
             </span>
           </div>
-          <a
+          <Link
             href="/#sandbox"
             className="text-[0.75rem] text-[var(--re-brand)] hover:underline"
           >
             Try your own data &rarr;
-          </a>
+          </Link>
         </div>
 
         {/* Results card */}
         <div className="bg-[var(--re-surface-card)] border border-[var(--re-surface-border)] rounded-xl overflow-hidden">
           <div className="px-4 py-3 border-b border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)] flex items-center justify-between">
             <span className="text-[0.8rem] font-semibold text-[var(--re-text-primary)]">
-              FSMA 204 Compliance Assessment
+              FSMA 204 Sandbox Diagnosis
             </span>
             <button
               onClick={() => generateComplianceReport(result)}
@@ -130,9 +131,9 @@ export function SharedSandboxResult({ result, shareId }: { result: SandboxResult
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               {[
                 { label: 'Events', value: result.total_events, color: 'text-[var(--re-text-primary)]' },
-                { label: 'Compliant', value: result.compliant_events, color: 'text-re-brand' },
-                { label: 'Non-compliant', value: result.non_compliant_events, color: result.non_compliant_events > 0 ? 'text-re-danger' : 'text-[var(--re-text-primary)]' },
-                { label: 'Rule Failures', value: result.total_rule_failures, color: result.total_rule_failures > 0 ? 'text-re-warning' : 'text-[var(--re-text-primary)]' },
+                { label: 'Passed checks', value: result.compliant_events, color: 'text-re-brand' },
+                { label: 'Need work', value: result.non_compliant_events, color: result.non_compliant_events > 0 ? 'text-re-danger' : 'text-[var(--re-text-primary)]' },
+                { label: 'Rule issues', value: result.total_rule_failures, color: result.total_rule_failures > 0 ? 'text-re-warning' : 'text-[var(--re-text-primary)]' },
               ].map((stat) => (
                 <div key={stat.label} className="bg-[var(--re-surface-elevated)] rounded-lg p-3 text-center">
                   <div className={`text-xl font-bold font-mono ${stat.color}`}>{stat.value}</div>
@@ -212,7 +213,7 @@ export function SharedSandboxResult({ result, shareId }: { result: SandboxResult
                 <div className="flex items-center gap-2 mb-2">
                   <ShieldAlert className="w-5 h-5 text-re-danger" />
                   <span className="text-[0.8rem] font-semibold text-re-danger">
-                    FDA SUBMISSION BLOCKED — {result.blocking_reasons.length} critical defect{result.blocking_reasons.length !== 1 ? 's' : ''}
+                    TEST RUN BLOCKED — {result.blocking_reasons.length} critical defect{result.blocking_reasons.length !== 1 ? 's' : ''}
                   </span>
                 </div>
                 <ul className="space-y-1">
@@ -231,7 +232,7 @@ export function SharedSandboxResult({ result, shareId }: { result: SandboxResult
                 <div className="flex items-center gap-2">
                   <CheckCircle2 className="w-5 h-5 text-re-brand" />
                   <span className="text-[0.8rem] font-semibold text-re-brand">
-                    ALL EVENTS COMPLIANT — Ready for FDA submission
+                    SANDBOX CHECKS CLEAR — ready to save as a test run
                   </span>
                 </div>
               </div>
@@ -334,14 +335,14 @@ export function SharedSandboxResult({ result, shareId }: { result: SandboxResult
             {/* CTA */}
             <div className="rounded-lg border border-[var(--re-brand)]/30 bg-[var(--re-brand)]/5 p-4 text-center">
               <p className="text-[0.8rem] font-semibold text-[var(--re-brand)] mb-2">
-                Ready to automate FSMA 204 compliance?
+                Ready to turn this diagnosis into an operational test run?
               </p>
-              <a
+              <Link
                 href="/#sandbox"
                 className="inline-flex items-center gap-2 bg-[var(--re-brand)] text-white px-5 py-2 rounded-lg text-[0.8rem] font-semibold transition-all hover:bg-[var(--re-brand-dark)]"
               >
                 Try Your Own Data
-              </a>
+              </Link>
             </div>
           </div>
         </div>
