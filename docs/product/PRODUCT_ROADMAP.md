@@ -1,11 +1,11 @@
 # RegEngine Product Roadmap (FSMA-First)
 
-Last updated: March 9, 2026
-Planning horizon: March 2026 through June 2026 (90 days)
+Last updated: April 30, 2026
+Planning horizon: May 2026 through July 2026 (90 days)
 
 ## Objective
 
-Convert FSMA free-tool traffic into paid adoption while improving production reliability for ingestion, traceability, and FDA export workflows.
+Convert the Inflow Workbench from a validated alpha loop into design-partner adoption while improving production reliability for ingestion, traceability, and FDA export workflows.
 
 ## Current Baseline (In Repo Today)
 
@@ -15,10 +15,40 @@ Convert FSMA free-tool traffic into paid adoption while improving production rel
 - FSMA graph routers in `services/graph/app/routers/fsma/`.
 - Supplier onboarding flow in `frontend/src/app/onboarding/supplier-flow/`.
 - Free tools and readiness flows in `frontend/src/app/tools/` plus landing routes.
+- Inflow Workbench loop in `frontend/src/app/tools/inflow-lab/` and `services/ingestion/app/inflow_workbench.py`:
+  - Preflight Mode and Readiness Score.
+  - Commit Gate for `simulation`, `preflight`, `staging`, and `production_evidence`.
+  - Fix Queue generated from validation failures.
+  - Scenario Library for replayable runs.
+  - Postgres-backed workbench persistence with file fallback for local/demo operation.
 
 ## 90-Day Priorities
 
-### Priority 1 (P0): Lead Capture On Free Tools
+### Priority 1 (P0): Harden Inflow Workbench For Design Partners
+
+Problem:
+The product now has a closed operational loop, but real supplier data should only flow through it after persistence, tenant isolation, and audit behavior are proven in staging.
+
+Scope:
+
+- Apply the Inflow Workbench Postgres migration in staging and verify tenant RLS behavior.
+- Treat file-backed workbench storage as local/demo fallback only.
+- Run the design-partner demo script against realistic messy supplier data.
+- Track readiness score movement across repeated preflight/fix/commit cycles.
+
+Likely touchpoints:
+
+- `alembic/versions/20260430_b8c9d0e1f2a3_v073_inflow_workbench_postgres.py`
+- `services/ingestion/app/inflow_workbench.py`
+- `docs/runbooks/inflow_workbench_design_partner_demo.md`
+- `frontend/src/app/dashboard/compliance/`
+- `frontend/src/app/dashboard/suppliers/`
+
+Success metric:
+
+- 2-3 design partners run real or production-like data through preflight and fix queue without writing invalid records to `production_evidence`.
+
+### Priority 2 (P0): Lead Capture On Free Tools
 
 Problem:
 Free tools create product-qualified traffic but weak capture/hand-off.
@@ -40,7 +70,7 @@ Success metric:
 
 - >= 25% of completed free-tool sessions include captured contact info.
 
-### Priority 2 (P0): Documentation Reality Cleanup
+### Priority 3 (P0): Documentation Reality Cleanup
 
 Problem:
 Core docs have contained speculative language that misleads agents and contributors.
@@ -56,7 +86,7 @@ Success metric:
 - Zero speculative terms in core architecture/roadmap standards docs.
 - New contributor/agent setup starts from accurate docs only.
 
-### Priority 3 (P1): Developer Response Examples
+### Priority 4 (P1): Developer Response Examples
 
 Problem:
 Developer-facing pages show request samples without enough concrete response payloads.
@@ -76,7 +106,7 @@ Success metric:
 
 - Response examples present for all primary FSMA onboarding/ingestion/export examples.
 
-### Priority 4 (P1): Free/Starter Pricing Bridge
+### Priority 5 (P1): Free/Starter Pricing Bridge
 
 Problem:
 Gap between free-tool value and paid conversion path.
@@ -100,8 +130,9 @@ Success metric:
 ## Sequencing
 
 1. Weeks 1-3: Priority 1 + Priority 2
-2. Weeks 4-8: Priority 3
-3. Weeks 6-12: Priority 4 (parallelized after lead capture instrumentation lands)
+2. Weeks 3-6: Priority 3
+3. Weeks 4-8: Priority 4
+4. Weeks 6-12: Priority 5 (parallelized after lead capture instrumentation lands)
 
 ## Tracking Metrics
 
@@ -110,6 +141,8 @@ Success metric:
 - Onboarding start rate after lead capture
 - FDA export endpoint usage
 - Time-to-first-successful-ingest per new tenant
+- Workbench readiness score before/after fix queue remediation
+- Count of commit-gate blocks before `production_evidence`
 
 ## Explicit Non-Goals (This 90-Day Window)
 

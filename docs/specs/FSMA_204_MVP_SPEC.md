@@ -5,6 +5,19 @@
 > evaluation -> audit output -> FDA export. Neo4j/Kafka sections below are
 > retained as legacy integration notes, not the source of truth for new work.
 
+## April 30, 2026 Implementation Milestone
+
+RegEngine now includes the first operational Inflow Workbench loop for design-partner validation:
+
+- Preflight Mode validates supplier data before evidence persistence.
+- Commit Gate separates `simulation`, `preflight`, `staging`, and `production_evidence` decisions.
+- Fix Queue converts validation failures into tenant-scoped remediation work.
+- Scenario Library preserves replayable runs for demos, onboarding, and regression checks.
+- Readiness Score is exposed to Inflow Lab plus dashboard compliance and supplier views.
+- Workbench persistence has a Postgres-backed path with tenant RLS and audit-oriented append-only controls, with file-backed storage retained only as local/demo fallback.
+
+This milestone shifts the MVP from a rules engine plus simulator toward an operational traceability data workbench: messy supplier data can be preflighted, scored, fixed, and gated before it becomes trusted FSMA evidence.
+
 ## Scope and Goals
 - Deliver demo-ready FSMA 204 traceability with 24-hour FDA spreadsheet, mock recall, and visual E2E trace.
 - Phase focus: Shipping CTE first (fastest path to one-up/one-down), then compliance/reporting, then mock recall/visualizer.
