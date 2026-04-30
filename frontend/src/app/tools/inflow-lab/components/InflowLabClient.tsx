@@ -362,7 +362,12 @@ function LineageStatusIcon({ state }: { state: CteState }) {
     return <AlertTriangle className="h-4 w-4" />;
 }
 
-export function InflowLabClient() {
+type InflowLabClientProps = {
+    mode?: "standalone" | "dashboard";
+};
+
+export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
+    const isStandalone = mode === "standalone";
     const [activeTab, setActiveTab] = useState("Control room");
     const [selectedLot, setSelectedLot] = useState(lotCodes[0]);
     const [traceInput, setTraceInput] = useState(lotCodes[0]);
@@ -421,13 +426,17 @@ export function InflowLabClient() {
     }).length;
 
     useEffect(() => {
-        document.body.dataset.inflowLab = "true";
+        if (isStandalone) {
+            document.body.dataset.inflowLab = "true";
+        }
         refreshService().catch((error) => setServiceError(error instanceof Error ? error.message : "Inflow Lab service unavailable"));
         return () => {
-            delete document.body.dataset.inflowLab;
+            if (isStandalone) {
+                delete document.body.dataset.inflowLab;
+            }
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+    }, [isStandalone]);
 
     useEffect(() => {
         if (!serviceEvents.length || !selectedLot || serviceLineage[selectedLot]) return;
@@ -576,7 +585,11 @@ export function InflowLabClient() {
     const epcisExportHref = `${servicePath(`/api/mock/regengine/export/epcis?traceability_lot_code=${encodeURIComponent(traceInput)}&start_date=${startDate}&end_date=${endDate}`)}`;
 
     return (
-        <main data-inflow-lab-app className="min-h-screen bg-[#f6f8f5] text-slate-950">
+        <main
+            data-inflow-lab-app
+            data-inflow-lab-mode={mode}
+            className={cn("bg-[#f6f8f5] text-slate-950", isStandalone ? "min-h-screen" : "min-h-full")}
+        >
             <style jsx global>{`
                 body[data-inflow-lab="true"] > a[href="#main-content"],
                 body[data-inflow-lab="true"] nav[aria-label="Main navigation"],
@@ -602,6 +615,10 @@ export function InflowLabClient() {
                     font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
                 }
 
+                [data-inflow-lab-mode="dashboard"] {
+                    min-height: calc(100vh - 44px);
+                }
+
                 [data-inflow-lab-app] * {
                     box-sizing: border-box;
                 }
@@ -621,6 +638,11 @@ export function InflowLabClient() {
                     display: flex;
                     flex-direction: column;
                     gap: 20px;
+                }
+
+                [data-inflow-lab-mode="dashboard"] > div {
+                    max-width: none;
+                    padding: 20px 24px 32px;
                 }
 
                 [data-inflow-lab-app] section:first-of-type {

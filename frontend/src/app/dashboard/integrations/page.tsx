@@ -167,6 +167,12 @@ export default function DashboardIntegrationsPage() {
 
                                 <div className={styles.actionRow}>
                                     <Button asChild className={styles.primaryAction}>
+                                        <Link href="/dashboard/inflow-lab">
+                                            <FlaskConical className={styles.buttonIcon} />
+                                            Open Inflow Lab
+                                        </Link>
+                                    </Button>
+                                    <Button asChild className={styles.primaryAction}>
                                         <Link href="/docs/connectors/inflow-lab">
                                             <Terminal className={styles.buttonIcon} />
                                             Connector docs
