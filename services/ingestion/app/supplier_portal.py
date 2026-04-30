@@ -22,6 +22,17 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 
+from app.inflow_workbench import (
+    CommitGateDecision,
+    CommitGateRequest,
+    ReadinessSummary,
+    build_readiness_summary,
+    decide_commit_gate,
+)
+from app.sandbox.csv_parser import _normalize_for_rules
+from app.sandbox.evaluators import _evaluate_event_stateless
+from app.sandbox.models import EventEvaluationResponse, RuleResultResponse, SandboxResponse
+from app.sandbox.validation import _validate_kdes
 from app.webhook_models import IngestEvent, WebhookCTEType, WebhookPayload
 from app.webhook_compat import _verify_api_key, ingest_events
 from shared.database import get_db_safe
@@ -200,6 +211,144 @@ class SubmissionResult(BaseModel):
     submitted_at: str
 
 
+class SupplierPreflightResult(BaseModel):
+    """Validate supplier-submitted data before committing it."""
+    status: str
+    message: str
+    supplier_name: str
+    result: SandboxResponse
+    readiness: ReadinessSummary
+    commit_gate: CommitGateDecision
+
+
+def _submission_event_dict(portal_id: str, link: dict, submission: SupplierSubmission) -> dict:
+    kdes: dict = {
+        "ship_date": submission.ship_date,
+        "ship_from_location": submission.ship_from_location,
+        "ship_to_location": submission.ship_to_location,
+        "supplier_name": link["supplier_name"],
+        "submission_source": "supplier_portal",
+        "portal_id": portal_id,
+    }
+    if submission.carrier_name:
+        kdes["carrier_name"] = submission.carrier_name
+    if submission.po_number:
+        kdes["po_number"] = submission.po_number
+    kdes["reference_document"] = submission.po_number or f"supplier-portal:{portal_id}"
+    kdes["tlc_source_reference"] = link["supplier_name"]
+    kdes["ftl_covered"] = True
+    if submission.temperature_celsius is not None:
+        kdes["temperature_celsius"] = submission.temperature_celsius
+    if submission.notes:
+        kdes["notes"] = submission.notes
+
+    return {
+        "cte_type": "shipping",
+        "traceability_lot_code": submission.traceability_lot_code,
+        "product_description": submission.product_description,
+        "quantity": submission.quantity,
+        "unit_of_measure": submission.unit_of_measure,
+        "location_gln": submission.ship_from_gln,
+        "location_name": submission.ship_from_location,
+        "timestamp": f"{submission.ship_date}T00:00:00Z",
+        "kdes": kdes,
+    }
+
+
+def _build_supplier_preflight(portal_id: str, link: dict, submission: SupplierSubmission) -> SupplierPreflightResult:
+    raw_event = _submission_event_dict(portal_id, link, submission)
+    canonical = _normalize_for_rules(raw_event)
+    kde_errors = _validate_kdes(raw_event)
+    summary = _evaluate_event_stateless(canonical, include_custom=False)
+
+    blocking: list[RuleResultResponse] = []
+    blocking_reasons: list[str] = []
+    for rule in summary.results:
+        if rule.result == "fail" and rule.severity == "critical":
+            reason = rule.why_failed or rule.rule_title
+            blocking_reasons.append(f"Event 1 (shipping): {reason}")
+            blocking.append(
+                RuleResultResponse(
+                    rule_title=rule.rule_title,
+                    severity=rule.severity,
+                    result=rule.result,
+                    why_failed=rule.why_failed,
+                    citation=rule.citation_reference,
+                    remediation=rule.remediation_suggestion,
+                    category=rule.category,
+                    evidence=rule.evidence_fields_inspected or None,
+                )
+            )
+
+    blocking_reasons.extend(f"Event 1 (shipping): {error}" for error in kde_errors)
+    compliant = not kde_errors and summary.compliant
+    sandbox_result = SandboxResponse(
+        total_events=1,
+        compliant_events=1 if compliant else 0,
+        non_compliant_events=0 if compliant else 1,
+        total_kde_errors=len(kde_errors),
+        total_rule_failures=summary.failed,
+        submission_blocked=bool(kde_errors or blocking),
+        blocking_reasons=list(dict.fromkeys(blocking_reasons)),
+        duplicate_warnings=[],
+        entity_warnings=[],
+        normalizations=[],
+        events=[
+            EventEvaluationResponse(
+                event_index=0,
+                cte_type="shipping",
+                traceability_lot_code=submission.traceability_lot_code,
+                product_description=submission.product_description,
+                kde_errors=kde_errors,
+                rules_evaluated=summary.total_rules,
+                rules_passed=summary.passed,
+                rules_failed=summary.failed,
+                rules_warned=summary.warned,
+                compliant=compliant,
+                blocking_defects=blocking,
+                all_results=[
+                    RuleResultResponse(
+                        rule_title=rule.rule_title,
+                        severity=rule.severity,
+                        result=rule.result,
+                        why_failed=rule.why_failed,
+                        citation=rule.citation_reference,
+                        remediation=rule.remediation_suggestion,
+                        category=rule.category,
+                        evidence=rule.evidence_fields_inspected or None,
+                    )
+                    for rule in summary.results
+                ],
+            )
+        ],
+    )
+    readiness = build_readiness_summary(sandbox_result)
+    commit_gate = decide_commit_gate(
+        CommitGateRequest(
+            mode="preflight",
+            tenant_id=link["tenant_id"],
+            result=sandbox_result,
+            authenticated=True,
+            persisted=False,
+            provenance_attached=True,
+        )
+    )
+    status = "ready" if not sandbox_result.submission_blocked else "blocked"
+    message = (
+        "Supplier record passed preflight and can be submitted."
+        if status == "ready"
+        else "Supplier record is blocked. Correct the listed KDE/rule issues before submission."
+    )
+    return SupplierPreflightResult(
+        status=status,
+        message=message,
+        supplier_name=link["supplier_name"],
+        result=sandbox_result,
+        readiness=readiness,
+        commit_gate=commit_gate,
+    )
+
+
 @router.post(
     "/links",
     response_model=PortalLinkResponse,
@@ -364,6 +513,21 @@ async def get_portal_details(portal_id: str):
 
 
 @router.post(
+    "/{portal_id}/preflight",
+    response_model=SupplierPreflightResult,
+    summary="Preflight supplier data",
+    description="Validate supplier-submitted shipment data before creating a persisted event.",
+)
+async def preflight_supplier_data(
+    portal_id: str,
+    submission: SupplierSubmission,
+) -> SupplierPreflightResult:
+    """Run the supplier submission through the Workbench validation gate."""
+    link = _get_active_portal_link(portal_id)
+    return _build_supplier_preflight(portal_id, link, submission)
+
+
+@router.post(
     "/{portal_id}/submit",
     response_model=SubmissionResult,
     summary="Submit supplier data",
@@ -378,24 +542,18 @@ async def submit_supplier_data(
 ) -> SubmissionResult:
     """Process a supplier submission — no auth required (link-based access)."""
     link = _get_active_portal_link(portal_id)
+    preflight = _build_supplier_preflight(portal_id, link, submission)
+    if preflight.status == "blocked":
+        return SubmissionResult(
+            status="error",
+            message=f"Submission blocked by preflight: {'; '.join(preflight.result.blocking_reasons)}",
+            supplier_name=link["supplier_name"],
+            submitted_at=datetime.now(timezone.utc).isoformat(),
+        )
 
     # Build KDEs
-    kdes: dict = {
-        "ship_date": submission.ship_date,
-        "ship_from_location": submission.ship_from_location,
-        "ship_to_location": submission.ship_to_location,
-        "supplier_name": link["supplier_name"],
-        "submission_source": "supplier_portal",
-        "portal_id": portal_id,
-    }
-    if submission.carrier_name:
-        kdes["carrier_name"] = submission.carrier_name
-    if submission.po_number:
-        kdes["po_number"] = submission.po_number
-    if submission.temperature_celsius is not None:
-        kdes["temperature_celsius"] = submission.temperature_celsius
-    if submission.notes:
-        kdes["notes"] = submission.notes
+    event_data = _submission_event_dict(portal_id, link, submission)
+    kdes: dict = event_data["kdes"]
 
     # Create event
     event = IngestEvent(
@@ -406,7 +564,7 @@ async def submit_supplier_data(
         unit_of_measure=submission.unit_of_measure,
         location_gln=submission.ship_from_gln,
         location_name=submission.ship_from_location,
-        timestamp=f"{submission.ship_date}T00:00:00Z",
+        timestamp=event_data["timestamp"],
         kdes=kdes,
     )
 

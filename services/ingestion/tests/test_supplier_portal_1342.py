@@ -594,6 +594,47 @@ class TestGetPortalDetails:
 
 
 # ---------------------------------------------------------------------------
+# POST /{portal_id}/preflight
+# ---------------------------------------------------------------------------
+
+
+class TestPreflightSupplierData:
+    def _seed_link(self, tok="tok"):
+        future = (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
+        sp._portal_links[tok] = {
+            "tenant_id": "t1",
+            "supplier_name": "Acme",
+            "allowed_cte_types": ["shipping"],
+            "expires_at": future,
+        }
+
+    def _payload(self) -> dict:
+        return {
+            "traceability_lot_code": "TLC123",
+            "product_description": "lettuce",
+            "quantity": 10.0,
+            "unit_of_measure": "cases",
+            "ship_date": "2026-04-17",
+            "ship_from_location": "Farm A",
+            "ship_to_location": "DC 1",
+        }
+
+    def test_preflight_returns_readiness_and_commit_gate(self, monkeypatch):
+        self._seed_link()
+        monkeypatch.setattr(sp, "_db_get_portal_link", lambda _pid: None)
+
+        client = TestClient(_build_app())
+        resp = client.post("/api/v1/portal/tok/preflight", json=self._payload())
+
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["supplier_name"] == "Acme"
+        assert body["readiness"]["score"] >= 0
+        assert body["commit_gate"]["mode"] == "preflight"
+        assert body["result"]["total_events"] == 1
+
+
+# ---------------------------------------------------------------------------
 # POST /{portal_id}/submit
 # ---------------------------------------------------------------------------
 
@@ -689,6 +730,9 @@ class TestSubmitSupplierData:
         assert kdes["notes"] == "Keep refrigerated"
         assert kdes["portal_id"] == "tok"
         assert kdes["submission_source"] == "supplier_portal"
+        assert kdes["reference_document"] == "PO-123"
+        assert kdes["tlc_source_reference"] == "Acme"
+        assert kdes["ftl_covered"] is True
 
     def test_rejected_returns_error_with_joined_errors(self, monkeypatch):
         self._seed_link()
@@ -750,4 +794,5 @@ class TestRouterSurface:
         assert "/api/v1/portal/links/list" in paths
         assert "/api/v1/portal/links/{portal_id}/revoke" in paths
         assert "/api/v1/portal/{portal_id}" in paths
+        assert "/api/v1/portal/{portal_id}/preflight" in paths
         assert "/api/v1/portal/{portal_id}/submit" in paths
