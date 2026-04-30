@@ -33,6 +33,7 @@ jobs:
   # workflow_run waits for their conclusion before starting this job.
   wait-for-ci:
     name: Wait for CI
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
       - name: Check backend CI status
@@ -73,6 +74,7 @@ jobs:
   deploy:
     name: Deploy RegEngine Service
     needs: [wait-for-ci]
+    if: always() && (github.event_name == 'workflow_dispatch' || needs.wait-for-ci.result == 'success')
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -101,14 +103,11 @@ jobs:
           [ -z "$RAILWAY_SERVICE_ID" ] && missing+=("RAILWAY_SERVICE_ID")
 
           if [ ${#missing[@]} -gt 0 ]; then
-            echo "::warning::Railway secrets not configured (${missing[*]}). Skipping deploy — Railway GitHub integration handles deploys automatically."
-            echo "ready=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "ready=true" >> "$GITHUB_OUTPUT"
+            echo "::error::Railway deployment secrets are missing: ${missing[*]}"
+            exit 1
           fi
 
       - name: Deploy to Railway
-        if: steps.validate_railway.outputs.ready == 'true'
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
           RAILWAY_PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID }}
