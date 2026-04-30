@@ -583,6 +583,11 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
 
     const csvExportHref = `${servicePath(`/api/mock/regengine/export/fda-request?preset=${exportPreset}&traceability_lot_code=${encodeURIComponent(traceInput)}&start_date=${startDate}&end_date=${endDate}`)}`;
     const epcisExportHref = `${servicePath(`/api/mock/regengine/export/epcis?traceability_lot_code=${encodeURIComponent(traceInput)}&start_date=${startDate}&end_date=${endDate}`)}`;
+    const engineConnected = Boolean(health?.ok && !serviceError);
+    const connectionLabel = engineConnected ? "Engine connected" : serviceError ? "Engine unavailable" : "Checking engine";
+    const connectionTone = engineConnected ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-amber-200 bg-amber-50 text-amber-800";
+    const postedCount = serviceStatus?.stats?.delivery?.posted ?? deliveredCount;
+    const failedCount = serviceStatus?.stats?.delivery?.failed ?? 0;
 
     return (
         <main
@@ -666,6 +671,34 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
                 [data-inflow-lab-app] section:first-of-type > div > div:last-child {
                     border-left: 1px solid rgba(255, 255, 255, 0.1);
                     background: rgba(255, 255, 255, 0.04);
+                }
+
+                [data-inflow-lab-mode="dashboard"] [data-dashboard-header] {
+                    border-radius: 10px;
+                    border: 1px solid #e2e8f0;
+                    background: #fff;
+                    color: #0f172a;
+                    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+                }
+
+                [data-inflow-lab-mode="dashboard"] [data-dashboard-header] > div {
+                    display: flex;
+                    gap: 16px;
+                }
+
+                [data-inflow-lab-mode="dashboard"] [data-dashboard-header] > div > div {
+                    padding: 0;
+                }
+
+                [data-inflow-lab-mode="dashboard"] [data-dashboard-header] > div > div:last-child {
+                    border-left: 0;
+                    background: transparent;
+                }
+
+                [data-inflow-lab-mode="dashboard"] [data-dashboard-header] button:not(.bg-emerald-700) {
+                    border-color: #cbd5e1;
+                    background: #fff;
+                    color: #0f172a;
                 }
 
                 [data-inflow-lab-app] section:nth-of-type(2) {
@@ -904,6 +937,13 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
                     border-color: rgba(255, 255, 255, 0.34);
                 }
 
+                [data-inflow-lab-mode="dashboard"] [data-dashboard-header] button:not(.bg-emerald-700),
+                [data-inflow-lab-mode="dashboard"] [data-dashboard-header] button:not(.bg-emerald-700):hover {
+                    border-color: #cbd5e1;
+                    background: #fff;
+                    color: #0f172a;
+                }
+
                 [data-inflow-lab-app] .transition { transition: all 0.15s ease; }
                 [data-inflow-lab-app] .hover\\:border-emerald-300:hover { border-color: #6ee7b7; }
                 [data-inflow-lab-app] .hover\\:bg-emerald-50:hover { background: #ecfdf5; }
@@ -935,6 +975,18 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
                     box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
                 }
 
+                @media (min-width: 640px) {
+                    [data-inflow-lab-app] .sm\\:grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+                    [data-inflow-lab-app] .sm\\:grid-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+                    [data-inflow-lab-app] .sm\\:flex-row { flex-direction: row; }
+                    [data-inflow-lab-app] .sm\\:items-center { align-items: center; }
+                    [data-inflow-lab-app] .sm\\:justify-between { justify-content: space-between; }
+                    [data-inflow-lab-app] .sm\\:w-\\[290px\\] { width: 290px; }
+                    [data-inflow-lab-app] .sm\\:px-6 { padding-left: 24px; padding-right: 24px; }
+                    [data-inflow-lab-app] .sm\\:p-6 { padding: 24px; }
+                    [data-inflow-lab-app] .sm\\:text-3xl { font-size: 30px; line-height: 36px; }
+                }
+
                 @media (min-width: 768px) {
                     [data-inflow-lab-app] .md\\:grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
                     [data-inflow-lab-app] .md\\:grid-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
@@ -942,12 +994,18 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
                 }
 
                 @media (min-width: 1024px) {
+                    [data-inflow-lab-app] .lg\\:items-start { align-items: flex-start; }
                     [data-inflow-lab-app] .lg\\:flex-row { flex-direction: row; }
                     [data-inflow-lab-app] .lg\\:items-center { align-items: center; }
                     [data-inflow-lab-app] .lg\\:justify-between { justify-content: space-between; }
                     [data-inflow-lab-app] .lg\\:grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
                     [data-inflow-lab-app] .lg\\:grid-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
                     [data-inflow-lab-app] .lg\\:w-auto { width: auto; }
+                    [data-inflow-lab-app] .lg\\:px-8 { padding-left: 32px; padding-right: 32px; }
+                    [data-inflow-lab-app] .lg\\:min-w-\\[480px\\] { min-width: 480px; }
+                    [data-inflow-lab-app] .lg\\:grid-cols-\\[minmax\\(0\\,1fr\\)_420px\\] {
+                        grid-template-columns: minmax(0, 1fr) 420px;
+                    }
                 }
 
                 @media (min-width: 1280px) {
@@ -976,82 +1034,131 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
                 }
             `}</style>
             <div className="mx-auto flex w-full max-w-[1480px] flex-col gap-5 px-4 py-5 sm:px-6 lg:px-8">
-                <section className="overflow-hidden rounded-xl border border-emerald-900/15 bg-slate-950 text-white shadow-sm">
-                    <div className="grid gap-0 lg:grid-cols-[minmax(0,1fr)_420px]">
-                        <div className="p-5 sm:p-6">
-                        <div className="max-w-3xl">
-                            <div className="flex flex-wrap items-center gap-2">
-                                <h1 className="text-2xl font-semibold tracking-normal text-white sm:text-3xl">
-                                    RegEngine Inflow Lab
-                                </h1>
-                                <Badge className="border-emerald-300/25 bg-emerald-400/10 text-emerald-200 hover:bg-emerald-400/10">
-                                    {runStatusLabel}
-                                </Badge>
+                {isStandalone ? (
+                    <section className="overflow-hidden rounded-xl border border-emerald-900/15 bg-slate-950 text-white shadow-sm">
+                        <div className="grid gap-0 lg:grid-cols-[minmax(0,1fr)_420px]">
+                            <div className="p-5 sm:p-6">
+                                <div className="max-w-3xl">
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        <h1 className="text-2xl font-semibold tracking-normal text-white sm:text-3xl">
+                                            RegEngine Inflow Lab
+                                        </h1>
+                                        <Badge className="border-emerald-300/25 bg-emerald-400/10 text-emerald-200 hover:bg-emerald-400/10">
+                                            {runStatusLabel}
+                                        </Badge>
+                                    </div>
+                                    <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300">
+                                        Configure an inflow source, run a mock FSMA 204 delivery, resolve lot warnings, and package export-ready evidence.
+                                    </p>
+                                </div>
+                                <div className="mt-5 flex flex-wrap gap-2">
+                                    <Button
+                                        variant="outline"
+                                        className="h-10 border-white/20 bg-white/10 text-white hover:bg-white/15"
+                                        onClick={loadScenario}
+                                        disabled={isBusy}
+                                    >
+                                        <RefreshCcw className="mr-2 h-4 w-4" />
+                                        Load demo scenario
+                                    </Button>
+                                    <Button
+                                        className="h-10 bg-emerald-700 text-white hover:bg-emerald-800"
+                                        onClick={runPipeline}
+                                        disabled={isBusy}
+                                    >
+                                        <Play className="mr-2 h-4 w-4" />
+                                        Run pipeline
+                                    </Button>
+                                    <Button
+                                        variant="outline"
+                                        className="h-10 border-white/20 bg-white/10 text-white hover:bg-white/15"
+                                        onClick={traceLatestLot}
+                                    >
+                                        <Search className="mr-2 h-4 w-4" />
+                                        Trace latest lot
+                                    </Button>
+                                    <Button
+                                        variant="outline"
+                                        className="h-10 border-white/20 bg-white/10 text-white hover:bg-white/15"
+                                        onClick={prepareExport}
+                                        disabled={stageIndex[runStage] < 4}
+                                    >
+                                        <ArrowDownToLine className="mr-2 h-4 w-4" />
+                                        Prepare FDA package
+                                    </Button>
+                                </div>
                             </div>
-                            <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300">
-                                Configure an inflow source, run a mock FSMA 204 delivery, resolve lot warnings, and package export-ready evidence.
-                            </p>
-                        </div>
-                        <div className="mt-5 flex flex-wrap gap-2">
-                            <Button
-                                variant="outline"
-                                className="h-10 border-white/20 bg-white/10 text-white hover:bg-white/15"
-                                onClick={loadScenario}
-                                disabled={isBusy}
-                            >
-                                <RefreshCcw className="mr-2 h-4 w-4" />
-                                Load demo scenario
-                            </Button>
-                            <Button
-                                className="h-10 bg-emerald-700 text-white hover:bg-emerald-800"
-                                onClick={runPipeline}
-                                disabled={isBusy}
-                            >
-                                <Play className="mr-2 h-4 w-4" />
-                                Run pipeline
-                            </Button>
-                            <Button
-                                variant="outline"
-                                className="h-10 border-white/20 bg-white/10 text-white hover:bg-white/15"
-                                onClick={traceLatestLot}
-                            >
-                                <Search className="mr-2 h-4 w-4" />
-                                Trace latest lot
-                            </Button>
-                            <Button
-                                variant="outline"
-                                className="h-10 border-white/20 bg-white/10 text-white hover:bg-white/15"
-                                onClick={prepareExport}
-                                disabled={stageIndex[runStage] < 4}
-                            >
-                                <ArrowDownToLine className="mr-2 h-4 w-4" />
-                                Prepare FDA package
-                            </Button>
-                        </div>
-                        </div>
 
-                        <div className="border-t border-white/10 bg-white/[0.04] p-5 lg:border-l lg:border-t-0">
-                            <div className="grid grid-cols-2 gap-2 text-xs text-slate-300">
-                                <div className="rounded-lg border border-white/10 bg-black/20 px-3 py-2">
-                                    <span className="block font-medium text-white">Tenant</span>
-                                    {tenantId}
-                        </div>
-                                <div className="rounded-lg border border-white/10 bg-black/20 px-3 py-2">
-                                    <span className="block font-medium text-white">Delivery</span>
-                                    {deliveryMode === "mock" ? "Mock RegEngine" : "Live adapter"}
-                        </div>
-                                <div className="rounded-lg border border-white/10 bg-black/20 px-3 py-2">
-                                    <span className="block font-medium text-white">Fixture</span>
-                                    {fixture === "leafy_greens_trace" ? "Leafy greens trace" : "Fresh-cut transformation"}
-                        </div>
-                                <div className="rounded-lg border border-white/10 bg-black/20 px-3 py-2">
-                                    <span className="block font-medium text-white">Source</span>
-                                    {source}
-                        </div>
+                            <div className="border-t border-white/10 bg-white/[0.04] p-5 lg:border-l lg:border-t-0">
+                                <div className="grid grid-cols-2 gap-2 text-xs text-slate-300">
+                                    <div className="rounded-lg border border-white/10 bg-black/20 px-3 py-2">
+                                        <span className="block font-medium text-white">Tenant</span>
+                                        {tenantId}
+                                    </div>
+                                    <div className="rounded-lg border border-white/10 bg-black/20 px-3 py-2">
+                                        <span className="block font-medium text-white">Delivery</span>
+                                        {deliveryMode === "mock" ? "Mock RegEngine" : "Live adapter"}
+                                    </div>
+                                    <div className="rounded-lg border border-white/10 bg-black/20 px-3 py-2">
+                                        <span className="block font-medium text-white">Fixture</span>
+                                        {fixture === "leafy_greens_trace" ? "Leafy greens trace" : "Fresh-cut transformation"}
+                                    </div>
+                                    <div className="rounded-lg border border-white/10 bg-black/20 px-3 py-2">
+                                        <span className="block font-medium text-white">Source</span>
+                                        {source}
+                                    </div>
+                                </div>
                             </div>
                         </div>
-                    </div>
-                </section>
+                    </section>
+                ) : (
+                    <section data-dashboard-header className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+                        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                            <div className="min-w-0">
+                                <div className="flex flex-wrap items-center gap-2">
+                                    <h1 className="text-2xl font-semibold tracking-normal text-slate-950">Inflow Lab</h1>
+                                    <Badge className={cn("border", connectionTone)}>{connectionLabel}</Badge>
+                                    <Badge className="border border-blue-200 bg-blue-50 text-blue-700">Mock records only</Badge>
+                                </div>
+                                <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
+                                    Test inbound traceability data before it becomes production evidence. Load a demo fixture, verify the API handoff, trace lots, and prepare export filters from the command center.
+                                </p>
+                                <div className="mt-4 flex flex-wrap gap-2">
+                                    <Button className="h-9 bg-emerald-700 text-white hover:bg-emerald-800" onClick={loadScenario} disabled={isBusy}>
+                                        <RefreshCcw className="mr-2 h-4 w-4" />
+                                        Load demo
+                                    </Button>
+                                    <Button variant="outline" className="h-9 border-slate-300 bg-white" onClick={runPipeline} disabled={isBusy}>
+                                        <Play className="mr-2 h-4 w-4" />
+                                        Run pipeline
+                                    </Button>
+                                    <Button variant="outline" className="h-9 border-slate-300 bg-white" onClick={traceLatestLot}>
+                                        <Search className="mr-2 h-4 w-4" />
+                                        Trace latest lot
+                                    </Button>
+                                    <Button variant="outline" className="h-9 border-slate-300 bg-white" onClick={prepareExport} disabled={stageIndex[runStage] < 4}>
+                                        <ArrowDownToLine className="mr-2 h-4 w-4" />
+                                        Prepare export
+                                    </Button>
+                                </div>
+                            </div>
+                            <div className="grid min-w-0 gap-2 sm:grid-cols-3 lg:min-w-[480px]">
+                                <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                                    <span className="block text-xs font-medium text-slate-500">Proxy route</span>
+                                    <strong className="mt-1 block break-words font-mono text-[11px] text-slate-950">/api/inflow-lab</strong>
+                                </div>
+                                <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                                    <span className="block text-xs font-medium text-slate-500">Posted</span>
+                                    <strong className="mt-1 block text-sm text-slate-950">{postedCount}</strong>
+                                </div>
+                                <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                                    <span className="block text-xs font-medium text-slate-500">Failed</span>
+                                    <strong className="mt-1 block text-sm text-slate-950">{failedCount}</strong>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+                )}
 
                 {serviceError && (
                     <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
@@ -1066,7 +1173,7 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
                                 <div>
                                     <CardTitle className="text-base font-semibold text-slate-950">Operational workspace</CardTitle>
                                     <p className="mt-1 text-sm text-slate-500">
-                                        Review generated records, trace lots, and prepare evidence exports from the active demo scenario.
+                                        Review mock-generated records, trace lots, and prepare evidence filters without mixing simulator data into production imports.
                                     </p>
                                 </div>
                                 <div className="flex w-full flex-col gap-2 sm:flex-row lg:w-auto">
@@ -1165,7 +1272,7 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
                                                 <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                                                     <div>
                                                         <p className="text-sm font-semibold text-slate-950">Run command center</p>
-                                                        <p className="mt-1 text-xs leading-5 text-slate-600">Harvest, cool, pack, ship, receive, validate, and export one leafy greens scenario.</p>
+                                                        <p className="mt-1 text-xs leading-5 text-slate-600">Harvest, cool, pack, ship, receive, validate, and export one safe demo scenario through the same API path.</p>
                                                     </div>
                                                     <div className="flex flex-wrap gap-2">
                                                         <Button className="h-9 bg-emerald-700 text-white hover:bg-emerald-800" onClick={runPipeline}>
