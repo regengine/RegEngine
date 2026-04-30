@@ -1,146 +1,243 @@
 # RegEngine
 
-**System of record for FSMA 204 food-supply-chain traceability, compliance evaluation, and FDA reporting.**
+RegEngine is a pre-production FSMA 204 traceability application. The codebase ingests food supply-chain records, normalizes them into CTE/KDE event data, stores tenant-scoped records in PostgreSQL, evaluates rule outcomes, and exposes audit/export surfaces for FDA traceability workflows.
 
-RegEngine ingests food supply chain events (EPCIS XML, EDI, CSV, webhook feeds, manual entry), resolves entity identities, evaluates FSMA 204 compliance rules, and emits audit-ready artifacts for FDA 204 exports.
+This README describes behavior that is visible in checked-in code, configuration, tests, and runbooks.
 
-## Status
+## Current Status
 
-Pre-production, solo-maintained. Ingestion and compliance surfaces run on Railway + Vercel with closed-alpha tenants. See [CHANGELOG.md](CHANGELOG.md) for ship history and [DEPLOY_AUDIT_2026-04-20.md](DEPLOY_AUDIT_2026-04-20.md) for the most recent deploy-path review.
+- Stage: pre-production.
+- Backend deploy target in checked-in Railway config: one consolidated FastAPI app in [server/main.py](server/main.py), built by the repo-root [Dockerfile](Dockerfile).
+- Frontend: Next.js App Router app in [frontend/](frontend/).
+- Database migrations: Alembic at [alembic/versions/](alembic/versions/).
+- Primary domain: FSMA 204 food traceability. Other regulatory, document, NLP, and graph modules exist, but FSMA ingestion and compliance are the best-evidenced product path in this repository.
 
-## Production spine
+## What The Product Does
+
+Verified product capabilities in the current tree:
+
+| Capability | Evidence |
+| --- | --- |
+| API key protected webhook CTE ingest | [services/ingestion/app/webhook_router_v2.py](services/ingestion/app/webhook_router_v2.py) |
+| CSV template download and CSV CTE ingest | [services/ingestion/app/csv_templates.py](services/ingestion/app/csv_templates.py) |
+| EPCIS ingest routes | [services/ingestion/app/epcis/router.py](services/ingestion/app/epcis/router.py) |
+| EDI ingest routes and parser modules | [services/ingestion/app/edi_ingestion/](services/ingestion/app/edi_ingestion/) |
+| CTE persistence, hash-chain storage, and verification | [services/shared/cte_persistence/core.py](services/shared/cte_persistence/core.py) |
+| Compliance score reads from stored FSMA CTE data | [services/ingestion/app/compliance_score.py](services/ingestion/app/compliance_score.py) |
+| FDA export routes | [services/ingestion/app/fda_export/router.py](services/ingestion/app/fda_export/router.py) |
+| Tenant/admin/user/API-key management | [services/admin/app/](services/admin/app/) |
+| Tamper-evident admin audit log hashing | [services/admin/app/audit.py](services/admin/app/audit.py) |
+| Audit-chain verification for admin audit exports | [services/admin/app/audit_integrity.py](services/admin/app/audit_integrity.py) |
+| Scheduler jobs and scheduler metrics surface | [services/scheduler/](services/scheduler/) |
+| Frontend dashboard, auth, sandbox, docs, and product pages | [frontend/src/app/](frontend/src/app/) |
+
+## Production Spine
 
 ```text
-ingestion → canonicalization → identity resolution → compliance evaluation → audit output → FDA export
+ingest source record
+  -> normalize to CTE/KDE shape
+  -> persist tenant-scoped event data
+  -> evaluate rules
+  -> expose compliance/audit/export views
 ```
 
-Everything outside this path is secondary. Graph expansion, advanced NLP, generalized regulation support, and speculative platform abstractions are **not** on the production spine and must not shape core architecture decisions. See [ARCHITECTURE.md](ARCHITECTURE.md) for the rationale.
+The strongest tested path is ingestion plus persisted CTE data plus compliance/export support. Graph, NLP, generic regulatory-intelligence, and document-ingestion modules are present, but they should not be treated as the core product contract without checking the relevant tests and deploy wiring.
 
 ## Architecture
 
-**Today:** 6 FastAPI microservices on Railway + Next.js (App Router) frontend on Vercel.
+### Runtime Shape
 
-**Target:** modular monolith on PostgreSQL, replacing Kafka/Neo4j/Redis. Planned, not yet started — see [ARCHITECTURE.md](ARCHITECTURE.md).
+The repo still contains six service directories:
 
-### Services
-
-| Service | Responsibility |
+| Directory | Purpose |
 | --- | --- |
-| `admin` | Tenant management, API keys, user auth, MFA, bulk upload, audit logging |
-| `ingestion` | Webhook ingestion, CTE/KDE validation, EPCIS/EDI/CSV normalization |
-| `compliance` | Compliance scoring, rule evaluation, export generation |
-| `graph` | Knowledge graph, identity resolution, supply-chain queries |
-| `nlp` | Document ingestion, regulatory text extraction, FSMA clause mapping |
-| `scheduler` | Cron jobs (recall drills, export scheduling, FDA warning-letter scrapes) |
+| [services/admin](services/admin) | tenants, users, roles, MFA, API keys, audit logs, admin routes |
+| [services/ingestion](services/ingestion) | webhook, CSV, EPCIS, EDI, sandbox, export, CTE persistence integration |
+| [services/compliance](services/compliance) | compliance validation routes and FSMA rules JSON |
+| [services/graph](services/graph) | graph and supply-chain query modules |
+| [services/nlp](services/nlp) | regulatory/document extraction modules |
+| [services/scheduler](services/scheduler) | scheduled jobs, job metrics, operational checks |
 
-Shared code lives in [services/shared/](services/shared/) (56 top-level modules; 130 files including subpackages). The top-level [kernel/](kernel/) package hosts the control plane, obligation engine, and FSMA applicability engine — wired into `services/ingestion` and `services/graph` routers.
+The repo-root Dockerfile copies all service directories and starts [server/main.py](server/main.py) with Gunicorn/Uvicorn. `server/main.py` mounts routers from the service directories into one FastAPI process.
+
+The old independent service entrypoints still exist, for example [services/ingestion/main.py](services/ingestion/main.py), but the repo-root [railway.toml](railway.toml) points at the root Dockerfile.
 
 ### Infrastructure
 
-**Current:** PostgreSQL (Supabase), Redis, Neo4j, Redpanda (Kafka-compatible), Railway (backend), Vercel (frontend).
+Verified from checked-in config and code:
 
-**Target:** PostgreSQL only — Redis replaced by Postgres-backed queues/cache, Neo4j replaced by recursive CTEs, Kafka replaced by outbox pattern.
+- PostgreSQL is required. Production connection is supplied through `DATABASE_URL`.
+- Local development stack in [docker-compose.dev.yml](docker-compose.dev.yml) starts PostgreSQL only.
+- Redis is used by rate limiting, queues, session/subscription checks, and other runtime paths when configured.
+- Neo4j code and health checks exist, but the default local development stack does not start Neo4j.
+- The frontend is a separate Next.js application with its own package lock and CI workflow.
 
-## Quickstart
+## Data And Schema
 
-Prerequisites: Python **3.11 or 3.12** (3.13 not yet supported — see [pyproject.toml](pyproject.toml)), Node 24+, Docker, and `npm`.
+- Alembic is the active schema migration system.
+- Root migration config: [alembic.ini](alembic.ini).
+- Migration files: [alembic/versions/](alembic/versions/).
+- Deploy migration runner: [scripts/run-migrations.sh](scripts/run-migrations.sh).
+- Legacy Flyway-style SQL files still exist under service directories and are tracked as orphan-migration debt by [scripts/check_orphan_migrations.py](scripts/check_orphan_migrations.py).
+
+Schema-related CI guards include:
+
+- [scripts/check_alembic_revisions.py](scripts/check_alembic_revisions.py)
+- [scripts/check_tenant_id_uuid_only.py](scripts/check_tenant_id_uuid_only.py)
+- [scripts/check_orphan_migrations.py](scripts/check_orphan_migrations.py)
+
+## Rule Enforcement
+
+FSMA rule evaluation has both advisory and blocking modes.
+
+- The rule enforcement switch is `RULES_ENGINE_ENFORCE`.
+- Supported modes are implemented in [services/shared/rules/enforcement.py](services/shared/rules/enforcement.py).
+- Rollout steps are documented in [docs/runbooks/RULES_ENGINE_ENFORCE_ROLLOUT.md](docs/runbooks/RULES_ENGINE_ENFORCE_ROLLOUT.md).
+
+Do not assume every ingestion path rejects all non-compliant records by default. Check the deployed `RULES_ENGINE_ENFORCE` setting and route-specific tests before treating a tenant path as blocking.
+
+## Security And Tenant Boundaries
+
+Verified controls in the codebase:
+
+- API-key auth and API-key storage utilities live under [services/shared/auth.py](services/shared/auth.py) and [services/shared/api_key_store.py](services/shared/api_key_store.py).
+- Ingestion authorization helpers live in [services/ingestion/app/authz.py](services/ingestion/app/authz.py).
+- Admin auth routes and MFA code live under [services/admin/app/](services/admin/app/).
+- Tenant context middleware lives under [services/shared/middleware/](services/shared/middleware/).
+- PostgreSQL RLS migrations exist in Alembic.
+- Rate limiting code exists for multiple surfaces, including tenant-scoped ingestion limits and auth-related limits.
+- Frontend auth uses Supabase session state plus a RegEngine JWT/cookie flow. See [frontend/src/lib/auth-context.tsx](frontend/src/lib/auth-context.tsx), [frontend/src/proxy.ts](frontend/src/proxy.ts), and [frontend/src/app/login/LoginClient.tsx](frontend/src/app/login/LoginClient.tsx).
+
+Known authentication caveat: the dual Supabase plus RegEngine JWT flow can produce session mismatch states. Treat auth behavior as code-and-test verified, not marketing-copy verified.
+
+## Local Development
+
+Prerequisites:
+
+- Python 3.11 or 3.12. `pyproject.toml` declares `>=3.11,<3.13`.
+- Node/npm for the frontend.
+- Docker for local PostgreSQL.
+
+Backend setup:
 
 ```bash
-# 1. Python deps
-python3 -m venv venv && source venv/bin/activate
-pip install -r requirements.lock
+python3 -m venv venv
+source venv/bin/activate
+pip install --require-hashes -r requirements.lock
 
-# 2. Frontend deps
-cd frontend && npm install && cd ..
-
-# 3. Local infra (Postgres only)
-#    requires POSTGRES_PASSWORD in the environment
+export POSTGRES_PASSWORD=regengine
 docker compose -f docker-compose.dev.yml up -d
 
-# 4. Apply migrations
-source venv/bin/activate
+export DATABASE_URL=postgresql://regengine:regengine@localhost:5432/regengine
 alembic upgrade head
-
-# 5. Start a backend service (example: ingestion)
-uvicorn services.ingestion.main:app --reload --port 8002
-
-# 6. Start the frontend
-cd frontend && npm run dev
 ```
 
-The `regengine-service-runner` skill wraps start/stop/tail workflows for all services.
+Run the consolidated backend:
 
-## Migrations
+```bash
+source venv/bin/activate
+uvicorn server.main:app --reload --port 8000
+```
 
-Alembic is the source of truth for schema. Migrations live in [alembic/versions/](alembic/versions/) at the repo root (not per-service). Railway runs `alembic upgrade head` on backend deploy.
+Run an individual legacy service entrypoint when needed:
 
-The Alembic baseline consolidates historical Flyway-style SQL under [alembic/sql/](alembic/sql/); the original Flyway files under `services/admin/migrations/` are kept for reference only. New schema changes go through Alembic. Use the `regengine-migrations` skill for the full workflow.
+```bash
+source venv/bin/activate
+uvicorn services.ingestion.main:app --reload --port 8002
+```
+
+Frontend setup:
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
 
 ## Testing
 
+Backend:
+
 ```bash
 source venv/bin/activate
-
-# Per-file runs are reliable
-pytest services/ingestion/tests/test_<name>.py
-
-# Full-suite runs currently cascade due to fixture bleed in services/ingestion/tests.
-# CI's ingestion gate is collect-only, which hides this from PRs — do not trust
-# a full-suite green locally as proof. Per-file is the ground truth.
+pytest
 ```
+
+Ingestion full suite, matching the CI hard gate:
+
+```bash
+source venv/bin/activate
+pytest services/ingestion/tests --dist=loadfile -n auto -q --no-cov
+```
+
+Frontend:
+
+```bash
+cd frontend
+npm run lint
+npm run test:run
+```
+
+Notes:
+
+- The ingestion full suite is a hard backend CI gate.
+- Local `.env` is loaded by `BaseServiceSettings`; developer-specific values can affect config-default tests. CI runs from a clean environment.
+- Some integration tests skip when Docker, external services, or a live local service are unavailable.
+
+## CI/CD
+
+Main workflows live in [.github/workflows/](.github/workflows/).
+
+Backend CI includes:
+
+- test matrix by service
+- lint matrix by service plus `services/shared`
+- Docker build for the consolidated image
+- security audit matrix
+- Alembic revision guard
+- orphan migration guard
+- tenant_id UUID guard
+- ingestion full suite hard gate
+- final `ci-status` gate
+
+Frontend CI is separate in [.github/workflows/frontend-ci.yml](.github/workflows/frontend-ci.yml).
 
 ## Deployment
 
-- **Backend:** services deployed to Railway under the `RegEngine-Prod` project. Live-ingest rollout is in flight — see recent commits.
-- **Frontend:** Vercel (Next.js App Router). See [frontend/](frontend/).
-- **CI/CD:** GitHub Actions workflows in [.github/workflows/](.github/workflows/) — `backend-ci.yml`, `deploy.yml`, `security.yml`. The deploy gate reads check status before promoting.
-- Orchestration via the `regengine-deploy` skill.
+Verified deployment files:
 
-## Documentation
+- [Dockerfile](Dockerfile) builds the backend image, installs root `requirements.lock`, runs Alembic migrations through [scripts/run-migrations.sh](scripts/run-migrations.sh), and starts `server.main:app`.
+- [railway.toml](railway.toml) points Railway at the root Dockerfile and uses `/health` as the healthcheck.
+- [frontend/](frontend/) is a Next.js application with its own package lock and scripts.
 
-Root-level docs (consolidating is on the to-do; some overlap):
+## Important Limitations
 
-- [ARCHITECTURE.md](ARCHITECTURE.md) — dependency topology, tech-debt register, monolith target
-- [CURRENT_SYSTEM_MAP.md](CURRENT_SYSTEM_MAP.md) — internal survival map of what talks to what
-- [ASYNC_PROCESSES.md](ASYNC_PROCESSES.md) — queue, scheduler, and background-worker layout
-- [CANONICAL_OWNERSHIP.md](CANONICAL_OWNERSHIP.md) — module ownership during consolidation
-- [SECURITY.md](SECURITY.md) — security posture + vulnerability reporting
-- [CHANGELOG.md](CHANGELOG.md) — release history
-- [CONTRIBUTING.md](CONTRIBUTING.md) — contribution guide
-- [DEPLOY_AUDIT_2026-04-20.md](DEPLOY_AUDIT_2026-04-20.md) — most recent deploy-path review
-- [PRODUCT_FEATURE_LIST.md](PRODUCT_FEATURE_LIST.md) — feature inventory
-- [FOUNDER_KNOWLEDGE.md](FOUNDER_KNOWLEDGE.md) — founder-context notes for AI collaborators
-- [regengine-architecture-review-2026-04-12.md](regengine-architecture-review-2026-04-12.md) — architecture review snapshot
-- [regengine-site-audit-2026-04-12.md](regengine-site-audit-2026-04-12.md) — site audit snapshot
+These are current repo facts, not speculation:
 
-## Known risks & tech debt
+- The codebase still contains both consolidated-monolith wiring and legacy service entrypoints.
+- Legacy/orphan migration files still exist and are guarded by an allowlist. See [scripts/orphan_migrations_allowlist.txt](scripts/orphan_migrations_allowlist.txt).
+- A live ORM-to-database type assertion startup check is not implemented yet.
+- Rule failures are not universally blocking unless the relevant enforcement mode is enabled and the route supports it.
+- Some architecture documentation is older than the current Dockerfile/server wiring; verify against code before using docs as operational truth.
+- Neo4j, Redis, Redpanda/Kafka-compatible code paths exist, but the default local dev compose file starts only PostgreSQL.
+- This repository does not prove broad production adoption, paid customer status, regulatory approval, or FDA certification.
 
-Honest summary of known, verified debt. Pointer to audits, not the audits themselves.
+## Documentation Map
 
-### Structural
-
-- **6-service → monolith consolidation** is planned but not started. Cross-service calls happen via HTTP; there is no inter-service transactionality. Breaking changes in `services/shared/` cascade.
-- **Dual migration systems** — Alembic at the repo root plus legacy Flyway SQL under `services/admin/migrations/` and `alembic/sql/`. Schema drift between the ORM (`sqlalchemy_models.py`) and the live database has bitten production; see PR #1892 (`audit_logs` uuid column drift → `operator does not exist: text = uuid`).
-- **Fixture bleed in the ingestion test suite** — per-file tests pass, full-suite runs cascade. CI's ingestion gate is collect-only so this is invisible at PR time.
-
-### Regulatory correctness
-
-- **FSMA 204 CTE enforcement** — the rules engine runs ingestion non-blocking; rule failures surface in audit logs and dashboards rather than rejecting the event. Acceptable for closed-alpha, will need reconsideration before broader rollout.
-- **Audit-chain integrity** — SHA-256 hash chain via `AuditLogger` in [services/admin/app/audit.py](services/admin/app/audit.py). v2 hash folds actor/severity/endpoint fields so SQL-rewrite of those fields breaks the chain (see #1415). Schema type-mismatch in `audit_logs` columns was fixed in alembic v065 (PR #1892).
-
-### Security posture
-
-- Tenant isolation is enforced by a mix of application-layer checks plus Postgres RLS. Policies live in Alembic v051/v056; `get_tenant_context()` returns `uuid` so columns holding `tenant_id` must be typed consistently — see [SECURITY.md](SECURITY.md) for the current posture.
-- Frontend enforces **Supabase + custom JWT cross-auth**. A valid RegEngine JWT without a Supabase cookie bounces to `/login?error=session_expired` (see [frontend/src/app/login/LoginClient.tsx](frontend/src/app/login/LoginClient.tsx) and the #538/#1072 references there). Diagnostic workflow lives in the `regengine-troubleshoot` skill.
-- Rate limiting (per-IP, per-email, per-tenant-scope), account lockout, and API-key scopes are in place across [services/admin/app/auth_routes.py](services/admin/app/auth_routes.py) and [services/ingestion/app/authz.py](services/ingestion/app/authz.py).
-
-### Operational
-
-- **Worktrees in active use** under [.claude/worktrees/](.claude/worktrees/) for parallel agent work. Run `git worktree list` before `git checkout <branch>` or scripts will fail silently on collision.
-- **Issue-tracker drift** — auto-close can miss when PRs merge from non-default branches. Verify fix-target state against current `main` before acting on an issue number from an audit report.
+- [ARCHITECTURE.md](ARCHITECTURE.md) - architecture notes and debt register; verify stale sections against code and CI.
+- [CURRENT_SYSTEM_MAP.md](CURRENT_SYSTEM_MAP.md) - system map.
+- [ASYNC_PROCESSES.md](ASYNC_PROCESSES.md) - async and background processing notes.
+- [CANONICAL_OWNERSHIP.md](CANONICAL_OWNERSHIP.md) - module ownership notes.
+- [SECURITY.md](SECURITY.md) - security posture.
+- [CHANGELOG.md](CHANGELOG.md) - change history.
+- [CONTRIBUTING.md](CONTRIBUTING.md) - contribution workflow.
+- [docs/runbooks/](docs/runbooks) - operational runbooks.
 
 ## Contributing
 
-Solo-maintained. PRs from the worktree workflow; security and compliance fixes take precedence over cosmetic changes. Phone-test critical flows before merging to `main`.
+Before changing schema, ingestion, auth, tenant isolation, or audit logic, start with:
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for branching, commit style, and review norms.
+- [docs/engineering/SCHEMA_CHANGE_POLICY.md](docs/engineering/SCHEMA_CHANGE_POLICY.md)
+- [.github/agents/regengine-implementer.agent.md](.github/agents/regengine-implementer.agent.md)
+
+Keep changes scoped. Do not treat old issue text, stale docs, or marketing copy as proof of current behavior; verify against code, tests, and GitHub Actions. If docs and code conflict, fix or call out the conflict in the PR.
