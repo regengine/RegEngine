@@ -26,6 +26,7 @@
 
 - [ ] My code follows the existing patterns in the codebase
 - [ ] I have not introduced hardcoded secrets or credentials
+- [ ] If this PR adds a test that uses `sys.modules[X] = stub`, I justified it in the PR description
 - [ ] I have updated relevant documentation (if applicable)
 - [ ] My changes generate no new warnings or lint errors
 
