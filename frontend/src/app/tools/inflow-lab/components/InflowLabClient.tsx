@@ -559,7 +559,21 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
     const hasGeneratedRecords = runStage !== "loaded";
     const visibleEvents = hasGeneratedRecords ? activeEvents : [];
     const visibleEventStatus = serviceEvents.length ? "posted" : getEventStatus(runStage);
-    const deliveredCount = serviceStatus?.stats?.delivery?.posted ?? (stageIndex[runStage] >= 2 ? activeEvents.length : 0);
+    const localDeliveryCounts = useMemo(
+        () =>
+            activeEvents.reduce(
+                (counts, event) => {
+                    counts.attempts += event.attempts;
+                    if (event.deliveryStatus === "posted") counts.posted += 1;
+                    if (event.deliveryStatus === "failed") counts.failed += 1;
+                    if (event.deliveryStatus === "generated") counts.generated += 1;
+                    return counts;
+                },
+                { posted: 0, failed: 0, generated: 0, attempts: 0 }
+            ),
+        [activeEvents]
+    );
+    const deliveredCount = serviceStatus?.stats?.delivery?.posted ?? localDeliveryCounts.posted;
 
     useEffect(() => {
         if (isStandalone) {
@@ -798,7 +812,9 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
     const connectionLabel = engineConnected ? "Connection ready" : serviceError ? "Connection needs attention" : "Checking connection";
     const connectionTone = engineConnected ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-amber-200 bg-amber-50 text-amber-800";
     const postedCount = serviceStatus?.stats?.delivery?.posted ?? deliveredCount;
-    const failedCount = serviceStatus?.stats?.delivery?.failed ?? 0;
+    const failedCount = serviceStatus?.stats?.delivery?.failed ?? localDeliveryCounts.failed;
+    const generatedOnlyCount = serviceStatus?.stats?.delivery?.generated ?? localDeliveryCounts.generated;
+    const attemptCount = serviceStatus?.stats?.delivery?.attempts ?? localDeliveryCounts.attempts;
     const totalLotCount = uniqueLots.length;
     const exceptionCount = exceptionLots.length + failedCount;
     const feederDefectCount = feederResult ? feederResult.total_kde_errors + feederResult.total_rule_failures : 0;
@@ -1836,9 +1852,9 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
                                 {(isStandalone
                                     ? [
                                           ["Posted", String(deliveredCount)],
-                                          ["Failed", String(serviceStatus?.stats?.delivery?.failed || 0)],
-                                          ["Generated only", String(serviceStatus?.stats?.delivery?.generated || 0)],
-                                          ["Attempts", String(serviceStatus?.stats?.delivery?.attempts || deliveredCount)],
+                                          ["Failed", String(failedCount)],
+                                          ["Generated only", String(generatedOnlyCount)],
+                                          ["Attempts", String(attemptCount)],
                                       ]
                                     : [
                                           ["Accepted records", String(postedCount)],
