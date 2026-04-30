@@ -30,6 +30,26 @@ interface SubmissionResult {
     submitted_at: string;
 }
 
+interface SupplierPreflightResult {
+    status: string;
+    message: string;
+    supplier_name: string;
+    readiness: {
+        score: number;
+        label: string;
+    };
+    commit_gate: {
+        allowed: boolean;
+        next_state: string;
+        reasons: string[];
+    };
+    result: {
+        total_kde_errors: number;
+        total_rule_failures: number;
+        blocking_reasons: string[];
+    };
+}
+
 /* ------------------------------------------------------------------ */
 /*  Page                                                               */
 /* ------------------------------------------------------------------ */
@@ -59,6 +79,8 @@ export default function PortalSubmissionPage() {
     const [notes, setNotes] = useState('');
 
     // Submission state
+    const [preflighting, setPreflighting] = useState(false);
+    const [preflight, setPreflight] = useState<SupplierPreflightResult | null>(null);
     const [submitting, setSubmitting] = useState(false);
     const [result, setResult] = useState<SubmissionResult | null>(null);
     const [submitError, setSubmitError] = useState<string | null>(null);
@@ -90,6 +112,45 @@ export default function PortalSubmissionPage() {
         && shipFromLocation.trim().length > 0
         && shipToLocation.trim().length > 0;
 
+    const submissionPayload = () => ({
+        traceability_lot_code: tlc.trim(),
+        product_description: productDescription.trim(),
+        quantity: parseFloat(quantity),
+        unit_of_measure: unitOfMeasure,
+        ship_date: shipDate,
+        ship_from_location: shipFromLocation.trim(),
+        ship_from_gln: shipFromGln.trim() || undefined,
+        ship_to_location: shipToLocation.trim(),
+        ship_to_gln: shipToGln.trim() || undefined,
+        carrier_name: carrierName.trim() || undefined,
+        po_number: poNumber.trim() || undefined,
+        temperature_celsius: temperatureCelsius ? parseFloat(temperatureCelsius) : undefined,
+        notes: notes.trim() || undefined,
+    });
+
+    const runPreflight = async () => {
+        if (!isValid || preflighting) return null;
+        setPreflighting(true);
+        setSubmitError(null);
+        try {
+            const { data } = await axios.post<SupplierPreflightResult>(
+                `${baseUrl}/api/v1/portal/${portalId}/preflight`,
+                submissionPayload(),
+            );
+            setPreflight(data);
+            return data;
+        } catch (err: unknown) {
+            if (axios.isAxiosError(err)) {
+                setSubmitError(err.response?.data?.detail || 'Preflight failed. Please try again.');
+            } else {
+                setSubmitError('Preflight failed. Please try again.');
+            }
+            return null;
+        } finally {
+            setPreflighting(false);
+        }
+    };
+
     // Submit handler
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -99,23 +160,14 @@ export default function PortalSubmissionPage() {
         setSubmitError(null);
 
         try {
+            const preflightResult = preflight?.status === 'ready' ? preflight : await runPreflight();
+            if (!preflightResult || preflightResult.status !== 'ready') {
+                setSubmitError(preflightResult?.message || 'Preflight must pass before submission.');
+                return;
+            }
             const { data } = await axios.post<SubmissionResult>(
                 `${baseUrl}/api/v1/portal/${portalId}/submit`,
-                {
-                    traceability_lot_code: tlc.trim(),
-                    product_description: productDescription.trim(),
-                    quantity: parseFloat(quantity),
-                    unit_of_measure: unitOfMeasure,
-                    ship_date: shipDate,
-                    ship_from_location: shipFromLocation.trim(),
-                    ship_from_gln: shipFromGln.trim() || undefined,
-                    ship_to_location: shipToLocation.trim(),
-                    ship_to_gln: shipToGln.trim() || undefined,
-                    carrier_name: carrierName.trim() || undefined,
-                    po_number: poNumber.trim() || undefined,
-                    temperature_celsius: temperatureCelsius ? parseFloat(temperatureCelsius) : undefined,
-                    notes: notes.trim() || undefined,
-                },
+                submissionPayload(),
             );
             setResult(data);
         } catch (err: unknown) {
@@ -139,6 +191,7 @@ export default function PortalSubmissionPage() {
         setPoNumber('');
         setTemperatureCelsius('');
         setNotes('');
+        setPreflight(null);
     };
 
     /* ---------- Loading / Error states ------------------------------ */
@@ -481,6 +534,33 @@ export default function PortalSubmissionPage() {
 
                         {/* Submit */}
                         <div className="p-6 border-t border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)]">
+                            {preflight && (
+                                <div
+                                    className={`p-3 rounded-xl text-sm mb-4 border ${
+                                        preflight.status === 'ready'
+                                            ? 'bg-re-success-muted border-re-success text-re-success'
+                                            : 'bg-re-warning-muted border-re-warning text-re-warning'
+                                    }`}
+                                >
+                                    <div className="flex items-start justify-between gap-3">
+                                        <div>
+                                            <div className="font-semibold">
+                                                Preflight {preflight.status === 'ready' ? 'passed' : 'blocked'} · {preflight.readiness.score}
+                                            </div>
+                                            <div className="text-xs mt-0.5 opacity-90">{preflight.message}</div>
+                                        </div>
+                                        <span className="text-xs font-mono">{preflight.commit_gate.next_state}</span>
+                                    </div>
+                                    {preflight.result.blocking_reasons.length > 0 && (
+                                        <ul className="mt-2 space-y-1 text-xs">
+                                            {preflight.result.blocking_reasons.slice(0, 3).map((reason) => (
+                                                <li key={reason}>{reason}</li>
+                                            ))}
+                                        </ul>
+                                    )}
+                                </div>
+                            )}
+
                             {submitError && (
                                 <div className="p-3 bg-re-danger-muted dark:bg-re-danger border border-re-danger dark:border-re-danger rounded-xl text-sm text-re-danger dark:text-re-danger mb-4">
                                     {submitError}
@@ -488,8 +568,27 @@ export default function PortalSubmissionPage() {
                             )}
 
                             <button
+                                type="button"
+                                disabled={!isValid || preflighting || submitting}
+                                onClick={runPreflight}
+                                className="w-full inline-flex items-center justify-center gap-2 bg-[var(--re-surface-card)] text-[var(--re-text-primary)] border border-[var(--re-surface-border)] px-6 py-3 rounded-xl text-sm font-semibold transition-all hover:border-[var(--re-brand)] disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.97] mb-2"
+                            >
+                                {preflighting ? (
+                                    <>
+                                        <Loader2 className="h-4 w-4 animate-spin" />
+                                        Running Preflight...
+                                    </>
+                                ) : (
+                                    <>
+                                        <ShieldCheck className="h-4 w-4 text-[var(--re-brand)]" />
+                                        Preflight Check
+                                    </>
+                                )}
+                            </button>
+
+                            <button
                                 type="submit"
-                                disabled={!isValid || submitting}
+                                disabled={!isValid || submitting || preflighting}
                                 className="w-full inline-flex items-center justify-center gap-2 bg-[var(--re-brand)] text-white px-6 py-3.5 rounded-xl text-sm font-semibold transition-all hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.97]"
                             >
                                 {submitting ? (

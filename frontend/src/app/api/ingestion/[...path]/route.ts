@@ -46,7 +46,11 @@ function getIngestionTargets(): string[] {
 const { GET, POST, PUT, PATCH, DELETE, OPTIONS } = createStreamProxy({
     serviceName: 'ingestion',
     resolveTargetBases: getIngestionTargets,
-    isUnauthenticatedPath: (path: string) => path.startsWith('api/v1/sandbox/'),
+    isUnauthenticatedPath: (path: string) => {
+        if (path.startsWith('api/v1/sandbox/')) return true;
+        const portalMatch = path.match(/^api\/v1\/portal\/([^/]+)(?:\/(submit|preflight))?$/);
+        return Boolean(portalMatch && portalMatch[1] !== 'links');
+    },
     buildHeaders: (request: NextRequest) => {
         const headers = new Headers();
         const hasRequestBody = !['GET', 'OPTIONS'].includes(request.method);

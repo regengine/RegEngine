@@ -1,14 +1,18 @@
 # RegEngine: Product Positioning & Messaging
 
+> Status: FSMA-first positioning update, April 30, 2026. Older regulatory-intelligence language below is retained for historical context, but the current commercial wedge is food traceability under FSMA 204.
+
 ## Positioning Statement
 
-**For** compliance teams and risk officers at financial institutions, RegTech vendors, and legal tech platforms **who need** to monitor global regulatory changes and automate compliance obligations,
+**For** food safety, supplier onboarding, and compliance operations teams at food manufacturers, distributors, retailers, and logistics partners **who need** to meet FSMA 204 traceability requirements without relying on spreadsheets and email,
 
-**RegEngine** is a Regulatory Intelligence API Platform **that** ingests, normalizes, and graphs regulatory documents from multiple jurisdictions, automatically extracting obligations, thresholds, and requirements.
+**RegEngine** is a traceability data operating system **that** preflights messy supplier data, scores readiness, routes fixes, and gates only validated records into tenant-scoped FSMA evidence.
 
-**Unlike** manual compliance tracking, legacy GRC tools, or expensive legal research platforms,
+**Unlike** legacy food safety platforms that are UI-first, services-heavy, and slow to deploy,
 
-**RegEngine** provides machine-readable regulation with queryable provenance, cross-jurisdictional arbitrage detection, and policy gap analysis—all accessible via API.
+**RegEngine** combines an API-first ingestion hub with deterministic FSMA rules, commit gates, tenant isolation, and audit-ready export paths.
+
+Current proof point: the Inflow Workbench loop now supports Preflight Mode, Commit Gate, Fix Queue, Scenario Library, and dashboard Readiness Score surfacing for design-partner demos and pilot validation.
 
 ---
 
