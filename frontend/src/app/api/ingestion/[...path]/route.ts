@@ -46,6 +46,7 @@ function getIngestionTargets(): string[] {
 const { GET, POST, PUT, PATCH, DELETE, OPTIONS } = createStreamProxy({
     serviceName: 'ingestion',
     resolveTargetBases: getIngestionTargets,
+    isUnauthenticatedPath: (path: string) => path.startsWith('api/v1/sandbox/'),
     buildHeaders: (request: NextRequest) => {
         const headers = new Headers();
         const hasRequestBody = !['GET', 'OPTIONS'].includes(request.method);
