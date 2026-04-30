@@ -76,6 +76,7 @@
 - [Product Overview](PRODUCT_OVERVIEW.md) -- What RegEngine is, core value, target market
 - [Product Roadmap](PRODUCT_ROADMAP.md) -- FSMA-first 90-day roadmap (March-June 2026)
 - [Honest Valuation Update](HONEST_VALUATION_UPDATE_2026-04-30.md) -- April 30 Inflow Workbench de-risking assessment
+- [What Changed For Design Partners](WHAT_CHANGED_FOR_DESIGN_PARTNERS_2026-04-30.md) -- One-page design-partner summary for the Inflow Workbench loop
 - [Roadmap (Extended)](ROADMAP.md) -- Longer-term product direction
 - [Competitive Landscape Research](COMPETITIVE_LANDSCAPE_RESEARCH_2026-03-28.md) -- Market positioning across FSMA, RegTech, and rules-as-code
 - [Competitive Benchmark](COMPETITIVE_BENCHMARK.md) -- Feature-by-feature comparison vs. FSMA 204 incumbents

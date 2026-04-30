@@ -250,6 +250,10 @@ def _submission_event_dict(portal_id: str, link: dict, submission: SupplierSubmi
         "unit_of_measure": submission.unit_of_measure,
         "location_gln": submission.ship_from_gln,
         "location_name": submission.ship_from_location,
+        "ship_from_location": submission.ship_from_location,
+        "ship_to_location": submission.ship_to_location,
+        "reference_document": kdes["reference_document"],
+        "tlc_source_reference": kdes["tlc_source_reference"],
         "timestamp": f"{submission.ship_date}T00:00:00Z",
         "kdes": kdes,
     }

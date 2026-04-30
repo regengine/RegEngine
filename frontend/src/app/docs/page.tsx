@@ -100,7 +100,7 @@ const subPages = [
   { title: 'Authentication', href: '/docs/authentication', icon: Key, description: 'API keys, tenant headers, and security' },
   { title: 'API Reference', href: '/docs/api', icon: Code2, description: 'Full endpoint reference with schemas' },
   { title: 'Webhooks', href: '/docs/webhooks', icon: Webhook, description: 'Real-time event notifications' },
-  { title: 'Inflow Lab', href: '/docs/connectors/inflow-lab', icon: Terminal, description: 'Simulator setup and source tagging' },
+  { title: 'Inflow Lab', href: '/docs/connectors/inflow-lab', icon: Terminal, description: 'Preflight, readiness scoring, fix queue, and commit gates' },
   { title: 'Error Codes', href: '/docs/errors', icon: AlertTriangle, description: 'Error responses and troubleshooting' },
   { title: 'Rate Limits', href: '/docs/rate-limits', icon: Clock, description: 'Request limits and throttling policies' },
   { title: 'SDKs', href: '/docs/sdks', icon: Package, description: 'Client libraries for Python, Node.js, and more' },
@@ -252,7 +252,7 @@ export default function DocsHomePage() {
           </h1>
           <p className="text-[16px] max-w-[600px] mb-8 leading-relaxed" style={{ color: T.textMuted }}>
             Build FSMA 204 compliant traceability into any supply chain system.
-            Ingest CTE/KDE records, evaluate compliance, and export FDA-ready audit packages.
+            Preflight supplier data, score readiness, fix missing KDEs, and commit only validated records as FDA-ready evidence.
           </p>
 
           {/* Quick start steps */}

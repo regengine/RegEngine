@@ -94,6 +94,20 @@ Inflow Workbench production evidence mode:
 psql "$DATABASE_URL" -c "SELECT to_regclass('fsma.inflow_workbench_runs');"
 ```
 
+For the full Inflow Workbench staging check, run:
+
+```bash
+export DATABASE_URL='postgresql://...'
+export INGESTION_URL='https://<ingestion-service>.up.railway.app'
+export REGENGINE_API_KEY='...' # optional if the deployed route requires it
+
+bash scripts/railway/verify_inflow_workbench_staging.sh
+```
+
+This verifies the v073/V067 tables, append-only and no-truncate triggers, a
+real Workbench run save through `ingestion-service`, the commit-decision audit
+row, and the tenant readiness summary endpoint.
+
 ## 5. Apply Neo4j Constraints
 
 After `graph-service` environment variables are set:
