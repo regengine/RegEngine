@@ -70,8 +70,9 @@ const COLLAPSIBLE_SECTIONS: CollapsibleSection[] = [
         key: 'data-inflow',
         title: 'Data Inflow',
         items: [
-            { label: 'CSV/API Import', href: '/ingest', icon: FileSpreadsheet },
+            { label: 'Import Data', href: '/ingest', icon: FileSpreadsheet },
             { label: 'Inflow Lab', href: '/dashboard/inflow-lab', icon: FlaskConical },
+            { label: 'Integrations', href: '/dashboard/integrations', icon: Link2 },
         ],
     },
     {

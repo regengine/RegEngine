@@ -37,8 +37,10 @@ import {
 import { cn } from "@/lib/utils";
 
 type RunStage = "loaded" | "generating" | "delivering" | "validating" | "complete" | "exported";
-type EventStatus = "posted" | "validated" | "queued";
+type EventStatus = "posted" | "validated" | "queued" | "generated" | "failed";
 type CteState = "complete" | "missing";
+type DeliveryState = "posted" | "generated" | "failed";
+type LotReadinessState = "ready" | "warning" | "blocked";
 
 type TraceEvent = {
     id: number;
@@ -49,6 +51,7 @@ type TraceEvent = {
     timestamp: string;
     mode: "simulation";
     attempts: number;
+    deliveryStatus: DeliveryState;
 };
 
 type LineageNode = {
@@ -142,7 +145,13 @@ function toTraceEvent(record: InflowRecord): TraceEvent {
         timestamp: formatServiceTime(record.event.timestamp),
         mode: "simulation",
         attempts: record.delivery_attempts || 0,
+        deliveryStatus: record.delivery_status,
     };
+}
+
+function formatCteLabel(cte: string) {
+    if (cte === "receiving") return "DC receiving";
+    return cte.replaceAll("_", " ");
 }
 
 function toLineage(eventsForLot: TraceEvent[]): LineageNode[] {
@@ -150,7 +159,7 @@ function toLineage(eventsForLot: TraceEvent[]): LineageNode[] {
     return REQUIRED_CTES.map((cte) => {
         const event = byCte.get(cte);
         return {
-            cte: cte.replaceAll("_", " "),
+            cte: formatCteLabel(cte),
             location: event?.location || "Not captured",
             time: event?.timestamp || "Missing CTE",
             state: event ? "complete" : "missing",
@@ -158,7 +167,51 @@ function toLineage(eventsForLot: TraceEvent[]): LineageNode[] {
     });
 }
 
-const tabs = ["Control room", "Lots", "Lineage", "Exports", "Event log", "Diagnostics"];
+function getLotReadiness(lineage: LineageNode[], lotEvents: TraceEvent[]) {
+    const completeCount = lineage.filter((node) => node.state === "complete").length;
+    const totalCount = lineage.length;
+    const failedDeliveries = lotEvents.filter((event) => event.deliveryStatus === "failed").length;
+    const generatedOnly = lotEvents.filter((event) => event.deliveryStatus === "generated").length;
+    const missingCtes = lineage.filter((node) => node.state === "missing").map((node) => node.cte);
+    const hasCompleteLineage = totalCount > 0 && completeCount === totalCount;
+
+    if (failedDeliveries > 0 || lotEvents.length === 0) {
+        return {
+            state: "blocked" as LotReadinessState,
+            label: "blocked",
+            completeCount,
+            totalCount,
+            missingCtes,
+            deliveryLabel: failedDeliveries > 0 ? "delivery failed" : "no events",
+            exportReady: false,
+        };
+    }
+
+    if (!hasCompleteLineage || generatedOnly > 0) {
+        return {
+            state: "warning" as LotReadinessState,
+            label: "exception",
+            completeCount,
+            totalCount,
+            missingCtes,
+            deliveryLabel: generatedOnly > 0 ? "generated only" : "posted",
+            exportReady: false,
+        };
+    }
+
+    return {
+        state: "ready" as LotReadinessState,
+        label: "export ready",
+        completeCount,
+        totalCount,
+        missingCtes,
+        deliveryLabel: "posted",
+        exportReady: true,
+    };
+}
+
+const standaloneTabs = ["Control room", "Lots", "Lineage", "Exports", "Event log", "Diagnostics"];
+const dashboardTabs = ["Overview", "Lots", "Lineage", "Exports", "Record log", "Diagnostics"];
 
 const lotCodes = [
     "00614141000012-20260426-000001",
@@ -176,6 +229,7 @@ const events: TraceEvent[] = [
         timestamp: "Apr 27, 2026, 2:04 AM",
         mode: "simulation",
         attempts: 1,
+        deliveryStatus: "posted",
     },
     {
         id: 14,
@@ -186,6 +240,7 @@ const events: TraceEvent[] = [
         timestamp: "Apr 26, 2026, 10:41 PM",
         mode: "simulation",
         attempts: 1,
+        deliveryStatus: "posted",
     },
     {
         id: 13,
@@ -196,6 +251,7 @@ const events: TraceEvent[] = [
         timestamp: "Apr 26, 2026, 8:12 PM",
         mode: "simulation",
         attempts: 1,
+        deliveryStatus: "posted",
     },
     {
         id: 12,
@@ -206,6 +262,7 @@ const events: TraceEvent[] = [
         timestamp: "Apr 26, 2026, 6:12 PM",
         mode: "simulation",
         attempts: 1,
+        deliveryStatus: "posted",
     },
     {
         id: 11,
@@ -216,6 +273,7 @@ const events: TraceEvent[] = [
         timestamp: "Apr 26, 2026, 3:20 PM",
         mode: "simulation",
         attempts: 1,
+        deliveryStatus: "posted",
     },
     {
         id: 10,
@@ -226,6 +284,7 @@ const events: TraceEvent[] = [
         timestamp: "Apr 27, 2026, 1:24 AM",
         mode: "simulation",
         attempts: 1,
+        deliveryStatus: "posted",
     },
     {
         id: 9,
@@ -236,6 +295,7 @@ const events: TraceEvent[] = [
         timestamp: "Apr 26, 2026, 10:03 PM",
         mode: "simulation",
         attempts: 1,
+        deliveryStatus: "posted",
     },
     {
         id: 8,
@@ -246,6 +306,7 @@ const events: TraceEvent[] = [
         timestamp: "Apr 26, 2026, 7:18 PM",
         mode: "simulation",
         attempts: 1,
+        deliveryStatus: "posted",
     },
     {
         id: 7,
@@ -256,6 +317,7 @@ const events: TraceEvent[] = [
         timestamp: "Apr 26, 2026, 4:51 PM",
         mode: "simulation",
         attempts: 1,
+        deliveryStatus: "posted",
     },
     {
         id: 6,
@@ -266,6 +328,7 @@ const events: TraceEvent[] = [
         timestamp: "Apr 26, 2026, 3:43 PM",
         mode: "simulation",
         attempts: 1,
+        deliveryStatus: "posted",
     },
     {
         id: 5,
@@ -276,6 +339,7 @@ const events: TraceEvent[] = [
         timestamp: "Apr 26, 2026, 5:26 PM",
         mode: "simulation",
         attempts: 1,
+        deliveryStatus: "posted",
     },
     {
         id: 4,
@@ -286,6 +350,7 @@ const events: TraceEvent[] = [
         timestamp: "Apr 26, 2026, 4:28 PM",
         mode: "simulation",
         attempts: 1,
+        deliveryStatus: "posted",
     },
 ];
 
@@ -333,6 +398,8 @@ function StatusPill({ status }: { status: EventStatus }) {
         posted: "border-emerald-200 bg-emerald-50 text-emerald-700",
         validated: "border-blue-200 bg-blue-50 text-blue-700",
         queued: "border-amber-200 bg-amber-50 text-amber-700",
+        generated: "border-amber-200 bg-amber-50 text-amber-700",
+        failed: "border-amber-200 bg-amber-50 text-amber-800",
     };
 
     return (
@@ -342,17 +409,16 @@ function StatusPill({ status }: { status: EventStatus }) {
     );
 }
 
-function LotReadinessPill({ ready }: { ready: boolean }) {
+function LotReadinessPill({ state, label }: { state: LotReadinessState; label: string }) {
+    const styles = {
+        ready: "border-emerald-200 bg-emerald-50 text-emerald-700",
+        warning: "border-amber-200 bg-amber-50 text-amber-700",
+        blocked: "border-amber-200 bg-amber-50 text-amber-800",
+    };
+
     return (
-        <span
-            className={cn(
-                "inline-flex rounded-full border px-2 py-0.5 text-xs font-medium",
-                ready
-                    ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                    : "border-amber-200 bg-amber-50 text-amber-700"
-            )}
-        >
-            {ready ? "export ready" : "partial"}
+        <span className={cn("inline-flex rounded-full border px-2 py-0.5 text-xs font-medium", styles[state])}>
+            {label}
         </span>
     );
 }
@@ -368,7 +434,9 @@ type InflowLabClientProps = {
 
 export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
     const isStandalone = mode === "standalone";
-    const [activeTab, setActiveTab] = useState("Control room");
+    const primaryTab = isStandalone ? "Control room" : "Overview";
+    const tabs = isStandalone ? standaloneTabs : dashboardTabs;
+    const [activeTab, setActiveTab] = useState(primaryTab);
     const [selectedLot, setSelectedLot] = useState(lotCodes[0]);
     const [traceInput, setTraceInput] = useState(lotCodes[0]);
     const [runStage, setRunStage] = useState<RunStage>("complete");
@@ -414,16 +482,13 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
     const activeEvents = serviceEvents.length ? serviceEvents : events;
     const activeLineageByLot = serviceEvents.length ? serviceLineage : lineageByLot;
     const selectedLineage = activeLineageByLot[selectedLot] ?? toLineage(selectedEvents);
-    const selectedCompleteCount = selectedLineage.filter((node) => node.state === "complete").length;
-    const selectedIsExportReady = selectedCompleteCount === selectedLineage.length;
+    const selectedReadiness = getLotReadiness(selectedLineage, selectedEvents);
+    const selectedCompleteCount = selectedReadiness.completeCount;
+    const selectedIsExportReady = selectedReadiness.exportReady;
     const hasGeneratedRecords = runStage !== "loaded";
     const visibleEvents = hasGeneratedRecords ? activeEvents : [];
     const visibleEventStatus = serviceEvents.length ? "posted" : getEventStatus(runStage);
     const deliveredCount = serviceStatus?.stats?.delivery?.posted ?? (stageIndex[runStage] >= 2 ? activeEvents.length : 0);
-    const completeLots = Array.from(new Set(activeEvents.map((event) => event.lotCode))).filter((lotCode) => {
-        const lineage = activeLineageByLot[lotCode] ?? toLineage(activeEvents.filter((event) => event.lotCode === lotCode));
-        return lineage.length > 0 && lineage.every((node) => node.state === "complete");
-    }).length;
 
     useEffect(() => {
         if (isStandalone) {
@@ -464,20 +529,24 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
                 const lotEvents = activeEvents.filter((event) => event.lotCode === lotCode);
                 const lineage = activeLineageByLot[lotCode] ?? toLineage(lotEvents);
                 const product = lotEvents[0]?.product ?? "Unknown product";
-                const completeCount = lineage.filter((node) => node.state === "complete").length;
-                const complete = completeCount === lineage.length;
+                const readiness = getLotReadiness(lineage, lotEvents);
                 return {
                     lotCode,
                     product,
                     events: lotEvents.length,
-                    complete,
-                    completeCount,
-                    totalCount: lineage.length,
+                    readiness,
+                    missingCtes: readiness.missingCtes,
+                    completeCount: readiness.completeCount,
+                    totalCount: readiness.totalCount,
                     lastLocation: lotEvents[0]?.location ?? "No location",
                 };
             }),
         [activeEvents, activeLineageByLot]
     );
+    const exportReadyLots = uniqueLots.filter((lot) => lot.readiness.exportReady);
+    const exceptionLots = uniqueLots.filter((lot) => !lot.readiness.exportReady);
+    const warningLots = uniqueLots.filter((lot) => lot.readiness.state === "warning");
+    const blockedLots = uniqueLots.filter((lot) => lot.readiness.state === "blocked");
 
     const loadScenario = async () => {
         setIsBusy(true);
@@ -498,13 +567,13 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
         } finally {
             setIsBusy(false);
         }
-        setActiveTab("Control room");
+        setActiveTab(primaryTab);
     };
 
     const runPipeline = async () => {
         setIsBusy(true);
         setRunStage("generating");
-        setActiveTab("Control room");
+        setActiveTab(primaryTab);
         try {
             await inflowJson("/api/simulate/start", {
                 method: "POST",
@@ -584,456 +653,35 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
     const csvExportHref = `${servicePath(`/api/mock/regengine/export/fda-request?preset=${exportPreset}&traceability_lot_code=${encodeURIComponent(traceInput)}&start_date=${startDate}&end_date=${endDate}`)}`;
     const epcisExportHref = `${servicePath(`/api/mock/regengine/export/epcis?traceability_lot_code=${encodeURIComponent(traceInput)}&start_date=${startDate}&end_date=${endDate}`)}`;
     const engineConnected = Boolean(health?.ok && !serviceError);
-    const connectionLabel = engineConnected ? "Engine connected" : serviceError ? "Engine unavailable" : "Checking engine";
+    const connectionLabel = engineConnected ? "Connection ready" : serviceError ? "Connection needs attention" : "Checking connection";
     const connectionTone = engineConnected ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-amber-200 bg-amber-50 text-amber-800";
     const postedCount = serviceStatus?.stats?.delivery?.posted ?? deliveredCount;
     const failedCount = serviceStatus?.stats?.delivery?.failed ?? 0;
+    const totalLotCount = uniqueLots.length;
+    const exceptionCount = exceptionLots.length + failedCount;
+    const validationOutcome = exceptionCount
+        ? `${exceptionCount} exception${exceptionCount === 1 ? "" : "s"} to review`
+        : "No blocking exceptions";
+    const exportReadyCount = exportReadyLots.length;
+    const exportReadinessLabel =
+        totalLotCount > 0 ? `${exportReadyCount} of ${totalLotCount} lots export ready` : "No test records loaded";
+    const lastReceivedLabel = serviceStatus?.stats?.delivery?.last_success_at
+        ? formatServiceTime(serviceStatus.stats.delivery.last_success_at)
+        : visibleEvents[0]?.timestamp || "No inbound records yet";
 
     return (
         <main
             data-inflow-lab-app
             data-inflow-lab-mode={mode}
-            className={cn("bg-[#f6f8f5] text-slate-950", isStandalone ? "min-h-screen" : "min-h-full")}
+            className={cn("text-slate-950", isStandalone ? "min-h-screen bg-[#f6f8f5]" : "min-h-full bg-slate-50")}
         >
-            <style jsx global>{`
-                body[data-inflow-lab="true"] > a[href="#main-content"],
-                body[data-inflow-lab="true"] nav[aria-label="Main navigation"],
-                body[data-inflow-lab="true"] footer,
-                body[data-inflow-lab="true"] contentinfo,
-                body[data-inflow-lab="true"] [role="contentinfo"],
-                body[data-inflow-lab="true"] [aria-label="Open accessibility settings"],
-                body[data-inflow-lab="true"] [aria-label="Cookie consent"],
-                body[data-inflow-lab="true"] [aria-label="Open Next.js Dev Tools"],
-                body[data-inflow-lab="true"] nextjs-portal,
-                body[data-inflow-lab="true"] > button {
-                    display: none !important;
-                }
-
-                body[data-inflow-lab="true"] {
-                    background: #f6f8f5;
-                }
-
-                [data-inflow-lab-app] {
-                    min-height: 100vh;
-                    background: #f6f8f5;
-                    color: #0f172a;
-                    font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-                }
-
-                [data-inflow-lab-mode="dashboard"] {
-                    min-height: calc(100vh - 44px);
-                }
-
-                [data-inflow-lab-app] * {
-                    box-sizing: border-box;
-                }
-
-                [data-inflow-lab-app] h1,
-                [data-inflow-lab-app] h2,
-                [data-inflow-lab-app] h3,
-                [data-inflow-lab-app] p {
-                    margin: 0;
-                }
-
-                [data-inflow-lab-app] > div {
-                    width: 100%;
-                    max-width: 1480px;
-                    margin: 0 auto;
-                    padding: 20px 32px;
-                    display: flex;
-                    flex-direction: column;
-                    gap: 20px;
-                }
-
-                [data-inflow-lab-mode="dashboard"] > div {
-                    max-width: none;
-                    padding: 20px 24px 32px;
-                }
-
-                [data-inflow-lab-app] section:first-of-type {
-                    overflow: hidden;
-                    border-radius: 18px;
-                    border: 1px solid rgba(6, 78, 59, 0.22);
-                    background: #020617;
-                    color: #fff;
-                    box-shadow: 0 20px 70px rgba(15, 23, 42, 0.16);
-                }
-
-                [data-inflow-lab-app] section:first-of-type > div {
-                    display: grid;
-                    grid-template-columns: minmax(0, 1fr) 420px;
-                }
-
-                [data-inflow-lab-app] section:first-of-type > div > div {
-                    padding: 24px;
-                }
-
-                [data-inflow-lab-app] section:first-of-type > div > div:last-child {
-                    border-left: 1px solid rgba(255, 255, 255, 0.1);
-                    background: rgba(255, 255, 255, 0.04);
-                }
-
-                [data-inflow-lab-mode="dashboard"] [data-dashboard-header] {
-                    border-radius: 10px;
-                    border: 1px solid #e2e8f0;
-                    background: #fff;
-                    color: #0f172a;
-                    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
-                }
-
-                [data-inflow-lab-mode="dashboard"] [data-dashboard-header] > div {
-                    display: flex;
-                    gap: 16px;
-                }
-
-                [data-inflow-lab-mode="dashboard"] [data-dashboard-header] > div > div {
-                    padding: 0;
-                }
-
-                [data-inflow-lab-mode="dashboard"] [data-dashboard-header] > div > div:last-child {
-                    border-left: 0;
-                    background: transparent;
-                }
-
-                [data-inflow-lab-mode="dashboard"] [data-dashboard-header] button:not(.bg-emerald-700) {
-                    border-color: #cbd5e1;
-                    background: #fff;
-                    color: #0f172a;
-                }
-
-                [data-inflow-lab-app] section:nth-of-type(2) {
-                    display: grid;
-                    grid-template-columns: minmax(0, 1fr) 380px;
-                    gap: 20px;
-                    align-items: start;
-                }
-
-                [data-inflow-lab-app] aside,
-                [data-inflow-lab-app] .flex.flex-col.gap-4 {
-                    display: flex;
-                    flex-direction: column;
-                    gap: 16px;
-                }
-
-                [data-inflow-lab-app] .grid {
-                    display: grid;
-                }
-
-                [data-inflow-lab-app] .flex {
-                    display: flex;
-                }
-
-                [data-inflow-lab-app] .inline-flex {
-                    display: inline-flex;
-                }
-
-                [data-inflow-lab-app] .hidden {
-                    display: none;
-                }
-
-                [data-inflow-lab-app] .items-center {
-                    align-items: center;
-                }
-
-                [data-inflow-lab-app] .items-start {
-                    align-items: flex-start;
-                }
-
-                [data-inflow-lab-app] .justify-between {
-                    justify-content: space-between;
-                }
-
-                [data-inflow-lab-app] .justify-center {
-                    justify-content: center;
-                }
-
-                [data-inflow-lab-app] .flex-col {
-                    flex-direction: column;
-                }
-
-                [data-inflow-lab-app] .flex-wrap {
-                    flex-wrap: wrap;
-                }
-
-                [data-inflow-lab-app] .gap-1 { gap: 4px; }
-                [data-inflow-lab-app] .gap-2 { gap: 8px; }
-                [data-inflow-lab-app] .gap-3 { gap: 12px; }
-                [data-inflow-lab-app] .gap-4 { gap: 16px; }
-                [data-inflow-lab-app] .gap-5 { gap: 20px; }
-                [data-inflow-lab-app] .space-y-2 > * + * { margin-top: 8px; }
-                [data-inflow-lab-app] .space-y-3 > * + * { margin-top: 12px; }
-                [data-inflow-lab-app] .space-y-4 > * + * { margin-top: 16px; }
-                [data-inflow-lab-app] .mt-0\\.5 { margin-top: 2px; }
-                [data-inflow-lab-app] .mt-1 { margin-top: 4px; }
-                [data-inflow-lab-app] .mt-2 { margin-top: 8px; }
-                [data-inflow-lab-app] .mt-3 { margin-top: 12px; }
-                [data-inflow-lab-app] .mt-4 { margin-top: 16px; }
-                [data-inflow-lab-app] .mt-5 { margin-top: 20px; }
-                [data-inflow-lab-app] .mb-3 { margin-bottom: 12px; }
-                [data-inflow-lab-app] .mr-2 { margin-right: 8px; }
-                [data-inflow-lab-app] .p-1 { padding: 4px; }
-                [data-inflow-lab-app] .p-2 { padding: 8px; }
-                [data-inflow-lab-app] .p-3 { padding: 12px; }
-                [data-inflow-lab-app] .p-4 { padding: 16px; }
-                [data-inflow-lab-app] .p-5 { padding: 20px; }
-                [data-inflow-lab-app] .p-8 { padding: 32px; }
-                [data-inflow-lab-app] .px-3 { padding-left: 12px; padding-right: 12px; }
-                [data-inflow-lab-app] .px-4 { padding-left: 16px; padding-right: 16px; }
-                [data-inflow-lab-app] .py-2 { padding-top: 8px; padding-bottom: 8px; }
-                [data-inflow-lab-app] .py-3 { padding-top: 12px; padding-bottom: 12px; }
-                [data-inflow-lab-app] .pb-2 { padding-bottom: 8px; }
-
-                [data-inflow-lab-app] .rounded-md { border-radius: 6px; }
-                [data-inflow-lab-app] .rounded-lg { border-radius: 10px; }
-                [data-inflow-lab-app] .rounded-xl { border-radius: 18px; }
-                [data-inflow-lab-app] .rounded-full { border-radius: 9999px; }
-                [data-inflow-lab-app] .border { border: 1px solid #e2e8f0; }
-                [data-inflow-lab-app] .border-b { border-bottom: 1px solid #e2e8f0; }
-                [data-inflow-lab-app] .border-t { border-top: 1px solid #e2e8f0; }
-                [data-inflow-lab-app] .border-dashed { border-style: dashed; }
-                [data-inflow-lab-app] .border-slate-100 { border-color: #f1f5f9; }
-                [data-inflow-lab-app] .border-slate-200 { border-color: #e2e8f0; }
-                [data-inflow-lab-app] .border-slate-300 { border-color: #cbd5e1; }
-                [data-inflow-lab-app] .border-emerald-200 { border-color: #a7f3d0; }
-                [data-inflow-lab-app] .border-emerald-300,
-                [data-inflow-lab-app] .border-emerald-400 { border-color: #6ee7b7; }
-                [data-inflow-lab-app] .border-amber-200 { border-color: #fde68a; }
-                [data-inflow-lab-app] .border-blue-200 { border-color: #bfdbfe; }
-                [data-inflow-lab-app] .border-white\\/10 { border-color: rgba(255, 255, 255, 0.1); }
-                [data-inflow-lab-app] .border-white\\/20 { border-color: rgba(255, 255, 255, 0.2); }
-                [data-inflow-lab-app] .shadow-sm { box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08); }
-
-                [data-inflow-lab-app] .bg-white { background: #fff; }
-                [data-inflow-lab-app] .bg-slate-50 { background: #f8fafc; }
-                [data-inflow-lab-app] .bg-slate-100 { background: #f1f5f9; }
-                [data-inflow-lab-app] .bg-slate-950 { background: #020617; }
-                [data-inflow-lab-app] .bg-emerald-50,
-                [data-inflow-lab-app] .bg-emerald-50\\/70 { background: rgba(236, 253, 245, 0.78); }
-                [data-inflow-lab-app] .bg-emerald-700 { background: #047857; }
-                [data-inflow-lab-app] .bg-emerald-600 { background: #059669; }
-                [data-inflow-lab-app] .bg-amber-50,
-                [data-inflow-lab-app] .bg-amber-50\\/70 { background: rgba(255, 251, 235, 0.86); }
-                [data-inflow-lab-app] .bg-blue-50 { background: #eff6ff; }
-                [data-inflow-lab-app] .bg-white\\/10 { background: rgba(255, 255, 255, 0.1); }
-                [data-inflow-lab-app] .bg-white\\/15 { background: rgba(255, 255, 255, 0.15); }
-
-                [data-inflow-lab-app] .text-white { color: #fff; }
-                [data-inflow-lab-app] .text-slate-950 { color: #020617; }
-                [data-inflow-lab-app] .text-slate-900 { color: #0f172a; }
-                [data-inflow-lab-app] .text-slate-800 { color: #1e293b; }
-                [data-inflow-lab-app] .text-slate-700 { color: #334155; }
-                [data-inflow-lab-app] .text-slate-600 { color: #475569; }
-                [data-inflow-lab-app] .text-slate-500 { color: #64748b; }
-                [data-inflow-lab-app] .text-slate-400 { color: #94a3b8; }
-                [data-inflow-lab-app] .text-slate-300 { color: #cbd5e1; }
-                [data-inflow-lab-app] .text-emerald-700 { color: #047857; }
-                [data-inflow-lab-app] .text-emerald-200 { color: #a7f3d0; }
-                [data-inflow-lab-app] .text-amber-950 { color: #451a03; }
-                [data-inflow-lab-app] .text-amber-800 { color: #92400e; }
-                [data-inflow-lab-app] .text-amber-700,
-                [data-inflow-lab-app] .text-amber-600 { color: #b45309; }
-                [data-inflow-lab-app] .text-blue-700 { color: #1d4ed8; }
-
-                [data-inflow-lab-app] .text-2xl { font-size: 24px; line-height: 32px; }
-                [data-inflow-lab-app] .text-sm { font-size: 14px; line-height: 20px; }
-                [data-inflow-lab-app] .text-xs { font-size: 12px; line-height: 16px; }
-                [data-inflow-lab-app] .text-\\[11px\\] { font-size: 11px; line-height: 14px; }
-                [data-inflow-lab-app] .font-semibold { font-weight: 600; }
-                [data-inflow-lab-app] .font-medium { font-weight: 500; }
-                [data-inflow-lab-app] .font-mono { font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace; }
-                [data-inflow-lab-app] .uppercase { text-transform: uppercase; }
-                [data-inflow-lab-app] .leading-5 { line-height: 20px; }
-                [data-inflow-lab-app] .leading-6 { line-height: 24px; }
-                [data-inflow-lab-app] .tracking-normal { letter-spacing: 0; }
-
-                [data-inflow-lab-app] .h-4 { height: 16px; }
-                [data-inflow-lab-app] .w-4 { width: 16px; }
-                [data-inflow-lab-app] .h-5 { height: 20px; }
-                [data-inflow-lab-app] .w-5 { width: 20px; }
-                [data-inflow-lab-app] .h-7 { height: 28px; }
-                [data-inflow-lab-app] .w-7 { width: 28px; }
-                [data-inflow-lab-app] .h-8 { height: 32px; }
-                [data-inflow-lab-app] .w-8 { width: 32px; }
-                [data-inflow-lab-app] .h-9 { height: 36px; }
-                [data-inflow-lab-app] .h-10 { height: 40px; }
-                [data-inflow-lab-app] .w-full { width: 100%; }
-                [data-inflow-lab-app] .min-w-0 { min-width: 0; }
-                [data-inflow-lab-app] .max-w-2xl { max-width: 672px; }
-                [data-inflow-lab-app] .max-w-3xl { max-width: 768px; }
-                [data-inflow-lab-app] .shrink-0 { flex-shrink: 0; }
-
-                [data-inflow-lab-app] button,
-                [data-inflow-lab-app] input,
-                [data-inflow-lab-app] select {
-                    font: inherit;
-                }
-
-                [data-inflow-lab-app] button {
-                    cursor: pointer;
-                }
-
-                [data-inflow-lab-app] input,
-                [data-inflow-lab-app] select {
-                    border: 1px solid #cbd5e1;
-                    border-radius: 8px;
-                    padding: 0 10px;
-                    background: #fff;
-                    color: #0f172a;
-                }
-
-                [data-inflow-lab-app] button {
-                    min-height: 36px;
-                    border-radius: 8px;
-                    border: 1px solid #cbd5e1;
-                    padding: 0 12px;
-                    display: inline-flex;
-                    align-items: center;
-                    justify-content: center;
-                    gap: 6px;
-                    background: #fff;
-                    color: #0f172a;
-                    transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
-                }
-
-                [data-inflow-lab-app] button.bg-emerald-700,
-                [data-inflow-lab-app] button.bg-emerald-600,
-                [data-inflow-lab-app] button.bg-slate-950 {
-                    border-color: transparent;
-                    color: #fff;
-                }
-
-                [data-inflow-lab-app] button.bg-white\\/10 {
-                    border-color: rgba(255, 255, 255, 0.2);
-                    background: rgba(255, 255, 255, 0.1);
-                    color: #fff;
-                }
-
-                [data-inflow-lab-app] button.bg-white\\/10:hover {
-                    background: rgba(255, 255, 255, 0.16);
-                    border-color: rgba(255, 255, 255, 0.32);
-                }
-
-                [data-inflow-lab-app] button:hover {
-                    border-color: #10b981;
-                }
-
-                [data-inflow-lab-app] button.p-3,
-                [data-inflow-lab-app] button.p-4 {
-                    display: block;
-                    min-height: 0;
-                    width: 100%;
-                }
-
-                [data-inflow-lab-app] section:first-of-type button:not(.bg-emerald-700),
-                [data-inflow-lab-app] .bg-slate-950 button:not(.bg-emerald-600) {
-                    border-color: rgba(255, 255, 255, 0.22);
-                    background: rgba(255, 255, 255, 0.1);
-                    color: #fff;
-                }
-
-                [data-inflow-lab-app] section:first-of-type button:not(.bg-emerald-700):hover,
-                [data-inflow-lab-app] .bg-slate-950 button:not(.bg-emerald-600):hover {
-                    background: rgba(255, 255, 255, 0.16);
-                    border-color: rgba(255, 255, 255, 0.34);
-                }
-
-                [data-inflow-lab-mode="dashboard"] [data-dashboard-header] button:not(.bg-emerald-700),
-                [data-inflow-lab-mode="dashboard"] [data-dashboard-header] button:not(.bg-emerald-700):hover {
-                    border-color: #cbd5e1;
-                    background: #fff;
-                    color: #0f172a;
-                }
-
-                [data-inflow-lab-app] .transition { transition: all 0.15s ease; }
-                [data-inflow-lab-app] .hover\\:border-emerald-300:hover { border-color: #6ee7b7; }
-                [data-inflow-lab-app] .hover\\:bg-emerald-50:hover { background: #ecfdf5; }
-                [data-inflow-lab-app] .hover\\:bg-slate-50:hover { background: #f8fafc; }
-                [data-inflow-lab-app] .hover\\:bg-slate-800:hover { background: #1e293b; }
-                [data-inflow-lab-app] .hover\\:bg-emerald-800:hover { background: #065f46; }
-                [data-inflow-lab-app] .hover\\:bg-emerald-700:hover { background: #047857; }
-                [data-inflow-lab-app] .break-all { word-break: break-all; }
-                [data-inflow-lab-app] .break-words { overflow-wrap: break-word; }
-                [data-inflow-lab-app] .text-left { text-align: left; }
-                [data-inflow-lab-app] .text-center { text-align: center; }
-                [data-inflow-lab-app] .relative { position: relative; }
-                [data-inflow-lab-app] .absolute { position: absolute; }
-                [data-inflow-lab-app] .overflow-hidden { overflow: hidden; }
-
-                [data-inflow-lab-app] table {
-                    width: 100%;
-                    border-collapse: collapse;
-                }
-
-                [data-inflow-lab-app] th,
-                [data-inflow-lab-app] td {
-                    border-bottom: 1px solid #e2e8f0;
-                    text-align: left;
-                }
-
-                [data-inflow-lab-app] aside > div,
-                [data-inflow-lab-app] [class*="rounded-lg"][class*="border"] {
-                    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
-                }
-
-                @media (min-width: 640px) {
-                    [data-inflow-lab-app] .sm\\:grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-                    [data-inflow-lab-app] .sm\\:grid-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-                    [data-inflow-lab-app] .sm\\:flex-row { flex-direction: row; }
-                    [data-inflow-lab-app] .sm\\:items-center { align-items: center; }
-                    [data-inflow-lab-app] .sm\\:justify-between { justify-content: space-between; }
-                    [data-inflow-lab-app] .sm\\:w-\\[290px\\] { width: 290px; }
-                    [data-inflow-lab-app] .sm\\:px-6 { padding-left: 24px; padding-right: 24px; }
-                    [data-inflow-lab-app] .sm\\:p-6 { padding: 24px; }
-                    [data-inflow-lab-app] .sm\\:text-3xl { font-size: 30px; line-height: 36px; }
-                }
-
-                @media (min-width: 768px) {
-                    [data-inflow-lab-app] .md\\:grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-                    [data-inflow-lab-app] .md\\:grid-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-                    [data-inflow-lab-app] .md\\:grid-cols-5 { grid-template-columns: repeat(5, minmax(0, 1fr)); }
-                }
-
-                @media (min-width: 1024px) {
-                    [data-inflow-lab-app] .lg\\:items-start { align-items: flex-start; }
-                    [data-inflow-lab-app] .lg\\:flex-row { flex-direction: row; }
-                    [data-inflow-lab-app] .lg\\:items-center { align-items: center; }
-                    [data-inflow-lab-app] .lg\\:justify-between { justify-content: space-between; }
-                    [data-inflow-lab-app] .lg\\:grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-                    [data-inflow-lab-app] .lg\\:grid-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-                    [data-inflow-lab-app] .lg\\:w-auto { width: auto; }
-                    [data-inflow-lab-app] .lg\\:px-8 { padding-left: 32px; padding-right: 32px; }
-                    [data-inflow-lab-app] .lg\\:min-w-\\[480px\\] { min-width: 480px; }
-                    [data-inflow-lab-app] .lg\\:grid-cols-\\[minmax\\(0\\,1fr\\)_420px\\] {
-                        grid-template-columns: minmax(0, 1fr) 420px;
-                    }
-                }
-
-                @media (min-width: 1280px) {
-                    [data-inflow-lab-app] .xl\\:grid-cols-\\[360px_minmax\\(0\\,1fr\\)\\] {
-                        grid-template-columns: 360px minmax(0, 1fr);
-                    }
-                    [data-inflow-lab-app] .xl\\:grid-cols-\\[minmax\\(0\\,1fr\\)_380px\\] {
-                        grid-template-columns: minmax(0, 1fr) 380px;
-                    }
-                }
-
-                @media (max-width: 900px) {
-                    [data-inflow-lab-app] > div {
-                        padding: 14px;
-                    }
-
-                    [data-inflow-lab-app] section:first-of-type > div,
-                    [data-inflow-lab-app] section:nth-of-type(2) {
-                        grid-template-columns: 1fr;
-                    }
-
-                    [data-inflow-lab-app] section:first-of-type > div > div:last-child {
-                        border-left: 0;
-                        border-top: 1px solid rgba(255, 255, 255, 0.1);
-                    }
-                }
-            `}</style>
-            <div className="mx-auto flex w-full max-w-[1480px] flex-col gap-5 px-4 py-5 sm:px-6 lg:px-8">
+            <div
+                data-dashboard-shell={!isStandalone ? true : undefined}
+                className={cn(
+                    "mx-auto flex w-full flex-col px-4 sm:px-6 lg:px-8",
+                    isStandalone ? "max-w-[1480px] gap-5 py-5" : "max-w-none gap-4 py-4"
+                )}
+            >
                 {isStandalone ? (
                     <section className="overflow-hidden rounded-xl border border-emerald-900/15 bg-slate-950 text-white shadow-sm">
                         <div className="grid gap-0 lg:grid-cols-[minmax(0,1fr)_420px]">
@@ -1112,25 +760,25 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
                         </div>
                     </section>
                 ) : (
-                    <section data-dashboard-header className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-                        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                    <section data-dashboard-header className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
+                        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                             <div className="min-w-0">
                                 <div className="flex flex-wrap items-center gap-2">
-                                    <h1 className="text-2xl font-semibold tracking-normal text-slate-950">Inflow Lab</h1>
+                                    <h1 className="text-xl font-semibold tracking-normal text-slate-950">Inflow Lab</h1>
                                     <Badge className={cn("border", connectionTone)}>{connectionLabel}</Badge>
-                                    <Badge className="border border-blue-200 bg-blue-50 text-blue-700">Mock records only</Badge>
+                                    <Badge className="border border-blue-200 bg-blue-50 text-blue-700">Test environment</Badge>
                                 </div>
-                                <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
-                                    Test inbound traceability data before it becomes production evidence. Load a demo fixture, verify the API handoff, trace lots, and prepare export filters from the command center.
+                                <p className="mt-1.5 max-w-3xl text-sm leading-6 text-slate-600">
+                                    Test inbound FSMA 204 traceability data before production ingestion. Validate record completeness, review exceptions, trace lots, and export evidence for readiness review.
                                 </p>
-                                <div className="mt-4 flex flex-wrap gap-2">
+                                <div data-dashboard-actions className="mt-3 flex flex-wrap gap-2">
                                     <Button className="h-9 bg-emerald-700 text-white hover:bg-emerald-800" onClick={loadScenario} disabled={isBusy}>
                                         <RefreshCcw className="mr-2 h-4 w-4" />
-                                        Load demo
+                                        Load test data
                                     </Button>
                                     <Button variant="outline" className="h-9 border-slate-300 bg-white" onClick={runPipeline} disabled={isBusy}>
                                         <Play className="mr-2 h-4 w-4" />
-                                        Run pipeline
+                                        Validate inbound data
                                     </Button>
                                     <Button variant="outline" className="h-9 border-slate-300 bg-white" onClick={traceLatestLot}>
                                         <Search className="mr-2 h-4 w-4" />
@@ -1138,22 +786,22 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
                                     </Button>
                                     <Button variant="outline" className="h-9 border-slate-300 bg-white" onClick={prepareExport} disabled={stageIndex[runStage] < 4}>
                                         <ArrowDownToLine className="mr-2 h-4 w-4" />
-                                        Prepare export
+                                        Export evidence
                                     </Button>
                                 </div>
                             </div>
                             <div className="grid min-w-0 gap-2 sm:grid-cols-3 lg:min-w-[480px]">
                                 <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
-                                    <span className="block text-xs font-medium text-slate-500">Proxy route</span>
-                                    <strong className="mt-1 block break-words font-mono text-[11px] text-slate-950">/api/inflow-lab</strong>
+                                    <span className="block text-xs font-medium text-slate-500">Last inbound record</span>
+                                    <strong className="mt-1 block text-sm text-slate-950">{lastReceivedLabel}</strong>
                                 </div>
                                 <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
-                                    <span className="block text-xs font-medium text-slate-500">Posted</span>
-                                    <strong className="mt-1 block text-sm text-slate-950">{postedCount}</strong>
+                                    <span className="block text-xs font-medium text-slate-500">Validation outcome</span>
+                                    <strong className="mt-1 block text-sm text-slate-950">{validationOutcome}</strong>
                                 </div>
                                 <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
-                                    <span className="block text-xs font-medium text-slate-500">Failed</span>
-                                    <strong className="mt-1 block text-sm text-slate-950">{failedCount}</strong>
+                                    <span className="block text-xs font-medium text-slate-500">Export readiness</span>
+                                    <strong className="mt-1 block text-sm text-slate-950">{exportReadinessLabel}</strong>
                                 </div>
                             </div>
                         </div>
@@ -1166,40 +814,44 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
                     </div>
                 )}
 
-                <section className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_380px]">
+                <section className={cn("grid xl:grid-cols-[minmax(0,1fr)_380px]", isStandalone ? "gap-5" : "gap-4")}>
                     <Card className="rounded-lg border-slate-200 bg-white shadow-sm">
-                        <CardHeader className="border-b border-slate-200 p-4">
+                        <CardHeader className={cn("border-b border-slate-200", isStandalone ? "p-4" : "p-3 sm:p-4")}>
                             <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                                 <div>
-                                    <CardTitle className="text-base font-semibold text-slate-950">Operational workspace</CardTitle>
-                                    <p className="mt-1 text-sm text-slate-500">
-                                        Review mock-generated records, trace lots, and prepare evidence filters without mixing simulator data into production imports.
+                                    <CardTitle className="text-base font-semibold text-slate-950">
+                                        {isStandalone ? "Operational workspace" : "Inbound data readiness"}
+                                    </CardTitle>
+                                    <p className="mt-1 text-sm leading-5 text-slate-500">
+                                        {isStandalone
+                                            ? "Review mock-generated records, trace lots, and prepare evidence filters without mixing simulator data into production imports."
+                                            : "Validate FSMA 204 records, resolve exceptions, prove traceability, and prepare customer evidence before production ingestion."}
                                     </p>
                                 </div>
                                 <div className="flex w-full flex-col gap-2 sm:flex-row lg:w-auto">
                                     <Input
                                         value={traceInput}
                                         onChange={(event) => setTraceInput(event.target.value)}
-                                        className="h-10 min-w-0 border-slate-300 text-xs sm:w-[290px]"
+                                        className={cn("min-w-0 border-slate-300 text-xs sm:w-[290px]", isStandalone ? "h-10" : "h-9")}
                                         aria-label="Traceability lot code"
                                     />
-                                    <Button onClick={traceLot} className="h-10 bg-slate-950 text-white hover:bg-slate-800">
+                                    <Button onClick={traceLot} className={cn("bg-slate-950 text-white hover:bg-slate-800", isStandalone ? "h-10" : "h-9")}>
                                         <GitBranch className="mr-2 h-4 w-4" />
                                         Trace lot
                                     </Button>
                                 </div>
                             </div>
                         </CardHeader>
-                        <CardContent className="p-4">
+                        <CardContent className={cn(isStandalone ? "p-4" : "p-3 sm:p-4")}>
                             <div>
-                                <div className="flex h-auto flex-wrap justify-start gap-1 rounded-lg bg-slate-100 p-1">
+                                <div className={cn("flex h-auto justify-start gap-1 rounded-md bg-slate-100 p-1", isStandalone ? "flex-wrap" : "overflow-x-auto")}>
                                     {tabs.map((tab) => (
                                         <button
                                             key={tab}
                                             type="button"
                                             onClick={() => setActiveTab(tab)}
                                             className={cn(
-                                                "rounded-md px-3 py-2 text-xs font-medium text-slate-600 transition hover:bg-white/70 hover:text-slate-950",
+                                                "shrink-0 rounded-md px-3 py-1.5 text-xs font-medium text-slate-600 transition hover:bg-white/70 hover:text-slate-950",
                                                 activeTab === tab && "bg-white text-slate-950 shadow-sm"
                                             )}
                                             aria-pressed={activeTab === tab}
@@ -1209,7 +861,149 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
                                     ))}
                                 </div>
 
-                                {activeTab === "Control room" && (
+                                {activeTab === "Overview" && (
+                                    <div className={cn("mt-4", isStandalone ? "space-y-4" : "space-y-3")}>
+                                        <div className={cn("grid lg:grid-cols-3", isStandalone ? "gap-4" : "gap-3")}>
+                                            <div className={cn("rounded-lg border border-slate-200 bg-white", isStandalone ? "p-4" : "p-3")}>
+                                                <div className="flex items-center gap-2">
+                                                    <CheckCircle2 className={cn("h-4 w-4", engineConnected ? "text-emerald-700" : "text-amber-600")} />
+                                                    <p className="text-sm font-semibold text-slate-950">Connection status</p>
+                                                </div>
+                                                <p className="mt-2 text-sm text-slate-700">{connectionLabel}</p>
+                                                <p className="mt-1 text-xs leading-5 text-slate-500">
+                                                    Test submissions are routed through the Inflow Lab gateway and remain outside production ingestion.
+                                                </p>
+                                            </div>
+
+                                            <div className={cn("rounded-lg border", isStandalone ? "p-4" : "p-3", exceptionCount ? "border-amber-200 bg-amber-50/70" : "border-emerald-200 bg-emerald-50/70")}>
+                                                <div className="flex items-center gap-2">
+                                                    {exceptionCount ? (
+                                                        <AlertTriangle className="h-4 w-4 text-amber-700" />
+                                                    ) : (
+                                                        <PackageCheck className="h-4 w-4 text-emerald-700" />
+                                                    )}
+                                                    <p className="text-sm font-semibold text-slate-950">Validation outcome</p>
+                                                </div>
+                                                <p className="mt-2 text-sm text-slate-700">{validationOutcome}</p>
+                                                <p className="mt-1 text-xs leading-5 text-slate-500">
+                                                    Ready: {exportReadyCount}. Warning: {warningLots.length}. Blocked: {blockedLots.length}. Records need CTE coverage, KDE completeness, lineage, and posted delivery before export.
+                                                </p>
+                                            </div>
+
+                                            <div className={cn("rounded-lg border border-slate-200 bg-white", isStandalone ? "p-4" : "p-3")}>
+                                                <div className="flex items-center gap-2">
+                                                    <FileSpreadsheet className="h-4 w-4 text-blue-700" />
+                                                    <p className="text-sm font-semibold text-slate-950">Export readiness</p>
+                                                </div>
+                                                <p className="mt-2 text-sm text-slate-700">{exportReadinessLabel}</p>
+                                                <p className="mt-1 text-xs leading-5 text-slate-500">
+                                                    Evidence exports use the selected lot and date window; exception lots stay visible and are excluded from ready counts.
+                                                </p>
+                                            </div>
+                                        </div>
+
+                                        <div className={cn("grid lg:grid-cols-2", isStandalone ? "gap-4" : "gap-3")}>
+                                            <div className={cn("rounded-lg border border-slate-200 bg-white", isStandalone ? "p-4" : "p-3")}>
+                                                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                                                    <div>
+                                                        <p className="text-sm font-semibold text-slate-950">Lot readiness</p>
+                                                        <p className="mt-1 text-xs leading-5 text-slate-500">Select a lot to inspect the traceability path and required FSMA 204 events.</p>
+                                                    </div>
+                                                    <Button variant="outline" className="h-9 border-slate-300 bg-white" onClick={() => setActiveTab("Lots")}>
+                                                        Review lots
+                                                    </Button>
+                                                </div>
+                                                <div className={cn("grid gap-3", isStandalone ? "mt-4" : "mt-3")}>
+                                                    {uniqueLots.map((lot) => (
+                                                        <button
+                                                            key={lot.lotCode}
+                                                            type="button"
+                                                            onClick={() => {
+                                                                setSelectedLot(lot.lotCode);
+                                                                setTraceInput(lot.lotCode);
+                                                                setActiveTab("Lineage");
+                                                            }}
+                                                            className={cn(
+                                                                "rounded-lg border bg-white p-3 text-left transition hover:border-emerald-300",
+                                                                lot.lotCode === selectedLot ? "border-emerald-400 shadow-sm" : "border-slate-200"
+                                                            )}
+                                                        >
+                                                            <div className="flex items-start justify-between gap-3">
+                                                                <div className="min-w-0">
+                                                                    <p className="text-sm font-semibold text-slate-950">{lot.product}</p>
+                                                                    <p className="mt-1 break-words font-mono text-[11px] text-slate-500">{lot.lotCode}</p>
+                                                                </div>
+                                                                <LotReadinessPill state={lot.readiness.state} label={lot.readiness.label} />
+                                                            </div>
+                                                            <p className="mt-2 text-xs text-slate-500">
+                                                                CTE coverage {lot.completeCount} of {lot.totalCount}; delivery {lot.readiness.deliveryLabel}
+                                                            </p>
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            </div>
+
+                                            <div className={cn(isStandalone ? "space-y-4" : "space-y-3")}>
+                                                <div className={cn("rounded-lg border", isStandalone ? "p-4" : "p-3", exceptionLots.length ? "border-amber-200 bg-amber-50/70" : "border-slate-200 bg-white")}>
+                                                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                                                        <div>
+                                                            <p className="text-sm font-semibold text-slate-950">Exceptions</p>
+                                                            <p className="mt-1 text-xs leading-5 text-slate-500">
+                                                                Partial lots remain visible for remediation instead of being hidden from the evidence package.
+                                                            </p>
+                                                        </div>
+                                                        <Button variant="outline" className="h-9 border-slate-300 bg-white" onClick={() => setActiveTab("Lineage")}>
+                                                            Trace selected lot
+                                                        </Button>
+                                                    </div>
+                                                    <div className={cn("space-y-3", isStandalone ? "mt-4" : "mt-3")}>
+                                                        {exceptionLots.length === 0 && failedCount === 0 ? (
+                                                            <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-700">
+                                                                No blocking exceptions found in the current test data.
+                                                            </div>
+                                                        ) : (
+                                                            <>
+                                                                {exceptionLots.map((lot) => (
+                                                                    <div key={lot.lotCode} className="rounded-md border border-amber-200 bg-white px-3 py-2">
+                                                                        <p className="text-xs font-semibold text-amber-950">{lot.product}</p>
+                                                                        <p className="mt-1 break-words font-mono text-[11px] text-amber-800">{lot.lotCode}</p>
+                                                                        <p className="mt-1 text-xs text-amber-800">
+                                                                            {lot.missingCtes.length > 0
+                                                                                ? `Missing KDE evidence for ${lot.missingCtes.join(", ")}.`
+                                                                                : `Delivery ${lot.readiness.deliveryLabel}; not export ready.`}
+                                                                        </p>
+                                                                    </div>
+                                                                ))}
+                                                                {failedCount > 0 && (
+                                                                    <div className="rounded-md border border-amber-200 bg-white px-3 py-2 text-xs text-amber-800">
+                                                                        {failedCount} inbound delivery {failedCount === 1 ? "attempt needs" : "attempts need"} review.
+                                                                    </div>
+                                                                )}
+                                                            </>
+                                                        )}
+                                                    </div>
+                                                </div>
+
+                                                <div className={cn("rounded-lg border border-slate-200 bg-slate-950 text-white", isStandalone ? "p-4" : "p-3")}>
+                                                    <p className="text-sm font-semibold">Evidence export</p>
+                                                    <p className="mt-1 text-xs leading-5 text-slate-300">
+                                                        Export FDA sortable CSV or EPCIS JSON-LD using the active lot and date filters.
+                                                    </p>
+                                                    <div className={cn("grid grid-cols-1 gap-2 sm:grid-cols-2", isStandalone ? "mt-4" : "mt-3")}>
+                                                        <Button asChild className="h-9 bg-emerald-600 text-white hover:bg-emerald-700">
+                                                            <a href={csvExportHref}>Download CSV</a>
+                                                        </Button>
+                                                        <Button asChild variant="outline" className="h-9 border-white/20 bg-white/10 text-white hover:bg-white/15">
+                                                            <a href={epcisExportHref}>EPCIS JSON</a>
+                                                        </Button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {activeTab === "Control room" && isStandalone && (
                                     <div className="mt-4 grid gap-4 xl:grid-cols-[360px_minmax(0,1fr)]">
                                         <div className="space-y-4">
                                             <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
@@ -1303,10 +1097,12 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
                                                         >
                                                             <div className="flex flex-col items-start gap-2">
                                                                 <span className="text-xs font-medium text-slate-500">{lot.product}</span>
-                                                                <LotReadinessPill ready={lot.complete} />
+                                                                <LotReadinessPill state={lot.readiness.state} label={lot.readiness.label} />
                                                             </div>
                                                             <p className="mt-3 break-words font-mono text-[11px] font-semibold leading-5 text-slate-950">{lot.lotCode}</p>
-                                                            <p className="mt-2 text-xs text-slate-500">{lot.completeCount}/{lot.totalCount} CTEs captured</p>
+                                                            <p className="mt-2 text-xs text-slate-500">
+                                                                {lot.completeCount}/{lot.totalCount} CTEs captured - delivery {lot.readiness.deliveryLabel}
+                                                            </p>
                                                         </button>
                                                     ))}
                                                 </div>
@@ -1346,7 +1142,9 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
 
                                                 <div className="rounded-lg border border-slate-200 bg-slate-950 p-4 text-white">
                                                     <p className="text-sm font-semibold">Evidence package</p>
-                                                    <p className="mt-1 text-xs leading-5 text-slate-300">2 lots are export-ready. 1 partial lot remains visible as an exception, not silently included.</p>
+                                                    <p className="mt-1 text-xs leading-5 text-slate-300">
+                                                        {exportReadyCount} lots are export ready. {exceptionLots.length} exception lots remain visible and are excluded from ready counts.
+                                                    </p>
                                                     <div className="mt-4 grid grid-cols-2 gap-2">
                                                         <Button asChild className="h-9 bg-emerald-600 text-white hover:bg-emerald-700">
                                                             <a href={csvExportHref}>Download CSV</a>
@@ -1361,27 +1159,33 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
                                     </div>
                                 )}
 
-                                {activeTab === "Event log" && (
+                                {(activeTab === "Event log" || activeTab === "Record log") && (
                                     <div className="mt-4">
                                         {visibleEvents.length === 0 ? (
                                             <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-8 text-center">
                                                 <ClipboardList className="mx-auto h-8 w-8 text-slate-400" />
-                                                <p className="mt-3 text-sm font-semibold text-slate-950">Demo scenario loaded</p>
-                                                <p className="mt-1 text-sm text-slate-500">Run the pipeline to generate FSMA 204 traceability records.</p>
+                                                <p className="mt-3 text-sm font-semibold text-slate-950">
+                                                    {isStandalone ? "Demo scenario loaded" : "No inbound records loaded"}
+                                                </p>
+                                                <p className="mt-1 text-sm text-slate-500">
+                                                    {isStandalone
+                                                        ? "Run the pipeline to generate FSMA 204 traceability records."
+                                                        : "Load test data to validate FSMA 204 records before production ingestion."}
+                                                </p>
                                             </div>
                                         ) : (
-                                            <Table>
+                                            <Table data-inflow-table>
                                                 <TableHeader>
                                                     <TableRow className="border-slate-200 bg-slate-50 hover:bg-slate-50">
-                                                        <TableHead className="h-10 px-3 text-xs">#</TableHead>
-                                                        <TableHead className="h-10 px-3 text-xs">CTE</TableHead>
-                                                        <TableHead className="h-10 px-3 text-xs">Lot code</TableHead>
-                                                        <TableHead className="h-10 px-3 text-xs">Product</TableHead>
-                                                        <TableHead className="h-10 px-3 text-xs">Location</TableHead>
-                                                        <TableHead className="h-10 px-3 text-xs">Timestamp</TableHead>
-                                                        <TableHead className="h-10 px-3 text-xs">Mode</TableHead>
-                                                        <TableHead className="h-10 px-3 text-xs">Attempts</TableHead>
-                                                        <TableHead className="h-10 px-3 text-xs">Status</TableHead>
+                                                        <TableHead className={cn("px-3 text-xs", isStandalone ? "h-10" : "h-9")}>#</TableHead>
+                                                        <TableHead className={cn("px-3 text-xs", isStandalone ? "h-10" : "h-9")}>CTE</TableHead>
+                                                        <TableHead className={cn("px-3 text-xs", isStandalone ? "h-10" : "h-9")}>Lot code</TableHead>
+                                                        <TableHead className={cn("px-3 text-xs", isStandalone ? "h-10" : "h-9")}>Product</TableHead>
+                                                        <TableHead className={cn("px-3 text-xs", isStandalone ? "h-10" : "h-9")}>Location</TableHead>
+                                                        <TableHead className={cn("px-3 text-xs", isStandalone ? "h-10" : "h-9")}>Timestamp</TableHead>
+                                                        <TableHead className={cn("px-3 text-xs", isStandalone ? "h-10" : "h-9")}>{isStandalone ? "Mode" : "Source type"}</TableHead>
+                                                        <TableHead className={cn("px-3 text-xs", isStandalone ? "h-10" : "h-9")}>Attempts</TableHead>
+                                                        <TableHead className={cn("px-3 text-xs", isStandalone ? "h-10" : "h-9")}>Status</TableHead>
                                                     </TableRow>
                                                 </TableHeader>
                                                 <TableBody>
@@ -1393,9 +1197,9 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
                                                                 event.lotCode === selectedLot && "bg-emerald-50/35"
                                                             )}
                                                         >
-                                                            <TableCell className="px-3 py-3 text-xs text-slate-500">{event.id}</TableCell>
-                                                            <TableCell className="px-3 py-3 text-xs font-medium text-slate-900">{event.cte}</TableCell>
-                                                            <TableCell className="px-3 py-3">
+                                                            <TableCell className={cn("px-3 text-xs text-slate-500", isStandalone ? "py-3" : "py-2")}>{event.id}</TableCell>
+                                                            <TableCell className={cn("px-3 text-xs font-medium text-slate-900", isStandalone ? "py-3" : "py-2")}>{event.cte}</TableCell>
+                                                            <TableCell className={cn("px-3", isStandalone ? "py-3" : "py-2")}>
                                                                 <button
                                                                     type="button"
                                                                     onClick={() => {
@@ -1408,13 +1212,15 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
                                                                     {event.lotCode}
                                                                 </button>
                                                             </TableCell>
-                                                            <TableCell className="px-3 py-3 text-xs text-slate-700">{event.product}</TableCell>
-                                                            <TableCell className="px-3 py-3 text-xs text-slate-700">{event.location}</TableCell>
-                                                            <TableCell className="px-3 py-3 text-xs text-slate-600">{event.timestamp}</TableCell>
-                                                            <TableCell className="px-3 py-3 text-xs text-slate-600">{event.mode}</TableCell>
-                                                            <TableCell className="px-3 py-3 text-xs text-slate-600">{event.attempts}</TableCell>
-                                                            <TableCell className="px-3 py-3">
-                                                                <StatusPill status={visibleEventStatus} />
+                                                            <TableCell className={cn("px-3 text-xs text-slate-700", isStandalone ? "py-3" : "py-2")}>{event.product}</TableCell>
+                                                            <TableCell className={cn("px-3 text-xs text-slate-700", isStandalone ? "py-3" : "py-2")}>{event.location}</TableCell>
+                                                            <TableCell className={cn("px-3 text-xs text-slate-600", isStandalone ? "py-3" : "py-2")}>{event.timestamp}</TableCell>
+                                                            <TableCell className={cn("px-3 text-xs text-slate-600", isStandalone ? "py-3" : "py-2")}>
+                                                                {isStandalone ? event.mode : "Test data"}
+                                                            </TableCell>
+                                                            <TableCell className={cn("px-3 text-xs text-slate-600", isStandalone ? "py-3" : "py-2")}>{event.attempts}</TableCell>
+                                                            <TableCell className={cn("px-3", isStandalone ? "py-3" : "py-2")}>
+                                                                <StatusPill status={serviceEvents.length ? event.deliveryStatus : visibleEventStatus} />
                                                             </TableCell>
                                                         </TableRow>
                                                     ))}
@@ -1426,6 +1232,29 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
 
                                 {activeTab === "Lots" && (
                                     <div className="mt-4">
+                                        <div className="mb-3 rounded-lg border border-slate-200 bg-slate-50 p-4">
+                                            <p className="text-sm font-semibold text-slate-950">Lot acceptance criteria</p>
+                                            <div className="mt-3 grid gap-3 md:grid-cols-3">
+                                                <div className="rounded-md border border-emerald-200 bg-white px-3 py-2">
+                                                    <p className="text-xs font-semibold text-emerald-700">Ready</p>
+                                                    <p className="mt-1 text-xs leading-5 text-slate-600">
+                                                        Required CTEs captured, KDE-bearing events posted, lineage complete, included in export-ready counts.
+                                                    </p>
+                                                </div>
+                                                <div className="rounded-md border border-amber-200 bg-white px-3 py-2">
+                                                    <p className="text-xs font-semibold text-amber-700">Warning</p>
+                                                    <p className="mt-1 text-xs leading-5 text-slate-600">
+                                                        Partial CTE/KDE coverage or generated-only delivery; visible as an exception and excluded from ready counts.
+                                                    </p>
+                                                </div>
+                                                <div className="rounded-md border border-amber-200 bg-white px-3 py-2">
+                                                    <p className="text-xs font-semibold text-amber-800">Blocked</p>
+                                                    <p className="mt-1 text-xs leading-5 text-slate-600">
+                                                        Failed delivery or no traceability events; cannot be exported until delivery and lineage are corrected.
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        </div>
                                         <div className="grid gap-3 lg:grid-cols-3">
                                             {uniqueLots.map((lot) => (
                                                 <button
@@ -1442,14 +1271,22 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
                                                     )}
                                                 >
                                                     <div className="flex items-start justify-between gap-3">
-                                                        <PackageCheck className={cn("h-5 w-5", lot.complete ? "text-emerald-700" : "text-amber-600")} />
-                                                        <LotReadinessPill ready={lot.complete} />
+                                                        <PackageCheck
+                                                            className={cn(
+                                                                "h-5 w-5",
+                                                                lot.readiness.exportReady ? "text-emerald-700" : "text-amber-600"
+                                                            )}
+                                                        />
+                                                        <LotReadinessPill state={lot.readiness.state} label={lot.readiness.label} />
                                                     </div>
                                                     <p className="mt-3 font-mono text-xs font-semibold text-slate-950">{lot.lotCode}</p>
                                                     <p className="mt-2 text-sm font-medium text-slate-800">{lot.product}</p>
                                                     <p className="mt-1 text-xs text-slate-500">
-                                                        {lot.completeCount} of {lot.totalCount} CTEs captured - last seen at {lot.lastLocation}
+                                                        CTE coverage {lot.completeCount} of {lot.totalCount}; delivery {lot.readiness.deliveryLabel}; last seen at {lot.lastLocation}
                                                     </p>
+                                                    {lot.missingCtes.length > 0 && (
+                                                        <p className="mt-2 text-xs text-amber-700">Missing KDE evidence: {lot.missingCtes.join(", ")}</p>
+                                                    )}
                                                 </button>
                                             ))}
                                         </div>
@@ -1468,14 +1305,16 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
                                                 <div>
                                                     <p className="text-sm font-semibold text-slate-950">Lineage for {selectedLot}</p>
                                                     <p className="mt-1 text-xs text-slate-500">
-                                                        {selectedCompleteCount} of {selectedLineage.length} required CTEs captured.
+                                                        CTE coverage {selectedCompleteCount} of {selectedLineage.length}; delivery {selectedReadiness.deliveryLabel}.
                                                     </p>
                                                 </div>
-                                                <LotReadinessPill ready={selectedIsExportReady} />
+                                                <LotReadinessPill state={selectedReadiness.state} label={selectedReadiness.label} />
                                             </div>
                                             {!selectedIsExportReady && (
                                                 <div className="mt-4 rounded-md border border-amber-200 bg-white px-3 py-2 text-xs text-amber-800">
-                                                    Capture initial packing, shipping, and DC receiving before this lot is included in the FDA-ready export package.
+                                                    {selectedReadiness.missingCtes.length > 0
+                                                        ? `Capture missing KDE evidence for ${selectedReadiness.missingCtes.join(", ")} before this lot is included in export-ready counts.`
+                                                        : "Resolve delivery status before this lot is included in export-ready counts."}
                                                 </div>
                                             )}
                                             <div className="mt-5 grid gap-3 md:grid-cols-5">
@@ -1504,7 +1343,7 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
                                     <div className="mt-4">
                                         {!selectedIsExportReady && (
                                             <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-                                                Selected lot is partial. The package can be prepared for export-ready lots, but this lot will be flagged until missing CTEs are captured.
+                                                Selected lot is an exception. Export-ready counts include only ready lots; this lot stays visible until missing CTE/KDE evidence or delivery issues are resolved.
                                             </div>
                                         )}
                                         <div className="grid gap-3 md:grid-cols-2">
@@ -1512,7 +1351,7 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
                                                 <FileSpreadsheet className="h-5 w-5 text-emerald-700" />
                                                 <p className="mt-3 text-sm font-semibold text-slate-950">FDA sortable spreadsheet</p>
                                                 <p className="mt-1 text-xs leading-5 text-slate-500">
-                                                    Includes the two complete lots and flags the partial lot for review.
+                                                    Includes {exportReadyCount} ready lots. {exceptionLots.length} exception lots are flagged for review, not counted as ready.
                                                 </p>
                                                 <Button asChild className="mt-4 h-9 bg-emerald-700 text-white hover:bg-emerald-800">
                                                     <a href={csvExportHref}>Download CSV</a>
@@ -1534,14 +1373,67 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
 
                                 {activeTab === "Diagnostics" && (
                                     <div className="mt-4">
+                                        {!isStandalone && (
+                                            <div className="mb-3 rounded-lg border border-slate-200 bg-white p-4">
+                                                <div className="flex items-center gap-2">
+                                                    <SlidersHorizontal className="h-4 w-4 text-slate-700" />
+                                                    <p className="text-sm font-semibold text-slate-950">Test data controls</p>
+                                                </div>
+                                                <p className="mt-1 text-xs leading-5 text-slate-500">
+                                                    Fixture and source settings are kept here for implementation review; the main workflow stays focused on validation and evidence.
+                                                </p>
+                                                <div className="mt-4 grid gap-3 md:grid-cols-2">
+                                                    <label className="block text-xs font-medium text-slate-600">
+                                                        Tenant
+                                                        <Input value={tenantId} onChange={(event) => setTenantId(event.target.value)} className="mt-1 h-9 bg-white" />
+                                                    </label>
+                                                    <label className="block text-xs font-medium text-slate-600">
+                                                        Source
+                                                        <Input value={source} onChange={(event) => setSource(event.target.value)} className="mt-1 h-9 bg-white" />
+                                                    </label>
+                                                    <label className="block text-xs font-medium text-slate-600">
+                                                        Test scenario
+                                                        <select value={scenarioPreset} onChange={(event) => setScenarioPreset(event.target.value)} className="mt-1 h-9 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900">
+                                                            <option value="leafy_greens_supplier">Leafy greens supplier</option>
+                                                            <option value="fresh_cut_processor">Fresh-cut processor</option>
+                                                            <option value="retailer_readiness_demo">Retailer readiness demo</option>
+                                                        </select>
+                                                    </label>
+                                                    <label className="block text-xs font-medium text-slate-600">
+                                                        Fixture
+                                                        <select value={fixture} onChange={(event) => setFixture(event.target.value)} className="mt-1 h-9 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900">
+                                                            <option value="leafy_greens_trace">Leafy greens trace</option>
+                                                            <option value="fresh_cut_transformation">Fresh-cut transformation</option>
+                                                            <option value="retailer_handoff">Retailer handoff</option>
+                                                        </select>
+                                                    </label>
+                                                    <label className="block text-xs font-medium text-slate-600">
+                                                        Delivery mode
+                                                        <select value={deliveryMode} onChange={(event) => setDeliveryMode(event.target.value)} className="mt-1 h-9 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900">
+                                                            <option value="mock">Test gateway</option>
+                                                            <option value="live">Live adapter disabled</option>
+                                                        </select>
+                                                    </label>
+                                                </div>
+                                                <div className="mt-4 flex flex-wrap gap-2">
+                                                    <Button className="h-9 bg-emerald-700 text-white hover:bg-emerald-800" onClick={loadScenario} disabled={isBusy}>
+                                                        <RefreshCcw className="mr-2 h-4 w-4" />
+                                                        Load test data
+                                                    </Button>
+                                                    <Button variant="outline" className="h-9 border-slate-300 bg-white" onClick={resetServiceState} disabled={isBusy}>
+                                                        Reset test state
+                                                    </Button>
+                                                </div>
+                                            </div>
+                                        )}
                                         <div className="grid gap-3 md:grid-cols-2">
                                             {[
-                                                ["Auth", "Off for local simulation"],
-                                                ["Storage", "Local JSONL"],
+                                                ["Auth", isStandalone ? "Off for local simulation" : "Dashboard session"],
+                                                ["Storage", isStandalone ? "Local JSONL" : "Test data store"],
                                                 ["Persist path", "data/events.jsonl"],
                                                 ["Source", source],
                                                 ["Service build", health?.build?.commit_sha_short || health?.build?.version || "Not connected"],
-                                                ["Retry queue", `${serviceStatus?.stats?.delivery?.failed || 0} failed deliveries`],
+                                                ["Exception queue", `${serviceStatus?.stats?.delivery?.failed || 0} failed deliveries`],
                                             ].map(([label, value]) => (
                                                 <div key={label} className="rounded-lg border border-slate-200 bg-slate-50 p-3">
                                                     <p className="text-xs font-medium uppercase text-slate-500">{label}</p>
@@ -1566,10 +1458,10 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
                             <CardContent className="p-4">
                                 <div className="flex items-start justify-between gap-3">
                                     <p className="font-mono text-xs font-semibold text-slate-950">{selectedLot}</p>
-                                    <LotReadinessPill ready={selectedIsExportReady} />
+                                    <LotReadinessPill state={selectedReadiness.state} label={selectedReadiness.label} />
                                 </div>
                                 <p className="mt-2 text-xs text-slate-500">
-                                    {selectedCompleteCount} of {selectedLineage.length} CTEs captured
+                                    CTE coverage {selectedCompleteCount} of {selectedLineage.length}; delivery {selectedReadiness.deliveryLabel}
                                 </p>
                                 <div className="mt-4 space-y-3">
                                     {selectedLineage.map((node, index) => (
@@ -1602,49 +1494,97 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
                             <CardHeader className="border-b border-slate-200 p-4">
                                 <CardTitle className="flex items-center gap-2 text-base font-semibold text-slate-950">
                                     <Truck className="h-4 w-4 text-blue-700" />
-                                    Delivery monitor
+                                    {isStandalone ? "Delivery monitor" : "Inbound validation"}
                                 </CardTitle>
                             </CardHeader>
                             <CardContent className="space-y-3 p-4">
-                                {[
-                                    ["Posted", String(deliveredCount)],
-                                    ["Failed", String(serviceStatus?.stats?.delivery?.failed || 0)],
-                                    ["Generated only", String(serviceStatus?.stats?.delivery?.generated || 0)],
-                                    ["Attempts", String(serviceStatus?.stats?.delivery?.attempts || deliveredCount)],
-                                ].map(([label, value]) => (
+                                {(isStandalone
+                                    ? [
+                                          ["Posted", String(deliveredCount)],
+                                          ["Failed", String(serviceStatus?.stats?.delivery?.failed || 0)],
+                                          ["Generated only", String(serviceStatus?.stats?.delivery?.generated || 0)],
+                                          ["Attempts", String(serviceStatus?.stats?.delivery?.attempts || deliveredCount)],
+                                      ]
+                                    : [
+                                          ["Accepted records", String(postedCount)],
+                                          ["Exceptions", String(exceptionCount)],
+                                          ["Lots reviewed", String(totalLotCount)],
+                                          ["Export-ready lots", String(exportReadyCount)],
+                                      ]
+                                ).map(([label, value]) => (
                                     <div key={label} className="flex items-center justify-between rounded-md bg-slate-50 px-3 py-2">
                                         <span className="text-xs text-slate-500">{label}</span>
                                         <span className="text-sm font-semibold text-slate-950">{value}</span>
                                     </div>
                                 ))}
-                                <Button variant="outline" className="mt-1 h-9 w-full border-slate-300 bg-white">
-                                    <RotateCcw className="mr-2 h-4 w-4" />
-                                    Retry failed deliveries
-                                </Button>
+                                {isStandalone ? (
+                                    <Button variant="outline" className="mt-1 h-9 w-full border-slate-300 bg-white">
+                                        <RotateCcw className="mr-2 h-4 w-4" />
+                                        Retry failed deliveries
+                                    </Button>
+                                ) : (
+                                    <Button variant="outline" className="mt-1 h-9 w-full border-slate-300 bg-white" onClick={() => setActiveTab("Diagnostics")}>
+                                        <SlidersHorizontal className="mr-2 h-4 w-4" />
+                                        Test data settings
+                                    </Button>
+                                )}
                             </CardContent>
                         </Card>
 
-                        <Card className="rounded-lg border-amber-200 bg-amber-50/70 shadow-sm">
-                            <CardContent className="flex gap-3 p-4">
-                                <Info className="mt-0.5 h-4 w-4 shrink-0 text-amber-700" />
-                                <div>
-                                    <p className="text-sm font-semibold text-amber-950">Local simulation</p>
-                                    <p className="mt-1 text-xs leading-5 text-amber-800">
-                                        This demo writes local events and validates the FSMA record shape before a live delivery adapter is enabled.
-                                    </p>
-                                </div>
-                            </CardContent>
-                        </Card>
+                        {isStandalone ? (
+                            <>
+                                <Card className="rounded-lg border-amber-200 bg-amber-50/70 shadow-sm">
+                                    <CardContent className="flex gap-3 p-4">
+                                        <Info className="mt-0.5 h-4 w-4 shrink-0 text-amber-700" />
+                                        <div>
+                                            <p className="text-sm font-semibold text-amber-950">Local simulation</p>
+                                            <p className="mt-1 text-xs leading-5 text-amber-800">
+                                                This demo writes local events and validates the FSMA record shape before a live delivery adapter is enabled.
+                                            </p>
+                                        </div>
+                                    </CardContent>
+                                </Card>
 
-                        <Card className="rounded-lg border-slate-200 bg-white shadow-sm">
-                            <CardContent className="flex items-center gap-3 p-4">
-                                <Database className="h-5 w-5 text-slate-500" />
-                                <div>
-                                    <p className="text-sm font-semibold text-slate-950">Local state</p>
-                                    <p className="text-xs text-slate-500">data/events.jsonl</p>
-                                </div>
-                            </CardContent>
-                        </Card>
+                                <Card className="rounded-lg border-slate-200 bg-white shadow-sm">
+                                    <CardContent className="flex items-center gap-3 p-4">
+                                        <Database className="h-5 w-5 text-slate-500" />
+                                        <div>
+                                            <p className="text-sm font-semibold text-slate-950">Local state</p>
+                                            <p className="text-xs text-slate-500">data/events.jsonl</p>
+                                        </div>
+                                    </CardContent>
+                                </Card>
+                            </>
+                        ) : (
+                            <Card className="rounded-lg border-slate-200 bg-white shadow-sm">
+                                <CardHeader className="border-b border-slate-200 p-4">
+                                    <CardTitle className="flex items-center gap-2 text-base font-semibold text-slate-950">
+                                        <CalendarDays className="h-4 w-4 text-slate-700" />
+                                        Evidence filters
+                                    </CardTitle>
+                                </CardHeader>
+                                <CardContent className="space-y-3 p-4">
+                                    <label className="block text-xs font-medium text-slate-600">
+                                        Preset
+                                        <select value={exportPreset} onChange={(event) => setExportPreset(event.target.value)} className="mt-1 h-9 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900">
+                                            <option value="all_records">All records</option>
+                                            <option value="lot_trace">Lot trace</option>
+                                            <option value="shipment_handoff">Shipment handoff</option>
+                                            <option value="receiving_log">Receiving log</option>
+                                            <option value="transformation_batches">Transformation batches</option>
+                                        </select>
+                                    </label>
+                                    <label className="block text-xs font-medium text-slate-600">
+                                        Start date
+                                        <Input type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} className="mt-1 h-9 bg-white" />
+                                    </label>
+                                    <label className="block text-xs font-medium text-slate-600">
+                                        End date
+                                        <Input type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} className="mt-1 h-9 bg-white" />
+                                    </label>
+                                </CardContent>
+                            </Card>
+                        )}
                     </aside>
                 </section>
             </div>

@@ -274,6 +274,32 @@ describe('LoginPage', () => {
             });
         });
 
+        it('redirects to Inflow Lab when login was started from the dashboard Inflow Lab route', async () => {
+            const user = userEvent.setup();
+            const mockResponse = {
+                access_token: 'test-token',
+                user: { id: '123', email: 'test@example.com', is_sysadmin: false },
+                tenant_id: 'tenant-123',
+            };
+
+            mockSearchParamGet.mockImplementation((key: string) => {
+                if (key === 'next') return '/dashboard/inflow-lab';
+                return null;
+            });
+
+            (apiClient.login as any).mockResolvedValueOnce(mockResponse);
+
+            render(<LoginPage />);
+
+            await user.type(screen.getByLabelText(/email/i), 'test@example.com');
+            await user.type(screen.getByLabelText(/password/i), 'password123');
+            await user.click(screen.getByRole('button', { name: /sign in/i }));
+
+            await waitFor(() => {
+                expect(mockPush).toHaveBeenCalledWith('/dashboard/inflow-lab');
+            });
+        });
+
         it('falls back to dashboard when next path is unsafe', async () => {
             const user = userEvent.setup();
             const mockResponse = {
