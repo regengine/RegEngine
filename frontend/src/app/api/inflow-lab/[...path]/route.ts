@@ -32,6 +32,13 @@ function serviceBaseUrl() {
     ).replace(/\/$/, "");
 }
 
+function basicAuthHeader() {
+    const username = process.env.INFLOW_LAB_BASIC_AUTH_USERNAME;
+    const password = process.env.INFLOW_LAB_BASIC_AUTH_PASSWORD;
+    if (!username || !password) return null;
+    return `Basic ${Buffer.from(`${username}:${password}`).toString("base64")}`;
+}
+
 function proxyError(
     message: string,
     status: number,
@@ -201,6 +208,8 @@ async function proxyInflowLab(request: NextRequest, params: Promise<{ path?: str
     if (contentType) headers.set("content-type", contentType);
     const tenant = request.headers.get("x-regengine-tenant");
     if (tenant) headers.set("x-regengine-tenant", tenant);
+    const authorization = basicAuthHeader();
+    if (authorization) headers.set("authorization", authorization);
 
     try {
         const upstream = await fetch(upstreamUrl, {
