@@ -244,14 +244,14 @@ export default function LoginPage() {
                                 RegEngine command center
                             </h1>
                             <p className="mt-3 max-w-md text-sm leading-6 text-slate-300">
-                                Continue to your FSMA 204 workspace, validate traceability records, and prepare export-ready evidence.
+                                Continue to your FSMA 204 workspace, validate traceability records, and prepare evidence from authenticated records.
                             </p>
                         </div>
 
                         <div className="grid gap-3 text-sm">
                             {[
                                 'Secure tenant-scoped session',
-                                'FDA-ready traceability exports',
+                                'Authenticated traceability exports',
                                 'Hash-chain audit evidence',
                             ].map((item) => (
                                 <div key={item} className="flex items-center gap-3 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2">

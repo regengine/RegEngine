@@ -104,7 +104,7 @@ export function generateComplianceReport(result: SandboxResult): void {
   doc.text('RegEngine', margin, 14);
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(10);
-  doc.text('FSMA 204 Compliance Assessment', pageWidth - margin, 10, { align: 'right' });
+  doc.text('FSMA 204 Sandbox Assessment', pageWidth - margin, 10, { align: 'right' });
   doc.setFontSize(8);
   doc.text(now, pageWidth - margin, 16, { align: 'right' });
   y = 30;
@@ -121,11 +121,11 @@ export function generateComplianceReport(result: SandboxResult): void {
 
   doc.setFontSize(10);
   doc.setTextColor(GRAY.r, GRAY.g, GRAY.b);
-  doc.text('Compliance Score', margin + 32, y + 4);
+  doc.text('Sandbox Pass Rate', margin + 32, y + 4);
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(9);
   doc.text(
-    `${result.compliant_events} of ${result.total_events} events passed all rules`,
+    `${result.compliant_events} of ${result.total_events} events passed sandbox checks`,
     margin + 32, y + 10,
   );
   y += 20;
@@ -134,9 +134,9 @@ export function generateComplianceReport(result: SandboxResult): void {
   const boxWidth = (contentWidth - 9) / 4;
   const stats = [
     { label: 'Total Events', value: String(result.total_events), color: GRAY },
-    { label: 'Compliant', value: String(result.compliant_events), color: SUCCESS },
-    { label: 'Non-Compliant', value: String(result.non_compliant_events), color: DANGER },
-    { label: 'Rule Failures', value: String(result.total_rule_failures), color: WARNING },
+    { label: 'Passed Checks', value: String(result.compliant_events), color: SUCCESS },
+    { label: 'Need Work', value: String(result.non_compliant_events), color: DANGER },
+    { label: 'Rule Issues', value: String(result.total_rule_failures), color: WARNING },
   ];
 
   for (let i = 0; i < stats.length; i++) {
@@ -163,7 +163,7 @@ export function generateComplianceReport(result: SandboxResult): void {
     doc.setFontSize(9);
     doc.setTextColor(DANGER.r, DANGER.g, DANGER.b);
     doc.text(
-      `FDA SUBMISSION BLOCKED \u2014 ${result.blocking_reasons.length} critical defect${result.blocking_reasons.length !== 1 ? 's' : ''}`,
+      `IMPORT AND EVIDENCE BLOCKED \u2014 ${result.blocking_reasons.length} critical defect${result.blocking_reasons.length !== 1 ? 's' : ''}`,
       margin + 4, y + 6,
     );
     doc.setFont('helvetica', 'normal');
@@ -317,7 +317,7 @@ export function generateComplianceReport(result: SandboxResult): void {
     doc.setTextColor(SUCCESS.r, SUCCESS.g, SUCCESS.b);
     const passedTlcs = passedEvents.slice(0, 10).map((e) => e.traceability_lot_code).join(', ');
     doc.text(
-      `\u2713 ${passedEvents.length} event${passedEvents.length !== 1 ? 's' : ''} fully compliant: ${truncate(passedTlcs, 100)}`,
+      `\u2713 ${passedEvents.length} event${passedEvents.length !== 1 ? 's' : ''} passed sandbox checks: ${truncate(passedTlcs, 100)}`,
       margin, y,
     );
     y += 8;

@@ -101,7 +101,7 @@ const TOOLS: Tool[] = [
     {
         id: 'inflow-lab',
         title: 'Inflow Lab',
-        description: 'Run a mock FSMA 204 inflow pipeline, trace lots, and export FDA-ready evidence from the connected simulator service.',
+        description: 'Run a mock FSMA 204 inflow pipeline, trace lots, and preview evidence filters without mixing test data into production exports.',
         icon: FlaskConical,
         category: 'simulate',
         maturity: 'pilot',
