@@ -1,13 +1,11 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
     AlertTriangle,
     ArrowDownToLine,
     CalendarDays,
     CheckCircle2,
-    ChevronRight,
-    CircleDot,
     ClipboardList,
     Database,
     FileJson,
@@ -19,7 +17,6 @@ import {
     RefreshCcw,
     RotateCcw,
     Search,
-    ShieldCheck,
     SlidersHorizontal,
     Truck,
     Upload,
@@ -59,13 +56,6 @@ type LineageNode = {
     location: string;
     time: string;
     state: CteState;
-};
-
-type PipelineStep = {
-    label: string;
-    detail: string;
-    count: string;
-    status: "complete" | "active" | "ready";
 };
 
 const tabs = ["Control room", "Lots", "Lineage", "Exports", "Event log", "Diagnostics"];
@@ -232,24 +222,6 @@ const stageIndex: Record<RunStage, number> = {
     exported: 5,
 };
 
-function getPipelineSteps(stage: RunStage): PipelineStep[] {
-    const labels = [
-        ["Demo data", "Leafy greens supplier", "1 scenario"],
-        ["Generate records", "Harvest to DC receipt", stageIndex[stage] >= 1 ? "12 records" : "ready"],
-        ["Deliver", "Local simulation", stageIndex[stage] >= 2 ? "12 posted" : "waiting"],
-        ["Validate", "FSMA KDE checks", stageIndex[stage] >= 3 ? "1 warning" : "waiting"],
-        ["Trace", "Lot lineage", stageIndex[stage] >= 4 ? "2 ready, 1 partial" : "waiting"],
-        ["Export", "FDA + EPCIS", stage === "exported" ? "prepared" : stageIndex[stage] >= 4 ? "ready" : "waiting"],
-    ];
-
-    return labels.map(([label, detail, count], index) => ({
-        label,
-        detail,
-        count,
-        status: stageIndex[stage] > index ? "complete" : stageIndex[stage] === index ? "active" : "ready",
-    }));
-}
-
 function getEventStatus(stage: RunStage): EventStatus {
     if (stage === "generating") return "queued";
     if (stage === "validating") return "validated";
@@ -283,12 +255,6 @@ function LotReadinessPill({ ready }: { ready: boolean }) {
             {ready ? "export ready" : "partial"}
         </span>
     );
-}
-
-function PipelineIcon({ status }: { status: PipelineStep["status"] }) {
-    if (status === "complete") return <CheckCircle2 className="h-4 w-4" />;
-    if (status === "active") return <CircleDot className="h-4 w-4" />;
-    return <ChevronRight className="h-4 w-4" />;
 }
 
 function LineageStatusIcon({ state }: { state: CteState }) {
@@ -327,7 +293,13 @@ export function InflowLabClient() {
         return lineage.length > 0 && lineage.every((node) => node.state === "complete");
     }).length;
 
-    const pipelineSteps = getPipelineSteps(runStage);
+    useEffect(() => {
+        document.body.dataset.inflowLab = "true";
+        return () => {
+            delete document.body.dataset.inflowLab;
+        };
+    }, []);
+
     const runStatusLabel =
         runStage === "exported"
             ? "FDA package prepared"
@@ -336,39 +308,6 @@ export function InflowLabClient() {
                 : runStage === "loaded"
                     ? "Demo scenario loaded"
                     : "Demo run in progress";
-
-    const metrics = [
-        {
-            label: "Events generated",
-            value: hasGeneratedRecords ? String(events.length) : "0",
-            detail: hasGeneratedRecords ? "5 CTE types" : "Ready to generate",
-            icon: ClipboardList,
-        },
-        {
-            label: "Delivered",
-            value: String(deliveredCount),
-            detail: deliveredCount ? "100% posted" : "Waiting for run",
-            icon: CheckCircle2,
-        },
-        {
-            label: "Warnings",
-            value: runStage === "loaded" ? "0" : "1",
-            detail: hasGeneratedRecords ? "1 partial lot" : "No records yet",
-            icon: AlertTriangle,
-        },
-        {
-            label: "Lots traceable",
-            value: hasGeneratedRecords ? `${completeLots}/${lotCodes.length}` : "0/3",
-            detail: hasGeneratedRecords ? "Complete chains" : "Waiting for records",
-            icon: GitBranch,
-        },
-        {
-            label: "FDA export ready",
-            value: stageIndex[runStage] >= 4 ? "2 lots" : "No",
-            detail: runStage === "exported" ? "Package prepared" : "CSV + EPCIS",
-            icon: ShieldCheck,
-        },
-    ];
 
     const uniqueLots = useMemo(
         () =>
@@ -425,7 +364,20 @@ export function InflowLabClient() {
     };
 
     return (
-        <main className="min-h-screen bg-[#f6f8f5] text-slate-950">
+        <main data-inflow-lab-app className="min-h-screen bg-[#f6f8f5] text-slate-950">
+            <style jsx global>{`
+                body[data-inflow-lab="true"] > a[href="#main-content"],
+                body[data-inflow-lab="true"] nav[aria-label="Main navigation"],
+                body[data-inflow-lab="true"] footer,
+                body[data-inflow-lab="true"] contentinfo,
+                body[data-inflow-lab="true"] [role="contentinfo"] {
+                    display: none !important;
+                }
+
+                body[data-inflow-lab="true"] {
+                    background: #f6f8f5;
+                }
+            `}</style>
             <div className="mx-auto flex w-full max-w-[1480px] flex-col gap-5 px-4 py-5 sm:px-6 lg:px-8">
                 <section className="overflow-hidden rounded-xl border border-emerald-900/15 bg-slate-950 text-white shadow-sm">
                     <div className="grid gap-0 lg:grid-cols-[minmax(0,1fr)_420px]">
@@ -499,62 +451,6 @@ export function InflowLabClient() {
                         </div>
                             </div>
                         </div>
-                    </div>
-                </section>
-
-                <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-                    {metrics.map((metric) => {
-                        const Icon = metric.icon;
-                        return (
-                            <Card key={metric.label} className="rounded-lg border-slate-200 bg-white shadow-sm">
-                                <CardContent className="flex items-start justify-between p-4">
-                                    <div>
-                                        <p className="text-xs font-medium uppercase text-slate-500">{metric.label}</p>
-                                        <p className="mt-2 text-2xl font-semibold text-slate-950">{metric.value}</p>
-                                        <p className="mt-1 text-xs text-slate-500">{metric.detail}</p>
-                                    </div>
-                                    <div className="rounded-md border border-slate-200 bg-slate-50 p-2 text-emerald-700">
-                                        <Icon className="h-4 w-4" />
-                                    </div>
-                                </CardContent>
-                            </Card>
-                        );
-                    })}
-                </section>
-
-                <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-                    <div className="grid gap-3 lg:grid-cols-6">
-                        {pipelineSteps.map((step, index) => (
-                            <div key={step.label} className="relative">
-                                {index < pipelineSteps.length - 1 && (
-                                    <div className="absolute left-[calc(50%+28px)] top-6 hidden h-px w-[calc(100%-56px)] bg-slate-200 lg:block" />
-                                )}
-                                <div
-                                    className={cn(
-                                        "relative rounded-lg border p-3",
-                                        step.status === "complete" && "border-emerald-200 bg-emerald-50/70",
-                                        step.status === "active" && "border-blue-200 bg-blue-50/70",
-                                        step.status === "ready" && "border-slate-200 bg-slate-50"
-                                    )}
-                                >
-                                    <div className="flex items-center gap-2">
-                                        <span
-                                            className={cn(
-                                                "inline-flex h-7 w-7 items-center justify-center rounded-full border bg-white",
-                                                step.status === "complete" && "border-emerald-300 text-emerald-700",
-                                                step.status === "active" && "border-blue-300 text-blue-700",
-                                                step.status === "ready" && "border-slate-300 text-slate-500"
-                                            )}
-                                        >
-                                            <PipelineIcon status={step.status} />
-                                        </span>
-                                        <span className="text-sm font-semibold text-slate-950">{step.label}</span>
-                                    </div>
-                                    <p className="mt-3 text-xs text-slate-600">{step.detail}</p>
-                                    <p className="mt-1 text-xs font-medium text-slate-900">{step.count}</p>
-                                </div>
-                            </div>
-                        ))}
                     </div>
                 </section>
 
