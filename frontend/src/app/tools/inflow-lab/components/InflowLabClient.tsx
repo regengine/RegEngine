@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
     AlertTriangle,
     ArrowDownToLine,
@@ -26,6 +27,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import {
     Table,
     TableBody,
@@ -34,6 +36,7 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table";
+import { fetchWithCsrf } from "@/lib/fetch-with-csrf";
 import { cn } from "@/lib/utils";
 
 type RunStage = "loaded" | "generating" | "delivering" | "validating" | "complete" | "exported";
@@ -49,7 +52,7 @@ type TraceEvent = {
     product: string;
     location: string;
     timestamp: string;
-    mode: "simulation";
+    mode: "simulation" | "uploaded";
     attempts: number;
     deliveryStatus: DeliveryState;
 };
@@ -105,8 +108,48 @@ type InflowLineagePayload = {
     records?: InflowRecord[];
 };
 
+type SandboxEventEvaluation = {
+    event_index: number;
+    cte_type: string;
+    traceability_lot_code: string;
+    product_description: string;
+    kde_errors: string[];
+    rules_failed: number;
+    rules_warned: number;
+    compliant: boolean;
+};
+
+type SandboxEvaluationResult = {
+    total_events: number;
+    compliant_events: number;
+    non_compliant_events: number;
+    total_kde_errors: number;
+    total_rule_failures: number;
+    submission_blocked: boolean;
+    blocking_reasons: string[];
+    duplicate_warnings?: string[];
+    entity_warnings?: string[];
+    events: SandboxEventEvaluation[];
+};
+
 const INFLOW_API = "/api/inflow-lab";
 const REQUIRED_CTES = ["harvesting", "cooling", "initial_packing", "shipping", "receiving"];
+const SANDBOX_CTE_TYPES = [
+    "harvesting",
+    "cooling",
+    "initial_packing",
+    "first_land_based_receiving",
+    "shipping",
+    "receiving",
+    "transformation",
+];
+const FEEDER_SAMPLE_CSV = `cte_type,traceability_lot_code,product_description,quantity,unit_of_measure,location_name,timestamp,ship_from_location,ship_to_location,reference_document
+harvesting,TLC-FEED-001,Romaine Lettuce,120,cases,Valley Fresh Farms,2026-04-26T15:20:00Z,,,HARV-001
+cooling,TLC-FEED-001,Romaine Lettuce,120,cases,Salinas Cooling Hub,2026-04-26T18:12:00Z,,,COOL-001
+initial_packing,TLC-FEED-001,Romaine Lettuce,118,cases,Salinas Packhouse,2026-04-26T20:12:00Z,,,PACK-001
+shipping,TLC-FEED-001,Romaine Lettuce,118,cases,Salinas Packout Dock,2026-04-26T22:41:00Z,Salinas Packhouse,Bay Area DC,BOL-001
+receiving,TLC-FEED-001,Romaine Lettuce,118,cases,Bay Area DC,2026-04-27T02:04:00Z,Salinas Packout Dock,Bay Area DC,REC-001`;
+const FEEDER_SAVED_RUN_KEY = "regengine:inflow-lab:last-feeder-run";
 
 function servicePath(path: string) {
     return `${INFLOW_API}${path}`;
@@ -147,6 +190,28 @@ function toTraceEvent(record: InflowRecord): TraceEvent {
         attempts: record.delivery_attempts || 0,
         deliveryStatus: record.delivery_status,
     };
+}
+
+function sandboxEventToTraceEvent(event: SandboxEventEvaluation): TraceEvent {
+    return {
+        id: event.event_index + 1,
+        cte: event.cte_type,
+        lotCode: event.traceability_lot_code || `row-${event.event_index + 1}`,
+        product: event.product_description || "Uploaded traceability record",
+        location: `Uploaded row ${event.event_index + 1}`,
+        timestamp: formatServiceTime(new Date().toISOString()),
+        mode: "uploaded",
+        attempts: 1,
+        deliveryStatus: event.compliant ? "posted" : "generated",
+    };
+}
+
+function lineageByLotFromEvents(traceEvents: TraceEvent[]) {
+    return traceEvents.reduce<Record<string, LineageNode[]>>((current, event) => {
+        const lotEvents = traceEvents.filter((candidate) => candidate.lotCode === event.lotCode);
+        current[event.lotCode] = toLineage(lotEvents);
+        return current;
+    }, {});
 }
 
 function formatCteLabel(cte: string) {
@@ -210,8 +275,8 @@ function getLotReadiness(lineage: LineageNode[], lotEvents: TraceEvent[]) {
     };
 }
 
-const standaloneTabs = ["Control room", "Lots", "Lineage", "Exports", "Event log", "Diagnostics"];
-const dashboardTabs = ["Overview", "Lots", "Lineage", "Exports", "Record log", "Diagnostics"];
+const standaloneTabs = ["Control room", "Data feeder", "Lots", "Lineage", "Exports", "Event log", "Diagnostics"];
+const dashboardTabs = ["Overview", "Data feeder", "Lots", "Lineage", "Exports", "Record log", "Diagnostics"];
 
 const lotCodes = [
     "00614141000012-20260426-000001",
@@ -454,6 +519,12 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
     const [exportPreset, setExportPreset] = useState("all_records");
     const [startDate, setStartDate] = useState("2026-04-26");
     const [endDate, setEndDate] = useState("2026-04-27");
+    const [feederCsv, setFeederCsv] = useState(FEEDER_SAMPLE_CSV);
+    const [feederResult, setFeederResult] = useState<SandboxEvaluationResult | null>(null);
+    const [feederError, setFeederError] = useState<string | null>(null);
+    const [feederSavedAt, setFeederSavedAt] = useState<string | null>(null);
+    const [isFeederEvaluating, setIsFeederEvaluating] = useState(false);
+    const feederFileInputRef = useRef<HTMLInputElement>(null);
 
     const refreshService = async () => {
         const [healthPayload, statusPayload, eventsPayload] = await Promise.all([
@@ -623,6 +694,77 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
         }
     };
 
+    const evaluateFeederData = async () => {
+        if (!feederCsv.trim()) {
+            setFeederError("Paste CSV text or upload a CSV file before evaluating.");
+            return;
+        }
+
+        setIsFeederEvaluating(true);
+        setFeederError(null);
+        try {
+            const response = await fetchWithCsrf("/api/ingestion/api/v1/sandbox/evaluate", {
+                method: "POST",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify({ csv: feederCsv }),
+            });
+
+            if (!response.ok) {
+                const payload = await response.json().catch(() => ({}));
+                const detail = typeof payload.detail === "string" ? payload.detail : `Sandbox evaluation failed: ${response.status}`;
+                throw new Error(detail);
+            }
+
+            const result = (await response.json()) as SandboxEvaluationResult;
+            const evaluatedEvents = result.events.map(sandboxEventToTraceEvent);
+            setFeederResult(result);
+            setFeederSavedAt(null);
+            setServiceEvents(evaluatedEvents);
+            setServiceLineage(lineageByLotFromEvents(evaluatedEvents));
+            setServiceStatus(null);
+            setRunStage("complete");
+            setSource("sandbox-data-feeder");
+
+            const firstLot = evaluatedEvents[0]?.lotCode;
+            if (firstLot) {
+                setSelectedLot(firstLot);
+                setTraceInput(firstLot);
+            }
+        } catch (error) {
+            setFeederError(error instanceof Error ? error.message : "Could not evaluate pasted data");
+        } finally {
+            setIsFeederEvaluating(false);
+        }
+    };
+
+    const handleFeederFile = (file: File | null) => {
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = () => {
+            setFeederCsv(String(reader.result || ""));
+            setFeederResult(null);
+            setFeederSavedAt(null);
+            setFeederError(null);
+        };
+        reader.onerror = () => setFeederError("Could not read the selected CSV file.");
+        reader.readAsText(file);
+    };
+
+    const saveFeederRun = () => {
+        if (!feederResult) return;
+        const savedAt = new Date().toISOString();
+        window.localStorage.setItem(
+            FEEDER_SAVED_RUN_KEY,
+            JSON.stringify({
+                saved_at: savedAt,
+                csv: feederCsv,
+                result: feederResult,
+                source: "inflow-lab-data-feeder",
+            })
+        );
+        setFeederSavedAt(savedAt);
+    };
+
     const traceLot = async () => {
         if (traceInput) {
             setSelectedLot(traceInput);
@@ -659,7 +801,12 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
     const failedCount = serviceStatus?.stats?.delivery?.failed ?? 0;
     const totalLotCount = uniqueLots.length;
     const exceptionCount = exceptionLots.length + failedCount;
-    const validationOutcome = exceptionCount
+    const feederDefectCount = feederResult ? feederResult.total_kde_errors + feederResult.total_rule_failures : 0;
+    const validationOutcome = feederResult
+        ? feederDefectCount
+            ? `${feederDefectCount} validation issue${feederDefectCount === 1 ? "" : "s"} found`
+            : "No sandbox validation issues"
+        : exceptionCount
         ? `${exceptionCount} exception${exceptionCount === 1 ? "" : "s"} to review`
         : "No blocking exceptions";
     const exportReadyCount = exportReadyLots.length;
@@ -668,6 +815,13 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
     const lastReceivedLabel = serviceStatus?.stats?.delivery?.last_success_at
         ? formatServiceTime(serviceStatus.stats.delivery.last_success_at)
         : visibleEvents[0]?.timestamp || "No inbound records yet";
+    const feederCteCoverage = useMemo(() => {
+        const covered = new Set((feederResult?.events || []).map((event) => event.cte_type).filter(Boolean));
+        return {
+            covered: SANDBOX_CTE_TYPES.filter((cte) => covered.has(cte)),
+            missing: SANDBOX_CTE_TYPES.filter((cte) => !covered.has(cte)),
+        };
+    }, [feederResult]);
 
     return (
         <main
@@ -997,6 +1151,187 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
                                                             <a href={epcisExportHref}>EPCIS JSON</a>
                                                         </Button>
                                                     </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {activeTab === "Data feeder" && (
+                                    <div className={cn("mt-4 grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]", !isStandalone && "xl:grid-cols-[minmax(0,1fr)_340px]")}>
+                                        <div className="rounded-lg border border-slate-200 bg-white p-4">
+                                            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                                                <div>
+                                                    <p className="text-sm font-semibold text-slate-950">Paste or upload inbound CSV</p>
+                                                    <p className="mt-1 text-xs leading-5 text-slate-500">
+                                                        Uses the public stateless sandbox evaluator. Data is parsed, normalized, and checked against FSMA 204 rules without being stored or promoted to production ingestion.
+                                                    </p>
+                                                </div>
+                                                <div className="flex shrink-0 gap-2">
+                                                    <input
+                                                        ref={feederFileInputRef}
+                                                        type="file"
+                                                        accept=".csv,text/csv"
+                                                        className="hidden"
+                                                        aria-label="Upload feeder CSV"
+                                                        onChange={(event) => handleFeederFile(event.target.files?.[0] ?? null)}
+                                                    />
+                                                    <Button variant="outline" className="h-9 border-slate-300 bg-white" onClick={() => feederFileInputRef.current?.click()}>
+                                                        <Upload className="mr-2 h-4 w-4" />
+                                                        Upload CSV
+                                                    </Button>
+                                                </div>
+                                            </div>
+                                            <Textarea
+                                                value={feederCsv}
+                                                onChange={(event) => {
+                                                    setFeederCsv(event.target.value);
+                                                    setFeederResult(null);
+                                                    setFeederSavedAt(null);
+                                                    setFeederError(null);
+                                                }}
+                                                className="mt-4 min-h-[260px] resize-y border-slate-300 bg-slate-50 font-mono text-xs leading-5 text-slate-900"
+                                                spellCheck={false}
+                                                aria-label="Inbound CSV data"
+                                            />
+                                            <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                                                <p className="text-xs leading-5 text-slate-500">
+                                                    Best for ERP exports, supplier CSVs, and messy column names. The evaluator accepts up to 500 events per run.
+                                                </p>
+                                                <Button className="h-9 bg-emerald-700 text-white hover:bg-emerald-800" onClick={evaluateFeederData} disabled={isFeederEvaluating}>
+                                                    {isFeederEvaluating ? (
+                                                        <>
+                                                            <RefreshCcw className="mr-2 h-4 w-4 animate-spin" />
+                                                            Evaluating
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <Play className="mr-2 h-4 w-4" />
+                                                            Evaluate data
+                                                        </>
+                                                    )}
+                                                </Button>
+                                            </div>
+                                            {feederError && (
+                                                <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                                                    {feederError}
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        <div className="space-y-4">
+                                            <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+                                                <div className="flex items-center gap-2">
+                                                    <ClipboardList className="h-4 w-4 text-blue-700" />
+                                                    <p className="text-sm font-semibold text-slate-950">Feeder validation</p>
+                                                </div>
+                                                {feederResult ? (
+                                                    <div className="mt-4 grid gap-3">
+                                                        {[
+                                                            ["Events evaluated", `${feederResult.total_events}`],
+                                                            ["Compliant events", `${feederResult.compliant_events}`],
+                                                            ["KDE errors", `${feederResult.total_kde_errors}`],
+                                                            ["Rule failures", `${feederResult.total_rule_failures}`],
+                                                        ].map(([label, value]) => (
+                                                            <div key={label} className="flex items-center justify-between rounded-md border border-slate-200 bg-white px-3 py-2">
+                                                                <span className="text-xs text-slate-500">{label}</span>
+                                                                <strong className="text-sm text-slate-950">{value}</strong>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                ) : (
+                                                    <p className="mt-3 text-xs leading-5 text-slate-500">
+                                                        Run the feeder to replace the predetermined demo records with evaluated CSV data in the lot, lineage, exception, and record log views.
+                                                    </p>
+                                                )}
+                                            </div>
+
+                                            <div className="rounded-lg border border-slate-200 bg-white p-4">
+                                                <div className="flex items-center gap-2">
+                                                    <PackageCheck className="h-4 w-4 text-emerald-700" />
+                                                    <p className="text-sm font-semibold text-slate-950">7 CTE type coverage</p>
+                                                </div>
+                                                <p className="mt-2 text-sm text-slate-700">
+                                                    {feederResult ? `${feederCteCoverage.covered.length} of ${SANDBOX_CTE_TYPES.length} CTE types present` : "Awaiting feeder run"}
+                                                </p>
+                                                <div className="mt-3 flex flex-wrap gap-2">
+                                                    {SANDBOX_CTE_TYPES.map((cte) => {
+                                                        const covered = feederCteCoverage.covered.includes(cte);
+                                                        return (
+                                                            <Badge
+                                                                key={cte}
+                                                                variant="outline"
+                                                                className={cn(
+                                                                    "border text-[10px] uppercase tracking-wide",
+                                                                    covered ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-slate-200 bg-slate-50 text-slate-500"
+                                                                )}
+                                                            >
+                                                                {formatCteLabel(cte)}
+                                                            </Badge>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </div>
+
+                                            {feederResult?.blocking_reasons.length ? (
+                                                <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
+                                                    <div className="flex items-center gap-2">
+                                                        <AlertTriangle className="h-4 w-4 text-amber-700" />
+                                                        <p className="text-sm font-semibold text-amber-950">Blocking reasons</p>
+                                                    </div>
+                                                    <ul className="mt-3 space-y-2 text-xs leading-5 text-amber-900">
+                                                        {feederResult.blocking_reasons.slice(0, 4).map((reason) => (
+                                                            <li key={reason}>{reason}</li>
+                                                        ))}
+                                                    </ul>
+                                                </div>
+                                            ) : null}
+
+                                            <div className="rounded-lg border border-slate-200 bg-slate-950 p-4 text-white">
+                                                <div className="flex items-center gap-2">
+                                                    <Truck className="h-4 w-4 text-emerald-300" />
+                                                    <p className="text-sm font-semibold">Path to production</p>
+                                                </div>
+                                                <p className="mt-1 text-xs leading-5 text-slate-300">
+                                                    Move from free diagnosis to a monitored feed without treating sandbox rows as production evidence.
+                                                </p>
+                                                <div className="mt-4 space-y-3">
+                                                    {[
+                                                        ["1", "Diagnose free", feederResult ? `${feederResult.total_events} events evaluated` : "Evaluate CSV first"],
+                                                        ["2", "Save as test run", feederSavedAt ? `Saved ${formatServiceTime(feederSavedAt)}` : "Keep the sandbox result for handoff"],
+                                                        ["3", "Convert to import mapping", "Turn headers and CTE aliases into an import setup"],
+                                                        ["4", "Monitor live feed", "Watch connector health, failures, and exceptions"],
+                                                        ["5", "Generate evidence", "Export only authenticated, persisted records"],
+                                                    ].map(([step, title, detail]) => (
+                                                        <div key={step} className="grid grid-cols-[28px_minmax(0,1fr)] gap-3">
+                                                            <span className="flex h-7 w-7 items-center justify-center rounded-full bg-white/10 text-xs font-semibold text-emerald-200">
+                                                                {step}
+                                                            </span>
+                                                            <div>
+                                                                <p className="text-xs font-semibold text-white">{title}</p>
+                                                                <p className="mt-0.5 text-xs leading-5 text-slate-300">{detail}</p>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                                <div className="mt-4 grid gap-2">
+                                                    <Button
+                                                        className="h-9 bg-emerald-600 text-white hover:bg-emerald-700"
+                                                        onClick={saveFeederRun}
+                                                        disabled={!feederResult}
+                                                    >
+                                                        <ClipboardList className="mr-2 h-4 w-4" />
+                                                        Save test run
+                                                    </Button>
+                                                    <Button asChild variant="outline" className="h-9 border-white/20 bg-white/10 text-white hover:bg-white/15">
+                                                        <Link href="/ingest">Convert to import mapping</Link>
+                                                    </Button>
+                                                    <Button asChild variant="outline" className="h-9 border-white/20 bg-white/10 text-white hover:bg-white/15">
+                                                        <Link href="/dashboard/integrations">Monitor live feed</Link>
+                                                    </Button>
+                                                    <Button asChild variant="outline" className="h-9 border-white/20 bg-white/10 text-white hover:bg-white/15">
+                                                        <Link href="/dashboard/export-jobs">Generate evidence</Link>
+                                                    </Button>
                                                 </div>
                                             </div>
                                         </div>
