@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import {
     AlertTriangle,
     ArrowDownToLine,
+    CalendarDays,
     CheckCircle2,
     ChevronRight,
     CircleDot,
@@ -19,7 +20,9 @@ import {
     RotateCcw,
     Search,
     ShieldCheck,
+    SlidersHorizontal,
     Truck,
+    Upload,
 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
@@ -65,7 +68,7 @@ type PipelineStep = {
     status: "complete" | "active" | "ready";
 };
 
-const tabs = ["Events", "Lots", "Lineage", "Exports", "Diagnostics"];
+const tabs = ["Control room", "Lots", "Lineage", "Exports", "Event log", "Diagnostics"];
 
 const lotCodes = [
     "00614141000012-20260426-000001",
@@ -294,10 +297,18 @@ function LineageStatusIcon({ state }: { state: CteState }) {
 }
 
 export function InflowLabClient() {
-    const [activeTab, setActiveTab] = useState("Events");
+    const [activeTab, setActiveTab] = useState("Control room");
     const [selectedLot, setSelectedLot] = useState(lotCodes[0]);
     const [traceInput, setTraceInput] = useState(lotCodes[0]);
     const [runStage, setRunStage] = useState<RunStage>("complete");
+    const [tenantId, setTenantId] = useState("local-demo");
+    const [scenarioPreset, setScenarioPreset] = useState("leafy-greens");
+    const [fixture, setFixture] = useState("leafy-greens-trace");
+    const [deliveryMode, setDeliveryMode] = useState("mock");
+    const [source, setSource] = useState("codex-simulator");
+    const [exportPreset, setExportPreset] = useState("all-records");
+    const [startDate, setStartDate] = useState("2026-04-26");
+    const [endDate, setEndDate] = useState("2026-04-27");
 
     const selectedEvents = useMemo(
         () => events.filter((event) => event.lotCode === selectedLot),
@@ -384,12 +395,12 @@ export function InflowLabClient() {
         setRunStage("loaded");
         setSelectedLot(lotCodes[0]);
         setTraceInput(lotCodes[0]);
-        setActiveTab("Events");
+        setActiveTab("Control room");
     };
 
     const runPipeline = () => {
         setRunStage("generating");
-        setActiveTab("Events");
+        setActiveTab("Control room");
         window.setTimeout(() => setRunStage("delivering"), 450);
         window.setTimeout(() => setRunStage("validating"), 900);
         window.setTimeout(() => setRunStage("complete"), 1350);
@@ -416,25 +427,26 @@ export function InflowLabClient() {
     return (
         <main className="min-h-screen bg-[#f6f8f5] text-slate-950">
             <div className="mx-auto flex w-full max-w-[1480px] flex-col gap-5 px-4 py-5 sm:px-6 lg:px-8">
-                <section className="rounded-lg border border-slate-200 bg-white px-5 py-4 shadow-sm">
-                    <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                <section className="overflow-hidden rounded-xl border border-emerald-900/15 bg-slate-950 text-white shadow-sm">
+                    <div className="grid gap-0 lg:grid-cols-[minmax(0,1fr)_420px]">
+                        <div className="p-5 sm:p-6">
                         <div className="max-w-3xl">
                             <div className="flex flex-wrap items-center gap-2">
-                                <h1 className="text-2xl font-semibold tracking-normal text-slate-950 sm:text-3xl">
+                                <h1 className="text-2xl font-semibold tracking-normal text-white sm:text-3xl">
                                     RegEngine Inflow Lab
                                 </h1>
-                                <Badge className="border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-50">
+                                <Badge className="border-emerald-300/25 bg-emerald-400/10 text-emerald-200 hover:bg-emerald-400/10">
                                     {runStatusLabel}
                                 </Badge>
                             </div>
-                            <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
-                                Run a demo FSMA 204 scenario, verify lot lineage, and prepare FDA-ready export evidence.
+                            <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300">
+                                Configure an inflow source, run a mock FSMA 204 delivery, resolve lot warnings, and package export-ready evidence.
                             </p>
                         </div>
-                        <div className="flex flex-wrap gap-2">
+                        <div className="mt-5 flex flex-wrap gap-2">
                             <Button
                                 variant="outline"
-                                className="h-10 border-slate-300 bg-white text-slate-800 hover:bg-slate-50"
+                                className="h-10 border-white/20 bg-white/10 text-white hover:bg-white/15"
                                 onClick={loadScenario}
                             >
                                 <RefreshCcw className="mr-2 h-4 w-4" />
@@ -449,7 +461,7 @@ export function InflowLabClient() {
                             </Button>
                             <Button
                                 variant="outline"
-                                className="h-10 border-slate-300 bg-white text-slate-800 hover:bg-slate-50"
+                                className="h-10 border-white/20 bg-white/10 text-white hover:bg-white/15"
                                 onClick={traceLatestLot}
                             >
                                 <Search className="mr-2 h-4 w-4" />
@@ -457,7 +469,7 @@ export function InflowLabClient() {
                             </Button>
                             <Button
                                 variant="outline"
-                                className="h-10 border-slate-300 bg-white text-slate-800 hover:bg-slate-50"
+                                className="h-10 border-white/20 bg-white/10 text-white hover:bg-white/15"
                                 onClick={prepareExport}
                                 disabled={stageIndex[runStage] < 4}
                             >
@@ -465,28 +477,27 @@ export function InflowLabClient() {
                                 Prepare FDA package
                             </Button>
                         </div>
-                    </div>
+                        </div>
 
-                    <div className="mt-4 grid gap-2 text-xs text-slate-600 sm:grid-cols-2 lg:grid-cols-5">
-                        <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
-                            <span className="block font-medium text-slate-900">Tenant</span>
-                            local-demo
+                        <div className="border-t border-white/10 bg-white/[0.04] p-5 lg:border-l lg:border-t-0">
+                            <div className="grid grid-cols-2 gap-2 text-xs text-slate-300">
+                                <div className="rounded-lg border border-white/10 bg-black/20 px-3 py-2">
+                                    <span className="block font-medium text-white">Tenant</span>
+                                    {tenantId}
                         </div>
-                        <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
-                            <span className="block font-medium text-slate-900">Mode</span>
-                            Local simulation
+                                <div className="rounded-lg border border-white/10 bg-black/20 px-3 py-2">
+                                    <span className="block font-medium text-white">Delivery</span>
+                                    {deliveryMode === "mock" ? "Mock RegEngine" : "Live adapter"}
                         </div>
-                        <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
-                            <span className="block font-medium text-slate-900">Scenario</span>
-                            Leafy greens supplier
+                                <div className="rounded-lg border border-white/10 bg-black/20 px-3 py-2">
+                                    <span className="block font-medium text-white">Fixture</span>
+                                    {fixture === "leafy-greens-trace" ? "Leafy greens trace" : "Single batch"}
                         </div>
-                        <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
-                            <span className="block font-medium text-slate-900">Demo data</span>
-                            Harvest to DC receipt
+                                <div className="rounded-lg border border-white/10 bg-black/20 px-3 py-2">
+                                    <span className="block font-medium text-white">Source</span>
+                                    {source}
                         </div>
-                        <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
-                            <span className="block font-medium text-slate-900">Run state</span>
-                            {runStatusLabel}
+                            </div>
                         </div>
                     </div>
                 </section>
@@ -590,7 +601,155 @@ export function InflowLabClient() {
                                     ))}
                                 </div>
 
-                                {activeTab === "Events" && (
+                                {activeTab === "Control room" && (
+                                    <div className="mt-4 grid gap-4 xl:grid-cols-[360px_minmax(0,1fr)]">
+                                        <div className="space-y-4">
+                                            <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+                                                <div className="flex items-center gap-2">
+                                                    <SlidersHorizontal className="h-4 w-4 text-emerald-700" />
+                                                    <p className="text-sm font-semibold text-slate-950">Scenario setup</p>
+                                                </div>
+                                                <div className="mt-4 space-y-3">
+                                                    <label className="block text-xs font-medium text-slate-600">
+                                                        Tenant
+                                                        <Input value={tenantId} onChange={(event) => setTenantId(event.target.value)} className="mt-1 h-9 bg-white" />
+                                                    </label>
+                                                    <label className="block text-xs font-medium text-slate-600">
+                                                        Scenario preset
+                                                        <select value={scenarioPreset} onChange={(event) => setScenarioPreset(event.target.value)} className="mt-1 h-9 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900">
+                                                            <option value="leafy-greens">Leafy greens supplier</option>
+                                                            <option value="single-batch">Single batch receiving</option>
+                                                        </select>
+                                                    </label>
+                                                    <label className="block text-xs font-medium text-slate-600">
+                                                        Fixture
+                                                        <select value={fixture} onChange={(event) => setFixture(event.target.value)} className="mt-1 h-9 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900">
+                                                            <option value="leafy-greens-trace">Leafy greens trace</option>
+                                                            <option value="single-batch">Single batch</option>
+                                                        </select>
+                                                    </label>
+                                                    <label className="block text-xs font-medium text-slate-600">
+                                                        Delivery mode
+                                                        <select value={deliveryMode} onChange={(event) => setDeliveryMode(event.target.value)} className="mt-1 h-9 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900">
+                                                            <option value="mock">Mock RegEngine</option>
+                                                            <option value="live">Live adapter disabled</option>
+                                                        </select>
+                                                    </label>
+                                                    <label className="block text-xs font-medium text-slate-600">
+                                                        Source
+                                                        <Input value={source} onChange={(event) => setSource(event.target.value)} className="mt-1 h-9 bg-white" />
+                                                    </label>
+                                                </div>
+                                            </div>
+
+                                            <div className="rounded-lg border border-slate-200 bg-white p-4">
+                                                <div className="flex items-center gap-2">
+                                                    <Upload className="h-4 w-4 text-blue-700" />
+                                                    <p className="text-sm font-semibold text-slate-950">CSV import</p>
+                                                </div>
+                                                <p className="mt-1 text-xs leading-5 text-slate-500">Stage scheduled events or replace the demo fixture during local testing.</p>
+                                                <div className="mt-3 rounded-md border border-dashed border-slate-300 bg-slate-50 px-3 py-4 text-center text-xs text-slate-500">
+                                                    CSV file input disabled in mock preview
+                                                </div>
+                                                <Button variant="outline" className="mt-3 h-9 w-full border-slate-300 bg-white">
+                                                    Import CSV
+                                                </Button>
+                                            </div>
+                                        </div>
+
+                                        <div className="space-y-4">
+                                            <div className="rounded-lg border border-emerald-200 bg-emerald-50/70 p-4">
+                                                <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                                                    <div>
+                                                        <p className="text-sm font-semibold text-slate-950">Run command center</p>
+                                                        <p className="mt-1 text-xs leading-5 text-slate-600">Harvest, cool, pack, ship, receive, validate, and export one leafy greens scenario.</p>
+                                                    </div>
+                                                    <div className="flex flex-wrap gap-2">
+                                                        <Button className="h-9 bg-emerald-700 text-white hover:bg-emerald-800" onClick={runPipeline}>
+                                                            <Play className="mr-2 h-4 w-4" />
+                                                            Start loop
+                                                        </Button>
+                                                        <Button variant="outline" className="h-9 border-slate-300 bg-white">
+                                                            Stop
+                                                        </Button>
+                                                        <Button variant="outline" className="h-9 border-slate-300 bg-white" onClick={loadScenario}>
+                                                            Reset state
+                                                        </Button>
+                                                    </div>
+                                                </div>
+                                                <div className="mt-4 grid gap-3 md:grid-cols-3">
+                                                    {uniqueLots.map((lot) => (
+                                                        <button
+                                                            key={lot.lotCode}
+                                                            type="button"
+                                                            onClick={() => {
+                                                                setSelectedLot(lot.lotCode);
+                                                                setTraceInput(lot.lotCode);
+                                                            }}
+                                                            className={cn(
+                                                                "rounded-lg border bg-white p-3 text-left transition hover:border-emerald-300",
+                                                                lot.lotCode === selectedLot ? "border-emerald-400 shadow-sm" : "border-slate-200"
+                                                            )}
+                                                        >
+                                                            <div className="flex items-center justify-between gap-2">
+                                                                <span className="text-xs font-medium text-slate-500">{lot.product}</span>
+                                                                <LotReadinessPill ready={lot.complete} />
+                                                            </div>
+                                                            <p className="mt-2 break-all font-mono text-[11px] font-semibold text-slate-950">{lot.lotCode}</p>
+                                                            <p className="mt-2 text-xs text-slate-500">{lot.completeCount}/{lot.totalCount} CTEs captured</p>
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            </div>
+
+                                            <div className="grid gap-4 lg:grid-cols-2">
+                                                <div className="rounded-lg border border-slate-200 bg-white p-4">
+                                                    <div className="flex items-center gap-2">
+                                                        <CalendarDays className="h-4 w-4 text-slate-700" />
+                                                        <p className="text-sm font-semibold text-slate-950">Export filters</p>
+                                                    </div>
+                                                    <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                                                        <label className="block text-xs font-medium text-slate-600">
+                                                            Preset
+                                                            <select value={exportPreset} onChange={(event) => setExportPreset(event.target.value)} className="mt-1 h-9 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900">
+                                                                <option value="all-records">All records</option>
+                                                                <option value="selected-lot">Selected lot</option>
+                                                                <option value="export-ready">Export-ready only</option>
+                                                            </select>
+                                                        </label>
+                                                        <label className="block text-xs font-medium text-slate-600">
+                                                            Traceability Lot Code
+                                                            <Input value={traceInput} onChange={(event) => setTraceInput(event.target.value)} className="mt-1 h-9 bg-white text-xs" />
+                                                        </label>
+                                                        <label className="block text-xs font-medium text-slate-600">
+                                                            Start date
+                                                            <Input type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} className="mt-1 h-9 bg-white" />
+                                                        </label>
+                                                        <label className="block text-xs font-medium text-slate-600">
+                                                            End date
+                                                            <Input type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} className="mt-1 h-9 bg-white" />
+                                                        </label>
+                                                    </div>
+                                                </div>
+
+                                                <div className="rounded-lg border border-slate-200 bg-slate-950 p-4 text-white">
+                                                    <p className="text-sm font-semibold">Evidence package</p>
+                                                    <p className="mt-1 text-xs leading-5 text-slate-300">2 lots are export-ready. 1 partial lot remains visible as an exception, not silently included.</p>
+                                                    <div className="mt-4 grid grid-cols-2 gap-2">
+                                                        <Button className="h-9 bg-emerald-600 text-white hover:bg-emerald-700" onClick={prepareExport}>
+                                                            Download CSV
+                                                        </Button>
+                                                        <Button variant="outline" className="h-9 border-white/20 bg-white/10 text-white hover:bg-white/15">
+                                                            EPCIS JSON
+                                                        </Button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {activeTab === "Event log" && (
                                     <div className="mt-4">
                                         {visibleEvents.length === 0 ? (
                                             <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-8 text-center">
