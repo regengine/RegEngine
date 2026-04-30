@@ -1,7 +1,6 @@
+@import "tailwindcss";
+@config "../../tailwind.config.ts";
 @source "../**/*.{ts,tsx}";
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
 
 body[data-inflow-lab="true"] > a[href="#main-content"],
 body[data-inflow-lab="true"] nav[aria-label="Main navigation"],
