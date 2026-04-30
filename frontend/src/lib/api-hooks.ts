@@ -80,6 +80,22 @@ export async function fetchComplianceScore(tenantId: string, apiKey: string) {
     return apiFetch(`/api/v1/compliance/score/${tenantId}`, apiKey);
 }
 
+export interface WorkbenchReadinessSnapshot {
+    tenant_id: string;
+    score: number | null;
+    label: string | null;
+    run_id: string | null;
+    saved_at: string | null;
+    unresolved_fix_count: number;
+    export_eligible: boolean;
+    source: string;
+}
+
+export async function fetchWorkbenchReadinessSummary(tenantId: string, apiKey: string) {
+    const qs = new URLSearchParams({ tenant_id: tenantId }).toString();
+    return apiFetch<WorkbenchReadinessSnapshot>(`/api/v1/inflow-workbench/readiness/summary?${qs}`, apiKey);
+}
+
 // ── SOP Generator ──
 
 export interface SOPRequest {

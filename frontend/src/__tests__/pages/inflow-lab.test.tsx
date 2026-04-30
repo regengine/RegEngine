@@ -109,6 +109,46 @@ describe('Dashboard Inflow Lab', () => {
             if (url.endsWith('/api/ingestion/api/v1/sandbox/evaluate')) {
                 return jsonResponse(sandboxEvaluation);
             }
+            if (url.endsWith('/api/ingestion/api/v1/inflow-workbench/readiness/preview')) {
+                return jsonResponse({
+                    score: 94,
+                    label: 'export ready after authenticated commit',
+                    components: [],
+                });
+            }
+            if (url.endsWith('/api/ingestion/api/v1/inflow-workbench/commit-gate')) {
+                return jsonResponse({
+                    mode: 'preflight',
+                    allowed: true,
+                    export_eligible: false,
+                    reasons: ['Allowed for sandbox diagnosis only; no production evidence is created.'],
+                    next_state: 'staging',
+                });
+            }
+            if (url.endsWith('/api/ingestion/api/v1/inflow-workbench/runs')) {
+                return jsonResponse({
+                    run_id: 'run-test-001',
+                    tenant_id: 'mock-tenant',
+                    source: 'inflow-lab-data-feeder',
+                    saved_at: '2026-04-30T10:00:00.000Z',
+                    readiness: {
+                        score: 94,
+                        label: 'export ready after authenticated commit',
+                        components: [],
+                    },
+                    fix_queue: [],
+                    commit_gate: {
+                        mode: 'staging',
+                        allowed: true,
+                        export_eligible: false,
+                        reasons: ['Ready to request authenticated production commit.'],
+                        next_state: 'production_evidence',
+                    },
+                });
+            }
+            if (url.includes('/api/ingestion/api/v1/inflow-workbench/scenarios')) {
+                return jsonResponse([]);
+            }
             if (url.endsWith('/api/healthz')) {
                 return jsonResponse({ ok: true, build: { version: 'test-build' } });
             }
@@ -147,11 +187,36 @@ describe('Dashboard Inflow Lab', () => {
         expect(screen.getByText('Authenticated feed')).toBeInTheDocument();
         expect(screen.getByText('Production evidence')).toBeInTheDocument();
         expect(screen.getByText('Authenticated persisted records only')).toBeInTheDocument();
+        expect(screen.getByText('Watch the inflow machine work')).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Start machine demo' })).toBeInTheDocument();
+        expect(screen.getByText('Load a source')).toBeInTheDocument();
+        expect(screen.getByText('Run validation')).toBeInTheDocument();
+        expect(screen.getByText('Watch records post')).toBeInTheDocument();
 
         await waitFor(() => {
             expect(screen.getAllByText('Connection ready').length).toBeGreaterThan(0);
         });
         expect(screen.getAllByText('1 of 2 lots test complete').length).toBeGreaterThan(0);
+    });
+
+    it('keeps a permanent startup demo that can run the mock inflow machine and open records', async () => {
+        const user = userEvent.setup();
+        render(<DashboardInflowLabPage />);
+
+        await user.click(screen.getByRole('button', { name: 'Start machine demo' }));
+
+        await waitFor(() => {
+            expect(mockFetch).toHaveBeenCalledWith(
+                expect.stringContaining('/api/inflow-lab/api/simulate/start'),
+                expect.objectContaining({ method: 'POST' }),
+            );
+            expect(mockFetch).toHaveBeenCalledWith(
+                expect.stringContaining('/api/inflow-lab/api/simulate/stop'),
+                expect.objectContaining({ method: 'POST' }),
+            );
+        });
+        expect(screen.getByRole('button', { name: 'Record log' })).toHaveAttribute('aria-pressed', 'true');
+        expect(screen.getByText('Watch the inflow machine work')).toBeInTheDocument();
     });
 
     it('keeps tab navigation interactive and opens lineage from a selected lot', async () => {
@@ -223,6 +288,34 @@ describe('Dashboard Inflow Lab', () => {
         });
         expect(savedRun.saved_at).toEqual(expect.any(String));
         expect(window.sessionStorage.getItem('regengine:sandbox-handoff')).toBeNull();
-        expect(screen.getByText(/Saved /)).toBeInTheDocument();
+        expect(await screen.findByText(/Persisted as run-test-001/)).toBeInTheDocument();
+        expect(screen.getByText('Backend readiness')).toBeInTheDocument();
+    });
+
+    it('surfaces the readiness score, fix queue, scenario library, and supplier readiness loop', async () => {
+        const user = userEvent.setup();
+        render(<DashboardInflowLabPage />);
+
+        expect(await screen.findByText('Readiness score')).toBeInTheDocument();
+        expect(screen.getByText('Traceability Readiness Score')).toBeInTheDocument();
+
+        await user.click(screen.getByRole('button', { name: 'Fix queue' }));
+        expect(screen.getByText('Commit gate')).toBeInTheDocument();
+        expect(screen.getByText(/Green Leaf Lettuce missing KDE evidence/i)).toBeInTheDocument();
+
+        await user.click(screen.getByRole('button', { name: 'Scenarios' }));
+        expect(screen.getByText('Replay and regression testing')).toBeInTheDocument();
+        expect(screen.getByText('Complete romaine lettuce flow')).toBeInTheDocument();
+        expect(screen.getByText('Missing shipping destination')).toBeInTheDocument();
+
+        const loadScenarioButtons = screen.getAllByRole('button', { name: 'Load scenario' });
+        await user.click(loadScenarioButtons[1]);
+        expect(screen.getByRole('button', { name: 'Data feeder' })).toHaveAttribute('aria-pressed', 'true');
+        expect((screen.getByLabelText('Inbound CSV data') as HTMLTextAreaElement).value).toContain('TLC-FEED-002');
+
+        await user.click(screen.getByRole('button', { name: 'Suppliers' }));
+        expect(screen.getByText('Supplier readiness')).toBeInTheDocument();
+        expect(screen.getByText(/Network average/i)).toBeInTheDocument();
+        expect(screen.getByText('Valley Fresh Farms')).toBeInTheDocument();
     });
 });

@@ -161,7 +161,53 @@ type FeederRemediationStep = {
     detail: string;
 };
 
+type FixQueueItem = {
+    id: string;
+    title: string;
+    owner: string;
+    status: "open" | "waiting" | "corrected" | "accepted";
+    severity: "blocked" | "warning" | "info";
+    impact: string;
+    source: string;
+};
+
+type WorkbenchScenario = {
+    id: string;
+    tenant_id?: string;
+    name: string;
+    outcome: string;
+    records: string;
+    csv: string;
+    created_at?: string;
+    built_in?: boolean;
+};
+
+type ReadinessSummary = {
+    score: number;
+    label: string;
+    components: { id: string; label: string; score: number; detail: string }[];
+};
+
+type CommitGateDecision = {
+    mode: "simulation" | "preflight" | "staging" | "production_evidence";
+    allowed: boolean;
+    export_eligible: boolean;
+    reasons: string[];
+    next_state: string;
+};
+
+type WorkbenchRunResponse = {
+    run_id: string;
+    tenant_id: string;
+    source: string;
+    readiness: ReadinessSummary;
+    fix_queue: FixQueueItem[];
+    commit_gate: CommitGateDecision;
+    saved_at: string;
+};
+
 const INFLOW_API = "/api/inflow-lab";
+const WORKBENCH_API = "/api/ingestion/api/v1/inflow-workbench";
 const REQUIRED_CTES = ["harvesting", "cooling", "initial_packing", "shipping", "receiving"];
 const SANDBOX_CTE_TYPES = [
     "harvesting",
@@ -178,7 +224,41 @@ cooling,TLC-FEED-001,Romaine Lettuce,120,cases,Salinas Cooling Hub,2026-04-26T18
 initial_packing,TLC-FEED-001,Romaine Lettuce,118,cases,Salinas Packhouse,2026-04-26T20:12:00Z,,,PACK-001
 shipping,TLC-FEED-001,Romaine Lettuce,118,cases,Salinas Packout Dock,2026-04-26T22:41:00Z,Salinas Packhouse,Bay Area DC,BOL-001
 receiving,TLC-FEED-001,Romaine Lettuce,118,cases,Bay Area DC,2026-04-27T02:04:00Z,Salinas Packout Dock,Bay Area DC,REC-001`;
+const MISSING_DESTINATION_CSV = `cte_type,traceability_lot_code,product_description,quantity,unit_of_measure,location_name,timestamp,ship_from_location,ship_to_location,reference_document
+harvesting,TLC-FEED-002,Romaine Lettuce,104,cases,Valley Fresh Farms,2026-04-26T15:20:00Z,,,HARV-002
+cooling,TLC-FEED-002,Romaine Lettuce,104,cases,Salinas Cooling Hub,2026-04-26T18:12:00Z,,,COOL-002
+initial_packing,TLC-FEED-002,Romaine Lettuce,103,cases,Salinas Packhouse,2026-04-26T20:12:00Z,,,PACK-002
+shipping,TLC-FEED-002,Romaine Lettuce,103,cases,Salinas Packout Dock,2026-04-26T22:41:00Z,Salinas Packhouse,,BOL-002
+receiving,TLC-FEED-002,Romaine Lettuce,103,cases,,2026-04-27T02:04:00Z,Salinas Packout Dock,,`;
+const BROKEN_LINEAGE_CSV = `cte_type,traceability_lot_code,product_description,quantity,unit_of_measure,location_name,timestamp,ship_from_location,ship_to_location,reference_document
+harvesting,TLC-FEED-003,Spring Mix,220,cases,Desert Bloom Farm,2026-04-26T14:43:00Z,,,HARV-003
+cooling,TLC-FEED-003,Spring Mix,220,cases,Imperial Pre-Cool Facility,2026-04-26T17:51:00Z,,,COOL-003
+shipping,TLC-FEED-003,Spring Mix,218,cases,Imperial Packout Dock,2026-04-26T23:03:00Z,Imperial Packhouse,Los Angeles DC,`;
 const FEEDER_SAVED_RUN_KEY = "regengine:inflow-lab:last-feeder-run";
+
+const scenarioLibrary: WorkbenchScenario[] = [
+    {
+        id: "complete-romaine-flow",
+        name: "Complete romaine lettuce flow",
+        outcome: "Export-ready full chain",
+        records: "5 CTE records",
+        csv: FEEDER_SAMPLE_CSV,
+    },
+    {
+        id: "missing-shipping-destination",
+        name: "Missing shipping destination",
+        outcome: "Blocked shipping KDE",
+        records: "5 CTE records",
+        csv: MISSING_DESTINATION_CSV,
+    },
+    {
+        id: "broken-lineage",
+        name: "Transformation-style broken lineage",
+        outcome: "Incomplete lot chain",
+        records: "3 CTE records",
+        csv: BROKEN_LINEAGE_CSV,
+    },
+];
 
 function servicePath(path: string) {
     return `${INFLOW_API}${path}`;
@@ -193,6 +273,23 @@ async function inflowJson<T>(path: string, init?: RequestInit): Promise<T> {
     if (!response.ok) {
         const payload = await response.json().catch(() => ({}));
         throw new Error(payload.error || payload.detail || `Inflow Lab request failed: ${response.status}`);
+    }
+    return response.json();
+}
+
+async function workbenchJson<T>(path: string, init?: RequestInit): Promise<T> {
+    const headers = new Headers(init?.headers);
+    if (!headers.has("content-type")) {
+        headers.set("content-type", "application/json");
+    }
+    const response = await fetchWithCsrf(`${WORKBENCH_API}${path}`, {
+        cache: "no-store",
+        ...init,
+        headers,
+    });
+    if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload.error || payload.detail || `Inflow Workbench request failed: ${response.status}`);
     }
     return response.json();
 }
@@ -360,8 +457,75 @@ function buildFeederRemediationPlan(result: SandboxEvaluationResult): FeederReme
     return steps;
 }
 
-const standaloneTabs = ["Control room", "Data feeder", "Lots", "Lineage", "Exports", "Event log", "Diagnostics"];
-const dashboardTabs = ["Overview", "Data feeder", "Lots", "Lineage", "Exports", "Record log", "Diagnostics"];
+function buildFixQueue(result: SandboxEvaluationResult | null, lotSummaries: {
+    lotCode: string;
+    product: string;
+    missingCtes: string[];
+    readiness: ReturnType<typeof getLotReadiness>;
+}[]): FixQueueItem[] {
+    const items: FixQueueItem[] = [];
+
+    lotSummaries
+        .filter((lot) => !lot.readiness.exportReady)
+        .forEach((lot) => {
+            items.push({
+                id: `lot-${lot.lotCode}`,
+                title: lot.missingCtes.length
+                    ? `${lot.product} missing KDE evidence for ${lot.missingCtes.join(", ")}`
+                    : `${lot.product} needs delivery review before evidence handoff`,
+                owner: lot.readiness.state === "blocked" ? "Integration owner" : "Operations analyst",
+                status: lot.readiness.state === "blocked" ? "open" : "waiting",
+                severity: lot.readiness.state === "blocked" ? "blocked" : "warning",
+                impact: "Excluded from export-ready counts until lineage and delivery are complete.",
+                source: lot.lotCode,
+            });
+        });
+
+    result?.events
+        .filter((event) => !event.compliant || event.kde_errors.length || event.rules_failed > 0)
+        .slice(0, 5)
+        .forEach((event) => {
+            const firstDefect = event.kde_errors[0] || event.blocking_defects?.[0]?.rule_title || "failed rule evaluation";
+            items.push({
+                id: `row-${event.event_index}`,
+                title: `Row ${event.event_index + 1} ${event.cte_type} needs ${firstDefect}`,
+                owner: "Source data owner",
+                status: result.submission_blocked ? "open" : "waiting",
+                severity: result.submission_blocked ? "blocked" : "warning",
+                impact: event.blocking_defects?.[0]?.remediation || "Correct the source record and rerun sandbox validation.",
+                source: event.traceability_lot_code || `row-${event.event_index + 1}`,
+            });
+        });
+
+    result?.blocking_reasons.slice(0, 3).forEach((reason, index) => {
+        items.push({
+            id: `blocking-${index}`,
+            title: reason,
+            owner: "Implementation",
+            status: "open",
+            severity: "blocked",
+            impact: "Commit gate stays closed until this blocker is resolved.",
+            source: "Sandbox evaluator",
+        });
+    });
+
+    if (result?.duplicate_warnings?.length) {
+        items.push({
+            id: "duplicate-risk",
+            title: `${result.duplicate_warnings.length} duplicate or idempotency risks need review`,
+            owner: "Integration owner",
+            status: "waiting",
+            severity: "warning",
+            impact: "Duplicate records can weaken audit trust and supplier feed quality.",
+            source: "Sandbox evaluator",
+        });
+    }
+
+    return items.slice(0, 8);
+}
+
+const standaloneTabs = ["Control room", "Data feeder", "Fix queue", "Scenarios", "Suppliers", "Lots", "Lineage", "Exports", "Event log", "Diagnostics"];
+const dashboardTabs = ["Overview", "Data feeder", "Fix queue", "Scenarios", "Suppliers", "Lots", "Lineage", "Exports", "Record log", "Diagnostics"];
 
 const lotCodes = [
     "00614141000012-20260426-000001",
@@ -609,6 +773,13 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
     const [feederError, setFeederError] = useState<string | null>(null);
     const [feederSavedAt, setFeederSavedAt] = useState<string | null>(null);
     const [isFeederEvaluating, setIsFeederEvaluating] = useState(false);
+    const [activeScenarioId, setActiveScenarioId] = useState(scenarioLibrary[0].id);
+    const [workbenchScenarios, setWorkbenchScenarios] = useState<WorkbenchScenario[]>(scenarioLibrary);
+    const [backendReadiness, setBackendReadiness] = useState<ReadinessSummary | null>(null);
+    const [backendFixQueue, setBackendFixQueue] = useState<FixQueueItem[]>([]);
+    const [commitGateDecision, setCommitGateDecision] = useState<CommitGateDecision | null>(null);
+    const [workbenchRunId, setWorkbenchRunId] = useState<string | null>(null);
+    const [workbenchError, setWorkbenchError] = useState<string | null>(null);
     const feederFileInputRef = useRef<HTMLInputElement>(null);
 
     const refreshService = async () => {
@@ -665,6 +836,15 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
             document.body.dataset.inflowLab = "true";
         }
         refreshService().catch((error) => setServiceError(error instanceof Error ? error.message : "Inflow Lab service unavailable"));
+        workbenchJson<WorkbenchScenario[]>(`/scenarios?tenant_id=${encodeURIComponent(tenantId)}`)
+            .then((scenarios) => {
+                if (scenarios.length) {
+                    setWorkbenchScenarios(scenarios);
+                }
+            })
+            .catch(() => {
+                setWorkbenchScenarios(scenarioLibrary);
+            });
         return () => {
             if (isStandalone) {
                 delete document.body.dataset.inflowLab;
@@ -818,6 +998,8 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
             const evaluatedEvents = result.events.map(sandboxEventToTraceEvent);
             setFeederResult(result);
             setFeederSavedAt(null);
+            setWorkbenchRunId(null);
+            setWorkbenchError(null);
             setServiceEvents(evaluatedEvents);
             setServiceLineage(lineageByLotFromEvents(evaluatedEvents));
             setServiceStatus(null);
@@ -828,6 +1010,37 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
             if (firstLot) {
                 setSelectedLot(firstLot);
                 setTraceInput(firstLot);
+            }
+
+            try {
+                const [readiness, gate] = await Promise.all([
+                    workbenchJson<ReadinessSummary>("/readiness/preview", {
+                        method: "POST",
+                        body: JSON.stringify(result),
+                    }),
+                    workbenchJson<CommitGateDecision>("/commit-gate", {
+                        method: "POST",
+                        body: JSON.stringify({
+                            mode: "preflight",
+                            tenant_id: tenantId || "default",
+                            result,
+                            authenticated: false,
+                            persisted: false,
+                            provenance_attached: false,
+                        }),
+                    }),
+                ]);
+                setBackendReadiness(typeof readiness.score === "number" ? readiness : null);
+                setCommitGateDecision(Array.isArray(gate.reasons) ? gate : null);
+                setBackendFixQueue([]);
+            } catch (workbenchIssue) {
+                setBackendReadiness(null);
+                setCommitGateDecision(null);
+                setWorkbenchError(
+                    workbenchIssue instanceof Error
+                        ? `Workbench preview unavailable: ${workbenchIssue.message}`
+                        : "Workbench preview unavailable"
+                );
             }
         } catch (error) {
             setFeederError(error instanceof Error ? error.message : "Could not evaluate pasted data");
@@ -844,12 +1057,31 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
             setFeederResult(null);
             setFeederSavedAt(null);
             setFeederError(null);
+            setBackendReadiness(null);
+            setBackendFixQueue([]);
+            setCommitGateDecision(null);
+            setWorkbenchRunId(null);
         };
         reader.onerror = () => setFeederError("Could not read the selected CSV file.");
         reader.readAsText(file);
     };
 
-    const saveFeederRun = () => {
+    const loadFeederScenario = (scenarioId: string) => {
+        const scenario = workbenchScenarios.find((item) => item.id === scenarioId) || scenarioLibrary.find((item) => item.id === scenarioId);
+        if (!scenario) return;
+        setActiveScenarioId(scenario.id);
+        setFeederCsv(scenario.csv);
+        setFeederResult(null);
+        setFeederSavedAt(null);
+        setFeederError(null);
+        setBackendReadiness(null);
+        setBackendFixQueue([]);
+        setCommitGateDecision(null);
+        setWorkbenchRunId(null);
+        setActiveTab("Data feeder");
+    };
+
+    const saveFeederRun = async () => {
         if (!feederResult) return;
         const savedAt = new Date().toISOString();
         window.localStorage.setItem(
@@ -862,6 +1094,40 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
             })
         );
         setFeederSavedAt(savedAt);
+        setWorkbenchError(null);
+
+        try {
+            const run = await workbenchJson<WorkbenchRunResponse>("/runs", {
+                method: "POST",
+                body: JSON.stringify({
+                    tenant_id: tenantId || "default",
+                    source: "inflow-lab-data-feeder",
+                    csv: feederCsv,
+                    result: feederResult,
+                }),
+            });
+            if (run.run_id) {
+                setWorkbenchRunId(run.run_id);
+            }
+            if (run.readiness && typeof run.readiness.score === "number") {
+                setBackendReadiness(run.readiness);
+            }
+            if (Array.isArray(run.fix_queue)) {
+                setBackendFixQueue(run.fix_queue);
+            }
+            if (run.commit_gate && Array.isArray(run.commit_gate.reasons)) {
+                setCommitGateDecision(run.commit_gate);
+            }
+            if (run.saved_at) {
+                setFeederSavedAt(run.saved_at);
+            }
+        } catch (error) {
+            setWorkbenchError(
+                error instanceof Error
+                    ? `Saved locally; backend workbench save unavailable: ${error.message}`
+                    : "Saved locally; backend workbench save unavailable"
+            );
+        }
     };
 
     const traceLot = async () => {
@@ -889,6 +1155,14 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
     const prepareExport = () => {
         setRunStage("exported");
         setActiveTab("Exports");
+    };
+
+    const startMachineDemo = async () => {
+        if (visibleEvents.length === 0) {
+            await loadScenario();
+        }
+        await runPipeline();
+        setActiveTab(isStandalone ? "Event log" : "Record log");
     };
 
     const csvExportHref = `${servicePath(`/api/mock/regengine/export/fda-request?preset=${exportPreset}&traceability_lot_code=${encodeURIComponent(traceInput)}&start_date=${startDate}&end_date=${endDate}`)}`;
@@ -925,6 +1199,72 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
     }, [feederResult]);
     const feederDiagnosis = useMemo(() => (feederResult ? summarizeFeederDiagnosis(feederResult) : null), [feederResult]);
     const feederRemediationPlan = useMemo(() => (feederResult ? buildFeederRemediationPlan(feederResult) : []), [feederResult]);
+    const readinessScore = useMemo(() => {
+        if (backendReadiness) return backendReadiness.score;
+        if (totalLotCount === 0) return 0;
+        const lotCoverage = exportReadyLots.length / totalLotCount;
+        const selectedCoverage = selectedLineage.length ? selectedCompleteCount / selectedLineage.length : 0;
+        const deliveryTotal = Math.max(1, postedCount + failedCount + generatedOnlyCount);
+        const deliveryQuality = postedCount / deliveryTotal;
+        const feederQuality = feederResult
+            ? feederResult.total_events > 0
+                ? feederResult.compliant_events / feederResult.total_events
+                : 0
+            : exceptionCount
+            ? 0.72
+            : 1;
+
+        return Math.max(
+            0,
+            Math.min(
+                100,
+                Math.round(lotCoverage * 36 + selectedCoverage * 18 + deliveryQuality * 22 + feederQuality * 18 + (engineConnected ? 6 : 0))
+            )
+        );
+    }, [
+        engineConnected,
+        backendReadiness,
+        exceptionCount,
+        exportReadyLots.length,
+        failedCount,
+        feederResult,
+        generatedOnlyCount,
+        postedCount,
+        selectedCompleteCount,
+        selectedLineage.length,
+        totalLotCount,
+    ]);
+    const fixQueue = useMemo(
+        () => (backendFixQueue.length ? backendFixQueue : buildFixQueue(feederResult, uniqueLots)),
+        [backendFixQueue, feederResult, uniqueLots]
+    );
+    const unresolvedFixCount = fixQueue.filter((item) => item.status === "open" || item.status === "waiting").length;
+    const supplierReadiness = useMemo(
+        () => [
+            {
+                name: "Valley Fresh Farms",
+                status: exportReadyCount > 0 ? "Passing validation" : "Sample received",
+                score: Math.max(58, readinessScore - 3),
+                blocker: exceptionLots.length ? "Waiting on missing CTE handoffs" : "No open blockers",
+            },
+            {
+                name: "FreshPack Central",
+                status: feederResult ? (feederResult.submission_blocked ? "Sample received" : "Mapping configured") : "Invited",
+                score: feederResult ? Math.max(35, Math.round((feederResult.compliant_events / Math.max(1, feederResult.total_events)) * 100)) : 44,
+                blocker: feederResult?.submission_blocked ? "Sandbox blockers need correction" : "Mapping profile not promoted",
+            },
+            {
+                name: "Bay Area DC",
+                status: selectedIsExportReady ? "Export ready" : "Production feed active",
+                score: Math.min(98, readinessScore + 5),
+                blocker: selectedIsExportReady ? "No open blockers" : "Selected lot needs complete lineage",
+            },
+        ],
+        [exceptionLots.length, exportReadyCount, feederResult, readinessScore, selectedIsExportReady]
+    );
+    const supplierAverageScore = Math.round(
+        supplierReadiness.reduce((total, supplier) => total + supplier.score, 0) / Math.max(1, supplierReadiness.length)
+    );
     const activeDataBoundary = feederResult ? "Public sandbox diagnosis" : serviceEvents.length ? "Mock Inflow Lab feed" : "Bundled mock fixture";
     const boundarySteps = [
         {
@@ -946,6 +1286,35 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
             label: "Production evidence",
             value: "Authenticated persisted records only",
             tone: "border-emerald-200 bg-emerald-50 text-emerald-950",
+        },
+    ];
+    const machineDemoSteps = [
+        {
+            label: "Load a source",
+            detail: visibleEvents.length > 0 ? `${visibleEvents.length} test records are loaded` : "Seed the mock leafy-greens feed",
+            state: visibleEvents.length > 0 ? "complete" : "active",
+        },
+        {
+            label: "Run validation",
+            detail: runStage === "generating" || runStage === "delivering" ? "Inbound records are moving" : validationOutcome,
+            state: runStage === "loaded" ? "pending" : runStage === "generating" || runStage === "delivering" ? "active" : "complete",
+        },
+        {
+            label: "Watch records post",
+            detail: `${postedCount} accepted, ${exceptionCount} exception${exceptionCount === 1 ? "" : "s"}`,
+            state: postedCount > 0 ? "complete" : "pending",
+        },
+        {
+            label: "Trace a lot",
+            detail: selectedReadiness.exportReady
+                ? "Selected lot has a complete test chain"
+                : "Selected lot shows the missing handoffs",
+            state: selectedLot ? "complete" : "pending",
+        },
+        {
+            label: "Preview handoff",
+            detail: "Mock filters only; production evidence stays authenticated",
+            state: runStage === "exported" ? "complete" : "pending",
         },
     ];
 
@@ -1070,10 +1439,14 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
                                     </Button>
                                 </div>
                             </div>
-                            <div className="grid min-w-0 gap-2 sm:grid-cols-3 lg:min-w-[480px]">
+                            <div className="grid min-w-0 gap-2 sm:grid-cols-4 lg:min-w-[620px]">
                                 <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
                                     <span className="block text-xs font-medium text-slate-500">Last inbound record</span>
                                     <strong className="mt-1 block text-sm text-slate-950">{lastReceivedLabel}</strong>
+                                </div>
+                                <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                                    <span className="block text-xs font-medium text-slate-500">Readiness score</span>
+                                    <strong className="mt-1 block text-sm text-slate-950">{readinessScore}/100</strong>
                                 </div>
                                 <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
                                     <span className="block text-xs font-medium text-slate-500">Validation outcome</span>
@@ -1168,7 +1541,7 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
 
                                 {activeTab === "Overview" && (
                                     <div className={cn("mt-4", isStandalone ? "space-y-4" : "space-y-3")}>
-                                        <div className={cn("grid lg:grid-cols-3", isStandalone ? "gap-4" : "gap-3")}>
+                                        <div className={cn("grid lg:grid-cols-4", isStandalone ? "gap-4" : "gap-3")}>
                                             <div className={cn("rounded-lg border border-slate-200 bg-white", isStandalone ? "p-4" : "p-3")}>
                                                 <div className="flex items-center gap-2">
                                                     <CheckCircle2 className={cn("h-4 w-4", engineConnected ? "text-emerald-700" : "text-amber-600")} />
@@ -1177,6 +1550,17 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
                                                 <p className="mt-2 text-sm text-slate-700">{connectionLabel}</p>
                                                 <p className="mt-1 text-xs leading-5 text-slate-500">
                                                     Test submissions are routed through the Inflow Lab gateway and remain outside production ingestion.
+                                                </p>
+                                            </div>
+
+                                            <div className={cn("rounded-lg border border-blue-200 bg-blue-50/70", isStandalone ? "p-4" : "p-3")}>
+                                                <div className="flex items-center gap-2">
+                                                    <Database className="h-4 w-4 text-blue-700" />
+                                                    <p className="text-sm font-semibold text-slate-950">Traceability Readiness Score</p>
+                                                </div>
+                                                <p className="mt-2 text-2xl font-semibold text-slate-950">{readinessScore}/100</p>
+                                                <p className="mt-1 text-xs leading-5 text-slate-500">
+                                                    Blends KDE completeness, CTE lifecycle coverage, delivery quality, sandbox pass rate, and connection health.
                                                 </p>
                                             </div>
 
@@ -1340,6 +1724,10 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
                                                     setFeederResult(null);
                                                     setFeederSavedAt(null);
                                                     setFeederError(null);
+                                                    setBackendReadiness(null);
+                                                    setBackendFixQueue([]);
+                                                    setCommitGateDecision(null);
+                                                    setWorkbenchRunId(null);
                                                 }}
                                                 className="mt-4 min-h-[260px] resize-y border-slate-300 bg-slate-50 font-mono text-xs leading-5 text-slate-900"
                                                 spellCheck={false}
@@ -1368,6 +1756,11 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
                                                     {feederError}
                                                 </div>
                                             )}
+                                            {workbenchError && (
+                                                <div className="mt-3 rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-700">
+                                                    {workbenchError}
+                                                </div>
+                                            )}
                                         </div>
 
                                         <div className="space-y-4">
@@ -1389,6 +1782,15 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
                                                                 <strong className="text-sm text-slate-950">{value}</strong>
                                                             </div>
                                                         ))}
+                                                        {backendReadiness && (
+                                                            <div className="rounded-md border border-blue-200 bg-blue-50 px-3 py-2">
+                                                                <div className="flex items-center justify-between">
+                                                                    <span className="text-xs text-blue-700">Backend readiness</span>
+                                                                    <strong className="text-sm text-blue-700">{backendReadiness.score}/100</strong>
+                                                                </div>
+                                                                <p className="mt-1 text-[11px] leading-4 text-blue-700">{backendReadiness.label}</p>
+                                                            </div>
+                                                        )}
                                                     </div>
                                                 ) : (
                                                     <p className="mt-3 text-xs leading-5 text-slate-500">
@@ -1502,7 +1904,7 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
                                                 <div className="mt-4 space-y-3">
                                                     {[
                                                         ["1", "Diagnose free", feederResult ? `${feederResult.total_events} events evaluated` : "Evaluate CSV first"],
-                                                        ["2", "Save as test run", feederSavedAt ? `Saved ${formatServiceTime(feederSavedAt)}` : "Keep the sandbox result for handoff"],
+                                                        ["2", "Save as test run", workbenchRunId ? `Persisted as ${workbenchRunId}` : feederSavedAt ? `Saved ${formatServiceTime(feederSavedAt)}` : "Keep the sandbox result for handoff"],
                                                         ["3", "Convert to import mapping", "Turn headers and CTE aliases into an import setup"],
                                                         ["4", "Monitor live feed", "Watch connector health, failures, and exceptions"],
                                                         ["5", "Generate production evidence", "Use authenticated persisted records only"],
@@ -1538,6 +1940,159 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
                                                     </Button>
                                                 </div>
                                             </div>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {activeTab === "Fix queue" && (
+                                    <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
+                                        <div className="rounded-lg border border-slate-200 bg-white p-4">
+                                            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                                                <div>
+                                                    <p className="text-sm font-semibold text-slate-950">Fix queue</p>
+                                                    <p className="mt-1 text-xs leading-5 text-slate-500">
+                                                        Every failed validation, incomplete lot, and commit-gate blocker becomes work that can be corrected and replayed through Inflow.
+                                                    </p>
+                                                </div>
+                                                <Badge className={cn("border", unresolvedFixCount ? "border-amber-200 bg-amber-50 text-amber-800" : "border-emerald-200 bg-emerald-50 text-emerald-700")}>
+                                                    {unresolvedFixCount} active
+                                                </Badge>
+                                            </div>
+                                            <div className="mt-4 space-y-3">
+                                                {fixQueue.length === 0 ? (
+                                                    <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4">
+                                                        <p className="text-sm font-semibold text-emerald-900">No open fixes in the current run</p>
+                                                        <p className="mt-1 text-xs leading-5 text-emerald-800">
+                                                            Ready lots can move to authenticated import mapping. Sandbox and mock records still stay outside production evidence.
+                                                        </p>
+                                                    </div>
+                                                ) : (
+                                                    fixQueue.map((item) => (
+                                                        <div key={item.id} className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                                                            <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                                                                <div className="min-w-0">
+                                                                    <p className="text-sm font-semibold text-slate-950">{item.title}</p>
+                                                                    <p className="mt-1 text-xs leading-5 text-slate-500">{item.impact}</p>
+                                                                </div>
+                                                                <Badge
+                                                                    variant="outline"
+                                                                    className={cn(
+                                                                        "shrink-0 border",
+                                                                        item.severity === "blocked"
+                                                                            ? "border-amber-300 bg-amber-50 text-amber-800"
+                                                                            : "border-blue-200 bg-blue-50 text-blue-700"
+                                                                    )}
+                                                                >
+                                                                    {item.severity}
+                                                                </Badge>
+                                                            </div>
+                                                            <div className="mt-3 grid gap-2 text-xs sm:grid-cols-3">
+                                                                <span className="rounded-md bg-white px-2 py-1 text-slate-600">Owner: {item.owner}</span>
+                                                                <span className="rounded-md bg-white px-2 py-1 text-slate-600">Status: {item.status}</span>
+                                                                <span className="rounded-md bg-white px-2 py-1 text-slate-600">Source: {item.source}</span>
+                                                            </div>
+                                                        </div>
+                                                    ))
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        <div className="rounded-lg border border-slate-200 bg-slate-950 p-4 text-white">
+                                            <p className="text-sm font-semibold">Commit gate</p>
+                                            <p className="mt-1 text-xs leading-5 text-slate-300">
+                                                Production evidence remains closed until records are authenticated, persisted, provenance-tagged, and export-eligible.
+                                            </p>
+                                            <div className="mt-4 space-y-2">
+                                                {[
+                                                    ["Simulation", "Mock and scenario data only"],
+                                                    ["Preflight", feederResult ? "Sandbox result available" : "Awaiting sandbox evaluation"],
+                                                    ["Staging", feederSavedAt ? "Saved test run ready for mapping" : "Save a test run before mapping"],
+                                                    [
+                                                        "Production evidence",
+                                                        commitGateDecision
+                                                            ? commitGateDecision.reasons[0]
+                                                            : unresolvedFixCount
+                                                            ? "Blocked by active fixes"
+                                                            : "Ready for authenticated import path",
+                                                    ],
+                                                ].map(([label, value]) => (
+                                                    <div key={label} className="rounded-md border border-white/10 bg-white/5 px-3 py-2">
+                                                        <p className="text-xs font-semibold text-white">{label}</p>
+                                                        <p className="mt-0.5 text-[11px] leading-4 text-slate-300">{value}</p>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {activeTab === "Scenarios" && (
+                                    <div className="mt-4 grid gap-4 lg:grid-cols-3">
+                                        {workbenchScenarios.map((scenario) => (
+                                            <div
+                                                key={scenario.id}
+                                                className={cn(
+                                                    "rounded-lg border bg-white p-4",
+                                                    activeScenarioId === scenario.id ? "border-emerald-300 shadow-sm" : "border-slate-200"
+                                                )}
+                                            >
+                                                <div className="flex items-start justify-between gap-3">
+                                                    <FileSpreadsheet className="h-5 w-5 text-blue-700" />
+                                                    <Badge variant="outline" className="border-slate-200 bg-slate-50 text-slate-600">
+                                                        {scenario.records}
+                                                    </Badge>
+                                                </div>
+                                                <p className="mt-3 text-sm font-semibold text-slate-950">{scenario.name}</p>
+                                                <p className="mt-1 text-xs leading-5 text-slate-500">{scenario.outcome}</p>
+                                                <Button
+                                                    variant={activeScenarioId === scenario.id ? "default" : "outline"}
+                                                    className={cn(
+                                                        "mt-4 h-9 w-full",
+                                                        activeScenarioId === scenario.id
+                                                            ? "bg-emerald-700 text-white hover:bg-emerald-800"
+                                                            : "border-slate-300 bg-white"
+                                                    )}
+                                                    onClick={() => loadFeederScenario(scenario.id)}
+                                                >
+                                                    <Play className="mr-2 h-4 w-4" />
+                                                    Load scenario
+                                                </Button>
+                                            </div>
+                                        ))}
+                                        <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 lg:col-span-3">
+                                            <p className="text-sm font-semibold text-slate-950">Replay and regression testing</p>
+                                            <p className="mt-1 text-xs leading-5 text-slate-500">
+                                                Scenarios are reusable preflight inputs for demos, supplier onboarding, implementation training, and contract regression checks before rules or mappings change.
+                                            </p>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {activeTab === "Suppliers" && (
+                                    <div className="mt-4">
+                                        <div className="mb-3 rounded-lg border border-slate-200 bg-slate-50 p-4">
+                                            <p className="text-sm font-semibold text-slate-950">Supplier readiness</p>
+                                            <p className="mt-1 text-xs leading-5 text-slate-500">
+                                                Supplier state uses sample validation, mapping progress, repeated fixes, and export-ready lots to show who is blocking readiness.
+                                            </p>
+                                            <p className="mt-3 text-sm font-semibold text-slate-950">Network average {supplierAverageScore}/100</p>
+                                        </div>
+                                        <div className="grid gap-3 lg:grid-cols-3">
+                                            {supplierReadiness.map((supplier) => (
+                                                <div key={supplier.name} className="rounded-lg border border-slate-200 bg-white p-4">
+                                                    <div className="flex items-start justify-between gap-3">
+                                                        <div>
+                                                            <p className="text-sm font-semibold text-slate-950">{supplier.name}</p>
+                                                            <p className="mt-1 text-xs text-slate-500">{supplier.status}</p>
+                                                        </div>
+                                                        <span className="text-lg font-semibold text-slate-950">{supplier.score}</span>
+                                                    </div>
+                                                    <div className="mt-3 h-2 rounded-full bg-slate-100">
+                                                        <div className="h-2 rounded-full bg-emerald-600" style={{ width: `${supplier.score}%` }} />
+                                                    </div>
+                                                    <p className="mt-3 text-xs leading-5 text-slate-500">{supplier.blocker}</p>
+                                                </div>
+                                            ))}
                                         </div>
                                     </div>
                                 )}
@@ -1987,6 +2542,67 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
                     </Card>
 
                     <aside className="flex flex-col gap-4">
+                        <Card className="rounded-lg border-slate-200 bg-white shadow-sm">
+                            <CardHeader className="border-b border-slate-200 p-4">
+                                <CardTitle className="flex items-center gap-2 text-base font-semibold text-slate-950">
+                                    <Play className="h-4 w-4 text-emerald-700" />
+                                    Watch the inflow machine work
+                                </CardTitle>
+                                <p className="mt-1 text-xs leading-5 text-slate-500">
+                                    Permanent demo guide for starting the mock feed, watching records post, tracing a lot, and previewing the handoff without claiming production evidence.
+                                </p>
+                            </CardHeader>
+                            <CardContent className="space-y-4 p-4">
+                                <Button className="h-9 w-full bg-emerald-700 text-white hover:bg-emerald-800" onClick={startMachineDemo} disabled={isBusy}>
+                                    {isBusy ? (
+                                        <>
+                                            <RefreshCcw className="mr-2 h-4 w-4 animate-spin" />
+                                            Machine running
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Play className="mr-2 h-4 w-4" />
+                                            Start machine demo
+                                        </>
+                                    )}
+                                </Button>
+                                <div className="space-y-3">
+                                    {machineDemoSteps.map((step, index) => (
+                                        <div key={step.label} className="grid grid-cols-[28px_minmax(0,1fr)] gap-3">
+                                            <span
+                                                className={cn(
+                                                    "flex h-7 w-7 items-center justify-center rounded-full border text-xs font-semibold",
+                                                    step.state === "complete" && "border-emerald-200 bg-emerald-50 text-emerald-700",
+                                                    step.state === "active" && "border-blue-200 bg-blue-50 text-blue-700",
+                                                    step.state === "pending" && "border-slate-200 bg-slate-50 text-slate-500"
+                                                )}
+                                            >
+                                                {step.state === "complete" ? <CheckCircle2 className="h-3.5 w-3.5" /> : index + 1}
+                                            </span>
+                                            <div>
+                                                <p className="text-xs font-semibold text-slate-950">{step.label}</p>
+                                                <p className="mt-0.5 text-[11px] leading-4 text-slate-500">{step.detail}</p>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                                <div className="grid grid-cols-2 gap-2">
+                                    <Button variant="outline" className="h-9 border-slate-300 bg-white" onClick={() => setActiveTab(isStandalone ? "Event log" : "Record log")}>
+                                        Records
+                                    </Button>
+                                    <Button variant="outline" className="h-9 border-slate-300 bg-white" onClick={() => setActiveTab("Lots")}>
+                                        View lots
+                                    </Button>
+                                    <Button variant="outline" className="h-9 border-slate-300 bg-white" onClick={traceLatestLot}>
+                                        Trace
+                                    </Button>
+                                    <Button variant="outline" className="h-9 border-slate-300 bg-white" onClick={prepareExport} disabled={stageIndex[runStage] < 4}>
+                                        Export
+                                    </Button>
+                                </div>
+                            </CardContent>
+                        </Card>
+
                         <Card className="rounded-lg border-slate-200 bg-white shadow-sm">
                             <CardHeader className="border-b border-slate-200 p-4">
                                 <CardTitle className="flex items-center gap-2 text-base font-semibold text-slate-950">
