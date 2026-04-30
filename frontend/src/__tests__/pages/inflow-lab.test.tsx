@@ -122,4 +122,19 @@ describe('Dashboard Inflow Lab', () => {
             expect.stringContaining('/api/inflow-lab/api/mock/regengine/export/fda-request'),
         );
     });
+
+    it('makes the feeder-to-production path explicit from the dashboard lab', async () => {
+        const user = userEvent.setup();
+        render(<DashboardInflowLabPage />);
+
+        await user.click(screen.getByRole('button', { name: 'Data feeder' }));
+
+        expect(screen.getByText('Paste or upload inbound CSV')).toBeInTheDocument();
+        expect(screen.getByText('Path to production')).toBeInTheDocument();
+        expect(screen.getByText('Diagnose free')).toBeInTheDocument();
+        expect(screen.getByText('Save as test run')).toBeInTheDocument();
+        expect(screen.getByRole('link', { name: 'Convert to import mapping' })).toHaveAttribute('href', '/ingest');
+        expect(screen.getByRole('link', { name: 'Monitor live feed' })).toHaveAttribute('href', '/dashboard/integrations');
+        expect(screen.getByRole('link', { name: 'Generate evidence' })).toHaveAttribute('href', '/dashboard/export-jobs');
+    });
 });
