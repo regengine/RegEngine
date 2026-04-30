@@ -44,7 +44,7 @@ describe('Ingest sandbox handoff consumer', () => {
     vi.clearAllMocks();
     window.sessionStorage.clear();
     (useAuth as any).mockReturnValue({
-      apiKey: 'rge_test_key',
+      apiKey: 'rge_test_key', // pragma: allowlist secret
       setApiKey: vi.fn(),
     });
     (useSearchParams as any).mockReturnValue(new URLSearchParams('from=sandbox-handoff'));
