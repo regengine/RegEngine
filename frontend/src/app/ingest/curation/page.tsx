@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, type SVGProps } from 'react';
+import { useCallback, useRef, useState, useEffect, type SVGProps } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { PageContainer } from '@/components/layout/page-container';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -29,14 +29,19 @@ interface DiscoveryItem {
 }
 
 export default function CurationDashboard() {
-    const { apiKey, isAuthenticated, isHydrated } = useAuth();
+    const { isAuthenticated, isHydrated } = useAuth();
     const [items, setItems] = useState<DiscoveryItem[]>([]);
     const [loading, setLoading] = useState(true);
     const [processing, setProcessing] = useState<number | null>(null);
     const [selectedIndices, setSelectedIndices] = useState<Set<number>>(new Set());
     const { toast } = useToast();
+    const toastRef = useRef(toast);
 
-    const fetchQueue = async () => {
+    useEffect(() => {
+        toastRef.current = toast;
+    }, [toast]);
+
+    const fetchQueue = useCallback(async () => {
         try {
             setLoading(true);
             const data = await apiClient.getDiscoveryQueue();
@@ -44,7 +49,7 @@ export default function CurationDashboard() {
             setSelectedIndices(new Set()); // Clear selection on refresh
         } catch (error) {
             console.error('Failed to fetch discovery queue:', error);
-            toast({
+            toastRef.current({
                 title: 'Offline Error',
                 description: 'Could not connect to the ingestion service. Please ensure the backend is running.',
                 variant: 'destructive',
@@ -52,11 +57,16 @@ export default function CurationDashboard() {
         } finally {
             setLoading(false);
         }
-    };
+    }, []);
 
     useEffect(() => {
+        if (!isHydrated) return;
+        if (!isAuthenticated) {
+            setLoading(false);
+            return;
+        }
         fetchQueue();
-    }, []);
+    }, [fetchQueue, isAuthenticated, isHydrated]);
 
     const toggleSelect = (index: number) => {
         const next = new Set(selectedIndices);
@@ -175,7 +185,7 @@ export default function CurationDashboard() {
         );
     }
 
-    if (!isAuthenticated || !apiKey) {
+    if (!isAuthenticated) {
         return (
             <div className="min-h-screen bg-slate-50 dark:bg-slate-950/50">
                 <PageContainer>
