@@ -45,3 +45,23 @@ We built a new FSMA 204 readiness loop in RegEngine: Inflow prepares messy suppl
 - Prospect shares one real or anonymized supplier feed.
 - Prospect can name one supplier readiness problem RegEngine made clearer.
 - Prospect agrees to a second session or LOI discussion.
+
+## Launch Queue
+
+Use this queue immediately after the staging verifier passes:
+
+| Segment | First ask | Demo file |
+| --- | --- | --- |
+| Fresh produce shipper | Validate one recent shipping CSV before FSMA 204 deadline pressure rises. | Missing shipping destination |
+| Regional distributor | Compare two supplier feeds and identify which lots cannot support FDA export. | Complete romaine flow + missing destination |
+| Co-packer | Test whether transformation-style input/output lot references survive preflight. | Broken lineage |
+| Implementation consultant | Use Scenario Library as a repeatable contract test for client onboarding. | Complete romaine flow |
+| EDI/API partner | Save a reusable field mapping profile and replay the same feed through Inflow. | Supplier CSV with BOL mapping |
+
+## Recording Checklist
+
+- Open staging, not local development.
+- Confirm the latest readiness score was generated from a Postgres-backed Workbench run.
+- Show the commit gate before showing dashboards.
+- Keep the recording under four minutes.
+- End with the one-line ask: "Can we run one anonymized supplier feed through this with you?"

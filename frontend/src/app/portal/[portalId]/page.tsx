@@ -18,6 +18,15 @@ interface PortalDetails {
     portal_id: string;
     supplier_name: string;
     allowed_cte_types: string[];
+    integration_profile_id?: string;
+    integration_profile?: {
+        profile_id: string;
+        display_name: string;
+        source_type: string;
+        default_cte_type: string;
+        status: string;
+        confidence: number;
+    } | null;
     status: string;
 }
 
@@ -322,6 +331,27 @@ export default function PortalSubmissionPage() {
                         </div>
                     ))}
                 </div>
+
+                {portal.integration_profile && (
+                    <div className="mb-6 border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] rounded-xl p-4">
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                            <div className="flex items-start gap-3">
+                                <FileCheck className="h-4 w-4 mt-0.5 text-[var(--re-brand)]" />
+                                <div>
+                                    <div className="text-sm font-semibold text-[var(--re-text-primary)]">
+                                        {portal.integration_profile.display_name}
+                                    </div>
+                                    <div className="text-xs text-[var(--re-text-muted)]">
+                                        {portal.integration_profile.source_type.toUpperCase()} mapping · {portal.integration_profile.default_cte_type}
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="text-xs text-[var(--re-text-muted)]">
+                                {Math.round(portal.integration_profile.confidence * 100)}% mapping confidence
+                            </div>
+                        </div>
+                    </div>
+                )}
 
                 {/* Form */}
                 <form onSubmit={handleSubmit}>

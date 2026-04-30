@@ -288,6 +288,7 @@ class TestModels:
         assert req.allowed_cte_types == ["shipping"]
         assert req.expires_days == 90
         assert req.supplier_email is None
+        assert req.integration_profile_id is None
 
     def test_create_portal_link_rejects_bad_expiry(self):
         with pytest.raises(Exception):
@@ -374,12 +375,15 @@ class TestCreatePortalLink:
                 "supplier_name": "Acme",
                 "supplier_email": "s@example.com",
                 "allowed_cte_types": ["shipping", "receiving"],
+                "integration_profile_id": "prof_csv_1",
             },
         )
         body = resp.json()
         assert body["allowed_cte_types"] == ["shipping", "receiving"]
+        assert body["integration_profile_id"] == "prof_csv_1"
         stored = sp._portal_links[body["portal_id"]]
         assert stored["supplier_email"] == "s@example.com"
+        assert stored["integration_profile_id"] == "prof_csv_1"
 
 
 # ---------------------------------------------------------------------------

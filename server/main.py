@@ -201,6 +201,10 @@ if _router_enabled("sandbox"):
     from services.ingestion.app.sandbox.router import router as sandbox_router
     app.include_router(sandbox_router)
 
+if _router_enabled("inflow_workbench"):
+    from services.ingestion.app.inflow_workbench import router as inflow_workbench_router
+    app.include_router(inflow_workbench_router)
+
 if _router_enabled("fda_export"):
     from services.ingestion.app.fda_export.router import router as fda_export_router
     app.include_router(fda_export_router, tags=["FDA Exports"])

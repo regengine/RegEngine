@@ -674,6 +674,71 @@ class TestDisconnect:
 
 
 # ---------------------------------------------------------------------------
+# Saved integration profiles
+# ---------------------------------------------------------------------------
+
+
+class TestIntegrationProfiles:
+    def test_create_list_and_get_profile_with_memory_fallback(self, client, monkeypatch):
+        monkeypatch.setattr(integration_router, "get_db_safe", lambda: None)
+        integration_router._profile_store.clear()
+
+        resp = client.post(
+            f"/api/v1/integrations/profiles/{TENANT}",
+            json={
+                "display_name": "FreshPack CSV",
+                "source_type": "csv",
+                "supplier_name": "FreshPack Central",
+                "field_mapping": {
+                    "traceability_lot_code": "lot",
+                    "product_description": "item",
+                    "quantity": "qty",
+                },
+            },
+        )
+        assert resp.status_code == 200
+        profile = resp.json()
+        assert profile["display_name"] == "FreshPack CSV"
+        assert profile["tenant_id"] == TENANT
+
+        list_resp = client.get(f"/api/v1/integrations/profiles/{TENANT}")
+        assert list_resp.status_code == 200
+        assert list_resp.json()["total"] == 1
+
+        get_resp = client.get(f"/api/v1/integrations/profiles/{TENANT}/{profile['profile_id']}")
+        assert get_resp.status_code == 200
+        assert get_resp.json()["supplier_name"] == "FreshPack Central"
+
+    def test_profile_preview_maps_sample_events_and_reports_missing_fields(self, client, monkeypatch):
+        monkeypatch.setattr(integration_router, "get_db_safe", lambda: None)
+        integration_router._profile_store.clear()
+        create = client.post(
+            f"/api/v1/integrations/profiles/{TENANT}",
+            json={
+                "display_name": "BOL CSV",
+                "field_mapping": {
+                    "traceability_lot_code": "shipment.lot",
+                    "product_description": "shipment.item",
+                    "quantity": "shipment.qty",
+                    "ship_to_location": "destination.name",
+                },
+            },
+        )
+        profile_id = create.json()["profile_id"]
+
+        resp = client.post(
+            f"/api/v1/integrations/profiles/{TENANT}/{profile_id}/preview",
+            json={"events": [{"shipment": {"lot": "TLC-1", "item": "Romaine"}, "destination": {}}]},
+        )
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["mapped"] == 1
+        assert body["events"][0]["traceability_lot_code"] == "TLC-1"
+        assert "quantity" in body["missing_fields"]["0"]
+        assert "ship_to_location" in body["missing_fields"]["0"]
+
+
+# ---------------------------------------------------------------------------
 # Auth gate: ensure protected endpoints *would* 401 without bypass
 # ---------------------------------------------------------------------------
 
@@ -697,8 +762,10 @@ class TestAuthGate:
         "method,path",
         [
             ("GET", "/api/v1/integrations/available"),
+            ("GET", f"/api/v1/integrations/profiles/{TENANT}"),
             ("GET", f"/api/v1/integrations/status/{TENANT}"),
             ("POST", f"/api/v1/integrations/configure/{TENANT}"),
+            ("POST", f"/api/v1/integrations/profiles/{TENANT}"),
             ("POST", f"/api/v1/integrations/test/{TENANT}/{CONNECTOR_ID}"),
             ("POST", f"/api/v1/integrations/sync/{TENANT}"),
             ("DELETE", f"/api/v1/integrations/disconnect/{TENANT}/{CONNECTOR_ID}"),
