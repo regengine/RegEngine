@@ -4,9 +4,10 @@ Purpose: a 3-4 minute Loom that shows RegEngine turning messy supplier data into
 
 ## Setup
 
-- Open `/tools/inflow-lab`.
+- Open the verified staging app at `/tools/inflow-lab`.
 - Use the built-in scenario `Missing shipping destination`.
 - Keep the dashboard tabs ready in a second browser tab: `/dashboard/compliance` and `/dashboard/suppliers`.
+- Keep the supplier portal tab ready if the buyer asks how external partners submit data.
 
 ## Talk Track
 

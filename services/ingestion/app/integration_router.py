@@ -12,13 +12,17 @@ Provides REST endpoints for:
 from __future__ import annotations
 
 import logging
+import json
+import uuid
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 from fastapi import APIRouter, Depends, File, Header, HTTPException, Query, Request, UploadFile
 from pydantic import BaseModel, Field
+from sqlalchemy import text
 
 from app.webhook_compat import _verify_api_key
+from shared.database import get_db_safe
 
 logger = logging.getLogger("integration-router")
 
@@ -46,7 +50,374 @@ class SyncRequest(BaseModel):
     limit: int = 100
 
 
+ProfileSourceType = Literal["csv", "edi", "epcis", "api", "webhook", "spreadsheet", "supplier_portal"]
+ProfileStatus = Literal["draft", "active", "archived"]
+
+
+DEFAULT_PROFILE_MAPPING: Dict[str, str] = {
+    "cte_type": "cte_type",
+    "traceability_lot_code": "traceability_lot_code",
+    "product_description": "product_description",
+    "quantity": "quantity",
+    "unit_of_measure": "unit_of_measure",
+    "location_name": "location_name",
+    "timestamp": "timestamp",
+    "ship_from_location": "ship_from_location",
+    "ship_to_location": "ship_to_location",
+    "reference_document": "reference_document",
+}
+
+
+class IntegrationProfile(BaseModel):
+    """Reusable supplier/source mapping profile."""
+    profile_id: str
+    tenant_id: str
+    display_name: str
+    source_type: ProfileSourceType = "csv"
+    field_mapping: Dict[str, str] = Field(default_factory=lambda: dict(DEFAULT_PROFILE_MAPPING))
+    default_cte_type: str = "shipping"
+    status: ProfileStatus = "draft"
+    confidence: float = Field(default=0.75, ge=0, le=1)
+    supplier_id: Optional[str] = None
+    supplier_name: Optional[str] = None
+    notes: Optional[str] = None
+    created_at: str
+    updated_at: str
+    last_used_at: Optional[str] = None
+
+
+class CreateIntegrationProfileRequest(BaseModel):
+    """Create a saved mapping profile for a supplier or source system."""
+    display_name: str = Field(..., min_length=2, max_length=120)
+    source_type: ProfileSourceType = "csv"
+    field_mapping: Dict[str, str] = Field(default_factory=lambda: dict(DEFAULT_PROFILE_MAPPING))
+    default_cte_type: str = "shipping"
+    status: ProfileStatus = "active"
+    confidence: float = Field(default=0.75, ge=0, le=1)
+    supplier_id: Optional[str] = Field(default=None, max_length=120)
+    supplier_name: Optional[str] = Field(default=None, max_length=160)
+    notes: Optional[str] = Field(default=None, max_length=1000)
+
+
+class UpdateIntegrationProfileRequest(BaseModel):
+    """Patch mutable fields on a saved integration profile."""
+    display_name: Optional[str] = Field(default=None, min_length=2, max_length=120)
+    source_type: Optional[ProfileSourceType] = None
+    field_mapping: Optional[Dict[str, str]] = None
+    default_cte_type: Optional[str] = None
+    status: Optional[ProfileStatus] = None
+    confidence: Optional[float] = Field(default=None, ge=0, le=1)
+    supplier_id: Optional[str] = Field(default=None, max_length=120)
+    supplier_name: Optional[str] = Field(default=None, max_length=160)
+    notes: Optional[str] = Field(default=None, max_length=1000)
+
+
+class MappingPreviewRequest(BaseModel):
+    events: List[Dict[str, Any]] = Field(default_factory=list, max_length=50)
+
+
+class MappingPreviewResponse(BaseModel):
+    profile_id: str
+    mapped: int
+    missing_fields: Dict[str, List[str]]
+    events: List[Dict[str, Any]]
+
+
+_profile_store: dict[str, dict[str, IntegrationProfile]] = {}
+
+
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _tenant_uuid(tenant_id: str) -> Optional[str]:
+    try:
+        return str(uuid.UUID(str(tenant_id)))
+    except (TypeError, ValueError):
+        return None
+
+
+def _set_tenant_context(db: Any, tenant_id: str) -> None:
+    db.execute(text("SELECT set_config('app.tenant_id', :tenant_id, true)"), {"tenant_id": tenant_id})
+
+
+def _profile_from_row(row: Any) -> IntegrationProfile:
+    mapping = row._mapping if hasattr(row, "_mapping") else row
+    return IntegrationProfile(
+        profile_id=str(mapping["profile_id"]),
+        tenant_id=str(mapping["tenant_id"]),
+        display_name=mapping["display_name"],
+        source_type=mapping["source_type"],
+        field_mapping=dict(mapping["field_mapping"] or {}),
+        default_cte_type=mapping["default_cte_type"],
+        status=mapping["status"],
+        confidence=float(mapping["confidence"] or 0),
+        supplier_id=mapping.get("supplier_id"),
+        supplier_name=mapping.get("supplier_name"),
+        notes=mapping.get("notes"),
+        created_at=mapping["created_at"].isoformat() if mapping.get("created_at") else _now_iso(),
+        updated_at=mapping["updated_at"].isoformat() if mapping.get("updated_at") else _now_iso(),
+        last_used_at=mapping["last_used_at"].isoformat() if mapping.get("last_used_at") else None,
+    )
+
+
+def _db_list_profiles(tenant_id: str) -> Optional[list[IntegrationProfile]]:
+    if not _tenant_uuid(tenant_id):
+        return None
+    db = get_db_safe()
+    if not db:
+        return None
+    try:
+        _set_tenant_context(db, tenant_id)
+        rows = db.execute(
+            text(
+                """
+                SELECT profile_id, tenant_id::text AS tenant_id, display_name, source_type,
+                       field_mapping, default_cte_type, status, confidence, supplier_id,
+                       supplier_name, notes, created_at, updated_at, last_used_at
+                FROM fsma.supplier_integration_profiles
+                WHERE tenant_id = CAST(:tenant_id AS uuid)
+                ORDER BY updated_at DESC
+                """
+            ),
+            {"tenant_id": tenant_id},
+        ).mappings().all()
+        return [_profile_from_row(row) for row in rows]
+    except Exception as exc:
+        logger.warning("integration_profiles_db_list_failed tenant=%s error=%s", tenant_id, str(exc))
+        return None
+    finally:
+        db.close()
+
+
+def _db_get_profile(tenant_id: str, profile_id: str) -> Optional[IntegrationProfile]:
+    if not _tenant_uuid(tenant_id):
+        return None
+    db = get_db_safe()
+    if not db:
+        return None
+    try:
+        _set_tenant_context(db, tenant_id)
+        row = db.execute(
+            text(
+                """
+                SELECT profile_id, tenant_id::text AS tenant_id, display_name, source_type,
+                       field_mapping, default_cte_type, status, confidence, supplier_id,
+                       supplier_name, notes, created_at, updated_at, last_used_at
+                FROM fsma.supplier_integration_profiles
+                WHERE tenant_id = CAST(:tenant_id AS uuid)
+                  AND profile_id = :profile_id
+                """
+            ),
+            {"tenant_id": tenant_id, "profile_id": profile_id},
+        ).mappings().first()
+        return _profile_from_row(row) if row else None
+    except Exception as exc:
+        logger.warning("integration_profiles_db_get_failed tenant=%s profile=%s error=%s", tenant_id, profile_id, str(exc))
+        return None
+    finally:
+        db.close()
+
+
+def _db_upsert_profile(profile: IntegrationProfile) -> bool:
+    if not _tenant_uuid(profile.tenant_id):
+        return False
+    db = get_db_safe()
+    if not db:
+        return False
+    try:
+        _set_tenant_context(db, profile.tenant_id)
+        db.execute(
+            text(
+                """
+                INSERT INTO fsma.supplier_integration_profiles (
+                    profile_id, tenant_id, display_name, source_type, field_mapping,
+                    default_cte_type, status, confidence, supplier_id, supplier_name,
+                    notes, created_at, updated_at, last_used_at
+                )
+                VALUES (
+                    :profile_id, CAST(:tenant_id AS uuid), :display_name, :source_type,
+                    CAST(:field_mapping AS jsonb), :default_cte_type, :status, :confidence,
+                    :supplier_id, :supplier_name, :notes, CAST(:created_at AS timestamptz),
+                    CAST(:updated_at AS timestamptz), CAST(:last_used_at AS timestamptz)
+                )
+                ON CONFLICT (tenant_id, profile_id) DO UPDATE SET
+                    display_name = EXCLUDED.display_name,
+                    source_type = EXCLUDED.source_type,
+                    field_mapping = EXCLUDED.field_mapping,
+                    default_cte_type = EXCLUDED.default_cte_type,
+                    status = EXCLUDED.status,
+                    confidence = EXCLUDED.confidence,
+                    supplier_id = EXCLUDED.supplier_id,
+                    supplier_name = EXCLUDED.supplier_name,
+                    notes = EXCLUDED.notes,
+                    updated_at = EXCLUDED.updated_at,
+                    last_used_at = EXCLUDED.last_used_at
+                """
+            ),
+            {
+                **profile.model_dump(mode="json"),
+                "field_mapping": json.dumps(profile.field_mapping, sort_keys=True),
+            },
+        )
+        db.commit()
+        return True
+    except Exception as exc:
+        logger.warning("integration_profiles_db_upsert_failed tenant=%s profile=%s error=%s", profile.tenant_id, profile.profile_id, str(exc))
+        db.rollback()
+        return False
+    finally:
+        db.close()
+
+
+def _memory_list_profiles(tenant_id: str) -> list[IntegrationProfile]:
+    return list(_profile_store.get(tenant_id, {}).values())
+
+
+def _memory_get_profile(tenant_id: str, profile_id: str) -> Optional[IntegrationProfile]:
+    return _profile_store.get(tenant_id, {}).get(profile_id)
+
+
+def _save_profile(profile: IntegrationProfile) -> IntegrationProfile:
+    if not _db_upsert_profile(profile):
+        _profile_store.setdefault(profile.tenant_id, {})[profile.profile_id] = profile
+    return profile
+
+
+def _get_profile_or_404(tenant_id: str, profile_id: str) -> IntegrationProfile:
+    profile = _db_get_profile(tenant_id, profile_id) or _memory_get_profile(tenant_id, profile_id)
+    if not profile:
+        raise HTTPException(status_code=404, detail=f"Integration profile '{profile_id}' not found")
+    return profile
+
+
+def _extract_path(event: Dict[str, Any], path: str) -> Any:
+    current: Any = event
+    for part in path.split("."):
+        if isinstance(current, dict):
+            current = current.get(part)
+        else:
+            return None
+    return current
+
+
+def _apply_profile_mapping(event: Dict[str, Any], profile: IntegrationProfile) -> tuple[Dict[str, Any], list[str]]:
+    mapped: Dict[str, Any] = {}
+    missing: list[str] = []
+    for canonical, source_path in profile.field_mapping.items():
+        value = _extract_path(event, source_path)
+        if value is None or value == "":
+            missing.append(canonical)
+            continue
+        mapped[canonical] = value
+    mapped.setdefault("cte_type", profile.default_cte_type)
+    mapped["_integration_profile_id"] = profile.profile_id
+    mapped["_source_type"] = profile.source_type
+    if profile.supplier_name:
+        mapped.setdefault("supplier_name", profile.supplier_name)
+    return mapped, missing
+
+
 # ── Endpoints ─────────────────────────────────────────────────
+
+@router.get(
+    "/profiles/{tenant_id}",
+    summary="List saved integration profiles",
+)
+async def list_integration_profiles(
+    tenant_id: str,
+    _: None = Depends(_verify_api_key),
+):
+    """List saved supplier/source mapping profiles for a tenant."""
+    profiles = _db_list_profiles(tenant_id)
+    if profiles is None:
+        profiles = _memory_list_profiles(tenant_id)
+    return {"profiles": [profile.model_dump() for profile in profiles], "total": len(profiles)}
+
+
+@router.post(
+    "/profiles/{tenant_id}",
+    response_model=IntegrationProfile,
+    summary="Create a saved integration profile",
+)
+async def create_integration_profile(
+    tenant_id: str,
+    request: CreateIntegrationProfileRequest,
+    _: None = Depends(_verify_api_key),
+) -> IntegrationProfile:
+    """Create a reusable field mapping profile for supplier onboarding."""
+    now = _now_iso()
+    profile = IntegrationProfile(
+        profile_id=f"prof_{uuid.uuid4().hex[:12]}",
+        tenant_id=tenant_id,
+        created_at=now,
+        updated_at=now,
+        **request.model_dump(),
+    )
+    return _save_profile(profile)
+
+
+@router.get(
+    "/profiles/{tenant_id}/{profile_id}",
+    response_model=IntegrationProfile,
+    summary="Get a saved integration profile",
+)
+async def get_integration_profile(
+    tenant_id: str,
+    profile_id: str,
+    _: None = Depends(_verify_api_key),
+) -> IntegrationProfile:
+    """Fetch one saved profile."""
+    return _get_profile_or_404(tenant_id, profile_id)
+
+
+@router.patch(
+    "/profiles/{tenant_id}/{profile_id}",
+    response_model=IntegrationProfile,
+    summary="Update a saved integration profile",
+)
+async def update_integration_profile(
+    tenant_id: str,
+    profile_id: str,
+    request: UpdateIntegrationProfileRequest,
+    _: None = Depends(_verify_api_key),
+) -> IntegrationProfile:
+    """Patch a saved supplier/source mapping profile."""
+    profile = _get_profile_or_404(tenant_id, profile_id)
+    updates = request.model_dump(exclude_unset=True)
+    profile = profile.model_copy(update={**updates, "updated_at": _now_iso()})
+    return _save_profile(profile)
+
+
+@router.post(
+    "/profiles/{tenant_id}/{profile_id}/preview",
+    response_model=MappingPreviewResponse,
+    summary="Preview profile mapping against sample events",
+)
+async def preview_integration_profile_mapping(
+    tenant_id: str,
+    profile_id: str,
+    request: MappingPreviewRequest,
+    _: None = Depends(_verify_api_key),
+) -> MappingPreviewResponse:
+    """Apply a saved profile to sample events without committing records."""
+    profile = _get_profile_or_404(tenant_id, profile_id)
+    mapped_events: list[Dict[str, Any]] = []
+    missing_fields: Dict[str, List[str]] = {}
+    for index, event in enumerate(request.events):
+        mapped, missing = _apply_profile_mapping(event, profile)
+        mapped_events.append(mapped)
+        if missing:
+            missing_fields[str(index)] = missing
+
+    profile.last_used_at = _now_iso()
+    _save_profile(profile)
+    return MappingPreviewResponse(
+        profile_id=profile.profile_id,
+        mapped=len(mapped_events),
+        missing_fields=missing_fields,
+        events=mapped_events,
+    )
 
 @router.get(
     "/available",

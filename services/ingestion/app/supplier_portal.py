@@ -53,25 +53,58 @@ def _db_store_portal_link(portal_id: str, link_data: dict) -> bool:
     if not db:
         return False
     try:
-        db.execute(
+        try:
+            db.execute(
+                # nosemgrep: avoid-sqlalchemy-text — parameterized with :param
+                text("""
+                    INSERT INTO fsma.tenant_portal_links
+                    (id, tenant_id, supplier_name, supplier_email, allowed_cte_types,
+                     integration_profile_id, link_token, status, created_at, expires_at)
+                    VALUES (gen_random_uuid(), :tenant_id, :supplier_name, :supplier_email,
+                            :allowed_cte_types, :integration_profile_id, :link_token,
+                            'active', :created_at, :expires_at)
+                    ON CONFLICT (link_token) DO UPDATE SET
+                        supplier_name = :supplier_name,
+                        supplier_email = :supplier_email,
+                        allowed_cte_types = :allowed_cte_types,
+                        integration_profile_id = :integration_profile_id,
+                        status = 'active',
+                        expires_at = :expires_at
+                """),
+                {
+                    "tenant_id": link_data["tenant_id"],
+                    "supplier_name": link_data["supplier_name"],
+                    "supplier_email": link_data.get("supplier_email"),
+                    "allowed_cte_types": link_data.get("allowed_cte_types") or ["shipping"],
+                    "integration_profile_id": link_data.get("integration_profile_id"),
+                    "link_token": portal_id,
+                    "created_at": link_data["created_at"],
+                    "expires_at": link_data["expires_at"],
+                },
+            )
+        except Exception as exc:
+            if "supplier_email" not in str(exc) and "allowed_cte_types" not in str(exc) and "integration_profile_id" not in str(exc):
+                raise
+            db.rollback()
+            db.execute(
             # nosemgrep: avoid-sqlalchemy-text — parameterized with :param
-            text("""
-                INSERT INTO fsma.tenant_portal_links
-                (id, tenant_id, supplier_name, link_token, status, created_at, expires_at)
-                VALUES (gen_random_uuid(), :tenant_id, :supplier_name, :link_token, 'active', :created_at, :expires_at)
-                ON CONFLICT (link_token) DO UPDATE SET
-                    supplier_name = :supplier_name,
-                    status = 'active',
-                    expires_at = :expires_at
-            """),
-            {
-                "tenant_id": link_data["tenant_id"],
-                "supplier_name": link_data["supplier_name"],
-                "link_token": portal_id,
-                "created_at": link_data["created_at"],
-                "expires_at": link_data["expires_at"],
-            },
-        )
+                text("""
+                    INSERT INTO fsma.tenant_portal_links
+                    (id, tenant_id, supplier_name, link_token, status, created_at, expires_at)
+                    VALUES (gen_random_uuid(), :tenant_id, :supplier_name, :link_token, 'active', :created_at, :expires_at)
+                    ON CONFLICT (link_token) DO UPDATE SET
+                        supplier_name = :supplier_name,
+                        status = 'active',
+                        expires_at = :expires_at
+                """),
+                {
+                    "tenant_id": link_data["tenant_id"],
+                    "supplier_name": link_data["supplier_name"],
+                    "link_token": portal_id,
+                    "created_at": link_data["created_at"],
+                    "expires_at": link_data["expires_at"],
+                },
+            )
         db.commit()
         return True
     except Exception as exc:
@@ -89,15 +122,50 @@ def _db_get_portal_link(portal_id: str) -> Optional[dict]:
     if not db:
         return None
     try:
-        row = db.execute(
-            # nosemgrep: avoid-sqlalchemy-text — parameterized with :param
-            text("""
-                SELECT tenant_id, supplier_name, link_token, status, created_at, expires_at
-                FROM fsma.tenant_portal_links
-                WHERE link_token = :link_token AND status = 'active'
-            """),
-            {"link_token": portal_id},
-        ).fetchone()
+        try:
+            row = db.execute(
+                # nosemgrep: avoid-sqlalchemy-text — parameterized with :param
+                text("""
+                    SELECT tenant_id, supplier_name, supplier_email, allowed_cte_types,
+                           integration_profile_id, link_token, status, created_at, expires_at
+                    FROM fsma.tenant_portal_links
+                    WHERE link_token = :link_token AND status = 'active'
+                """),
+                {"link_token": portal_id},
+            ).fetchone()
+            if not row:
+                return None
+            if len(row) < 9:
+                return {
+                    "tenant_id": str(row[0]),
+                    "supplier_name": row[1],
+                    "supplier_email": None,
+                    "allowed_cte_types": ["shipping"],
+                    "integration_profile_id": None,
+                    "expires_at": row[5].isoformat() if row[5] else None,
+                    "created_at": row[4].isoformat() if row[4] else None,
+                }
+            return {
+                "tenant_id": str(row[0]),
+                "supplier_name": row[1],
+                "supplier_email": row[2],
+                "allowed_cte_types": list(row[3] or ["shipping"]),
+                "integration_profile_id": row[4],
+                "expires_at": row[8].isoformat() if row[8] else None,
+                "created_at": row[7].isoformat() if row[7] else None,
+            }
+        except Exception as exc:
+            if "supplier_email" not in str(exc) and "allowed_cte_types" not in str(exc) and "integration_profile_id" not in str(exc):
+                raise
+            row = db.execute(
+                # nosemgrep: avoid-sqlalchemy-text — parameterized with :param
+                text("""
+                    SELECT tenant_id, supplier_name, link_token, status, created_at, expires_at
+                    FROM fsma.tenant_portal_links
+                    WHERE link_token = :link_token AND status = 'active'
+                """),
+                {"link_token": portal_id},
+            ).fetchone()
         if not row:
             return None
         return {
@@ -105,6 +173,7 @@ def _db_get_portal_link(portal_id: str) -> Optional[dict]:
             "supplier_name": row[1],
             "supplier_email": None,
             "allowed_cte_types": ["shipping"],
+            "integration_profile_id": None,
             "expires_at": row[5].isoformat() if row[5] else None,
             "created_at": row[4].isoformat() if row[4] else None,
         }
@@ -162,6 +231,44 @@ def _get_active_portal_link(portal_id: str) -> dict:
     return link
 
 
+def _db_get_integration_profile_summary(tenant_id: str, profile_id: Optional[str]) -> Optional[dict]:
+    """Return non-secret profile metadata safe to show to a supplier."""
+    if not profile_id:
+        return None
+    db = get_db_safe()
+    if not db:
+        return None
+    try:
+        db.execute(text("SELECT set_config('app.tenant_id', :tenant_id, true)"), {"tenant_id": tenant_id})
+        row = db.execute(
+            # nosemgrep: avoid-sqlalchemy-text — parameterized with :param
+            text("""
+                SELECT profile_id, display_name, source_type, default_cte_type, status,
+                       confidence, supplier_name
+                FROM fsma.supplier_integration_profiles
+                WHERE tenant_id = CAST(:tenant_id AS uuid)
+                  AND profile_id = :profile_id
+            """),
+            {"tenant_id": tenant_id, "profile_id": profile_id},
+        ).fetchone()
+        if not row:
+            return None
+        return {
+            "profile_id": row[0],
+            "display_name": row[1],
+            "source_type": row[2],
+            "default_cte_type": row[3],
+            "status": row[4],
+            "confidence": float(row[5] or 0),
+            "supplier_name": row[6],
+        }
+    except Exception as exc:
+        logger.warning("portal_profile_summary_failed portal_profile=%s error=%s", profile_id, str(exc))
+        return None
+    finally:
+        db.close()
+
+
 class CreatePortalLinkRequest(BaseModel):
     """Request to create a supplier portal link."""
     tenant_id: str = Field(..., description="Customer's tenant ID")
@@ -170,6 +277,10 @@ class CreatePortalLinkRequest(BaseModel):
     allowed_cte_types: list[str] = Field(
         default=["shipping"],
         description="CTE types the supplier can submit (default: shipping only)"
+    )
+    integration_profile_id: Optional[str] = Field(
+        default=None,
+        description="Optional saved integration profile to attach to this supplier link",
     )
     expires_days: int = Field(default=90, ge=1, le=365, description="Link expiry in days")
 
@@ -182,6 +293,7 @@ class PortalLinkResponse(BaseModel):
     tenant_id: str
     expires_at: str
     allowed_cte_types: list[str]
+    integration_profile_id: Optional[str] = None
 
 
 class SupplierSubmission(BaseModel):
@@ -373,6 +485,7 @@ async def create_portal_link(
         "supplier_name": request.supplier_name,
         "supplier_email": request.supplier_email,
         "allowed_cte_types": request.allowed_cte_types,
+        "integration_profile_id": request.integration_profile_id,
         "expires_at": expires_at,
         "created_at": now.isoformat(),
     }
@@ -400,6 +513,7 @@ async def create_portal_link(
         tenant_id=request.tenant_id,
         expires_at=expires_at,
         allowed_cte_types=request.allowed_cte_types,
+        integration_profile_id=request.integration_profile_id,
     )
 
 
@@ -444,6 +558,7 @@ async def list_portal_links(
                     "status": status,
                     "created_at": row[5].isoformat() if row[5] else None,
                     "expires_at": expires_at.isoformat() if expires_at else None,
+                    "integration_profile_id": None,
                 })
         except Exception as exc:
             logger.warning("list_portal_links_db_failed error=%s", str(exc))
@@ -471,6 +586,7 @@ async def list_portal_links(
                 "status": status,
                 "created_at": data.get("created_at"),
                 "expires_at": expires_at_raw,
+                "integration_profile_id": data.get("integration_profile_id"),
             })
 
     total = len(links)
@@ -507,11 +623,14 @@ async def revoke_portal_link(
 async def get_portal_details(portal_id: str):
     """Get portal link details — used by the frontend to render the form."""
     link = _get_active_portal_link(portal_id)
+    profile = _db_get_integration_profile_summary(link["tenant_id"], link.get("integration_profile_id"))
 
     return {
         "portal_id": portal_id,
         "supplier_name": link["supplier_name"],
         "allowed_cte_types": link["allowed_cte_types"],
+        "integration_profile_id": link.get("integration_profile_id"),
+        "integration_profile": profile,
         "status": "active",
     }
 
