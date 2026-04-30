@@ -131,7 +131,7 @@ _VALID_ROUTER_NAMES = {
     "notification_prefs", "team_mgmt", "settings", "integration",
     "canonical_records", "rules", "exceptions", "request_workflow", "identity",
     "auditor", "compliance_metrics", "readiness", "incidents", "sandbox",
-    "supplier_validation", "disaster_recovery",
+    "inflow_workbench", "supplier_validation", "disaster_recovery",
     "sla_tracking", "export_monitoring",
     "chain_verification", "audit_export_log",
 }
@@ -228,6 +228,11 @@ app.include_router(webhook_router, tags=["Webhooks"])
 if _router_enabled("sandbox"):
     from app.sandbox.router import router as sandbox_router
     app.include_router(sandbox_router)
+
+# Inflow Lab Workbench (scenarios, saved runs, fix queue, commit gates)
+if _router_enabled("inflow_workbench"):
+    from app.inflow_workbench import router as inflow_workbench_router
+    app.include_router(inflow_workbench_router)
 
 # FDA 24-Hour Export
 if _router_enabled("fda_export"):

@@ -52,6 +52,7 @@ Use [`docs/ENV_SETUP_CHECKLIST.md`] for full inventory. This section is only the
 - `STRIPE_PRICE_SCALE_MONTHLY`
 - `ADMIN_SERVICE_URL` (public URL of `admin-service`)
 - `CORS_ORIGINS` (include `https://regengine.co`)
+- `REGENGINE_INFLOW_WORKBENCH_PATH` (optional fallback only; Alembic v073 stores production workbench data in Postgres)
 
 ### 3.3 compliance-service
 
@@ -85,6 +86,13 @@ What this executes:
 - `services/ingestion/migrations/V*.sql`
 - `migrations/V*.sql` (FSMA persistence migration lives here)
 - `services/compliance/migrations/V*.sql`
+
+Confirm Alembic v073 is applied before allowing design-partner data through
+Inflow Workbench production evidence mode:
+
+```bash
+psql "$DATABASE_URL" -c "SELECT to_regclass('fsma.inflow_workbench_runs');"
+```
 
 ## 5. Apply Neo4j Constraints
 

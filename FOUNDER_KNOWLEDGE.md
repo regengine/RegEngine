@@ -140,6 +140,7 @@ There are 144+ env vars in `.env.example`. Here is what actually matters:
 | `REGENGINE_ENV` | "development" | Controls auth bypass. Cloud auto-forces "production" but manual deploys don't. |
 | `CORS_ALLOWED_ORIGINS` | regengine.co domains | Must include your actual domain. |
 | `MINIO_ROOT_USER/PASSWORD` | "minioadmin" | Default creds are publicly known. |
+| `REGENGINE_INFLOW_WORKBENCH_PATH` | `/tmp/regengine_inflow_workbench.json` | Local/test fallback only. Production workbench runs should persist through Alembic v073 Postgres tables; set this explicitly on Railway only if you need a known fallback path for smoke tests. |
 
 ### Can Be Ignored (optional features, safe to leave unset)
 
@@ -157,6 +158,9 @@ There are 144+ env vars in `.env.example`. Here is what actually matters:
 Railway requires you to click the SHARE button per service for shared variables.
 Setting a variable on one service does NOT propagate to others. Each of the 6
 services needs its own copy of `DATABASE_URL`, `REGENGINE_INTERNAL_SECRET`, etc.
+For the Inflow Workbench, verify the ingestion/monolith service sees `DATABASE_URL`
+and has run Alembic v073. `REGENGINE_INFLOW_WORKBENCH_PATH` is optional after
+v073 and should not be treated as production storage.
 
 ---
 

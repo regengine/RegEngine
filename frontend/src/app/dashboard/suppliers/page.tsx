@@ -24,11 +24,14 @@ import {
     Copy,
     ExternalLink,
     Trash2,
+    ArrowRight,
 } from 'lucide-react';
 
 import { apiClient } from '@/lib/api-client';
 import { useAuth } from '@/lib/auth-context';
+import { useTenant } from '@/lib/tenant-context';
 import { useDashboardRefresh } from '@/hooks/use-dashboard-refresh';
+import { fetchWorkbenchReadinessSummary, type WorkbenchReadinessSnapshot } from '@/lib/api-hooks';
 import type {
     SupplierFacility,
     SupplierComplianceScore,
@@ -79,12 +82,14 @@ function complianceLabel(score: number | null): { color: string; bg: string; lab
 /* ------------------------------------------------------------------ */
 
 export default function SupplierDashboardPage() {
-    const { isAuthenticated } = useAuth();
+    const { isAuthenticated, apiKey } = useAuth();
+    const { tenantId } = useTenant();
     const isLoggedIn = isAuthenticated;
 
     const [facilities, setFacilities] = useState<FacilityRow[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [workbenchSummary, setWorkbenchSummary] = useState<WorkbenchReadinessSnapshot | null>(null);
 
     // Portal link state
     const [portalLinks, setPortalLinks] = useState<PortalLink[]>([]);
@@ -110,6 +115,7 @@ export default function SupplierDashboardPage() {
     const loadData = useCallback(async () => {
         if (!isLoggedIn) {
             setFacilities([]);
+            setWorkbenchSummary(null);
             setLoading(false);
             setError('Sign in to view your supplier facilities.');
             return;
@@ -123,6 +129,12 @@ export default function SupplierDashboardPage() {
             apiClient.listPortalLinks()
                 .then((res) => setPortalLinks(res.links || []))
                 .catch(() => { /* portal links are optional */ });
+
+            if (tenantId) {
+                fetchWorkbenchReadinessSummary(tenantId, apiKey || '')
+                    .then(setWorkbenchSummary)
+                    .catch(() => setWorkbenchSummary(null));
+            }
 
             // Phase 1: Show facilities immediately
             const rawFacilities = await apiClient.listSupplierFacilities();
@@ -178,7 +190,7 @@ export default function SupplierDashboardPage() {
             setError(friendlyError(err, 'Unable to load supplier data. Please try again.'));
             setLoading(false);
         }
-    }, [isLoggedIn]);
+    }, [apiKey, isLoggedIn, tenantId]);
 
     useEffect(() => { loadData(); }, [loadData]);
 
@@ -361,6 +373,51 @@ export default function SupplierDashboardPage() {
                         </Card>
                     ))}
                 </div>
+
+                {/* Inflow Workbench readiness */}
+                <Card className="border-[var(--re-border-default)]">
+                    <CardContent className="py-4">
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                            <div className="flex items-center gap-3">
+                                <div
+                                    className="h-12 w-12 rounded-xl border border-[var(--re-border-default)] flex items-center justify-center text-lg font-bold tabular-nums"
+                                    style={{
+                                        color: workbenchSummary?.score != null ? complianceLabel(workbenchSummary.score).color : '#6b7280',
+                                        background: workbenchSummary?.score != null ? complianceLabel(workbenchSummary.score).bg : 'rgba(107,114,128,0.08)',
+                                    }}
+                                >
+                                    {workbenchSummary?.score ?? '—'}
+                                </div>
+                                <div>
+                                    <div className="text-sm font-semibold">Inflow Workbench readiness</div>
+                                    <p className="text-xs text-muted-foreground mt-0.5">
+                                        {workbenchSummary?.label ?? 'No supplier preflight run saved yet'}
+                                    </p>
+                                </div>
+                            </div>
+                            <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+                                <Badge
+                                    variant="secondary"
+                                    className={`text-[10px] ${
+                                        (workbenchSummary?.unresolved_fix_count ?? 0) > 0
+                                            ? 'bg-re-warning-muted0/10 text-re-warning'
+                                            : 'bg-re-brand-muted text-re-brand'
+                                    }`}
+                                >
+                                    {workbenchSummary?.unresolved_fix_count ?? 0} open fix{(workbenchSummary?.unresolved_fix_count ?? 0) === 1 ? '' : 'es'}
+                                </Badge>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="rounded-xl min-h-[36px] text-xs active:scale-[0.97]"
+                                    onClick={() => { window.location.href = '/tools/inflow-lab'; }}
+                                >
+                                    Open Workbench <ArrowRight className="h-3.5 w-3.5 ml-1" />
+                                </Button>
+                            </div>
+                        </div>
+                    </CardContent>
+                </Card>
 
                 {/* Portal Links — Invite Suppliers */}
                 <Card className="border-[var(--re-border-default)]">

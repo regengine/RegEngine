@@ -29,7 +29,7 @@ import {
 
 import { useAuth } from '@/lib/auth-context';
 import { useTenant } from '@/lib/tenant-context';
-import { fetchComplianceScore } from '@/lib/api-hooks';
+import { fetchComplianceScore, fetchWorkbenchReadinessSummary } from '@/lib/api-hooks';
 
 /* ── Types matching ComplianceScoreResponse from backend ── */
 
@@ -219,6 +219,16 @@ export default function ComplianceDashboardPage() {
         refetchInterval: POLL_MS,
     });
 
+    const {
+        data: workbenchSummary = null,
+        refetch: fetchWorkbenchSummary,
+    } = useQuery({
+        queryKey: ['inflow-workbench-readiness', tenantId],
+        queryFn: async () => fetchWorkbenchReadinessSummary(tenantId, apiKey || ''),
+        enabled: isLoggedIn && !!tenantId,
+        refetchInterval: POLL_MS,
+    });
+
     const error = scoreError?.message ?? null;
     const lastFetched = dataUpdatedAt ? new Date(dataUpdatedAt) : null;
 
@@ -278,7 +288,10 @@ export default function ComplianceDashboardPage() {
                         {score && (
                             <Button
                                 variant="ghost" size="sm"
-                                onClick={() => fetchScore()}
+                                onClick={() => {
+                                    fetchScore();
+                                    fetchWorkbenchSummary();
+                                }}
                                 disabled={loading}
                                 className="h-8 w-8 p-0"
                             >
@@ -345,7 +358,7 @@ export default function ComplianceDashboardPage() {
                         )}
 
                         {/* Score Gauge + Summary */}
-                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
+                        <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 sm:gap-6">
                             <Card className="border-[var(--re-border-default)]">
                                 <CardHeader className="pb-2">
                                     <CardTitle className="text-base">Overall Readiness</CardTitle>
@@ -362,6 +375,54 @@ export default function ComplianceDashboardPage() {
                                             </p>
                                         )}
                                     </div>
+                                </CardContent>
+                            </Card>
+
+                            <Card className="border-[var(--re-border-default)]">
+                                <CardHeader className="pb-2">
+                                    <CardTitle className="text-base">Inflow Workbench</CardTitle>
+                                </CardHeader>
+                                <CardContent className="space-y-4">
+                                    <div className="flex items-end justify-between gap-3">
+                                        <div>
+                                            <div
+                                                className="text-4xl font-bold tabular-nums"
+                                                style={{ color: workbenchSummary?.score != null ? scoreColor(workbenchSummary.score) : '#6b7280' }}
+                                            >
+                                                {workbenchSummary?.score ?? '—'}
+                                            </div>
+                                            <p className="text-[11px] text-muted-foreground mt-1">
+                                                {workbenchSummary?.label ?? 'No saved preflight run yet'}
+                                            </p>
+                                        </div>
+                                        <Badge
+                                            variant="secondary"
+                                            className={`text-[10px] ${
+                                                (workbenchSummary?.unresolved_fix_count ?? 0) > 0
+                                                    ? 'bg-re-warning-muted0/10 text-re-warning'
+                                                    : 'bg-re-brand-muted text-re-brand'
+                                            }`}
+                                        >
+                                            {workbenchSummary?.unresolved_fix_count ?? 0} open fix{(workbenchSummary?.unresolved_fix_count ?? 0) === 1 ? '' : 'es'}
+                                        </Badge>
+                                    </div>
+                                    <div className="space-y-2 text-[11px] text-muted-foreground">
+                                        <div className="flex items-center justify-between">
+                                            <span>Export eligible</span>
+                                            <span className="font-medium text-foreground">{workbenchSummary?.export_eligible ? 'Yes' : 'Not yet'}</span>
+                                        </div>
+                                        <div className="flex items-center justify-between">
+                                            <span>Latest run</span>
+                                            <span className="font-mono text-[10px] text-foreground">
+                                                {workbenchSummary?.run_id ? workbenchSummary.run_id.slice(0, 16) : 'none'}
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <Link href="/tools/inflow-lab">
+                                        <Button variant="outline" className="w-full h-9 rounded-xl text-xs">
+                                            Open Workbench <ArrowRight className="ml-1 h-3 w-3" />
+                                        </Button>
+                                    </Link>
                                 </CardContent>
                             </Card>
 
