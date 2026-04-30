@@ -1,0 +1,392 @@
+.page {
+  min-height: 100vh;
+  background: #f7f8f5;
+  color: #17211d;
+  font-family: var(--re-font-sans, Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif);
+}
+
+.hero {
+  border-bottom: 1px solid #d9ded7;
+  background:
+    linear-gradient(90deg, rgb(18 32 27 / 5%) 1px, transparent 1px),
+    linear-gradient(180deg, #fbfcf8 0%, #f2f5ef 100%);
+  background-size: 48px 48px, auto;
+}
+
+.heroInner {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(360px, 430px);
+  gap: 2rem;
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 3.25rem 1.5rem;
+}
+
+.backLink,
+.apiLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  color: #173f31;
+  font-size: 0.88rem;
+  font-weight: 760;
+  text-decoration: none;
+}
+
+.backLink {
+  margin-bottom: 1.35rem;
+}
+
+.kicker,
+.eyebrow,
+.statusGrid dt {
+  margin: 0;
+  color: #526159;
+  font-size: 0.72rem;
+  font-weight: 760;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.hero h1 {
+  max-width: 760px;
+  margin: 0.65rem 0 0;
+  color: #101a16;
+  font-size: clamp(2.55rem, 5vw, 4.1rem);
+  font-weight: 780;
+  letter-spacing: 0;
+  line-height: 0.98;
+}
+
+.hero p,
+.card p,
+.notes p {
+  color: #526159;
+  line-height: 1.65;
+}
+
+.hero p {
+  max-width: 760px;
+  margin: 1.05rem 0 0;
+  font-size: 1rem;
+}
+
+.statusGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin: 1.45rem 0 0;
+  overflow: hidden;
+  border: 1px solid #d7ded5;
+  border-radius: 0.55rem;
+  background: rgb(255 255 255 / 72%);
+}
+
+.statusGrid div {
+  min-width: 0;
+  padding: 0.86rem 0.95rem;
+  border-left: 1px solid #d7ded5;
+}
+
+.statusGrid div:first-child {
+  border-left: 0;
+}
+
+.statusGrid div:nth-child(odd) {
+  border-left: 0;
+}
+
+.statusGrid div:nth-child(n + 3) {
+  border-top: 1px solid #d7ded5;
+}
+
+.statusGrid dd {
+  margin: 0.28rem 0 0;
+  color: #17211d;
+  font-size: 0.86rem;
+  font-weight: 760;
+  overflow-wrap: anywhere;
+}
+
+.pathPanel,
+.card {
+  border: 1px solid #c8d4ca;
+  border-radius: 0.65rem;
+  background: #fff;
+  box-shadow: 0 16px 34px rgb(18 32 27 / 8%);
+}
+
+.pathPanel {
+  align-self: stretch;
+  padding: 1rem;
+}
+
+.panelHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.panelHeader > span {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 2.55rem;
+  height: 2.55rem;
+  border: 1px solid #d6e2d8;
+  border-radius: 0.5rem;
+  background: #eef5ef;
+  color: #163f31;
+}
+
+.panelHeader h2 {
+  margin: 0.18rem 0 0;
+  color: #101a16;
+  font-size: 1.28rem;
+  font-weight: 780;
+  letter-spacing: 0;
+}
+
+.pathStep {
+  display: grid;
+  grid-template-columns: 2rem minmax(0, 1fr);
+  gap: 0.75rem;
+  align-items: center;
+  padding: 0.78rem 0;
+  border-top: 1px solid #e3e8e1;
+}
+
+.pathStep:first-of-type {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.pathStep:last-child {
+  padding-bottom: 0;
+}
+
+.pathStep > span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 999px;
+  background: #173f31;
+  color: #fff;
+  font-size: 0.74rem;
+  font-weight: 800;
+}
+
+.pathStep strong {
+  display: block;
+  color: #101a16;
+  font-size: 0.9rem;
+}
+
+.pathStep p {
+  margin: 0.12rem 0 0;
+  color: #657168;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 0.74rem;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.content {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 320px);
+  gap: 1rem;
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 2.5rem 1.5rem;
+}
+
+.mainColumn,
+.sideColumn {
+  display: grid;
+  align-content: start;
+  gap: 1rem;
+  min-width: 0;
+}
+
+.sideColumn {
+  position: sticky;
+  top: 1rem;
+}
+
+.card {
+  padding: 1.25rem;
+}
+
+.card h2 {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  margin: 0;
+  color: #101a16;
+  font-size: 1.08rem;
+  font-weight: 780;
+  letter-spacing: 0;
+}
+
+.card h2 svg {
+  flex: 0 0 auto;
+  color: #173f31;
+}
+
+.card > p {
+  margin: 0.78rem 0 0;
+  font-size: 0.92rem;
+}
+
+.card code {
+  padding: 0.08rem 0.3rem;
+  border-radius: 0.32rem;
+  background: #eef5ef;
+  color: #173f31;
+  font-family: var(--re-font-mono, "SFMono-Regular", Consolas, monospace);
+  font-size: 0.9em;
+}
+
+.checkList {
+  display: grid;
+  gap: 0;
+  margin-top: 1rem;
+  border: 1px solid #e1e7df;
+  border-radius: 0.55rem;
+  overflow: hidden;
+}
+
+.checkList div {
+  display: grid;
+  grid-template-columns: 1.45rem minmax(0, 1fr);
+  gap: 0.75rem;
+  padding: 0.9rem;
+  border-top: 1px solid #e1e7df;
+  background: #fbfcfa;
+}
+
+.checkList div:first-child {
+  border-top: 0;
+}
+
+.checkList svg {
+  flex: 0 0 auto;
+  margin-top: 0.1rem;
+  color: #1b6b4d;
+}
+
+.checkList p {
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.codeBlock {
+  overflow: hidden;
+  margin-top: 1rem;
+  border: 1px solid #243c33;
+  border-radius: 0.55rem;
+  background: #111c18;
+}
+
+.codeBlock > div {
+  padding: 0.62rem 0.85rem;
+  border-bottom: 1px solid rgb(255 255 255 / 10%);
+  color: #a9c8ba;
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.codeBlock pre {
+  max-width: 100%;
+  margin: 0;
+  overflow-x: auto;
+  padding: 0.95rem;
+  color: #dff4e8;
+  font-family: var(--re-font-mono, "SFMono-Regular", Consolas, monospace);
+  font-size: 0.74rem;
+  line-height: 1.55;
+}
+
+.codeBlock code {
+  padding: 0;
+  background: transparent;
+  color: inherit;
+}
+
+.notes {
+  display: grid;
+  gap: 0.75rem;
+  margin-top: 0.9rem;
+}
+
+.notes p {
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.apiLink {
+  justify-content: space-between;
+  padding: 0.95rem 1rem;
+  border: 1px solid #c6d0c7;
+  border-radius: 0.55rem;
+  background: #fff;
+}
+
+.apiLink:hover {
+  border-color: #8fa695;
+  background: #f8faf7;
+}
+
+@media (max-width: 980px) {
+  .heroInner,
+  .content {
+    grid-template-columns: 1fr;
+    padding-left: 1.25rem;
+    padding-right: 1.25rem;
+  }
+
+  .sideColumn {
+    position: static;
+  }
+}
+
+@media (max-width: 560px) {
+  .heroInner {
+    padding-top: 2rem;
+    padding-bottom: 2rem;
+  }
+
+  .hero h1 {
+    font-size: 2.3rem;
+  }
+
+  .hero p {
+    font-size: 0.96rem;
+  }
+
+  .content {
+    padding-top: 2rem;
+  }
+
+  .card {
+    padding: 1rem;
+  }
+
+  .statusGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .statusGrid div {
+    border-top: 1px solid #d7ded5;
+    border-left: 0;
+  }
+
+  .statusGrid div:first-child {
+    border-top: 0;
+  }
+}

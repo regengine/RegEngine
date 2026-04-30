@@ -10,7 +10,7 @@ Central registry for all available connectors. Used by:
 from __future__ import annotations
 
 import logging
-from typing import Dict, List, Optional, Type
+from typing import Dict, Iterable, List, Optional, Type
 
 from .base import ConnectorConfig, ConnectionStatus, IntegrationConnector
 
@@ -18,20 +18,33 @@ logger = logging.getLogger("connector-registry")
 
 # Global registry mapping connector_id → connector class
 _CONNECTOR_CLASSES: Dict[str, Type[IntegrationConnector]] = {}
+_CONNECTOR_ALIASES: Dict[str, str] = {}
 
 # Active connector instances per tenant
 _ACTIVE_CONNECTORS: Dict[str, Dict[str, IntegrationConnector]] = {}
 
 
-def register_connector(connector_id: str, cls: Type[IntegrationConnector]) -> None:
+def register_connector(
+    connector_id: str,
+    cls: Type[IntegrationConnector],
+    *,
+    aliases: Iterable[str] = (),
+) -> None:
     """Register a connector class for a given ID."""
     _CONNECTOR_CLASSES[connector_id] = cls
+    for alias in aliases:
+        _CONNECTOR_ALIASES[alias] = connector_id
     logger.info("registered_connector id=%s class=%s", connector_id, cls.__name__)
+
+
+def resolve_connector_id(connector_id: str) -> str:
+    """Return the canonical registry ID for a connector or alias."""
+    return _CONNECTOR_ALIASES.get(connector_id, connector_id)
 
 
 def get_connector_class(connector_id: str) -> Optional[Type[IntegrationConnector]]:
     """Get a registered connector class by ID."""
-    return _CONNECTOR_CLASSES.get(connector_id)
+    return _CONNECTOR_CLASSES.get(resolve_connector_id(connector_id))
 
 
 def list_available_connectors() -> List[Dict]:
@@ -66,6 +79,7 @@ def get_or_create_connector(
     if tenant_id not in _ACTIVE_CONNECTORS:
         _ACTIVE_CONNECTORS[tenant_id] = {}
 
+    connector_id = resolve_connector_id(connector_id)
     tenant_connectors = _ACTIVE_CONNECTORS[tenant_id]
     if connector_id not in tenant_connectors:
         cls = _CONNECTOR_CLASSES.get(connector_id)
@@ -84,7 +98,7 @@ def get_tenant_connectors(tenant_id: str) -> Dict[str, IntegrationConnector]:
 def remove_connector(tenant_id: str, connector_id: str) -> None:
     """Remove a connector instance for a tenant."""
     if tenant_id in _ACTIVE_CONNECTORS:
-        _ACTIVE_CONNECTORS[tenant_id].pop(connector_id, None)
+        _ACTIVE_CONNECTORS[tenant_id].pop(resolve_connector_id(connector_id), None)
 
 
 def get_all_integration_statuses(tenant_id: str) -> List[Dict]:
@@ -100,12 +114,26 @@ def get_all_integration_statuses(tenant_id: str) -> List[Dict]:
         if connector_id in active:
             statuses.append(active[connector_id].to_integration_status())
         else:
+            info = {}
+            try:
+                config = ConnectorConfig(
+                    connector_id=connector_id,
+                    display_name=connector_id,
+                    category="unknown",
+                )
+                info = cls(config).get_connector_info()
+            except Exception as exc:
+                logger.warning(
+                    "connector_status_info_failed id=%s error=%s",
+                    connector_id, str(exc),
+                )
             statuses.append({
                 "id": connector_id,
-                "name": connector_id,
-                "category": "unknown",
+                "name": info.get("name", connector_id),
+                "category": info.get("category", "unknown"),
                 "status": ConnectionStatus.DISCONNECTED.value,
                 "last_sync": None,
+                "docs_url": info.get("docs_url"),
             })
 
     return statuses

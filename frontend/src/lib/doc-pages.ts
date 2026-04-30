@@ -12,6 +12,7 @@ export const DOC_PAGES: DocPage[] = [
   { title: 'Authentication', href: '/docs/authentication' },
   { title: 'API Reference', href: '/docs/api' },
   { title: 'Webhooks', href: '/docs/webhooks' },
+  { title: 'Inflow Lab', href: '/docs/connectors/inflow-lab' },
   { title: 'Error Codes', href: '/docs/errors' },
   { title: 'Rate Limits', href: '/docs/rate-limits' },
   { title: 'SDKs', href: '/docs/sdks' },

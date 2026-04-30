@@ -124,6 +124,7 @@ def _clean_registry(monkeypatch):
     """Start every test from a clean connector registry so previous
     tests don't leak connector instances."""
     monkeypatch.setattr(registry_mod, "_CONNECTOR_CLASSES", {})
+    monkeypatch.setattr(registry_mod, "_CONNECTOR_ALIASES", {})
     monkeypatch.setattr(registry_mod, "_ACTIVE_CONNECTORS", {})
 
 
@@ -236,6 +237,45 @@ class TestConfigureConnector:
         assert created["config"].api_key == "sk_test_123"
         assert created["config"].base_url == "https://api.example.com"
 
+    def test_public_slug_alias_configures_canonical_connector(
+        self, client, monkeypatch
+    ):
+        """Public docs/UI slugs should work even when the backend stores
+        an older underscore connector ID."""
+
+        class _FakeClass:
+            def __init__(self, config):
+                self._config = config
+
+            def get_connector_info(self):
+                return {"id": "inflow_lab", "category": "developer"}
+
+        created = {}
+
+        def _get_or_create(tenant_id, connector_id, config):
+            created["tenant_id"] = tenant_id
+            created["connector_id"] = connector_id
+            created["config"] = config
+            return _FakeConnector(status=ConnectionStatus.CONNECTED)
+
+        monkeypatch.setattr(
+            registry_mod, "_CONNECTOR_CLASSES", {"inflow_lab": _FakeClass}
+        )
+        monkeypatch.setattr(
+            registry_mod, "_CONNECTOR_ALIASES", {"inflow-lab": "inflow_lab"}
+        )
+        monkeypatch.setattr(registry_mod, "get_or_create_connector", _get_or_create)
+
+        resp = client.post(
+            f"/api/v1/integrations/configure/{TENANT}",
+            json={"connector_id": "inflow-lab"},
+        )
+
+        assert resp.status_code == 200
+        assert resp.json()["connector_id"] == "inflow_lab"
+        assert created["connector_id"] == "inflow_lab"
+        assert created["config"].connector_id == "inflow_lab"
+
     def test_category_falls_back_to_class_name_on_introspection_failure(
         self, client, monkeypatch
     ):
@@ -305,6 +345,26 @@ class TestConnection:
             "connected": True,
             "status": "connected",
         }
+
+    def test_public_slug_alias_reaches_configured_connector(
+        self, client, monkeypatch
+    ):
+        connector = _FakeConnector(
+            status=ConnectionStatus.CONNECTED, test_result=True
+        )
+        monkeypatch.setattr(
+            registry_mod, "_CONNECTOR_ALIASES", {"inflow-lab": "inflow_lab"}
+        )
+        monkeypatch.setattr(
+            registry_mod,
+            "get_tenant_connectors",
+            lambda _tid: {"inflow_lab": connector},
+        )
+
+        resp = client.post(f"/api/v1/integrations/test/{TENANT}/inflow-lab")
+
+        assert resp.status_code == 200
+        assert resp.json()["connector_id"] == "inflow_lab"
 
     def test_connection_test_failure_still_returns_200(self, client, monkeypatch):
         """A failed ``test_connection`` is not an API-error condition —

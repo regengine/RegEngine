@@ -261,7 +261,7 @@ def _install_shared_stubs(
             self.kdes = {}
 
     monkeypatch.setattr(
-        wr, "normalize_webhook_event", lambda event, tenant_id: _FakeCanonical(event.traceability_lot_code)
+        wr, "normalize_webhook_event", lambda event, tenant_id, **_: _FakeCanonical(event.traceability_lot_code)
     )
     monkeypatch.setattr(wr, "emit_funnel_event", lambda **_kw: None)
 
@@ -1336,6 +1336,24 @@ class TestIngestEndpoint:
         )
         assert resp.status_code == 200
         assert persistence.batch_calls[0]["tenant_id"] == "tenant-from-principal"
+
+    def test_tenant_resolved_from_x_tenant_id_header(self, monkeypatch):
+        """Payload without tenant_id can use the tenant header sent by live webhook clients."""
+        client, _session, persistence = _client(monkeypatch)
+        payload = self._payload()
+        payload.pop("tenant_id")
+
+        resp = client.post(
+            "/api/v1/webhooks/ingest",
+            json=payload,
+            headers={
+                "Idempotency-Key": "idem-header-tenant",
+                "X-Tenant-ID": "tenant-from-header",
+            },
+        )
+
+        assert resp.status_code == 200
+        assert persistence.batch_calls[0]["tenant_id"] == "tenant-from-header"
 
     def test_missing_tenant_returns_400(self, monkeypatch):
         client, _session, _persistence = _client(monkeypatch)

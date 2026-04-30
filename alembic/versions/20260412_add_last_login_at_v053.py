@@ -20,14 +20,26 @@ depends_on: Union[str, Sequence[str], None] = None
 def upgrade() -> None:
     """Add last_login_at timestamp to users table for login tracking."""
     op.execute("""
+        DO $$
+        BEGIN
+        IF to_regclass('public.users') IS NOT NULL THEN
         ALTER TABLE users
         ADD COLUMN IF NOT EXISTS last_login_at TIMESTAMPTZ;
 
         COMMENT ON COLUMN users.last_login_at
         IS 'Timestamp of most recent successful login';
+        END IF;
+        END $$;
     """)
 
 
 def downgrade() -> None:
     """Remove last_login_at column."""
-    op.execute("ALTER TABLE users DROP COLUMN IF EXISTS last_login_at;")
+    op.execute("""
+        DO $$
+        BEGIN
+        IF to_regclass('public.users') IS NOT NULL THEN
+            ALTER TABLE users DROP COLUMN IF EXISTS last_login_at;
+        END IF;
+        END $$;
+    """)

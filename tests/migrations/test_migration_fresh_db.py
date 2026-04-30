@@ -52,6 +52,52 @@ from testcontainers.postgres import PostgresContainer  # noqa: E402
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
+def _provision_app_roles(database_url: str) -> None:
+    """Create roles referenced by RLS policies in the migration chain."""
+    sa_url = database_url.replace(
+        "postgresql://", "postgresql+psycopg://"
+    )
+    engine = create_engine(sa_url, future=True)
+    try:
+        with engine.begin() as conn:
+            conn.execute(text("""
+                DO $$
+                BEGIN
+                    IF NOT EXISTS (
+                        SELECT 1 FROM pg_roles WHERE rolname = 'regengine'
+                    ) THEN
+                        CREATE ROLE regengine NOLOGIN;
+                    END IF;
+                    IF NOT EXISTS (
+                        SELECT 1 FROM pg_roles WHERE rolname = 'regengine_sysadmin'
+                    ) THEN
+                        CREATE ROLE regengine_sysadmin NOLOGIN;
+                    END IF;
+                END$$;
+            """))
+            conn.execute(text("""
+                CREATE OR REPLACE FUNCTION get_tenant_context()
+                RETURNS uuid
+                LANGUAGE plpgsql
+                STABLE
+                AS $$
+                DECLARE
+                    tid text;
+                BEGIN
+                    tid := NULLIF(current_setting('app.tenant_id', true), '');
+                    IF tid IS NULL THEN
+                        RAISE EXCEPTION
+                            'app.tenant_id not set - tenant context required for RLS'
+                            USING ERRCODE = 'insufficient_privilege';
+                    END IF;
+                    RETURN tid::uuid;
+                END;
+                $$;
+            """))
+    finally:
+        engine.dispose()
+
+
 def _run_alembic(cmd: list[str], database_url: str, extra_env: dict | None = None) -> subprocess.CompletedProcess:
     """Invoke alembic as a subprocess with DATABASE_URL set.
 
@@ -129,6 +175,7 @@ def applied_head(pg_container: PostgresContainer, database_url: str) -> None:
     fixture just ensures the other tests observe the post-upgrade
     state.
     """
+    _provision_app_roles(database_url)
     result = _run_alembic(["upgrade", "head"], database_url)
     if result.returncode != 0:
         # Stash the output on the fixture's module so the dedicated

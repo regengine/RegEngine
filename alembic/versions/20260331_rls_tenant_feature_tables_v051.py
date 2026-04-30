@@ -229,6 +229,7 @@ def upgrade() -> None:
 
     # Update RLS policies on core tables — require BOTH session var AND role
     op.execute("""
+        DO $$ BEGIN
         DROP POLICY IF EXISTS tenant_isolation_docs ON ingestion.documents;
         CREATE POLICY tenant_isolation_docs ON ingestion.documents
             FOR ALL
@@ -243,9 +244,13 @@ def upgrade() -> None:
             AFTER INSERT OR UPDATE OR DELETE ON ingestion.documents
             FOR EACH ROW
             EXECUTE FUNCTION audit.log_sysadmin_access();
+        EXCEPTION WHEN undefined_table OR invalid_schema_name THEN
+            RAISE NOTICE 'Table ingestion.documents does not exist - skipping RLS';
+        END $$;
     """)
 
     op.execute("""
+        DO $$ BEGIN
         DROP POLICY IF EXISTS tenant_isolation_projects ON vertical_projects;
         CREATE POLICY tenant_isolation_projects ON vertical_projects
             FOR ALL
@@ -260,9 +265,13 @@ def upgrade() -> None:
             AFTER INSERT OR UPDATE OR DELETE ON vertical_projects
             FOR EACH ROW
             EXECUTE FUNCTION audit.log_sysadmin_access();
+        EXCEPTION WHEN undefined_table OR invalid_schema_name THEN
+            RAISE NOTICE 'Table vertical_projects does not exist - skipping RLS';
+        END $$;
     """)
 
     op.execute("""
+        DO $$ BEGIN
         DROP POLICY IF EXISTS tenant_isolation_evidence ON evidence_logs;
         CREATE POLICY tenant_isolation_evidence ON evidence_logs
             FOR ALL
@@ -277,9 +286,13 @@ def upgrade() -> None:
             AFTER INSERT OR UPDATE OR DELETE ON evidence_logs
             FOR EACH ROW
             EXECUTE FUNCTION audit.log_sysadmin_access();
+        EXCEPTION WHEN undefined_table OR invalid_schema_name THEN
+            RAISE NOTICE 'Table evidence_logs does not exist - skipping RLS';
+        END $$;
     """)
 
     op.execute("""
+        DO $$ BEGIN
         DROP POLICY IF EXISTS tenant_isolation_audit ON audit_logs;
         CREATE POLICY tenant_isolation_audit ON audit_logs
             FOR ALL
@@ -294,9 +307,13 @@ def upgrade() -> None:
             AFTER INSERT OR UPDATE OR DELETE ON audit_logs
             FOR EACH ROW
             EXECUTE FUNCTION audit.log_sysadmin_access();
+        EXCEPTION WHEN undefined_table OR invalid_schema_name THEN
+            RAISE NOTICE 'Table audit_logs does not exist - skipping RLS';
+        END $$;
     """)
 
     op.execute("""
+        DO $$ BEGIN
         DROP POLICY IF EXISTS tenant_isolation_memberships ON memberships;
         CREATE POLICY tenant_isolation_memberships ON memberships
             FOR ALL
@@ -311,9 +328,13 @@ def upgrade() -> None:
             AFTER INSERT OR UPDATE OR DELETE ON memberships
             FOR EACH ROW
             EXECUTE FUNCTION audit.log_sysadmin_access();
+        EXCEPTION WHEN undefined_table OR invalid_schema_name THEN
+            RAISE NOTICE 'Table memberships does not exist - skipping RLS';
+        END $$;
     """)
 
     op.execute("""
+        DO $$ BEGIN
         DROP POLICY IF EXISTS user_self_isolation ON users;
         CREATE POLICY user_self_isolation ON users
             FOR ALL
@@ -328,6 +349,9 @@ def upgrade() -> None:
             AFTER INSERT OR UPDATE OR DELETE ON users
             FOR EACH ROW
             EXECUTE FUNCTION audit.log_sysadmin_access();
+        EXCEPTION WHEN undefined_table OR invalid_schema_name THEN
+            RAISE NOTICE 'Table users does not exist - skipping RLS';
+        END $$;
     """)
 
     # ----------------------------------------------------------------
@@ -416,11 +440,13 @@ def upgrade() -> None:
     op.execute("""
         ALTER TABLE public.food_traceability_list FORCE ROW LEVEL SECURITY;
         DO $$ BEGIN
+            IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
             CREATE POLICY "food_traceability_list_select_authenticated"
               ON public.food_traceability_list
               FOR SELECT
               TO authenticated
               USING (true);
+            END IF;
         EXCEPTION WHEN duplicate_object THEN NULL;
         END $$;
     """)
@@ -428,6 +454,7 @@ def upgrade() -> None:
     op.execute("""
         ALTER TABLE public.obligations FORCE ROW LEVEL SECURITY;
         DO $$ BEGIN
+            IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
             CREATE POLICY "obligations_select_tenant_scoped"
               ON public.obligations
               FOR SELECT
@@ -439,6 +466,7 @@ def upgrade() -> None:
                   WHERE m.user_id = auth.uid()
                 )
               );
+            END IF;
         EXCEPTION WHEN duplicate_object THEN NULL;
         END $$;
     """)
@@ -447,6 +475,7 @@ def upgrade() -> None:
         ALTER TABLE public.obligation_cte_rules ENABLE ROW LEVEL SECURITY;
         ALTER TABLE public.obligation_cte_rules FORCE ROW LEVEL SECURITY;
         DO $$ BEGIN
+            IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
             CREATE POLICY "obligation_cte_rules_select_via_obligation"
               ON public.obligation_cte_rules
               FOR SELECT
@@ -459,6 +488,7 @@ def upgrade() -> None:
                   WHERE m.user_id = auth.uid()
                 )
               );
+            END IF;
         EXCEPTION WHEN duplicate_object THEN NULL;
         END $$;
     """)

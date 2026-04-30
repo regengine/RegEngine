@@ -52,10 +52,55 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 # data that all tenants share, or system catalogs. Every entry needs a
 # comment justifying the exemption and ideally a link to the design doc.
 TABLES_EXEMPT: Set[str] = {
-    # Empty on purpose: every ``fsma.*`` table in-tree today is
-    # tenant-scoped. If you add a global reference table, add it here
-    # with a rationale and update the audit doc.
+    # Tenant/org roots do not carry tenant_id; they define the isolation boundary.
+    "organizations",
+    # Global rules catalog and its change log are shared regulatory metadata.
+    "rule_definitions",
+    "rule_audit_log",
 }
+
+
+def _provision_app_roles(database_url: str) -> None:
+    """Create local roles/functions referenced by RLS policies."""
+    engine = create_engine(database_url, future=True)
+    try:
+        with engine.begin() as conn:
+            conn.execute(text("""
+                DO $$
+                BEGIN
+                    IF NOT EXISTS (
+                        SELECT 1 FROM pg_roles WHERE rolname = 'regengine'
+                    ) THEN
+                        CREATE ROLE regengine NOLOGIN;
+                    END IF;
+                    IF NOT EXISTS (
+                        SELECT 1 FROM pg_roles WHERE rolname = 'regengine_sysadmin'
+                    ) THEN
+                        CREATE ROLE regengine_sysadmin NOLOGIN;
+                    END IF;
+                END$$;
+            """))
+            conn.execute(text("""
+                CREATE OR REPLACE FUNCTION get_tenant_context()
+                RETURNS uuid
+                LANGUAGE plpgsql
+                STABLE
+                AS $$
+                DECLARE
+                    tid text;
+                BEGIN
+                    tid := NULLIF(current_setting('app.tenant_id', true), '');
+                    IF tid IS NULL THEN
+                        RAISE EXCEPTION
+                            'app.tenant_id not set - tenant context required for RLS'
+                            USING ERRCODE = 'insufficient_privilege';
+                    END IF;
+                    RETURN tid::uuid;
+                END;
+                $$;
+            """))
+    finally:
+        engine.dispose()
 
 
 @pytest.fixture(scope="module")
@@ -85,6 +130,7 @@ def upgraded_engine() -> Iterator[Engine]:
             if v is not None:
                 env[k] = v
 
+        _provision_app_roles(url)
         result = subprocess.run(
             [sys.executable, "-m", "alembic", "upgrade", "head"],
             cwd=REPO_ROOT,

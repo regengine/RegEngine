@@ -1,0 +1,213 @@
+name: Inflow Lab Contract CI
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'services/ingestion/app/webhook_models.py'
+      - 'services/ingestion/app/webhook_router_v2.py'
+      - 'services/shared/canonical_event.py'
+      - 'services/shared/cte_persistence/**'
+      - 'services/shared/canonical_persistence/**'
+      - 'alembic/**'
+      - 'requirements.in'
+      - 'requirements.lock'
+      - '.github/workflows/inflow-contract-ci.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'services/ingestion/app/webhook_models.py'
+      - 'services/ingestion/app/webhook_router_v2.py'
+      - 'services/shared/canonical_event.py'
+      - 'services/shared/cte_persistence/**'
+      - 'services/shared/canonical_persistence/**'
+      - 'alembic/**'
+      - 'requirements.in'
+      - 'requirements.lock'
+      - '.github/workflows/inflow-contract-ci.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: inflow-contract-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHON_VERSION: '3.11'
+  INFLOW_LAB_REPOSITORY: regengine/inflow-lab
+  INFLOW_LAB_REF: 8dc9e89dfc41eda4d9acd3f4f8a30c6e2968f52c  # pragma: allowlist secret
+  CONTRACT_TENANT_ID: 11111111-1111-1111-1111-111111111111
+  CONTRACT_API_KEY: ci-inflow-contract-key  # pragma: allowlist secret
+  CONTRACT_HMAC_SECRET: ci-inflow-contract-hmac-secret  # pragma: allowlist secret
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    name: Simulator live ingest contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres  # pragma: allowlist secret
+          POSTGRES_DB: regengine_contract
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout RegEngine
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+        with:
+          path: regengine
+
+      - name: Checkout pinned Inflow Lab simulator
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+        with:
+          repository: ${{ env.INFLOW_LAB_REPOSITORY }}
+          ref: ${{ env.INFLOW_LAB_REF }}
+          path: inflow-lab
+
+      - name: Setup Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Cache pip packages
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae  # v5
+        with:
+          path: ~/.cache/pip
+          key: inflow-contract-pip-${{ hashFiles('regengine/requirements.lock', 'inflow-lab/requirements.txt') }}
+          restore-keys: |
+            inflow-contract-pip-
+            pip-
+
+      - name: Install RegEngine dependencies
+        working-directory: regengine
+        run: |
+          pip install --require-hashes -r requirements.lock
+          pip install uvicorn
+
+      - name: Install Inflow Lab dependencies
+        working-directory: inflow-lab
+        run: pip install -r requirements.txt
+
+      - name: Prepare RegEngine database roles
+        env:
+          PGPASSWORD: postgres  # pragma: allowlist secret
+        run: |
+          psql -h localhost -U postgres -d regengine_contract -v ON_ERROR_STOP=1 \
+            -c "DO \$\$ BEGIN CREATE ROLE regengine LOGIN; EXCEPTION WHEN duplicate_object THEN NULL; END \$\$;" \
+            -c "DO \$\$ BEGIN CREATE ROLE regengine_sysadmin LOGIN INHERIT; EXCEPTION WHEN duplicate_object THEN NULL; END \$\$;" \
+            -c "GRANT regengine TO regengine_sysadmin;" \
+            -c "CREATE OR REPLACE FUNCTION get_tenant_context() RETURNS UUID AS \$\$ DECLARE tid TEXT; BEGIN tid := NULLIF(current_setting('app.tenant_id', TRUE), ''); IF tid IS NULL THEN RAISE EXCEPTION 'app.tenant_id not set - tenant context required for RLS'; END IF; RETURN tid::UUID; END; \$\$ LANGUAGE plpgsql;"
+
+      - name: Apply RegEngine migrations
+        working-directory: regengine
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/regengine_contract  # pragma: allowlist secret
+        run: alembic upgrade head
+
+      - name: Start local RegEngine ingestion service
+        working-directory: regengine
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/regengine_contract  # pragma: allowlist secret
+          COMPLIANCE_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/regengine_contract  # pragma: allowlist secret
+          ADMIN_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/regengine_contract  # pragma: allowlist secret
+          REDIS_URL: redis://localhost:6379/0
+          REGENGINE_ENV: test
+          API_KEY: ${{ env.CONTRACT_API_KEY }}
+          AUTH_TEST_BYPASS_TOKEN: ${{ env.CONTRACT_API_KEY }}
+          AUTH_TEST_BYPASS_TENANT_ID: ${{ env.CONTRACT_TENANT_ID }}
+          SUBSCRIPTION_GATE_FAIL_OPEN: 'true'
+          WEBHOOK_HMAC_SECRET: ${{ env.CONTRACT_HMAC_SECRET }}
+          JWT_SECRET: test-secret-key-for-ci  # pragma: allowlist secret
+          SUPABASE_URL: http://localhost:54321
+          SUPABASE_KEY: test-key-for-ci
+          PYTHONDONTWRITEBYTECODE: 1
+        run: |
+          export PYTHONPATH="$(pwd):$(pwd)/services:${PYTHONPATH}"
+          python -m uvicorn services.ingestion.main:app --host 127.0.0.1 --port 8002 > /tmp/regengine-ingestion.log 2>&1 &
+          echo $! > /tmp/regengine-ingestion.pid
+          for attempt in {1..60}; do
+            if curl -fsS http://127.0.0.1:8002/health >/dev/null 2>&1; then
+              exit 0
+            fi
+            if ! kill -0 "$(cat /tmp/regengine-ingestion.pid)" 2>/dev/null; then
+              cat /tmp/regengine-ingestion.log
+              exit 1
+            fi
+            sleep 1
+          done
+          cat /tmp/regengine-ingestion.log
+          exit 1
+
+      - name: Start local Inflow Lab simulator
+        working-directory: inflow-lab
+        env:
+          REGENGINE_DATA_DIR: /tmp/inflow-lab-data
+          REGENGINE_CORS_ORIGINS: http://127.0.0.1:8010
+          REGENGINE_WEBHOOK_HMAC_SECRET: ${{ env.CONTRACT_HMAC_SECRET }}
+          PYTHONDONTWRITEBYTECODE: 1
+        run: |
+          python -m uvicorn app.main:app --host 127.0.0.1 --port 8010 > /tmp/inflow-lab.log 2>&1 &
+          echo $! > /tmp/inflow-lab.pid
+          for attempt in {1..60}; do
+            if curl -fsS http://127.0.0.1:8010/api/healthz >/dev/null 2>&1; then
+              exit 0
+            fi
+            if ! kill -0 "$(cat /tmp/inflow-lab.pid)" 2>/dev/null; then
+              cat /tmp/inflow-lab.log
+              exit 1
+            fi
+            sleep 1
+          done
+          cat /tmp/inflow-lab.log
+          exit 1
+
+      - name: Run one-batch signed live ingest contract
+        working-directory: inflow-lab
+        env:
+          REGENGINE_REMOTE_BASE_URL: http://127.0.0.1:8010
+          REGENGINE_REMOTE_USERNAME: unused
+          REGENGINE_REMOTE_PASSWORD: unused  # pragma: allowlist secret
+          REGENGINE_REMOTE_TENANT: inflow-contract
+          REGENGINE_LIVE_ENDPOINT: http://localhost:8002/api/v1/webhooks/ingest
+          REGENGINE_LIVE_API_KEY: ${{ env.CONTRACT_API_KEY }}
+          REGENGINE_LIVE_TENANT_ID: ${{ env.CONTRACT_TENANT_ID }}
+          REGENGINE_WEBHOOK_HMAC_SECRET: ${{ env.CONTRACT_HMAC_SECRET }}
+        run: python scripts/live_trial.py --confirm-live
+
+      - name: Dump service logs on failure
+        if: failure()
+        run: |
+          echo "== Inflow Lab stored events =="
+          curl -fsS -H "X-RegEngine-Tenant: inflow-contract" "http://127.0.0.1:8010/api/events?limit=5" || true
+          echo
+          echo "== RegEngine ingestion log =="
+          cat /tmp/regengine-ingestion.log || true
+          echo "== Inflow Lab log =="
+          cat /tmp/inflow-lab.log || true
+
+      - name: Stop local services
+        if: always()
+        run: |
+          if [ -f /tmp/inflow-lab.pid ]; then kill "$(cat /tmp/inflow-lab.pid)" 2>/dev/null || true; fi
+          if [ -f /tmp/regengine-ingestion.pid ]; then kill "$(cat /tmp/regengine-ingestion.pid)" 2>/dev/null || true; fi

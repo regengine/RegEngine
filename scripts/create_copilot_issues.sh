@@ -2,7 +2,7 @@
 # Create batch of Copilot-assignable issues for vertical development
 # Each issue is scoped to be completable by Copilot coding agent
 
-REPO="PetrefiedThunder/RegEngine"
+REPO="regengine/RegEngine"
 
 create_issue() {
   local title="$1"
