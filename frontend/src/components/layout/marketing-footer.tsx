@@ -11,17 +11,12 @@ import {
 } from '@/components/layout/marketing-nav';
 import { RegEngineWordmark } from '@/components/layout/regengine-wordmark';
 import { requestShowCookiePrefs } from '@/lib/cookie-consent';
+import { shouldHideMarketingChrome } from '@/lib/app-routes';
 
 export function MarketingFooter() {
     const pathname = usePathname();
 
-    // Hide global footer on standalone mobile app and dashboard routes
-    if (
-        pathname === '/mobile/capture' ||
-        pathname === '/fsma/field-capture' ||
-        pathname.startsWith('/dashboard') ||
-        pathname.startsWith('/onboarding')
-    ) {
+    if (shouldHideMarketingChrome(pathname)) {
         return null;
     }
 

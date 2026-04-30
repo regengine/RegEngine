@@ -8,7 +8,7 @@ import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader } from '@/components/ui/card';
-import { Loader2, Lock, LayoutDashboard, ArrowRight, ShieldCheck, CalendarClock, GitBranch } from 'lucide-react';
+import { Loader2, LayoutDashboard, ShieldCheck, KeyRound, ClipboardCheck } from 'lucide-react';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
 
@@ -90,6 +90,8 @@ export default function LoginPage() {
     const searchParams = useSearchParams();
     const nextParam = searchParams.get('next');
     const { login, user, isHydrated } = useAuth();
+    const showQaPresets = Boolean(QALoginPresets && (searchParams.get('qa') === '1' || searchParams.get('preset')));
+    const QaPresets = QALoginPresets;
 
     const applyPreset = useCallback((presetEmail: string) => {
         setEmail(presetEmail);
@@ -230,78 +232,57 @@ export default function LoginPage() {
     };
 
     return (
-        <div className="relative overflow-hidden bg-[var(--re-surface-base)]">
-            <div className="pointer-events-none absolute inset-0">
-                <div className="absolute -top-16 left-1/2 h-56 w-56 -translate-x-1/2 rounded-full bg-[var(--re-brand)]/10 blur-3xl" />
-                <div className="absolute right-12 top-28 h-48 w-48 rounded-full bg-cyan-400/10 blur-3xl" />
-            </div>
-
-            <section className="relative z-[1] mx-auto max-w-6xl px-6 py-14 lg:py-20">
-                <div className="grid items-stretch gap-6 lg:grid-cols-[1.05fr_0.95fr]">
-                    <div className="rounded-3xl border border-[var(--re-surface-border)] bg-[var(--re-surface-card)]/70 p-8 shadow-[0_20px_80px_rgba(0,0,0,0.25)] lg:p-10">
-                        <div className="inline-flex items-center gap-2 rounded-full border border-[var(--re-brand)]/30 bg-[var(--re-brand)]/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--re-brand)]">
-                            RegEngine
+        <div className="min-h-[calc(100vh-1px)] bg-slate-50 text-slate-950">
+            <section className="mx-auto flex min-h-[calc(100vh-1px)] w-full max-w-6xl items-center px-4 py-8 sm:px-6 lg:px-8">
+                <div className="grid w-full overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm lg:grid-cols-[minmax(0,0.9fr)_minmax(420px,0.7fr)]">
+                    <div className="hidden border-r border-slate-200 bg-slate-950 p-8 text-white lg:flex lg:flex-col lg:justify-between">
+                        <div>
+                            <div className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-500 text-slate-950">
+                                <ClipboardCheck className="h-5 w-5" />
+                            </div>
+                            <h1 className="mt-8 max-w-md text-3xl font-semibold leading-tight tracking-normal">
+                                RegEngine command center
+                            </h1>
+                            <p className="mt-3 max-w-md text-sm leading-6 text-slate-300">
+                                Continue to your FSMA 204 workspace, validate traceability records, and prepare export-ready evidence.
+                            </p>
                         </div>
 
-                        <h1 className="mt-4 text-3xl font-bold leading-tight text-[var(--re-text-primary)] lg:text-4xl">
-                            API-first regulatory compliance.
-                        </h1>
-                        <p className="mt-3 max-w-[58ch] text-sm leading-relaxed text-[var(--re-text-muted)] lg:text-base">
-                            Sign in to continue your FSMA 204 workflow, run traceability checks, and export audit-ready records with cryptographic proof.
-                        </p>
-
-                        <div className="mt-7 grid gap-3 sm:grid-cols-2">
-                            <div className="rounded-xl border border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)] p-3">
-                                <div className="mb-1 inline-flex items-center gap-2 text-xs font-semibold text-[var(--re-text-primary)]">
-                                    <CalendarClock className="h-3.5 w-3.5 text-[var(--re-brand)]" />
-                                    Deadline Focus
-                                </div>
-                                <p className="text-xs text-[var(--re-text-muted)]">FSMA 204 deadline: July 20, 2028</p>
-                            </div>
-                            <div className="rounded-xl border border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)] p-3">
-                                <div className="mb-1 inline-flex items-center gap-2 text-xs font-semibold text-[var(--re-text-primary)]">
-                                    <GitBranch className="h-3.5 w-3.5 text-[var(--re-brand)]" />
-                                    Verifiable by Design
-                                </div>
-                                <p className="text-xs text-[var(--re-text-muted)]">Every record is cryptographically signed and auditable.</p>
-                            </div>
-                        </div>
-
-                        <div className="mt-7 space-y-3">
+                        <div className="grid gap-3 text-sm">
                             {[
-                                'Capture and validate all 7 FSMA 204 CTE types',
-                                'Track supplier onboarding and compliance gaps in real time',
-                                'Generate FDA-ready exports without manual spreadsheet cleanup',
+                                'Secure tenant-scoped session',
+                                'FDA-ready traceability exports',
+                                'Hash-chain audit evidence',
                             ].map((item) => (
-                                <div key={item} className="flex items-start gap-3">
-                                    <ShieldCheck className="mt-0.5 h-4 w-4 text-[var(--re-brand)]" />
-                                    <p className="text-sm text-[var(--re-text-secondary)]">{item}</p>
+                                <div key={item} className="flex items-center gap-3 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2">
+                                    <ShieldCheck className="h-4 w-4 text-emerald-300" />
+                                    <span className="text-slate-200">{item}</span>
                                 </div>
                             ))}
                         </div>
-
-                        <div className="mt-8 flex flex-wrap items-center gap-3 text-xs text-[var(--re-text-muted)]">
-                            <span>New to RegEngine?</span>
-                            <Link href="/onboarding/supplier-flow" className="inline-flex items-center gap-1 rounded-full border border-[var(--re-brand)]/40 px-3 py-1 font-semibold text-[var(--re-brand)] transition hover:bg-[var(--re-brand)]/10">
-                                Get Started (Supplier Flow)
-                                <ArrowRight className="h-3 w-3" />
-                            </Link>
-                        </div>
                     </div>
 
-                    <Card className="border-[var(--re-surface-border)] bg-[var(--re-surface-card)]/95 shadow-[0_16px_70px_rgba(0,0,0,0.25)]">
-                        <CardHeader className="space-y-1 pb-4">
-                            <div className="mb-3 flex justify-center">
-                                <div className="rounded-full border border-[var(--re-brand)]/30 bg-[var(--re-brand)]/10 p-3">
-                                    <Lock className="h-7 w-7 text-[var(--re-brand)]" />
+                    <Card className="border-0 bg-white shadow-none">
+                        <CardHeader className="space-y-2 px-5 pb-4 pt-6 sm:px-8 sm:pt-8">
+                            <div className="flex items-center gap-3 lg:hidden">
+                                <div className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-600 text-white">
+                                    <ClipboardCheck className="h-4 w-4" />
+                                </div>
+                                <div>
+                                    <p className="text-sm font-semibold text-slate-950">RegEngine</p>
+                                    <p className="text-xs text-slate-500">Command center</p>
                                 </div>
                             </div>
-                            <h2 className="text-center text-2xl font-semibold leading-none tracking-tight text-[var(--re-text-primary)]">Welcome back</h2>
-                            <CardDescription className="text-center text-[var(--re-text-muted)]">
-                                Sign in to your RegEngine account
+                            <div className="inline-flex w-fit items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-800">
+                                <KeyRound className="h-3.5 w-3.5" />
+                                Protected workspace
+                            </div>
+                            <h2 className="text-2xl font-semibold leading-tight tracking-normal text-slate-950">Sign in</h2>
+                            <CardDescription className="text-sm leading-6 text-slate-600">
+                                Use your RegEngine account to continue to the requested workspace.
                             </CardDescription>
                         </CardHeader>
-                        <CardContent>
+                        <CardContent className="px-5 pb-6 sm:px-8 sm:pb-8">
                             {searchParams.get('error') === 'auth_config' && (
                                 <div className="mb-4 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-700 dark:border-amber-800 dark:bg-amber-900/10 dark:text-amber-400">
                                     Authentication is misconfigured (AUTH_SECRET_KEY not set). Contact your administrator.
@@ -338,7 +319,7 @@ export default function LoginPage() {
                                 )}
 
                                 <div className="space-y-2">
-                                    <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70" htmlFor="email">
+                                    <label className="text-sm font-medium leading-none text-slate-700 peer-disabled:cursor-not-allowed peer-disabled:opacity-70" htmlFor="email">
                                         Email
                                     </label>
                                     <Input
@@ -352,12 +333,12 @@ export default function LoginPage() {
                                         autoComplete="email"
                                         aria-invalid={!!error}
                                         aria-describedby={error ? 'login-error' : undefined}
-                                        className="h-11"
+                                        className="h-11 border-slate-300 bg-white"
                                     />
                                 </div>
 
                                 <div className="space-y-2">
-                                    <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70" htmlFor="password">
+                                    <label className="text-sm font-medium leading-none text-slate-700 peer-disabled:cursor-not-allowed peer-disabled:opacity-70" htmlFor="password">
                                         Password
                                     </label>
                                     <Input
@@ -370,20 +351,20 @@ export default function LoginPage() {
                                         autoComplete="current-password"
                                         aria-invalid={!!error}
                                         aria-describedby={error ? 'login-error' : undefined}
-                                        className="h-11"
+                                        className="h-11 border-slate-300 bg-white"
                                     />
                                 </div>
 
-                                <div className="flex items-center justify-between text-xs text-[var(--re-text-muted)]">
-                                    <Link href="/accept-invite" className="transition hover:text-[var(--re-brand)]">
+                                <div className="flex items-center justify-between text-xs text-slate-500">
+                                    <Link href="/accept-invite" className="transition hover:text-emerald-700">
                                         Have an invite?
                                     </Link>
-                                    <Link href="/forgot-password" className="transition hover:text-[var(--re-brand)]">
+                                    <Link href="/forgot-password" className="transition hover:text-emerald-700">
                                         Forgot password?
                                     </Link>
                                 </div>
 
-                                <Button className="h-11 w-full" type="submit" disabled={isLoading}>
+                                <Button className="h-11 w-full bg-emerald-700 text-white hover:bg-emerald-800" type="submit" disabled={isLoading}>
                                     {isLoading ? (
                                         <>
                                             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -394,16 +375,16 @@ export default function LoginPage() {
                                     )}
                                 </Button>
 
-                                {QALoginPresets && <QALoginPresets onApplyPreset={applyPreset} />}
+                                {showQaPresets && QaPresets ? <QaPresets onApplyPreset={applyPreset} /> : null}
 
-                                <div className="pt-2 text-center text-sm text-muted-foreground">
+                                <div className="border-t border-slate-200 pt-4 text-center text-sm text-slate-500">
                                     <p className="mb-2">
                                         New here?{" "}
-                                        <Link href="/signup" className="font-medium text-[var(--re-brand)] hover:underline">
+                                        <Link href="/signup" className="font-medium text-emerald-700 hover:underline">
                                             Create an account
                                         </Link>
                                     </p>
-                                    <Link href="/" className="flex items-center justify-center gap-2 transition-colors hover:text-primary">
+                                    <Link href="/" className="flex items-center justify-center gap-2 transition-colors hover:text-slate-950">
                                         <LayoutDashboard className="h-4 w-4" />
                                         Return to public site
                                     </Link>
