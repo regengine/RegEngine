@@ -5,7 +5,10 @@ import Link from 'next/link';
 import {
     AlertTriangle,
     ArrowRight,
+    Archive,
     CheckCircle2,
+    ClipboardCheck,
+    FileSpreadsheet,
     FlaskConical,
     GitBranch,
     Link2,
@@ -45,6 +48,33 @@ const INFLOW_PATH = [
     ['Webhook ingest', '/api/v1/webhooks/ingest'],
     ['Alias resolution', 'inflow-lab -> inflow_lab'],
     ['Dashboard source', 'Tagged as Inflow Lab'],
+];
+
+const ROUTE_GUIDANCE = [
+    {
+        title: 'Import Data',
+        description: 'Upload documents, CSV, XML, or spreadsheet files that need parsing before compliance use.',
+        href: '/ingest',
+        icon: FileSpreadsheet,
+    },
+    {
+        title: 'Curation Queue',
+        description: 'Review normalized records and KDE mapping issues before publication.',
+        href: '/ingest/curation',
+        icon: ClipboardCheck,
+    },
+    {
+        title: 'Inflow Lab',
+        description: 'Run FSMA event simulations and webhook replay without mixing test traffic into normal imports.',
+        href: '/dashboard/inflow-lab',
+        icon: FlaskConical,
+    },
+    {
+        title: 'FDA Export',
+        description: 'Generate export jobs after records are curated and ready for regulator response.',
+        href: '/dashboard/export-jobs',
+        icon: Archive,
+    },
 ];
 
 type MappingReviewResponse = {
@@ -138,6 +168,31 @@ export default function DashboardIntegrationsPage() {
                     </div>
                 </div>
 
+                <section className={styles.card}>
+                    <div className={styles.cardHeader}>
+                        <h2 className={styles.cardTitle}>Data inflow entry points</h2>
+                        <p className={styles.cardDescription}>
+                            Pick the route by intent so simulated connector traffic stays separate from customer imports and FDA export work.
+                        </p>
+                    </div>
+                    <div className={styles.cardContent}>
+                        <div className={styles.factGrid}>
+                            {ROUTE_GUIDANCE.map((route) => (
+                                <Link key={route.href} href={route.href} className={styles.factCard}>
+                                    <div className={styles.connectorHeading}>
+                                        <route.icon className={styles.inlineIcon} />
+                                        <div className={styles.factValue}>{route.title}</div>
+                                        <ArrowRight className={styles.evidenceIcon} />
+                                    </div>
+                                    <div>
+                                        <p className={styles.registryCopy}>{route.description}</p>
+                                    </div>
+                                </Link>
+                            ))}
+                        </div>
+                    </div>
+                </section>
+
                 {INFLOW_CONNECTOR && (
                     <section className={styles.inflowPanel}>
                         <div className={styles.inflowGrid}>
@@ -153,7 +208,7 @@ export default function DashboardIntegrationsPage() {
                                 </div>
 
                                 <p className={styles.inflowCopy}>
-                                    {INFLOW_CONNECTOR.customer_copy} Inbound events use the public slug <code>inflow-lab</code>, then resolve to canonical backend id <code>inflow_lab</code>.
+                                    {INFLOW_CONNECTOR.customer_copy} Use Inflow Lab for simulated FSMA event batches and webhook validation. Use Import Data for customer documents or files, then Curation Queue and FDA Export when records are ready. Inbound events use the public slug <code>inflow-lab</code>, then resolve to canonical backend id <code>inflow_lab</code>.
                                 </p>
 
                                 <div className={styles.factGrid}>
