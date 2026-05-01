@@ -89,7 +89,7 @@ test.describe('Design-partner demo smoke', () => {
         await page.getByRole('button', { name: /Data feeder/i }).click();
         await page.getByLabel('Inbound CSV data').fill(MESSY_SUPPLIER_CSV);
         await page.getByRole('button', { name: /Evaluate data/i }).click();
-        await expect(page.getByText('Events evaluated')).toBeVisible({ timeout: 30_000 });
+        await expect(page.getByText('Events evaluated', { exact: true })).toBeVisible({ timeout: 30_000 });
         await expect(page.getByText('Backend readiness')).toBeVisible({ timeout: 30_000 });
         await page.getByRole('button', { name: /Save test run/i }).click();
         await expect(page.getByText(/Persisted as|Saved/i).first()).toBeVisible({ timeout: 30_000 });
