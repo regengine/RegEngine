@@ -9,21 +9,16 @@ import {
   Calculator,
   CheckCircle2,
   ClipboardCheck,
-  Code2,
   Database,
-  Factory,
   FileText,
   Leaf,
   Network,
   PackageCheck,
-  RadioTower,
   Route,
   ScanLine,
   Shield,
   ShieldCheck,
-  Store,
   Thermometer,
-  Truck,
   AlertTriangle,
   Clock,
   Zap,
@@ -35,9 +30,9 @@ import { SandboxUpload } from "@/components/marketing/SandboxUpload";
 /*  SEO METADATA                                                       */
 /* ------------------------------------------------------------------ */
 export const metadata: Metadata = {
-  title: "RegEngine — Food Traceability That Protects Your Brand",
+  title: "RegEngine — From Messy Supplier Data to FDA-Ready Evidence",
   description:
-    "Supply chain traceability infrastructure for food companies. Respond to recall requests in minutes, satisfy Walmart and Kroger supplier requirements, and build the visibility your brand depends on.",
+    "FSMA 204 traceability infrastructure for food companies. Preflight supplier data, create fix queues, gate evidence commits, and produce FDA-ready exports.",
   keywords: [
     "food traceability software",
     "supply chain traceability",
@@ -48,18 +43,18 @@ export const metadata: Metadata = {
     "food safety compliance",
   ],
   openGraph: {
-    title: "RegEngine — Food Traceability That Protects Your Brand",
+    title: "RegEngine — From Messy Supplier Data to FDA-Ready Evidence",
     description:
-      "FSMA 204 Food Traceability Compliance",
+      "Inflow prepares supplier traceability data. The Engine proves whether it is complete, compliant, trustworthy, and export-ready.",
     url: "https://regengine.co",
     type: "website",
     images: [{ url: "/og-image.png", width: 1200, height: 630, alt: "RegEngine FSMA 204 traceability compliance" }],
   },
   twitter: {
     card: "summary_large_image",
-    title: "RegEngine — Food Traceability That Protects Your Brand",
+    title: "RegEngine — From Messy Supplier Data to FDA-Ready Evidence",
     description:
-      "Supply chain traceability infrastructure for food companies.",
+      "Preflight supplier data, score readiness, and commit only validated FSMA 204 evidence.",
     images: ["/og-image.png"],
   },
 };
@@ -69,93 +64,93 @@ export const metadata: Metadata = {
 /* ------------------------------------------------------------------ */
 
 const TRUST_SIGNALS = [
-  "First evidence package in 48 hours",
-  "1hr 40min recall response",
-  "API-first",
+  "Supplier preflight",
+  "Commit-gated evidence",
+  "Tenant-scoped Postgres",
   "Built for FSMA 204",
 ];
 
 const COMMAND_TIMELINE = [
   {
-    stage: "Harvest CTE",
-    facility: "Valley Fresh Farms",
-    detail: "Romaine Lot R-2026-0312",
+    stage: "Supplier CSV",
+    facility: "FreshPack Central",
+    detail: "83 records detected",
     time: "07:42",
-    icon: Leaf,
+    icon: Database,
     color: "var(--re-decomposition)",
     bg: "rgba(16,185,129,0.12)",
   },
   {
-    stage: "Cooling",
-    facility: "Central Valley Packhouse",
-    detail: "Temperature log attached",
+    stage: "Preflight",
+    facility: "Inflow Lab",
+    detail: "KDE and CTE checks",
     time: "09:18",
-    icon: Factory,
+    icon: ScanLine,
     color: "var(--re-discovery)",
     bg: "rgba(59,130,246,0.12)",
   },
   {
-    stage: "Distribution",
-    facility: "Northwest DC",
-    detail: "Bill of lading matched",
+    stage: "Fix queue",
+    facility: "Operations owner",
+    detail: "12 remediation tasks",
     time: "13:06",
-    icon: Truck,
+    icon: ClipboardCheck,
     color: "var(--re-linkage)",
     bg: "rgba(168,85,247,0.12)",
   },
   {
-    stage: "Retail handoff",
-    facility: "Kroger + Walmart packets",
-    detail: "Evidence package assembled",
+    stage: "Evidence handoff",
+    facility: "Engine commit gate",
+    detail: "Validated records only",
     time: "15:24",
-    icon: Store,
+    icon: ShieldCheck,
     color: "var(--re-evidence)",
     bg: "rgba(245,158,11,0.14)",
   },
 ];
 
 const HERO_STATUS_CARDS = [
-  { label: "CTEs found", value: "12/12", color: "var(--re-decomposition)" },
-  { label: "Supplier names", value: "Normalized", color: "var(--re-discovery)" },
-  { label: "Chain links", value: "Verified", color: "var(--re-linkage)" },
-  { label: "Evidence pack", value: "Assembled", color: "var(--re-evidence)" },
+  { label: "Preflight records", value: "83", color: "var(--re-decomposition)" },
+  { label: "Ready to commit", value: "71", color: "var(--re-discovery)" },
+  { label: "Fix queue", value: "12 tasks", color: "var(--re-linkage)" },
+  { label: "Readiness", value: "100", color: "var(--re-evidence)" },
 ];
 
 const OPERATIONAL_STATS = [
   {
-    value: "1hr 40min",
-    label: "Average recall response time with RegEngine — vs. days with manual processes",
+    value: "100",
+    label: "Readiness score returned after the verified staging Workbench run",
   },
   {
-    value: "8+ hrs",
-    label: "Traceability labor saved per facility on average",
+    value: "4 gates",
+    label: "Simulation, preflight, staging, and production evidence stay separated",
   },
   {
-    value: "Walmart · Costco · Kroger",
-    label: "Major retailers actively requiring supplier traceability documentation",
+    value: "CSV · EDI · API",
+    label: "Supplier data can be mapped, tested, fixed, and replayed before evidence commit",
     compact: true,
   },
 ];
 
 const OPERATIONS_LANES = [
   {
-    title: "FDA request",
-    status: "24h clock started",
-    desc: "Records package queued with lot history, CTE chain, and evidence attachments.",
-    icon: RadioTower,
+    title: "Supplier data readiness",
+    status: "Preflight first",
+    desc: "Upload or simulate supplier files, detect CTE types, and map fields before records become evidence.",
+    icon: Database,
     color: "var(--re-discovery)",
   },
   {
-    title: "Retailer readiness",
-    status: "Walmart · Kroger · Costco",
-    desc: "Supplier documentation and retailer-specific fields stay visible before an audit.",
+    title: "Fix queue",
+    status: "Work gets created",
+    desc: "Missing KDEs, malformed values, duplicate risks, and lineage gaps become owner-ready remediation tasks.",
     icon: ClipboardCheck,
     color: "var(--re-linkage)",
   },
   {
-    title: "Brand exposure",
-    status: "Gaps surfaced early",
-    desc: "Missing KDEs, duplicate lots, and supplier mismatches are flagged before they become recall drag.",
+    title: "Evidence handoff",
+    status: "Commit gated",
+    desc: "Production evidence requires authentication, persistence, provenance, and clean readiness signals.",
     icon: ShieldCheck,
     color: "var(--re-evidence)",
   },
@@ -164,18 +159,18 @@ const OPERATIONS_LANES = [
 const BRAND_PROTECTION_CARDS = [
   {
     icon: Clock,
-    title: "Recall response in minutes, not days",
-    desc: "The FDA gives you 24 hours. Manual spreadsheet processes average 3–5 days. RegEngine gets you there in under 2.",
+    title: "Bad data is caught before commit",
+    desc: "Supplier files can be preflighted, fixed, and replayed before they enter the tenant-scoped evidence path.",
   },
   {
     icon: ShieldCheck,
-    title: "Retailer requirements are here now",
-    desc: "Walmart, Kroger, Costco, and Target require traceability from suppliers. One failed audit means shelf removal.",
+    title: "Readiness is visible by lot and supplier",
+    desc: "The same loop that evaluates KDEs also reports readiness so teams know which records are export-ready.",
   },
   {
     icon: AlertTriangle,
-    title: "One contamination incident costs millions",
-    desc: "Brand damage from a slow recall response dwarfs the cost of prevention. Traceability is brand insurance.",
+    title: "Supplier mappings become reusable",
+    desc: "Repeated field names and source patterns can become saved integration profiles instead of one-off cleanup.",
   },
 ];
 
@@ -197,10 +192,10 @@ const FREE_TOOLS = [
     tag: null,
   },
   {
-    title: "Retailer Readiness Assessment",
-    desc: "Could you pass a Walmart supplier audit today? Auto-scored in 3 minutes.",
-    href: "/retailer-readiness",
-    icon: ShieldCheck,
+    title: "Inflow Lab Workbench",
+    desc: "Load messy supplier data, preflight KDEs, generate a fix queue, and review the commit gate.",
+    href: "/tools/inflow-lab",
+    icon: Database,
     tag: "Most popular",
   },
   {
@@ -226,8 +221,8 @@ const FREE_TOOLS = [
   },
   {
     title: "Live Data Sandbox",
-    desc: "Paste your CSV. RegEngine checks the CTEs present, shows missing KDEs and lineage gaps, and keeps results ephemeral.",
-    href: "#sandbox",
+    desc: "Paste your CSV. RegEngine checks CTEs, missing KDEs, and lineage gaps before you commit anything.",
+    href: "/tools/inflow-lab",
     icon: Database,
     tag: "Try now",
   },
@@ -236,20 +231,20 @@ const FREE_TOOLS = [
 const HOW_IT_WORKS = [
   {
     step: "01",
-    title: "Connect your data",
-    desc: "Upload CSVs, connect your ERP, or send records via API. RegEngine accepts any format.",
+    title: "Preflight supplier data",
+    desc: "Upload, paste, or simulate supplier CSV, spreadsheet, EDI-style, or API-shaped traceability records.",
     icon: Database,
   },
   {
     step: "02",
-    title: "RegEngine validates & normalizes",
-    desc: "Every record is checked against FSMA 204 rules, mapped to EPCIS 2.0, and cryptographically verified.",
+    title: "The Engine evaluates",
+    desc: "FSMA 204 KDE and CTE rules produce readiness scores, blocked states, and fix queue tasks.",
     icon: Shield,
   },
   {
     step: "03",
-    title: "Package verified records",
-    desc: "Generate an evidence package from authenticated records in minutes, with sandbox findings kept separate from production exports.",
+    title: "Commit only clean evidence",
+    desc: "Simulation, preflight, staging, and production evidence are separated by an explicit commit gate.",
     icon: FileText,
   },
 ];
@@ -295,15 +290,15 @@ function TraceabilityCommandCenter() {
               </div>
               <div>
                 <p className="font-mono text-[0.62rem] font-semibold uppercase tracking-[0.16em] text-emerald-300">
-                  Live recall workspace
+                  Inflow Workbench
                 </p>
-                <p className="text-sm font-semibold text-white">Romaine Lot R-2026-0312</p>
+                <p className="text-sm font-semibold text-white">Supplier feed preflight</p>
               </div>
             </div>
             <div className="flex items-center gap-2 rounded-full border border-amber-300/30 bg-amber-300/10 px-3 py-1.5">
               <Clock className="h-3.5 w-3.5 text-amber-200" />
               <span className="font-mono text-[0.65rem] font-semibold uppercase tracking-[0.1em] text-amber-100">
-                1h 40m response
+                Commit gate on
               </span>
             </div>
           </div>
@@ -312,12 +307,12 @@ function TraceabilityCommandCenter() {
             <div className="border-b border-white/10 p-4 sm:p-5 lg:border-b-0 lg:border-r">
               <div className="mb-4 flex items-center justify-between gap-3">
                 <div>
-                  <p className="text-xs font-medium text-slate-400">Chain of custody</p>
-                  <p className="text-lg font-semibold text-white">4 critical events linked</p>
+                    <p className="text-xs font-medium text-slate-400">Preflight path</p>
+                    <p className="text-lg font-semibold text-white">Data is checked before evidence</p>
                 </div>
                 <div className="flex items-center gap-2 rounded-md border border-emerald-300/25 bg-emerald-300/10 px-2.5 py-1.5 text-emerald-200">
                   <Network className="h-3.5 w-3.5" />
-                  <span className="font-mono text-[0.62rem] font-semibold uppercase tracking-[0.1em]">Verified</span>
+                  <span className="font-mono text-[0.62rem] font-semibold uppercase tracking-[0.1em]">Gated</span>
                 </div>
               </div>
 
@@ -356,8 +351,8 @@ function TraceabilityCommandCenter() {
               <div className="mb-4 rounded-lg border border-white/10 bg-white/[0.04] p-4">
                 <div className="mb-3 flex items-center justify-between gap-3">
                   <div>
-                    <p className="text-xs font-medium text-slate-400">Retailer readiness</p>
-                    <p className="text-2xl font-bold text-white">94%</p>
+                    <p className="text-xs font-medium text-slate-400">Traceability readiness</p>
+                    <p className="text-2xl font-bold text-white">100</p>
                   </div>
                   <ShieldCheck className="h-6 w-6 text-emerald-300" />
                 </div>
@@ -365,7 +360,7 @@ function TraceabilityCommandCenter() {
                   <div className="h-full w-[94%] rounded-full bg-[linear-gradient(90deg,var(--re-decomposition),var(--re-discovery),var(--re-linkage))]" />
                 </div>
                 <div className="mt-3 grid grid-cols-3 gap-2 text-center">
-                  {["Walmart", "Kroger", "Costco"].map((retailer) => (
+                  {["Preflight", "Fix queue", "Evidence"].map((retailer) => (
                     <span key={retailer} className="rounded-md border border-white/10 bg-black/20 px-2 py-1.5 text-[0.65rem] font-semibold text-slate-200">
                       {retailer}
                     </span>
@@ -386,17 +381,17 @@ function TraceabilityCommandCenter() {
               <div className="mt-4 rounded-lg border border-emerald-300/25 bg-emerald-300/10 p-4">
                 <div className="mb-2 flex items-center gap-2 text-emerald-100">
                   <PackageCheck className="h-4 w-4" />
-                  <p className="text-sm font-semibold">Evidence package assembled</p>
+                  <p className="text-sm font-semibold">Validated records are export-ready</p>
                 </div>
                 <p className="text-xs leading-relaxed text-emerald-50/80">
-                  EPCIS 2.0 export, PDF summary, chain integrity hash, and retailer audit packet are assembled from verified records.
+                  Production evidence stays behind authentication, persistence, provenance, and readiness checks.
                 </p>
               </div>
             </div>
           </div>
 
           <div className="grid grid-cols-3 border-t border-white/10 bg-black/20">
-            {["Ingest", "Normalize", "Export"].map((step, index) => (
+            {["Preflight", "Fix", "Commit"].map((step, index) => (
               <div key={step} className="flex items-center justify-center gap-2 px-3 py-3 text-xs font-semibold text-slate-300">
                 <span className={`h-2 w-2 rounded-full ${index === 0 ? "bg-blue-300" : index === 1 ? "bg-emerald-300" : "bg-amber-300"}`} />
                 {step}
@@ -501,34 +496,28 @@ export default function RegEngineLanding() {
             </div>
 
             <h1 className="font-display text-[clamp(2.4rem,5vw,4.25rem)] font-bold text-white leading-[1.02] tracking-tight mb-6">
-              Supply chain traceability that protects your brand.
+              From messy supplier data to FDA-ready evidence.
             </h1>
 
             <p className="text-lg text-slate-300 leading-relaxed mb-8 max-w-[560px]">
-              Respond to recall requests in minutes, satisfy Walmart and Kroger supplier requirements,
-              and build the visibility your brand depends on.
+              Inflow prepares the data. The Engine proves it. RegEngine preflights supplier
+              traceability feeds, creates fix queues, scores readiness, and commits only
+              validated records as tenant-scoped FSMA 204 evidence.
             </p>
 
             <div className="flex flex-col sm:flex-row sm:flex-wrap gap-3 mb-8">
               <Link
-                href="/retailer-readiness"
+                href="/contact"
                 className="group relative inline-flex items-center justify-center gap-2 bg-[var(--re-brand)] text-white px-7 py-3.5 rounded-lg text-sm font-semibold transition-all duration-200 hover:bg-[var(--re-brand-dark)] hover:shadow-re-glow active:scale-[0.98] min-h-[48px]"
               >
-                Start Your Workspace
+                Book a free gap analysis
                 <ArrowRight className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-0.5" />
               </Link>
               <Link
-                href="/retailer-readiness"
+                href="/tools/inflow-lab"
                 className="inline-flex items-center justify-center gap-2 border border-white/15 bg-white/[0.03] text-white px-7 py-3.5 rounded-lg text-sm font-medium transition-all duration-200 hover:border-[var(--re-brand)] hover:text-[var(--re-brand-light)] min-h-[48px]"
               >
-                Check Your Readiness (Free)
-              </Link>
-              <Link
-                href="/docs"
-                className="inline-flex items-center justify-center gap-2 border border-white/15 bg-white/[0.03] text-white px-7 py-3.5 rounded-lg text-sm font-medium transition-all duration-200 hover:border-[var(--re-brand)] hover:text-[var(--re-brand-light)] min-h-[48px]"
-              >
-                <Code2 className="h-4 w-4" />
-                View API Docs
+                Try Inflow Lab
               </Link>
             </div>
 
@@ -550,9 +539,9 @@ export default function RegEngineLanding() {
 
           <div className="mt-10 grid gap-3 border-t border-white/10 pt-5 sm:grid-cols-3">
             {[
-              { icon: ScanLine, label: "Incoming request", value: "Supplier audit packet" },
-              { icon: Boxes, label: "Lot graph", value: "12 CTEs connected" },
-              { icon: Building2, label: "Retailer formats", value: "Walmart · Kroger · Costco" },
+              { icon: ScanLine, label: "Input", value: "Messy supplier CSV" },
+              { icon: Boxes, label: "Workbench", value: "Fix queue + gate" },
+              { icon: Building2, label: "Evidence", value: "Tenant-scoped records" },
             ].map((item) => {
               const Icon = item.icon;
 
@@ -577,14 +566,14 @@ export default function RegEngineLanding() {
         <div className="max-w-[1200px] mx-auto px-4 sm:px-6 py-14 sm:py-20">
           <div className="mb-10 max-w-[760px]">
             <p className="font-mono text-xs font-medium text-[var(--re-brand)] uppercase tracking-widest mb-3">
-              Operational value, not just compliance
+              Hardened loop, not just a dashboard
             </p>
             <h2 className="font-display text-[clamp(1.75rem,4vw,2.75rem)] font-bold text-[var(--re-text-primary)] tracking-tight leading-tight">
-              Traceability that pays for itself in the first recall drill.
+              Supplier data gets worked into shape before it becomes evidence.
             </h2>
             <p className="mt-4 max-w-[620px] text-[var(--re-text-secondary)] leading-relaxed">
-              Keep the recall clock, lot movement, retailer readiness, and export evidence in one operating view
-              before a buyer or regulator asks.
+              Inflow is now the operational front door for the Engine: preflight, explain,
+              repair, replay, and then commit only records that are ready for audit and export.
             </p>
           </div>
 
@@ -613,13 +602,14 @@ export default function RegEngineLanding() {
         <div className="grid gap-8 lg:grid-cols-[0.78fr_1.22fr] lg:items-start">
           <div>
             <p className="font-mono text-xs font-medium text-[var(--re-brand)] uppercase tracking-widest mb-3">
-              Free tools — no signup required
+              Start with the workbench
             </p>
             <h2 className="font-display text-[clamp(1.75rem,4vw,2.75rem)] font-bold text-[var(--re-text-primary)] tracking-tight leading-tight mb-4">
-              See your compliance gaps before you commit.
+              See supplier data gaps before they become permanent.
             </h2>
             <p className="text-[var(--re-text-secondary)] max-w-[500px] leading-relaxed">
-              Use these tools now. No account needed. Understand your exposure, then decide.
+              Run the same loop your implementation team will use: preflight a feed,
+              inspect missing KDEs, review the fix queue, and decide whether records can commit.
             </p>
 
             <div className="mt-8 rounded-2xl border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] p-5">
@@ -629,18 +619,18 @@ export default function RegEngineLanding() {
                 </div>
                 <div>
                   <p className="font-display text-lg font-semibold text-[var(--re-text-primary)]">
-                    Start with readiness
+                    Try the Inflow loop
                   </p>
                   <p className="text-sm text-[var(--re-text-tertiary)]">
-                    Auto-scored in 3 minutes.
+                    Preflight, fix, gate, score.
                   </p>
                 </div>
               </div>
               <Link
-                href="/retailer-readiness"
+                href="/tools/inflow-lab"
                 className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-[var(--re-brand)] px-5 py-3 text-sm font-semibold text-white transition-all duration-200 hover:bg-[var(--re-brand-dark)] hover:shadow-re-glow"
               >
-                Run readiness assessment
+                Open Inflow Lab
                 <ArrowRight className="h-4 w-4" />
               </Link>
             </div>
@@ -649,7 +639,7 @@ export default function RegEngineLanding() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {FREE_TOOLS.map((tool, index) => {
               const Icon = tool.icon;
-              const isFeatured = tool.title === "Retailer Readiness Assessment";
+              const isFeatured = tool.title === "Inflow Lab Workbench";
               const accent = TOOL_ACCENTS[index];
 
               return (
@@ -701,10 +691,10 @@ export default function RegEngineLanding() {
         <div className="max-w-[1200px] mx-auto px-4 sm:px-6 py-16 sm:py-24">
           <div className="text-center mb-14">
             <p className="font-mono text-xs font-medium text-[var(--re-brand)] uppercase tracking-widest mb-3">
-              How it works
+              Product loop
             </p>
             <h2 className="font-display text-[clamp(1.5rem,3.5vw,2.25rem)] font-bold text-[var(--re-text-primary)] tracking-tight leading-tight max-w-[600px] mx-auto">
-              From messy data to verified evidence in three steps.
+              Inflow prepares the data. The Engine proves it.
             </h2>
           </div>
 
@@ -739,13 +729,14 @@ export default function RegEngineLanding() {
       <section className="max-w-[1200px] mx-auto px-4 sm:px-6 py-16 sm:py-24">
         <div className="mb-10">
           <p className="font-mono text-xs font-medium text-[var(--re-brand)] uppercase tracking-widest mb-3">
-            See what happens to bad data
+            Preflight before evidence
           </p>
           <h2 className="font-display text-[clamp(1.5rem,3.5vw,2.25rem)] font-bold text-[var(--re-text-primary)] tracking-tight leading-tight mb-3 max-w-[640px]">
-            Messy CSV in. Defensible evidence package out.
+            Messy CSV in. Explainable fix queue out.
           </h2>
           <p className="text-[var(--re-text-secondary)] max-w-[560px] leading-relaxed">
-            Missing fields, duplicate lots, inconsistent supplier names — the kind of data you actually get. Watch RegEngine catch it all.
+            Missing fields, duplicate lots, inconsistent supplier names - the kind of data
+            you actually get. RegEngine shows what is blocked, why it matters, and what to fix.
           </p>
         </div>
         <DataTransformDemo />
@@ -755,13 +746,14 @@ export default function RegEngineLanding() {
       <section id="sandbox" className="max-w-[1200px] mx-auto px-4 sm:px-6 pb-16 sm:pb-24">
         <div className="mb-10">
           <p className="font-mono text-xs font-medium text-[var(--re-brand)] uppercase tracking-widest mb-3">
-            Try it yourself — no signup required
+            Try it yourself
           </p>
           <h2 className="font-display text-[clamp(1.5rem,3.5vw,2.25rem)] font-bold text-[var(--re-text-primary)] tracking-tight leading-tight mb-3 max-w-[640px]">
-            Paste your data. See what breaks.
+            Paste supplier data. See what would block evidence.
           </h2>
           <p className="text-[var(--re-text-secondary)] max-w-[560px] leading-relaxed">
-            Drop your CSV and RegEngine checks the CTEs present, explains missing KDEs and lineage gaps, and shows the correction path in real time. Nothing is stored.
+            Drop your CSV and RegEngine checks CTEs, explains missing KDEs and lineage gaps,
+            and shows the correction path before records become production evidence.
           </p>
         </div>
         <SandboxUpload />
@@ -890,24 +882,25 @@ export default function RegEngineLanding() {
             FSMA 204 compliance deadline: July 20, 2028
           </p>
           <h2 className="font-display text-[clamp(1.75rem,4vw,2.75rem)] font-bold text-[var(--re-text-primary)] tracking-tight leading-tight mb-4 max-w-[700px] mx-auto">
-            Know exactly where every lot has been — before anyone asks.
+            Get one supplier feed into evidence-ready shape.
           </h2>
           <p className="text-[var(--re-text-secondary)] max-w-[520px] mx-auto leading-relaxed mb-8">
-            Protect your brand. Satisfy your retailers. Get your free readiness score in 3 minutes, including FSMA 204 compliance gaps.
+            Use the hardened Inflow to Engine loop to learn which lots are ready,
+            which suppliers are blocking readiness, and what has to be fixed before FDA export.
           </p>
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
             <Link
-              href="/retailer-readiness"
+              href="/contact"
               className="group relative inline-flex items-center justify-center gap-2 bg-[var(--re-brand)] text-white px-8 py-4 rounded-lg text-sm font-semibold transition-all duration-200 hover:bg-[var(--re-brand-dark)] hover:shadow-re-glow-strong active:scale-[0.98] min-h-[48px]"
             >
-              Get My Free Readiness Score
+              Book a free gap analysis
               <ArrowRight className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-0.5" />
             </Link>
             <Link
-              href="/pricing"
+              href="/tools/inflow-lab"
               className="inline-flex items-center justify-center gap-2 border border-[var(--re-border-default)] text-[var(--re-text-primary)] px-8 py-4 rounded-lg text-sm font-medium transition-all duration-200 hover:border-[var(--re-brand)] hover:text-[var(--re-brand)] min-h-[48px]"
             >
-              View Pricing
+              Try Inflow Lab
             </Link>
           </div>
         </div>
