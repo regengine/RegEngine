@@ -31,6 +31,7 @@ export function CookieBanner({ enableAnalytics }: CookieBannerProps) {
   const pathname = usePathname();
   const [consent, setConsent] = useState<ConsentValue | null | 'loading'>('loading');
   const [visible, setVisible] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const hideBanner = shouldHideMarketingChrome(pathname);
 
   // Read stored consent on mount
@@ -47,6 +48,17 @@ export function CookieBanner({ enableAnalytics }: CookieBannerProps) {
     const handler = () => setVisible(true);
     document.addEventListener('re:show-cookie-prefs', handler);
     return () => document.removeEventListener('re:show-cookie-prefs', handler);
+  }, []);
+
+  // Keep the first-visit banner from sitting above the mobile navigation drawer.
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const { open } = (event as CustomEvent<{ open?: boolean }>).detail ?? {};
+      setMobileMenuOpen(Boolean(open));
+    };
+
+    window.addEventListener('re:mobile-menu-state', handler);
+    return () => window.removeEventListener('re:mobile-menu-state', handler);
   }, []);
 
   const handleAccept = () => {
@@ -79,7 +91,7 @@ export function CookieBanner({ enableAnalytics }: CookieBannerProps) {
       )}
 
       {/* ── Cookie Banner ─────────────────────────────── */}
-      {visible && !hideBanner && (
+      {visible && !hideBanner && !mobileMenuOpen && (
         <div
           role="dialog"
           aria-modal="false"

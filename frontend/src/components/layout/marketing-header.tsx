@@ -27,12 +27,16 @@ export function MarketingHeader() {
 
     // Prevent body scroll when mobile menu is open
     useEffect(() => {
+        window.dispatchEvent(new CustomEvent('re:mobile-menu-state', { detail: { open: mobileOpen } }));
         if (mobileOpen) {
             document.body.style.overflow = 'hidden';
         } else {
             document.body.style.overflow = '';
         }
-        return () => { document.body.style.overflow = ''; };
+        return () => {
+            document.body.style.overflow = '';
+            window.dispatchEvent(new CustomEvent('re:mobile-menu-state', { detail: { open: false } }));
+        };
     }, [mobileOpen]);
 
     const handleToolsEnter = () => {
