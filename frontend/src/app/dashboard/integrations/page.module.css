@@ -345,6 +345,175 @@
     padding: 1.25rem 1.5rem 1.5rem;
 }
 
+.profileContent {
+    display: grid;
+    gap: 1rem;
+    padding: 1.25rem 1.5rem 1.5rem;
+}
+
+.profileSummaryGrid,
+.profileGrid {
+    display: grid;
+    gap: .8rem;
+    grid-template-columns: minmax(0, .72fr) minmax(0, 1.28fr);
+}
+
+.profileMetric,
+.profileBuilder,
+.profileListPanel,
+.previewPanel {
+    border: 1px solid var(--re-border-default);
+    border-radius: .6rem;
+    background: var(--re-surface-card);
+    padding: 1rem;
+}
+
+.profileBuilder,
+.profileListPanel,
+.previewPanel {
+    display: grid;
+    gap: 1rem;
+}
+
+.profileFormGrid,
+.mappingGrid {
+    display: grid;
+    gap: .75rem;
+}
+
+.profileFormGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.mappingGrid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.formField {
+    display: grid;
+    gap: .35rem;
+    color: var(--re-text-secondary);
+    font-size: .74rem;
+    font-weight: 700;
+}
+
+.formField span {
+    color: var(--re-text-tertiary);
+}
+
+.input,
+.textarea,
+.codeTextarea {
+    width: 100%;
+    border: 1px solid var(--re-border-default);
+    border-radius: .5rem;
+    background: var(--re-surface-base);
+    color: var(--re-text-primary);
+    font: inherit;
+}
+
+.input {
+    min-height: 2.5rem;
+    padding: .55rem .7rem;
+}
+
+.textarea,
+.codeTextarea {
+    min-height: 5rem;
+    padding: .7rem;
+    line-height: 1.45;
+    resize: vertical;
+}
+
+.codeTextarea,
+.previewResult pre {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    font-size: .75rem;
+}
+
+.profileList {
+    display: grid;
+    gap: .6rem;
+    max-height: 24rem;
+    overflow: auto;
+}
+
+.profileCard {
+    display: grid;
+    gap: .55rem;
+    width: 100%;
+    border: 1px solid var(--re-border-default);
+    border-radius: .55rem;
+    background: var(--re-surface-base);
+    padding: .8rem;
+    text-align: left;
+    cursor: pointer;
+}
+
+.profileCard:hover,
+.profileCardActive {
+    border-color: color-mix(in srgb, var(--re-brand) 46%, var(--re-border-default));
+    background: color-mix(in srgb, var(--re-brand) 6%, var(--re-surface-base));
+}
+
+.profileCardHeader {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: .75rem;
+}
+
+.profileName {
+    color: var(--re-text-primary);
+    font-size: .9rem;
+    font-weight: 700;
+}
+
+.profileMeta {
+    margin-top: .2rem;
+    color: var(--re-text-tertiary);
+    font-size: .72rem;
+    text-transform: capitalize;
+}
+
+.mappingChips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .35rem;
+}
+
+.mappingChip {
+    border: 1px solid var(--re-border-default);
+    border-radius: .4rem;
+    background: var(--re-surface-elevated);
+    color: var(--re-text-tertiary);
+    padding: .25rem .4rem;
+    font-size: .68rem;
+    overflow-wrap: anywhere;
+}
+
+.previewPanel {
+    margin-top: .25rem;
+}
+
+.previewResult {
+    display: grid;
+    gap: .6rem;
+    border: 1px solid color-mix(in srgb, var(--re-success) 26%, var(--re-border-default));
+    border-radius: .55rem;
+    background: color-mix(in srgb, var(--re-success) 7%, var(--re-surface-base));
+    color: var(--re-text-secondary);
+    padding: .8rem;
+}
+
+.previewResult pre {
+    max-height: 16rem;
+    overflow: auto;
+    margin: 0;
+    color: var(--re-text-primary);
+    white-space: pre-wrap;
+}
+
 .categoryBlock {
     display: grid;
     gap: .55rem;
@@ -533,7 +702,10 @@
     }
 
     .statsGrid,
+    .profileSummaryGrid,
     .inflowGrid,
+    .profileGrid,
+    .mappingGrid,
     .registryRow {
         grid-template-columns: 1fr;
     }
@@ -557,11 +729,16 @@
         grid-template-columns: 1fr;
     }
 
+    .profileFormGrid {
+        grid-template-columns: 1fr;
+    }
+
     .inflowMain,
     .pathPanel,
     .cardHeader,
     .cardContent,
-    .queueContent {
+    .queueContent,
+    .profileContent {
         padding-inline: 1rem;
     }
 

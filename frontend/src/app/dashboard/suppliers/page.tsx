@@ -25,6 +25,7 @@ import {
     ExternalLink,
     Trash2,
     ArrowRight,
+    SlidersHorizontal,
 } from 'lucide-react';
 
 import { apiClient } from '@/lib/api-client';
@@ -38,6 +39,7 @@ import type {
     SupplierComplianceGapsResponse,
     SupplierTLC,
     PortalLink,
+    IntegrationProfile,
 } from '@/types/api';
 
 /* ------------------------------------------------------------------ */
@@ -97,8 +99,10 @@ export default function SupplierDashboardPage() {
     const [inviteSupplierName, setInviteSupplierName] = useState('');
     const [inviteSupplierEmail, setInviteSupplierEmail] = useState('');
     const [inviteExpiresDays, setInviteExpiresDays] = useState(90);
+    const [inviteProfileId, setInviteProfileId] = useState('');
     const [creatingLink, setCreatingLink] = useState(false);
     const [copiedLinkId, setCopiedLinkId] = useState<string | null>(null);
+    const [integrationProfiles, setIntegrationProfiles] = useState<IntegrationProfile[]>([]);
 
     // Add-facility form state
     const [showAddForm, setShowAddForm] = useState(false);
@@ -129,6 +133,9 @@ export default function SupplierDashboardPage() {
             apiClient.listPortalLinks()
                 .then((res) => setPortalLinks(res.links || []))
                 .catch(() => { /* portal links are optional */ });
+            apiClient.listIntegrationProfiles()
+                .then((res) => setIntegrationProfiles(res.profiles || []))
+                .catch(() => setIntegrationProfiles([]));
 
             if (tenantId) {
                 fetchWorkbenchReadinessSummary(tenantId, apiKey || '')
@@ -234,10 +241,12 @@ export default function SupplierDashboardPage() {
                 supplier_name: inviteSupplierName.trim(),
                 supplier_email: inviteSupplierEmail.trim() || undefined,
                 expires_days: inviteExpiresDays,
+                integration_profile_id: inviteProfileId || undefined,
             });
             setPortalLinks((prev) => [newLink, ...prev]);
             setInviteSupplierName('');
             setInviteSupplierEmail('');
+            setInviteProfileId('');
             setShowInviteForm(false);
             // Auto-copy the link
             await navigator.clipboard.writeText(newLink.portal_url);
@@ -441,7 +450,7 @@ export default function SupplierDashboardPage() {
                         </div>
 
                         <p className="text-xs text-muted-foreground mb-3">
-                            Generate portal links for your suppliers to submit shipment data directly — no account needed.
+                            Generate portal links for your suppliers to submit shipment data directly. Attach a saved mapping profile when a source already has known field names.
                         </p>
 
                         {/* Invite Form */}
@@ -452,7 +461,7 @@ export default function SupplierDashboardPage() {
                                 className="mb-3"
                             >
                                 <div className="bg-[var(--re-surface-elevated)] rounded-xl p-4 border border-[var(--re-brand)] space-y-3">
-                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
                                         <Input
                                             value={inviteSupplierName}
                                             onChange={(e) => setInviteSupplierName(e.target.value)}
@@ -466,6 +475,21 @@ export default function SupplierDashboardPage() {
                                             type="email"
                                             className="rounded-xl min-h-[40px] text-sm"
                                         />
+                                        <select
+                                            value={inviteProfileId}
+                                            onChange={(e) => setInviteProfileId(e.target.value)}
+                                            className="px-3 py-2 rounded-xl border border-input bg-background text-sm"
+                                            aria-label="Saved integration profile"
+                                        >
+                                            <option value="">No saved profile</option>
+                                            {integrationProfiles
+                                                .filter((profile) => profile.status !== 'archived')
+                                                .map((profile) => (
+                                                    <option key={profile.profile_id} value={profile.profile_id}>
+                                                        {profile.display_name}
+                                                    </option>
+                                                ))}
+                                        </select>
                                         <div className="flex gap-2">
                                             <select
                                                 value={inviteExpiresDays}
@@ -486,6 +510,11 @@ export default function SupplierDashboardPage() {
                                             </Button>
                                         </div>
                                     </div>
+                                    {integrationProfiles.length === 0 && (
+                                        <p className="text-xs text-muted-foreground">
+                                            Create reusable mapping profiles from the Integrations dashboard to preconfigure supplier portal links.
+                                        </p>
+                                    )}
                                 </div>
                             </motion.div>
                         )}
@@ -519,6 +548,12 @@ export default function SupplierDashboardPage() {
                                                 <span className="text-[var(--re-text-disabled)] flex-shrink-0">
                                                     expires {expiresDate}
                                                 </span>
+                                                {link.integration_profile_id && (
+                                                    <span className="inline-flex items-center gap-1 text-[var(--re-brand)] flex-shrink-0">
+                                                        <SlidersHorizontal className="h-3 w-3" />
+                                                        {integrationProfiles.find((profile) => profile.profile_id === link.integration_profile_id)?.display_name ?? 'Saved profile'}
+                                                    </span>
+                                                )}
                                             </div>
                                             <div className="flex items-center gap-1 flex-shrink-0 ml-2">
                                                 {isActive && (
