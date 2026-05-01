@@ -84,7 +84,7 @@ export default function HomePage() {
               href="/tools/inflow-lab"
               className="inline-flex h-11 items-center gap-2 border border-[var(--re-text-primary)] bg-[var(--re-text-primary)] px-5 text-[13px] font-semibold text-[var(--re-surface-base)]"
             >
-              Test a supplier file
+              Preflight a supplier file
               <ArrowRight className="h-4 w-4" />
             </Link>
             <Link

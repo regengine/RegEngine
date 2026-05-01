@@ -62,7 +62,7 @@ export function PricingPageClient({ pricingTiers }: { pricingTiers: PricingTier[
             <section className="relative z-[2] max-w-[900px] mx-auto pt-14 sm:pt-20 pb-10 sm:pb-[60px] px-4 sm:px-6 text-center">
                 <h1 className="font-display text-[clamp(32px,5vw,48px)] font-bold text-[var(--re-text-primary)] leading-[1.1] tracking-tight mb-4">
                     FSMA 204 compliance,<br />
-                    priced like an operating tool.
+                    priced for facility teams.
                 </h1>
                 <p className="text-lg text-[var(--re-text-muted)] max-w-[600px] mx-auto mb-4 leading-relaxed">
                     Three plans sized by facility count. Founding Design Partners lock in a lower rate while the product is shaped around real supplier data.

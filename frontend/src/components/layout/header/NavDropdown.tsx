@@ -56,8 +56,8 @@ export function NavDropdown({
                     fontWeight: 600,
                     fontFamily: "var(--re-font-mono)",
                     textTransform: "uppercase",
-                    color: "var(--re-surface-base)",
-                    background: "var(--re-text-primary)",
+                    color: "var(--re-text-primary)",
+                    background: "transparent",
                     padding: "8px 14px",
                     borderRadius: "2px",
                     textDecoration: "none",
@@ -70,7 +70,7 @@ export function NavDropdown({
                     whiteSpace: "nowrap",
                 }}
             >
-                Free Tools
+                Tools
                 <ChevronDown
                     aria-hidden="true"
                     size={14}

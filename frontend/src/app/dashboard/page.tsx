@@ -184,7 +184,7 @@ const getQuickActions = (tenantType: "retailer" | "supplier" | "system") => {
 
 const DATA_INFLOW_ENTRY_POINTS = [
   {
-    title: "Import Data",
+    title: "Import files",
     description:
       "Use for regulatory documents, CSV files, and normal customer uploads that need parsing and curation.",
     href: "/ingest",
@@ -196,7 +196,7 @@ const DATA_INFLOW_ENTRY_POINTS = [
     title: "Inflow Lab",
     description:
       "Use for FSMA 204 event simulation, webhook contract checks, and tagged demo traffic.",
-    href: "/tools/inflow-lab",
+    href: "/dashboard/inflow-lab",
     icon: FlaskConical,
     color: "text-re-brand",
     bg: "bg-re-brand-muted dark:bg-re-brand/30",
@@ -476,7 +476,7 @@ export default function DashboardPage() {
                         </p>
                       </div>
                     </div>
-                    <Link href="/tools/inflow-lab" className="w-full xl:w-auto">
+                    <Link href="/dashboard/inflow-lab" className="w-full xl:w-auto">
                       <Button
                         variant="outline"
                         className="min-h-[44px] w-full xl:w-auto active:scale-[0.98] transition-transform"
