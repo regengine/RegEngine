@@ -43,7 +43,7 @@ export default function SetupLayout({ children }: { children: ReactNode }) {
                 )}
                 <div className="flex items-center gap-2">
                   <div
-                    className={`flex h-8 w-8 items-center justify-center rounded-full text-xs font-semibold transition-all ${
+                    className={`flex h-8 w-8 items-center justify-center rounded-sm text-xs font-semibold transition-all ${
                       isComplete
                         ? 'bg-[var(--re-brand)] text-white'
                         : isCurrent

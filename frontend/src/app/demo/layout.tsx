@@ -8,11 +8,11 @@ export const metadata: Metadata = {
 
 export default function DemoLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="min-h-screen bg-[#0f1117]">
+    <div className="min-h-screen re-app-shell">
       {/* Demo banner */}
-      <div className="bg-[var(--re-brand)] text-white text-center py-2 px-4 text-[0.75rem] font-medium">
+      <div className="bg-[var(--re-brand)] text-[var(--re-surface-base)] text-center py-2 px-4 text-[0.75rem] font-medium">
         This is an interactive demo with sample data.{" "}
-        <a href="/signup" className="underline font-semibold hover:text-white/90">
+        <a href="/signup" className="underline font-semibold hover:text-[var(--re-surface-base)]">
           Start your free 14-day trial
         </a>{" "}
         to see your own data.

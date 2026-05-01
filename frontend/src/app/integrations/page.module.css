@@ -1,16 +1,26 @@
 .page {
   min-height: 100vh;
-  background: #f7f8f5;
-  color: #17211d;
-  font-family: var(--re-font-sans, Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif);
+  background: var(--re-surface-base);
+  color: var(--re-text-primary);
+  font-family: var(
+    --re-font-sans,
+    Inter,
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif
+  );
 }
 
 .hero {
-  border-bottom: 1px solid #d9ded7;
+  border-bottom: 1px solid var(--re-surface-border);
   background:
-    linear-gradient(90deg, rgb(18 32 27 / 5%) 1px, transparent 1px),
-    linear-gradient(180deg, #fbfcf8 0%, #f2f5ef 100%);
-  background-size: 48px 48px, auto;
+    linear-gradient(90deg, rgba(29, 29, 27, 0.035) 1px, transparent 1px),
+    var(--re-surface-base);
+  background-size:
+    48px 48px,
+    auto;
 }
 
 .heroInner {
@@ -79,38 +89,40 @@
   gap: 0.45rem;
   min-width: 0;
   text-decoration: none;
-  transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease;
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease,
+    color 160ms ease;
 }
 
 .primaryButton,
 .secondaryButton {
   min-height: 2.55rem;
   padding: 0.66rem 0.9rem;
-  border-radius: 0.45rem;
+  border-radius: 0.18rem;
   font-size: 0.88rem;
   font-weight: 760;
 }
 
 .primaryButton {
   border: 1px solid #133c2e;
-  background: #133c2e;
-  color: #fff;
-  box-shadow: 0 12px 24px rgb(19 60 46 / 15%);
+  background: var(--re-text-primary);
+  color: var(--re-surface-base);
 }
 
 .primaryButton:hover {
-  border-color: #0d2e23;
-  background: #0d2e23;
+  border-color: var(--re-text-secondary);
+  background: var(--re-text-secondary);
 }
 
 .secondaryButton {
-  border: 1px solid #c6d0c7;
-  background: #fff;
-  color: #173f31;
+  border: 1px solid var(--re-surface-border);
+  background: var(--re-surface-elevated);
+  color: var(--re-text-primary);
 }
 
 .secondaryButton:hover {
-  border-color: #8fa695;
+  border-color: var(--re-border-strong);
 }
 
 .proofGrid {
@@ -118,15 +130,14 @@
   grid-template-columns: repeat(3, minmax(0, 1fr));
   max-width: 720px;
   margin: 1.55rem 0 0;
-  border: 1px solid #d7ded5;
-  border-radius: 0.55rem;
-  background: rgb(255 255 255 / 72%);
+  border: 1px solid var(--re-surface-border);
+  background: var(--re-surface-elevated);
 }
 
 .proofGrid div {
   min-width: 0;
   padding: 0.9rem 1rem;
-  border-left: 1px solid #d7ded5;
+  border-left: 1px solid var(--re-surface-border);
 }
 
 .proofGrid div:first-child {
@@ -135,7 +146,7 @@
 
 .proofGrid dt,
 .featureFacts dt {
-  color: #66726b;
+  color: var(--re-text-muted);
   font-size: 0.68rem;
   font-weight: 760;
   letter-spacing: 0.08em;
@@ -145,7 +156,7 @@
 .proofGrid dd,
 .featureFacts dd {
   margin: 0.28rem 0 0;
-  color: #17211d;
+  color: var(--re-text-primary);
   font-size: 0.9rem;
   font-weight: 760;
   overflow-wrap: anywhere;
@@ -154,10 +165,8 @@
 .featurePanel {
   align-self: stretch;
   padding: 1rem;
-  border: 1px solid #c8d4ca;
-  border-radius: 0.65rem;
-  background: #fff;
-  box-shadow: 0 16px 34px rgb(18 32 27 / 10%);
+  border: 1px solid var(--re-surface-border);
+  background: var(--re-surface-elevated);
 }
 
 .featureTop {
@@ -181,15 +190,14 @@
   flex: 0 0 auto;
   align-items: center;
   justify-content: center;
-  color: #163f31;
-  background: #eef5ef;
+  color: var(--re-text-primary);
+  background: var(--re-surface-card);
 }
 
 .featureIcon {
   width: 2.55rem;
   height: 2.55rem;
-  border: 1px solid #d6e2d8;
-  border-radius: 0.5rem;
+  border: 1px solid var(--re-surface-border);
 }
 
 .featurePanel h2,
@@ -219,7 +227,6 @@
   margin-top: 1rem;
   overflow: hidden;
   border: 1px solid #243c33;
-  border-radius: 0.55rem;
   background: #111c18;
   color: #dff4e8;
 }
@@ -245,7 +252,7 @@
   width: 1.75rem;
   height: 1.75rem;
   border: 1px solid rgb(255 255 255 / 18%);
-  border-radius: 999px;
+  border-radius: 0.12rem;
   background: #1b4a39;
   color: #fff;
   font-size: 0.74rem;
@@ -261,7 +268,9 @@
 .flowStep p {
   margin: 0.12rem 0 0;
   color: #a9c8ba;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-family:
+    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
+    monospace;
   font-size: 0.75rem;
   line-height: 1.4;
   overflow-wrap: anywhere;
@@ -278,7 +287,6 @@
   min-width: 0;
   padding: 0.72rem;
   border: 1px solid #dbe3dc;
-  border-radius: 0.5rem;
   background: #f8faf7;
 }
 
@@ -322,7 +330,6 @@
 .category {
   overflow: hidden;
   border: 1px solid #d7ded5;
-  border-radius: 0.6rem;
   background: #fff;
 }
 
@@ -348,7 +355,6 @@
   width: 2.25rem;
   height: 2.25rem;
   border: 1px solid #dce5dc;
-  border-radius: 0.45rem;
 }
 
 .categoryTitle h3,
@@ -382,7 +388,10 @@
 
 .integrationRow {
   display: grid;
-  grid-template-columns: minmax(210px, 0.82fr) minmax(0, 1.38fr) minmax(230px, 0.7fr);
+  grid-template-columns: minmax(210px, 0.82fr) minmax(0, 1.38fr) minmax(
+      230px,
+      0.7fr
+    );
   gap: 1rem;
   align-items: center;
   padding: 0.85rem 1rem;
@@ -439,7 +448,7 @@
   gap: 0.32rem;
   padding: 0.32rem 0.52rem;
   border: 1px solid transparent;
-  border-radius: 999px;
+  border-radius: 0.14rem;
   background: #f8faf7;
   color: #596760;
   font-size: 0.66rem;

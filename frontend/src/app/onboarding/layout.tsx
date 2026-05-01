@@ -10,8 +10,8 @@ export default function OnboardingLayout({ children }: { children: ReactNode }) 
   const { user } = useAuth();
 
   return (
-    <div className="min-h-screen bg-[var(--re-surface-base)] text-[var(--re-text-primary)]">
-      <header className="h-12 sticky top-0 z-40 border-b border-[var(--re-nav-border)] backdrop-blur-[16px] bg-[var(--re-nav-bg)]">
+    <div className="min-h-screen re-app-shell text-[var(--re-text-primary)]">
+      <header className="h-12 sticky top-0 z-40 border-b border-[var(--re-nav-border)] bg-[var(--re-nav-bg)]">
         <div className="max-w-[1120px] mx-auto h-full px-6 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2.5 no-underline">
             <span className="hidden md:inline-flex">

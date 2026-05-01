@@ -836,3 +836,518 @@ html.a11y-cursor-large [role="button"],
 html.a11y-cursor-large input[type="submit"] {
     cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='48' height='48'%3E%3Cpath d='M8 4v40h6V28h12v-6H14V10h20V4z' fill='black' stroke='white' stroke-width='2'/%3E%3C/svg%3E") 8 4, pointer !important;
 }
+
+/* ═══════════════════════════════════════════════════════════
+   RegEngine Braun/Rams System
+   Quiet, technical, table-first product language.
+   ═══════════════════════════════════════════════════════════ */
+
+@layer base {
+    :root,
+    .light {
+        --background: 60 8% 96%;
+        --foreground: 210 9% 9%;
+        --card: 60 5% 93%;
+        --card-foreground: 210 9% 9%;
+        --popover: 60 8% 98%;
+        --popover-foreground: 210 9% 9%;
+        --primary: 210 9% 9%;
+        --primary-foreground: 60 8% 96%;
+        --secondary: 60 5% 88%;
+        --secondary-foreground: 210 9% 9%;
+        --muted: 60 5% 90%;
+        --muted-foreground: 210 7% 34%;
+        --accent: 4 76% 43%;
+        --accent-foreground: 60 8% 96%;
+        --destructive: 4 76% 43%;
+        --destructive-foreground: 60 8% 96%;
+        --border: 45 7% 74%;
+        --input: 45 7% 66%;
+        --ring: 210 9% 9%;
+        --radius: 0.1875rem;
+
+        --re-brand: #1d1d1b;
+        --re-brand-dark: #000000;
+        --re-brand-light: #4a4a45;
+        --re-brand-muted: #1d1d1b12;
+        --re-signal-red: #b3261e;
+        --re-signal-yellow: #d59a17;
+        --re-signal-green: #2d7f45;
+        --re-signal-blue: #2364aa;
+
+        --re-discovery: var(--re-signal-blue);
+        --re-decomposition: var(--re-signal-green);
+        --re-linkage: #6f5f3f;
+        --re-evidence: var(--re-signal-yellow);
+
+        --re-surface-base: #f4f4f1;
+        --re-surface-card: #ededeb;
+        --re-surface-border: #a9a79f;
+        --re-surface-elevated: #ffffff;
+        --re-surface-overlay: #fffffff2;
+
+        --re-text-primary: #1d1d1b;
+        --re-text-secondary: #343431;
+        --re-text-tertiary: #5d5c56;
+        --re-text-muted: #6d6b64;
+        --re-text-disabled: #918d82;
+
+        --re-border-default: #a9a79f;
+        --re-border-subtle: #d7d6d1;
+        --re-border-strong: #1d1d1b;
+
+        --re-success: var(--re-signal-green);
+        --re-success-muted: #2d7f4517;
+        --re-success-bg: #2d7f450d;
+        --re-success-border: #2d7f4536;
+        --re-warning: var(--re-signal-yellow);
+        --re-warning-muted: #d59a1717;
+        --re-warning-bg: #d59a170d;
+        --re-warning-border: #d59a1736;
+        --re-danger: var(--re-signal-red);
+        --re-danger-muted: #b3261e17;
+        --re-danger-bg: #b3261e0d;
+        --re-danger-border: #b3261e36;
+        --re-info: var(--re-signal-blue);
+        --re-info-muted: #2364aa17;
+        --re-info-bg: #2364aa0d;
+        --re-info-border: #2364aa36;
+        --re-sticky-bg: #f4f4f1f0;
+
+        --re-shadow-sm: none;
+        --re-shadow-md: none;
+        --re-shadow-lg: none;
+        --re-shadow-glow: none;
+        --re-shadow-glow-strong: none;
+
+        --re-font-sans: "Inter", "Helvetica Neue", Arial, system-ui, sans-serif;
+        --re-font-display: "Inter", "Helvetica Neue", Arial, system-ui, sans-serif;
+        --re-font-serif: Georgia, serif;
+        --re-font-mono: "JetBrains Mono", "IBM Plex Mono", ui-monospace, monospace;
+
+        --re-radius-sm: 2px;
+        --re-radius-md: 3px;
+        --re-radius-lg: 4px;
+        --re-radius-xl: 4px;
+        --re-radius-2xl: 4px;
+        --re-radius-pill: 2px;
+
+        --re-nav-bg: #f4f4f1f2;
+        --re-nav-border: #1d1d1b;
+        --re-nav-dropdown-bg: #ffffff;
+        --re-nav-dropdown-border: #1d1d1b;
+        --re-nav-dropdown-shadow: none;
+        --re-nav-hover: #1d1d1b0a;
+        --re-nav-divider: #a9a79f;
+        --re-mobile-menu-bg: #f4f4f1;
+        --re-mobile-border: #1d1d1b;
+        --re-mobile-toggle-border: #1d1d1b;
+    }
+
+    .dark {
+        --background: 210 9% 9%;
+        --foreground: 42 30% 94%;
+        --card: 210 7% 13%;
+        --card-foreground: 42 30% 94%;
+        --popover: 210 7% 13%;
+        --popover-foreground: 42 30% 94%;
+        --primary: 42 30% 94%;
+        --primary-foreground: 210 9% 9%;
+        --secondary: 210 5% 18%;
+        --secondary-foreground: 42 30% 94%;
+        --muted: 210 5% 18%;
+        --muted-foreground: 42 9% 68%;
+        --accent: 4 76% 56%;
+        --accent-foreground: 42 30% 94%;
+        --border: 42 8% 33%;
+        --input: 42 8% 33%;
+        --ring: 42 30% 94%;
+        --re-surface-base: #1d1d1b;
+        --re-surface-card: #242420;
+        --re-surface-border: #5d574b;
+        --re-surface-elevated: #151513;
+        --re-surface-overlay: #1d1d1bf2;
+        --re-text-primary: #f3f0e8;
+        --re-text-secondary: #ddd6c8;
+        --re-text-tertiary: #b9b3a7;
+        --re-text-muted: #aca597;
+        --re-text-disabled: #837d72;
+        --re-border-default: #5d574b;
+        --re-border-subtle: #3f3b34;
+        --re-border-strong: #f3f0e8;
+        --re-nav-bg: #1d1d1bf2;
+        --re-nav-border: #5d574b;
+        --re-nav-dropdown-bg: #242420;
+        --re-nav-dropdown-border: #5d574b;
+        --re-mobile-menu-bg: #1d1d1b;
+        --re-mobile-border: #5d574b;
+        --re-mobile-toggle-border: #5d574b;
+    }
+
+    html {
+        background: var(--re-surface-base);
+        color: var(--re-text-primary);
+        font-family: var(--re-font-sans);
+        text-rendering: optimizeLegibility;
+    }
+
+    body {
+        background:
+            linear-gradient(90deg, rgba(29, 29, 27, 0.035) 1px, transparent 1px),
+            linear-gradient(180deg, rgba(29, 29, 27, 0.025) 1px, transparent 1px),
+            var(--re-surface-base);
+        background-size: 48px 48px;
+        color: var(--re-text-primary);
+        letter-spacing: 0;
+    }
+
+    h1,
+    h2,
+    h3,
+    h4 {
+        color: var(--re-text-primary);
+        font-family: var(--re-font-display);
+        letter-spacing: 0;
+    }
+
+    ::selection {
+        background: var(--re-signal-yellow);
+        color: #1d1d1b;
+    }
+}
+
+@layer components {
+    .re-page {
+        background:
+            linear-gradient(90deg, rgba(29, 29, 27, 0.035) 1px, transparent 1px),
+            linear-gradient(180deg, rgba(29, 29, 27, 0.025) 1px, transparent 1px),
+            var(--re-surface-base);
+        background-size: 48px 48px;
+    }
+
+    .re-container {
+        width: min(1180px, calc(100vw - 32px));
+        margin: 0 auto;
+    }
+
+    .re-section {
+        padding: clamp(48px, 7vw, 88px) 0;
+        border-top: 1px solid var(--re-surface-border);
+    }
+
+    .re-panel {
+        border: 1px solid var(--re-surface-border);
+        border-radius: var(--re-radius-lg);
+        background: var(--re-surface-elevated);
+        box-shadow: none;
+    }
+
+    .re-rule-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13px;
+    }
+
+    .re-rule-table th,
+    .re-rule-table td {
+        border-bottom: 1px solid var(--re-surface-border);
+        padding: 12px 10px;
+        text-align: left;
+        vertical-align: top;
+    }
+
+    .re-rule-table th {
+        color: var(--re-text-muted);
+        font-family: var(--re-font-mono);
+        font-size: 11px;
+        font-weight: 500;
+        text-transform: uppercase;
+    }
+
+    .re-label {
+        color: var(--re-text-muted);
+        font-family: var(--re-font-mono);
+        font-size: 11px;
+        line-height: 1.3;
+        text-transform: uppercase;
+    }
+
+    .re-signal {
+        display: inline-block;
+        width: 8px;
+        height: 8px;
+        border: 1px solid currentColor;
+        border-radius: 50%;
+        background: currentColor;
+    }
+
+    .bg-gradient-to-r,
+    .bg-gradient-to-l,
+    .bg-gradient-to-b,
+    .bg-gradient-to-t,
+    .bg-gradient-to-br,
+    .bg-gradient-to-bl,
+    .bg-gradient-to-tr,
+    .bg-gradient-to-tl {
+        background-image: none !important;
+    }
+
+    .rounded-full,
+    .rounded-2xl,
+    .rounded-3xl,
+    .rounded-xl,
+    .rounded-lg {
+        border-radius: var(--re-radius-lg) !important;
+    }
+
+    .shadow,
+    .shadow-sm,
+    .shadow-md,
+    .shadow-lg,
+    .shadow-xl,
+    .shadow-2xl {
+        box-shadow: none !important;
+    }
+}
+
+/* Plain selectors intentionally duplicate the named components above.
+   Turbopack can reorder Tailwind layers in dev; these keep the design shell firm. */
+.re-page {
+    background:
+        linear-gradient(90deg, rgba(29, 29, 27, 0.035) 1px, transparent 1px),
+        linear-gradient(180deg, rgba(29, 29, 27, 0.025) 1px, transparent 1px),
+        var(--re-surface-base) !important;
+    background-size: 48px 48px !important;
+}
+
+.re-container {
+    width: min(1120px, calc(100vw - 40px)) !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+}
+
+.re-section {
+    padding-top: clamp(48px, 7vw, 88px) !important;
+    padding-bottom: clamp(48px, 7vw, 88px) !important;
+    border-top: 1px solid var(--re-surface-border) !important;
+}
+
+.re-panel {
+    border: 1px solid var(--re-surface-border) !important;
+    border-radius: var(--re-radius-lg) !important;
+    background: var(--re-surface-elevated) !important;
+    box-shadow: none !important;
+}
+
+.re-rule-table {
+    width: 100%;
+    min-width: 620px;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+
+.re-workbench-table {
+    min-width: 0;
+    table-layout: fixed;
+}
+
+.re-workbench-table th,
+.re-workbench-table td {
+    padding-left: 9px;
+    padding-right: 9px;
+}
+
+.re-workbench-table th:nth-child(1),
+.re-workbench-table td:nth-child(1) {
+    width: 27%;
+}
+
+.re-workbench-table th:nth-child(2),
+.re-workbench-table td:nth-child(2) {
+    width: 17%;
+}
+
+.re-workbench-table th:nth-child(3),
+.re-workbench-table td:nth-child(3) {
+    width: 21%;
+}
+
+.re-workbench-table th:nth-child(4),
+.re-workbench-table td:nth-child(4) {
+    width: 16%;
+}
+
+.re-workbench-table th:nth-child(5),
+.re-workbench-table td:nth-child(5) {
+    width: 19%;
+}
+
+.re-rule-table th,
+.re-rule-table td {
+    border-bottom: 1px solid var(--re-surface-border);
+    padding: 12px 10px;
+    text-align: left;
+    vertical-align: top;
+}
+
+.re-rule-table th {
+    color: var(--re-text-muted);
+    font-family: var(--re-font-mono);
+    font-size: 11px;
+    font-weight: 500;
+    text-transform: uppercase;
+}
+
+.re-label {
+    color: var(--re-text-muted);
+    font-family: var(--re-font-mono);
+    font-size: 11px;
+    line-height: 1.3;
+    text-transform: uppercase;
+}
+
+.re-signal {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border: 1px solid currentColor;
+    border-radius: 50%;
+    background: currentColor;
+}
+
+.re-app-surface {
+    min-height: 100%;
+    background:
+        linear-gradient(90deg, rgba(29, 29, 27, 0.035) 1px, transparent 1px),
+        linear-gradient(180deg, rgba(29, 29, 27, 0.025) 1px, transparent 1px),
+        var(--re-surface-base);
+    background-size: 48px 48px;
+    color: var(--re-text-primary);
+}
+
+.re-app-surface :is(section, article, aside, form, table, thead, tbody, tr, th, td) {
+    border-color: var(--re-surface-border);
+}
+
+.re-app-surface :is(h1, h2, h3) {
+    color: var(--re-text-primary);
+    font-family: var(--re-font-display);
+    letter-spacing: 0;
+}
+
+.re-app-surface h1 {
+    font-weight: 700;
+}
+
+.re-app-surface :is(p, li, dd, dt, label) {
+    color: inherit;
+    letter-spacing: 0;
+}
+
+.re-app-surface :is(.text-slate-400, .text-slate-500, .text-slate-600, .text-slate-700, .text-gray-500, .text-gray-600, .text-zinc-500, .text-zinc-600) {
+    color: var(--re-text-muted) !important;
+}
+
+.re-app-surface :is(.text-emerald-500, .text-emerald-600, .text-emerald-700, .text-green-600, .text-green-700) {
+    color: var(--re-signal-green) !important;
+}
+
+.re-app-surface :is(.text-blue-500, .text-blue-600, .text-blue-700, .text-indigo-500, .text-indigo-600, .text-indigo-700) {
+    color: var(--re-signal-blue) !important;
+}
+
+.re-app-surface :is(.text-amber-500, .text-amber-600, .text-amber-700, .text-orange-500, .text-orange-600, .text-orange-700) {
+    color: var(--re-signal-yellow) !important;
+}
+
+.re-app-surface :is(.text-red-500, .text-red-600, .text-red-700, .text-rose-500, .text-rose-600, .text-rose-700) {
+    color: var(--re-signal-red) !important;
+}
+
+.re-app-surface :is(.bg-white, .bg-slate-50, .bg-slate-100, .bg-gray-50, .bg-gray-100, .bg-zinc-50, .bg-zinc-100) {
+    background-color: var(--re-surface-elevated) !important;
+}
+
+.re-app-surface :is(.bg-emerald-50, .bg-green-50, .bg-teal-50) {
+    background-color: var(--re-success-bg) !important;
+}
+
+.re-app-surface :is(.bg-blue-50, .bg-indigo-50, .bg-sky-50) {
+    background-color: var(--re-info-bg) !important;
+}
+
+.re-app-surface :is(.bg-amber-50, .bg-yellow-50, .bg-orange-50) {
+    background-color: var(--re-warning-bg) !important;
+}
+
+.re-app-surface :is(.bg-red-50, .bg-rose-50) {
+    background-color: var(--re-danger-bg) !important;
+}
+
+.re-app-surface :is([class*="border-slate-"], [class*="border-gray-"], [class*="border-zinc-"], [class*="border-neutral-"]) {
+    border-color: var(--re-surface-border) !important;
+}
+
+.re-app-surface :is([class*="ring-"], [class*="focus:ring-"], [class*="focus-visible:ring-"]) {
+    --tw-ring-color: var(--re-border-strong) !important;
+}
+
+.re-app-surface :is(input, select, textarea) {
+    border-radius: var(--re-radius-md) !important;
+    border-color: var(--re-surface-border) !important;
+    background: var(--re-surface-elevated) !important;
+    color: var(--re-text-primary) !important;
+    box-shadow: none !important;
+}
+
+.re-app-surface :is(button, [role="button"], a[class*="rounded"]) {
+    letter-spacing: 0;
+}
+
+.re-app-surface :is(code, pre, kbd) {
+    border-radius: var(--re-radius-md);
+    font-family: var(--re-font-mono);
+}
+
+.re-app-surface :is(pre, .font-mono) {
+    letter-spacing: 0;
+}
+
+.re-app-surface .text-transparent {
+    color: var(--re-text-primary) !important;
+}
+
+.re-app-surface .bg-clip-text {
+    background-image: none !important;
+}
+
+.re-app-shell {
+    background:
+        linear-gradient(90deg, rgba(29, 29, 27, 0.035) 1px, transparent 1px),
+        linear-gradient(180deg, rgba(29, 29, 27, 0.025) 1px, transparent 1px),
+        var(--re-surface-base);
+    background-size: 48px 48px;
+}
+
+.re-app-shell :is(aside, nav) {
+    border-color: var(--re-border-strong);
+}
+
+.re-docs-shell {
+    background: var(--re-surface-base);
+    border-top: 1px solid var(--re-surface-border);
+}
+
+.re-auth-rail :is(h1, h2, h3, p, span) {
+    color: var(--re-surface-base) !important;
+}
+
+@media (max-width: 767px) {
+    .re-container {
+        width: min(100% - 32px, 1120px) !important;
+    }
+
+    .re-rule-table {
+        min-width: 560px;
+    }
+}

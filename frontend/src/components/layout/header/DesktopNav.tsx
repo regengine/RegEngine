@@ -19,12 +19,15 @@ export function DesktopNav({
     focusFirstToolsItem,
 }: DesktopNavProps) {
     const navLinkStyle: React.CSSProperties = {
-        fontSize: "13px",
+        fontSize: "12px",
         color: "var(--re-text-muted)",
         textDecoration: "none",
-        fontWeight: 500,
+        fontWeight: 600,
+        textTransform: "uppercase",
+        fontFamily: "var(--re-font-mono)",
         transition: "color 0.2s",
         padding: "8px 0",
+        whiteSpace: "nowrap",
     };
 
     const handleLinkEnter = (e: React.MouseEvent) =>
@@ -33,7 +36,7 @@ export function DesktopNav({
         ((e.target as HTMLElement).style.color = "var(--re-text-muted)");
 
     return (
-        <div className="marketing-desktop-nav" style={{ display: "flex", alignItems: "center", gap: "28px" }}>
+        <div className="marketing-desktop-nav" style={{ display: "flex", alignItems: "center", gap: "24px" }}>
             {(showLoggedIn ? [
                 { label: 'Compliance', href: '/dashboard/compliance' },
                 { label: 'Suppliers', href: '/dashboard/suppliers' },
@@ -90,15 +93,17 @@ export function DesktopNav({
                             fontSize: "13px",
                             fontWeight: 600,
                             color: "var(--re-surface-base)",
-                            background: "var(--re-brand)",
-                            padding: "7px 18px",
-                            borderRadius: "6px",
+                            background: "var(--re-text-primary)",
+                            padding: "8px 16px",
+                            borderRadius: "2px",
                             textDecoration: "none",
                             transition: "all 0.2s",
-                            boxShadow: "0 2px 8px var(--re-brand-muted)",
+                            boxShadow: "none",
+                            border: "1px solid var(--re-text-primary)",
                             display: "inline-flex",
                             alignItems: "center",
                             gap: "6px",
+                            whiteSpace: "nowrap",
                         }}
                     >
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -110,14 +115,15 @@ export function DesktopNav({
                         style={{
                             width: "32px",
                             height: "32px",
-                            borderRadius: "50%",
-                            background: "var(--re-brand)",
+                            borderRadius: "2px",
+                            background: "var(--re-surface-elevated)",
+                            border: "1px solid var(--re-text-primary)",
                             display: "flex",
                             alignItems: "center",
                             justifyContent: "center",
                             fontSize: "12px",
                             fontWeight: 700,
-                            color: "var(--re-surface-base)",
+                            color: "var(--re-text-primary)",
                             cursor: "pointer",
                             textTransform: "uppercase",
                         }}
@@ -128,31 +134,30 @@ export function DesktopNav({
                 </div>
             ) : (
                 <>
-                    <Link
-                        href="/login"
-                        style={navLinkStyle}
-                        onMouseEnter={handleLinkEnter}
-                        onMouseLeave={handleLinkLeave}
-                    >
+                    <Link href="/login" style={navLinkStyle} onMouseEnter={handleLinkEnter} onMouseLeave={handleLinkLeave}>
                         Log In
                     </Link>
                     <Link
                         href="/retailer-readiness"
                         style={{
-                            fontSize: "13px",
+                            fontSize: "12px",
                             fontWeight: 600,
-                            color: "#fff",
-                            background: "var(--re-brand)",
-                            padding: "7px 18px",
-                            borderRadius: "6px",
+                            fontFamily: "var(--re-font-mono)",
+                            textTransform: "uppercase",
+                            color: "var(--re-surface-base)",
+                            background: "var(--re-text-primary)",
+                            padding: "8px 16px",
+                            borderRadius: "2px",
                             textDecoration: "none",
                             transition: "all 0.2s",
-                            boxShadow: "0 2px 8px var(--re-brand-muted)",
+                            boxShadow: "none",
+                            border: "1px solid var(--re-text-primary)",
+                            whiteSpace: "nowrap",
                         }}
-                        onMouseEnter={(e) => { (e.target as HTMLElement).style.transform = "translateY(-1px)"; (e.target as HTMLElement).style.boxShadow = "0 4px 16px var(--re-brand-muted)"; }}
-                        onMouseLeave={(e) => { (e.target as HTMLElement).style.transform = "translateY(0)"; (e.target as HTMLElement).style.boxShadow = "0 2px 8px var(--re-brand-muted)"; }}
+                        onMouseEnter={(e) => { (e.target as HTMLElement).style.background = "var(--re-text-secondary)"; }}
+                        onMouseLeave={(e) => { (e.target as HTMLElement).style.background = "var(--re-text-primary)"; }}
                     >
-                        Free Assessment &rarr;
+                        Check Readiness
                     </Link>
                 </>
             )}
