@@ -30,7 +30,7 @@ export function FreeToolPageShell({
     );
 
     return (
-        <div className="min-h-screen bg-background p-4 md:p-8 pt-4">
+        <div className="min-h-screen bg-[var(--re-surface-base)] p-4 pt-4 md:p-8">
             <div className="mx-auto max-w-7xl space-y-6">
                 {/* Breadcrumb */}
                 <Breadcrumbs
@@ -41,9 +41,10 @@ export function FreeToolPageShell({
                 />
 
                 {/* Title Block */}
+                <div className="rounded-lg border border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)] p-5 shadow-sm md:p-6">
                 <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
                     <div>
-                        <h1 className="text-3xl font-semibold tracking-tight">
+                        <h1 className="text-3xl font-semibold tracking-tight text-[var(--re-text-primary)]">
                             RegEngine • {title}
                         </h1>
                         <div className="mt-1 text-sm text-muted-foreground">
@@ -57,12 +58,13 @@ export function FreeToolPageShell({
                         </Badge>
                     </div>
                 </div>
+                </div>
 
                 {/* Tool Content */}
                 <div className="mt-6">{children}</div>
 
                 {/* Compliance Note */}
-                <div className="rounded-3xl border p-4 md:p-6 mt-8">
+                <div className="rounded-lg border border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)] p-4 shadow-sm md:p-6 mt-8">
                     <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
                         <div>
                             <div className="text-sm font-medium">

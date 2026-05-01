@@ -4,14 +4,14 @@ import { cva, type VariantProps } from "class-variance-authority"
 import { cn } from "@/lib/utils"
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center whitespace-nowrap rounded-sm border text-[13px] font-semibold ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50",
+  "inline-flex items-center justify-center whitespace-nowrap rounded-md border text-[13px] font-semibold ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50",
   {
     variants: {
       variant: {
-        default: "border-primary bg-primary text-primary-foreground hover:bg-[var(--re-text-secondary)]",
+        default: "border-primary bg-primary text-primary-foreground shadow-sm hover:bg-[var(--re-text-secondary)]",
         destructive: "border-destructive bg-destructive text-destructive-foreground hover:bg-[var(--re-signal-red)]",
-        outline: "border-input bg-transparent text-foreground hover:border-[var(--re-border-strong)] hover:bg-[var(--re-brand-muted)]",
-        secondary: "border-[var(--re-surface-border)] bg-secondary text-secondary-foreground hover:bg-[var(--re-surface-card)]",
+        outline: "border-input bg-[var(--re-surface-elevated)] text-foreground hover:border-[var(--re-border-strong)] hover:bg-[var(--re-brand-muted)]",
+        secondary: "border-[var(--re-surface-border)] bg-secondary text-secondary-foreground shadow-sm hover:bg-[var(--re-surface-card)]",
         ghost: "border-transparent bg-transparent hover:border-[var(--re-surface-border)] hover:bg-[var(--re-brand-muted)]",
         link: "border-transparent text-primary underline-offset-4 hover:underline",
       },

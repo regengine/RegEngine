@@ -317,19 +317,19 @@ function EndpointCard({ endpoint }: { endpoint: Endpoint }) {
         <div className="border rounded-lg overflow-hidden">
             <button
                 onClick={() => setExpanded(!expanded)}
-                className="w-full flex items-center gap-3 p-3 text-left hover:bg-muted/50 transition-colors"
+                className="w-full flex flex-wrap items-center gap-2 p-3 text-left hover:bg-muted/50 transition-colors sm:gap-3"
             >
                 {expanded ? (
-                    <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                    <ChevronDown className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
                 ) : (
-                    <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                    <ChevronRight className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
                 )}
                 <Badge className={`${methodColors[endpoint.method]} text-white font-mono text-xs`}>
                     {endpoint.method}
                 </Badge>
-                <code className="font-mono text-sm flex-1">{endpoint.path}</code>
+                <code className="min-w-0 flex-[1_1_150px] break-all font-mono text-sm">{endpoint.path}</code>
                 {endpoint.auth && (
-                    <Badge variant="outline" className="text-xs">
+                    <Badge variant="outline" className="ml-6 text-xs sm:ml-0">
                         Auth
                     </Badge>
                 )}

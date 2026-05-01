@@ -8,7 +8,20 @@ import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader } from '@/components/ui/card';
-import { Loader2, LayoutDashboard, ShieldCheck, KeyRound, ClipboardCheck } from 'lucide-react';
+import {
+    ArrowRight,
+    CheckCircle2,
+    ClipboardCheck,
+    Eye,
+    EyeOff,
+    FileCheck2,
+    KeyRound,
+    LayoutDashboard,
+    LockKeyhole,
+    Loader2,
+    Mail,
+    ShieldCheck,
+} from 'lucide-react';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
 
@@ -85,11 +98,13 @@ export default function LoginPage() {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [isLoading, setIsLoading] = useState(false);
+    const [isSessionSyncing, setIsSessionSyncing] = useState(false);
+    const [showPassword, setShowPassword] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const router = useRouter();
     const searchParams = useSearchParams();
     const nextParam = searchParams.get('next');
-    const { login, user, isHydrated } = useAuth();
+    const { clearCredentials, login, user, isHydrated } = useAuth();
     const showQaPresets = Boolean(QALoginPresets && (searchParams.get('qa') === '1' || searchParams.get('preset')));
     const QaPresets = QALoginPresets;
 
@@ -100,7 +115,7 @@ export default function LoginPage() {
     }, []);
 
     useEffect(() => {
-        if (!isHydrated || !user) {
+        if (!isHydrated || !user || isSessionSyncing) {
             return;
         }
 
@@ -137,7 +152,7 @@ export default function LoginPage() {
         } else {
             router.push('/dashboard');
         }
-    }, [isHydrated, user, nextParam, router, searchParams]);
+    }, [isHydrated, user, isSessionSyncing, nextParam, router, searchParams]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -152,6 +167,7 @@ export default function LoginPage() {
         }
 
         setIsLoading(true);
+        setIsSessionSyncing(true);
         setError(null);
 
         try {
@@ -179,13 +195,11 @@ export default function LoginPage() {
             const supabase = createSupabaseBrowserClient();
             const { error: sbError } = await supabase.auth.signInWithPassword({ email, password });
             if (sbError) {
-                // Supabase auth failed — this means the user exists in RegEngine
-                // but not in Supabase, or passwords are out of sync. Log it and
-                // surface the issue rather than silently breaking middleware.
-                console.error('[login] Supabase session sync failed:', sbError.message);
-                // Don't throw — the RegEngine JWT is set and the user can still
-                // reach public/free-tool routes. But protected routes will fail
-                // until Supabase session is established.
+                if (process.env.NODE_ENV !== 'production') {
+                    console.error('[login] Supabase session sync failed:', sbError.message);
+                }
+                clearCredentials();
+                throw new Error('Secure session could not be established. Please try again.');
             }
 
             // Clear any error params (e.g. ?error=session_expired) left by
@@ -199,8 +213,10 @@ export default function LoginPage() {
 
             // Ensure the middleware picks up the newly-set cookie before
             // the useEffect redirect fires.
+            setIsSessionSyncing(false);
             router.refresh();
         } catch (err: unknown) {
+            setIsSessionSyncing(false);
             if (process.env.NODE_ENV !== 'production') {
                 console.error('Login error:', err);
             }
@@ -223,6 +239,8 @@ export default function LoginPage() {
                 setError('Unable to reach authentication service. Check API configuration and try again.');
             } else if (apiError.message?.includes('DNS_HOSTNAME_RESOLVED_PRIVATE')) {
                 setError('Authentication service is misconfigured for public access.');
+            } else if (apiError.message === 'Secure session could not be established. Please try again.') {
+                setError(apiError.message);
             } else {
                 setError(errorDetail || 'An unexpected error occurred. Please try again.');
             }
@@ -231,74 +249,140 @@ export default function LoginPage() {
         }
     };
 
+    const queryError = searchParams.get('error');
+    const submitBusy = isLoading || isSessionSyncing;
+
     return (
-        <div className="min-h-[calc(100vh-1px)] bg-slate-50 text-slate-950">
-            <section className="mx-auto flex min-h-[calc(100vh-1px)] w-full max-w-6xl items-center px-4 py-8 sm:px-6 lg:px-8">
-                <div className="grid w-full overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm lg:grid-cols-[minmax(0,0.9fr)_minmax(420px,0.7fr)]">
-                    <div className="re-auth-rail hidden border-r border-[var(--re-border-strong)] bg-[var(--re-brand)] p-8 text-[var(--re-surface-base)] lg:flex lg:flex-col lg:justify-between">
+        <div className="min-h-[calc(100vh-1px)] bg-[var(--re-surface-base)] text-[var(--re-text-primary)]">
+            <section className="mx-auto flex min-h-[calc(100vh-1px)] w-full max-w-7xl items-center px-4 py-6 sm:px-6 lg:px-8">
+                <div className="grid w-full overflow-hidden rounded-lg border border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)] shadow-lg lg:grid-cols-[minmax(0,0.92fr)_minmax(440px,1.08fr)]">
+                    <aside className="re-auth-rail hidden min-h-[680px] border-r border-white/10 bg-[var(--re-brand)] p-8 text-white lg:flex lg:flex-col lg:justify-between">
                         <div>
-                            <div className="inline-flex h-10 w-10 items-center justify-center rounded-sm border border-[var(--re-surface-base)] bg-[var(--re-surface-base)] text-[var(--re-brand)]">
-                                <ClipboardCheck className="h-5 w-5" />
-                            </div>
-                            <h1 className="mt-8 max-w-md text-3xl font-semibold leading-tight tracking-normal">
-                                RegEngine command center
+                            <Link href="/" className="inline-flex items-center gap-3 text-white no-underline">
+                                <div className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-white/20 bg-white text-[var(--re-brand)]">
+                                    <ClipboardCheck className="h-5 w-5" />
+                                </div>
+                                <div>
+                                    <p className="text-lg font-semibold leading-none">RegEngine</p>
+                                    <p className="mt-1 font-mono text-[11px] uppercase tracking-[0.14em] text-white/60">Command center</p>
+                                </div>
+                            </Link>
+
+                            <h1 className="mt-10 max-w-md text-4xl font-semibold leading-tight tracking-normal">
+                                Evidence-ready access for regulated teams.
                             </h1>
-                            <p className="mt-3 max-w-md text-sm leading-6 text-[var(--re-surface-base)]">
-                                Continue to your FSMA 204 workspace, validate traceability records, and prepare evidence from authenticated records.
+                            <p className="mt-4 max-w-md text-sm leading-6 text-white/72">
+                                Sign in to validate traceability records, resolve readiness blockers, and prepare tenant-scoped audit evidence.
                             </p>
                         </div>
 
-                        <div className="grid gap-3 text-sm">
-                            {[
-                                'Secure tenant-scoped session',
-                                'Authenticated traceability exports',
-                                'Hash-chain audit evidence',
-                            ].map((item) => (
-                                <div key={item} className="flex items-center gap-3 rounded-sm border border-[var(--re-surface-base)]/25 bg-[var(--re-surface-base)]/[0.04] px-3 py-2">
-                                    <ShieldCheck className="h-4 w-4 text-[var(--re-signal-green)]" />
-                                    <span className="text-[var(--re-surface-base)]">{item}</span>
+                        <div className="mt-10 grid gap-4">
+                            <div className="re-auth-check rounded-lg border border-white/15 p-4">
+                                <div className="mb-3 flex items-center justify-between">
+                                    <p className="text-sm font-semibold">Evidence checklist</p>
+                                    <span className="rounded-full border border-emerald-300/30 bg-emerald-400/10 px-2 py-1 text-[11px] font-medium text-emerald-200">Live</span>
                                 </div>
-                            ))}
-                        </div>
-                    </div>
+                                {[
+                                    ['Supplier onboarding', 'All suppliers verified', 'Complete'],
+                                    ['Foreign Traceability', '2 lots awaiting FTL', 'Review'],
+                                    ['Recall readiness', 'Exercises current', 'Complete'],
+                                ].map(([title, detail, status]) => (
+                                    <div key={title} className="flex items-center gap-3 border-t border-white/10 py-3 first:border-t-0 first:pt-0 last:pb-0">
+                                        {status === 'Complete' ? (
+                                            <CheckCircle2 className="h-4 w-4 flex-shrink-0 text-emerald-300" />
+                                        ) : (
+                                            <FileCheck2 className="h-4 w-4 flex-shrink-0 text-amber-300" />
+                                        )}
+                                        <div className="min-w-0 flex-1">
+                                            <p className="text-sm font-medium text-white">{title}</p>
+                                            <p className="mt-0.5 text-xs text-white/55">{detail}</p>
+                                        </div>
+                                        <span className="rounded-full border border-white/15 px-2 py-1 text-[11px] text-white/72">{status}</span>
+                                    </div>
+                                ))}
+                            </div>
 
-                    <Card className="border-0 bg-white shadow-none">
-                        <CardHeader className="space-y-2 px-5 pb-4 pt-6 sm:px-8 sm:pt-8">
-                            <div className="flex items-center gap-3 lg:hidden">
-                                <div className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-600 text-white">
-                                    <ClipboardCheck className="h-4 w-4" />
+                            <div className="re-auth-check rounded-lg border border-white/15 p-4">
+                                <div className="mb-3 flex items-center justify-between">
+                                    <p className="text-sm font-semibold">Traceability status</p>
+                                    <span className="font-mono text-[11px] text-white/55">3 events</span>
+                                </div>
+                                <div className="grid grid-cols-[1fr_88px_74px] gap-x-3 border-b border-white/10 pb-2 font-mono text-[10px] uppercase tracking-[0.08em] text-white/45">
+                                    <span>Lot</span>
+                                    <span>Status</span>
+                                    <span>CTE</span>
+                                </div>
+                                {[
+                                    ['LOT-24-0512', 'Compliant', 'Shipping'],
+                                    ['LOT-24-0511', 'Compliant', 'Cooling'],
+                                    ['LOT-24-0510', 'Warning', 'Receiving'],
+                                ].map(([lot, status, cte]) => (
+                                    <div key={lot} className="grid grid-cols-[1fr_88px_74px] gap-x-3 border-b border-white/10 py-2 text-xs last:border-b-0">
+                                        <span className="font-mono text-white/80">{lot}</span>
+                                        <span className="inline-flex items-center gap-1.5 text-white/72">
+                                            <span className={status === 'Compliant' ? 'h-2 w-2 rounded-full bg-emerald-300' : 'h-2 w-2 rounded-full bg-amber-300'} />
+                                            {status}
+                                        </span>
+                                        <span className="text-white/60">{cte}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-3 gap-4 border-t border-white/10 pt-5 text-xs text-white/58">
+                            <div className="flex gap-2">
+                                <ShieldCheck className="h-4 w-4 flex-shrink-0 text-white/70" />
+                                <span>Enterprise security</span>
+                            </div>
+                            <div className="flex gap-2">
+                                <LockKeyhole className="h-4 w-4 flex-shrink-0 text-white/70" />
+                                <span>Encrypted session</span>
+                            </div>
+                            <div className="flex gap-2">
+                                <FileCheck2 className="h-4 w-4 flex-shrink-0 text-white/70" />
+                                <span>Audit-ready evidence</span>
+                            </div>
+                        </div>
+                    </aside>
+
+                    <Card className="border-0 bg-[var(--re-surface-elevated)] shadow-none">
+                        <CardHeader className="px-5 pb-3 pt-6 text-left sm:px-10 sm:pt-10 lg:px-16 lg:pt-16">
+                            <Link href="/" className="mb-8 inline-flex items-center gap-3 text-[var(--re-text-primary)] no-underline sm:mb-10">
+                                <div className="inline-flex h-10 w-10 items-center justify-center rounded-md bg-[var(--re-brand)] text-white">
+                                    <ClipboardCheck className="h-5 w-5" />
                                 </div>
                                 <div>
-                                    <p className="text-sm font-semibold text-slate-950">RegEngine</p>
-                                    <p className="text-xs text-slate-500">Command center</p>
+                                    <p className="text-lg font-semibold leading-none">RegEngine</p>
+                                    <p className="mt-1 text-xs text-[var(--re-text-muted)] lg:hidden">Command center</p>
                                 </div>
-                            </div>
-                            <div className="inline-flex w-fit items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-800">
+                            </Link>
+
+                            <div className="inline-flex w-fit items-center gap-2 rounded-full border border-[var(--re-info-border)] bg-[var(--re-info-bg)] px-3 py-1 text-xs font-medium text-[var(--re-info)]">
                                 <KeyRound className="h-3.5 w-3.5" />
                                 Protected workspace
                             </div>
-                            <h2 className="text-2xl font-semibold leading-tight tracking-normal text-slate-950">Sign in</h2>
-                            <CardDescription className="text-sm leading-6 text-slate-600">
-                                Use your RegEngine account to continue to the requested workspace.
+                            <h2 className="mt-5 text-4xl font-semibold leading-tight tracking-normal text-[var(--re-text-primary)]">Sign in</h2>
+                            <CardDescription className="mt-2 text-base leading-7 text-[var(--re-text-muted)]">
+                                Access your regulated workspace with a synchronized secure session.
                             </CardDescription>
                         </CardHeader>
-                        <CardContent className="px-5 pb-6 sm:px-8 sm:pb-8">
-                            {searchParams.get('error') === 'auth_config' && (
+                        <CardContent className="px-5 pb-6 sm:px-10 sm:pb-10 lg:px-16">
+                            {queryError === 'auth_config' && (
                                 <div className="mb-4 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-700 dark:border-amber-800 dark:bg-amber-900/10 dark:text-amber-400">
-                                    Authentication is misconfigured (AUTH_SECRET_KEY not set). Contact your administrator.
+                                    Authentication is temporarily unavailable. Please contact your administrator.
                                 </div>
                             )}
-                            {searchParams.get('error') === 'token_invalid' && (
+                            {queryError === 'token_invalid' && (
                                 <div className="mb-4 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-700 dark:border-amber-800 dark:bg-amber-900/10 dark:text-amber-400">
                                     Your session could not be verified. Please sign in again.
                                 </div>
                             )}
-                            {searchParams.get('error') === 'session_expired' && (
+                            {queryError === 'session_expired' && (
                                 <div className="mb-4 rounded-md border border-blue-200 bg-blue-50 p-3 text-sm text-blue-700 dark:border-blue-800 dark:bg-blue-900/10 dark:text-blue-400">
                                     Your session has expired. Please sign in again.
                                 </div>
                             )}
-                            {searchParams.get('error') === 'auth_failed' && (
+                            {queryError === 'auth_failed' && (
                                 <div className="mb-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-800 dark:bg-red-900/10 dark:text-red-400">
                                     Password reset link has expired or is invalid.{' '}
                                     <Link href="/forgot-password" className="font-medium underline underline-offset-2">
@@ -312,81 +396,109 @@ export default function LoginPage() {
                                         id="login-error"
                                         role="alert"
                                         aria-live="polite"
-                                        className="animate-in fade-in slide-in-from-top-2 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-500 dark:border-red-800 dark:bg-red-900/10"
+                                        className="animate-in fade-in slide-in-from-top-2 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-600 dark:border-red-800 dark:bg-red-900/10"
                                     >
                                         {error}
                                     </div>
                                 )}
 
                                 <div className="space-y-2">
-                                    <label className="text-sm font-medium leading-none text-slate-700 peer-disabled:cursor-not-allowed peer-disabled:opacity-70" htmlFor="email">
-                                        Email
+                                    <label className="text-sm font-medium leading-none text-[var(--re-text-secondary)] peer-disabled:cursor-not-allowed peer-disabled:opacity-70" htmlFor="email">
+                                        Email address
                                     </label>
-                                    <Input
-                                        id="email"
-                                        type="email"
-                                        placeholder="name@example.com"
-                                        value={email}
-                                        onChange={(e) => setEmail(e.target.value)}
-                                        disabled={isLoading}
-                                        required
-                                        autoComplete="email"
-                                        aria-invalid={!!error}
-                                        aria-describedby={error ? 'login-error' : undefined}
-                                        className="h-11 border-slate-300 bg-white"
-                                    />
+                                    <div className="relative">
+                                        <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--re-text-muted)]" />
+                                        <Input
+                                            id="email"
+                                            type="email"
+                                            placeholder="name@company.com"
+                                            value={email}
+                                            onChange={(e) => setEmail(e.target.value)}
+                                            disabled={submitBusy}
+                                            required
+                                            autoComplete="email"
+                                            aria-invalid={!!error}
+                                            aria-describedby={error ? 'login-error' : undefined}
+                                            className="h-12 pl-10"
+                                        />
+                                    </div>
                                 </div>
 
                                 <div className="space-y-2">
-                                    <label className="text-sm font-medium leading-none text-slate-700 peer-disabled:cursor-not-allowed peer-disabled:opacity-70" htmlFor="password">
+                                    <label className="text-sm font-medium leading-none text-[var(--re-text-secondary)] peer-disabled:cursor-not-allowed peer-disabled:opacity-70" htmlFor="password">
                                         Password
                                     </label>
-                                    <Input
-                                        id="password"
-                                        type="password"
-                                        value={password}
-                                        onChange={(e) => setPassword(e.target.value)}
-                                        disabled={isLoading}
-                                        required
-                                        autoComplete="current-password"
-                                        aria-invalid={!!error}
-                                        aria-describedby={error ? 'login-error' : undefined}
-                                        className="h-11 border-slate-300 bg-white"
-                                    />
+                                    <div className="relative">
+                                        <LockKeyhole className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--re-text-muted)]" />
+                                        <Input
+                                            id="password"
+                                            type={showPassword ? 'text' : 'password'}
+                                            placeholder="Enter your password"
+                                            value={password}
+                                            onChange={(e) => setPassword(e.target.value)}
+                                            disabled={submitBusy}
+                                            required
+                                            autoComplete="current-password"
+                                            aria-invalid={!!error}
+                                            aria-describedby={error ? 'login-error' : undefined}
+                                            className="h-12 pl-10 pr-10"
+                                        />
+                                        <button
+                                            type="button"
+                                            aria-label={showPassword ? 'Hide password' : 'Show password'}
+                                            className="absolute right-3 top-1/2 inline-flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-md text-[var(--re-text-muted)] transition hover:bg-[var(--re-surface-base)] hover:text-[var(--re-text-primary)]"
+                                            onClick={() => setShowPassword((value) => !value)}
+                                            disabled={submitBusy}
+                                        >
+                                            {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                                        </button>
+                                    </div>
                                 </div>
 
-                                <div className="flex items-center justify-between text-xs text-slate-500">
-                                    <Link href="/accept-invite" className="transition hover:text-emerald-700">
+                                <div className="flex items-center justify-between gap-3 text-xs text-[var(--re-text-muted)]">
+                                    <Link href="/accept-invite" className="transition hover:text-[var(--re-text-primary)]">
                                         Have an invite?
                                     </Link>
-                                    <Link href="/forgot-password" className="transition hover:text-emerald-700">
+                                    <Link href="/forgot-password" className="transition hover:text-[var(--re-text-primary)]">
                                         Forgot password?
                                     </Link>
                                 </div>
 
-                                <Button className="h-11 w-full bg-emerald-700 text-white hover:bg-emerald-800" type="submit" disabled={isLoading}>
-                                    {isLoading ? (
+                                <Button className="h-12 w-full gap-2" type="submit" disabled={submitBusy}>
+                                    {submitBusy ? (
                                         <>
-                                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                            Signing in...
+                                            <Loader2 className="h-4 w-4 animate-spin" />
+                                            {isSessionSyncing ? 'Securing session...' : 'Signing in...'}
                                         </>
                                     ) : (
-                                        'Sign In'
+                                        <>
+                                            Sign in
+                                            <ArrowRight className="h-4 w-4" />
+                                        </>
                                     )}
                                 </Button>
 
+                                <div className="rounded-md border border-[var(--re-surface-border)] bg-[var(--re-surface-base)] p-3">
+                                    <div className="flex gap-3">
+                                        <ShieldCheck className="mt-0.5 h-4 w-4 flex-shrink-0 text-[var(--re-info)]" />
+                                        <p className="text-xs leading-5 text-[var(--re-text-muted)]">
+                                            We synchronize your RegEngine and secure workspace sessions before opening protected routes.
+                                        </p>
+                                    </div>
+                                </div>
+
                                 {showQaPresets && QaPresets ? <QaPresets onApplyPreset={applyPreset} /> : null}
 
-                                <div className="border-t border-slate-200 pt-4 text-center text-sm text-slate-500">
-                                    <p className="mb-2">
-                                        New here?{" "}
-                                        <Link href="/signup" className="font-medium text-emerald-700 hover:underline">
+                                <div className="border-t border-[var(--re-border-subtle)] pt-5 text-center text-sm text-[var(--re-text-muted)]">
+                                    <p className="mb-3 flex flex-col items-center gap-1 sm:block">
+                                        <span>New to RegEngine?</span>{" "}
+                                        <Link href="/signup" className="font-medium text-[var(--re-text-primary)] hover:underline">
                                             Create an account
                                         </Link>
                                     </p>
-                                    <Link href="/" className="flex items-center justify-center gap-2 transition-colors hover:text-slate-950">
+                                    <Link href="/" className="inline-flex items-center justify-center gap-2 font-medium text-[var(--re-text-secondary)] transition-colors hover:text-[var(--re-text-primary)]">
                                         <LayoutDashboard className="h-4 w-4" />
-                                        Return to public site
+                                        Return to RegEngine.com
                                     </Link>
                                 </div>
                             </form>

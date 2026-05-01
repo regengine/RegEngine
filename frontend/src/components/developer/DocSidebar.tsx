@@ -16,19 +16,22 @@ export function DocSidebar() {
         position: 'sticky',
         top: 24,
         alignSelf: 'flex-start',
-        paddingRight: 24,
-        borderRight: '1px solid var(--re-border, rgba(255,255,255,0.06))',
+        padding: '16px',
+        border: '1px solid var(--re-surface-border)',
+        borderRadius: 'var(--re-radius-lg)',
+        background: 'var(--re-surface-elevated)',
+        boxShadow: 'var(--re-shadow-sm)',
       }}
     >
       <div
         style={{
           fontSize: 11,
           fontWeight: 600,
-          color: 'var(--re-text-muted, #64748b)',
+          color: 'var(--re-text-muted)',
           textTransform: 'uppercase',
-          letterSpacing: '1px',
+          letterSpacing: '0.04em',
           marginBottom: 12,
-          paddingLeft: 12,
+          paddingLeft: 8,
         }}
       >
         Documentation
@@ -48,10 +51,10 @@ export function DocSidebar() {
                   fontSize: 14,
                   fontWeight: isActive ? 600 : 400,
                   color: isActive
-                    ? 'var(--re-brand, #10b981)'
-                    : 'var(--re-text-secondary, #c8d1dc)',
+                    ? '#fff'
+                    : 'var(--re-text-secondary)',
                   background: isActive
-                    ? 'rgba(16,185,129,0.1)'
+                    ? 'var(--re-brand)'
                     : 'transparent',
                   textDecoration: 'none',
                   transition: 'background 0.15s, color 0.15s',

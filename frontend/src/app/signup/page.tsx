@@ -146,7 +146,7 @@ function SignupForm() {
           </div>
         )}
 
-        <Card className="border-[var(--re-surface-border)] bg-[var(--re-surface-card)]/95">
+        <Card className="border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)] shadow-md">
           <CardHeader className="space-y-1">
             <h1 className="text-2xl font-semibold leading-none tracking-tight text-[var(--re-text-primary)]">
               {partnerTier === 'founding' ? 'Create Your Partner Workspace' : 'Create Your Workspace'}

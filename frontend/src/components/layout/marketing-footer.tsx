@@ -23,9 +23,9 @@ export function MarketingFooter() {
     return (
         <footer
             aria-label="Site footer"
-            className="relative z-[2] border-t border-[var(--re-surface-border)] bg-[var(--re-surface-card)] text-[var(--re-text-secondary)]"
+            className="relative z-[2] border-t border-[var(--re-border-subtle)] bg-[var(--re-surface-card)] text-[var(--re-text-secondary)]"
         >
-            <div className="max-w-[1100px] mx-auto px-6 pt-12 pb-8 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-[2fr_1fr_1fr_1fr_1fr] gap-10">
+            <div className="max-w-[1200px] mx-auto px-6 pt-14 pb-9 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-[2fr_1fr_1fr_1fr_1fr] gap-10">
                 <div>
                     <Link href="/" className="flex items-center gap-2 mb-3 no-underline" aria-label="RegEngine home">
                         <RegEngineWordmark size="sm" />
@@ -103,7 +103,7 @@ export function MarketingFooter() {
                     ))}
                 </div>
             </div>
-            <div className="max-w-[1100px] mx-auto px-6 py-5 border-t border-[var(--re-surface-border)] flex flex-wrap justify-between items-center gap-4">
+            <div className="max-w-[1200px] mx-auto px-6 py-5 border-t border-[var(--re-border-subtle)] flex flex-wrap justify-between items-center gap-4">
                 <span className="text-[0.72rem] text-[var(--re-text-muted)]">
                     &copy; 2026 RegEngine Inc. All rights reserved.
                 </span>
