@@ -19,10 +19,12 @@ export function DesktopNav({
     focusFirstToolsItem,
 }: DesktopNavProps) {
     const navLinkStyle: React.CSSProperties = {
-        fontSize: "13px",
+        fontSize: "12px",
         color: "var(--re-text-muted)",
         textDecoration: "none",
-        fontWeight: 500,
+        fontWeight: 600,
+        textTransform: "uppercase",
+        fontFamily: "var(--re-font-mono)",
         transition: "color 0.2s",
         padding: "8px 0",
     };
@@ -90,12 +92,13 @@ export function DesktopNav({
                             fontSize: "13px",
                             fontWeight: 600,
                             color: "var(--re-surface-base)",
-                            background: "var(--re-brand)",
-                            padding: "7px 18px",
-                            borderRadius: "6px",
+                            background: "var(--re-text-primary)",
+                            padding: "8px 16px",
+                            borderRadius: "2px",
                             textDecoration: "none",
                             transition: "all 0.2s",
-                            boxShadow: "0 2px 8px var(--re-brand-muted)",
+                            boxShadow: "none",
+                            border: "1px solid var(--re-text-primary)",
                             display: "inline-flex",
                             alignItems: "center",
                             gap: "6px",
@@ -110,14 +113,15 @@ export function DesktopNav({
                         style={{
                             width: "32px",
                             height: "32px",
-                            borderRadius: "50%",
-                            background: "var(--re-brand)",
+                            borderRadius: "2px",
+                            background: "var(--re-surface-elevated)",
+                            border: "1px solid var(--re-text-primary)",
                             display: "flex",
                             alignItems: "center",
                             justifyContent: "center",
                             fontSize: "12px",
                             fontWeight: 700,
-                            color: "var(--re-surface-base)",
+                            color: "var(--re-text-primary)",
                             cursor: "pointer",
                             textTransform: "uppercase",
                         }}
@@ -128,31 +132,29 @@ export function DesktopNav({
                 </div>
             ) : (
                 <>
-                    <Link
-                        href="/login"
-                        style={navLinkStyle}
-                        onMouseEnter={handleLinkEnter}
-                        onMouseLeave={handleLinkLeave}
-                    >
+                    <Link href="/login" style={navLinkStyle} onMouseEnter={handleLinkEnter} onMouseLeave={handleLinkLeave}>
                         Log In
                     </Link>
                     <Link
                         href="/retailer-readiness"
                         style={{
-                            fontSize: "13px",
+                            fontSize: "12px",
                             fontWeight: 600,
-                            color: "#fff",
-                            background: "var(--re-brand)",
-                            padding: "7px 18px",
-                            borderRadius: "6px",
+                            fontFamily: "var(--re-font-mono)",
+                            textTransform: "uppercase",
+                            color: "var(--re-surface-base)",
+                            background: "var(--re-text-primary)",
+                            padding: "8px 16px",
+                            borderRadius: "2px",
                             textDecoration: "none",
                             transition: "all 0.2s",
-                            boxShadow: "0 2px 8px var(--re-brand-muted)",
+                            boxShadow: "none",
+                            border: "1px solid var(--re-text-primary)",
                         }}
-                        onMouseEnter={(e) => { (e.target as HTMLElement).style.transform = "translateY(-1px)"; (e.target as HTMLElement).style.boxShadow = "0 4px 16px var(--re-brand-muted)"; }}
-                        onMouseLeave={(e) => { (e.target as HTMLElement).style.transform = "translateY(0)"; (e.target as HTMLElement).style.boxShadow = "0 2px 8px var(--re-brand-muted)"; }}
+                        onMouseEnter={(e) => { (e.target as HTMLElement).style.background = "var(--re-text-secondary)"; }}
+                        onMouseLeave={(e) => { (e.target as HTMLElement).style.background = "var(--re-text-primary)"; }}
                     >
-                        Free Assessment &rarr;
+                        Free Assessment
                     </Link>
                 </>
             )}

@@ -52,19 +52,21 @@ export function NavDropdown({
                     }
                 }}
                 style={{
-                    fontSize: "13px",
+                    fontSize: "12px",
                     fontWeight: 600,
+                    fontFamily: "var(--re-font-mono)",
+                    textTransform: "uppercase",
                     color: "var(--re-surface-base)",
-                    background: "var(--re-brand)",
-                    padding: "7px 16px",
-                    borderRadius: "var(--re-radius-lg)",
+                    background: "var(--re-text-primary)",
+                    padding: "8px 14px",
+                    borderRadius: "2px",
                     textDecoration: "none",
                     transition: "all var(--re-transition-normal)",
                     cursor: "pointer",
                     display: "inline-flex",
                     alignItems: "center",
                     gap: "6px",
-                    border: "none",
+                    border: "1px solid var(--re-text-primary)",
                 }}
             >
                 Free Tools
@@ -87,7 +89,7 @@ export function NavDropdown({
                     marginTop: "-30px",
                     background: "none",
                     border: "none",
-                    borderRadius: "10px",
+                    borderRadius: "2px",
                     opacity: toolsOpen ? 1 : 0,
                     visibility: toolsOpen ? "visible" : "hidden",
                     pointerEvents: toolsOpen ? "auto" : "none",
@@ -104,7 +106,7 @@ export function NavDropdown({
                     style={{
                         background: "var(--re-nav-dropdown-bg)",
                         border: "1px solid var(--re-nav-dropdown-border)",
-                        borderRadius: "12px",
+                        borderRadius: "2px",
                         padding: "8px 0",
                         minWidth: "280px",
                         backdropFilter: "blur(16px)",
@@ -127,7 +129,7 @@ export function NavDropdown({
                         >
                             <span
                                 aria-hidden="true"
-                                className="flex h-8 w-8 items-center justify-center rounded-lg border border-[var(--re-brand)]/20 bg-[var(--re-brand-muted)] text-[var(--re-brand)]"
+                                className="flex h-8 w-8 items-center justify-center rounded-sm border border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)] text-[var(--re-text-primary)]"
                             >
                                 <tool.icon size={15} strokeWidth={2} />
                             </span>
@@ -154,7 +156,7 @@ export function NavDropdown({
                             <AllToolsIcon size={15} strokeWidth={2} />
                         </span>
                         <div>
-                            <div className="text-[13px] font-semibold text-re-brand">{MARKETING_ALL_TOOLS_LINK.label} &rarr;</div>
+                            <div className="text-[13px] font-semibold text-re-text-primary">{MARKETING_ALL_TOOLS_LINK.label}</div>
                             <div className="text-[11px] text-re-text-muted">{MARKETING_ALL_TOOLS_LINK.desc}</div>
                         </div>
                     </Link>

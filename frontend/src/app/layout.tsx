@@ -146,7 +146,7 @@ export default async function RootLayout({
         />
       </head>
       <body
-        className="min-h-screen flex flex-col bg-background text-foreground"
+        className="min-h-screen flex flex-col bg-background text-foreground re-page"
         suppressHydrationWarning
       >
         <a
@@ -157,7 +157,7 @@ export default async function RootLayout({
         </a>
         <Providers>
           <MarketingHeader />
-          <main id="main-content" aria-label="Page content" className="flex-grow">
+          <main id="main-content" aria-label="Page content" className="flex-grow re-app-surface">
             {children}
           </main>
           <AuthAwareFooter />

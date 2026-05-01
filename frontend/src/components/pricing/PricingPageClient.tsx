@@ -6,7 +6,6 @@ import {
     Check, Zap, Rocket, Crown, ArrowRight, HelpCircle, Lock, ShieldCheck, KeyRound,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { PricingCheckoutButton } from '@/components/billing/PricingCheckoutButton';
 import { analytics } from '@/lib/analytics';
 
@@ -61,15 +60,12 @@ export function PricingPageClient({ pricingTiers }: { pricingTiers: PricingTier[
     return (
         <div className="re-page min-h-screen bg-[var(--re-surface-base)] text-[var(--re-text-secondary)]">
             <section className="relative z-[2] max-w-[900px] mx-auto pt-14 sm:pt-20 pb-10 sm:pb-[60px] px-4 sm:px-6 text-center">
-                <Badge className="bg-[var(--re-brand-muted)] text-[var(--re-brand)] border border-[var(--re-surface-border)] mb-5">
-                    Founding Design Partners — 50% Off for Life
-                </Badge>
                 <h1 className="font-display text-[clamp(32px,5vw,48px)] font-bold text-[var(--re-text-primary)] leading-[1.1] tracking-tight mb-4">
-                    FSMA 204 Compliance,<br />
-                    <span className="text-re-brand">Priced for Mid-Market</span>
+                    FSMA 204 compliance,<br />
+                    priced like an operating tool.
                 </h1>
                 <p className="text-lg text-[var(--re-text-muted)] max-w-[600px] mx-auto mb-4 leading-relaxed">
-                    Three plans sized by facility count. Founding Design Partners lock in 50% off for the life of their account — white-glove onboarding and direct founder support included.
+                    Three plans sized by facility count. Founding Design Partners lock in a lower rate while the product is shaped around real supplier data.
                 </p>
                 <p className="font-display text-base font-semibold text-[var(--re-text-muted)] tracking-tight">
                     Based on company size. No hidden fees. Cancel anytime.
@@ -86,20 +82,20 @@ export function PricingPageClient({ pricingTiers }: { pricingTiers: PricingTier[
                         return (
                             <div
                                 key={tier.id}
-                                className={`bg-[var(--re-surface-card)] rounded-2xl overflow-hidden flex flex-col transition-all duration-300 ${
+                                className={`bg-[var(--re-surface-card)] rounded-sm overflow-hidden flex flex-col transition-all duration-300 ${
                                     tier.highlighted
-                                        ? 'border-2 border-[var(--re-brand)] shadow-[0_8px_32px_rgba(16,185,129,0.12),0_0_0_1px_var(--re-surface-border)]'
-                                        : 'border border-[var(--re-surface-border)] shadow-[0_2px_12px_rgba(0,0,0,0.06)]'
+                                        ? 'border-2 border-[var(--re-text-primary)]'
+                                        : 'border border-[var(--re-surface-border)]'
                                 }`}
                             >
                                 {tier.highlighted && (
-                                    <div className="bg-[var(--re-brand)] text-white text-center p-2 text-xs font-bold tracking-[0.03em]">
+                                    <div className="bg-[var(--re-text-primary)] text-[var(--re-surface-base)] text-center p-2 font-mono text-[11px] font-medium uppercase tracking-normal">
                                         Most Popular
                                     </div>
                                 )}
                                 <div className="p-6 flex-1 flex flex-col">
                                     <div className="flex items-center gap-2.5 mb-2">
-                                        <div className={`border border-[var(--re-surface-border)] rounded-[10px] p-2 ${
+                                        <div className={`border border-[var(--re-surface-border)] rounded-sm p-2 ${
                                             tier.highlighted ? 'bg-[var(--re-brand-muted)]' : 'bg-[var(--re-surface-elevated)]'
                                         }`}>
                                             <Icon className={`w-[18px] h-[18px] ${
@@ -110,7 +106,7 @@ export function PricingPageClient({ pricingTiers }: { pricingTiers: PricingTier[
                                     </div>
                                     <p className="text-[13px] text-[var(--re-text-disabled)] mb-3">{tier.description}</p>
                                     <span className="inline-block text-[11px] font-semibold bg-[rgba(16,185,129,0.1)] text-[var(--re-brand)] px-2 py-[3px] rounded-md mb-4">
-                                        50% Off — Founding Design Partner
+                                        Founding design partner rate
                                     </span>
 
                                     <div className="mb-5">
@@ -144,7 +140,7 @@ export function PricingPageClient({ pricingTiers }: { pricingTiers: PricingTier[
                                             background: tier.highlighted ? 'var(--re-brand)' : 'var(--re-surface-elevated)',
                                             color: tier.highlighted ? '#fff' : 'var(--re-text-primary)',
                                             border: tier.highlighted ? 'none' : '1px solid var(--re-surface-border)',
-                                            boxShadow: tier.highlighted ? '0 4px 16px rgba(16,185,129,0.25)' : 'none',
+                                            boxShadow: 'none',
                                         }}
                                     />
                                 </div>
@@ -157,7 +153,7 @@ export function PricingPageClient({ pricingTiers }: { pricingTiers: PricingTier[
                     <Link href="/terms" className="text-[var(--re-brand)] underline">See Terms</Link> for full details.
                 </p>
 
-                <div className="max-w-[680px] mx-auto mt-10 rounded-2xl border-2 border-[var(--re-brand-muted)] bg-[var(--re-brand-muted)] px-8 py-7 text-center">
+                <div className="max-w-[680px] mx-auto mt-10 rounded-sm border border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)] px-8 py-7 text-center">
                     <p className="text-base font-bold text-[var(--re-brand)] mb-2">
                         Founding Design Partner Program
                     </p>
@@ -171,8 +167,8 @@ export function PricingPageClient({ pricingTiers }: { pricingTiers: PricingTier[
                         Includes a 14-day free trial — no charge until day 15. Cancel anytime during the trial at no cost. We accept Visa, Mastercard, American Express, ACH bank transfer, and wire.
                     </p>
                     <Link href="/onboarding">
-                        <Button className="bg-[var(--re-brand)] text-white font-semibold rounded-[10px] px-7 py-3 shadow-[0_4px_16px_rgba(16,185,129,0.25)]">
-                            Apply as Founding Design Partner <ArrowRight className="ml-2 w-4 h-4" />
+                        <Button className="bg-[var(--re-text-primary)] text-[var(--re-surface-base)] font-semibold rounded-sm px-7 py-3 shadow-none">
+                            Apply as founding design partner <ArrowRight className="ml-2 w-4 h-4" />
                         </Button>
                     </Link>
                 </div>
@@ -210,7 +206,7 @@ export function PricingPageClient({ pricingTiers }: { pricingTiers: PricingTier[
                     <p className="text-center text-sm text-[var(--re-text-disabled)] max-w-[520px] mx-auto mb-10 leading-relaxed">
                         A GMA/FMI study found that the average major food recall costs companies over $10 million in lost product, logistics, and brand damage. RegEngine starts at $425/mo (billed annually) for Founding Design Partners.
                     </p>
-                    <div className="bg-[var(--re-surface-card)] border border-[var(--re-surface-border)] rounded-2xl overflow-hidden shadow-[0_2px_12px_rgba(0,0,0,0.06)]">
+                    <div className="bg-[var(--re-surface-card)] border border-[var(--re-surface-border)] rounded-sm overflow-hidden shadow-none">
                         <div className="overflow-x-auto">
                             <table className="w-full border-collapse">
                                 <thead>
@@ -250,7 +246,7 @@ export function PricingPageClient({ pricingTiers }: { pricingTiers: PricingTier[
                 </h2>
                 <div className="flex flex-col gap-4">
                     {FAQ.map((item, i) => (
-                        <div key={i} className="bg-[var(--re-surface-card)] border border-[var(--re-surface-border)] rounded-xl p-5">
+                        <div key={i} className="bg-[var(--re-surface-card)] border border-[var(--re-surface-border)] rounded-sm p-5">
                             <div className="flex items-start gap-3 mb-3">
                                 <HelpCircle className="w-[18px] h-[18px] text-[var(--re-brand)] mt-0.5 shrink-0" />
                                 <span className="text-[15px] font-semibold text-[var(--re-text-primary)]">{item.q}</span>
@@ -261,18 +257,18 @@ export function PricingPageClient({ pricingTiers }: { pricingTiers: PricingTier[
                 </div>
             </section>
 
-            <section className="relative z-[2] py-10 sm:py-[60px] px-4 sm:px-6 bg-[linear-gradient(135deg,var(--re-brand)_0%,#0ea5e9_100%)]">
+            <section className="relative z-[2] py-10 sm:py-[60px] px-4 sm:px-6 bg-[var(--re-text-primary)]">
                 <div className="max-w-[600px] mx-auto text-center">
                     <h2 className="font-display text-[28px] font-bold text-white tracking-tight mb-3">
-                        Become a Founding Design Partner
+                        Become a founding design partner
                     </h2>
                     <p className="text-base text-white/90 mb-8">
-                        Founding Design Partners start at $425/mo (billed annually). Apply now and get white-glove onboarding before the FSMA 204 deadline.
+                        Founding Design Partners start at $425/mo, billed annually. Apply now and get the product shaped around real supplier data.
                     </p>
                     <div className="flex gap-3 justify-center flex-wrap">
                         <Link href="/onboarding">
-                            <Button className="bg-white text-[var(--re-brand)] font-semibold px-6 py-3.5">
-                                Apply Now <ArrowRight className="ml-2 w-4 h-4" />
+                            <Button className="bg-[var(--re-surface-base)] text-[var(--re-text-primary)] font-semibold px-6 py-3.5">
+                                Apply now <ArrowRight className="ml-2 w-4 h-4" />
                             </Button>
                         </Link>
                         <Link href="/trust">

@@ -235,15 +235,15 @@ export default function LoginPage() {
         <div className="min-h-[calc(100vh-1px)] bg-slate-50 text-slate-950">
             <section className="mx-auto flex min-h-[calc(100vh-1px)] w-full max-w-6xl items-center px-4 py-8 sm:px-6 lg:px-8">
                 <div className="grid w-full overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm lg:grid-cols-[minmax(0,0.9fr)_minmax(420px,0.7fr)]">
-                    <div className="hidden border-r border-slate-200 bg-slate-950 p-8 text-white lg:flex lg:flex-col lg:justify-between">
+                    <div className="re-auth-rail hidden border-r border-[var(--re-border-strong)] bg-[var(--re-brand)] p-8 text-[var(--re-surface-base)] lg:flex lg:flex-col lg:justify-between">
                         <div>
-                            <div className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-500 text-slate-950">
+                            <div className="inline-flex h-10 w-10 items-center justify-center rounded-sm border border-[var(--re-surface-base)] bg-[var(--re-surface-base)] text-[var(--re-brand)]">
                                 <ClipboardCheck className="h-5 w-5" />
                             </div>
                             <h1 className="mt-8 max-w-md text-3xl font-semibold leading-tight tracking-normal">
                                 RegEngine command center
                             </h1>
-                            <p className="mt-3 max-w-md text-sm leading-6 text-slate-300">
+                            <p className="mt-3 max-w-md text-sm leading-6 text-[var(--re-surface-base)]">
                                 Continue to your FSMA 204 workspace, validate traceability records, and prepare evidence from authenticated records.
                             </p>
                         </div>
@@ -254,9 +254,9 @@ export default function LoginPage() {
                                 'Authenticated traceability exports',
                                 'Hash-chain audit evidence',
                             ].map((item) => (
-                                <div key={item} className="flex items-center gap-3 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2">
-                                    <ShieldCheck className="h-4 w-4 text-emerald-300" />
-                                    <span className="text-slate-200">{item}</span>
+                                <div key={item} className="flex items-center gap-3 rounded-sm border border-[var(--re-surface-base)]/25 bg-[var(--re-surface-base)]/[0.04] px-3 py-2">
+                                    <ShieldCheck className="h-4 w-4 text-[var(--re-signal-green)]" />
+                                    <span className="text-[var(--re-surface-base)]">{item}</span>
                                 </div>
                             ))}
                         </div>

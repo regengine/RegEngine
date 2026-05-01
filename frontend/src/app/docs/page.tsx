@@ -223,13 +223,15 @@ const codeTabs = [
 
 export default function DocsHomePage() {
   return (
-    <div className="min-h-screen bg-[var(--re-surface-base)] text-[var(--re-text-secondary)]">
+    <div className="min-h-screen re-page text-[var(--re-text-secondary)]">
 
       {/* ── Hero ────────────────────────────────────────────── */}
       <section
         className="px-6 py-16"
         style={{
-          background: 'linear-gradient(135deg, rgba(16,185,129,0.06) 0%, rgba(6,182,212,0.04) 100%)',
+          background:
+            'linear-gradient(90deg, rgba(29,29,27,0.035) 1px, transparent 1px), linear-gradient(180deg, rgba(29,29,27,0.025) 1px, transparent 1px), var(--re-surface-base)',
+          backgroundSize: '48px 48px',
           borderBottom: `1px solid ${T.border}`,
         }}
       >
@@ -237,7 +239,7 @@ export default function DocsHomePage() {
           <div className="flex items-center gap-3 mb-5">
             <span
               className="font-mono text-[11px] font-bold uppercase tracking-widest px-3 py-1 rounded"
-              style={{ background: T.accentBg, color: T.accent }}
+              style={{ background: 'var(--re-brand)', color: 'var(--re-surface-base)' }}
             >
               Developer Docs
             </span>

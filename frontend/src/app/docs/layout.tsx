@@ -20,6 +20,7 @@ export default function DocsLayout({ children }: { children: ReactNode }) {
 
     return (
         <div
+            className="re-docs-shell"
             style={{
                 display: 'flex',
                 maxWidth: 1200,

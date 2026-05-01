@@ -1,5 +1,4 @@
 import type { CSSProperties } from 'react';
-import Image from 'next/image';
 
 type WordmarkSize = 'sm' | 'md';
 
@@ -33,19 +32,25 @@ export function RegEngineWordmark({
                 minWidth: 0,
             }}
         >
-            <Image
-                src="/icon.png"
-                alt=""
+            <span
                 aria-hidden
-                width={config.icon}
-                height={config.icon}
                 style={{
                     width: `${config.icon}px`,
                     height: `${config.icon}px`,
-                    objectFit: 'contain',
-                    display: 'block',
+                    display: 'grid',
+                    gridTemplateColumns: '1fr 1fr',
+                    gridTemplateRows: '1fr 1fr',
+                    gap: 2,
+                    border: '1px solid var(--re-text-primary)',
+                    padding: 2,
+                    background: 'var(--re-surface-base)',
                 }}
-            />
+            >
+                <span style={{ background: 'var(--re-signal-red)' }} />
+                <span style={{ background: 'var(--re-text-primary)' }} />
+                <span style={{ background: 'var(--re-signal-yellow)' }} />
+                <span style={{ background: 'var(--re-signal-green)' }} />
+            </span>
             {showText ? (
                 <span
                     style={{
@@ -53,7 +58,7 @@ export function RegEngineWordmark({
                         fontSize: `${config.text}px`,
                         lineHeight: 1,
                         letterSpacing: 0,
-                        fontWeight: 700,
+                        fontWeight: 650,
                         color: 'var(--re-text-primary)',
                         ...textStyle,
                     }}
