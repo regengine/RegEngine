@@ -286,7 +286,7 @@ class ProductionReadinessVerifier:
 
             required_tokens = [
                 "railway",
-                "RAILWAY_TOKEN",
+                "RAILWAY_API_TOKEN",
                 "RAILWAY_PROJECT_ID",
                 "RAILWAY_ENVIRONMENT_ID",
             ]
