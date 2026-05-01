@@ -141,34 +141,7 @@ function WorkbenchPreview() {
       </div>
 
       <div>
-        <div className="grid gap-3 p-3 sm:hidden">
-          {feedRows.map((row) => (
-            <article key={row.lot} className="rounded-md border border-[var(--re-surface-border)] bg-[var(--re-surface-base)] p-3">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <h3 className="text-sm font-semibold text-[var(--re-text-primary)]">{row.supplier}</h3>
-                  <p className="mt-1 font-mono text-[11px] text-[var(--re-text-muted)]">{row.lot}</p>
-                </div>
-                <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--re-surface-border)] px-2 py-1 text-[11px] font-semibold text-[var(--re-text-primary)]">
-                  <StatusDot status={row.status} />
-                  {row.status}
-                </span>
-              </div>
-              <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
-                <div>
-                  <p className="re-label">CTE</p>
-                  <p className="mt-1 text-[var(--re-text-primary)]">{row.cte}</p>
-                </div>
-                <div>
-                  <p className="re-label">Issue</p>
-                  <p className="mt-1 text-[var(--re-text-primary)]">{row.issue}</p>
-                </div>
-              </div>
-            </article>
-          ))}
-        </div>
-
-        <div className="hidden overflow-x-auto sm:block">
+        <div className="overflow-x-auto">
           <table className="w-full min-w-[620px] border-collapse text-[13px]">
             <thead>
               <tr>
