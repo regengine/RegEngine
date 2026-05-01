@@ -49,9 +49,11 @@ jobs:
         env:
           DEMO_SMOKE_EMAIL: ${{ secrets.DEMO_SMOKE_EMAIL }}
           DEMO_SMOKE_PASSWORD: ${{ secrets.DEMO_SMOKE_PASSWORD }}
+          TEST_USER_EMAIL: ${{ secrets.TEST_USER_EMAIL }}
+          TEST_PASSWORD: ${{ secrets.TEST_PASSWORD }}
         run: |
-          test -n "$DEMO_SMOKE_EMAIL" || { echo "Missing DEMO_SMOKE_EMAIL secret"; exit 1; }
-          test -n "$DEMO_SMOKE_PASSWORD" || { echo "Missing DEMO_SMOKE_PASSWORD secret"; exit 1; }
+          test -n "${DEMO_SMOKE_EMAIL:-$TEST_USER_EMAIL}" || { echo "Missing DEMO_SMOKE_EMAIL or TEST_USER_EMAIL secret"; exit 1; }
+          test -n "${DEMO_SMOKE_PASSWORD:-$TEST_PASSWORD}" || { echo "Missing DEMO_SMOKE_PASSWORD or TEST_PASSWORD secret"; exit 1; }
 
       - name: Install dependencies
         run: |
@@ -69,6 +71,8 @@ jobs:
           PLAYWRIGHT_BASE_URL: ${{ inputs.base_url }}
           DEMO_SMOKE_EMAIL: ${{ secrets.DEMO_SMOKE_EMAIL }}
           DEMO_SMOKE_PASSWORD: ${{ secrets.DEMO_SMOKE_PASSWORD }}
+          TEST_USER_EMAIL: ${{ secrets.TEST_USER_EMAIL }}
+          TEST_PASSWORD: ${{ secrets.TEST_PASSWORD }}
           DEMO_SMOKE_COMMIT_MODE: ${{ inputs.commit_mode }}
           DEMO_SMOKE_ALLOW_PRODUCTION_EVIDENCE: ${{ inputs.allow_production_evidence }}
         run: |
