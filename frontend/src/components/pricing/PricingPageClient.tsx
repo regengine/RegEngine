@@ -90,7 +90,7 @@ export function PricingPageClient({ pricingTiers }: { pricingTiers: PricingTier[
                             >
                                 {tier.highlighted && (
                                     <div className="bg-[var(--re-text-primary)] text-[var(--re-surface-base)] text-center p-2 font-mono text-[11px] font-medium uppercase tracking-normal">
-                                        Most Popular
+                                        Best fit for multi-facility teams
                                     </div>
                                 )}
                                 <div className="p-6 flex-1 flex flex-col">
@@ -198,10 +198,10 @@ export function PricingPageClient({ pricingTiers }: { pricingTiers: PricingTier[
             <section className="relative z-[2] py-10 sm:py-[60px] px-4 sm:px-6 bg-[var(--re-surface-card)] border-t border-b border-[var(--re-surface-border)]">
                 <div className="max-w-[1000px] mx-auto">
                     <h2 className="font-display text-[28px] font-bold text-[var(--re-text-primary)] text-center tracking-tight mb-3">
-                        See How We Compare
+                        Compare the operating model
                     </h2>
                     <p className="text-center text-[var(--re-text-muted)] max-w-[500px] mx-auto mb-4">
-                        The competition charges enterprise prices for basic traceability. We believe compliance should be accessible.
+                        RegEngine is priced around facility operations, not a long enterprise procurement cycle.
                     </p>
                     <p className="text-center text-sm text-[var(--re-text-disabled)] max-w-[520px] mx-auto mb-10 leading-relaxed">
                         A GMA/FMI study found that the average major food recall costs companies over $10 million in lost product, logistics, and brand damage. RegEngine starts at $425/mo (billed annually) for Founding Design Partners.

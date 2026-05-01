@@ -67,6 +67,7 @@ export function NavDropdown({
                     alignItems: "center",
                     gap: "6px",
                     border: "1px solid var(--re-text-primary)",
+                    whiteSpace: "nowrap",
                 }}
             >
                 Free Tools

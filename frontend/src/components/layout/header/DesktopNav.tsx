@@ -27,6 +27,7 @@ export function DesktopNav({
         fontFamily: "var(--re-font-mono)",
         transition: "color 0.2s",
         padding: "8px 0",
+        whiteSpace: "nowrap",
     };
 
     const handleLinkEnter = (e: React.MouseEvent) =>
@@ -35,7 +36,7 @@ export function DesktopNav({
         ((e.target as HTMLElement).style.color = "var(--re-text-muted)");
 
     return (
-        <div className="marketing-desktop-nav" style={{ display: "flex", alignItems: "center", gap: "28px" }}>
+        <div className="marketing-desktop-nav" style={{ display: "flex", alignItems: "center", gap: "24px" }}>
             {(showLoggedIn ? [
                 { label: 'Compliance', href: '/dashboard/compliance' },
                 { label: 'Suppliers', href: '/dashboard/suppliers' },
@@ -102,6 +103,7 @@ export function DesktopNav({
                             display: "inline-flex",
                             alignItems: "center",
                             gap: "6px",
+                            whiteSpace: "nowrap",
                         }}
                     >
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -150,11 +152,12 @@ export function DesktopNav({
                             transition: "all 0.2s",
                             boxShadow: "none",
                             border: "1px solid var(--re-text-primary)",
+                            whiteSpace: "nowrap",
                         }}
                         onMouseEnter={(e) => { (e.target as HTMLElement).style.background = "var(--re-text-secondary)"; }}
                         onMouseLeave={(e) => { (e.target as HTMLElement).style.background = "var(--re-text-primary)"; }}
                     >
-                        Free Assessment
+                        Check Readiness
                     </Link>
                 </>
             )}

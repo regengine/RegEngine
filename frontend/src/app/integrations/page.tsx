@@ -25,7 +25,7 @@ import {
 import styles from "./page.module.css";
 
 export const metadata: Metadata = {
-  title: "Integrations - Connect Your Supply Chain to RegEngine",
+  title: "Integrations - Supplier Data Intake | RegEngine",
   description:
     "RegEngine integrates with ERPs, food safety platforms, retailers, IoT sensors, and custom systems. CSV, API, webhook, and SFTP ingestion.",
 };
@@ -88,10 +88,10 @@ export default function IntegrationsPage() {
       <section className={styles.hero}>
         <div className={styles.heroInner}>
           <div className={styles.heroCopy}>
-            <p className={styles.kicker}>RegEngine integrations</p>
-            <h1>Integration registry</h1>
+            <p className={styles.kicker}>Supplier data intake</p>
+            <h1>Know which sources are ready, guided, or custom scoped.</h1>
             <p>
-              A compact view of what can send data into RegEngine, what is only export-ready, and what still needs guided implementation. Inflow Lab is the live simulator path for webhook demos and contract CI.
+              A compact view of what can send data into RegEngine today, what is export-ready, and what still needs an explicit implementation estimate. Inflow Lab is the live simulator path for webhook demos and contract CI.
             </p>
             <div className={styles.actions}>
               <Link href="/docs/connectors/inflow-lab" className={styles.primaryButton}>

@@ -51,20 +51,22 @@ describe('Dashboard navigation discoverability', () => {
         });
     });
 
-    it('auto-expands the Data Inflow section and exposes Inflow Lab as the active dashboard link', async () => {
+    it('exposes Inflow Lab as a top-level active dashboard link', async () => {
         render(
             <DashboardLayout>
                 <div>Inflow content</div>
             </DashboardLayout>,
         );
 
-        expect(screen.getByRole('button', { name: /Data Inflow/i })).toHaveAttribute('aria-expanded', 'true');
-
-        const inflowLink = (await screen.findByText('Inflow Lab')).closest('a');
+        const inflowLink = screen
+            .getAllByText('Inflow Lab')
+            .map((node) => node.closest('a'))
+            .find((link) => link?.getAttribute('aria-current') === 'page');
         expect(inflowLink).not.toBeNull();
         expect(inflowLink).toHaveAttribute('href', '/dashboard/inflow-lab');
         expect(inflowLink).toHaveAttribute('aria-current', 'page');
-        expect(screen.getAllByText('Import Data')[0].closest('a')).toHaveAttribute('href', '/ingest');
+        expect(screen.getByRole('button', { name: /Intake/i })).toBeInTheDocument();
+        expect(screen.getAllByText('Import files')[0].closest('a')).toHaveAttribute('href', '/ingest');
     });
 
     it('redirects unauthenticated visitors back to login with the Inflow Lab return path', async () => {

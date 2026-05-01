@@ -58,26 +58,25 @@ interface CollapsibleSection {
 /** Always-visible top-level items (max 5) */
 const TOP_ITEMS: NavItem[] = [
     { label: 'Overview', href: '/dashboard', icon: Activity },
+    { label: 'Inflow Lab', href: '/dashboard/inflow-lab', icon: FlaskConical },
     { label: 'Compliance', href: '/dashboard/compliance', icon: BarChart3 },
     { label: 'Alerts', href: '/dashboard/alerts', icon: Bell },
-    { label: 'Import Data', href: '/ingest', icon: FileSpreadsheet },
-    { label: 'Export', href: '/dashboard/export-jobs', icon: Archive },
+    { label: 'FDA Export', href: '/dashboard/export-jobs', icon: Archive },
 ];
 
 /** Collapsible sections (closed by default) */
 const COLLAPSIBLE_SECTIONS: CollapsibleSection[] = [
     {
         key: 'data-inflow',
-        title: 'Data Inflow',
+        title: 'Intake',
         items: [
-            { label: 'Import Data', href: '/ingest', icon: FileSpreadsheet },
-            { label: 'Inflow Lab', href: '/dashboard/inflow-lab', icon: FlaskConical },
-            { label: 'Integrations', href: '/dashboard/integrations', icon: Link2 },
+            { label: 'Import files', href: '/ingest', icon: FileSpreadsheet },
+            { label: 'Integration registry', href: '/dashboard/integrations', icon: Link2 },
         ],
     },
     {
         key: 'fda-response',
-        title: 'FDA Response',
+        title: 'Response',
         items: [
             { label: 'FDA Export', href: '/dashboard/export-jobs', icon: Archive },
             { label: 'Recall Drills', href: '/dashboard/recall-drills', icon: Zap },
@@ -86,7 +85,7 @@ const COLLAPSIBLE_SECTIONS: CollapsibleSection[] = [
     },
     {
         key: 'supply-chain',
-        title: 'Supply Chain',
+        title: 'Sources',
         items: [
             { label: 'Suppliers', href: '/dashboard/suppliers', icon: Users },
             { label: 'Products', href: '/dashboard/products', icon: Package },
@@ -96,7 +95,7 @@ const COLLAPSIBLE_SECTIONS: CollapsibleSection[] = [
     },
     {
         key: 'control-plane',
-        title: 'Control Plane',
+        title: 'Governance',
         items: [
             { label: 'Rules', href: '/rules', icon: Scale },
             { label: 'Records', href: '/records', icon: FileCheck },
@@ -314,10 +313,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
     return (
         <div className="flex flex-col min-h-screen re-app-shell">
-            {/* MEDIUM #11: Demo mode visual indicator */}
             {demoMode && (
                 <div className="bg-re-warning-muted0/90 text-black text-xs font-medium text-center py-1.5 px-4 flex items-center justify-center gap-2 z-50">
-                    <span>⚠️ Sandbox Mode — using sample data for demonstration.</span>
+                    <span>Sandbox mode — using sample data for demonstration.</span>
                     <Link href="/dashboard/settings" className="underline hover:no-underline">
                         Disable in Settings
                     </Link>
@@ -334,7 +332,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                         </div>
                         <div>
                             <span className="font-bold text-sm block leading-tight">RegEngine</span>
-                            <span className="text-[10px] text-[var(--re-text-disabled)] leading-tight">Command Center</span>
+                            <span className="text-[10px] text-[var(--re-text-disabled)] leading-tight">Readiness console</span>
                         </div>
                     </Link>
                 </div>
@@ -403,14 +401,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                         <Link href="/dashboard/settings" className="block px-3 py-2.5 rounded-sm bg-[var(--re-surface-base)] border border-[var(--re-surface-border)] hover:border-[var(--re-border-strong)] transition-colors">
                         <div className="flex items-center justify-between">
                             <div>
-                                <div className="text-[10px] text-muted-foreground uppercase tracking-wider">Plan</div>
-                                <div className="text-xs font-semibold mt-0.5">Manage Plan</div>
+                                <div className="text-[10px] text-muted-foreground uppercase tracking-wider">Workspace</div>
+                                <div className="text-xs font-semibold mt-0.5">Settings & usage</div>
                             </div>
                             <div className="w-6 h-6 rounded-sm bg-[var(--re-brand)]/10 flex items-center justify-center">
                                 <Zap className="h-3 w-3 text-[var(--re-brand)]" />
                             </div>
                         </div>
-                        <div className="text-[10px] text-muted-foreground mt-1">View billing &amp; usage</div>
+                        <div className="text-[10px] text-muted-foreground mt-1">Tenant, team, and billing controls</div>
                     </Link>
                     <div className="flex items-center gap-2 mt-2">
                         <Link

@@ -14,11 +14,11 @@ export type MarketingToolLink = {
 };
 
 export const MARKETING_PRIMARY_NAV: MarketingNavLink[] = [
-    { label: "Product", href: "/walkthrough" },
-    { label: "Why RegEngine", href: "/why-regengine" },
-    { label: "Retailer Readiness", href: "/retailer-readiness" },
+    { label: "Product", href: "/product" },
+    { label: "Integrations", href: "/integrations" },
+    { label: "Readiness", href: "/retailer-readiness" },
     { label: "Pricing", href: "/pricing" },
-    { label: "FSMA 204 Guide", href: "/fsma-204" },
+    { label: "FSMA 204", href: "/fsma-204" },
 ];
 
 export const MARKETING_FREE_TOOLS: MarketingToolLink[] = [

@@ -616,7 +616,7 @@ export default function DashboardPage() {
           <div>
             <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-2 mb-4">
               <div>
-                <h2 className="text-xl font-semibold">Data Inflow</h2>
+                <h2 className="text-xl font-semibold">Intake</h2>
                 <p className="text-sm text-muted-foreground mt-1">
                   Choose the path by source: import for customer files, Inflow
                   Lab for simulated FSMA events, integrations for connector

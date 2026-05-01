@@ -32,7 +32,7 @@ export function MobileMenuCTA({ user, showLoggedIn, setMobileOpen }: MobileMenuC
                         <div style={{
                             width: "36px",
                             height: "36px",
-                            borderRadius: "50%",
+                            borderRadius: "2px",
                             background: "var(--re-brand)",
                             display: "flex",
                             alignItems: "center",
@@ -65,7 +65,7 @@ export function MobileMenuCTA({ user, showLoggedIn, setMobileOpen }: MobileMenuC
                             fontWeight: 600,
                             fontSize: "15px",
                             padding: "14px 24px",
-                            borderRadius: "10px",
+                            borderRadius: "2px",
                             textDecoration: "none",
                             minHeight: "48px",
                             WebkitTapHighlightColor: "transparent",
@@ -87,20 +87,20 @@ export function MobileMenuCTA({ user, showLoggedIn, setMobileOpen }: MobileMenuC
                             display: "flex",
                             alignItems: "center",
                             justifyContent: "center",
-                            background: "var(--re-brand)",
-                            color: "#fff",
+                            background: "var(--re-text-primary)",
+                            color: "var(--re-surface-base)",
                             fontWeight: 600,
                             fontSize: "15px",
                             padding: "14px 24px",
-                            borderRadius: "10px",
+                            borderRadius: "2px",
                             textDecoration: "none",
-                            boxShadow: "0 2px 12px var(--re-brand-muted)",
+                            boxShadow: "none",
                             minHeight: "48px",
                             WebkitTapHighlightColor: "transparent",
                             transition: "all 0.2s",
                         }}
                     >
-                        Start Your Workspace &rarr;
+                        Check readiness
                     </Link>
                     <Link
                         href="/login"
@@ -114,7 +114,7 @@ export function MobileMenuCTA({ user, showLoggedIn, setMobileOpen }: MobileMenuC
                             fontWeight: 500,
                             fontSize: "15px",
                             padding: "14px 24px",
-                            borderRadius: "10px",
+                            borderRadius: "2px",
                             textDecoration: "none",
                             background: "transparent",
                             minHeight: "48px",
