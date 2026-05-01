@@ -64,9 +64,9 @@ export function DeveloperPortalShell({ children }: { children: React.ReactNode }
 
     return (
         <div className="min-h-screen flex re-app-shell">
-            <aside className="w-60 flex-shrink-0 flex flex-col border-r border-[var(--re-border-strong)] bg-[var(--re-surface-elevated)]">
-                <Link href="/developer/portal" className="p-4 flex items-center gap-2.5 no-underline border-b border-[var(--re-border-strong)]">
-                    <div className="w-7 h-7 rounded-sm flex items-center justify-center border border-[var(--re-border-strong)] bg-[var(--re-surface-base)]">
+            <aside className="w-60 flex-shrink-0 flex flex-col border-r border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)] shadow-sm">
+                <Link href="/developer/portal" className="p-4 flex items-center gap-2.5 no-underline border-b border-[var(--re-border-subtle)]">
+                    <div className="w-7 h-7 rounded-md flex items-center justify-center border border-[var(--re-surface-border)] bg-[var(--re-surface-base)]">
                         <ShieldCheck className="w-4 h-4 text-[var(--re-brand)]" />
                     </div>
                     <div>
@@ -82,7 +82,7 @@ export function DeveloperPortalShell({ children }: { children: React.ReactNode }
                             <div key={section.label} className="mb-1">
                                 <button
                                     onClick={() => toggleSection(section.label)}
-                                    className="w-full flex items-center justify-between px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider rounded-sm"
+                                    className="w-full flex items-center justify-between px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider rounded-md"
                                     style={{ color: 'var(--re-text-disabled)' }}
                                 >
                                     {section.label}
@@ -99,18 +99,18 @@ export function DeveloperPortalShell({ children }: { children: React.ReactNode }
                                                 <Link
                                                     key={item.href}
                                                     href={item.href}
-                                                    className="flex items-center gap-2.5 px-3 py-1.5 rounded-sm text-[13px] transition-all no-underline"
+                                                    className="flex items-center gap-2.5 px-3 py-1.5 rounded-md text-[13px] transition-all no-underline"
                                                     style={{
-                                                        color: active ? 'var(--re-surface-base)' : 'var(--re-text-muted)',
+                                                        color: active ? '#fff' : 'var(--re-text-muted)',
                                                         background: active ? 'var(--re-brand)' : 'transparent',
                                                         fontWeight: active ? 500 : 400,
                                                     }}
                                                 >
                                                     <item.icon className="w-3.5 h-3.5 flex-shrink-0" style={{
-                                                        color: active ? 'var(--re-surface-base)' : 'var(--re-text-disabled)',
+                                                        color: active ? '#fff' : 'var(--re-text-disabled)',
                                                     }} />
                                                     {item.label}
-                                                    {active && <div className="ml-auto w-1.5 h-1.5 rounded-sm" style={{ background: 'var(--re-surface-base)' }} />}
+                                                    {active && <div className="ml-auto w-1.5 h-1.5 rounded-full" style={{ background: '#fff' }} />}
                                                 </Link>
                                             );
                                         })}
@@ -121,21 +121,21 @@ export function DeveloperPortalShell({ children }: { children: React.ReactNode }
                     })}
                 </nav>
 
-                <div className="p-2 space-y-0.5 border-t border-[var(--re-border-strong)]">
+                <div className="p-2 space-y-0.5 border-t border-[var(--re-border-subtle)]">
                     <a
                         href="https://status.regengine.co"
                         target="_blank"
                         rel="noopener"
-                        className="flex items-center gap-2.5 px-3 py-1.5 rounded-sm text-[13px] no-underline transition-colors"
+                        className="flex items-center gap-2.5 px-3 py-1.5 rounded-md text-[13px] no-underline transition-colors"
                         style={{ color: 'var(--re-text-disabled)' }}
                     >
-                        <div className="w-1.5 h-1.5 rounded-sm bg-re-success" />
+                        <div className="w-1.5 h-1.5 rounded-full bg-re-success" />
                         API Status
                         <ExternalLink className="w-3 h-3 ml-auto" />
                     </a>
                     <button
                         onClick={handleLogout}
-                        className="flex items-center gap-2.5 px-3 py-1.5 rounded-sm text-[13px] w-full transition-colors hover:bg-re-danger-muted0/10 no-underline"
+                        className="flex items-center gap-2.5 px-3 py-1.5 rounded-md text-[13px] w-full transition-colors hover:bg-re-danger-muted0/10 no-underline"
                         style={{ color: 'var(--re-text-disabled)' }}
                     >
                         <LogOut className="w-3.5 h-3.5" />

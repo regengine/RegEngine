@@ -22,7 +22,7 @@ export function MarketingHeader() {
 
     // Close mobile menu on route change
     useEffect(() => {
-        setMobileOpen(false);
+        queueMicrotask(() => setMobileOpen(false));
     }, [pathname]);
 
     // Prevent body scroll when mobile menu is open
@@ -133,7 +133,7 @@ export function MarketingHeader() {
                     background: "var(--re-nav-bg)",
                 }}
             >
-                <div className="max-w-[1120px] mx-auto px-[clamp(16px,4vw,24px)] h-14 flex items-center justify-between">
+                <div className="max-w-[1200px] mx-auto px-[clamp(16px,4vw,28px)] h-14 flex items-center justify-between">
 
                     <Link href="/" className="flex items-center gap-2.5 no-underline mr-6 shrink-0">
                         <RegEngineWordmark size="md" />

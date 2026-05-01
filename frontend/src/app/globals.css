@@ -1604,6 +1604,14 @@ body,
     color: var(--re-surface-base) !important;
 }
 
+.re-auth-rail .re-auth-check {
+    background: rgba(255, 255, 255, 0.08) !important;
+}
+
+.re-auth-rail .re-auth-check span {
+    color: rgba(255, 255, 255, 0.9) !important;
+}
+
 @media (max-width: 767px) {
     .re-container {
         width: min(100% - 32px, 1120px) !important;

@@ -25,7 +25,7 @@ export default function DocsLayout({ children }: { children: ReactNode }) {
                 display: 'flex',
                 maxWidth: 1200,
                 margin: '0 auto',
-                padding: '32px 24px',
+                padding: '40px 24px',
                 gap: 32,
                 minHeight: '100vh',
             }}

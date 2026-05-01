@@ -232,12 +232,12 @@ export default function LoginPage() {
     };
 
     return (
-        <div className="min-h-[calc(100vh-1px)] bg-slate-50 text-slate-950">
+        <div className="min-h-[calc(100vh-1px)] bg-[var(--re-surface-base)] text-[var(--re-text-primary)]">
             <section className="mx-auto flex min-h-[calc(100vh-1px)] w-full max-w-6xl items-center px-4 py-8 sm:px-6 lg:px-8">
-                <div className="grid w-full overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm lg:grid-cols-[minmax(0,0.9fr)_minmax(420px,0.7fr)]">
-                    <div className="re-auth-rail hidden border-r border-[var(--re-border-strong)] bg-[var(--re-brand)] p-8 text-[var(--re-surface-base)] lg:flex lg:flex-col lg:justify-between">
+                <div className="grid w-full overflow-hidden rounded-lg border border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)] shadow-md lg:grid-cols-[minmax(0,0.9fr)_minmax(420px,0.7fr)]">
+                    <div className="re-auth-rail hidden border-r border-[var(--re-surface-border)] bg-[var(--re-brand)] p-8 text-white lg:flex lg:flex-col lg:justify-between">
                         <div>
-                            <div className="inline-flex h-10 w-10 items-center justify-center rounded-sm border border-[var(--re-surface-base)] bg-[var(--re-surface-base)] text-[var(--re-brand)]">
+                            <div className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-white/20 bg-white text-[var(--re-brand)]">
                                 <ClipboardCheck className="h-5 w-5" />
                             </div>
                             <h1 className="mt-8 max-w-md text-3xl font-semibold leading-tight tracking-normal">
@@ -254,31 +254,31 @@ export default function LoginPage() {
                                 'Authenticated traceability exports',
                                 'Hash-chain audit evidence',
                             ].map((item) => (
-                                <div key={item} className="flex items-center gap-3 rounded-sm border border-[var(--re-surface-base)]/25 bg-[var(--re-surface-base)]/[0.04] px-3 py-2">
+                                <div key={item} className="re-auth-check flex items-center gap-3 rounded-md border border-white/20 px-3 py-2">
                                     <ShieldCheck className="h-4 w-4 text-[var(--re-signal-green)]" />
-                                    <span className="text-[var(--re-surface-base)]">{item}</span>
+                                    <span>{item}</span>
                                 </div>
                             ))}
                         </div>
                     </div>
 
-                    <Card className="border-0 bg-white shadow-none">
+                    <Card className="border-0 bg-[var(--re-surface-elevated)] shadow-none">
                         <CardHeader className="space-y-2 px-5 pb-4 pt-6 sm:px-8 sm:pt-8">
                             <div className="flex items-center gap-3 lg:hidden">
-                                <div className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-600 text-white">
+                                <div className="inline-flex h-9 w-9 items-center justify-center rounded-md bg-[var(--re-brand)] text-white">
                                     <ClipboardCheck className="h-4 w-4" />
                                 </div>
                                 <div>
-                                    <p className="text-sm font-semibold text-slate-950">RegEngine</p>
-                                    <p className="text-xs text-slate-500">Command center</p>
+                                    <p className="text-sm font-semibold text-[var(--re-text-primary)]">RegEngine</p>
+                                    <p className="text-xs text-[var(--re-text-muted)]">Command center</p>
                                 </div>
                             </div>
-                            <div className="inline-flex w-fit items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-800">
+                            <div className="inline-flex w-fit items-center gap-2 rounded-full border border-[var(--re-info-border)] bg-[var(--re-info-bg)] px-3 py-1 text-xs font-medium text-[var(--re-info)]">
                                 <KeyRound className="h-3.5 w-3.5" />
                                 Protected workspace
                             </div>
-                            <h2 className="text-2xl font-semibold leading-tight tracking-normal text-slate-950">Sign in</h2>
-                            <CardDescription className="text-sm leading-6 text-slate-600">
+                            <h2 className="text-2xl font-semibold leading-tight tracking-normal text-[var(--re-text-primary)]">Sign in</h2>
+                            <CardDescription className="text-sm leading-6 text-[var(--re-text-muted)]">
                                 Use your RegEngine account to continue to the requested workspace.
                             </CardDescription>
                         </CardHeader>
@@ -319,7 +319,7 @@ export default function LoginPage() {
                                 )}
 
                                 <div className="space-y-2">
-                                    <label className="text-sm font-medium leading-none text-slate-700 peer-disabled:cursor-not-allowed peer-disabled:opacity-70" htmlFor="email">
+                                    <label className="text-sm font-medium leading-none text-[var(--re-text-secondary)] peer-disabled:cursor-not-allowed peer-disabled:opacity-70" htmlFor="email">
                                         Email
                                     </label>
                                     <Input
@@ -333,12 +333,12 @@ export default function LoginPage() {
                                         autoComplete="email"
                                         aria-invalid={!!error}
                                         aria-describedby={error ? 'login-error' : undefined}
-                                        className="h-11 border-slate-300 bg-white"
+                                        className="h-11"
                                     />
                                 </div>
 
                                 <div className="space-y-2">
-                                    <label className="text-sm font-medium leading-none text-slate-700 peer-disabled:cursor-not-allowed peer-disabled:opacity-70" htmlFor="password">
+                                    <label className="text-sm font-medium leading-none text-[var(--re-text-secondary)] peer-disabled:cursor-not-allowed peer-disabled:opacity-70" htmlFor="password">
                                         Password
                                     </label>
                                     <Input
@@ -351,20 +351,20 @@ export default function LoginPage() {
                                         autoComplete="current-password"
                                         aria-invalid={!!error}
                                         aria-describedby={error ? 'login-error' : undefined}
-                                        className="h-11 border-slate-300 bg-white"
+                                        className="h-11"
                                     />
                                 </div>
 
-                                <div className="flex items-center justify-between text-xs text-slate-500">
-                                    <Link href="/accept-invite" className="transition hover:text-emerald-700">
+                                <div className="flex items-center justify-between text-xs text-[var(--re-text-muted)]">
+                                    <Link href="/accept-invite" className="transition hover:text-[var(--re-text-primary)]">
                                         Have an invite?
                                     </Link>
-                                    <Link href="/forgot-password" className="transition hover:text-emerald-700">
+                                    <Link href="/forgot-password" className="transition hover:text-[var(--re-text-primary)]">
                                         Forgot password?
                                     </Link>
                                 </div>
 
-                                <Button className="h-11 w-full bg-emerald-700 text-white hover:bg-emerald-800" type="submit" disabled={isLoading}>
+                                <Button className="h-11 w-full" type="submit" disabled={isLoading}>
                                     {isLoading ? (
                                         <>
                                             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -377,14 +377,14 @@ export default function LoginPage() {
 
                                 {showQaPresets && QaPresets ? <QaPresets onApplyPreset={applyPreset} /> : null}
 
-                                <div className="border-t border-slate-200 pt-4 text-center text-sm text-slate-500">
+                                <div className="border-t border-[var(--re-border-subtle)] pt-4 text-center text-sm text-[var(--re-text-muted)]">
                                     <p className="mb-2">
                                         New here?{" "}
-                                        <Link href="/signup" className="font-medium text-emerald-700 hover:underline">
+                                        <Link href="/signup" className="font-medium text-[var(--re-text-primary)] hover:underline">
                                             Create an account
                                         </Link>
                                     </p>
-                                    <Link href="/" className="flex items-center justify-center gap-2 transition-colors hover:text-slate-950">
+                                    <Link href="/" className="flex items-center justify-center gap-2 transition-colors hover:text-[var(--re-text-primary)]">
                                         <LayoutDashboard className="h-4 w-4" />
                                         Return to public site
                                     </Link>
