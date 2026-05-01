@@ -87,12 +87,41 @@ def upgrade() -> None:
         "ON fsma.supplier_integration_profiles (tenant_id, supplier_id)"
     )
 
+    op.execute(
+        """
+        CREATE TABLE IF NOT EXISTS fsma.tenant_portal_links (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            tenant_id UUID NOT NULL,
+            supplier_name TEXT NOT NULL,
+            link_token TEXT NOT NULL UNIQUE,
+            status TEXT NOT NULL DEFAULT 'active',
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            expires_at TIMESTAMPTZ
+        )
+        """
+    )
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS idx_tenant_portal_links_tid "
+        "ON fsma.tenant_portal_links (tenant_id)"
+    )
     op.execute("ALTER TABLE fsma.tenant_portal_links ADD COLUMN IF NOT EXISTS supplier_email TEXT")
     op.execute("ALTER TABLE fsma.tenant_portal_links ADD COLUMN IF NOT EXISTS allowed_cte_types TEXT[] NOT NULL DEFAULT ARRAY['shipping']::TEXT[]")
     op.execute("ALTER TABLE fsma.tenant_portal_links ADD COLUMN IF NOT EXISTS integration_profile_id TEXT")
     op.execute(
         "CREATE INDEX IF NOT EXISTS idx_tenant_portal_links_profile "
         "ON fsma.tenant_portal_links (tenant_id, integration_profile_id)"
+    )
+    op.execute("ALTER TABLE fsma.tenant_portal_links ENABLE ROW LEVEL SECURITY")
+    op.execute("ALTER TABLE fsma.tenant_portal_links FORCE ROW LEVEL SECURITY")
+    op.execute("DROP POLICY IF EXISTS tenant_isolation_portal_links ON fsma.tenant_portal_links")
+    op.execute(
+        f"""
+        CREATE POLICY tenant_isolation_portal_links
+            ON fsma.tenant_portal_links
+            FOR ALL TO regengine, regengine_sysadmin
+            USING ({_TENANT_POLICY})
+            WITH CHECK ({_TENANT_POLICY})
+        """
     )
 
     op.execute("ALTER TABLE fsma.supplier_integration_profiles ENABLE ROW LEVEL SECURITY")
