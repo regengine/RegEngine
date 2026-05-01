@@ -305,7 +305,11 @@ class RulesEngine:
                 tenant_id=tenant_id,
                 related_events=related_events_cache,
             )
-            if result.result == "fail" and result.severity == "warning":
+            if (
+                result.result == "fail"
+                and result.severity == "warning"
+                and result.category == "operational_quality"
+            ):
                 result.result = "warn"
             summary.results.append(result)
             self._tally_result(summary, result)
@@ -431,7 +435,11 @@ class RulesEngine:
                     tenant_id=tenant_id,
                     related_events=related_events_cache,
                 )
-                if result.result == "fail" and result.severity == "warning":
+                if (
+                    result.result == "fail"
+                    and result.severity == "warning"
+                    and result.category == "operational_quality"
+                ):
                     result.result = "warn"
                 summary.results.append(result)
                 self._tally_result(summary, result)
