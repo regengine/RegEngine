@@ -16,20 +16,26 @@ receiving,TLC-DEMO-SMOKE-001,Romaine Lettuce,103,cases,,2026-04-27T02:04:00Z,Sal
 
 type JsonObject = Record<string, unknown>;
 
-async function waitForAuthenticated(page: Page, timeout = 30_000) {
-    await page.waitForURL((url) => {
-        const pathname = new URL(url).pathname;
-        return /^\/(dashboard|sysadmin|onboarding)/.test(pathname);
-    }, { timeout });
-}
-
 async function login(page: Page): Promise<{ tenantId: string }> {
-    await page.goto('/login?next=/dashboard');
-    await expect(page.locator('input[type="email"]')).toBeVisible({ timeout: 15_000 });
-    await page.fill('input[type="email"]', DEMO_EMAIL);
-    await page.fill('input[type="password"]', DEMO_PASSWORD);
-    await page.click('button[type="submit"]');
-    await waitForAuthenticated(page);
+    const loginResponse = await expectJson<JsonObject>(
+        await page.request.post('/api/admin/auth/login', {
+            data: { email: DEMO_EMAIL, password: DEMO_PASSWORD },
+        }),
+        'admin login',
+    );
+    expect(loginResponse.access_token, 'admin login should return an access token').toEqual(expect.any(String));
+    expect(loginResponse.tenant_id, 'admin login should return a tenant_id').toEqual(expect.any(String));
+
+    await expectJson<JsonObject>(
+        await page.request.post('/api/session', {
+            data: {
+                access_token: loginResponse.access_token,
+                tenant_id: loginResponse.tenant_id,
+                user: loginResponse.user,
+            },
+        }),
+        'session cookie bootstrap',
+    );
 
     const response = await page.request.get('/api/session');
     const session = await expectJson<JsonObject>(response, 'session');
