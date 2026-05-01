@@ -81,8 +81,8 @@ test.describe('Design-partner demo smoke', () => {
 
         await page.goto('/tools/inflow-lab');
         await expect(page.getByRole('button', { name: /Data feeder/i })).toBeVisible({ timeout: 20_000 });
-        const defaultTenantInput = page.getByDisplayValue('mock-tenant').first();
-        if (await defaultTenantInput.isVisible().catch(() => false)) {
+        const defaultTenantInput = page.locator('input[value="mock-tenant"]').first();
+        if (await defaultTenantInput.count()) {
             await defaultTenantInput.fill(tenantId);
         }
 
