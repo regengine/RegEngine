@@ -49,10 +49,11 @@ describe('LoginPage', () => {
     const mockPush = vi.fn();
     const mockReplace = vi.fn();
     const mockRefresh = vi.fn();
+    const mockClearCredentials = vi.fn();
     const mockSearchParamGet = vi.fn();
 
     // Track the current auth state so mockLogin can trigger user update
-    let authState: { user: any; login: any; isHydrated: boolean };
+    let authState: { user: any; login: any; clearCredentials: any; isHydrated: boolean };
     const mockLogin = vi.fn().mockImplementation(async (_token: string, user: any, _tenantId?: string) => {
         // Simulate what the real login does: update user state
         authState.user = user;
@@ -72,7 +73,7 @@ describe('LoginPage', () => {
         });
         mockSearchParamGet.mockReturnValue(null);
         (useSearchParams as any).mockReturnValue({ get: mockSearchParamGet });
-        authState = { login: mockLogin, user: null, isHydrated: true };
+        authState = { clearCredentials: mockClearCredentials, login: mockLogin, user: null, isHydrated: true };
         (useAuth as any).mockReturnValue(authState);
         (apiClient.getOnboardingStatus as any).mockResolvedValue({ is_complete: true });
         if (typeof window !== 'undefined' && window.localStorage?.clear) {
@@ -86,7 +87,7 @@ describe('LoginPage', () => {
 
             expect(screen.getByRole('heading', { name: /sign in/i })).toBeInTheDocument();
             expect(screen.getByLabelText(/email/i)).toBeInTheDocument();
-            expect(screen.getByLabelText(/password/i)).toBeInTheDocument();
+            expect(screen.getByLabelText(/^password$/i)).toBeInTheDocument();
             expect(screen.getByRole('button', { name: /sign in/i })).toBeInTheDocument();
         });
 
@@ -94,7 +95,7 @@ describe('LoginPage', () => {
             render(<LoginPage />);
 
             const emailInput = screen.getByLabelText(/email/i);
-            const passwordInput = screen.getByLabelText(/password/i);
+            const passwordInput = screen.getByLabelText(/^password$/i);
 
             expect(emailInput).toHaveAttribute('autocomplete', 'email');
             expect(passwordInput).toHaveAttribute('autocomplete', 'current-password');
@@ -103,7 +104,7 @@ describe('LoginPage', () => {
         it('renders return to public site link', () => {
             render(<LoginPage />);
 
-            const link = screen.getByRole('link', { name: /return to public site/i });
+            const link = screen.getByRole('link', { name: /return to regengine\.com/i });
             expect(link).toBeInTheDocument();
             expect(link).toHaveAttribute('href', '/');
         });
@@ -123,13 +124,13 @@ describe('LoginPage', () => {
             });
             render(<LoginPage />);
 
-            const passwordInput = screen.getByLabelText(/password/i);
+            const passwordInput = screen.getByLabelText(/^password$/i);
             await user.type(passwordInput, 'temporary-password');
 
             await user.click(screen.getByRole('button', { name: /qa tester/i }));
 
             expect(screen.getByLabelText(/email/i)).toHaveValue('test@example.com');
-            expect(screen.getByLabelText(/password/i)).toHaveValue('');
+            expect(screen.getByLabelText(/^password$/i)).toHaveValue('');
         });
     });
 
@@ -155,7 +156,7 @@ describe('LoginPage', () => {
             const submitButton = screen.getByRole('button', { name: /sign in/i });
             await user.click(submitButton);
 
-            const passwordInput = screen.getByLabelText(/password/i) as HTMLInputElement;
+            const passwordInput = screen.getByLabelText(/^password$/i) as HTMLInputElement;
             expect(passwordInput.validity.valid).toBe(false);
         });
 
@@ -173,7 +174,7 @@ describe('LoginPage', () => {
             const user = userEvent.setup();
             render(<LoginPage />);
 
-            const passwordInput = screen.getByLabelText(/password/i);
+            const passwordInput = screen.getByLabelText(/^password$/i);
             await user.type(passwordInput, 'SecurePassword123!');
 
             expect(passwordInput).toHaveValue('SecurePassword123!');
@@ -194,7 +195,7 @@ describe('LoginPage', () => {
             render(<LoginPage />);
 
             await user.type(screen.getByLabelText(/email/i), 'test@example.com');
-            await user.type(screen.getByLabelText(/password/i), 'password123');
+            await user.type(screen.getByLabelText(/^password$/i), 'password123');
             await user.click(screen.getByRole('button', { name: /sign in/i }));
 
             await waitFor(() => {
@@ -215,7 +216,7 @@ describe('LoginPage', () => {
             render(<LoginPage />);
 
             await user.type(screen.getByLabelText(/email/i), 'test@example.com');
-            await user.type(screen.getByLabelText(/password/i), 'password123');
+            await user.type(screen.getByLabelText(/^password$/i), 'password123');
             await user.click(screen.getByRole('button', { name: /sign in/i }));
 
             await waitFor(() => {
@@ -240,7 +241,7 @@ describe('LoginPage', () => {
             render(<LoginPage />);
 
             await user.type(screen.getByLabelText(/email/i), 'test@example.com');
-            await user.type(screen.getByLabelText(/password/i), 'password123');
+            await user.type(screen.getByLabelText(/^password$/i), 'password123');
             await user.click(screen.getByRole('button', { name: /sign in/i }));
 
             await waitFor(() => {
@@ -266,7 +267,7 @@ describe('LoginPage', () => {
             render(<LoginPage />);
 
             await user.type(screen.getByLabelText(/email/i), 'test@example.com');
-            await user.type(screen.getByLabelText(/password/i), 'password123');
+            await user.type(screen.getByLabelText(/^password$/i), 'password123');
             await user.click(screen.getByRole('button', { name: /sign in/i }));
 
             await waitFor(() => {
@@ -292,7 +293,7 @@ describe('LoginPage', () => {
             render(<LoginPage />);
 
             await user.type(screen.getByLabelText(/email/i), 'test@example.com');
-            await user.type(screen.getByLabelText(/password/i), 'password123');
+            await user.type(screen.getByLabelText(/^password$/i), 'password123');
             await user.click(screen.getByRole('button', { name: /sign in/i }));
 
             await waitFor(() => {
@@ -318,7 +319,7 @@ describe('LoginPage', () => {
             render(<LoginPage />);
 
             await user.type(screen.getByLabelText(/email/i), 'test@example.com');
-            await user.type(screen.getByLabelText(/password/i), 'password123');
+            await user.type(screen.getByLabelText(/^password$/i), 'password123');
             await user.click(screen.getByRole('button', { name: /sign in/i }));
 
             await waitFor(() => {
@@ -339,7 +340,7 @@ describe('LoginPage', () => {
             render(<LoginPage />);
 
             await user.type(screen.getByLabelText(/email/i), 'admin@example.com');
-            await user.type(screen.getByLabelText(/password/i), 'adminpass');
+            await user.type(screen.getByLabelText(/^password$/i), 'adminpass');
             await user.click(screen.getByRole('button', { name: /sign in/i }));
 
             await waitFor(() => {
@@ -350,6 +351,7 @@ describe('LoginPage', () => {
         it('redirects authenticated users away from login on mount', async () => {
             (useAuth as any).mockReturnValue({
                 login: mockLogin,
+                clearCredentials: mockClearCredentials,
                 user: { id: '123', email: 'test@example.com', is_sysadmin: false },
                 isHydrated: true,
             });
@@ -372,7 +374,7 @@ describe('LoginPage', () => {
             render(<LoginPage />);
 
             await user.type(screen.getByLabelText(/email/i), 'wrong@example.com');
-            await user.type(screen.getByLabelText(/password/i), 'wrongpass');
+            await user.type(screen.getByLabelText(/^password$/i), 'wrongpass');
             await user.click(screen.getByRole('button', { name: /sign in/i }));
 
             await waitFor(() => {
@@ -389,7 +391,7 @@ describe('LoginPage', () => {
             render(<LoginPage />);
 
             await user.type(screen.getByLabelText(/email/i), 'disabled@example.com');
-            await user.type(screen.getByLabelText(/password/i), 'password');
+            await user.type(screen.getByLabelText(/^password$/i), 'password');
             await user.click(screen.getByRole('button', { name: /sign in/i }));
 
             await waitFor(() => {
@@ -406,7 +408,7 @@ describe('LoginPage', () => {
             render(<LoginPage />);
 
             await user.type(screen.getByLabelText(/email/i), 'test@example.com');
-            await user.type(screen.getByLabelText(/password/i), 'password');
+            await user.type(screen.getByLabelText(/^password$/i), 'password');
             await user.click(screen.getByRole('button', { name: /sign in/i }));
 
             await waitFor(() => {
@@ -423,7 +425,7 @@ describe('LoginPage', () => {
             render(<LoginPage />);
 
             await user.type(screen.getByLabelText(/email/i), 'test@example.com');
-            await user.type(screen.getByLabelText(/password/i), 'password');
+            await user.type(screen.getByLabelText(/^password$/i), 'password');
             await user.click(screen.getByRole('button', { name: /sign in/i }));
 
             await waitFor(() => {
@@ -440,7 +442,7 @@ describe('LoginPage', () => {
             render(<LoginPage />);
 
             await user.type(screen.getByLabelText(/email/i), 'test@example.com');
-            await user.type(screen.getByLabelText(/password/i), 'password');
+            await user.type(screen.getByLabelText(/^password$/i), 'password');
             await user.click(screen.getByRole('button', { name: /sign in/i }));
 
             await waitFor(() => {
@@ -464,7 +466,7 @@ describe('LoginPage', () => {
 
             // First attempt - fails
             await user.type(screen.getByLabelText(/email/i), 'test@example.com');
-            await user.type(screen.getByLabelText(/password/i), 'wrongpass');
+            await user.type(screen.getByLabelText(/^password$/i), 'wrongpass');
             await user.click(screen.getByRole('button', { name: /sign in/i }));
 
             await waitFor(() => {
@@ -472,8 +474,8 @@ describe('LoginPage', () => {
             });
 
             // Second attempt - succeeds
-            await user.clear(screen.getByLabelText(/password/i));
-            await user.type(screen.getByLabelText(/password/i), 'correctpass');
+            await user.clear(screen.getByLabelText(/^password$/i));
+            await user.type(screen.getByLabelText(/^password$/i), 'correctpass');
             await user.click(screen.getByRole('button', { name: /sign in/i }));
 
             await waitFor(() => {
@@ -495,13 +497,13 @@ describe('LoginPage', () => {
             render(<LoginPage />);
 
             await user.type(screen.getByLabelText(/email/i), 'test@example.com');
-            await user.type(screen.getByLabelText(/password/i), 'password');
+            await user.type(screen.getByLabelText(/^password$/i), 'password');
             await user.click(screen.getByRole('button', { name: /sign in/i }));
 
             // Check loading state
             await waitFor(() => {
-                expect(screen.getByRole('button', { name: /signing in/i })).toBeInTheDocument();
-                expect(screen.getByRole('button', { name: /signing in/i })).toBeDisabled();
+                expect(screen.getByRole('button', { name: /securing session/i })).toBeInTheDocument();
+                expect(screen.getByRole('button', { name: /securing session/i })).toBeDisabled();
             });
 
             // Resolve login
@@ -512,7 +514,7 @@ describe('LoginPage', () => {
             });
 
             await waitFor(() => {
-                expect(screen.queryByRole('button', { name: /signing in/i })).not.toBeInTheDocument();
+                expect(screen.queryByRole('button', { name: /securing session/i })).not.toBeInTheDocument();
             });
         });
 
@@ -528,13 +530,13 @@ describe('LoginPage', () => {
             render(<LoginPage />);
 
             await user.type(screen.getByLabelText(/email/i), 'test@example.com');
-            await user.type(screen.getByLabelText(/password/i), 'password');
+            await user.type(screen.getByLabelText(/^password$/i), 'password');
             await user.click(screen.getByRole('button', { name: /sign in/i }));
 
             // Check inputs disabled
             await waitFor(() => {
                 expect(screen.getByLabelText(/email/i)).toBeDisabled();
-                expect(screen.getByLabelText(/password/i)).toBeDisabled();
+                expect(screen.getByLabelText(/^password$/i)).toBeDisabled();
             });
 
             // Resolve login
@@ -556,12 +558,12 @@ describe('LoginPage', () => {
             render(<LoginPage />);
 
             await user.type(screen.getByLabelText(/email/i), 'wrong@example.com');
-            await user.type(screen.getByLabelText(/password/i), 'wrongpass');
+            await user.type(screen.getByLabelText(/^password$/i), 'wrongpass');
             await user.click(screen.getByRole('button', { name: /sign in/i }));
 
             await waitFor(() => {
                 expect(screen.getByLabelText(/email/i)).toHaveAttribute('aria-invalid', 'true');
-                expect(screen.getByLabelText(/password/i)).toHaveAttribute('aria-invalid', 'true');
+                expect(screen.getByLabelText(/^password$/i)).toHaveAttribute('aria-invalid', 'true');
             });
         });
 
@@ -574,7 +576,7 @@ describe('LoginPage', () => {
             render(<LoginPage />);
 
             await user.type(screen.getByLabelText(/email/i), 'wrong@example.com');
-            await user.type(screen.getByLabelText(/password/i), 'wrongpass');
+            await user.type(screen.getByLabelText(/^password$/i), 'wrongpass');
             await user.click(screen.getByRole('button', { name: /sign in/i }));
 
             await waitFor(() => {
