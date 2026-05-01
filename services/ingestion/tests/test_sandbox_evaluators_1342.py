@@ -85,6 +85,7 @@ def _mk_result(
     rule_id: str = "R-1",
     result: str = "pass",
     severity: str = "warning",
+    category: str = "test",
 ) -> RuleEvaluationResult:
     return RuleEvaluationResult(
         rule_id=rule_id,
@@ -92,7 +93,7 @@ def _mk_result(
         rule_title="Rule",
         severity=severity,
         result=result,
-        category="test",
+        category=category,
     )
 
 
@@ -202,6 +203,22 @@ class TestEvaluateStatelessDispatch:
         assert summary.failed == 1
         # Non-critical failure does NOT go into critical_failures
         assert summary.critical_failures == []
+
+    def test_operational_quality_warning_fail_increments_warned(self, monkeypatch):
+        rule = _mk_rule(severity="warning", category="operational_quality")
+        monkeypatch.setattr(evaluators_mod, "_get_applicable_rules",
+                            lambda et, include_custom=False: [rule])
+        monkeypatch.setitem(
+            evaluators_mod._EVALUATORS, "field_presence",
+            lambda ev, logic, r: _mk_result(
+                result="fail",
+                severity="warning",
+                category="operational_quality",
+            ),
+        )
+        summary = _evaluate_event_stateless({"event_type": "x"})
+        assert summary.failed == 0
+        assert summary.warned == 1
 
     def test_critical_fail_goes_into_critical_failures(self, monkeypatch):
         rule = _mk_rule(severity="critical")
