@@ -2,11 +2,23 @@ name: security
 
 on:
   pull_request:
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+      - '.github/ISSUE_TEMPLATE/**'
   push:
     branches: ["main"]
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+      - '.github/ISSUE_TEMPLATE/**'
   workflow_dispatch:
   schedule:
     - cron: '0 6 * * 1'  # Weekly: Monday 06:00 UTC
+
+concurrency:
+  group: security-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -74,6 +86,7 @@ jobs:
         # exits non-zero when it finds a potential secret that isn't already
         # captured in `.secrets.baseline`.
         run: |
+          # shellcheck disable=SC2046
           detect-secrets-hook \
             --baseline .secrets.baseline \
             --exclude-files '.*\.lock$' \
@@ -101,32 +114,22 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install and run Semgrep
+      - name: Install Semgrep
+        run: pip install semgrep
+
+      - name: Semgrep OWASP hard gate (fail on any finding)
+        # Original behavior: --error with no severity filter. Do not add
+        # --severity ERROR here; that would silently relax the OWASP gate.
         run: |
-          pip install semgrep
           semgrep \
             --config p/owasp-top-ten \
-            --config p/security-audit \
             --exclude-rule python.sqlalchemy.security.audit.avoid-sqlalchemy-text.avoid-sqlalchemy-text \
             --exclude-rule python.lang.security.audit.logging.logger-credential-leak.python-logger-credential-disclosure \
-            --json --output semgrep-results.json
-
-          # Results are uploaded as artifacts AND also checked for critical/high findings below
-          # The avoid-sqlalchemy-text rule is excluded because all text() usage
-          # in this codebase uses parameterized :param syntax, not f-string
-          # interpolation. Semgrep cannot distinguish the two patterns.
-        env:
-          SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN }}
-
-      - name: Semgrep OWASP hard gate (fail on critical/high)
-        run: |
-          pip install semgrep
-          semgrep --config=p/owasp-top-ten \
-            --exclude-rule python.sqlalchemy.security.audit.avoid-sqlalchemy-text.avoid-sqlalchemy-text \
-            --exclude-rule python.lang.security.audit.logging.logger-credential-leak.python-logger-credential-disclosure \
+            --json --output semgrep-owasp-results.json \
             --error .
-          # --error causes semgrep to exit non-zero if any findings are found.
-          # This step intentionally fails CI on security findings.
+          # --error causes semgrep to exit non-zero if any OWASP findings are
+          # found. This preserves the previous blocking behavior while removing
+          # the separate artifact-only OWASP/security-audit scan.
         env:
           SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN }}
 
@@ -137,18 +140,17 @@ jobs:
       # and do not block CI, keeping the gate signal-to-noise ratio manageable.
       - name: Semgrep security-audit gate (fail on ERROR severity -- #1157)
         run: |
-          pip install semgrep
           semgrep --config=p/security-audit \
             --exclude-rule python.sqlalchemy.security.audit.avoid-sqlalchemy-text.avoid-sqlalchemy-text \
             --exclude-rule python.lang.security.audit.logging.logger-credential-leak.python-logger-credential-disclosure \
             --severity ERROR \
+            --json --output semgrep-security-audit-results.json \
             --error .
         env:
           SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN }}
 
       - name: Semgrep EPIC-A scan (tenant_id trust — #1651, advisory until rollout)
         run: |
-          pip install semgrep
           # Advisory-only while EPIC-A rollout is in flight. Emits findings
           # to the log but does not fail the build. Each finding corresponds
           # to a call site that an EPIC-A child issue is migrating to
@@ -187,7 +189,9 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7
         with:
           name: semgrep-results
-          path: semgrep-results.json
+          path: |
+            semgrep-owasp-results.json
+            semgrep-security-audit-results.json
           retention-days: 90
 
   # ──────────────────────────────────────────────
@@ -233,24 +237,26 @@ jobs:
           python_files=$( { find . -name requirements.txt -not -path "./.venv/*" -not -path "./frontend/*"; [ -f requirements.lock ] && echo ./requirements.lock; } | sort)
           if [ -n "$python_files" ]; then
             printf '%s\n' "$python_files" > pip-audit-targets.txt
-            printf '{\n  "audits": [\n' > pip-audit-results.json
-            first=1
-            while IFS= read -r req_file; do
-              [ -n "$req_file" ] || continue
-              echo "Auditing $req_file"
-              audit_json=$(mktemp)
-              pip-audit -r "$req_file" --format json --output "$audit_json" || true
-              pip-audit -r "$req_file"
-              if [ $first -eq 0 ]; then
-                printf ',\n' >> pip-audit-results.json
-              fi
-              printf '    {\n      "file": "%s",\n      "results": ' "$req_file" >> pip-audit-results.json
-              cat "$audit_json" >> pip-audit-results.json
-              printf '\n    }' >> pip-audit-results.json
-              first=0
-              rm -f "$audit_json"
-            done < pip-audit-targets.txt
-            printf '\n  ]\n}\n' >> pip-audit-results.json
+            {
+              printf '{\n  "audits": [\n'
+              first=1
+              while IFS= read -r req_file; do
+                [ -n "$req_file" ] || continue
+                echo "Auditing $req_file" >&2
+                audit_json=$(mktemp)
+                pip-audit -r "$req_file" --format json --output "$audit_json" || true
+                pip-audit -r "$req_file" >&2
+                if [ $first -eq 0 ]; then
+                  printf ',\n'
+                fi
+                printf '    {\n      "file": "%s",\n      "results": ' "$req_file"
+                cat "$audit_json"
+                printf '\n    }'
+                first=0
+                rm -f "$audit_json"
+              done < pip-audit-targets.txt
+              printf '\n  ]\n}\n'
+            } > pip-audit-results.json
           elif [ -f pyproject.toml ]; then
             pip-audit --format json --output pip-audit-results.json || true
             pip-audit
@@ -372,6 +378,7 @@ jobs:
     name: Generate SBOM (SPDX)
     runs-on: ubuntu-latest
     needs: [secrets, sast, deps]
+    if: github.event_name != 'pull_request'
     permissions:
       contents: read
       id-token: write  # required for cosign keyless signing
@@ -418,6 +425,10 @@ jobs:
   container-scan:
     name: Container Scan (Trivy)
     runs-on: ubuntu-latest
+    # PR trigger removed (#2032): building the monolith image on every PR is
+    # the largest single Actions minute consumer in this workflow. Keep on
+    # push-to-main, scheduled weekly, and on-demand via workflow_dispatch.
+    if: github.event_name != 'pull_request'
     needs: [secrets, sast, deps]
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
