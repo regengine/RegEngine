@@ -232,7 +232,7 @@ test.describe('Design-partner demo smoke', () => {
             workbench_run_id: savedRun.run_id,
             readiness_score: readiness.score,
             fix_queue_count: fixQueue.length,
-            commit_gate,
+            commit_gate: commitGate,
             integration_profile_id: profileId,
             portal_id: portalLink.portal_id,
             portal_path: portalPath,
