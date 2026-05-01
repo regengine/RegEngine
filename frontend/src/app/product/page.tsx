@@ -47,14 +47,14 @@ const outcomes = [
 export default function ProductPage() {
   return (
     <main className="re-page min-h-screen text-[var(--re-text-secondary)]">
-      <section className="re-container pb-14 pt-12 md:pb-20 md:pt-18">
-        <div className="grid gap-10 md:grid-cols-[0.85fr_1fr]">
+      <section className="re-container pb-12 pt-12 md:pb-16 md:pt-16">
+        <div className="grid items-start gap-10 md:grid-cols-[0.85fr_1fr]">
           <div>
             <p className="re-label mb-5">Product</p>
-            <h1 className="max-w-[680px] text-[clamp(40px,6vw,70px)] font-semibold leading-[0.98]">
+            <h1 className="re-hero-title">
               A workbench for deciding what can become evidence.
             </h1>
-            <p className="mt-6 max-w-[560px] text-[17px] leading-7 text-[var(--re-text-muted)]">
+            <p className="re-hero-copy mt-6">
               RegEngine is built around one simple operating rule: supplier data is useful only after it is mapped, checked, fixed, persisted, and explicitly committed.
             </p>
             <div className="mt-8 flex flex-wrap gap-3">
@@ -67,7 +67,7 @@ export default function ProductPage() {
             </div>
           </div>
 
-          <div className="re-panel overflow-hidden">
+          <div className="re-panel self-start overflow-hidden">
             {stages.map(({ num, title, detail, icon: Icon }, index) => (
               <div key={title} className="grid grid-cols-[56px_44px_1fr] items-start gap-4 border-b border-[var(--re-surface-border)] p-4 last:border-b-0">
                 <span className="font-mono text-[12px] text-[var(--re-text-muted)]">{num}</span>

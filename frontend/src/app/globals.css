@@ -1209,7 +1209,7 @@ html.a11y-cursor-large input[type="submit"] {
 .re-hero-title {
     max-width: 720px;
     color: var(--re-text-primary);
-    font-size: clamp(36px, 5.25vw, 64px);
+    font-size: clamp(36px, 4.8vw, 58px);
     font-weight: 650;
     letter-spacing: 0;
     line-height: 1;
