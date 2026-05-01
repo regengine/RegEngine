@@ -6,14 +6,18 @@ import {
     AlertTriangle,
     ArrowRight,
     Archive,
+    Braces,
     CheckCircle2,
     ClipboardCheck,
     FileSpreadsheet,
     FlaskConical,
     GitBranch,
     Link2,
+    Play,
     RefreshCcw,
+    Save,
     ShieldCheck,
+    SlidersHorizontal,
     Terminal,
 } from 'lucide-react';
 import {
@@ -25,6 +29,15 @@ import {
     getCapabilitiesByCategory,
 } from '@/lib/customer-readiness';
 import { Button } from '@/components/ui/button';
+import { apiClient } from '@/lib/api-client';
+import { useAuth } from '@/lib/auth-context';
+import { useTenant } from '@/lib/tenant-context';
+import type {
+    CreateIntegrationProfileRequest,
+    IntegrationProfile,
+    IntegrationProfileSourceType,
+    MappingPreviewResponse,
+} from '@/types/api';
 import styles from './page.module.css';
 
 const CATEGORY_LABELS = [
@@ -85,10 +98,65 @@ type MappingReviewResponse = {
     };
 };
 
+const PROFILE_FIELDS = [
+    ['cte_type', 'CTE type'],
+    ['traceability_lot_code', 'Traceability lot code'],
+    ['product_description', 'Product description'],
+    ['quantity', 'Quantity'],
+    ['unit_of_measure', 'Unit of measure'],
+    ['timestamp', 'Event timestamp'],
+    ['ship_from_location', 'Ship from'],
+    ['ship_to_location', 'Ship to'],
+    ['reference_document', 'Reference document'],
+] as const;
+
+const DEFAULT_PROFILE_MAPPING = {
+    cte_type: 'event_type',
+    traceability_lot_code: 'lot_code',
+    product_description: 'item_description',
+    quantity: 'case_count',
+    unit_of_measure: 'uom',
+    timestamp: 'ship_date',
+    ship_from_location: 'origin_facility',
+    ship_to_location: 'destination_facility',
+    reference_document: 'bol_number',
+};
+
+const DEFAULT_PREVIEW_EVENT = JSON.stringify([
+    {
+        event_type: 'shipping',
+        lot_code: 'TLC-ROMAINE-0426',
+        item_description: 'Romaine hearts',
+        case_count: 24,
+        uom: 'cases',
+        ship_date: '2026-04-30T15:00:00Z',
+        origin_facility: 'FreshPack Central',
+        destination_facility: 'DC-17',
+        bol_number: 'BOL-88921',
+    },
+], null, 2);
+
 export default function DashboardIntegrationsPage() {
+    const { isAuthenticated } = useAuth();
+    const { tenantId } = useTenant();
     const [items, setItems] = useState<MappingReviewItem[]>([]);
     const [meta, setMeta] = useState<MappingReviewResponse['meta']>();
     const [status, setStatus] = useState<'idle' | 'loading' | 'error'>('loading');
+    const [profiles, setProfiles] = useState<IntegrationProfile[]>([]);
+    const [profilesStatus, setProfilesStatus] = useState<'idle' | 'loading' | 'error'>('loading');
+    const [profileError, setProfileError] = useState<string | null>(null);
+    const [profileName, setProfileName] = useState('FreshPack shipping CSV');
+    const [supplierName, setSupplierName] = useState('FreshPack Central');
+    const [sourceType, setSourceType] = useState<IntegrationProfileSourceType>('csv');
+    const [defaultCteType, setDefaultCteType] = useState('shipping');
+    const [profileNotes, setProfileNotes] = useState('Supplier uses BOL number for FSMA reference document.');
+    const [fieldMapping, setFieldMapping] = useState<Record<string, string>>({ ...DEFAULT_PROFILE_MAPPING });
+    const [savingProfile, setSavingProfile] = useState(false);
+    const [previewProfileId, setPreviewProfileId] = useState('');
+    const [previewEventText, setPreviewEventText] = useState(DEFAULT_PREVIEW_EVENT);
+    const [previewResult, setPreviewResult] = useState<MappingPreviewResponse | null>(null);
+    const [previewError, setPreviewError] = useState<string | null>(null);
+    const [previewing, setPreviewing] = useState(false);
 
     useEffect(() => {
         let cancelled = false;
@@ -122,10 +190,104 @@ export default function DashboardIntegrationsPage() {
         };
     }, []);
 
+    useEffect(() => {
+        let cancelled = false;
+
+        async function loadProfiles() {
+            if (!isAuthenticated || !tenantId) {
+                setProfiles([]);
+                setProfilesStatus('idle');
+                return;
+            }
+
+            setProfilesStatus('loading');
+            setProfileError(null);
+
+            try {
+                const response = await apiClient.listIntegrationProfiles();
+                if (!cancelled) {
+                    setProfiles(response.profiles ?? []);
+                    setProfilesStatus('idle');
+                    setPreviewProfileId((current) => current || response.profiles?.[0]?.profile_id || '');
+                }
+            } catch {
+                if (!cancelled) {
+                    setProfiles([]);
+                    setProfilesStatus('error');
+                    setProfileError('Unable to load saved integration profiles for this tenant.');
+                }
+            }
+        }
+
+        void loadProfiles();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [isAuthenticated, tenantId]);
+
     const notConnected = meta?.status === 'not_connected';
     const reviewCount = items.filter((item) => item.status !== 'mapped').length;
     const capabilityCount = CAPABILITY_REGISTRY.filter((item) => item.category !== 'commercial').length;
     const liveApiCount = CAPABILITY_REGISTRY.filter((item) => item.status === 'ga').length;
+    const activeProfileCount = profiles.filter((profile) => profile.status === 'active').length;
+
+    const handleMappingChange = (key: string, value: string) => {
+        setFieldMapping((current) => ({ ...current, [key]: value }));
+    };
+
+    const handleCreateProfile = async () => {
+        if (!profileName.trim() || savingProfile) return;
+
+        setSavingProfile(true);
+        setProfileError(null);
+        try {
+            const request: CreateIntegrationProfileRequest = {
+                display_name: profileName.trim(),
+                supplier_name: supplierName.trim() || undefined,
+                source_type: sourceType,
+                default_cte_type: defaultCteType,
+                field_mapping: fieldMapping,
+                status: 'active',
+                confidence: 0.82,
+                notes: profileNotes.trim() || undefined,
+            };
+            const created = await apiClient.createIntegrationProfile(request);
+            setProfiles((current) => [created, ...current]);
+            setPreviewProfileId(created.profile_id);
+            setProfileName('');
+            setSupplierName('');
+            setProfileNotes('');
+        } catch {
+            setProfileError('Unable to save the integration profile. Check tenant access and try again.');
+        } finally {
+            setSavingProfile(false);
+        }
+    };
+
+    const handlePreviewProfile = async () => {
+        if (!previewProfileId || previewing) return;
+
+        setPreviewing(true);
+        setPreviewError(null);
+        setPreviewResult(null);
+        try {
+            const parsed = JSON.parse(previewEventText) as unknown;
+            const events = Array.isArray(parsed) ? parsed : [parsed];
+            const normalizedEvents = events.filter((event): event is Record<string, unknown> => (
+                Boolean(event) && typeof event === 'object' && !Array.isArray(event)
+            ));
+            if (normalizedEvents.length === 0) {
+                throw new Error('No sample events');
+            }
+            const result = await apiClient.previewIntegrationProfile(previewProfileId, normalizedEvents);
+            setPreviewResult(result);
+        } catch {
+            setPreviewError('Preview needs valid JSON: either one event object or an array of event objects.');
+        } finally {
+            setPreviewing(false);
+        }
+    };
 
     return (
         <div className={styles.page}>
@@ -189,6 +351,217 @@ export default function DashboardIntegrationsPage() {
                                     </div>
                                 </Link>
                             ))}
+                        </div>
+                    </div>
+                </section>
+
+                <section className={styles.card}>
+                    <div className={styles.cardHeader}>
+                        <h2 className={styles.cardTitle}>Saved supplier integration profiles</h2>
+                        <p className={styles.cardDescription}>
+                            Preserve supplier-specific field mappings once, attach them to portal links, and preview messy source rows before they become evidence candidates.
+                        </p>
+                    </div>
+                    <div className={styles.profileContent}>
+                        <div className={styles.profileSummaryGrid}>
+                            <div className={styles.profileMetric}>
+                                <div className={styles.statLabel}>Saved profiles</div>
+                                <div className={styles.statValue}>{profilesStatus === 'loading' ? '-' : profiles.length}</div>
+                                <p className={styles.statCopy}>Reusable mappings for CSV, spreadsheet, API, EDI-style, and supplier portal feeds.</p>
+                            </div>
+                            <div className={styles.profileMetric}>
+                                <div className={styles.statLabel}>Active profiles</div>
+                                <div className={styles.statValue}>{profilesStatus === 'loading' ? '-' : activeProfileCount}</div>
+                                <p className={styles.statCopy}>Eligible to attach to supplier self-service portal links.</p>
+                            </div>
+                        </div>
+
+                        {!isAuthenticated && (
+                            <div className={styles.warningBox}>
+                                Sign in to create tenant-scoped supplier profiles and attach them to portal invites.
+                            </div>
+                        )}
+                        {profileError && <div className={styles.errorBox}>{profileError}</div>}
+
+                        <div className={styles.profileGrid}>
+                            <div className={styles.profileBuilder}>
+                                <div className={styles.connectorHeading}>
+                                    <div className={styles.connectorIcon}>
+                                        <SlidersHorizontal className={styles.connectorSvg} />
+                                    </div>
+                                    <div>
+                                        <h3 className={styles.sectionTitle}>Create a mapping profile</h3>
+                                        <p className={styles.muted}>Start with a supplier’s real column names, then reuse the mapping on every replay and portal submission.</p>
+                                    </div>
+                                </div>
+
+                                <div className={styles.profileFormGrid}>
+                                    <label className={styles.formField}>
+                                        <span>Profile name</span>
+                                        <input
+                                            value={profileName}
+                                            onChange={(event) => setProfileName(event.target.value)}
+                                            placeholder="FreshPack shipping CSV"
+                                            className={styles.input}
+                                        />
+                                    </label>
+                                    <label className={styles.formField}>
+                                        <span>Supplier/source</span>
+                                        <input
+                                            value={supplierName}
+                                            onChange={(event) => setSupplierName(event.target.value)}
+                                            placeholder="Supplier name"
+                                            className={styles.input}
+                                        />
+                                    </label>
+                                    <label className={styles.formField}>
+                                        <span>Source type</span>
+                                        <select
+                                            value={sourceType}
+                                            onChange={(event) => setSourceType(event.target.value as IntegrationProfileSourceType)}
+                                            className={styles.input}
+                                        >
+                                            <option value="csv">CSV</option>
+                                            <option value="spreadsheet">Spreadsheet</option>
+                                            <option value="edi">EDI-style</option>
+                                            <option value="epcis">EPCIS</option>
+                                            <option value="api">API</option>
+                                            <option value="webhook">Webhook</option>
+                                            <option value="supplier_portal">Supplier portal</option>
+                                        </select>
+                                    </label>
+                                    <label className={styles.formField}>
+                                        <span>Default CTE</span>
+                                        <select
+                                            value={defaultCteType}
+                                            onChange={(event) => setDefaultCteType(event.target.value)}
+                                            className={styles.input}
+                                        >
+                                            <option value="shipping">Shipping</option>
+                                            <option value="receiving">Receiving</option>
+                                            <option value="transformation">Transformation</option>
+                                            <option value="packing">Packing</option>
+                                            <option value="cooling">Cooling</option>
+                                            <option value="harvesting">Harvesting</option>
+                                        </select>
+                                    </label>
+                                </div>
+
+                                <div className={styles.mappingGrid}>
+                                    {PROFILE_FIELDS.map(([key, label]) => (
+                                        <label key={key} className={styles.formField}>
+                                            <span>{label}</span>
+                                            <input
+                                                value={fieldMapping[key] ?? ''}
+                                                onChange={(event) => handleMappingChange(key, event.target.value)}
+                                                placeholder="supplier_column"
+                                                className={styles.input}
+                                            />
+                                        </label>
+                                    ))}
+                                </div>
+
+                                <label className={styles.formField}>
+                                    <span>Notes</span>
+                                    <textarea
+                                        value={profileNotes}
+                                        onChange={(event) => setProfileNotes(event.target.value)}
+                                        className={styles.textarea}
+                                        rows={3}
+                                    />
+                                </label>
+
+                                <Button
+                                    className={styles.primaryAction}
+                                    onClick={handleCreateProfile}
+                                    disabled={!isAuthenticated || !tenantId || savingProfile || !profileName.trim()}
+                                >
+                                    <Save className={styles.buttonIcon} />
+                                    {savingProfile ? 'Saving...' : 'Save profile'}
+                                </Button>
+                            </div>
+
+                            <div className={styles.profileListPanel}>
+                                <div className={styles.pathHeader}>
+                                    <div>
+                                        <h3 className={styles.pathTitle}>Tenant profiles</h3>
+                                        <p className={styles.muted}>Attach one when you invite a supplier from Supplier Management.</p>
+                                    </div>
+                                    <span className={styles.verifiedBadge}>
+                                        <ShieldCheck className={styles.badgeIcon} />
+                                        Tenant-scoped
+                                    </span>
+                                </div>
+
+                                <div className={styles.profileList}>
+                                    {profiles.map((profile) => (
+                                        <button
+                                            key={profile.profile_id}
+                                            type="button"
+                                            className={`${styles.profileCard} ${previewProfileId === profile.profile_id ? styles.profileCardActive : ''}`}
+                                            onClick={() => setPreviewProfileId(profile.profile_id)}
+                                        >
+                                            <div className={styles.profileCardHeader}>
+                                                <div>
+                                                    <div className={styles.profileName}>{profile.display_name}</div>
+                                                    <div className={styles.profileMeta}>
+                                                        {profile.source_type.replace('_', ' ')} · {profile.default_cte_type} · {Math.round(profile.confidence * 100)}%
+                                                    </div>
+                                                </div>
+                                                <span className={styles.metaBadge}>{profile.status}</span>
+                                            </div>
+                                            {profile.supplier_name && (
+                                                <p className={styles.registryCopy}>{profile.supplier_name}</p>
+                                            )}
+                                            <div className={styles.mappingChips}>
+                                                {Object.entries(profile.field_mapping).slice(0, 4).map(([target, source]) => (
+                                                    <span key={target} className={styles.mappingChip}>
+                                                        {source}{' -> '}{target}
+                                                    </span>
+                                                ))}
+                                            </div>
+                                        </button>
+                                    ))}
+                                    {profilesStatus === 'loading' && <div className={styles.emptyBox}>Loading saved profiles...</div>}
+                                    {profilesStatus === 'idle' && profiles.length === 0 && (
+                                        <div className={styles.emptyBox}>
+                                            No profiles yet. Save a supplier mapping to make future portal invites faster.
+                                        </div>
+                                    )}
+                                </div>
+
+                                <div className={styles.previewPanel}>
+                                    <div className={styles.connectorHeading}>
+                                        <Braces className={styles.inlineIcon} />
+                                        <h3 className={styles.pathTitle}>Validate-only preview</h3>
+                                    </div>
+                                    <textarea
+                                        value={previewEventText}
+                                        onChange={(event) => setPreviewEventText(event.target.value)}
+                                        className={styles.codeTextarea}
+                                        rows={9}
+                                    />
+                                    <Button
+                                        variant="outline"
+                                        className={styles.secondaryAction}
+                                        onClick={handlePreviewProfile}
+                                        disabled={!previewProfileId || previewing}
+                                    >
+                                        <Play className={styles.buttonIcon} />
+                                        {previewing ? 'Previewing...' : 'Preview mapping'}
+                                    </Button>
+                                    {previewError && <div className={styles.errorBox}>{previewError}</div>}
+                                    {previewResult && (
+                                        <div className={styles.previewResult}>
+                                            <div className={styles.profileCardHeader}>
+                                                <span>{previewResult.mapped} event{previewResult.mapped === 1 ? '' : 's'} mapped</span>
+                                                <span>{Object.keys(previewResult.missing_fields).length} with missing fields</span>
+                                            </div>
+                                            <pre>{JSON.stringify(previewResult.events[0] ?? {}, null, 2)}</pre>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </section>

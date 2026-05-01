@@ -33,6 +33,10 @@ import type {
   SupplierFDAExportPreviewResponse,
   SupplierTLC,
   SupplierTLCUpsertRequest,
+  CreateIntegrationProfileRequest,
+  IntegrationProfile,
+  IntegrationProfilesResponse,
+  MappingPreviewResponse,
   AnalysisSummary,
   DiscoveryQueueItem,
   DiscoveryActionResponse,
@@ -730,6 +734,7 @@ class APIClient {
     supplier_name: string;
     supplier_email?: string;
     expires_days?: number;
+    integration_profile_id?: string;
   }): Promise<PortalLink> {
     const tenantId = this.currentTenantId;
     if (!tenantId) throw new Error('No tenant selected');
@@ -738,12 +743,46 @@ class APIClient {
       supplier_name: request.supplier_name,
       supplier_email: request.supplier_email,
       expires_days: request.expires_days || 90,
+      integration_profile_id: request.integration_profile_id,
     });
     return data;
   }
 
   async revokePortalLink(portalId: string): Promise<void> {
     await this.ingestionClient.patch(`/api/v1/portal/links/${portalId}/revoke`);
+  }
+
+  // Supplier Integration Profiles — saved field mappings for portal and file feeds
+  async listIntegrationProfiles(): Promise<IntegrationProfilesResponse> {
+    const tenantId = this.currentTenantId;
+    if (!tenantId) throw new Error('No tenant selected');
+    const { data } = await this.ingestionClient.get<IntegrationProfilesResponse>(
+      `/api/v1/integrations/profiles/${tenantId}`,
+    );
+    return data;
+  }
+
+  async createIntegrationProfile(request: CreateIntegrationProfileRequest): Promise<IntegrationProfile> {
+    const tenantId = this.currentTenantId;
+    if (!tenantId) throw new Error('No tenant selected');
+    const { data } = await this.ingestionClient.post<IntegrationProfile>(
+      `/api/v1/integrations/profiles/${tenantId}`,
+      request,
+    );
+    return data;
+  }
+
+  async previewIntegrationProfile(
+    profileId: string,
+    events: Record<string, unknown>[],
+  ): Promise<MappingPreviewResponse> {
+    const tenantId = this.currentTenantId;
+    if (!tenantId) throw new Error('No tenant selected');
+    const { data } = await this.ingestionClient.post<MappingPreviewResponse>(
+      `/api/v1/integrations/profiles/${tenantId}/${profileId}/preview`,
+      { events },
+    );
+    return data;
   }
 
   async downloadSupplierBulkUploadTemplate(

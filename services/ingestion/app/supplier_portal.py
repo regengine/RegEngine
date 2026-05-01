@@ -534,19 +534,35 @@ async def list_portal_links(
     db = get_db_safe()
     if db:
         try:
-            rows = db.execute(
-                # nosemgrep: avoid-sqlalchemy-text — parameterized with :param
-                text("""
-                    SELECT id, tenant_id, supplier_name, link_token, status, created_at, expires_at
-                    FROM fsma.tenant_portal_links
-                    WHERE tenant_id = :tenant_id
-                    ORDER BY created_at DESC
-                """),
-                {"tenant_id": tenant_id},
-            ).fetchall()
+            try:
+                rows = db.execute(
+                    # nosemgrep: avoid-sqlalchemy-text — parameterized with :param
+                    text("""
+                        SELECT id, tenant_id, supplier_name, link_token, status, created_at, expires_at,
+                               integration_profile_id
+                        FROM fsma.tenant_portal_links
+                        WHERE tenant_id = :tenant_id
+                        ORDER BY created_at DESC
+                    """),
+                    {"tenant_id": tenant_id},
+                ).fetchall()
+            except Exception as exc:
+                if "integration_profile_id" not in str(exc):
+                    raise
+                rows = db.execute(
+                    # nosemgrep: avoid-sqlalchemy-text — parameterized with :param
+                    text("""
+                        SELECT id, tenant_id, supplier_name, link_token, status, created_at, expires_at
+                        FROM fsma.tenant_portal_links
+                        WHERE tenant_id = :tenant_id
+                        ORDER BY created_at DESC
+                    """),
+                    {"tenant_id": tenant_id},
+                ).fetchall()
             for row in rows:
                 expires_at = row[6]
                 status = row[4]
+                integration_profile_id = row[7] if len(row) > 7 else None
                 # Auto-expire links past their expiry
                 if status == "active" and expires_at and expires_at <= datetime.now(timezone.utc):
                     status = "expired"
@@ -558,7 +574,7 @@ async def list_portal_links(
                     "status": status,
                     "created_at": row[5].isoformat() if row[5] else None,
                     "expires_at": expires_at.isoformat() if expires_at else None,
-                    "integration_profile_id": None,
+                    "integration_profile_id": str(integration_profile_id) if integration_profile_id else None,
                 })
         except Exception as exc:
             logger.warning("list_portal_links_db_failed error=%s", str(exc))

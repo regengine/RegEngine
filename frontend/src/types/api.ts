@@ -420,6 +420,51 @@ export interface PortalLink {
     created_at: string | null;
     expires_at: string | null;
     allowed_cte_types?: string[];
+    integration_profile_id?: string | null;
+}
+
+export type IntegrationProfileSourceType = 'csv' | 'edi' | 'epcis' | 'api' | 'webhook' | 'spreadsheet' | 'supplier_portal';
+export type IntegrationProfileStatus = 'draft' | 'active' | 'archived';
+
+export interface IntegrationProfile {
+    profile_id: string;
+    tenant_id: string;
+    display_name: string;
+    source_type: IntegrationProfileSourceType;
+    field_mapping: Record<string, string>;
+    default_cte_type: string;
+    status: IntegrationProfileStatus;
+    confidence: number;
+    supplier_id?: string | null;
+    supplier_name?: string | null;
+    notes?: string | null;
+    created_at: string;
+    updated_at: string;
+    last_used_at?: string | null;
+}
+
+export interface IntegrationProfilesResponse {
+    profiles: IntegrationProfile[];
+    total: number;
+}
+
+export interface CreateIntegrationProfileRequest {
+    display_name: string;
+    source_type: IntegrationProfileSourceType;
+    field_mapping: Record<string, string>;
+    default_cte_type: string;
+    status?: IntegrationProfileStatus;
+    confidence?: number;
+    supplier_id?: string;
+    supplier_name?: string;
+    notes?: string;
+}
+
+export interface MappingPreviewResponse {
+    profile_id: string;
+    mapped: number;
+    missing_fields: Record<string, string[]>;
+    events: Record<string, unknown>[];
 }
 
 export interface LoginResponse {
