@@ -71,6 +71,8 @@ def _evaluate_event_stateless(
         else:
             try:
                 result = evaluator(event_data, logic, rule)
+                if result.result == "fail" and result.severity == "warning":
+                    result.result = "warn"
             except Exception as e:
                 # #1354 — evaluator crashes must not fail-open as "skip".
                 result = RuleEvaluationResult(

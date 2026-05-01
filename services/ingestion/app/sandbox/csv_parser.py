@@ -228,6 +228,26 @@ _KDE_FIELD_ALIASES = {
     # Other
     "temperature": "temperature",
     "temp": "temperature",
+    "temp_c": "temperature_celsius",
+    "temp_°c": "temperature_celsius",
+    "temp_celsius": "temperature_celsius",
+    "temperature_c": "temperature_celsius",
+    "temperature_°c": "temperature_celsius",
+    "temperature_celsius": "temperature_celsius",
+    "cooling_temperature_c": "cooling_temperature_celsius",
+    "cooling_temperature_°c": "cooling_temperature_celsius",
+    "cooling_temperature_celsius": "cooling_temperature_celsius",
+    "temp_f": "temperature_fahrenheit",
+    "temp_°f": "temperature_fahrenheit",
+    "temp_fahrenheit": "temperature_fahrenheit",
+    "temperature_f": "temperature_fahrenheit",
+    "temperature_°f": "temperature_fahrenheit",
+    "temperature_fahrenheit": "temperature_fahrenheit",
+    "cooling_temperature_f": "cooling_temperature_fahrenheit",
+    "cooling_temperature_°f": "cooling_temperature_fahrenheit",
+    "cooling_temperature_fahrenheit": "cooling_temperature_fahrenheit",
+    "temperature_unit": "temperature_unit",
+    "temp_unit": "temperature_unit",
     "field_name": "field_name",
     "field": "field_name",
     "growing_area": "field_name",
@@ -285,6 +305,33 @@ _CTE_TYPE_ALIASES = {
     "manufacturing": "transformation",
     "t": "transformation",
 }
+
+_FTL_PRODUCT_KEYWORDS: tuple[tuple[str, str], ...] = (
+    ("spinach", "Leafy Greens"),
+    ("romaine", "Leafy Greens"),
+    ("rm hrts", "Leafy Greens"),
+    ("lettuce", "Leafy Greens"),
+    ("kale", "Leafy Greens"),
+    ("chard", "Leafy Greens"),
+    ("greens", "Leafy Greens"),
+    ("cilantro", "Herbs"),
+    ("parsley", "Herbs"),
+    ("basil", "Herbs"),
+    ("mint", "Herbs"),
+    ("tomato", "Fresh Tomatoes"),
+    ("pepper", "Fresh Peppers"),
+    ("cucumber", "Fresh Cucumbers"),
+    ("melon", "Fresh Melons"),
+    ("sprout", "Fresh Sprouts"),
+)
+
+
+def _infer_ftl_category(product_description: str) -> str | None:
+    product = (product_description or "").lower()
+    return next(
+        (category for keyword, category in _FTL_PRODUCT_KEYWORDS if keyword in product),
+        None,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -513,6 +560,9 @@ def _normalize_for_rules(event: Dict[str, Any]) -> Dict[str, Any]:
     """
     kdes = dict(event.get("kdes", {}))
     event_type = event.get("cte_type", "")
+    product_description = event.get("product_description", "")
+    inferred_ftl_category = _infer_ftl_category(product_description)
+    product = {"category": inferred_ftl_category} if inferred_ftl_category else {}
 
     # Build facility references from available data
     from_facility = (
@@ -536,7 +586,10 @@ def _normalize_for_rules(event: Dict[str, Any]) -> Dict[str, Any]:
         "event_id": str(uuid4()),
         "event_type": event_type,
         "traceability_lot_code": event.get("traceability_lot_code", ""),
-        "product_reference": event.get("product_description", ""),
+        "product_reference": product_description,
+        "product": product,
+        "ftl_covered": True if inferred_ftl_category else event.get("ftl_covered"),
+        "product_category": inferred_ftl_category or event.get("product_category"),
         "quantity": event.get("quantity"),
         "unit_of_measure": event.get("unit_of_measure", ""),
         "event_timestamp": event.get("timestamp", ""),

@@ -36,9 +36,9 @@ from services.shared.rules.seeds import FSMA_RULE_SEEDS
 _CTE_KDE_FLOORS: dict[str, int] = {
     # 21 CFR §1.1327 — Harvest Date, Farm Location, Commodity+Variety
     "harvesting": 3,
-    # §1.1330 — Cooling Date, Cooling Location, Temperature Reading,
-    # Temperature Within Cold-Chain Window (new, #1364), Duration (new, #1364)
-    "cooling": 5,
+    # §1.1325 — Cooling Date, Cooling Location. Temperature thresholds are
+    # operational checks, not FSMA 204 KDE presence blockers.
+    "cooling": 2,
     # §1.1335 — Packing Date, Harvester Business Name, Packing Location
     # (new), Harvest Location Ref (new)
     "initial_packing": 4,
@@ -96,7 +96,7 @@ def test_no_cte_has_zero_per_cte_rules():
 
 def test_citation_references_are_21_cfr_and_not_receiving_only():
     """Sanity check: the new non-receiving seed rules should cite
-    §1.1325 / §1.1330 / §1.1335 / §1.1340 / §1.1350, not §1.1345."""
+    §1.1325 / §1.1335 / §1.1340 / §1.1350, not receiving-only citations."""
     non_receiving_citations: Counter[str] = Counter()
     for seed in FSMA_RULE_SEEDS:
         if seed.get("category") != "kde_presence":
@@ -111,7 +111,6 @@ def test_citation_references_are_21_cfr_and_not_receiving_only():
         for section in (
             "\u00a71.1325",  # first_land_based_receiving
             "\u00a71.1327",  # harvesting
-            "\u00a71.1330",  # cooling
             "\u00a71.1335",  # initial_packing
             "\u00a71.1340",  # shipping
             "\u00a71.1350",  # transformation
@@ -125,7 +124,6 @@ def test_citation_references_are_21_cfr_and_not_receiving_only():
         s for s in (
             "\u00a71.1325",
             "\u00a71.1327",
-            "\u00a71.1330",
             "\u00a71.1335",
             "\u00a71.1340",
             "\u00a71.1350",

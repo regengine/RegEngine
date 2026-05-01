@@ -143,6 +143,10 @@ async def sandbox_evaluate(payload: SandboxRequest, request: Request) -> Sandbox
         # Step 1: KDE validation
         kde_errors = _validate_kdes(raw_event)
         total_kde_errors += len(kde_errors)
+        for error in kde_errors:
+            all_blocking_reasons.append(
+                f"Event {i+1} ({raw_event.get('cte_type', '?')}): {error}"
+            )
 
         # Step 2: Stateless per-event rules evaluation
         summary = _evaluate_event_stateless(
@@ -190,7 +194,7 @@ async def sandbox_evaluate(payload: SandboxRequest, request: Request) -> Sandbox
             kde_errors.extend(dup_warnings_by_index[i])
             total_kde_errors += len(dup_warnings_by_index[i])
 
-        is_compliant = len(kde_errors) == 0 and summary.compliant
+        is_compliant = len(kde_errors) == 0 and summary.compliant is True
         if is_compliant:
             compliant_count += 1
 

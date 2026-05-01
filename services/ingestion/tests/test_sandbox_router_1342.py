@@ -313,6 +313,7 @@ class TestEvaluateRelationalMerge:
         monkeypatch.setattr(sandbox_router_mod, "_normalize_for_rules", _norm)
         monkeypatch.setattr(sandbox_router_mod, "_evaluate_relational_in_memory",
                             lambda evs: relational_results)
+        monkeypatch.setattr(sandbox_router_mod, "_validate_kdes", lambda ev: [])
 
     def test_pass_result_increments_passed(self, client, monkeypatch):
         self._install_stubs(monkeypatch, relational_results={
@@ -455,7 +456,9 @@ class TestEvaluateRelationalMerge:
         body = resp.json()
         assert body["events"][0]["kde_errors"]
         assert body["total_kde_errors"] > 0
-        # No critical failures but non-compliant due to KDE errors
+        assert body["submission_blocked"] is True
+        assert any("Missing required KDE" in reason for reason in body["blocking_reasons"])
+        # Non-compliant due to import-blocking KDE errors.
         assert body["events"][0]["compliant"] is False
 
 

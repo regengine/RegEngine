@@ -5,7 +5,7 @@ seed rule ``Cooling: Temperature Reading Required`` only checked that
 *some* temperature field was present. A tenant could record
 ``kdes.cooling_temperature = 72`` (i.e. room-temperature °F) and the
 rule engine would stamp the event compliant — exactly the opposite of
-what 21 CFR §1.1330(b)(5) calls for.
+what operational cold-chain checks are meant to catch.
 
 After:
 - ``shared.rules.uom`` exposes ``fahrenheit_to_celsius``,
@@ -15,11 +15,9 @@ After:
 - ``shared.rules.evaluators.stateless`` adds ``evaluate_numeric_range``
   registered as ``"numeric_range"`` in ``EVALUATORS``. Missing values
   fail (not skip) so blank fields don't fail-open.
-- ``shared.rules.seeds.FSMA_RULE_SEEDS`` adds two rules for COOLING:
+- ``shared.rules.seeds.FSMA_RULE_SEEDS`` adds an operational COOLING rule:
   - ``Cooling: Temperature Within Cold-Chain Window`` — numeric_range
     0–5 °C, °F readings normalized before comparison.
-  - ``Cooling: Duration Required`` — presence of cooling duration /
-    start time, so FDA can reconstruct the temperature-time combination.
 
 Pure-Python; no DB, no live evaluator machinery beyond the bits under
 test.
@@ -65,7 +63,7 @@ def _make_rule(**overrides) -> RuleDefinition:
         severity="critical",
         category="kde_presence",
         applicability_conditions={"cte_types": ["cooling"], "ftl_scope": ["ALL"]},
-        citation_reference="21 CFR §1.1330(b)(5)",
+        citation_reference="Operational cold-chain check",
         effective_date=date(2026, 1, 1),
         retired_date=None,
         evaluation_logic={
@@ -188,13 +186,20 @@ class TestResolveTemperatureReading_Issue1364:
         assert value_c == pytest.approx(5.0, abs=1e-6)
         assert source == "temperature"
 
-    def test_generic_temperature_no_unit_defaults_to_fahrenheit(self):
-        """US produce/seafood convention — operators entering a bare number
-        almost always mean °F. Document the policy and hold it here."""
+    def test_generic_temperature_no_unit_infers_fahrenheit_for_large_values(self):
+        """Receiving/shipping logs often enter bare values like 41 as °F."""
         got = uom.resolve_temperature_reading({"temperature": 41})
         assert got is not None
         value_c, source = got
         assert value_c == pytest.approx(5.0, abs=1e-6)
+        assert source == "temperature"
+
+    def test_generic_temperature_no_unit_infers_celsius_for_small_decimals(self):
+        """Cooler ERP exports often enter bare values like 1.8 as °C."""
+        got = uom.resolve_temperature_reading({"temperature": 1.8})
+        assert got is not None
+        value_c, source = got
+        assert value_c == pytest.approx(1.8, abs=1e-6)
         assert source == "temperature"
 
     def test_no_temperature_field_returns_none(self):
@@ -353,19 +358,15 @@ class TestCoolingSeedRules_Issue1364:
             "the temperature is in the cold-chain window — #1364"
         )
 
-    def test_cooling_temperature_numeric_range_rule_is_severe_and_cites_1330(self):
+    def test_cooling_temperature_numeric_range_rule_is_operational_warning(self):
         seeds = self._cooling_seeds()
         numeric = [
             s for s in seeds
             if s["evaluation_logic"].get("type") == "numeric_range"
         ][0]
-        assert numeric["severity"] == "critical", (
-            "Out-of-range cooling temperature is a compliance failure, not a "
-            "warning — this is the crux of #1364."
-        )
-        assert "1.1330" in (numeric.get("citation_reference") or ""), (
-            "Cold-chain range rule must cite 21 CFR §1.1330"
-        )
+        assert numeric["severity"] == "warning"
+        assert numeric["category"] == "operational_quality"
+        assert numeric["citation_reference"] == "Operational cold-chain check"
 
     def test_cooling_temperature_range_bounds_match_fda_cold_chain(self):
         seeds = self._cooling_seeds()
@@ -381,24 +382,9 @@ class TestCoolingSeedRules_Issue1364:
         assert params.get("max") == pytest.approx(5.0)
         assert (params.get("unit") or "").upper() == "C"
 
-    def test_cooling_duration_presence_rule_exists(self):
+    def test_cooling_duration_is_not_a_fsma_kde_blocker(self):
         seeds = self._cooling_seeds()
-        has_duration = any(
-            "duration" in s["title"].lower()
-            for s in seeds
-        )
-        assert has_duration, (
-            "COOLING CTE must require cooling_duration presence so the "
-            "temperature-time combination can be reconstructed — #1364"
-        )
-
-    def test_cooling_duration_rule_cites_1330(self):
-        seeds = self._cooling_seeds()
-        duration_rule = next(
-            s for s in seeds if "duration" in s["title"].lower()
-        )
-        assert "1.1330" in (duration_rule.get("citation_reference") or "")
-        assert duration_rule["severity"] == "critical"
+        assert not any("duration" in s["title"].lower() for s in seeds)
 
 
 # ===========================================================================
@@ -447,7 +433,7 @@ class TestCoolingRuleEndToEnd_Issue1364:
         }
         res = EVALUATORS["numeric_range"](event, rule.evaluation_logic, rule)
         assert res.result == "fail"
-        assert res.severity == "critical"
+        assert res.severity == "warning"
 
     def test_seeded_rule_passes_on_in_range_celsius(self):
         rule = self._seed_to_rule(self._numeric_cooling_seed())
