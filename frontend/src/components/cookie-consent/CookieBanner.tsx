@@ -96,71 +96,63 @@ export function CookieBanner({ enableAnalytics }: CookieBannerProps) {
           role="dialog"
           aria-modal="false"
           aria-label="Cookie consent"
-          className="fixed bottom-2 left-2 right-2 z-[9999] pointer-events-none sm:bottom-4 sm:left-auto sm:right-4"
+          className="fixed bottom-3 left-3 right-3 z-[var(--re-z-toast)] pointer-events-none sm:bottom-4 sm:left-auto sm:right-4"
         >
           <div
-            className="pointer-events-auto w-full rounded-xl border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] shadow-[0_8px_32px_rgba(0,0,0,0.22)] sm:max-w-[620px]"
+            className="pointer-events-auto w-full rounded-lg border border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)] shadow-[0_10px_26px_rgba(16,24,40,0.16)] sm:max-w-[520px]"
           >
-            <div className="flex items-start gap-2.5 p-3 sm:items-center sm:gap-3 sm:p-3">
+            <div className="grid gap-2 p-3 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:items-center sm:gap-3">
               {/* Icon */}
-              <div className="flex-shrink-0 flex h-7 w-7 items-center justify-center rounded-lg border border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)] sm:h-8 sm:w-8">
-                <Cookie className="h-3.5 w-3.5 text-[var(--re-brand)] sm:h-4 sm:w-4" />
+              <div className="hidden h-8 w-8 flex-shrink-0 items-center justify-center rounded-md border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] sm:flex">
+                <Cookie className="h-4 w-4 text-[var(--re-brand)]" />
               </div>
 
               {/* Content */}
-              <div className="flex-1 min-w-0 sm:flex sm:items-center sm:gap-4">
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-start justify-between gap-2 mb-0.5 sm:mb-1">
-                    <h2 className="text-sm font-semibold text-[var(--re-text-primary)]">
-                      We use cookies
-                    </h2>
-                    {/* Dismiss button — only shown when a preference is already stored */}
-                    {consent !== null && consent !== 'loading' && (
-                      <button
-                        onClick={handleDismiss}
-                        aria-label="Close cookie banner"
-                        className="flex-shrink-0 text-[var(--re-text-muted)] hover:text-[var(--re-text-primary)] transition-colors"
-                      >
-                        <X className="h-4 w-4" />
-                      </button>
-                    )}
-                  </div>
-
-                  <p className="mb-2 text-[11px] leading-snug text-[var(--re-text-muted)] sm:mb-0 sm:text-xs sm:leading-relaxed">
-                    <span className="sm:hidden">
-                      Essential sessions. Analytics only if accepted.
-                    </span>
-                    <span className="hidden sm:inline">
-                      Essential cookies keep sessions working. Analytics only run if you accept, with no
-                      advertising tracking. Change this anytime in the footer.
-                    </span>{' '}
-                    <Link
-                      href="/privacy"
-                      className="text-[var(--re-brand)] underline hover:opacity-90"
+              <div className="min-w-0">
+                <div className="mb-0.5 flex items-start justify-between gap-2">
+                  <h2 className="text-sm font-semibold leading-5 text-[var(--re-text-primary)]">
+                    We use cookies
+                  </h2>
+                  {/* Dismiss button — only shown when a preference is already stored */}
+                  {consent !== null && consent !== 'loading' && (
+                    <button
+                      onClick={handleDismiss}
+                      aria-label="Close cookie banner"
+                      className="flex-shrink-0 text-[var(--re-text-muted)] transition-colors hover:text-[var(--re-text-primary)]"
                     >
-                      Privacy Policy
-                    </Link>
-                    .
-                  </p>
+                      <X className="h-4 w-4" />
+                    </button>
+                  )}
                 </div>
 
-                {/* Buttons — Accept first, Decline second (GDPR: no hierarchy via styling) */}
-                <div className="grid grid-cols-2 gap-2 sm:w-[260px] sm:flex-shrink-0">
-                  <button
-                    onClick={handleAccept}
-                    className="inline-flex min-h-8 items-center justify-center rounded-lg bg-[var(--re-brand)] px-2 py-1.5 text-xs font-semibold text-white transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--re-brand)] sm:min-h-9 sm:px-3 sm:py-2"
+                <p className="text-[11px] leading-snug text-[var(--re-text-muted)] sm:text-xs sm:leading-relaxed">
+                  Essential sessions. Analytics only if accepted.{' '}
+                  <Link
+                    href="/privacy"
+                    className="text-[var(--re-brand)] underline hover:opacity-90"
                   >
-                    <span className="sm:hidden">Accept</span>
-                    <span className="hidden sm:inline">Accept analytics</span>
-                  </button>
-                  <button
-                    onClick={handleDecline}
-                    className="inline-flex min-h-8 items-center justify-center rounded-lg border border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)] px-2 py-1.5 text-xs font-semibold text-[var(--re-text-secondary)] transition-colors hover:border-[var(--re-text-muted)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--re-brand)] sm:min-h-9 sm:px-3 sm:py-2"
-                  >
-                    <span className="sm:hidden">Essential</span>
-                    <span className="hidden sm:inline">Essential only</span>
-                  </button>
-                </div>
+                    Privacy Policy
+                  </Link>
+                  .
+                </p>
+              </div>
+
+              {/* Buttons — Accept first, Decline second (GDPR: no hierarchy via styling) */}
+              <div className="grid grid-cols-2 gap-2 sm:w-[230px] sm:flex-shrink-0">
+                <button
+                  onClick={handleAccept}
+                  className="inline-flex min-h-8 items-center justify-center rounded-md bg-[var(--re-brand)] px-2 py-1.5 text-xs font-semibold text-white transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--re-brand)] sm:min-h-9 sm:px-3 sm:py-2"
+                >
+                  <span className="sm:hidden">Accept</span>
+                  <span className="hidden sm:inline">Accept analytics</span>
+                </button>
+                <button
+                  onClick={handleDecline}
+                  className="inline-flex min-h-8 items-center justify-center rounded-md border border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)] px-2 py-1.5 text-xs font-semibold text-[var(--re-text-secondary)] transition-colors hover:border-[var(--re-text-muted)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--re-brand)] sm:min-h-9 sm:px-3 sm:py-2"
+                >
+                  <span className="sm:hidden">Essential</span>
+                  <span className="hidden sm:inline">Essential only</span>
+                </button>
               </div>
             </div>
           </div>

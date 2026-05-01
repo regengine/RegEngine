@@ -76,38 +76,60 @@ export default function DevelopersPage() {
     return (
         <div className="min-h-screen bg-[var(--re-surface-base)] text-[var(--re-text-secondary)]">
             {/* ═══ HERO ═══ */}
-            <section className="relative z-[2] max-w-[800px] mx-auto pt-14 sm:pt-20 px-4 sm:px-6 pb-12 sm:pb-16 text-center">
-                <Badge className="mb-5 bg-[var(--re-brand-muted)] text-[var(--re-brand)] border-[var(--re-brand)]/20">
-                    <Terminal className="w-3.5 h-3.5 mr-1.5" />
-                    Developer Platform
-                </Badge>
-                <h1 className="font-display text-3xl sm:text-4xl md:text-5xl font-bold text-re-text-primary leading-tight mb-5">
-                    Build on{' '}
-                    <span className="text-re-brand">RegEngine</span>
-                </h1>
-                <p className="text-lg text-re-text-muted max-w-xl mx-auto leading-relaxed mb-8">
-                    The FSMA 204 compliance API. Record critical tracking events,
-                    validate against 25+ rules, resolve identities, and export
-                    FDA-ready packages &mdash; all through a single REST interface.
-                </p>
-                <div className="flex gap-3 justify-center flex-wrap">
-                    <Link href="/alpha">
-                        <Button className="bg-[var(--re-brand)] hover:bg-[var(--re-brand-dark)] text-white font-semibold px-6 shadow-[0_4px_16px_var(--re-brand-muted)] hover:-translate-y-0.5 transition-all">
-                            Get API Access
-                            <ArrowRight className="ml-2 w-4 h-4" />
-                        </Button>
-                    </Link>
-                    <Link href="/docs">
-                        <Button variant="outline" className="border-[var(--re-surface-border)] text-re-text-secondary hover:border-[var(--re-brand)]/30 px-6">
-                            <BookOpen className="mr-2 w-4 h-4" />
-                            Full Documentation
-                        </Button>
-                    </Link>
+            <section className="relative z-[2] mx-auto grid max-w-[1120px] items-start gap-8 px-4 pb-10 pt-12 sm:px-6 sm:pb-14 sm:pt-16 lg:grid-cols-[0.82fr_1fr]">
+                <div>
+                    <Badge className="mb-5 bg-[var(--re-brand-muted)] text-[var(--re-brand)] border-[var(--re-brand)]/20">
+                        <Terminal className="w-3.5 h-3.5 mr-1.5" />
+                        Developer Platform
+                    </Badge>
+                    <h1 className="re-hero-title">
+                        Build on RegEngine
+                    </h1>
+                    <p className="re-hero-copy mt-5">
+                        The FSMA 204 compliance API. Record critical tracking events,
+                        validate against 25+ rules, resolve identities, and export
+                        FDA-ready packages through a single REST interface.
+                    </p>
+                    <div className="mt-8 flex flex-wrap gap-3">
+                        <Link href="/alpha">
+                            <Button className="bg-[var(--re-brand)] hover:bg-[var(--re-brand-dark)] text-white font-semibold px-6 shadow-[0_4px_16px_var(--re-brand-muted)] hover:-translate-y-0.5 transition-all">
+                                Get API Access
+                                <ArrowRight className="ml-2 w-4 h-4" />
+                            </Button>
+                        </Link>
+                        <Link href="/docs">
+                            <Button variant="outline" className="border-[var(--re-surface-border)] text-re-text-secondary hover:border-[var(--re-brand)]/30 px-6">
+                                <BookOpen className="mr-2 w-4 h-4" />
+                                Full Documentation
+                            </Button>
+                        </Link>
+                    </div>
                 </div>
+
+                <aside className="re-panel overflow-hidden">
+                    <div className="border-b border-[var(--re-surface-border)] px-4 py-3">
+                        <p className="font-mono text-[11px] font-semibold uppercase text-[var(--re-text-muted)]">
+                            Integration path
+                        </p>
+                    </div>
+                    {[
+                        ['Ingest', 'POST critical tracking events with tenant scope.'],
+                        ['Validate', 'Run KDE, TLC, and rule checks before evidence commit.'],
+                        ['Export', 'Generate FDA-ready packages from verified records.'],
+                    ].map(([label, detail], index) => (
+                        <div key={label} className="grid grid-cols-[32px_110px_1fr] gap-3 border-b border-[var(--re-surface-border)] px-4 py-4 last:border-b-0">
+                            <span className="flex h-7 w-7 items-center justify-center rounded-md bg-[var(--re-brand-muted)] font-mono text-xs font-semibold text-[var(--re-brand)]">
+                                {index + 1}
+                            </span>
+                            <span className="font-semibold text-[var(--re-text-primary)]">{label}</span>
+                            <span className="text-sm leading-6 text-[var(--re-text-muted)]">{detail}</span>
+                        </div>
+                    ))}
+                </aside>
             </section>
 
             {/* ═══ QUICK START CURL ═══ */}
-            <section className="relative z-[2] max-w-[900px] mx-auto px-4 sm:px-6 pb-12 sm:pb-16">
+            <section className="relative z-[2] max-w-[900px] mx-auto px-4 sm:px-6 pb-10 sm:pb-14">
                 <h2 className="font-display text-2xl font-bold text-re-text-primary mb-3 text-center">Quick start</h2>
                 <p className="text-sm text-re-text-muted text-center mb-8 max-w-lg mx-auto">
                     Record your first critical tracking event in one request.
@@ -120,7 +142,7 @@ export default function DevelopersPage() {
                         <Terminal className="w-3.5 h-3.5 text-[var(--re-brand)]" />
                         <span className="text-xs font-mono font-semibold text-re-text-muted">bash</span>
                     </div>
-                    <pre className="bg-[var(--re-surface-card)] p-5 overflow-x-auto text-[13px] leading-relaxed font-mono text-re-text-secondary">
+                    <pre className="bg-[var(--re-surface-card)] p-4 overflow-x-auto text-[11px] leading-relaxed font-mono text-re-text-secondary sm:p-5 sm:text-[13px]">
                         <code>{curlSnippet}</code>
                     </pre>
                 </div>

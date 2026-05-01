@@ -48,17 +48,17 @@ export function ToolsLandingClient() {
 
     return (
         <main className="re-page min-h-screen text-[var(--re-text-secondary)]">
-            <section className="re-container grid gap-10 pb-10 pt-12 md:grid-cols-[0.75fr_1fr] md:pb-14 md:pt-18">
+            <section className="re-container grid items-start gap-10 pb-10 pt-12 md:grid-cols-[0.75fr_1fr] md:pb-12 md:pt-16">
                 <div>
                     <p className="re-label mb-5">Tools</p>
-                    <h1 className="max-w-[620px] text-[clamp(40px,6vw,70px)] font-semibold leading-[0.98]">
+                    <h1 className="re-hero-title max-w-[620px]">
                         Instruments for finding traceability gaps.
                     </h1>
-                    <p className="mt-6 max-w-[560px] text-[17px] leading-7 text-[var(--re-text-muted)]">
+                    <p className="re-hero-copy mt-6">
                         Small utilities for checking product scope, data completeness, recall readiness, and evidence export before the work reaches production.
                     </p>
                 </div>
-                <div className="re-panel overflow-hidden">
+                <div className="re-panel self-start overflow-hidden">
                     <table className="re-rule-table">
                         <tbody>
                             {[

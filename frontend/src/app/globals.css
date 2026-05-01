@@ -1127,8 +1127,8 @@ html.a11y-cursor-large input[type="submit"] {
 }
 
 .re-section {
-    padding-top: clamp(48px, 7vw, 88px) !important;
-    padding-bottom: clamp(48px, 7vw, 88px) !important;
+    padding-top: clamp(36px, 5vw, 72px) !important;
+    padding-bottom: clamp(36px, 5vw, 72px) !important;
     border-top: 1px solid var(--re-surface-border) !important;
 }
 
@@ -1204,6 +1204,22 @@ html.a11y-cursor-large input[type="submit"] {
     font-size: 11px;
     line-height: 1.3;
     text-transform: uppercase;
+}
+
+.re-hero-title {
+    max-width: 720px;
+    color: var(--re-text-primary);
+    font-size: clamp(36px, 4.8vw, 58px);
+    font-weight: 650;
+    letter-spacing: 0;
+    line-height: 1;
+}
+
+.re-hero-copy {
+    max-width: 590px;
+    color: var(--re-text-muted);
+    font-size: clamp(16px, 1.5vw, 18px);
+    line-height: 1.65;
 }
 
 .re-signal {
@@ -1518,6 +1534,22 @@ body,
     border-radius: var(--re-radius-lg) !important;
     background-color: var(--re-surface-elevated) !important;
     box-shadow: var(--re-shadow-sm) !important;
+}
+
+@media (max-width: 640px) {
+    .re-container {
+        width: min(100%, calc(100vw - 32px)) !important;
+    }
+
+    .re-hero-title {
+        font-size: clamp(34px, 10.5vw, 44px);
+        line-height: 1.02;
+    }
+
+    .re-section {
+        padding-top: 34px !important;
+        padding-bottom: 34px !important;
+    }
 }
 
 .re-panel:hover,
