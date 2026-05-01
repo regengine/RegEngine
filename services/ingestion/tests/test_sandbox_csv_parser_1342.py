@@ -255,6 +255,12 @@ class TestParseCsvKdeAliases:
         events = _parse_csv_to_events(csv)
         assert events[0]["kdes"]["temperature"] == "34"
 
+    def test_temperature_unit_header_aliases(self):
+        csv = "cte_type,tlc,Temp °F,Temp C\ncooling,LOT-1,34,1.8\n"
+        events = _parse_csv_to_events(csv)
+        assert events[0]["kdes"]["temperature_fahrenheit"] == "34"
+        assert events[0]["kdes"]["temperature_celsius"] == "1.8"
+
     def test_harvester_alias(self):
         csv = "cte_type,tlc,grower\nharvesting,LOT-1,Sunny Farms\n"
         events = _parse_csv_to_events(csv)

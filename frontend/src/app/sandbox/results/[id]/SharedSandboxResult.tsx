@@ -213,7 +213,7 @@ export function SharedSandboxResult({ result, shareId }: { result: SandboxResult
                 <div className="flex items-center gap-2 mb-2">
                   <ShieldAlert className="w-5 h-5 text-re-danger" />
                   <span className="text-[0.8rem] font-semibold text-re-danger">
-                    TEST RUN BLOCKED — {result.blocking_reasons.length} critical defect{result.blocking_reasons.length !== 1 ? 's' : ''}
+                    TEST RUN NEEDS CORRECTION — {result.blocking_reasons.length} blocker{result.blocking_reasons.length !== 1 ? 's' : ''}
                   </span>
                 </div>
                 <ul className="space-y-1">

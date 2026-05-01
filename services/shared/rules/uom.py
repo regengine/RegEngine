@@ -5,10 +5,8 @@ Weight: converts common food industry units to a canonical base unit (lbs).
 Used by mass balance evaluator to compare quantities across different UOMs.
 
 Temperature (#1364): converts Fahrenheit↔Celsius so numeric-range evaluators
-can compare a recorded reading against an FDA threshold regardless of the
-unit the operator recorded it in. 21 CFR §1.1330(b)(5) requires a cooling
-temperature reading but never dictates °F vs °C — the COOLING rule needs
-to accept either and evaluate against a canonical scale.
+can compare a recorded reading against an operational cold-chain threshold
+regardless of the unit the operator recorded it in.
 """
 
 from typing import Dict, Optional, Tuple
@@ -156,10 +154,10 @@ def resolve_temperature_reading(
     - ``temperature_fahrenheit`` / ``cooling_temperature_fahrenheit`` → °F
     - ``temperature`` / ``cooling_temperature`` with a sibling
       ``temperature_unit`` (or ``..._unit``) → unit-qualified
-    - ``temperature`` / ``cooling_temperature`` with no unit → treated as °F
-      (the prevailing US convention in FDA-facing produce/seafood ops). This
-      is the one place we make a policy choice; alternative is to refuse to
-      evaluate, which silently fail-opens the rule.
+    - ``temperature`` / ``cooling_temperature`` with no unit → inferred from
+      the value. Small decimal readings common in cooler exports are treated as
+      °C; larger readings common in US receiving/shipping logs are treated as
+      °F.
 
     Returns ``None`` if nothing parseable was found. The tuple's second
     element is the KDE key the reading came from so evidence can cite it.
@@ -213,8 +211,10 @@ def resolve_temperature_reading(
         unit_raw = _get(unit_key)
         canonical_unit = _normalize_temp_unit(unit_raw) if unit_raw else None
         if canonical_unit is None:
-            # Default: assume Fahrenheit (US produce/seafood convention).
-            canonical_unit = "f"
+            # Bare "temp" columns in cooler ERP exports are often Celsius
+            # decimals (e.g. 1.8); bare receiving/shipping temperatures are
+            # often Fahrenheit (e.g. 34). Infer conservatively from magnitude.
+            canonical_unit = "c" if -5.0 <= value <= 10.0 else "f"
         if canonical_unit == "c":
             return value, value_key
         return fahrenheit_to_celsius(value), value_key

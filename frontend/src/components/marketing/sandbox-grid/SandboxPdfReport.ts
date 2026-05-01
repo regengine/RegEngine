@@ -163,7 +163,7 @@ export function generateComplianceReport(result: SandboxResult): void {
     doc.setFontSize(9);
     doc.setTextColor(DANGER.r, DANGER.g, DANGER.b);
     doc.text(
-      `IMPORT AND EVIDENCE BLOCKED \u2014 ${result.blocking_reasons.length} critical defect${result.blocking_reasons.length !== 1 ? 's' : ''}`,
+      `IMPORT MAPPING NEEDS CORRECTION \u2014 ${result.blocking_reasons.length} blocker${result.blocking_reasons.length !== 1 ? 's' : ''}`,
       margin + 4, y + 6,
     );
     doc.setFont('helvetica', 'normal');

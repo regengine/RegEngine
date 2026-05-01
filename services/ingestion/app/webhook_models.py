@@ -78,7 +78,7 @@ REQUIRED_KDES_BY_CTE: Dict[WebhookCTEType, List[str]] = {
     WebhookCTEType.COOLING: [
         "traceability_lot_code", "product_description", "quantity",
         "unit_of_measure", "cooling_date", "location_name",
-        "reference_document",  # §1.1330(b)(6)
+        "reference_document",  # §1.1325(b)(7)
     ],
     WebhookCTEType.INITIAL_PACKING: [
         "traceability_lot_code", "product_description", "quantity",

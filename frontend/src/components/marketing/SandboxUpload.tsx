@@ -745,7 +745,7 @@ export function SandboxUpload() {
                 <div className="flex items-center gap-2 mb-2">
                   <ShieldAlert className="w-5 h-5 text-re-danger" />
                   <span className="text-[0.8rem] font-semibold text-re-danger">
-                    IMPORT AND EVIDENCE BLOCKED — {result.blocking_reasons.length} critical defect{result.blocking_reasons.length !== 1 ? 's' : ''}
+                    IMPORT MAPPING NEEDS CORRECTION — {result.blocking_reasons.length} blocker{result.blocking_reasons.length !== 1 ? 's' : ''}
                   </span>
                 </div>
                 <ul className="space-y-1">
@@ -845,10 +845,16 @@ export function SandboxUpload() {
                         const skipped = ev.all_results.filter((r) => r.result === 'skip');
 
                         const isCustom = (r: RuleResult) => r.category === 'custom_business_rule';
-                        const structuralFailed = failed.filter((r) => !isRelational(r) && !isCustom(r));
+                        const isOperational = (r: RuleResult) => r.category === 'operational_quality';
+                        const structuralFailed = failed.filter((r) => !isRelational(r) && !isCustom(r) && !isOperational(r));
                         const relationalFailed = failed.filter((r) => isRelational(r));
-                        const structuralWarned = warned.filter((r) => !isRelational(r) && !isCustom(r));
+                        const structuralWarned = warned.filter((r) => !isRelational(r) && !isCustom(r) && !isOperational(r));
                         const relationalWarned = warned.filter((r) => isRelational(r));
+                        const operationalResults = [
+                          ...failed.filter(isOperational),
+                          ...warned.filter(isOperational),
+                          ...passed.filter(isOperational),
+                        ];
                         const customResults = [...failed.filter(isCustom), ...warned.filter(isCustom), ...passed.filter(isCustom)];
 
                         const renderRule = (rule: RuleResult, j: number) => (
@@ -902,6 +908,17 @@ export function SandboxUpload() {
                                   Missing Data ({structuralFailed.length + structuralWarned.length}):
                                 </span>
                                 {[...structuralFailed, ...structuralWarned].map(renderRule)}
+                              </div>
+                            )}
+
+                            {/* Operational quality checks */}
+                            {operationalResults.length > 0 && (
+                              <div className="space-y-1">
+                                <span className="text-[0.65rem] font-medium text-re-warning flex items-center gap-1">
+                                  <AlertTriangle className="w-3 h-3" />
+                                  Operational Checks ({operationalResults.length}):
+                                </span>
+                                {operationalResults.map(renderRule)}
                               </div>
                             )}
 
@@ -1017,7 +1034,7 @@ export function SandboxUpload() {
             {result.non_compliant_events > 0 && (
               <SandboxResultsCTA
                 mode="failures"
-                defectCount={result.non_compliant_events}
+                defectCount={diagnosis?.totalIssues || result.non_compliant_events}
                 eventCount={result.total_events}
                 onTrack={trackSandbox}
               />
@@ -1047,7 +1064,7 @@ export function SandboxUpload() {
           setLeadGateAction(null);
         }}
         onTrack={trackSandbox}
-        defectCount={result?.non_compliant_events}
+        defectCount={diagnosis?.totalIssues || result?.non_compliant_events}
         eventCount={result?.total_events}
       />
     </div>

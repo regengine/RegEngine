@@ -75,10 +75,10 @@ export function SandboxResultsCTA({
           </div>
           <div className="flex-1 min-w-0">
             <h4 className="text-[0.8rem] font-semibold text-[var(--re-text-primary)]">
-              You have {defectCount} compliance gap{defectCount !== 1 ? 's' : ''}. We can close them automatically.
+              We found {defectCount} import gap{defectCount !== 1 ? 's' : ''} your ERP mapping should close automatically.
             </h4>
             <p className="text-[0.7rem] text-[var(--re-text-secondary)] mt-1">
-              RegEngine connects to your ERP and validates every shipment in real-time — no more manual CSV fixes.
+              RegEngine connects to your ERP and validates every shipment in real-time before supplier records become evidence.
             </p>
             <div className="flex flex-wrap items-center gap-2 mt-3">
               <button

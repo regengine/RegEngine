@@ -63,6 +63,7 @@ export type CorrectionWorklistItem = {
 };
 
 const RELATIONAL_CATEGORIES = new Set(['temporal_ordering', 'quantity_consistency', 'lot_linkage']);
+const OPERATIONAL_CATEGORIES = new Set(['operational_quality', 'custom_business_rule']);
 const KDE_ERROR_RE = /Missing required KDE '([^']+)'/;
 const INVALID_CTE_RE = /Invalid CTE type/i;
 
@@ -148,6 +149,7 @@ function ruleTargetColumn(rule: SandboxRuleResultForDiagnosis, headers: string[]
   if (rule.category === 'lot_linkage' && /identity/i.test(rule.rule_title)) return findCsvColumn('product_description', headers);
   if (rule.category === 'lot_linkage') return findCsvColumn('input_traceability_lot_codes', headers);
   if (rule.category === 'custom_business_rule' && /temperature/i.test(rule.rule_title)) return findCsvColumn('temperature', headers);
+  if (rule.category === 'operational_quality' && /temperature/i.test(rule.rule_title)) return findCsvColumn('temperature', headers);
   return findCsvColumn('cte_type', headers);
 }
 
@@ -208,7 +210,11 @@ export function buildSandboxCorrectionWorklist(
       .forEach((rule, ruleIndex) => {
         const actionType = ruleActionType(rule);
         const targetColumn = actionType === 'add_row' ? null : ruleTargetColumn(rule, csvHeaders);
-        const priority = rule.severity === 'critical' || rule.result === 'fail' ? 'blocker' : 'warning';
+        const priority = OPERATIONAL_CATEGORIES.has(rule.category)
+          ? 'warning'
+          : rule.severity === 'critical' || rule.result === 'fail'
+            ? 'blocker'
+            : 'warning';
         items.push(makeItem(event, `rule-${ruleIndex}`, {
           priority,
           actionType,
@@ -233,7 +239,7 @@ export function summarizeSandboxDiagnosis(result: SandboxResultForDiagnosis, csv
   const relationalIssues = issues.filter((rule) => RELATIONAL_CATEGORIES.has(rule.category)).length;
   const duplicateWarnings = result.duplicate_warnings?.length || 0;
   const entityWarnings = result.entity_warnings?.length || 0;
-  const customWarnings = issues.filter((rule) => rule.category === 'custom_business_rule').length;
+  const operationalWarnings = issues.filter((rule) => OPERATIONAL_CATEGORIES.has(rule.category)).length;
   const blockingCount = result.blocking_reasons.length;
 
   const buckets: DiagnosisBucket[] = [
@@ -268,7 +274,7 @@ export function summarizeSandboxDiagnosis(result: SandboxResultForDiagnosis, csv
     {
       id: 'data-quality',
       label: 'Data quality warnings',
-      count: duplicateWarnings + entityWarnings + customWarnings,
+      count: duplicateWarnings + entityWarnings + operationalWarnings,
       description: 'Duplicate rows, name drift, or operational checks that should be cleaned up.',
       tone: 'warning',
     },

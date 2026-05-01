@@ -190,7 +190,7 @@ FSMA_RULE_SEEDS: List[Dict[str, Any]] = [
         "severity": "critical",
         "category": "kde_presence",
         "applicability_conditions": {"cte_types": ["cooling"], "ftl_scope": ["ALL"]},
-        "citation_reference": "21 CFR \u00a71.1330(b)(3)",
+        "citation_reference": "21 CFR \u00a71.1325(b)(5)",
         "evaluation_logic": {
             "type": "multi_field_presence",
             "field": "kdes.cooling_date",
@@ -199,18 +199,16 @@ FSMA_RULE_SEEDS: List[Dict[str, Any]] = [
         "failure_reason_template": "Cooling event missing {field_name} ({citation})",
         "remediation_suggestion": "Record the date of cooling",
     },
-    # --- Per-CTE KDE gap-fill (#1102): per 21 CFR 1.1325-1.1335 every
-    # CTE needs enforcement of its mandated KDEs. Adding the rules the
-    # audit flagged as missing: cooling location + temperature,
-    # initial-packing location + harvest-location reference, and the
-    # two first-land-based-receiving fields used for import tracking.
+    # --- Per-CTE KDE gap-fill (#1102): per 21 CFR 1.1325-1.1350 every
+    # CTE needs enforcement of its mandated KDEs. Cooling temperature is
+    # handled as an operational quality check, not as a FSMA 204 KDE.
     {
         "title": "Cooling: Cooling Location Required",
         "description": "Cooling events must identify the location where cooling occurred",
         "severity": "critical",
         "category": "kde_presence",
         "applicability_conditions": {"cte_types": ["cooling"], "ftl_scope": ["ALL"]},
-        "citation_reference": "21 CFR \u00a71.1330(b)(2)",
+        "citation_reference": "21 CFR \u00a71.1325(b)(4)",
         "evaluation_logic": {
             "type": "multi_field_presence",
             "field": "kdes.cooling_location",
@@ -227,11 +225,11 @@ FSMA_RULE_SEEDS: List[Dict[str, Any]] = [
     },
     {
         "title": "Cooling: Temperature Reading Required",
-        "description": "Cooling events must include the achieved temperature (\u00b0F or \u00b0C) so thermal kill-step and cold-chain integrity can be audited",
-        "severity": "critical",
-        "category": "kde_presence",
+        "description": "Cooling events should include the achieved temperature (\u00b0F or \u00b0C) so cold-chain integrity can be audited",
+        "severity": "warning",
+        "category": "operational_quality",
         "applicability_conditions": {"cte_types": ["cooling"], "ftl_scope": ["ALL"]},
-        "citation_reference": "21 CFR \u00a71.1330(b)(5)",
+        "citation_reference": "Operational cold-chain check",
         "evaluation_logic": {
             "type": "multi_field_presence",
             "field": "kdes.temperature",
@@ -244,31 +242,25 @@ FSMA_RULE_SEEDS: List[Dict[str, Any]] = [
                 ]
             },
         },
-        "failure_reason_template": "Cooling event missing {field_name} \u2014 temperature reading required for cold-chain audit ({citation})",
+        "failure_reason_template": "Cooling event missing {field_name} \u2014 temperature reading cannot be audited ({citation})",
         "remediation_suggestion": "Record the temperature achieved during cooling in \u00b0F or \u00b0C",
     },
     # #1364 — presence alone is a checkbox. Validate that the recorded
-    # temperature actually sits in the cold-chain window. FDA guidance for
-    # FTL-covered leafy greens / cut melons / fresh-cut produce and the
-    # broader HACCP cold-chain doctrine use 41\u00b0F (5\u00b0C) as the hard
-    # ceiling: above that you are in the microbial danger zone. The
-    # practical floor is 32\u00b0F (0\u00b0C) \u2014 below it is freezer territory
-    # and the operator should be filing a freezing record instead of a
-    # cooling record. The numeric_range evaluator normalizes to \u00b0C before
-    # comparing, so °F readings (the US default) pass through unchanged.
+    # temperature sits in an expected cold-chain window. This is an
+    # operational quality check for the sandbox and rule builder, not a
+    # FSMA 204 KDE blocker.
     {
         "title": "Cooling: Temperature Within Cold-Chain Window",
         "description": (
             "Cooling events must record a temperature in the cold-chain window "
             "(approximately 0\u20135\u00b0C / 32\u201341\u00b0F). Presence alone is a checkbox; "
-            "an out-of-range reading indicates the lot was NOT brought into a "
-            "safe thermal regime and is a compliance failure under 21 CFR "
-            "\u00a71.1330(b)(5)."
+            "an out-of-range reading should be reviewed against the operator's "
+            "cold-chain SOP before the feed is automated."
         ),
-        "severity": "critical",
-        "category": "kde_presence",
+        "severity": "warning",
+        "category": "operational_quality",
         "applicability_conditions": {"cte_types": ["cooling"], "ftl_scope": ["ALL"]},
-        "citation_reference": "21 CFR \u00a71.1330(b)(5)",
+        "citation_reference": "Operational cold-chain check",
         "evaluation_logic": {
             "type": "numeric_range",
             "params": {
@@ -279,57 +271,18 @@ FSMA_RULE_SEEDS: List[Dict[str, Any]] = [
                 # 5\u00b0C = 41\u00b0F ceiling \u2014 FDA cold-chain danger-zone threshold.
                 "max": 5.0,
                 "unit": "C",
+                "missing_result": "skip",
             },
         },
         "failure_reason_template": (
             "Cooling temperature {value} {unit} is outside the cold-chain "
-            "window [{min}, {max}] {unit} \u2014 lot was not brought into a safe "
-            "thermal regime ({citation})"
+            "window [{min}, {max}] {unit} \u2014 review the reading against the "
+            "site cold-chain SOP ({citation})"
         ),
         "remediation_suggestion": (
-            "Re-cool the lot to between 0\u00b0C (32\u00b0F) and 5\u00b0C (41\u00b0F) before "
-            "releasing for downstream handling. If the reading is correct but "
-            "outside the window, document the deviation and any corrective "
-            "action taken."
-        ),
-    },
-    # #1364 \u2014 cooling_duration is the other half of a cold-chain record:
-    # a cold reading that took 12h to achieve tells a very different story
-    # from one achieved in 30min. 21 CFR \u00a71.1330(b)(5) requires the
-    # "temperature-time combination" for each cooling step; duration alone
-    # must be on record so an auditor can reconstruct the combination.
-    {
-        "title": "Cooling: Duration Required",
-        "description": (
-            "Cooling events must record the duration of the cooling step "
-            "(time from start to reaching target temperature). Temperature "
-            "alone is insufficient \u2014 the temperature-time combination is "
-            "what FDA inspectors reconstruct during an outbreak trace."
-        ),
-        "severity": "critical",
-        "category": "kde_presence",
-        "applicability_conditions": {"cte_types": ["cooling"], "ftl_scope": ["ALL"]},
-        "citation_reference": "21 CFR \u00a71.1330(b)(5)",
-        "evaluation_logic": {
-            "type": "multi_field_presence",
-            "field": "kdes.cooling_duration",
-            "params": {
-                "fields": [
-                    "kdes.cooling_duration",
-                    "kdes.cooling_duration_hours",
-                    "kdes.cooling_duration_minutes",
-                    "kdes.cooling_start_time",  # start + event_time = duration
-                ]
-            },
-        },
-        "failure_reason_template": (
-            "Cooling event missing duration \u2014 the temperature-time combination "
-            "cannot be reconstructed without it ({citation})"
-        ),
-        "remediation_suggestion": (
-            "Record either the cooling duration (hours or minutes) or the "
-            "cooling start time so the duration can be derived from the event "
-            "timestamp."
+            "Verify whether the reading is in \u00b0C or \u00b0F, correct the unit if "
+            "needed, and document the deviation/corrective action when the "
+            "reading is truly outside the operator's accepted range."
         ),
     },
     {

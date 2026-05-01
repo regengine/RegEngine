@@ -274,6 +274,15 @@ def evaluate_numeric_range(
     }]
 
     if value is None:
+        if params.get("missing_result") == "skip":
+            return RuleEvaluationResult(
+                rule_id=rule.rule_id, rule_version=rule.rule_version,
+                rule_title=rule.title, severity=rule.severity,
+                result="skip",
+                evidence_fields_inspected=evidence,
+                citation_reference=rule.citation_reference,
+                category=rule.category,
+            )
         # Missing / non-numeric ⇒ FAIL. Otherwise a blank field fail-opens
         # the cold-chain audit (see issue #1364).
         field_label = (evidence_field or "value").split(".")[-1].replace("_", " ")
