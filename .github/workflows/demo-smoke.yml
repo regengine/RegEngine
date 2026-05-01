@@ -1,0 +1,86 @@
+name: Demo Smoke
+
+on:
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: 'RegEngine web URL to smoke test'
+        required: true
+        default: 'https://regengine.co'
+      commit_mode:
+        description: 'Commit gate mode to verify'
+        required: true
+        default: 'preflight'
+        type: choice
+        options:
+          - simulation
+          - preflight
+          - staging
+          - production_evidence
+      allow_production_evidence:
+        description: 'Allow production_evidence mode. Keep false for routine demo smoke.'
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: demo-smoke-${{ github.event.inputs.base_url }}
+  cancel-in-progress: false
+
+jobs:
+  demo-smoke:
+    name: Inflow Workbench demo smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e  # v6
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Verify demo credentials are configured
+        env:
+          DEMO_SMOKE_EMAIL: ${{ secrets.DEMO_SMOKE_EMAIL }}
+          DEMO_SMOKE_PASSWORD: ${{ secrets.DEMO_SMOKE_PASSWORD }}
+        run: |
+          test -n "$DEMO_SMOKE_EMAIL" || { echo "Missing DEMO_SMOKE_EMAIL secret"; exit 1; }
+          test -n "$DEMO_SMOKE_PASSWORD" || { echo "Missing DEMO_SMOKE_PASSWORD secret"; exit 1; }
+
+      - name: Install dependencies
+        run: |
+          cd frontend
+          npm ci
+
+      - name: Install Playwright Chromium
+        run: |
+          cd frontend
+          npx playwright install --with-deps chromium
+
+      - name: Run demo smoke
+        env:
+          DEMO_SMOKE_BASE_URL: ${{ inputs.base_url }}
+          PLAYWRIGHT_BASE_URL: ${{ inputs.base_url }}
+          DEMO_SMOKE_EMAIL: ${{ secrets.DEMO_SMOKE_EMAIL }}
+          DEMO_SMOKE_PASSWORD: ${{ secrets.DEMO_SMOKE_PASSWORD }}
+          DEMO_SMOKE_COMMIT_MODE: ${{ inputs.commit_mode }}
+          DEMO_SMOKE_ALLOW_PRODUCTION_EVIDENCE: ${{ inputs.allow_production_evidence }}
+        run: |
+          cd frontend
+          npm run test:demo-smoke
+
+      - name: Upload demo smoke artifacts
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7
+        with:
+          name: demo-smoke-results
+          path: |
+            frontend/playwright-report/demo-smoke
+            frontend/test-results
+          if-no-files-found: ignore
