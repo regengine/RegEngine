@@ -126,7 +126,7 @@ class TenantRateLimitMiddleware(BaseHTTPMiddleware):
         super().__init__(app)
         self.default_rpm = int(os.getenv("TENANT_RATE_LIMIT_RPM", str(default_rpm)))
         self.tenant_overrides = tenant_overrides or {}
-        self.exempt_paths = {"/health", "/ready", "/metrics", "/"}
+        self.exempt_paths = {"/health", "/ready", "/readiness", "/metrics", "/"}
 
     async def dispatch(self, request: Request, call_next):
         if request.url.path in self.exempt_paths:

@@ -7,7 +7,7 @@ from shared.cors import get_allowed_headers, get_allowed_origins
 # Paths exempt from TrustedHost validation (infra probes, metrics).
 # Railway's internal health-checker may send a Host header that doesn't
 # match any configured domain (e.g. container IP or private hostname).
-_TRUSTED_HOST_EXEMPT_PATHS = {"/health", "/ready", "/metrics", "/"}
+_TRUSTED_HOST_EXEMPT_PATHS = {"/health", "/ready", "/readiness", "/metrics", "/"}
 
 
 class _HealthBypassTrustedHostMiddleware:

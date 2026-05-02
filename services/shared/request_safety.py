@@ -25,7 +25,7 @@ from starlette.responses import JSONResponse
 
 logger = logging.getLogger(__name__)
 
-_EXEMPT_PATHS = {"/health", "/ready", "/metrics", "/"}
+_EXEMPT_PATHS = {"/health", "/ready", "/readiness", "/metrics", "/"}
 
 
 # ---------------------------------------------------------------------------
