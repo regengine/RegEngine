@@ -138,8 +138,13 @@ export const INTEGRATIONS = [
 export function useTrackEvent() {
     return useCallback((event: string, data?: Record<string, unknown>) => {
         if (typeof window !== 'undefined') {
+            const safeData = data
+                ? Object.fromEntries(
+                    Object.entries(data).filter(([key]) => !/email|name|company|phone/i.test(key)),
+                )
+                : undefined;
             const events = JSON.parse(localStorage.getItem('retailer_analytics') || '[]');
-            events.push({ event, data, ts: new Date().toISOString() });
+            events.push({ event, data: safeData, ts: new Date().toISOString() });
             localStorage.setItem('retailer_analytics', JSON.stringify(events));
         }
     }, []);

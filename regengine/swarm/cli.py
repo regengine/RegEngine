@@ -9,6 +9,7 @@ Usage:
 
 import argparse
 import json
+import os
 import sys
 from typing import Optional
 
@@ -98,7 +99,6 @@ def cmd_run(args) -> None:
                     # Extract PR number from task or env if possible
                     # Task format usually: "Audit PR #123 ..."
                     import re
-                    import os
                     match = re.search(r"PR #(\d+)", args.task)
                     pr_num = int(match.group(1)) if match else None
                     
