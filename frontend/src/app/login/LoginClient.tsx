@@ -11,19 +11,22 @@ import { Card, CardContent, CardDescription, CardHeader } from '@/components/ui/
 import {
     ArrowRight,
     CheckCircle2,
-    ClipboardCheck,
     Eye,
     EyeOff,
-    FileCheck2,
+    Fingerprint,
     KeyRound,
     LayoutDashboard,
     LockKeyhole,
     Loader2,
     Mail,
+    PackageCheck,
     ShieldCheck,
+    TimerReset,
 } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
+import { RegEngineWordmark } from '@/components/layout/regengine-wordmark';
 
 // QA presets are code-split into a separate chunk via dynamic import.
 // In production builds without the opt-in env var, the chunk is never
@@ -251,122 +254,133 @@ export default function LoginPage() {
 
     const queryError = searchParams.get('error');
     const submitBusy = isLoading || isSessionSyncing;
+    const mobileSessionIndicators: Array<{ icon: LucideIcon; label: string }> = [
+        { icon: LockKeyhole, label: 'JWT' },
+        { icon: ShieldCheck, label: 'Secure' },
+        { icon: TimerReset, label: 'Ready' },
+    ];
 
     return (
-        <div className="min-h-[calc(100vh-1px)] bg-[var(--re-surface-base)] text-[var(--re-text-primary)]">
-            <section className="mx-auto flex min-h-[calc(100vh-1px)] w-full max-w-7xl items-center px-4 py-6 sm:px-6 lg:px-8">
-                <div className="grid w-full overflow-hidden rounded-lg border border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)] shadow-lg lg:grid-cols-[minmax(0,0.92fr)_minmax(440px,1.08fr)]">
-                    <aside className="re-auth-rail hidden min-h-[680px] border-r border-white/10 bg-[var(--re-brand)] p-8 text-white lg:flex lg:flex-col lg:justify-between">
-                        <div>
-                            <Link href="/" className="inline-flex items-center gap-3 text-white no-underline">
-                                <div className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-white/20 bg-white text-[var(--re-brand)]">
-                                    <ClipboardCheck className="h-5 w-5" />
-                                </div>
-                                <div>
-                                    <p className="text-lg font-semibold leading-none">RegEngine</p>
-                                    <p className="mt-1 font-mono text-[11px] uppercase tracking-[0.14em] text-white/60">Command center</p>
-                                </div>
-                            </Link>
+        <div className="re-compliance-os min-h-screen overflow-x-hidden text-[var(--re-text-primary)]">
+            <section className="mx-auto grid min-h-screen w-full max-w-7xl items-center gap-6 px-4 py-6 sm:px-6 lg:grid-cols-[minmax(0,1fr)_minmax(420px,0.72fr)] lg:px-8">
+                <aside className="hidden lg:grid lg:gap-5" aria-label="Secure access context">
+                    <Link href="/" className="inline-flex w-fit items-center text-[var(--re-text-primary)] no-underline">
+                        <RegEngineWordmark size="md" />
+                    </Link>
 
-                            <h1 className="mt-10 max-w-md text-4xl font-semibold leading-tight tracking-normal">
-                                Evidence-ready access for regulated teams.
-                            </h1>
-                            <p className="mt-4 max-w-md text-sm leading-6 text-white/72">
-                                Sign in to validate traceability records, resolve readiness blockers, and prepare tenant-scoped audit evidence.
-                            </p>
+                    <div className="rounded-lg border border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)] p-6 shadow-sm">
+                        <div className="inline-flex items-center gap-2 border border-[var(--re-info-border)] bg-[var(--re-info-bg)] px-3 py-1 text-xs font-medium text-[var(--re-info)]">
+                            <KeyRound className="h-3.5 w-3.5" aria-hidden="true" />
+                            Secure workspace access
                         </div>
+                        <h1 className="mt-6 max-w-xl text-4xl font-semibold leading-tight text-[var(--re-text-primary)]">
+                            Access the traceability control room.
+                        </h1>
+                        <p className="mt-4 max-w-2xl text-sm leading-6 text-[var(--re-text-muted)]">
+                            Sign in to resolve supplier gaps, verify KDE coverage, and commit export-ready evidence under tenant-scoped access controls.
+                        </p>
 
-                        <div className="mt-10 grid gap-4">
-                            <div className="re-auth-check rounded-lg border border-white/15 p-4">
-                                <div className="mb-3 flex items-center justify-between">
-                                    <p className="text-sm font-semibold">Evidence checklist</p>
-                                    <span className="rounded-full border border-emerald-300/30 bg-emerald-400/10 px-2 py-1 text-[11px] font-medium text-emerald-200">Live</span>
+                        <div className="mt-8 grid gap-3 sm:grid-cols-3">
+                            {[
+                                ['86%', 'KDE readiness'],
+                                ['2', 'Open supplier gaps'],
+                                ['24h', 'Recall clock target'],
+                            ].map(([value, label]) => (
+                                <div key={label} className="border border-[var(--re-border-subtle)] bg-[var(--re-surface-card)] p-4">
+                                    <p className="font-mono text-2xl font-semibold leading-none text-[var(--re-text-primary)]">{value}</p>
+                                    <p className="mt-2 text-xs leading-5 text-[var(--re-text-muted)]">{label}</p>
                                 </div>
+                            ))}
+                        </div>
+                    </div>
+
+                    <div className="grid gap-5 xl:grid-cols-[0.88fr_1.12fr]">
+                        <div className="rounded-lg border border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)] p-5 shadow-sm">
+                            <div className="flex items-center gap-2 text-sm font-semibold text-[var(--re-text-primary)]">
+                                <ShieldCheck className="h-4 w-4 text-[var(--re-success)]" aria-hidden="true" />
+                                Session preflight
+                            </div>
+                            <div className="mt-4 grid gap-3">
                                 {[
-                                    ['Supplier onboarding', 'All suppliers verified', 'Complete'],
-                                    ['Foreign Traceability', '2 lots awaiting FTL', 'Review'],
-                                    ['Recall readiness', 'Exercises current', 'Complete'],
-                                ].map(([title, detail, status]) => (
-                                    <div key={title} className="flex items-center gap-3 border-t border-white/10 py-3 first:border-t-0 first:pt-0 last:pb-0">
-                                        {status === 'Complete' ? (
-                                            <CheckCircle2 className="h-4 w-4 flex-shrink-0 text-emerald-300" />
-                                        ) : (
-                                            <FileCheck2 className="h-4 w-4 flex-shrink-0 text-amber-300" />
-                                        )}
-                                        <div className="min-w-0 flex-1">
-                                            <p className="text-sm font-medium text-white">{title}</p>
-                                            <p className="mt-0.5 text-xs text-white/55">{detail}</p>
+                                    ['Identity verified', 'RegEngine JWT'],
+                                    ['Secure cookie ready', 'Supabase session'],
+                                    ['Tenant scope locked', 'Role-based access'],
+                                ].map(([title, detail]) => (
+                                    <div key={title} className="flex items-start gap-3 border-t border-[var(--re-border-subtle)] pt-3 first:border-t-0 first:pt-0">
+                                        <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-[var(--re-success)]" aria-hidden="true" />
+                                        <div className="min-w-0">
+                                            <p className="text-sm font-medium text-[var(--re-text-primary)]">{title}</p>
+                                            <p className="mt-1 text-xs leading-5 text-[var(--re-text-muted)]">{detail}</p>
                                         </div>
-                                        <span className="rounded-full border border-white/15 px-2 py-1 text-[11px] text-white/72">{status}</span>
                                     </div>
                                 ))}
                             </div>
+                        </div>
 
-                            <div className="re-auth-check rounded-lg border border-white/15 p-4">
-                                <div className="mb-3 flex items-center justify-between">
-                                    <p className="text-sm font-semibold">Traceability status</p>
-                                    <span className="font-mono text-[11px] text-white/55">3 events</span>
+                        <div className="rounded-lg border border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)] p-5 shadow-sm">
+                            <div className="flex items-center justify-between gap-3">
+                                <div className="flex items-center gap-2 text-sm font-semibold text-[var(--re-text-primary)]">
+                                    <PackageCheck className="h-4 w-4 text-[var(--re-evidence)]" aria-hidden="true" />
+                                    Evidence state
                                 </div>
-                                <div className="grid grid-cols-[1fr_88px_74px] gap-x-3 border-b border-white/10 pb-2 font-mono text-[10px] uppercase tracking-[0.08em] text-white/45">
-                                    <span>Lot</span>
-                                    <span>Status</span>
-                                    <span>CTE</span>
-                                </div>
+                                <span className="border border-[var(--re-success-border)] bg-[var(--re-success-bg)] px-2 py-1 font-mono text-[11px] font-medium text-[var(--re-success)]">READY</span>
+                            </div>
+                            <div className="mt-4 grid gap-2">
                                 {[
-                                    ['LOT-24-0512', 'Compliant', 'Shipping'],
-                                    ['LOT-24-0511', 'Compliant', 'Cooling'],
-                                    ['LOT-24-0510', 'Warning', 'Receiving'],
-                                ].map(([lot, status, cte]) => (
-                                    <div key={lot} className="grid grid-cols-[1fr_88px_74px] gap-x-3 border-b border-white/10 py-2 text-xs last:border-b-0">
-                                        <span className="font-mono text-white/80">{lot}</span>
-                                        <span className="inline-flex items-center gap-1.5 text-white/72">
-                                            <span className={status === 'Compliant' ? 'h-2 w-2 rounded-full bg-emerald-300' : 'h-2 w-2 rounded-full bg-amber-300'} />
-                                            {status}
-                                        </span>
-                                        <span className="text-white/60">{cte}</span>
+                                    ['FTL coverage', '94%', 'Receiving, shipping, transformation'],
+                                    ['Export gate', 'Eligible', '2 warnings require review'],
+                                    ['Recall drill', 'Current', 'Last run 4 days ago'],
+                                ].map(([label, value, detail]) => (
+                                    <div key={label} className="grid grid-cols-[minmax(0,1fr)_92px] gap-3 border-t border-[var(--re-border-subtle)] pt-3 first:border-t-0 first:pt-0">
+                                        <div className="min-w-0">
+                                            <p className="text-sm font-medium text-[var(--re-text-primary)]">{label}</p>
+                                            <p className="mt-1 truncate text-xs text-[var(--re-text-muted)]">{detail}</p>
+                                        </div>
+                                        <span className="self-start text-right font-mono text-sm font-semibold text-[var(--re-text-primary)]">{value}</span>
                                     </div>
                                 ))}
                             </div>
                         </div>
+                    </div>
 
-                        <div className="grid grid-cols-3 gap-4 border-t border-white/10 pt-5 text-xs text-white/58">
-                            <div className="flex gap-2">
-                                <ShieldCheck className="h-4 w-4 flex-shrink-0 text-white/70" />
-                                <span>Enterprise security</span>
-                            </div>
-                            <div className="flex gap-2">
-                                <LockKeyhole className="h-4 w-4 flex-shrink-0 text-white/70" />
-                                <span>Encrypted session</span>
-                            </div>
-                            <div className="flex gap-2">
-                                <FileCheck2 className="h-4 w-4 flex-shrink-0 text-white/70" />
-                                <span>Audit-ready evidence</span>
+                    <div className="rounded-lg border border-[var(--re-evidence-border)] bg-[var(--re-evidence-bg)] p-4">
+                        <div className="flex items-start gap-3">
+                            <Fingerprint className="mt-0.5 h-4 w-4 shrink-0 text-[var(--re-evidence)]" aria-hidden="true" />
+                            <div className="min-w-0">
+                                <p className="text-sm font-semibold text-[var(--re-text-primary)]">Access is part of the evidence chain.</p>
+                                <p className="mt-1 text-xs leading-5 text-[var(--re-text-muted)]">
+                                    Session handoff is verified before protected routes open, keeping audit activity tied to the right identity and tenant.
+                                </p>
                             </div>
                         </div>
-                    </aside>
+                    </div>
+                </aside>
 
-                    <Card className="border-0 bg-[var(--re-surface-elevated)] shadow-none">
-                        <CardHeader className="px-5 pb-3 pt-6 text-left sm:px-10 sm:pt-10 lg:px-16 lg:pt-16">
-                            <Link href="/" className="mb-8 inline-flex items-center gap-3 text-[var(--re-text-primary)] no-underline sm:mb-10">
-                                <div className="inline-flex h-10 w-10 items-center justify-center rounded-md bg-[var(--re-brand)] text-white">
-                                    <ClipboardCheck className="h-5 w-5" />
-                                </div>
-                                <div>
-                                    <p className="text-lg font-semibold leading-none">RegEngine</p>
-                                    <p className="mt-1 text-xs text-[var(--re-text-muted)] lg:hidden">Command center</p>
-                                </div>
-                            </Link>
+                <Card className="border border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)] shadow-lg">
+                    <CardHeader className="px-5 pb-3 pt-6 text-left sm:px-9 sm:pt-9">
+                        <Link href="/" className="mb-8 inline-flex w-fit items-center text-[var(--re-text-primary)] no-underline lg:hidden">
+                            <RegEngineWordmark size="md" />
+                        </Link>
 
-                            <div className="inline-flex w-fit items-center gap-2 rounded-full border border-[var(--re-info-border)] bg-[var(--re-info-bg)] px-3 py-1 text-xs font-medium text-[var(--re-info)]">
-                                <KeyRound className="h-3.5 w-3.5" />
-                                Protected workspace
-                            </div>
-                            <h2 className="mt-5 text-4xl font-semibold leading-tight tracking-normal text-[var(--re-text-primary)]">Sign in</h2>
-                            <CardDescription className="mt-2 text-base leading-7 text-[var(--re-text-muted)]">
-                                Access your regulated workspace with a synchronized secure session.
-                            </CardDescription>
-                        </CardHeader>
-                        <CardContent className="px-5 pb-6 sm:px-10 sm:pb-10 lg:px-16">
+                        <div className="inline-flex w-fit items-center gap-2 border border-[var(--re-info-border)] bg-[var(--re-info-bg)] px-3 py-1 text-xs font-medium text-[var(--re-info)]">
+                            <KeyRound className="h-3.5 w-3.5" aria-hidden="true" />
+                            Protected workspace
+                        </div>
+                        <h2 className="mt-5 text-4xl font-semibold leading-tight text-[var(--re-text-primary)]">Sign in</h2>
+                        <CardDescription className="mt-2 text-base leading-7 text-[var(--re-text-muted)]">
+                            Open a synchronized RegEngine and secure workspace session before entering protected routes.
+                        </CardDescription>
+
+                        <div className="mt-5 grid grid-cols-3 gap-2 rounded-lg border border-[var(--re-border-subtle)] bg-[var(--re-surface-card)] p-2">
+                            {mobileSessionIndicators.map(({ icon: Icon, label }) => (
+                                <div key={label} className="flex min-w-0 flex-col items-center gap-1 border-r border-[var(--re-border-subtle)] px-2 py-2 text-center last:border-r-0">
+                                    <Icon className="h-4 w-4 text-[var(--re-text-secondary)]" aria-hidden="true" />
+                                    <span className="text-[11px] font-medium leading-4 text-[var(--re-text-muted)]">{label}</span>
+                                </div>
+                            ))}
+                        </div>
+                    </CardHeader>
+                    <CardContent className="px-5 pb-6 sm:px-9 sm:pb-9">
                             {queryError === 'auth_config' && (
                                 <div className="mb-4 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-700 dark:border-amber-800 dark:bg-amber-900/10 dark:text-amber-400">
                                     Authentication is temporarily unavailable. Please contact your administrator.
@@ -504,7 +518,6 @@ export default function LoginPage() {
                             </form>
                         </CardContent>
                     </Card>
-                </div>
             </section>
         </div>
     );
