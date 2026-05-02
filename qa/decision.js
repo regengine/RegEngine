@@ -50,16 +50,15 @@ if (allPassed) {
   console.error('');
   process.exit(1);
 } else if (anySkipped) {
-  console.log('\u26a0\ufe0f  WARN: Some stages were skipped.');
-  console.log('  Deploy is allowed but review skipped stages.');
+  console.error('\u274c BLOCK DEPLOY: Required stages were skipped.');
   for (const [stage, result] of Object.entries(results)) {
     if (result === 'skipped') {
-      console.log(`  \u26a0 ${stage}: skipped`);
+      console.error(`  \u2717 ${stage}: skipped`);
     }
   }
-  process.exit(0);
+  process.exit(1);
 } else {
-  console.log(`\u26a0\ufe0f  UNKNOWN: Unexpected state — ${JSON.stringify(results)}`);
-  console.log('  Allowing deploy but investigate.');
-  process.exit(0);
+  console.error(`\u274c BLOCK DEPLOY: Unexpected stage state — ${JSON.stringify(results)}`);
+  console.error('  Investigate the workflow result before deploying.');
+  process.exit(1);
 }

@@ -1,4 +1,5 @@
-import { test, expect, type Page, type Browser } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
+import { adminAuthenticatedE2ESkipReason, hasAdminAuthenticatedE2E } from './auth-prereqs';
 
 /** Wait for navigation to an authenticated page (pathname-only check to avoid matching query strings like ?next=/dashboard) */
 async function waitForAuthenticated(page: Page, timeout = 15000) {
@@ -22,9 +23,10 @@ const ADMIN_EMAIL = process.env.TEST_ADMIN_EMAIL || process.env.TEST_USER_EMAIL 
 const ADMIN_PASSWORD = process.env.TEST_ADMIN_PASSWORD || process.env.TEST_PASSWORD || 'test-placeholder';
 
 test.describe('Tenant Isolation', () => {
+    test.skip(!hasAdminAuthenticatedE2E, adminAuthenticatedE2ESkipReason);
 
     test.afterEach(async ({ page }, testInfo) => {
-        if (testInfo.status !== 'passed') {
+        if (testInfo.status !== testInfo.expectedStatus) {
             const path = `test-results/tenant-failure-${testInfo.title.replace(/\s+/g, '-').toLowerCase()}.png`;
             await page.screenshot({ path, fullPage: true });
         }

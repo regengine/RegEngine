@@ -10,11 +10,14 @@
  * are surfaced immediately rather than appearing as dozens of test timeouts.
  */
 import { test, expect } from '@playwright/test';
+import { authenticatedE2ESkipReason, hasAuthenticatedE2E } from './auth-prereqs';
 
 const TEST_USER_EMAIL = process.env.TEST_USER_EMAIL || 'test@example.com';
 const TEST_PASSWORD = process.env.TEST_PASSWORD || 'test-placeholder';
 
 test.describe('Auth Smoke', () => {
+    test.skip(!hasAuthenticatedE2E, authenticatedE2ESkipReason);
+
     test('login API → session cookie → authenticated page', async ({ page }) => {
         test.setTimeout(60000);
 

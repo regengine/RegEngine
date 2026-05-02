@@ -12,7 +12,7 @@ from urllib.parse import unquote, urlparse
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from pydantic import BaseModel, Field
 
-from app.authz import IngestionPrincipal, require_permission
+from .authz import IngestionPrincipal, require_permission
 from shared.funnel_events import emit_funnel_event
 
 logger = logging.getLogger("qr-decoder")

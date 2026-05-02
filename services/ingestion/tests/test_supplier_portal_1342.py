@@ -26,6 +26,7 @@ from app.supplier_portal import (
     _get_active_portal_link,
     router,
 )
+from app.authz import IngestionPrincipal, get_ingestion_principal
 from app.webhook_compat import _verify_api_key
 from app.webhook_models import EventResult, IngestResponse
 
@@ -85,10 +86,15 @@ class _FakeSession:
         self.closed = True
 
 
-def _build_app() -> FastAPI:
+def _build_app(principal_tenant: Optional[str] = None) -> FastAPI:
     app = FastAPI()
     app.include_router(router)
     app.dependency_overrides[_verify_api_key] = lambda: None
+    app.dependency_overrides[get_ingestion_principal] = lambda: IngestionPrincipal(
+        key_id="test-key",
+        scopes=["*"],
+        tenant_id=principal_tenant,
+    )
     return app
 
 
@@ -120,6 +126,7 @@ class TestDbStorePortalLink:
         assert ok is True
         assert session.committed is True
         assert session.closed is True
+        assert session.executed[0][1] == {"tenant_id": "t1"}
 
     def test_failure_rolls_back(self, monkeypatch):
         session = _FakeSession(raise_on_execute=RuntimeError("boom"))
@@ -192,8 +199,9 @@ class TestDbUpdateStatus:
     def test_success(self, monkeypatch):
         session = _FakeSession()
         monkeypatch.setattr(sp, "get_db_safe", lambda: session)
-        assert _db_update_portal_link_status("tok", "revoked") is True
+        assert _db_update_portal_link_status("tok", "revoked", tenant_id="t1") is True
         assert session.committed is True
+        assert session.executed[0][1] == {"tenant_id": "t1"}
 
     def test_failure_rolls_back(self, monkeypatch):
         session = _FakeSession(raise_on_execute=RuntimeError("oops"))
@@ -255,12 +263,12 @@ class TestGetActivePortalLink:
         status_updates: list = []
         monkeypatch.setattr(
             sp, "_db_update_portal_link_status",
-            lambda pid, status: status_updates.append((pid, status)) or True,
+            lambda pid, status, tenant_id=None: status_updates.append((pid, status, tenant_id)) or True,
         )
         with pytest.raises(Exception) as exc:
             _get_active_portal_link("tok")
         assert exc.value.status_code == 404
-        assert ("tok", "expired") in status_updates
+        assert ("tok", "expired", "t1") in status_updates
         assert "tok" not in sp._portal_links
 
     def test_z_suffix_expiry_parsed(self, monkeypatch):
@@ -384,6 +392,32 @@ class TestCreatePortalLink:
         stored = sp._portal_links[body["portal_id"]]
         assert stored["supplier_email"] == "s@example.com"
         assert stored["integration_profile_id"] == "prof_csv_1"
+
+    def test_scoped_principal_allows_matching_tenant(self, monkeypatch):
+        stored: dict = {}
+
+        def _store(_portal_id, link_data):
+            stored.update(link_data)
+            return True
+
+        monkeypatch.setattr(sp, "_db_store_portal_link", _store)
+        client = TestClient(_build_app(principal_tenant="tenant-a"))
+        resp = client.post(
+            "/api/v1/portal/links",
+            json={"tenant_id": "tenant-a", "supplier_name": "Acme"},
+        )
+        assert resp.status_code == 200
+        assert resp.json()["tenant_id"] == "tenant-a"
+        assert stored["tenant_id"] == "tenant-a"
+
+    def test_scoped_principal_rejects_tenant_override(self, monkeypatch):
+        monkeypatch.setattr(sp, "_db_store_portal_link", lambda *a, **k: True)
+        client = TestClient(_build_app(principal_tenant="tenant-a"))
+        resp = client.post(
+            "/api/v1/portal/links",
+            json={"tenant_id": "tenant-b", "supplier_name": "Acme"},
+        )
+        assert resp.status_code == 403
 
 
 # ---------------------------------------------------------------------------
@@ -541,6 +575,22 @@ class TestListPortalLinks:
         assert body["links"][0]["created_at"] is None
         assert body["links"][0]["expires_at"] is None
 
+    def test_db_query_sets_tenant_context(self, monkeypatch):
+        session = _FakeSession(rows=[])
+        monkeypatch.setattr(sp, "get_db_safe", lambda: session)
+
+        client = TestClient(_build_app(principal_tenant="t1"))
+        resp = client.get("/api/v1/portal/links/list")
+        assert resp.status_code == 200
+        assert session.executed[0][1] == {"tenant_id": "t1"}
+
+    def test_scoped_principal_rejects_list_override(self, monkeypatch):
+        monkeypatch.setattr(sp, "get_db_safe", lambda: _FakeSession(rows=[]))
+
+        client = TestClient(_build_app(principal_tenant="tenant-a"))
+        resp = client.get("/api/v1/portal/links/list?tenant_id=tenant-b")
+        assert resp.status_code == 403
+
 
 # ---------------------------------------------------------------------------
 # PATCH /links/{portal_id}/revoke
@@ -564,6 +614,15 @@ class TestRevokePortalLink:
         resp = client.patch("/api/v1/portal/links/tok/revoke")
         assert resp.status_code == 200
         assert "tok" not in sp._portal_links
+
+    def test_scoped_principal_rejects_other_tenant_link(self, monkeypatch):
+        monkeypatch.setattr(sp, "_db_get_portal_link", lambda _pid: None)
+        monkeypatch.setattr(sp, "_db_update_portal_link_status", lambda *a, **k: True)
+        sp._portal_links["tok"] = {"tenant_id": "tenant-b", "supplier_name": "S"}
+        client = TestClient(_build_app(principal_tenant="tenant-a"))
+        resp = client.patch("/api/v1/portal/links/tok/revoke")
+        assert resp.status_code == 403
+        assert "tok" in sp._portal_links
 
 
 # ---------------------------------------------------------------------------

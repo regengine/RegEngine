@@ -159,6 +159,7 @@ class ExceptionQueueService:
 
         If no due_date is provided, one is computed from severity defaults.
         """
+        self.set_tenant_context(tenant_id)
         case_id = str(uuid4())
         now = datetime.now(timezone.utc)
 
@@ -228,6 +229,7 @@ class ExceptionQueueService:
 
     def get_exception(self, tenant_id: str, case_id: str) -> Optional[ExceptionCase]:
         """Fetch a single exception case by ID."""
+        self.set_tenant_context(tenant_id)
         row = self.session.execute(
             text("""
                 SELECT case_id, tenant_id, severity, status,
@@ -270,6 +272,7 @@ class ExceptionQueueService:
             source_facility_reference - facility reference substring match
             rule_category - exact category match
         """
+        self.set_tenant_context(tenant_id)
         clauses = ["tenant_id = :tenant_id"]
         params: Dict[str, Any] = {"tenant_id": tenant_id, "limit": limit, "offset": offset}
 
@@ -332,6 +335,7 @@ class ExceptionQueueService:
 
         These are cases that block compliance sign-off.
         """
+        self.set_tenant_context(tenant_id)
         row = self.session.execute(
             text("""
                 SELECT COUNT(*)
@@ -358,6 +362,7 @@ class ExceptionQueueService:
         """
         Assign an owner to an exception case and move to in_review status.
         """
+        self.set_tenant_context(tenant_id)
         now = datetime.now(timezone.utc)
 
         result = self.session.execute(
@@ -418,6 +423,7 @@ class ExceptionQueueService:
         """
         Resolve an exception case with a resolution summary.
         """
+        self.set_tenant_context(tenant_id)
         now = datetime.now(timezone.utc)
 
         result = self.session.execute(
@@ -486,6 +492,7 @@ class ExceptionQueueService:
 
         Waivers are tracked with a signoff record for audit purposes.
         """
+        self.set_tenant_context(tenant_id)
         now = datetime.now(timezone.utc)
 
         result = self.session.execute(
@@ -561,6 +568,7 @@ class ExceptionQueueService:
 
         comment_type: note, status_change, assignment, supplier_response, system
         """
+        self.set_tenant_context(tenant_id)
         # Verify case exists for this tenant
         case = self.get_exception(tenant_id, case_id)
         if case is None:
@@ -580,6 +588,7 @@ class ExceptionQueueService:
         case_id: str,
     ) -> List[ExceptionComment]:
         """List all comments for an exception case, ordered by creation time."""
+        self.set_tenant_context(tenant_id)
         rows = self.session.execute(
             text("""
                 SELECT id, tenant_id, case_id, author_user_id,

@@ -18,24 +18,27 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 
-from app.inflow_workbench import (
+from .authz import IngestionPrincipal, require_permission
+from .inflow_workbench import (
     CommitGateDecision,
     CommitGateRequest,
     ReadinessSummary,
     build_readiness_summary,
     decide_commit_gate,
 )
-from app.sandbox.csv_parser import _normalize_for_rules
-from app.sandbox.evaluators import _evaluate_event_stateless
-from app.sandbox.models import EventEvaluationResponse, RuleResultResponse, SandboxResponse
-from app.sandbox.validation import _validate_kdes
-from app.webhook_models import IngestEvent, WebhookCTEType, WebhookPayload
-from app.webhook_compat import _verify_api_key, ingest_events
+from .sandbox.csv_parser import _normalize_for_rules
+from .sandbox.evaluators import _evaluate_event_stateless
+from .sandbox.models import EventEvaluationResponse, RuleResultResponse, SandboxResponse
+from .sandbox.validation import _validate_kdes
+from .shared.tenant_resolution import resolve_principal_tenant_id
+from .webhook_models import IngestEvent, WebhookCTEType, WebhookPayload
+from .webhook_compat import ingest_events
 from shared.database import get_db_safe
+from shared.env import is_production
 from shared.pagination import PaginationParams
 
 logger = logging.getLogger("supplier-portal")
@@ -46,6 +49,14 @@ router = APIRouter(prefix="/api/v1/portal", tags=["Supplier Portal"])
 _portal_links: dict[str, dict] = {}
 
 
+def _allow_memory_fallback() -> bool:
+    """Allow volatile portal-link fallback only outside production."""
+    return not is_production()
+
+
+def _set_tenant_context(db, tenant_id: str) -> None:
+    db.execute(text("SELECT set_config('app.tenant_id', :tenant_id, true)"), {"tenant_id": tenant_id})
+
 
 def _db_store_portal_link(portal_id: str, link_data: dict) -> bool:
     """Insert a portal link into the database. Returns True on success."""
@@ -53,6 +64,7 @@ def _db_store_portal_link(portal_id: str, link_data: dict) -> bool:
     if not db:
         return False
     try:
+        _set_tenant_context(db, link_data["tenant_id"])
         try:
             db.execute(
                 # nosemgrep: avoid-sqlalchemy-text — parameterized with :param
@@ -87,7 +99,7 @@ def _db_store_portal_link(portal_id: str, link_data: dict) -> bool:
                 raise
             db.rollback()
             db.execute(
-            # nosemgrep: avoid-sqlalchemy-text — parameterized with :param
+                # nosemgrep: avoid-sqlalchemy-text — parameterized with :param
                 text("""
                     INSERT INTO fsma.tenant_portal_links
                     (id, tenant_id, supplier_name, link_token, status, created_at, expires_at)
@@ -122,6 +134,30 @@ def _db_get_portal_link(portal_id: str) -> Optional[dict]:
     if not db:
         return None
     try:
+        try:
+            row = db.execute(
+                # nosemgrep: avoid-sqlalchemy-text — SECURITY DEFINER function, parameterized token
+                text("""
+                    SELECT tenant_id, supplier_name, supplier_email, allowed_cte_types,
+                           integration_profile_id, link_token, status, created_at, expires_at
+                    FROM fsma.get_active_portal_link_by_token(:link_token)
+                """),
+                {"link_token": portal_id},
+            ).fetchone()
+            if row and len(row) >= 9:
+                return {
+                    "tenant_id": str(row[0]),
+                    "supplier_name": row[1],
+                    "supplier_email": row[2],
+                    "allowed_cte_types": list(row[3] or ["shipping"]),
+                    "integration_profile_id": row[4],
+                    "expires_at": row[8].isoformat() if row[8] else None,
+                    "created_at": row[7].isoformat() if row[7] else None,
+                }
+        except Exception as exc:
+            logger.debug("portal_link_function_lookup_unavailable error=%s", str(exc))
+            db.rollback()
+
         try:
             row = db.execute(
                 # nosemgrep: avoid-sqlalchemy-text — parameterized with :param
@@ -184,12 +220,14 @@ def _db_get_portal_link(portal_id: str) -> Optional[dict]:
         db.close()
 
 
-def _db_update_portal_link_status(portal_id: str, status: str) -> bool:
+def _db_update_portal_link_status(portal_id: str, status: str, tenant_id: Optional[str] = None) -> bool:
     """Update the status of a portal link in the database."""
     db = get_db_safe()
     if not db:
         return False
     try:
+        if tenant_id:
+            _set_tenant_context(db, tenant_id)
         db.execute(
             # nosemgrep: avoid-sqlalchemy-text — parameterized with :param
             text("UPDATE fsma.tenant_portal_links SET status = :status WHERE link_token = :link_token"),
@@ -209,7 +247,7 @@ def _db_update_portal_link_status(portal_id: str, status: str) -> bool:
 def _get_active_portal_link(portal_id: str) -> dict:
     # Try DB first, fall back to in-memory
     link = _db_get_portal_link(portal_id)
-    if link is None:
+    if link is None and _allow_memory_fallback():
         link = _portal_links.get(portal_id)
     if not link:
         raise HTTPException(status_code=404, detail="Portal link not found or expired")
@@ -225,7 +263,7 @@ def _get_active_portal_link(portal_id: str) -> dict:
 
     if expires_at <= datetime.now(timezone.utc):
         _portal_links.pop(portal_id, None)
-        _db_update_portal_link_status(portal_id, "expired")
+        _db_update_portal_link_status(portal_id, "expired", link["tenant_id"])
         raise HTTPException(status_code=404, detail="Portal link not found or expired")
 
     return link
@@ -473,15 +511,17 @@ def _build_supplier_preflight(portal_id: str, link: dict, submission: SupplierSu
 )
 async def create_portal_link(
     request: CreatePortalLinkRequest,
-    _: None = Depends(_verify_api_key),
+    principal: IngestionPrincipal = Depends(require_permission("webhooks.ingest")),
+    x_tenant_id: Optional[str] = Header(default=None, alias="X-Tenant-ID"),
 ) -> PortalLinkResponse:
     """Create a supplier portal link."""
+    tenant_id = resolve_principal_tenant_id(request.tenant_id, x_tenant_id, principal.tenant_id)
     portal_id = secrets.token_urlsafe(16)
     now = datetime.now(timezone.utc)
     expires_at = (now + timedelta(days=request.expires_days)).isoformat()
 
     link_data = {
-        "tenant_id": request.tenant_id,
+        "tenant_id": tenant_id,
         "supplier_name": request.supplier_name,
         "supplier_email": request.supplier_email,
         "allowed_cte_types": request.allowed_cte_types,
@@ -493,6 +533,8 @@ async def create_portal_link(
     # Try DB first, fall back to in-memory
     db_success = _db_store_portal_link(portal_id, link_data)
     if not db_success:
+        if not _allow_memory_fallback():
+            raise HTTPException(status_code=503, detail="Portal link persistence unavailable")
         logger.info("db_store_fallback using in-memory for portal_id=%s", portal_id)
     # Always store in-memory as well for supplemental fields (supplier_email, allowed_cte_types)
     _portal_links[portal_id] = link_data
@@ -501,7 +543,7 @@ async def create_portal_link(
         "portal_link_created",
         extra={
             "portal_id": portal_id,
-            "tenant_id": request.tenant_id,
+            "tenant_id": tenant_id,
             "supplier_name": request.supplier_name,
         },
     )
@@ -510,7 +552,7 @@ async def create_portal_link(
         portal_id=portal_id,
         portal_url=f"https://regengine.co/portal/{portal_id}",
         supplier_name=request.supplier_name,
-        tenant_id=request.tenant_id,
+        tenant_id=tenant_id,
         expires_at=expires_at,
         allowed_cte_types=request.allowed_cte_types,
         integration_profile_id=request.integration_profile_id,
@@ -523,17 +565,20 @@ async def create_portal_link(
     description="Returns all portal links for the authenticated tenant.",
 )
 async def list_portal_links(
-    tenant_id: str,
+    tenant_id: Optional[str] = None,
     pagination: PaginationParams = Depends(),
-    _: None = Depends(_verify_api_key),
+    principal: IngestionPrincipal = Depends(require_permission("webhooks.ingest")),
+    x_tenant_id: Optional[str] = Header(default=None, alias="X-Tenant-ID"),
 ):
     """List all portal links for a tenant."""
+    tenant_id = resolve_principal_tenant_id(tenant_id, x_tenant_id, principal.tenant_id)
     links: list[dict] = []
 
     # Try DB first
     db = get_db_safe()
     if db:
         try:
+            _set_tenant_context(db, tenant_id)
             try:
                 rows = db.execute(
                     # nosemgrep: avoid-sqlalchemy-text — parameterized with :param
@@ -583,8 +628,10 @@ async def list_portal_links(
 
     # Supplement with in-memory links not in DB results
     db_tokens = {link["portal_id"] for link in links}
-    for token, data in _portal_links.items():
-        if data.get("tenant_id") == tenant_id and token not in db_tokens:
+    if _allow_memory_fallback():
+        for token, data in _portal_links.items():
+            if data.get("tenant_id") != tenant_id or token in db_tokens:
+                continue
             expires_at_raw = data.get("expires_at")
             status = "active"
             if expires_at_raw:
@@ -617,11 +664,23 @@ async def list_portal_links(
 )
 async def revoke_portal_link(
     portal_id: str,
-    _: None = Depends(_verify_api_key),
+    principal: IngestionPrincipal = Depends(require_permission("webhooks.ingest")),
 ):
     """Revoke a portal link."""
+    link = _db_get_portal_link(portal_id)
+    if link is None and _allow_memory_fallback():
+        link = _portal_links.get(portal_id)
+    if principal.tenant_id and link and link.get("tenant_id") != principal.tenant_id:
+        raise HTTPException(
+            status_code=403,
+            detail="Tenant mismatch: your API key does not have access to this tenant.",
+        )
     # Update DB
-    db_updated = _db_update_portal_link_status(portal_id, "revoked")
+    db_updated = _db_update_portal_link_status(
+        portal_id,
+        "revoked",
+        link.get("tenant_id") if link else None,
+    )
     # Remove from in-memory
     _portal_links.pop(portal_id, None)
 

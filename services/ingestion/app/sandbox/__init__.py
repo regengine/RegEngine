@@ -15,12 +15,12 @@ All public names are re-exported here for backward compatibility:
     from app.sandbox import router
 """
 
-from app.sandbox.router import router  # noqa: F401
+from .router import router  # noqa: F401
 
 # Re-export commonly imported internals for backward compatibility
-from app.sandbox.tracer import _trace_in_memory  # noqa: F401
-from app.sandbox.csv_parser import _parse_csv_to_events  # noqa: F401
-from app.sandbox.models import (  # noqa: F401
+from .tracer import _trace_in_memory  # noqa: F401
+from .csv_parser import _parse_csv_to_events  # noqa: F401
+from .models import (  # noqa: F401
     SandboxEvent,
     SandboxRequest,
     RuleResultResponse,
@@ -32,21 +32,21 @@ from app.sandbox.models import (  # noqa: F401
     TraceGraphResponse,
     SandboxTraceRequest,
 )
-from app.sandbox.validation import (  # noqa: F401
+from .validation import (  # noqa: F401
     _validate_kdes,
     _detect_duplicate_lots,
     _normalize_entity_name,
     _detect_entity_mismatches,
 )
-from app.sandbox.evaluators import (  # noqa: F401
+from .evaluators import (  # noqa: F401
     _evaluate_event_stateless,
     _evaluate_relational_in_memory,
 )
-from app.sandbox.csv_parser import (  # noqa: F401
+from .csv_parser import (  # noqa: F401
     _CSV_COLUMN_MAP,
     _normalize_for_rules,
 )
-from app.sandbox.rate_limiting import _check_sandbox_rate_limit  # noqa: F401
+from .rate_limiting import _check_sandbox_rate_limit  # noqa: F401
 
 __all__ = [
     "router",

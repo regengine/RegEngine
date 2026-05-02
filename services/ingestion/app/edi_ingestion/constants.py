@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from app.webhook_models import WebhookCTEType
+from ..webhook_models import WebhookCTEType
 
 _X12_UOM_MAP = {
     "CA": "cases",

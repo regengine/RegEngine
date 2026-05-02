@@ -18,7 +18,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from sqlalchemy.exc import SQLAlchemyError
 
-from app.webhook_compat import _verify_api_key
+from .webhook_compat import _verify_api_key
 from shared.database import get_db_safe
 
 logger = logging.getLogger("disaster-recovery")

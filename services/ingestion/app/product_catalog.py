@@ -19,7 +19,7 @@ from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
 from sqlalchemy.exc import SQLAlchemyError
 
-from app.webhook_compat import _verify_api_key
+from .webhook_compat import _verify_api_key
 from shared.database import get_db_safe
 from shared.pagination import PaginationParams
 

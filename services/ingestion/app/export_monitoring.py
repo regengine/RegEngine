@@ -20,7 +20,7 @@ from typing import Any, Dict, List, Literal, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
-from app.webhook_compat import _verify_api_key
+from .webhook_compat import _verify_api_key
 
 logger = logging.getLogger("export-monitoring")
 

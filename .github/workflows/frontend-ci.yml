@@ -123,6 +123,34 @@ jobs:
           cd frontend
           npm run test:run
 
+  # ── Deterministic Smoke ───────────────────────────────────
+  smoke:
+    name: Deterministic Smoke Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e  # v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: |
+          cd frontend
+          npm ci
+
+      - name: Run deterministic smoke slice
+        run: |
+          cd frontend
+          npm run test:run -- \
+            src/__tests__/lib/app-routes.test.ts \
+            src/__tests__/api/proxy-sanitization.test.ts \
+            src/__tests__/api/admin.test.ts
+
   # ── Security ─────────────────────────────────────────────
   security:
     name: Security Audit
@@ -145,7 +173,7 @@ jobs:
   ci-status:
     name: CI Status Gate
     if: always()
-    needs: [build, lint, test, security]
+    needs: [build, lint, test, smoke, security]
     runs-on: ubuntu-latest
     steps:
       - name: Check results
@@ -153,13 +181,15 @@ jobs:
           echo "Build:    ${{ needs.build.result }}"
           echo "Lint:     ${{ needs.lint.result }}"
           echo "Tests:    ${{ needs.test.result }}"
+          echo "Smoke:    ${{ needs.smoke.result }}"
           echo "Security: ${{ needs.security.result }}"
           echo "E2E:      advisory (runs separately)"
           if [[ "${{ needs.build.result }}" == "failure" \
              || "${{ needs.lint.result }}" == "failure" \
              || "${{ needs.test.result }}" == "failure" \
+             || "${{ needs.smoke.result }}" == "failure" \
              || "${{ needs.security.result }}" == "failure" ]]; then
-            echo "::error::Build, lint, unit tests, or security audit failed"
+            echo "::error::Build, lint, unit tests, deterministic smoke, or security audit failed"
             exit 1
           fi
           echo "All blocking frontend checks passed"
@@ -195,16 +225,16 @@ jobs:
           [[ -z "$TEST_PASSWORD" ]]             && MISSING+=("TEST_PASSWORD")
           [[ -z "$JWT_SIGNING_KEY" ]]          && MISSING+=("JWT_SIGNING_KEY")
           if [[ ${#MISSING[@]} -gt 0 ]]; then
-            echo "::warning::E2E skipped because GitHub Secrets are not configured: ${MISSING[*]}"
-            echo "E2E is advisory; build, lint, unit tests, and security audit remain the gating checks."
-            exit 0
+            echo "::error::E2E signal missing because GitHub Secrets are not configured: ${MISSING[*]}"
+            echo "The deterministic smoke job is the fallback gate; missing E2E prerequisites must be visible."
+            exit 1
           fi
           echo "Checking admin service health at $ADMIN_SERVICE_URL..."
           STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "$ADMIN_SERVICE_URL/health" || echo "000")
           if [[ "$STATUS" != "200" ]]; then
-            echo "::warning::E2E skipped because admin service is unreachable (HTTP $STATUS): $ADMIN_SERVICE_URL"
-            echo "E2E is advisory; build, lint, unit tests, and security audit remain the gating checks."
-            exit 0
+            echo "::error::E2E signal missing because admin service is unreachable (HTTP $STATUS): $ADMIN_SERVICE_URL"
+            echo "The deterministic smoke job is the fallback gate; unreachable E2E prerequisites must be visible."
+            exit 1
           fi
           echo "All preflight checks passed. Proceeding with E2E tests."
 

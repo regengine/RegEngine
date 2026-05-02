@@ -10,11 +10,14 @@
  */
 
 import { test, expect } from '@playwright/test';
+import { authenticatedE2ESkipReason, hasAuthenticatedE2E } from './auth-prereqs';
 
 const TEST_USER_EMAIL = process.env.TEST_USER_EMAIL || 'test@example.com';
 const TEST_PASSWORD = process.env.TEST_PASSWORD || 'test-placeholder';
 
 test.describe('Energy Snapshot Creation', () => {
+    test.skip(!hasAuthenticatedE2E, authenticatedE2ESkipReason);
+
     test.beforeEach(async ({ page }) => {
         // Login
         await page.goto('/login?next=/dashboard');
@@ -108,6 +111,8 @@ test.describe('Energy Snapshot Creation', () => {
 });
 
 test.describe('Snapshot Verification', () => {
+    test.skip(!hasAuthenticatedE2E, authenticatedE2ESkipReason);
+
     test.beforeEach(async ({ page }) => {
         await page.goto('/login?next=/dashboard');
         await page.fill('input[type="email"]', TEST_USER_EMAIL);

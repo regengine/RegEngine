@@ -22,15 +22,15 @@ from typing import Optional
 from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, UploadFile
 from pydantic import BaseModel, Field
 
-from app.config import get_settings
-from app.webhook_models import (
+from .config import get_settings
+from .webhook_models import (
     IngestEvent,
     IngestResponse,
     WebhookCTEType,
     WebhookPayload,
 )
-from app.shared.upload_limits import read_upload_with_limit, MAX_CSV_FILE_SIZE_BYTES
-from app.webhook_compat import _verify_api_key, ingest_events
+from .shared.upload_limits import read_upload_with_limit, MAX_CSV_FILE_SIZE_BYTES
+from .webhook_compat import _verify_api_key, ingest_events
 
 logger = logging.getLogger("sensitech-parser")
 

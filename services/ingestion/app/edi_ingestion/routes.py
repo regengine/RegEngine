@@ -29,12 +29,12 @@ from typing import Any, Optional
 from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, Query, UploadFile
 from pydantic import ValidationError
 
-from app.authz import IngestionPrincipal, require_permission
-from app.format_extractors import is_edi_content
-from app.shared.tenant_resolution import resolve_principal_tenant_id, resolve_tenant_id
-from app.shared.upload_limits import read_upload_with_limit, MAX_EDI_FILE_SIZE_BYTES
-from app.webhook_compat import ingest_events
-from app.webhook_models import (
+from ..authz import IngestionPrincipal, require_permission
+from ..format_extractors import is_edi_content
+from ..shared.tenant_resolution import resolve_principal_tenant_id, resolve_tenant_id
+from ..shared.upload_limits import read_upload_with_limit, MAX_EDI_FILE_SIZE_BYTES
+from ..webhook_compat import ingest_events
+from ..webhook_models import (
     IngestEvent,
     WebhookCTEType,
     WebhookPayload,

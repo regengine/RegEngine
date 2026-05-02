@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 
 from fastapi.responses import StreamingResponse
 
-from app.fda_export_service import (
+from ..fda_export_service import (
     _build_chain_verification_payload,
     _build_completeness_summary,
     _build_fda_package,

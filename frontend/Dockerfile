@@ -5,7 +5,7 @@ COPY package*.json ./
 RUN npm ci
 COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
-ENV REGENGINE_DEPLOY_MODE=static
+ENV REGENGINE_DEPLOY_MODE=docker
 RUN npm run build
 
 # Stage 2: Production

@@ -40,8 +40,8 @@ from pydantic import BaseModel, Field
 from sqlalchemy import text
 
 from shared.pagination import PaginationParams
-from app.authz import require_permission, IngestionPrincipal
-from app.tenant_validation import validate_tenant_id, resolve_tenant
+from .authz import require_permission, IngestionPrincipal
+from .tenant_validation import validate_tenant_id, resolve_tenant
 from shared.database import get_db_session
 
 logger = logging.getLogger("incident-command")

@@ -27,6 +27,12 @@ MIGRATION_LOCK_ID=4294967294
 # to leave room for the actual migration + app boot after the lock is acquired.
 MIGRATION_LOCK_TIMEOUT_S=${MIGRATION_LOCK_TIMEOUT_S:-90}
 
+if [ -z "${DATABASE_URL:-}" ]; then
+  echo "!! DATABASE_URL must be set before running migrations." >&2
+  echo "!! Refusing to fall back to development database defaults in deploy/runtime paths." >&2
+  exit 64  # EX_USAGE
+fi
+
 echo "==> Acquiring migration advisory lock (id=${MIGRATION_LOCK_ID}, timeout=${MIGRATION_LOCK_TIMEOUT_S}s)..."
 
 # Wrap entire migration in a Python script that holds an advisory lock.
@@ -37,7 +43,7 @@ import os, sys, subprocess, time
 
 from sqlalchemy import create_engine, text
 
-url = os.environ.get('DATABASE_URL', 'postgresql://regengine:regengine@postgres:5432/regengine')
+url = os.environ['DATABASE_URL']
 timeout_s = int(os.environ.get('MIGRATION_LOCK_TIMEOUT_S', '${MIGRATION_LOCK_TIMEOUT_S}'))
 engine = create_engine(url)
 

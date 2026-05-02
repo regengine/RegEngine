@@ -20,8 +20,9 @@ class Settings(BaseServiceSettings):
     )
     neo4j_uri: str = Field(default="bolt+s://neo4j:7687", alias="NEO4J_URI")
     neo4j_user: str = Field(default="neo4j", alias="NEO4J_USER")
-    # No default password - must be set via environment variable
-    neo4j_password: str = Field(alias="NEO4J_PASSWORD")
+    # Keep imports/startup non-fatal when Neo4j is intentionally disabled; the
+    # readiness probe and client connection path report missing credentials.
+    neo4j_password: str = Field(default="", alias="NEO4J_PASSWORD")
     neo4j_pool_size: int = Field(default=50, alias="NEO4J_POOL_SIZE")
     neo4j_pool_timeout: float = Field(default=60.0, alias="NEO4J_POOL_TIMEOUT")
     neo4j_max_lifetime: int = Field(default=3600, alias="NEO4J_MAX_LIFETIME")

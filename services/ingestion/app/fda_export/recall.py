@@ -13,7 +13,7 @@ from typing import Optional
 
 from fastapi import HTTPException
 
-from app.fda_export_service import (
+from ..fda_export_service import (
     _build_chain_verification_payload,
     _build_completeness_summary,
     _build_fda_package,

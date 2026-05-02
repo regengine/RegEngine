@@ -16,17 +16,25 @@ export default async function globalSetup() {
     // ── Preflight: verify JWT_SIGNING_KEY is configured ──────────────────
     // Without this key, the Next.js middleware cannot verify JWTs from the
     // admin service and EVERY authenticated test will fail with
-    // "session_expired". Fail fast with a clear message.
+    // "session_expired". Fail fast in CI, but allow local no-secret runs to
+    // execute unauthenticated specs while auth specs self-skip.
+    const isCI = Boolean(process.env.CI);
     const jwtKey = process.env.JWT_SIGNING_KEY || process.env.AUTH_SECRET_KEY;
     if (!jwtKey) {
-        console.error(
-            '[globalSetup] ✗ FATAL: JWT_SIGNING_KEY (or AUTH_SECRET_KEY) is not set.\n' +
+        const message =
+            'JWT_SIGNING_KEY (or AUTH_SECRET_KEY) is not set.\n' +
             '  The Next.js middleware needs this to verify tokens from the admin service.\n' +
-            '  Without it, every authenticated route redirects to /login?error=session_expired.\n' +
-            '  → Add JWT_SIGNING_KEY to GitHub Secrets (must match Railway\'s value).\n' +
-            '  → Ensure it is passed in the "Run E2E tests" step of frontend-ci.yml.'
-        );
-        throw new Error('JWT_SIGNING_KEY is not configured — all authenticated E2E tests will fail');
+            '  Without it, authenticated routes redirect to /login?error=session_expired.\n' +
+            '  Local run: authenticated specs will be skipped; unauthenticated specs can still run.\n' +
+            '  CI run: add JWT_SIGNING_KEY to GitHub Secrets (must match Railway\'s value).';
+
+        if (isCI) {
+            console.error(`[globalSetup] ✗ FATAL: ${message}`);
+            throw new Error('JWT_SIGNING_KEY is not configured — all authenticated E2E tests will fail');
+        }
+
+        console.warn(`[globalSetup] ${message}`);
+        return;
     }
     console.log('[globalSetup] ✓ JWT_SIGNING_KEY is configured');
 

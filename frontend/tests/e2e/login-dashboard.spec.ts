@@ -10,6 +10,7 @@
  */
 
 import { test, expect, type Page } from '@playwright/test';
+import { authenticatedE2ESkipReason, hasAuthenticatedE2E } from './auth-prereqs';
 
 /** Wait for navigation to an authenticated page (pathname-only check to avoid matching query strings like ?next=/dashboard) */
 async function waitForAuthenticated(page: Page, timeout = 15000) {
@@ -24,6 +25,8 @@ const TEST_PASSWORD = process.env.TEST_PASSWORD || 'test-placeholder';
 
 test.describe('Login → Dashboard Flow', () => {
     test('successful login redirects to dashboard', async ({ page }) => {
+        test.skip(!hasAuthenticatedE2E, authenticatedE2ESkipReason);
+
         // Navigate to login page with ?next=/dashboard to bypass the onboarding check
         // so this test reliably reaches /dashboard regardless of the test user's
         // onboarding state in the Railway admin service.
@@ -66,7 +69,7 @@ test.describe('Login → Dashboard Flow', () => {
         // Error message should appear — the admin service may take several
         // seconds to respond from Railway, so use a generous timeout.
         await expect(page.locator('#login-error')).toBeVisible({ timeout: 15000 });
-        await expect(page.locator('#login-error')).toContainText(/invalid|error|unavailable/i);
+        await expect(page.locator('#login-error')).toContainText(/invalid|error|unavailable|unreachable/i);
     });
 
     test('login form has proper accessibility', async ({ page }) => {
@@ -86,6 +89,7 @@ test.describe('Login → Dashboard Flow', () => {
     });
 
     test('logout from dashboard redirects to login', async ({ page }) => {
+        test.skip(!hasAuthenticatedE2E, authenticatedE2ESkipReason);
         test.setTimeout(60000);
 
         // Login first — use ?next=/dashboard to bypass onboarding redirect
@@ -108,6 +112,8 @@ test.describe('Login → Dashboard Flow', () => {
 });
 
 test.describe('Dashboard Features', () => {
+    test.skip(!hasAuthenticatedE2E, authenticatedE2ESkipReason);
+
     test.beforeEach(async ({ page }) => {
         // Login before each test — use ?next=/dashboard to bypass onboarding redirect
         await page.goto('/login?next=/dashboard');
