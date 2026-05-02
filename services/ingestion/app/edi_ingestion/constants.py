@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from ..webhook_models import WebhookCTEType
+from .transaction_sets import _SUPPORTED_TRANSACTION_SETS
 
 _X12_UOM_MAP = {
     "CA": "cases",
@@ -21,8 +22,6 @@ _FROM_ENTITY_CODES = {"SF", "SU", "SH"}
 _TO_ENTITY_CODES = {"ST", "BT", "OB"}
 _REQUIRED_856_SEGMENTS = {"ISA", "GS", "ST", "BSN", "HL", "SE", "GE", "IEA"}
 
-
-_SUPPORTED_TRANSACTION_SETS = {"856", "850", "810", "861"}
 
 _REQUIRED_850_SEGMENTS = {"ISA", "GS", "ST", "BEG", "SE", "GE", "IEA"}
 _REQUIRED_810_SEGMENTS = {"ISA", "GS", "ST", "BIG", "SE", "GE", "IEA"}

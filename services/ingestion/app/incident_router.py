@@ -31,7 +31,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
@@ -312,7 +312,7 @@ async def add_action(
         "priority": body.priority,
         "status": "pending",
         "created_at": now.isoformat(),
-        "due_at": (now.replace(hour=now.hour + (body.due_hours or 4))).isoformat() if body.due_hours else None,
+        "due_at": (now + timedelta(hours=body.due_hours)).isoformat() if body.due_hours else None,
         "notes": [],
     }
 
