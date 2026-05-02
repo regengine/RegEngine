@@ -17,8 +17,8 @@ from datetime import datetime, timezone
 from typing import Any, Optional
 from uuid import uuid4
 
-from app.shared.csv_safety import sanitize_cell
-from app.webhook_models import REQUIRED_KDES_BY_CTE, WebhookCTEType
+from .shared.csv_safety import sanitize_cell
+from .webhook_models import REQUIRED_KDES_BY_CTE, WebhookCTEType
 from shared.fda_export import safe_filename_token as _shared_safe_filename_token
 
 

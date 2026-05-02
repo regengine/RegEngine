@@ -16,16 +16,21 @@ Hardening (#1385):
   AND hold the ``audit.export.pii`` permission. Without the
   permission (or when the feature flag is not granted by the RBAC
   layer) the response returns salted-hashed email and null IP/UA.
-- When a row has ``anonymized_at`` set (GDPR Art. 17), PII is forced
-  to the masked representation regardless of the caller's
+- When a row has ``anonymized_at`` set, or a per-user anonymization
+  marker exists in the append-only audit stream (GDPR Art. 17), PII is
+  forced to the masked representation regardless of the caller's
   permissions -- the retention policy must be honored even for
   compliance officers.
+- Audit metadata is redacted on export so raw payload fields such as
+  invite emails, contact details, IPs, user agents, and tokens do not
+  bypass the actor-level PII controls.
 """
 
 import hashlib
 import hmac
 import json
 import os
+import re
 from datetime import datetime, timezone, timedelta
 from typing import Optional, Any
 from uuid import UUID
@@ -55,6 +60,50 @@ _ALLOWED_EXPORT_PURPOSES = frozenset(
     {"compliance_investigation", "security_incident", "user_request"}
 )
 
+_ANONYMIZATION_MARKER_ACTION = "gdpr_anonymize_user"
+_ANONYMIZATION_MARKER_KIND = "per_user_anonymization_order"
+_PII_REDACTION = "[REDACTED_PII]"
+_PII_KEY_SUBSTRINGS = frozenset(
+    {
+        "address",
+        "actor_ip",
+        "actor_ua",
+        "contact",
+        "contact_name",
+        "email",
+        "first_name",
+        "full_name",
+        "ip_address",
+        "last_name",
+        "password",
+        "person_name",
+        "phone",
+        "redacted_user_id",
+        "secret",
+        "ssn",
+        "token",
+        "user_agent",
+        "user_id",
+    }
+)
+_SECRET_KEY_SUBSTRINGS = frozenset({"password", "secret", "token"})
+_EMAIL_PATTERN = re.compile(r"[\w.!#$%&'*+/=?^`{|}~-]+@[\w.-]+\.[A-Za-z]{2,}")
+_PHONE_PATTERN = re.compile(
+    r"(?<!\w)(?:\+?1[\s.-]?)?(?:\(?\d{3}\)?[\s.-]?)\d{3}[\s.-]?\d{4}(?!\w)"
+)
+
+
+def _mask_identifier(value: Any) -> Optional[str]:
+    """Salted-hash a stable identifier for PII-redacted export."""
+    if value is None:
+        return None
+    text = str(value)
+    if not text:
+        return text
+    salt = os.getenv("AUDIT_PII_HASH_SALT", "regengine-audit-default-salt-v1")
+    digest = hashlib.sha256(f"{salt}:{text}".encode("utf-8")).hexdigest()
+    return f"masked:{digest[:24]}"
+
 
 def _mask_email(email: Optional[str]) -> Optional[str]:
     """Salted-hash an email for PII-redacted export.
@@ -63,11 +112,149 @@ def _mask_email(email: Optional[str]) -> Optional[str]:
     otherwise a per-process salt is generated at module import so
     hashes are at least consistent within a single deploy.
     """
-    if not email:
-        return email
-    salt = os.getenv("AUDIT_PII_HASH_SALT", "regengine-audit-default-salt-v1")
-    digest = hashlib.sha256(f"{salt}:{email}".encode("utf-8")).hexdigest()
-    return f"masked:{digest[:24]}"
+    return _mask_identifier(email)
+
+
+def _metadata_as_dict(metadata: Any) -> dict[str, Any]:
+    """Return audit metadata as a dict without trusting stored shape."""
+    if not metadata:
+        return {}
+    if isinstance(metadata, dict):
+        return metadata
+    if isinstance(metadata, str):
+        try:
+            parsed = json.loads(metadata)
+        except json.JSONDecodeError:
+            return {"value": metadata}
+        return parsed if isinstance(parsed, dict) else {"value": parsed}
+    return {"value": metadata}
+
+
+def _metadata_key_is_pii(key: Any) -> bool:
+    key_lower = str(key).lower()
+    return any(marker in key_lower for marker in _PII_KEY_SUBSTRINGS)
+
+
+def _metadata_key_is_secret(key: Any) -> bool:
+    key_lower = str(key).lower()
+    return any(marker in key_lower for marker in _SECRET_KEY_SUBSTRINGS)
+
+
+def _redact_metadata_value(value: Any, *, force: bool = False) -> Any:
+    """Recursively redact PII from audit metadata export payloads."""
+    if isinstance(value, dict):
+        redacted: dict[str, Any] = {}
+        for key, nested_value in value.items():
+            key_is_pii = _metadata_key_is_pii(key)
+            if key_is_pii and _metadata_key_is_secret(key):
+                redacted[key] = _PII_REDACTION
+            else:
+                redacted[key] = _redact_metadata_value(
+                    nested_value, force=force or key_is_pii
+                )
+        return redacted
+    if isinstance(value, list):
+        return [_redact_metadata_value(item, force=force) for item in value]
+    if isinstance(value, tuple):
+        return [_redact_metadata_value(item, force=force) for item in value]
+    if force:
+        if isinstance(value, str) and value:
+            return _mask_identifier(value)
+        return _PII_REDACTION
+    if isinstance(value, str):
+        redacted = _EMAIL_PATTERN.sub(
+            lambda match: _mask_email(match.group(0)) or "", value
+        )
+        return _PHONE_PATTERN.sub(_PII_REDACTION, redacted)
+    return value
+
+
+def _redact_metadata_pii(metadata: Any, *, force: bool = False) -> dict[str, Any]:
+    """Redact raw PII from an audit metadata object."""
+    redacted = _redact_metadata_value(_metadata_as_dict(metadata), force=force)
+    return redacted if isinstance(redacted, dict) else {"value": redacted}
+
+
+def _collect_anonymized_actor_ids(rows: list[Any], tenant_id: UUID) -> set[str]:
+    """Collect erased user IDs from append-only per-user anonymization markers."""
+    anonymized_actor_ids: set[str] = set()
+    tenant_text = str(tenant_id)
+    for row in rows:
+        metadata = _metadata_as_dict(getattr(row, "metadata_", None))
+        raw_details = metadata.get("details")
+        details = raw_details if isinstance(raw_details, dict) else {}
+        marker_payloads = (metadata, details)
+        is_marker = (
+            getattr(row, "action", None) == _ANONYMIZATION_MARKER_ACTION
+            or any(
+                payload.get("marker_kind") == _ANONYMIZATION_MARKER_KIND
+                for payload in marker_payloads
+            )
+        )
+        if not is_marker:
+            continue
+        redacted_tenant_id = next(
+            (
+                payload.get("redacted_tenant_id")
+                for payload in marker_payloads
+                if payload.get("redacted_tenant_id")
+            ),
+            None,
+        )
+        if redacted_tenant_id and str(redacted_tenant_id) != tenant_text:
+            continue
+        redacted_user_id = next(
+            (
+                payload.get("redacted_user_id")
+                for payload in marker_payloads
+                if payload.get("redacted_user_id")
+            ),
+            None,
+        )
+        redacted_user_id = redacted_user_id or getattr(row, "resource_id", None)
+        if redacted_user_id:
+            anonymized_actor_ids.add(str(redacted_user_id))
+    return anonymized_actor_ids
+
+
+def _load_anonymized_actor_ids(
+    db: Session,
+    tenant_id: UUID,
+    export_rows: list[Any],
+) -> set[str]:
+    """Load tenant-wide erasure markers so narrow exports still honor them."""
+    marker_stmt = select(AuditLogModel).where(
+        and_(
+            AuditLogModel.tenant_id == tenant_id,
+            AuditLogModel.action == _ANONYMIZATION_MARKER_ACTION,
+        )
+    )
+    marker_rows = db.execute(marker_stmt).scalars().all()
+    return _collect_anonymized_actor_ids([*export_rows, *marker_rows], tenant_id)
+
+
+def _row_is_anonymized(row: Any, anonymized_actor_ids: set[str]) -> bool:
+    """Return True when export-time PII must stay masked for this row."""
+    if getattr(row, "anonymized_at", None) is not None:
+        return True
+    actor_id = getattr(row, "actor_id", None)
+    return actor_id is not None and str(actor_id) in anonymized_actor_ids
+
+
+def _export_actor_id(row: Any, row_anonymized: bool) -> Optional[str]:
+    actor_id = getattr(row, "actor_id", None)
+    if not actor_id:
+        return None
+    if row_anonymized:
+        return _mask_identifier(actor_id)
+    return str(actor_id)
+
+
+def _export_resource_id(row: Any, anonymized_actor_ids: set[str]) -> Any:
+    resource_id = getattr(row, "resource_id", None)
+    if resource_id is not None and str(resource_id) in anonymized_actor_ids:
+        return _mask_identifier(resource_id)
+    return resource_id
 
 
 def _caller_has_pii_export_permission(
@@ -136,7 +323,8 @@ def export_audit_logs(
         False,
         description=(
             "Return raw PII (actor_email/ip/ua). Requires audit.export.pii "
-            "permission. Ignored for rows with anonymized_at set. (#1385)"
+            "permission. Ignored for rows with anonymized_at set or per-user "
+            "anonymization markers. (#1385)"
         ),
     ),
 ):
@@ -152,8 +340,11 @@ def export_audit_logs(
     - Raw PII is only returned when ``include_pii=true`` AND the caller
       holds ``audit.export.pii``. Otherwise the masked representation
       is returned (email -> salted-hash, ip -> None, ua -> None).
-    - Rows with ``anonymized_at`` set (GDPR Art. 17 erasure) are
-      always masked regardless of permissions.
+    - Rows with ``anonymized_at`` set, or rows covered by a per-user
+      anonymization marker (GDPR Art. 17 erasure), are always masked
+      regardless of permissions.
+    - Metadata runs through a recursive PII redaction pass so raw
+      payload fields do not bypass actor-level masking.
     """
     # Purpose gate (#1385)
     if purpose not in _ALLOWED_EXPORT_PURPOSES:
@@ -230,16 +421,16 @@ def export_audit_logs(
     )
     rows = db.execute(stmt).scalars().all()
 
-    # Build export entries (#1385 -- mask PII unless caller is entitled)
+    anonymized_actor_ids = _load_anonymized_actor_ids(db, tenant_id, rows)
+
+    # Build export entries (#1385 -- mask PII unless caller is entitled).
+    # Per-user anonymization is represented by append-only marker rows, so
+    # export performs dynamic masking rather than mutating historical logs.
     entries = []
     for row in rows:
-        meta = row.metadata_ if row.metadata_ else {}
-
-        # GDPR Art. 17: rows marked anonymized ALWAYS mask regardless
-        # of permissions. The anonymizer cron sets ``anonymized_at`` on
-        # rows past the retention threshold for users who requested
-        # erasure. We must not un-anonymize them downstream.
-        row_anonymized = getattr(row, "anonymized_at", None) is not None
+        # GDPR Art. 17: rows marked anonymized, or rows whose actor has a
+        # per-user anonymization order, ALWAYS mask regardless of permissions.
+        row_anonymized = _row_is_anonymized(row, anonymized_actor_ids)
         show_raw_pii = raw_pii_allowed and not row_anonymized
 
         if show_raw_pii:
@@ -251,40 +442,45 @@ def export_audit_logs(
             actor_ip = None
             actor_ua = None
 
-        entries.append({
-            "id": row.id,
-            "tenant_id": str(row.tenant_id),
-            "timestamp": row.timestamp.isoformat() if row.timestamp else None,
-            "actor": {
-                "id": str(row.actor_id) if row.actor_id else None,
-                "email": actor_email,
-                "ip": actor_ip,
-                "user_agent": actor_ua,
-                "pii_masked": not show_raw_pii,
-                "anonymized_at": (
-                    row.anonymized_at.isoformat()
-                    if row_anonymized and hasattr(row, "anonymized_at")
-                    else None
+        entries.append(
+            {
+                "id": row.id,
+                "tenant_id": str(row.tenant_id),
+                "timestamp": row.timestamp.isoformat() if row.timestamp else None,
+                "actor": {
+                    "id": _export_actor_id(row, row_anonymized),
+                    "email": actor_email,
+                    "ip": actor_ip,
+                    "user_agent": actor_ua,
+                    "pii_masked": not show_raw_pii,
+                    "anonymized_at": (
+                        row.anonymized_at.isoformat()
+                        if row_anonymized and hasattr(row, "anonymized_at")
+                        else None
+                    ),
+                },
+                "event": {
+                    "type": row.event_type,
+                    "category": row.event_category,
+                    "action": row.action,
+                    "severity": row.severity,
+                },
+                "resource": {
+                    "type": row.resource_type,
+                    "id": _export_resource_id(row, anonymized_actor_ids),
+                },
+                "endpoint": row.endpoint,
+                "metadata": _redact_metadata_pii(
+                    row.metadata_,
+                    force=row_anonymized,
                 ),
-            },
-            "event": {
-                "type": row.event_type,
-                "category": row.event_category,
-                "action": row.action,
-                "severity": row.severity,
-            },
-            "resource": {
-                "type": row.resource_type,
-                "id": row.resource_id,
-            },
-            "endpoint": row.endpoint,
-            "metadata": meta,
-            "request_id": str(row.request_id) if row.request_id else None,
-            "integrity": {
-                "prev_hash": row.prev_hash,
-                "hash": row.integrity_hash,
-            },
-        })
+                "request_id": str(row.request_id) if row.request_id else None,
+                "integrity": {
+                    "prev_hash": row.prev_hash,
+                    "hash": row.integrity_hash,
+                },
+            }
+        )
 
     # Sign the export bundle
     export_timestamp = datetime.now(timezone.utc).isoformat()

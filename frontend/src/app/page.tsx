@@ -1,92 +1,113 @@
 import Link from "next/link";
 import type { Metadata } from "next";
+import type { ReactNode } from "react";
 import {
   ArrowRight,
+  Boxes,
   CheckCircle2,
   ClipboardCheck,
   Database,
   FileCheck2,
   Gauge,
+  GitBranch,
   PackageCheck,
   ScanLine,
   ShieldCheck,
   TimerReset,
 } from "lucide-react";
+import {
+  CommitGate,
+  ComplianceStateBadge,
+  EvidenceCard,
+  EvidencePackagePreview,
+  HashVerificationStrip,
+  ReadinessScore,
+  RegulatoryCitationBlock,
+} from "@/components/compliance";
 
 export const metadata: Metadata = {
-  title: "RegEngine — Traceability Proof for FSMA 204",
+  title: "RegEngine — Compliance OS for Food Traceability",
   description:
-    "RegEngine turns supplier traceability data into verified, tenant-scoped FSMA 204 evidence with preflight checks, fix queues, commit gates, and FDA-ready export packages.",
+    "RegEngine turns messy supplier data into verified FSMA 204 evidence with readiness scoring, supplier gap queues, commit gates, and FDA-ready export packages.",
   openGraph: {
-    title: "RegEngine — Traceability Proof for FSMA 204",
+    title: "RegEngine — Compliance OS for Food Traceability",
     description:
-      "Preflight supplier data, create fix queues, gate evidence commits, and export verified FSMA 204 records.",
+      "Preflight supplier data, find KDE gaps, gate evidence commits, and export verified FSMA 204 records.",
     url: "https://regengine.co",
     type: "website",
-    images: [{ url: "/og-image.png", width: 1200, height: 630, alt: "RegEngine traceability proof interface" }],
+    images: [{ url: "/og-image.png", width: 1200, height: 630, alt: "RegEngine food traceability command center" }],
   },
 };
 
-const feedRows = [
-  { supplier: "FreshPack Central", cte: "Shipping", lot: "TLC-DEMO-001", status: "Blocked", issue: "Ship-to missing" },
-  { supplier: "Valley Farms", cte: "Harvesting", lot: "TLC-DEMO-002", status: "Ready", issue: "Commit eligible" },
-  { supplier: "Cold Dock 7", cte: "Cooling", lot: "TLC-DEMO-003", status: "Review", issue: "Temp note" },
-  { supplier: "Bay Area DC", cte: "Receiving", lot: "TLC-DEMO-004", status: "Ready", issue: "Export eligible" },
+const readinessMetrics = [
+  { label: "FTL coverage", value: "91%", state: "ready" as const },
+  { label: "KDE completeness", value: "84%", state: "needs-correction" as const },
+  { label: "Export eligibility", value: "72%", state: "blocked" as const },
+  { label: "Recall clock", value: "18h", state: "recall-ready" as const },
+];
+
+const supplierGaps = [
+  {
+    supplier: "FreshPack Central",
+    scope: "Shipping CTE",
+    issue: "Ship-to location missing for 3 lots",
+    owner: "Supplier portal",
+    state: "blocked" as const,
+  },
+  {
+    supplier: "Valley Farms",
+    scope: "Harvesting CTE",
+    issue: "Harvest date and quantity validated",
+    owner: "Evidence commit",
+    state: "ready" as const,
+  },
+  {
+    supplier: "Cold Dock 7",
+    scope: "Cooling CTE",
+    issue: "Temperature note requires review",
+    owner: "Ops review",
+    state: "needs-correction" as const,
+  },
+];
+
+const evidenceCards = [
+  {
+    title: "Supplier Gap Radar",
+    description: "Expose the supplier, CTE, lot, and field blocking export readiness before records enter the evidence boundary.",
+    state: "blocked" as const,
+    meta: "Readiness workbench",
+    icon: Gauge,
+  },
+  {
+    title: "Evidence Chain",
+    description: "Carry every accepted record forward with provenance, tenant scope, validation history, and hash verification.",
+    state: "committed" as const,
+    meta: "Evidence ledger",
+    icon: GitBranch,
+  },
+  {
+    title: "24-hour Recall Clock",
+    description: "Keep recall response posture visible with package readiness, export state, and the work still blocking delivery.",
+    state: "recall-ready" as const,
+    meta: "Response posture",
+    icon: TimerReset,
+  },
 ];
 
 const workflow = [
-  { label: "Intake", detail: "CSV, API, EDI, portal", icon: ScanLine, color: "var(--re-info)" },
-  { label: "Normalize", detail: "CTE/KDE shape check", icon: Database, color: "var(--re-signal-blue)" },
-  { label: "Block / fix", detail: "Owner and reason", icon: ClipboardCheck, color: "var(--re-warning)" },
-  { label: "Commit", detail: "Tenant evidence gate", icon: ShieldCheck, color: "var(--re-success)" },
-  { label: "Export", detail: "FDA-ready package", icon: PackageCheck, color: "var(--re-danger)" },
-];
-
-const proof = [
-  ["Supplier reality", "Different file shapes, late responses, duplicate lots, missing KDEs."],
-  ["Operator decision", "Ready, review, or blocked before records become evidence."],
-  ["Evidence boundary", "Tenant-scoped persistence with provenance and verification history."],
-  ["Response posture", "Recall and retailer request packages generated from clean records."],
-];
-
-const outcomes = [
-  {
-    title: "Find the failure point",
-    body: "See which CTE, supplier, lot, or field blocks readiness before the problem lands in production.",
-    icon: ScanLine,
-  },
-  {
-    title: "Give the queue an owner",
-    body: "Turn missing KDEs and malformed values into accountable remediation work instead of spreadsheet archaeology.",
-    icon: ClipboardCheck,
-  },
-  {
-    title: "Ship defensible evidence",
-    body: "Commit only records that pass identity, provenance, persistence, and export checks.",
-    icon: ShieldCheck,
-  },
+  { label: "Intake", detail: "CSV, API, EDI, or portal files enter the workbench.", icon: ScanLine },
+  { label: "Interrogate", detail: "CTE/KDE coverage, identity, and facility scope are checked.", icon: Database },
+  { label: "Correct", detail: "Every gap gets a reason, owner, and recovery path.", icon: ClipboardCheck },
+  { label: "Commit", detail: "Only verified records cross the evidence boundary.", icon: ShieldCheck },
+  { label: "Export", detail: "Build signed FDA, retailer, or internal evidence packets.", icon: PackageCheck },
 ];
 
 const destinations = [
-  { label: "Product", href: "/product", icon: Database, note: "Platform view" },
-  { label: "Pricing", href: "/pricing", icon: Gauge, note: "Plans and limits" },
-  { label: "Security", href: "/security", icon: FileCheck2, note: "Controls and posture" },
-  { label: "Trust", href: "/trust", icon: CheckCircle2, note: "Architecture and proof" },
+  { label: "Product", href: "/product", icon: Database, note: "Command Center workflows" },
+  { label: "Tools", href: "/tools", icon: Gauge, note: "Compliance instruments" },
+  { label: "Security", href: "/security", icon: FileCheck2, note: "Evidence Ledger controls" },
+  { label: "Trust", href: "/trust", icon: CheckCircle2, note: "Verification posture" },
 ];
-
-function statusColor(status: string) {
-  if (status === "Ready") {
-    return "var(--re-success)";
-  }
-  if (status === "Review") {
-    return "var(--re-warning)";
-  }
-  return "var(--re-danger)";
-}
-
-function StatusDot({ status }: { status: string }) {
-  return <span className="re-signal" style={{ color: statusColor(status) }} />;
-}
 
 function ActionLink({
   href,
@@ -94,17 +115,17 @@ function ActionLink({
   primary = false,
 }: {
   href: string;
-  children: React.ReactNode;
+  children: ReactNode;
   primary?: boolean;
 }) {
   return (
     <Link
       href={href}
       className={[
-        "inline-flex h-11 items-center justify-center gap-2 border px-5 text-[13px] font-semibold no-underline transition-colors",
+        "inline-flex min-h-11 items-center justify-center gap-2 border px-5 py-3 text-[13px] font-semibold no-underline transition-colors",
         primary
-          ? "border-[var(--re-text-primary)] bg-[var(--re-text-primary)] text-[var(--re-surface-base)] hover:bg-[var(--re-signal-green)]"
-          : "border-[var(--re-border-strong)] text-[var(--re-text-primary)] hover:bg-[var(--re-surface-elevated)]",
+          ? "border-[var(--re-text-primary)] bg-[var(--re-text-primary)] text-[var(--re-surface-base)] hover:bg-[var(--re-success)]"
+          : "border-[var(--re-border-strong)] bg-[var(--re-surface-elevated)] text-[var(--re-text-primary)] hover:bg-[var(--re-surface-card)]",
       ].join(" ")}
     >
       {children}
@@ -112,78 +133,82 @@ function ActionLink({
   );
 }
 
-function WorkbenchPreview() {
+function MetricRail() {
   return (
-    <div className="re-panel overflow-hidden bg-[var(--re-surface-elevated)]">
-      <div className="grid border-b border-[var(--re-surface-border)] md:grid-cols-[1fr_180px]">
-        <div className="p-5">
-          <p className="re-label">Live preflight</p>
-          <h2 className="mt-2 text-2xl font-semibold leading-tight text-[var(--re-text-primary)]">Supplier feed decisions</h2>
-          <p className="mt-2 max-w-[460px] text-sm leading-6 text-[var(--re-text-muted)]">
-            Records are scored before commit, with every blocker tied to an owner and evidence boundary.
-          </p>
+    <div className="re-home-command-rail mt-8">
+      {readinessMetrics.map((metric) => (
+        <div key={metric.label} className="border-b border-r border-[var(--re-surface-border)] p-4 last:border-r-0 md:border-b-0">
+          <p className="text-2xl font-semibold leading-none text-[var(--re-text-primary)]">{metric.value}</p>
+          <div className="mt-3 flex flex-col gap-2">
+            <p className="re-label">{metric.label}</p>
+            <ComplianceStateBadge state={metric.state} />
+          </div>
         </div>
-        <div className="grid grid-cols-3 border-t border-[var(--re-surface-border)] md:grid-cols-1 md:border-l md:border-t-0">
-          {[
-            ["Ready", "2", "var(--re-success)"],
-            ["Blocked", "1", "var(--re-danger)"],
-            ["ETA", "04:12", "var(--re-warning)"],
-          ].map(([label, value, color]) => (
-            <div key={label} className="border-r border-[var(--re-surface-border)] px-4 py-3 last:border-r-0 md:border-b md:border-r-0 md:last:border-b-0">
-              <p className="re-label">{label}</p>
-              <p className="mt-1 flex items-center gap-2 text-xl font-semibold text-[var(--re-text-primary)]">
-                <span className="re-signal" style={{ color }} />
-                {value}
-              </p>
-            </div>
-          ))}
+      ))}
+    </div>
+  );
+}
+
+function SupplierGapRadar() {
+  return (
+    <section className="border bg-[var(--re-surface-elevated)] p-4">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <p className="re-label">Supplier Gap Radar</p>
+          <h2 className="mt-2 text-xl font-semibold leading-tight text-[var(--re-text-primary)]">What blocks export readiness</h2>
         </div>
+        <Boxes className="h-5 w-5 text-[var(--re-text-muted)]" aria-hidden="true" />
       </div>
-
-      <div>
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[620px] border-collapse text-[13px]">
-            <thead>
-              <tr>
-                {["Supplier", "CTE", "Lot", "Status", "Issue"].map((label) => (
-                  <th key={label} className="border-b border-[var(--re-surface-border)] px-4 py-3 text-left font-mono text-[11px] font-medium uppercase text-[var(--re-text-muted)]">
-                    {label}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {feedRows.map((row) => (
-                <tr key={row.lot}>
-                  <td className="border-b border-[var(--re-surface-border)] px-4 py-3 font-medium text-[var(--re-text-primary)]">{row.supplier}</td>
-                  <td className="border-b border-[var(--re-surface-border)] px-4 py-3">{row.cte}</td>
-                  <td className="border-b border-[var(--re-surface-border)] px-4 py-3 font-mono text-[12px]">{row.lot}</td>
-                  <td className="border-b border-[var(--re-surface-border)] px-4 py-3">
-                    <span className="inline-flex items-center gap-2">
-                      <StatusDot status={row.status} />
-                      {row.status}
-                    </span>
-                  </td>
-                  <td className="border-b border-[var(--re-surface-border)] px-4 py-3">{row.issue}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        <div className="grid border-t border-[var(--re-surface-border)] sm:grid-cols-3">
-          {["Identity resolved", "KDE completeness", "Hash chain ready"].map((item, index) => (
-            <div key={item} className="border-b border-[var(--re-surface-border)] px-4 py-3 sm:border-b-0 sm:border-r sm:last:border-r-0">
-              <p className="flex items-center gap-2 text-sm font-semibold text-[var(--re-text-primary)]">
-                <span className="flex h-5 w-5 items-center justify-center border border-[var(--re-border-default)] text-[10px]">
-                  {index + 1}
-                </span>
-                {item}
-              </p>
-              <p className="mt-1 font-mono text-[11px] text-[var(--re-text-muted)]">pass:{index === 1 ? "review" : "true"}</p>
+      <div className="mt-4 grid gap-3">
+        {supplierGaps.map((gap) => (
+          <article key={gap.supplier} className="grid gap-3 border border-[var(--re-border-subtle)] bg-[var(--re-surface-card)] p-3 sm:grid-cols-[1fr_auto] sm:items-center">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="text-sm font-semibold text-[var(--re-text-primary)]">{gap.supplier}</h3>
+                <ComplianceStateBadge state={gap.state} />
+              </div>
+              <p className="mt-2 text-sm leading-5 text-[var(--re-text-muted)]">{gap.issue}</p>
             </div>
-          ))}
-        </div>
+            <div className="grid gap-1 text-left sm:text-right">
+              <span className="font-mono text-[11px] uppercase text-[var(--re-text-muted)]">{gap.scope}</span>
+              <span className="text-xs font-semibold text-[var(--re-text-secondary)]">{gap.owner}</span>
+            </div>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function CommandCenterPreview() {
+  return (
+    <div className="re-home-grid-panel border border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)] p-3 shadow-[var(--re-shadow-md)]">
+      <div className="grid gap-3 xl:grid-cols-[250px_minmax(0,1fr)]">
+        <ReadinessScore
+          score={86}
+          label="Traceability readiness"
+          description="Facility scope, KDE coverage, supplier response, and export blockers scored before commit."
+          blockers={3}
+          size="sm"
+        />
+        <SupplierGapRadar />
+      </div>
+      <div className="mt-3 grid gap-3">
+        <CommitGate
+          status="blocked"
+          title="Export eligibility gate"
+          description="The FDA package can build after missing ship-to locations are corrected and revalidated."
+          criteria={[
+            { label: "Tenant identity resolved", passed: true },
+            { label: "CTE/KDE coverage above threshold", passed: true },
+            { label: "Supplier gaps cleared", passed: false, detail: "FreshPack Central has 3 unresolved shipping lots." },
+          ]}
+        />
+        <HashVerificationStrip
+          hash="8f14e45fceea167a5a36dedd4bea2543"
+          verifiedAt="verified 04:12 UTC"
+          state="committed"
+        />
       </div>
     </div>
   );
@@ -191,95 +216,97 @@ function WorkbenchPreview() {
 
 export default function HomePage() {
   return (
-    <main className="re-page min-h-screen text-[var(--re-text-secondary)]">
-      <section className="re-container grid min-h-[calc(100vh-56px)] items-center gap-10 py-10 lg:grid-cols-[0.86fr_1.14fr] lg:py-12">
+    <main className="re-compliance-os min-h-screen">
+      <section className="re-container grid min-h-[calc(100vh-56px)] items-start gap-8 py-10 lg:grid-cols-[0.9fr_1.1fr] lg:py-12">
         <div>
-          <h1 className="max-w-[680px] text-[clamp(44px,6.6vw,76px)] font-semibold leading-[0.95] text-[var(--re-text-primary)]">
-            Traceability proof before records ship.
+          <h1 className="max-w-[720px] text-[clamp(40px,5.2vw,64px)] font-semibold leading-[0.98] text-[var(--re-text-primary)]">
+            Compliance operating system for food traceability.
           </h1>
-          <p className="mt-6 max-w-[590px] text-[18px] leading-8 text-[var(--re-text-muted)]">
-            RegEngine turns messy supplier files into clear readiness decisions, fix queues, and verified FSMA 204 evidence packages.
+          <p className="mt-6 max-w-[620px] text-[18px] leading-8 text-[var(--re-text-muted)]">
+            RegEngine is where messy supplier data enters, gets interrogated, corrected, verified, committed, and exported as defensible FSMA 204 evidence.
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
             <ActionLink href="/tools/inflow-lab" primary>
               Preflight a supplier file
-              <ArrowRight className="h-4 w-4" />
+              <ArrowRight className="h-4 w-4" aria-hidden="true" />
             </ActionLink>
             <ActionLink href="/retailer-readiness">Check readiness</ActionLink>
           </div>
-          <div className="mt-10 grid max-w-[620px] border-y border-[var(--re-surface-border)] sm:grid-cols-3">
-            {[
-              ["24h", "Recall response path"],
-              ["CTE/KDE", "Field-level blockers"],
-              ["Tenant", "Scoped evidence"],
-            ].map(([value, label]) => (
-              <div key={label} className="border-b border-[var(--re-surface-border)] py-4 sm:border-b-0 sm:border-r sm:px-4 sm:first:pl-0 sm:last:border-r-0">
-                <p className="text-2xl font-semibold text-[var(--re-text-primary)]">{value}</p>
-                <p className="mt-1 re-label">{label}</p>
-              </div>
-            ))}
-          </div>
+          <MetricRail />
         </div>
 
-        <WorkbenchPreview />
+        <CommandCenterPreview />
       </section>
 
-      <section className="border-y border-[var(--re-surface-border)] bg-[var(--re-surface-card)]">
+      <section className="border-y border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)]">
         <div className="re-container grid gap-0 py-0 md:grid-cols-5">
           {workflow.map((step, index) => (
-            <div key={step.label} className="border-b border-[var(--re-surface-border)] px-0 py-5 md:border-b-0 md:border-r md:px-5 md:first:pl-0 md:last:border-r-0">
+            <div key={step.label} className="border-b border-[var(--re-surface-border)] py-5 md:border-b-0 md:border-r md:px-5 md:first:pl-0 md:last:border-r-0">
               <div className="flex items-center justify-between gap-3">
-                <step.icon className="h-5 w-5" style={{ color: step.color }} />
+                <step.icon className="h-5 w-5 text-[var(--re-text-primary)]" aria-hidden="true" />
                 <span className="font-mono text-[11px] text-[var(--re-text-muted)]">{String(index + 1).padStart(2, "0")}</span>
               </div>
               <h2 className="mt-5 text-xl font-semibold text-[var(--re-text-primary)]">{step.label}</h2>
-              <p className="mt-2 text-sm text-[var(--re-text-muted)]">{step.detail}</p>
+              <p className="mt-2 text-sm leading-6 text-[var(--re-text-muted)]">{step.detail}</p>
             </div>
           ))}
         </div>
       </section>
 
       <section className="re-section">
-        <div className="re-container grid gap-10 lg:grid-cols-[0.82fr_1fr]">
+        <div className="re-container grid gap-10 lg:grid-cols-[0.72fr_1fr]">
           <div>
-            <h2 className="max-w-[540px] text-[clamp(32px,4.5vw,56px)] font-semibold leading-tight">
-              Make the readiness decision visible.
+            <h2 className="max-w-[560px] text-[clamp(32px,4.5vw,56px)] font-semibold leading-tight text-[var(--re-text-primary)]">
+              Make every compliance object show its state.
             </h2>
-            <p className="mt-5 max-w-[480px] text-base leading-7 text-[var(--re-text-muted)]">
-              The interface is built around the daily question: which supplier records can move, which need review, and what proof will survive an audit.
+            <p className="mt-5 max-w-[500px] text-base leading-7 text-[var(--re-text-muted)]">
+              Suppliers, records, exports, and facilities use the same state model everywhere, so teams know what is ready, blocked, corrected, committed, and recall-ready.
             </p>
           </div>
-          <div className="grid gap-4 sm:grid-cols-3">
-            {outcomes.map(({ title, body, icon: Icon }) => (
-              <article key={title} className="border-t border-[var(--re-border-strong)] pt-4">
-                <Icon className="h-5 w-5 text-[var(--re-text-primary)]" />
-                <h3 className="mt-7 text-xl font-semibold text-[var(--re-text-primary)]">{title}</h3>
-                <p className="mt-3 text-sm leading-6 text-[var(--re-text-muted)]">{body}</p>
-              </article>
+          <div className="grid gap-4 md:grid-cols-3">
+            {evidenceCards.map((card) => (
+              <EvidenceCard key={card.title} {...card}>
+                <p className="text-xs leading-5 text-[var(--re-text-muted)]">Object state drives badge, border, copy, and next action.</p>
+              </EvidenceCard>
             ))}
           </div>
         </div>
       </section>
 
-      <section className="re-section">
-        <div className="re-container grid gap-8 lg:grid-cols-[0.74fr_1fr]">
-          <div>
-            <TimerReset className="h-7 w-7 text-[var(--re-signal-red)]" />
-            <h2 className="mt-6 max-w-[520px] text-[clamp(30px,4vw,48px)] font-semibold leading-tight">
-              Operational proof without the spreadsheet chase.
-            </h2>
+      <section className="re-section bg-[var(--re-surface-card)]">
+        <div className="re-container grid gap-8 lg:grid-cols-[1fr_0.9fr]">
+          <div className="grid gap-4">
+            <EvidencePackagePreview
+              packageId="FDA-204-PKG-0427"
+              status="building"
+              records={1284}
+              kdeCoverage={94}
+              generatedAt="04:12"
+              items={["Facility scope manifest", "Committed CTE/KDE records", "Supplier correction log", "Hash verification strip"]}
+            />
+            <HashVerificationStrip
+              hash="b7a875fc1ea228b9061041b7cec4bd3c52ab3ce3"
+              verifiedAt="chain checked today"
+              state="signed"
+            />
           </div>
-          <div className="re-panel overflow-hidden">
-            <table className="re-rule-table">
-              <tbody>
-                {proof.map(([label, value]) => (
-                  <tr key={label}>
-                    <td className="w-[34%] font-mono text-[12px] uppercase text-[var(--re-text-muted)]">{label}</td>
-                    <td className="font-medium text-[var(--re-text-primary)]">{value}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div>
+            <RegulatoryCitationBlock citation="21 CFR 1.1455" title="Records must be sortable and provided within 24 hours.">
+              RegEngine treats recall response as an operating state, not a static report. The interface keeps the evidence package, blockers, owners, and verification trail visible before the clock starts.
+            </RegulatoryCitationBlock>
+            <div className="mt-5 grid gap-3 sm:grid-cols-2">
+              {[
+                ["Records with full provenance", "1,184"],
+                ["Open supplier blockers", "3"],
+                ["Facilities scoped", "12/14"],
+                ["Days since recall drill", "18"],
+              ].map(([label, value]) => (
+                <div key={label} className="border border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)] p-4">
+                  <p className="text-2xl font-semibold text-[var(--re-text-primary)]">{value}</p>
+                  <p className="mt-2 re-label">{label}</p>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       </section>
@@ -289,8 +316,8 @@ export default function HomePage() {
           {destinations.map(({ label, href, icon: Icon, note }) => (
             <Link key={label} href={href} className="group border-t border-[var(--re-border-strong)] pt-4 no-underline">
               <div className="flex items-center justify-between">
-                <Icon className="h-5 w-5 text-[var(--re-text-muted)]" />
-                <ArrowRight className="h-4 w-4 text-[var(--re-text-primary)] transition-transform group-hover:translate-x-1" />
+                <Icon className="h-5 w-5 text-[var(--re-text-muted)]" aria-hidden="true" />
+                <ArrowRight className="h-4 w-4 text-[var(--re-text-primary)] transition-transform group-hover:translate-x-1" aria-hidden="true" />
               </div>
               <span className="mt-10 block text-2xl font-semibold text-[var(--re-text-primary)]">{label}</span>
               <span className="mt-2 block text-sm text-[var(--re-text-muted)]">{note}</span>

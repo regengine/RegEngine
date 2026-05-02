@@ -4,7 +4,7 @@ from typing import Any, Optional
 
 from pydantic import BaseModel, Field
 
-from app.webhook_models import IngestResponse
+from ..webhook_models import IngestResponse
 
 
 class EDIIngestResponse(BaseModel):

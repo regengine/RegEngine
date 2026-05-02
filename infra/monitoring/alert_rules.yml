@@ -4,34 +4,43 @@ groups:
     rules:
       # Service Health Alerts
       - alert: ServiceDown
-        expr: up{job="regengine"} == 0
+        expr: up{job="regengine-services"} == 0
         for: 1m
         labels:
           severity: critical
           component: service
         annotations:
-          summary: "RegEngine service {{ $labels.instance }} is down"
-          description: "Service {{ $labels.instance }} has been down for more than 1 minute."
+          summary: "RegEngine service {{ $labels.service }} is down"
+          description: "Service {{ $labels.service }} ({{ $labels.instance }}) has been down or unscrapeable for more than 1 minute."
 
       - alert: HighErrorRate
-        expr: rate(http_requests_total{job="regengine", status=~"5.."}[5m]) > 0.05
+        expr: |
+          (
+            sum by (service) (rate(http_requests_total{job="regengine-services", status=~"5.."}[5m]))
+            /
+            sum by (service) (rate(http_requests_total{job="regengine-services"}[5m]))
+          ) > 0.05
         for: 5m
         labels:
           severity: critical
           component: api
         annotations:
-          summary: "High 5xx error rate on {{ $labels.endpoint }}"
-          description: "Error rate is {{ $value | humanizePercentage }} on endpoint {{ $labels.endpoint }}."
+          summary: "High 5xx error rate on {{ $labels.service }}"
+          description: "5xx ratio is {{ $value | humanizePercentage }} on {{ $labels.service }}."
 
       - alert: HighP99Latency
-        expr: histogram_quantile(0.99, rate(http_request_duration_seconds_bucket{job="regengine"}[5m])) > 0.5
+        expr: |
+          histogram_quantile(
+            0.99,
+            sum by (service, le) (rate(http_request_duration_seconds_bucket{job="regengine-services"}[5m]))
+          ) > 0.5
         for: 10m
         labels:
           severity: critical
           component: performance
         annotations:
-          summary: "High P99 latency on {{ $labels.endpoint }}"
-          description: "P99 latency is {{ $value | humanizeDuration }} on endpoint {{ $labels.endpoint }} (threshold: 500ms)."
+          summary: "High P99 latency on {{ $labels.service }}"
+          description: "P99 latency is {{ $value | humanizeDuration }} on {{ $labels.service }} (threshold: 500ms)."
 
       # Kafka Alerts
       - alert: HighKafkaConsumerLag
@@ -114,7 +123,7 @@ groups:
           component: database
         annotations:
           summary: "PostgreSQL approaching max connections"
-          description: "PostgreSQL has {{ $value }} active connections, approaching max of {{ pg_settings_max_connections }}."
+          description: "PostgreSQL connection usage is above 90% of the configured max; current matching value is {{ $value }}."
 
   - name: regengine_warning_alerts
     interval: 30s
@@ -130,24 +139,33 @@ groups:
           description: "Consumer lag is {{ $value }} messages on topic {{ $labels.topic }}."
 
       - alert: IncreasedErrorRate
-        expr: rate(http_requests_total{job="regengine", status=~"5.."}[5m]) > 0.01
+        expr: |
+          (
+            sum by (service) (rate(http_requests_total{job="regengine-services", status=~"5.."}[5m]))
+            /
+            sum by (service) (rate(http_requests_total{job="regengine-services"}[5m]))
+          ) > 0.01
         for: 10m
         labels:
           severity: warning
           component: api
         annotations:
-          summary: "Increased error rate on {{ $labels.endpoint }}"
-          description: "Error rate is {{ $value | humanizePercentage }} on endpoint {{ $labels.endpoint }}."
+          summary: "Increased error rate on {{ $labels.service }}"
+          description: "5xx ratio is {{ $value | humanizePercentage }} on {{ $labels.service }}."
 
       - alert: ModerateP99Latency
-        expr: histogram_quantile(0.99, rate(http_request_duration_seconds_bucket{job="regengine"}[5m])) > 0.2
+        expr: |
+          histogram_quantile(
+            0.99,
+            sum by (service, le) (rate(http_request_duration_seconds_bucket{job="regengine-services"}[5m]))
+          ) > 0.2
         for: 15m
         labels:
           severity: warning
           component: performance
         annotations:
-          summary: "Elevated P99 latency on {{ $labels.endpoint }}"
-          description: "P99 latency is {{ $value | humanizeDuration }} on endpoint {{ $labels.endpoint }} (threshold: 200ms)."
+          summary: "Elevated P99 latency on {{ $labels.service }}"
+          description: "P99 latency is {{ $value | humanizeDuration }} on {{ $labels.service }} (threshold: 200ms)."
 
       - alert: HighDiskIOWait
         expr: rate(node_disk_io_time_seconds_total[5m]) > 0.5

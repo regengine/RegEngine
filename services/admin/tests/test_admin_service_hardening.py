@@ -12,7 +12,10 @@ hardening:
 
 from __future__ import annotations
 
+import json
 import time
+import uuid
+from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
@@ -97,6 +100,114 @@ def test_audit_export_allowed_purposes_are_constrained():
     assert "user_request" in _ALLOWED_EXPORT_PURPOSES
     # Random value not allowed
     assert "exfiltrate_all_the_things" not in _ALLOWED_EXPORT_PURPOSES
+
+
+def test_audit_export_metadata_redaction_scrubs_nested_pii():
+    from services.admin.app.audit_routes import _PII_REDACTION, _redact_metadata_pii
+
+    erased_user_id = uuid.uuid4()
+    redacted = _redact_metadata_pii(
+        {
+            "email": "invitee@example.com",
+            "safe": "role-change",
+            "nested": {
+                "owner_phone": "+1 (415) 555-1212",
+                "note": "Call jane@example.com before shipping.",
+                "api_token": "super-secret-token",
+                "redacted_user_id": str(erased_user_id),
+            },
+            "contacts": [{"contact_name": "Jane Doe"}],
+        }
+    )
+
+    payload = json.dumps(redacted, sort_keys=True)
+    assert "invitee@example.com" not in payload
+    assert "jane@example.com" not in payload
+    assert "415" not in payload
+    assert "super-secret-token" not in payload
+    assert str(erased_user_id) not in payload
+    assert redacted["safe"] == "role-change"
+    assert redacted["nested"]["api_token"] == _PII_REDACTION
+    assert "masked:" in payload
+
+
+def test_audit_export_honors_per_user_anonymization_marker():
+    from services.admin.app.audit_routes import (
+        _collect_anonymized_actor_ids,
+        _export_actor_id,
+        _export_resource_id,
+        _row_is_anonymized,
+    )
+
+    tenant_id = uuid.uuid4()
+    erased_user_id = uuid.uuid4()
+    marker = SimpleNamespace(
+        action="gdpr_anonymize_user",
+        resource_id=str(erased_user_id),
+        metadata_={
+            "details": {
+                "marker_kind": "per_user_anonymization_order",
+                "redacted_user_id": str(erased_user_id),
+                "redacted_tenant_id": str(tenant_id),
+            },
+        },
+    )
+    historical_row = SimpleNamespace(
+        actor_id=erased_user_id,
+        resource_id=str(erased_user_id),
+        anonymized_at=None,
+    )
+
+    anonymized_actor_ids = _collect_anonymized_actor_ids(
+        [historical_row, marker], tenant_id
+    )
+
+    assert str(erased_user_id) in anonymized_actor_ids
+    assert _row_is_anonymized(historical_row, anonymized_actor_ids) is True
+    assert _export_actor_id(historical_row, True).startswith("masked:")
+    assert _export_resource_id(historical_row, anonymized_actor_ids).startswith(
+        "masked:"
+    )
+
+
+def test_audit_export_ignores_anonymization_marker_for_other_tenant():
+    from services.admin.app.audit_routes import _collect_anonymized_actor_ids
+
+    tenant_id = uuid.uuid4()
+    erased_user_id = uuid.uuid4()
+    marker = SimpleNamespace(
+        action="gdpr_anonymize_user",
+        resource_id=str(erased_user_id),
+        metadata_={
+            "marker_kind": "per_user_anonymization_order",
+            "redacted_user_id": str(erased_user_id),
+            "redacted_tenant_id": str(uuid.uuid4()),
+        },
+    )
+
+    assert _collect_anonymized_actor_ids([marker], tenant_id) == set()
+
+
+def test_audit_export_loads_markers_outside_requested_export_rows():
+    from services.admin.app.audit_routes import _load_anonymized_actor_ids
+
+    tenant_id = uuid.uuid4()
+    erased_user_id = uuid.uuid4()
+    marker = SimpleNamespace(
+        action="gdpr_anonymize_user",
+        resource_id=str(erased_user_id),
+        metadata_={
+            "marker_kind": "per_user_anonymization_order",
+            "redacted_user_id": str(erased_user_id),
+            "redacted_tenant_id": str(tenant_id),
+        },
+    )
+    db = MagicMock()
+    db.execute.return_value.scalars.return_value.all.return_value = [marker]
+
+    anonymized_actor_ids = _load_anonymized_actor_ids(db, tenant_id, export_rows=[])
+
+    assert str(erased_user_id) in anonymized_actor_ids
 
 
 # =========================================================================

@@ -1,5 +1,6 @@
 
 import { test, expect } from '@playwright/test';
+import { adminAuthenticatedE2ESkipReason, hasAdminAuthenticatedE2E } from './auth-prereqs';
 
 // Invite flow requires an org admin account that can create invite tokens.
 // Use dedicated admin credentials if available; fall back to the test user
@@ -10,7 +11,7 @@ const ADMIN_PASSWORD = process.env.TEST_ADMIN_PASSWORD || process.env.TEST_PASSW
 test.describe('User Invite Flow', () => {
 
     test.afterEach(async ({ page }, testInfo) => {
-        if (testInfo.status !== 'passed') {
+        if (testInfo.status !== testInfo.expectedStatus) {
             const path = `test-results/failure-${testInfo.title.replace(/\s+/g, '-').toLowerCase()}.png`;
             await page.screenshot({ path, fullPage: true });
             console.log(`Screenshot saved to ${path}`);
@@ -24,6 +25,7 @@ test.describe('User Invite Flow', () => {
             !process.env.TEST_ADMIN_EMAIL || !process.env.TEST_ADMIN_PASSWORD,
             'Requires TEST_ADMIN_EMAIL + TEST_ADMIN_PASSWORD secrets (sysadmin account)'
         );
+        test.skip(!hasAdminAuthenticatedE2E, adminAuthenticatedE2ESkipReason);
 
         // Increase timeout
         test.setTimeout(90000);

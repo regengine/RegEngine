@@ -10,8 +10,8 @@ import stripe
 import structlog
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 
-from app.authz import IngestionPrincipal, get_ingestion_principal, require_permission
-from app.webhook_compat import _verify_api_key
+from ..authz import IngestionPrincipal, get_ingestion_principal, require_permission
+from ..webhook_compat import _verify_api_key
 from shared import funnel_events as _funnel_mod
 
 from . import customers as _customers_mod

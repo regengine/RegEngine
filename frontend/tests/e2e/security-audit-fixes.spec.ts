@@ -1,4 +1,10 @@
 import { test, expect, type Page, type BrowserContext } from '@playwright/test';
+import {
+    adminAuthenticatedE2ESkipReason,
+    authenticatedE2ESkipReason,
+    hasAdminAuthenticatedE2E,
+    hasAuthenticatedE2E,
+} from './auth-prereqs';
 
 /** Wait for navigation to an authenticated page (pathname-only check to avoid matching query strings like ?next=/dashboard) */
 async function waitForAuthenticated(page: Page, timeout = 15000) {
@@ -35,6 +41,7 @@ const REGULAR_USER_PASSWORD = process.env.TEST_PASSWORD || 'test-placeholder';
 // The /sysadmin page checks user.is_sysadmin client-side and redirects non-sysadmins to /login.
 const hasDedicatedAdmin = !!(
     process.env.TEST_ADMIN_EMAIL &&
+    process.env.TEST_ADMIN_PASSWORD &&
     process.env.TEST_ADMIN_EMAIL !== process.env.TEST_USER_EMAIL
 );
 
@@ -50,7 +57,7 @@ function isReAccessToken(c: { name: string }): boolean {
 test.describe('Security Audit Fixes', () => {
 
     test.afterEach(async ({ page }, testInfo) => {
-        if (testInfo.status !== 'passed') {
+        if (testInfo.status !== testInfo.expectedStatus) {
             const path = `test-results/security-failure-${testInfo.title.replace(/\s+/g, '-').toLowerCase()}.png`;
             await page.screenshot({ path, fullPage: true });
         }
@@ -124,6 +131,7 @@ test.describe('Security Audit Fixes', () => {
     // ============================================================================
 
     test.describe('Cookie-Based Auth (PR #327)', () => {
+        test.skip(!hasAdminAuthenticatedE2E, adminAuthenticatedE2ESkipReason);
 
         test('No tokens stored in localStorage after login', async ({ page }) => {
             test.setTimeout(60000);
@@ -223,6 +231,7 @@ test.describe('Security Audit Fixes', () => {
     // ============================================================================
 
     test.describe('Security Settings Page (PR #325)', () => {
+        test.skip(!hasAdminAuthenticatedE2E, adminAuthenticatedE2ESkipReason);
 
         test('Security settings page renders without dead stubs', async ({ page }) => {
             test.setTimeout(60000);
@@ -339,6 +348,7 @@ test.describe('Security Audit Fixes', () => {
         test('Non-sysadmin cannot access /sysadmin routes', async ({ page }) => {
             // This test requires separate admin and regular user accounts.
             // When both use the same credentials, we can't distinguish roles.
+            test.skip(!hasAuthenticatedE2E, authenticatedE2ESkipReason);
             test.skip(
                 ADMIN_EMAIL === REGULAR_USER_EMAIL,
                 'Requires separate TEST_ADMIN_EMAIL and TEST_USER_EMAIL to test role differences'
@@ -394,6 +404,7 @@ test.describe('Security Audit Fixes', () => {
     // ============================================================================
 
     test.describe('CSRF Protection (PR #329)', () => {
+        test.skip(!hasAdminAuthenticatedE2E, adminAuthenticatedE2ESkipReason);
 
         test('State-changing forms include CSRF tokens', async ({ page }) => {
             test.setTimeout(60000);
@@ -584,6 +595,7 @@ test.describe('Security Audit Fixes', () => {
         });
 
         test('Login page redirects authenticated users', async ({ page }) => {
+            test.skip(!hasAdminAuthenticatedE2E, adminAuthenticatedE2ESkipReason);
             test.setTimeout(60000);
 
             await loginAsAdmin(page);
@@ -623,6 +635,7 @@ test.describe('Security Audit Fixes', () => {
     test.describe('Integration: Full Auth & Security Flow', () => {
 
         test('Complete login, navigate, security settings, logout flow', async ({ page, context }) => {
+            test.skip(!hasAdminAuthenticatedE2E, adminAuthenticatedE2ESkipReason);
             test.setTimeout(90000);
 
             // 1. Login
@@ -672,6 +685,7 @@ test.describe('Security Audit Fixes', () => {
             // The test user created by globalSetup is a regular org owner — not sysadmin.
             // The /sysadmin page checks user.is_sysadmin client-side and redirects non-sysadmins.
             test.skip(!hasDedicatedAdmin, 'Requires a dedicated sysadmin account — set TEST_ADMIN_EMAIL + TEST_ADMIN_PASSWORD');
+            test.skip(!hasAuthenticatedE2E, authenticatedE2ESkipReason);
             test.setTimeout(120000);
 
             // Test as admin

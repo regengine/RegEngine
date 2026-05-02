@@ -11,8 +11,8 @@ import stripe
 import structlog
 from fastapi import HTTPException
 
-from app.authz import IngestionPrincipal
-from app.shared.tenant_resolution import resolve_principal_tenant_id
+from ..authz import IngestionPrincipal
+from ..shared.tenant_resolution import resolve_principal_tenant_id
 from shared.permissions import has_permission
 
 logger = structlog.get_logger("stripe-billing.helpers")

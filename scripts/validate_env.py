@@ -72,6 +72,7 @@ _ALWAYS_REQUIRED: list[str] = [
 # Additional variables required only in production
 # ---------------------------------------------------------------------------
 _PRODUCTION_REQUIRED: list[str] = [
+    "DATABASE_URL",
     "SCHEDULER_API_KEY",
     "OBJECT_STORAGE_ACCESS_KEY_ID",
     "OBJECT_STORAGE_SECRET_ACCESS_KEY",

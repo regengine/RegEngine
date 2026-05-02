@@ -27,15 +27,15 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 
-from app.authz import require_permission, IngestionPrincipal
-from app.subscription_gate import require_active_subscription
+from .authz import require_permission, IngestionPrincipal
+from .subscription_gate import require_active_subscription
 from shared.database import get_db_session
-from app.config import get_settings
-from app.tenant_validation import validate_tenant_id
+from .config import get_settings
+from .tenant_validation import validate_tenant_id
 from shared.funnel_events import emit_funnel_event
 from shared.idempotency import IdempotencyDependency
 from shared.tenant_rate_limiting import consume_tenant_rate_limit
-from app.webhook_models import (
+from .webhook_models import (
     ChainVerifyResponse,
     EventResult,
     IngestEvent,
@@ -109,6 +109,7 @@ def _verify_api_key(
     settings = get_settings()
     configured_api_key = (
         getattr(settings, "api_key", None)
+        or os.environ.get("API_KEY")
         or os.environ.get("REGENGINE_API_KEY")
     )
     if not configured_api_key and _is_production():
@@ -1194,7 +1195,7 @@ async def ingest_events(
 
                     # Auto-learn product catalog from confirmed scans
                     try:
-                        from app.product_catalog import learn_from_event
+                        from .product_catalog import learn_from_event
                         learn_from_event(
                             tenant_id=tenant_id,
                             event={
@@ -1272,7 +1273,7 @@ async def ingest_events(
 
                         _publish_graph_sync(store_result.event_id, event, tenant_id)
                         try:
-                            from app.product_catalog import learn_from_event
+                            from .product_catalog import learn_from_event
                             learn_from_event(
                                 tenant_id=tenant_id,
                                 event={

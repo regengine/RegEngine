@@ -14,7 +14,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
-from app.webhook_compat import _verify_api_key
+from .webhook_compat import _verify_api_key
 from shared.tenant_settings import get_jsonb, set_jsonb
 
 logger = logging.getLogger("settings")

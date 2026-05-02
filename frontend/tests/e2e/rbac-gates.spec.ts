@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
+import { adminAuthenticatedE2ESkipReason, hasAdminAuthenticatedE2E } from './auth-prereqs';
 
 /** Wait for navigation to an authenticated page (pathname-only check to avoid matching query strings like ?next=/dashboard) */
 async function waitForAuthenticated(page: Page, timeout = 15000) {
@@ -27,13 +28,14 @@ const ADMIN_PASSWORD = process.env.TEST_ADMIN_PASSWORD || process.env.TEST_PASSW
 // The test user created by globalSetup is a regular org owner, NOT a sysadmin.
 const hasDedicatedAdmin = !!(
     process.env.TEST_ADMIN_EMAIL &&
+    process.env.TEST_ADMIN_PASSWORD &&
     process.env.TEST_ADMIN_EMAIL !== process.env.TEST_USER_EMAIL
 );
 
 test.describe('RBAC Gates', () => {
 
     test.afterEach(async ({ page }, testInfo) => {
-        if (testInfo.status !== 'passed') {
+        if (testInfo.status !== testInfo.expectedStatus) {
             const path = `test-results/rbac-failure-${testInfo.title.replace(/\s+/g, '-').toLowerCase()}.png`;
             await page.screenshot({ path, fullPage: true });
         }
@@ -70,6 +72,7 @@ test.describe('RBAC Gates', () => {
         // The test user created by globalSetup is a regular org member — not sysadmin.
         // The sysadmin page checks user.is_sysadmin client-side and redirects to /login if false.
         test.skip(!hasDedicatedAdmin, 'Requires a dedicated sysadmin account — set TEST_ADMIN_EMAIL + TEST_ADMIN_PASSWORD secrets pointing to a sysadmin user');
+        test.skip(!hasAdminAuthenticatedE2E, adminAuthenticatedE2ESkipReason);
 
         test.setTimeout(60000);
 
@@ -96,6 +99,7 @@ test.describe('RBAC Gates', () => {
     });
 
     test('Admin can access user management', async ({ page }) => {
+        test.skip(!hasAdminAuthenticatedE2E, adminAuthenticatedE2ESkipReason);
         test.setTimeout(60000);
 
         // Login as admin — ?next=/dashboard/team to navigate directly to team page
@@ -124,6 +128,7 @@ test.describe('RBAC Gates', () => {
     });
 
     test('Session persists across navigation', async ({ page }) => {
+        test.skip(!hasAdminAuthenticatedE2E, adminAuthenticatedE2ESkipReason);
         test.setTimeout(60000);
 
         // Login — ?next=/dashboard bypasses the onboarding check

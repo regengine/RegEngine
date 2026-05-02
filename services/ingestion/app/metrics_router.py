@@ -32,8 +32,8 @@ from typing import Any, Dict, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import text
 
-from app.authz import require_permission, IngestionPrincipal
-from app.tenant_validation import validate_tenant_id, resolve_tenant
+from .authz import require_permission, IngestionPrincipal
+from .tenant_validation import validate_tenant_id, resolve_tenant
 from shared.database import get_db_session
 
 logger = logging.getLogger("compliance-metrics")

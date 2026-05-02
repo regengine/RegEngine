@@ -23,7 +23,7 @@ from uuid import uuid4
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
-from app.webhook_compat import _verify_api_key
+from .webhook_compat import _verify_api_key
 from shared.pagination import PaginationParams
 
 logger = logging.getLogger("sla-tracking")

@@ -13,8 +13,8 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
-from app.shared.tenant_resolution import resolve_tenant_id
-from app.webhook_compat import _verify_api_key
+from ..shared.tenant_resolution import resolve_tenant_id
+from ..webhook_compat import _verify_api_key
 
 from .normalization import (
     _normalize_epcis_to_cte,
