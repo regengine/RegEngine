@@ -6,7 +6,7 @@ from typing import Optional
 
 from fastapi import HTTPException
 
-from .constants import _SUPPORTED_TRANSACTION_SETS
+from .transaction_sets import _SUPPORTED_TRANSACTION_SETS
 
 logger = logging.getLogger("edi-ingestion")
 
