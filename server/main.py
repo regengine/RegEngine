@@ -72,6 +72,14 @@ async def lifespan(app: FastAPI):
     except Exception as exc:
         logger.warning("admin_database_init_skipped", error=str(exc))
 
+    # Fail before serving traffic if live Postgres drift would break
+    # tenant isolation or the tamper-evident audit hash chain.
+    from services.admin.app.database import _engine as _admin_engine
+    from services.admin.app.sqlalchemy_models import Base as _admin_base
+    from shared.db_type_assertions import verify_orm_db_type_alignment
+
+    verify_orm_db_type_alignment(_admin_engine, _admin_base)
+
     # Register integration connectors (best-effort)
     try:
         from shared.external_connectors.register_all import register_all_connectors
