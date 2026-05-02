@@ -140,12 +140,26 @@ export function AccessibilityWidget() {
   const [open, setOpen] = useState(false);
   const [settings, setSettings] = useState<A11ySettings>(defaultSettings);
   const [mounted, setMounted] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   useEffect(() => {
     const loaded = loadSettings();
     setSettings(loaded);
     applySettings(loaded);
     setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const { open: menuOpen } = (event as CustomEvent<{ open?: boolean }>).detail ?? {};
+      setMobileMenuOpen(Boolean(menuOpen));
+      if (menuOpen) {
+        setOpen(false);
+      }
+    };
+
+    window.addEventListener('re:mobile-menu-state', handler);
+    return () => window.removeEventListener('re:mobile-menu-state', handler);
   }, []);
 
   /* Close on Escape */
@@ -169,7 +183,7 @@ export function AccessibilityWidget() {
     update(defaultSettings);
   }, [update]);
 
-  if (!mounted) return null;
+  if (!mounted || mobileMenuOpen) return null;
 
   const hasChanges = JSON.stringify(settings) !== JSON.stringify(defaultSettings);
 
