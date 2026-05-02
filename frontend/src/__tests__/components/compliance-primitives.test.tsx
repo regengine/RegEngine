@@ -40,9 +40,9 @@ describe("Compliance primitives", () => {
   });
 
   it("renders hash verification details without dropping long hashes", () => {
-    render(<HashVerificationStrip hash="abc123def456" verifiedAt="verified today" state="signed" />);
+    render(<HashVerificationStrip hash="fixture-hash-value-that-wraps" verifiedAt="verified today" state="signed" />);
 
-    expect(screen.getByText(/SHA-256:abc123def456/)).toBeInTheDocument();
+    expect(screen.getByText(/SHA-256:fixture-hash-value-that-wraps/)).toBeInTheDocument();
     expect(screen.getByText("Signed")).toBeInTheDocument();
   });
 

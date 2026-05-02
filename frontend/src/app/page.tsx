@@ -205,7 +205,7 @@ function CommandCenterPreview() {
           ]}
         />
         <HashVerificationStrip
-          hash="8f14e45fceea167a5a36dedd4bea2543"
+          hash="sample-package-chain-hash"
           verifiedAt="verified 04:12 UTC"
           state="committed"
         />
@@ -285,7 +285,7 @@ export default function HomePage() {
               items={["Facility scope manifest", "Committed CTE/KDE records", "Supplier correction log", "Hash verification strip"]}
             />
             <HashVerificationStrip
-              hash="b7a875fc1ea228b9061041b7cec4bd3c52ab3ce3"
+              hash="demo-signed-chain-hash"
               verifiedAt="chain checked today"
               state="signed"
             />

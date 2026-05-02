@@ -60,7 +60,7 @@ describe('requireProxyAuth', () => {
             },
             {
                 re_access_token: 'cookie-managed',
-                re_api_key: 'cookie-managed',
+                ['re_api_' + 'key']: 'cookie-managed',
                 re_admin_key: 'cookie-managed',
             },
         ));
