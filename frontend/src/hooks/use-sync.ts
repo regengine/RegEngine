@@ -1,7 +1,7 @@
 import { fetchWithCsrf } from '@/lib/fetch-with-csrf';
 
-import { useEffect, useState } from 'react';
-import { markScanSynced, markPhotoSynced, getPendingUploads, cleanupSyncedRecords } from '@/lib/db';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { markScanSynced, markPhotoSynced, getPendingUploads, cleanupOfflineRecords } from '@/lib/db';
 import { useIngestFile } from '@/hooks/use-api';
 import { useAuth } from '@/lib/auth-context';
 import { useToast } from '@/components/ui/use-toast';
@@ -10,16 +10,24 @@ import { getServiceURL } from '@/lib/api-config';
 export function useSync() {
     const [isOnline, setIsOnline] = useState(true);
     const [isSyncing, setIsSyncing] = useState(false);
+    const isSyncingRef = useRef(false);
     const { apiKey, tenantId } = useAuth();
     const { toast } = useToast();
 
-    const ingestFileMutation = useIngestFile();
+    const { mutateAsync: ingestFile } = useIngestFile();
 
-    const sync = async () => {
-        if (!apiKey || isSyncing || !navigator.onLine) return;
+    const sync = useCallback(async () => {
+        if (!apiKey || isSyncingRef.current || !navigator.onLine) return;
 
+        isSyncingRef.current = true;
         setIsSyncing(true);
         try {
+            try {
+                await cleanupOfflineRecords();
+            } catch {
+                // cleanup is best-effort
+            }
+
             const { scans, photos } = await getPendingUploads();
 
             if (scans.length === 0 && photos.length === 0) {
@@ -76,7 +84,13 @@ export function useSync() {
                     }
                     if (scan.id) await markScanSynced(scan.id);
                 } catch (e) {
-                    if (process.env.NODE_ENV !== 'production') { console.error("Failed to sync scan", scan, e); }
+                    if (process.env.NODE_ENV !== 'production') {
+                        console.error("Failed to sync scan", {
+                            id: scan.id,
+                            timestamp: scan.timestamp,
+                            cteType: scan.cteType,
+                        }, e);
+                    }
                 }
             }
 
@@ -84,14 +98,19 @@ export function useSync() {
             for (const photo of photos) {
                 try {
                     const file = new File([photo.blob], `offline_capture_${photo.timestamp}.jpg`, { type: 'image/jpeg' });
-                    await ingestFileMutation.mutateAsync({
+                    await ingestFile({
                         apiKey,
                         file,
                         sourceSystem: "mobile_capture_pwa_offline"
                     });
                     if (photo.id) await markPhotoSynced(photo.id);
                 } catch (e) {
-                    if (process.env.NODE_ENV !== 'production') { console.error("Failed to sync photo", photo, e); }
+                    if (process.env.NODE_ENV !== 'production') {
+                        console.error("Failed to sync photo", {
+                            id: photo.id,
+                            timestamp: photo.timestamp,
+                        }, e);
+                    }
                 }
             }
 
@@ -101,9 +120,9 @@ export function useSync() {
                 variant: "default"
             });
 
-            // Cleanup old synced records to prevent IndexedDB bloat
+            // Cleanup records created during this sync attempt.
             try {
-                await cleanupSyncedRecords();
+                await cleanupOfflineRecords();
             } catch {
                 // cleanup is best-effort
             }
@@ -111,9 +130,10 @@ export function useSync() {
         } catch (err) {
             if (process.env.NODE_ENV !== 'production') { console.error("Sync error", err); }
         } finally {
+            isSyncingRef.current = false;
             setIsSyncing(false);
         }
-    };
+    }, [apiKey, ingestFile, tenantId, toast]);
 
     useEffect(() => {
         // Initial check
@@ -140,7 +160,7 @@ export function useSync() {
             window.removeEventListener('online', handleOnline);
             window.removeEventListener('offline', handleOffline);
         };
-    }, [apiKey]); // Re-run if API key changes (user logs in)
+    }, [sync]);
 
     return { isOnline, isSyncing, manualSync: sync };
 }

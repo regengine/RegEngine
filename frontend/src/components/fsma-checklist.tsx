@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import { submitAssessment } from "@/app/actions/submit-assessment";
 
 const checklistItems = [
     {
@@ -116,6 +117,7 @@ export default function FSMAChecklist() {
     const [email, setEmail] = useState("");
     const [company, setCompany] = useState("");
     const [submitted, setSubmitted] = useState(false);
+    const [submissionError, setSubmissionError] = useState<string | null>(null);
     const [animateIn, setAnimateIn] = useState(false);
 
     useEffect(() => {
@@ -131,16 +133,43 @@ export default function FSMAChecklist() {
         setChecked((prev) => ({ ...prev, [id]: !prev[id] }));
         setShowResults(false);
         setSubmitted(false);
+        setSubmissionError(null);
     };
 
-    const handleSubmit = () => {
+    const handleSubmit = async () => {
         if (email && company) {
-            localStorage.setItem('fsma_gap_analysis_lead', JSON.stringify({
+            setSubmissionError(null);
+            const submittedAt = new Date().toISOString();
+            const result = await submitAssessment({
+                name: "FSMA checklist lead",
                 email,
                 company,
-                gaps: uncheckedItems.map(i => i.title),
-                date: new Date().toISOString()
-            }));
+                role: "Retailer readiness checklist",
+                source: "fsma-checklist",
+                quizScore: checkedCount,
+                quizGrade: `${checkedCount}/${total}`,
+                quizAnswers: {
+                    checked,
+                    gaps: uncheckedItems.map(i => i.title),
+                },
+            });
+
+            if (!result.success) {
+                try {
+                    localStorage.setItem('fsma_gap_analysis_retry', JSON.stringify({
+                        pending: true,
+                        lastAttemptAt: submittedAt,
+                        source: "fsma-checklist",
+                    }));
+                } catch {}
+                setSubmissionError(result.error || "We could not send your gap analysis request. Your details are still on this page; please try again.");
+                return;
+            }
+
+            try {
+                localStorage.setItem('fsma_gap_analysis_submitted', '1');
+                localStorage.removeItem('fsma_gap_analysis_retry');
+            } catch {}
             setSubmitted(true);
         }
     };
@@ -404,6 +433,11 @@ export default function FSMAChecklist() {
                                             >
                                                 Get Free Gap Analysis →
                                             </button>
+                                            {submissionError && (
+                                                <p role="alert" className="text-xs text-[var(--re-danger)] mt-1">
+                                                    {submissionError}
+                                                </p>
+                                            )}
                                         </div>
                                         <p className="text-xs text-[#475569] mt-3">
                                             No commitment. No sales pitch. Just a technical review from the founder.

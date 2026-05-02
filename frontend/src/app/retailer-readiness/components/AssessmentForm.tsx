@@ -9,12 +9,13 @@ export interface AssessmentFormProps {
     companyName: string;
     setCompanyName: (name: string) => void;
     submitted: boolean;
+    error?: string | null;
     handleAssessment: (e: React.FormEvent) => Promise<void>;
 }
 
 export default function AssessmentForm({
     email, setEmail, companyName, setCompanyName,
-    submitted, handleAssessment,
+    submitted, error, handleAssessment,
 }: AssessmentFormProps) {
     return (
         <section id="assessment" style={{
@@ -40,10 +41,11 @@ export default function AssessmentForm({
                 {!submitted ? (
                     <form onSubmit={handleAssessment} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                         <div className="text-left">
-                            <label style={{ fontSize: 13, fontWeight: 500, color: T.text, display: 'block', marginBottom: 6 }}>
+                            <label htmlFor="retailer-readiness-company" style={{ fontSize: 13, fontWeight: 500, color: T.text, display: 'block', marginBottom: 6 }}>
                                 Company Name
                             </label>
                             <input
+                                id="retailer-readiness-company"
                                 placeholder="Your company name"
                                 value={companyName}
                                 onChange={(e) => setCompanyName(e.target.value)}
@@ -59,10 +61,11 @@ export default function AssessmentForm({
                             />
                         </div>
                         <div className="text-left">
-                            <label style={{ fontSize: 13, fontWeight: 500, color: T.text, display: 'block', marginBottom: 6 }}>
+                            <label htmlFor="retailer-readiness-email" style={{ fontSize: 13, fontWeight: 500, color: T.text, display: 'block', marginBottom: 6 }}>
                                 Work Email
                             </label>
                             <input
+                                id="retailer-readiness-email"
                                 type="email"
                                 placeholder="you@company.com"
                                 value={email}
@@ -91,6 +94,11 @@ export default function AssessmentForm({
                         >
                             Get Free Assessment →
                         </button>
+                        {error && (
+                            <p role="alert" style={{ fontSize: 13, color: T.danger, margin: 0 }}>
+                                {error}
+                            </p>
+                        )}
                         <p style={{ fontSize: 12, color: T.textDim }}>
                             No commitment required. Assessment delivered within 24 hours.
                         </p>

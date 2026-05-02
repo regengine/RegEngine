@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
-import time
+import tempfile
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 from urllib.parse import urlparse
 from urllib.robotparser import RobotFileParser
@@ -124,18 +125,35 @@ class EthicalScraper:
             elif "pdf" in response.headers.get("Content-Type", "").lower():
                 ext = "pdf"
 
-            path = f"/tmp/{body}_{int(time.time())}.{ext}"
-            with open(path, "wb") as f:
-                f.write(response.content)
+            with tempfile.NamedTemporaryFile(
+                mode="wb",
+                prefix="regengine-discovery-",
+                suffix=f".{ext}",
+                delete=False,
+            ) as artifact:
+                path = artifact.name
+                artifact.write(response.content)
 
-            # ── Parse + load ─────────────────────────────────────────────
-            parse_source_type = "html" if ext == "html" else "pdf"
-            parser = RegulationParser()
-            sections = await parser.parse(path, parse_source_type)
+            try:
+                # ── Parse + load ─────────────────────────────────────────────
+                parse_source_type = "html" if ext == "html" else "pdf"
+                parser = RegulationParser()
+                await parser.parse(path, parse_source_type)
 
-            loader = RegulationLoader()
-            count = await loader.load(path, parse_source_type, body)
-            loader.close()
+                loader = RegulationLoader()
+                try:
+                    count = await loader.load(path, parse_source_type, body)
+                finally:
+                    loader.close()
+            finally:
+                try:
+                    Path(path).unlink(missing_ok=True)
+                except Exception as cleanup_error:
+                    logger.warning(
+                        "temporary_artifact_cleanup_failed",
+                        path=path,
+                        error=str(cleanup_error),
+                    )
 
             logger.info(
                 "ethical_ingestion_complete",

@@ -9,6 +9,7 @@
  */
 
 const CACHE_NAME = 'regengine-v1';
+const OFFLINE_EVENT_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 
 const PRECACHE_URLS = [
   '/fsma/field-capture',
@@ -100,6 +101,14 @@ async function processOfflineQueue() {
     const events = await getAllFromStore(store);
 
     for (const event of events) {
+      const queuedAt = getOfflineEventQueuedAt(event);
+      if (!queuedAt) {
+        await putOfflineEvent(db, { ...event, createdAt: Date.now() });
+      } else if (Date.now() - queuedAt > OFFLINE_EVENT_MAX_AGE_MS) {
+        await deleteOfflineEvent(db, event.id);
+        continue;
+      }
+
       try {
         await fetch(event.url, {
           method: 'POST',
@@ -107,8 +116,7 @@ async function processOfflineQueue() {
           body: JSON.stringify(event.body),
         });
         // Remove from queue on success
-        const deleteTx = db.transaction('offline-events', 'readwrite');
-        deleteTx.objectStore('offline-events').delete(event.id);
+        await deleteOfflineEvent(db, event.id);
       } catch {
         // Still offline — leave in queue for next sync
         break;
@@ -130,10 +138,38 @@ function openDB() {
   });
 }
 
+function getOfflineEventQueuedAt(event) {
+  const value = event.createdAt || event.timestamp || event.queuedAt;
+  if (typeof value === 'number') return value;
+  if (typeof value === 'string') {
+    const parsed = Date.parse(value);
+    return Number.isNaN(parsed) ? 0 : parsed;
+  }
+  return 0;
+}
+
 function getAllFromStore(store) {
   return new Promise((resolve, reject) => {
     const request = store.getAll();
     request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+function putOfflineEvent(db, event) {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('offline-events', 'readwrite');
+    const request = tx.objectStore('offline-events').put(event);
+    request.onsuccess = () => resolve();
+    request.onerror = () => reject(request.error);
+  });
+}
+
+function deleteOfflineEvent(db, id) {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('offline-events', 'readwrite');
+    const request = tx.objectStore('offline-events').delete(id);
+    request.onsuccess = () => resolve();
     request.onerror = () => reject(request.error);
   });
 }

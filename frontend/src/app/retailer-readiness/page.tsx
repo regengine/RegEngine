@@ -31,6 +31,7 @@ export default function RetailerSuppliersPage() {
     const [email, setEmail] = useState('');
     const [companyName, setCompanyName] = useState('');
     const [submitted, setSubmitted] = useState(false);
+    const [assessmentError, setAssessmentError] = useState<string | null>(null);
 
     // Risk calculator state
     const [annualRevenue, setAnnualRevenue] = useState(25);
@@ -135,6 +136,8 @@ export default function RetailerSuppliersPage() {
         if (email && companyName) {
             const payload = { email, companyName, date: new Date().toISOString() };
 
+            setAssessmentError(null);
+
             try {
                 const res = await fetch('/api/v1/assessments/retailer-readiness', {
                     method: 'POST',
@@ -142,13 +145,24 @@ export default function RetailerSuppliersPage() {
                     body: JSON.stringify(payload),
                 });
                 if (!res.ok) throw new Error(`API responded ${res.status}`);
-            } catch {
-                // Fallback: persist locally so the submission is not lost
-                localStorage.setItem('retailer_supplier_lead', JSON.stringify(payload));
-            }
 
-            trackEvent('assessment_submitted', { email, companyName });
-            setSubmitted(true);
+                try {
+                    localStorage.setItem('retailer_supplier_lead_submitted', '1');
+                    localStorage.removeItem('retailer_supplier_lead_retry');
+                } catch {}
+                trackEvent('assessment_submitted', { hasEmail: true, hasCompanyName: true });
+                setSubmitted(true);
+            } catch {
+                try {
+                    localStorage.setItem('retailer_supplier_lead_retry', JSON.stringify({
+                        pending: true,
+                        lastAttemptAt: payload.date,
+                        endpoint: '/api/v1/assessments/retailer-readiness',
+                    }));
+                } catch {}
+                trackEvent('assessment_submission_failed');
+                setAssessmentError('We could not send your assessment request. Your details are still on this page; please try again.');
+            }
         }
     };
 
@@ -221,6 +235,7 @@ export default function RetailerSuppliersPage() {
                 companyName={companyName}
                 setCompanyName={setCompanyName}
                 submitted={submitted}
+                error={assessmentError}
                 handleAssessment={handleAssessment}
             />
 
