@@ -14,8 +14,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 
-from app.webhook_compat import _verify_api_key
-from app.tenant_validation import validate_tenant_id
+from .webhook_compat import _verify_api_key
+from .tenant_validation import validate_tenant_id
 from shared.database import get_db_safe
 from shared.pagination import PaginationParams
 

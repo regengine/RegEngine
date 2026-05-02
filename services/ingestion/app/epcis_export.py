@@ -18,8 +18,8 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 
-from app.disclaimers import SAMPLE_EXPORT_DISCLAIMER
-from app.webhook_compat import _verify_api_key
+from .disclaimers import SAMPLE_EXPORT_DISCLAIMER
+from .webhook_compat import _verify_api_key
 from shared.database import get_db_safe
 
 logger = logging.getLogger("epcis-export")

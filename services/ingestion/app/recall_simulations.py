@@ -17,8 +17,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
-from app.authz import require_permission
-from app.disclaimers import SIMULATION_DISCLAIMER
+from .authz import require_permission
+from .disclaimers import SIMULATION_DISCLAIMER
 from shared.tenant_settings import get_tenant_data, set_tenant_data, list_tenant_data
 
 logger = logging.getLogger("recall-simulations")

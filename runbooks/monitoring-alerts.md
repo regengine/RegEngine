@@ -11,6 +11,8 @@
 ## Prerequisites
 
 - Prometheus scraping all services
+- Prometheus 2.55+ or 3.x so scrape `http_headers` can pass `X-Metrics-Key`
+- `METRICS_API_KEY` mounted into Prometheus at `/etc/prometheus/secrets/metrics-api-key`
 - Grafana dashboards configured
 - Alertmanager routing to Slack
 - Health endpoints responding
@@ -145,7 +147,12 @@ kubectl exec -it postgres-0 -- psql -c "SELECT count(*) FROM pg_stat_activity;"
 
 ```promql
 # 95th percentile latency (all services)
-histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m]))
+histogram_quantile(
+  0.95,
+  sum by (service, le) (
+    rate(http_request_duration_seconds_bucket{job="regengine-services"}[5m])
+  )
+)
 ```
 
 | Service | Target | Alert Threshold |
@@ -158,8 +165,14 @@ histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m]))
 ### Error Rate
 
 ```promql
-# Error rate (5xx errors)
-rate(http_requests_total{status=~"5.."}[5m])
+# Error ratio (5xx responses / all responses)
+sum by (service) (
+  rate(http_requests_total{job="regengine-services", status=~"5.."}[5m])
+)
+/
+sum by (service) (
+  rate(http_requests_total{job="regengine-services"}[5m])
+)
 ```
 
 **Target:** < 0.5% (0.005)
@@ -169,7 +182,7 @@ rate(http_requests_total{status=~"5.."}[5m])
 
 ```promql
 # Requests per second
-rate(http_requests_total[1m])
+sum by (service) (rate(http_requests_total{job="regengine-services"}[1m]))
 ```
 
 | Service | Target | Minimum |
@@ -370,4 +383,3 @@ kubectl top pods -n regengine | head -10
 | Database unavailable | P1 | Activate disaster recovery |
 | Latency > 3s, errors < 1% | P3 | Scale and monitor |
 | Latency > 3s, errors > 5% | P1 | Rollback immediately |
-

@@ -20,8 +20,8 @@ from pydantic import BaseModel, Field
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 
-from app.webhook_compat import _verify_api_key
-from app.tenant_validation import validate_tenant_id
+from .webhook_compat import _verify_api_key
+from .tenant_validation import validate_tenant_id
 from shared.database import get_db_safe
 
 logger = logging.getLogger("audit-log")

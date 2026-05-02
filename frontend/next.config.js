@@ -3,6 +3,7 @@
 const { withSentryConfig } = require("@sentry/nextjs");
 
 const isStatic = process.env.REGENGINE_DEPLOY_MODE === 'static';
+const isDocker = process.env.REGENGINE_DEPLOY_MODE === 'docker';
 const apiGatewayUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
 const ingestionUrl = process.env.INGESTION_SERVICE_URL || (apiGatewayUrl && `${apiGatewayUrl}:8002`);
 // Note: COMPLIANCE_SERVICE_URL is read directly by the compliance route handler
@@ -35,7 +36,7 @@ if (!isStatic && isDevServer) {
 }
 
 const nextConfig = {
-    output: isStatic ? 'export' : undefined,
+    output: isStatic ? 'export' : (isDocker ? 'standalone' : undefined),
     // (#558) Always enable Next.js image optimization.
     // sharp is installed (package.json) and handles build-time optimization for
     // both server-rendered and static-export builds — do not disable for static.

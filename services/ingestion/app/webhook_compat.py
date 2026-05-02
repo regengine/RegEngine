@@ -21,8 +21,8 @@ from typing import Optional
 
 from fastapi import Header, Request
 
-from app.webhook_models import EventResult, IngestResponse, WebhookPayload
-from app.webhook_router_v2 import (
+from .webhook_models import EventResult, IngestResponse, WebhookPayload
+from .webhook_router_v2 import (
     _check_rate_limit,
     _generate_alerts,
     _publish_graph_sync,

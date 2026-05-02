@@ -84,19 +84,19 @@
       },
       "targets": [
         {
-          "expr": "histogram_quantile(0.99, rate(http_request_duration_seconds_bucket{job=\"regengine\", endpoint=\"/ingest\"}[5m])) * 1000",
+          "expr": "histogram_quantile(0.99, sum by (service, le) (rate(http_request_duration_seconds_bucket{job=\"regengine-services\", service=\"ingestion-service\"}[5m]))) * 1000",
           "refId": "A",
-          "legendFormat": "Ingestion API - P99"
+          "legendFormat": "Ingestion - P99"
         },
         {
-          "expr": "histogram_quantile(0.99, rate(http_request_duration_seconds_bucket{job=\"regengine\", endpoint=\"/opportunities\"}[5m])) * 1000",
+          "expr": "histogram_quantile(0.99, sum by (service, le) (rate(http_request_duration_seconds_bucket{job=\"regengine-services\", service=\"compliance-service\"}[5m]))) * 1000",
           "refId": "B",
-          "legendFormat": "Opportunity API - P99"
+          "legendFormat": "Compliance - P99"
         },
         {
-          "expr": "histogram_quantile(0.99, rate(http_request_duration_seconds_bucket{job=\"regengine\", endpoint=\"/graph/write\"}[5m])) * 1000",
+          "expr": "histogram_quantile(0.99, sum by (service, le) (rate(http_request_duration_seconds_bucket{job=\"regengine-services\", service=\"graph-service\"}[5m]))) * 1000",
           "refId": "C",
-          "legendFormat": "Graph Write API - P99"
+          "legendFormat": "Graph - P99"
         }
       ],
       "title": "P99 Latency - Core API Endpoints",
@@ -170,14 +170,14 @@
       },
       "targets": [
         {
-          "expr": "histogram_quantile(0.50, rate(http_request_duration_seconds_bucket{job=\"regengine\"}[5m])) * 1000",
+          "expr": "histogram_quantile(0.50, sum by (service, handler, le) (rate(http_request_duration_seconds_bucket{job=\"regengine-services\"}[5m]))) * 1000",
           "refId": "A",
-          "legendFormat": "P50 - {{endpoint}}"
+          "legendFormat": "P50 - {{service}} {{handler}}"
         },
         {
-          "expr": "histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{job=\"regengine\"}[5m])) * 1000",
+          "expr": "histogram_quantile(0.95, sum by (service, handler, le) (rate(http_request_duration_seconds_bucket{job=\"regengine-services\"}[5m]))) * 1000",
           "refId": "B",
-          "legendFormat": "P95 - {{endpoint}}"
+          "legendFormat": "P95 - {{service}} {{handler}}"
         }
       ],
       "title": "P50/P95 Latency - All Endpoints",
@@ -251,9 +251,9 @@
       },
       "targets": [
         {
-          "expr": "rate(http_requests_total{job=\"regengine\"}[5m])",
+          "expr": "sum by (service, handler, method, status) (rate(http_requests_total{job=\"regengine-services\"}[5m]))",
           "refId": "A",
-          "legendFormat": "{{method}} {{endpoint}} - {{status}}"
+          "legendFormat": "{{service}} {{method}} {{handler}} - {{status}}"
         }
       ],
       "title": "Request Rate by Endpoint",
@@ -303,9 +303,9 @@
       },
       "targets": [
         {
-          "expr": "sum(rate(http_requests_total{job=\"regengine\", status=~\"5..\"}[5m]))",
+          "expr": "sum by (service) (rate(http_requests_total{job=\"regengine-services\", status=~\"5..\"}[5m]))",
           "refId": "A",
-          "legendFormat": "5xx Errors/sec"
+          "legendFormat": "{{service}} 5xx/sec"
         }
       ],
       "title": "Error Rate (5xx)",

@@ -520,8 +520,10 @@ async def readiness():
         checks["neo4j"] = {"status": "error", "error": str(exc)[:200]}
 
     # --- Determine overall status ---
-    # Postgres is required; Redis and Neo4j are degraded but not fatal
-    pg_ok = checks.get("postgres", {}).get("status") in ("ok", "not_configured")
+    # Postgres is required for the consolidated API to serve production traffic.
+    # Missing DATABASE_URL must fail readiness so deploy health checks do not
+    # route requests to an instance that can only satisfy liveness.
+    pg_ok = checks.get("postgres", {}).get("status") == "ok"
     all_ok = all(c.get("status") != "error" for c in checks.values())
 
     if not pg_ok:

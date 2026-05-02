@@ -22,9 +22,9 @@ from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.exc import OperationalError, ProgrammingError
 
-from app.config import get_settings
-from app.webhook_compat import _verify_api_key
-from app.tenant_validation import validate_tenant_id
+from .config import get_settings
+from .webhook_compat import _verify_api_key
+from .tenant_validation import validate_tenant_id
 
 logger = logging.getLogger("compliance-score")
 

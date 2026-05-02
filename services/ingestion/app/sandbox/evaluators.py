@@ -22,7 +22,7 @@ from shared.rules_engine import (
     _normalize_to_lbs,
 )
 
-from app.sandbox.rule_loader import _SANDBOX_RULES, _get_applicable_rules
+from .rule_loader import _SANDBOX_RULES, _get_applicable_rules
 
 
 # Relational evaluation types handled by _evaluate_relational_in_memory

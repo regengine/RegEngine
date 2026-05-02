@@ -57,7 +57,7 @@ def _get_redis():
     if _redis_client is not None:
         return _redis_client
     try:
-        from app.config import get_settings
+        from ..config import get_settings
         import redis as redis_lib
         settings = get_settings()
         _redis_client = redis_lib.from_url(

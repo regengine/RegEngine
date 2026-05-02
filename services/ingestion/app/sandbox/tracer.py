@@ -11,14 +11,14 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import HTTPException, Request
 
-from app.sandbox.csv_parser import _parse_csv_to_events
-from app.sandbox.models import (
+from .csv_parser import _parse_csv_to_events
+from .models import (
     SandboxTraceRequest,
     TraceEdge,
     TraceGraphResponse,
     TraceNode,
 )
-from app.sandbox.rate_limiting import _check_sandbox_rate_limit
+from .rate_limiting import _check_sandbox_rate_limit
 
 
 def _trace_in_memory(

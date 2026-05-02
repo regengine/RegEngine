@@ -22,8 +22,8 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 
-from app.authz import IngestionPrincipal, require_permission
-from app.shared.tenant_resolution import resolve_principal_tenant_id, resolve_tenant_id
+from .authz import IngestionPrincipal, require_permission
+from .shared.tenant_resolution import resolve_principal_tenant_id, resolve_tenant_id
 from shared.database import get_db_safe
 
 logger = logging.getLogger("b2b-exchange")

@@ -1653,3 +1653,109 @@ body,
         min-width: 560px;
     }
 }
+
+/* ─── Compliance Operating System v2 foundation ─── */
+:root,
+.light {
+    --re-feeling-control: #0f172a;
+    --re-feeling-traceability: #1d4ed8;
+    --re-feeling-readiness: #047857;
+    --re-feeling-trust: #92400e;
+    --re-feeling-calm-urgency: #b91c1c;
+
+    --re-command-bg: #f6f8fb;
+    --re-command-grid: #dbe3ee;
+    --re-command-ink: #0f172a;
+    --re-ledger-bg: #fffdf7;
+    --re-workbench-bg: #f8fafc;
+
+    --re-density-low: 18px;
+    --re-density-medium: 14px;
+    --re-density-high: 10px;
+
+    --re-state-invited: #475569;
+    --re-state-invited-bg: #f1f5f9;
+    --re-state-invited-border: #cbd5e1;
+    --re-state-corrected: #7c3aed;
+    --re-state-corrected-bg: #f5f3ff;
+    --re-state-corrected-border: #ddd6fe;
+    --re-state-event: #2563eb;
+    --re-state-event-bg: #eff6ff;
+    --re-state-event-border: #bfdbfe;
+    --re-evidence-bg: #fffbeb;
+    --re-evidence-border: #fde68a;
+}
+
+.dark {
+    --re-feeling-control: #f8fafc;
+    --re-feeling-traceability: #60a5fa;
+    --re-feeling-readiness: #34d399;
+    --re-feeling-trust: #fbbf24;
+    --re-feeling-calm-urgency: #f87171;
+
+    --re-command-bg: #080d16;
+    --re-command-grid: #1e293b;
+    --re-command-ink: #f8fafc;
+    --re-ledger-bg: #15120a;
+    --re-workbench-bg: #0b1220;
+
+    --re-state-invited: #cbd5e1;
+    --re-state-invited-bg: #1e293b;
+    --re-state-invited-border: #334155;
+    --re-state-corrected: #c4b5fd;
+    --re-state-corrected-bg: #2e1065;
+    --re-state-corrected-border: #5b21b6;
+    --re-state-event: #93c5fd;
+    --re-state-event-bg: #172554;
+    --re-state-event-border: #1d4ed8;
+    --re-evidence-bg: #451a03;
+    --re-evidence-border: #92400e;
+}
+
+.re-compliance-os {
+    color: var(--re-text-secondary);
+    background:
+        linear-gradient(90deg, rgba(219, 227, 238, 0.34) 1px, transparent 1px),
+        linear-gradient(180deg, rgba(219, 227, 238, 0.3) 1px, transparent 1px),
+        linear-gradient(180deg, #ffffff 0, var(--re-command-bg) 580px, var(--re-surface-base) 100%);
+    background-size: 64px 64px, 64px 64px, auto;
+}
+
+.dark .re-compliance-os {
+    background:
+        linear-gradient(90deg, rgba(30, 41, 59, 0.5) 1px, transparent 1px),
+        linear-gradient(180deg, rgba(30, 41, 59, 0.42) 1px, transparent 1px),
+        linear-gradient(180deg, #090f1a 0, var(--re-command-bg) 600px, var(--re-surface-base) 100%);
+    background-size: 64px 64px, 64px 64px, auto;
+}
+
+.re-evidence-card,
+.re-readiness-score,
+.re-hash-strip,
+.re-commit-gate,
+.re-package-preview {
+    border-radius: var(--re-radius-lg);
+    box-shadow: var(--re-shadow-sm);
+}
+
+.re-home-grid-panel {
+    background-image:
+        linear-gradient(90deg, rgba(203, 213, 225, 0.38) 1px, transparent 1px),
+        linear-gradient(180deg, rgba(203, 213, 225, 0.32) 1px, transparent 1px);
+    background-size: 28px 28px;
+}
+
+.re-home-command-rail {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    border: 1px solid var(--re-surface-border);
+    background: var(--re-surface-elevated);
+    border-radius: var(--re-radius-lg);
+    overflow: hidden;
+}
+
+@media (max-width: 760px) {
+    .re-home-command-rail {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}

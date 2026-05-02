@@ -12,7 +12,7 @@ import string
 from collections import defaultdict
 from typing import Any, Dict, List
 
-from app.webhook_models import (
+from ..webhook_models import (
     REQUIRED_KDES_BY_CTE,
     WebhookCTEType,
 )

@@ -121,30 +121,20 @@ export function getAdminMasterKey(): string | undefined {
  * proxying to the backend. Returns a 401 NextResponse if no credentials
  * are present, or null if the request should proceed.
  *
- * Credentials checked (in order):
+ * Caller credentials checked (in order):
  *   1. re_api_key cookie
  *   2. re_admin_key cookie
  *   3. re_access_token cookie
  *   4. x-regengine-api-key header (direct API calls)
  *   5. x-admin-key header (direct API calls)
- *   6. Server-side REGENGINE_API_KEY env var (service-to-service)
+ *   6. x-api-key header (direct API calls)
+ *
+ * Server-side env keys are intentionally not caller credentials. They may be
+ * injected later only after this preflight sees a real caller credential or
+ * session.
  */
 export function requireProxyAuth(request: NextRequest): NextResponse | null {
-  const hasApiKeyCookie = !!request.cookies.get('re_api_key')?.value;
-  const hasAdminKeyCookie = !!request.cookies.get('re_admin_key')?.value;
-  const hasAccessToken = !!request.cookies.get('re_access_token')?.value;
-  const hasApiKeyHeader = !!request.headers.get('x-regengine-api-key');
-  const hasAdminKeyHeader = !!request.headers.get('x-admin-key');
-  const hasServerApiKey = !!process.env.REGENGINE_API_KEY;
-
-  if (
-    hasApiKeyCookie ||
-    hasAdminKeyCookie ||
-    hasAccessToken ||
-    hasApiKeyHeader ||
-    hasAdminKeyHeader ||
-    hasServerApiKey
-  ) {
+  if (hasRealCallerCredential(request)) {
     return null;
   }
 
@@ -152,6 +142,54 @@ export function requireProxyAuth(request: NextRequest): NextResponse | null {
     { error: 'Unauthorized — no valid credentials provided' },
     { status: 401 },
   );
+}
+
+const COOKIE_MANAGED_PLACEHOLDER = 'cookie-managed';
+const PLACEHOLDER_CREDENTIAL_VALUES = new Set([
+  COOKIE_MANAGED_PLACEHOLDER,
+  `bearer ${COOKIE_MANAGED_PLACEHOLDER}`,
+  'bearer',
+  'null',
+  'undefined',
+  'bearer null',
+  'bearer undefined',
+]);
+const CALLER_CREDENTIAL_COOKIES = ['re_api_key', 're_admin_key', 're_access_token'] as const;
+const CALLER_CREDENTIAL_HEADERS = [
+  'authorization',
+  'x-regengine-api-key',
+  'x-admin-key',
+  'x-api-key',
+] as const;
+const CREDENTIAL_HEADER_NAMES = new Set<string>(CALLER_CREDENTIAL_HEADERS);
+
+export function isUsableCallerCredential(value: string | null | undefined): value is string {
+  const normalized = value?.trim().toLowerCase() ?? '';
+  return normalized.length > 0 && !PLACEHOLDER_CREDENTIAL_VALUES.has(normalized);
+}
+
+export function isCookieManagedCredentialHeader(name: string, value: string): boolean {
+  const normalizedName = name.toLowerCase();
+  if (!CREDENTIAL_HEADER_NAMES.has(normalizedName)) {
+    return false;
+  }
+  return !isUsableCallerCredential(value);
+}
+
+export function hasRealCallerCredential(request: NextRequest): boolean {
+  for (const name of CALLER_CREDENTIAL_COOKIES) {
+    if (isUsableCallerCredential(request.cookies.get(name)?.value)) {
+      return true;
+    }
+  }
+
+  for (const name of CALLER_CREDENTIAL_HEADERS) {
+    if (isUsableCallerCredential(request.headers.get(name))) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 // ---------------------------------------------------------------------------

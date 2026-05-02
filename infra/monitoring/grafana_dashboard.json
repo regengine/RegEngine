@@ -73,7 +73,7 @@
                         "uid": "prometheus"
                     },
                     "editorMode": "code",
-                    "expr": "sum(irate(http_requests_total[5m])) by (service)",
+                    "expr": "sum(irate(http_requests_total{job=\"regengine-services\"}[5m])) by (service)",
                     "legendFormat": "__auto",
                     "range": true,
                     "refId": "A"

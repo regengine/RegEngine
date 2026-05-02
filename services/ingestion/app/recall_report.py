@@ -15,8 +15,8 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
-from app.disclaimers import DEMO_DATA_DISCLAIMER
-from app.webhook_compat import _verify_api_key
+from .disclaimers import DEMO_DATA_DISCLAIMER
+from .webhook_compat import _verify_api_key
 
 logger = logging.getLogger("recall-report")
 

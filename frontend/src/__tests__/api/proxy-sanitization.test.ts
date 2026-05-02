@@ -12,10 +12,20 @@
  *   #1152-follow-on — UUID validation on [tenantId]/[snapshotId] routes
  */
 
-import { describe, it, expect } from 'vitest';
-import { sanitizePath, validateUuid, safeSegment } from '@/lib/api-proxy';
+import { afterEach, describe, it, expect } from 'vitest';
+import { requireProxyAuth, sanitizePath, validateUuid, safeSegment } from '@/lib/api-proxy';
 import { applyCookieCredentials, passthroughRequestHeaders } from '@/lib/proxy-factory';
 import type { NextRequest } from 'next/server';
+
+const ORIGINAL_REGENGINE_API_KEY = process.env.REGENGINE_API_KEY;
+
+afterEach(() => {
+    if (ORIGINAL_REGENGINE_API_KEY === undefined) {
+        delete process.env.REGENGINE_API_KEY;
+    } else {
+        process.env.REGENGINE_API_KEY = ORIGINAL_REGENGINE_API_KEY;
+    }
+});
 
 function makeProxyRequest(headers: Record<string, string>, cookies: Record<string, string> = {}): NextRequest {
     return {
@@ -28,6 +38,42 @@ function makeProxyRequest(headers: Record<string, string>, cookies: Record<strin
         },
     } as unknown as NextRequest;
 }
+
+describe('requireProxyAuth', () => {
+    it('does not treat REGENGINE_API_KEY as a caller credential', () => {
+        process.env.REGENGINE_API_KEY = 'server-side-key'; // pragma: allowlist secret
+
+        const response = requireProxyAuth(makeProxyRequest({}));
+
+        expect(response?.status).toBe(401);
+    });
+
+    it('does not treat cookie-managed placeholders as caller credentials', () => {
+        process.env.REGENGINE_API_KEY = 'server-side-key'; // pragma: allowlist secret
+
+        const response = requireProxyAuth(makeProxyRequest(
+            {
+                authorization: 'Bearer cookie-managed',
+                'x-regengine-api-key': 'cookie-managed',
+                'x-admin-key': 'cookie-managed',
+                'x-api-key': 'cookie-managed',
+            },
+            {
+                re_access_token: 'cookie-managed',
+                re_api_key: 'cookie-managed',
+                re_admin_key: 'cookie-managed',
+            },
+        ));
+
+        expect(response?.status).toBe(401);
+    });
+
+    it('allows real caller credentials from cookies or headers', () => {
+        expect(requireProxyAuth(makeProxyRequest({}, { re_access_token: 'real-token' }))).toBeNull();
+        expect(requireProxyAuth(makeProxyRequest({ authorization: 'Bearer real-token' }))).toBeNull();
+        expect(requireProxyAuth(makeProxyRequest({ 'x-regengine-api-key': 'real-api-key' }))).toBeNull();
+    });
+});
 
 describe('sanitizePath (catch-all [...path] proxies)', () => {
     it('joins valid path segments with slashes', () => {
@@ -209,5 +255,50 @@ describe('cookie-managed credential passthrough', () => {
         expect(outgoing.get('authorization')).toBe('Bearer real-token');
         expect(outgoing.get('x-regengine-api-key')).toBe('real-api-key');
         expect(outgoing.get('x-admin-key')).toBe('real-admin-key');
+    });
+
+    it('does not inject the server API key without a real caller credential', () => {
+        process.env.REGENGINE_API_KEY = 'server-side-key'; // pragma: allowlist secret
+        const outgoing = new Headers();
+        const request = makeProxyRequest({});
+
+        applyCookieCredentials(outgoing, request);
+
+        expect(outgoing.has('x-regengine-api-key')).toBe(false);
+    });
+
+    it('injects the server API key only after a real session credential is present', () => {
+        process.env.REGENGINE_API_KEY = 'server-side-key'; // pragma: allowlist secret
+        const outgoing = new Headers();
+        const request = makeProxyRequest({}, { re_access_token: 'real-token' });
+
+        applyCookieCredentials(outgoing, request);
+
+        expect(outgoing.get('authorization')).toBe('Bearer real-token');
+        expect(outgoing.get('x-regengine-api-key')).toBe('server-side-key');
+    });
+
+    it('prefers the tenant cookie over browser-provided tenant headers', () => {
+        const outgoing = new Headers({ 'x-tenant-id': 'browser-tenant' });
+        const request = makeProxyRequest(
+            { origin: 'https://regengine.co', 'x-tenant-id': 'browser-tenant' },
+            { re_access_token: 'real-token', re_tenant_id: 'cookie-tenant' },
+        );
+
+        applyCookieCredentials(outgoing, request);
+
+        expect(outgoing.get('x-tenant-id')).toBe('cookie-tenant');
+    });
+
+    it('drops browser-provided tenant headers when no tenant cookie is present', () => {
+        const outgoing = new Headers({ 'x-tenant-id': 'browser-tenant' });
+        const request = makeProxyRequest(
+            { origin: 'https://regengine.co', 'x-tenant-id': 'browser-tenant' },
+            { re_access_token: 'real-token' },
+        );
+
+        applyCookieCredentials(outgoing, request);
+
+        expect(outgoing.has('x-tenant-id')).toBe(false);
     });
 });

@@ -21,7 +21,7 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 
-from app.webhook_compat import _verify_api_key
+from .webhook_compat import _verify_api_key
 from shared.tenant_settings import get_jsonb, set_jsonb
 
 logger = logging.getLogger("onboarding")

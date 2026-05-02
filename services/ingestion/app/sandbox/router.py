@@ -22,16 +22,16 @@ import structlog
 from fastapi import APIRouter, HTTPException, Request
 from sqlalchemy import text
 
-from app.sandbox.csv_parser import (
+from .csv_parser import (
     _collect_value_normalizations,
     _normalize_for_rules,
     _parse_csv_to_events,
 )
-from app.sandbox.evaluators import (
+from .evaluators import (
     _evaluate_event_stateless,
     _evaluate_relational_in_memory,
 )
-from app.sandbox.models import (
+from .models import (
     EventEvaluationResponse,
     NormalizationAction,
     RuleResultResponse,
@@ -42,9 +42,9 @@ from app.sandbox.models import (
     SandboxTraceRequest,
     TraceGraphResponse,
 )
-from app.sandbox.rate_limiting import _check_sandbox_rate_limit
-from app.sandbox.tracer import _trace_in_memory, sandbox_trace as _sandbox_trace_impl
-from app.sandbox.validation import (
+from .rate_limiting import _check_sandbox_rate_limit
+from .tracer import _trace_in_memory, sandbox_trace as _sandbox_trace_impl
+from .validation import (
     _detect_duplicate_lots,
     _detect_entity_mismatches,
     _validate_kdes,

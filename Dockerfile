@@ -73,9 +73,9 @@ ENV PYTHONPATH=/app:/app/services:/app/services/ingestion:/app/services/admin:/a
 # Expose default port (Railway injects PORT at runtime)
 EXPOSE 8000
 
-# Health check
+# Dependency-aware health check. Railway also probes /readiness.
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-    CMD sh -c 'curl -fsS "http://localhost:${PORT:-8000}/health" || exit 1'
+    CMD sh -c 'curl -fsS "http://localhost:${PORT:-8000}/readiness" || exit 1'
 
 # Issue #1155: Remove any test files that slipped through the build context
 RUN find /app -name "test_*.py" -delete

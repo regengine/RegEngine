@@ -22,8 +22,8 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
-from app.authz import require_permission, IngestionPrincipal
-from app.tenant_validation import validate_tenant_id, resolve_tenant
+from .authz import require_permission, IngestionPrincipal
+from .tenant_validation import validate_tenant_id, resolve_tenant
 from shared.pagination import PaginationParams
 from shared.database import get_db_session
 

@@ -21,16 +21,18 @@ from dateutil.parser import ParserError as _DateParserError
 from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
 
-from app.config import get_settings
-from app.shared.upload_limits import read_upload_with_limit, MAX_CSV_FILE_SIZE_BYTES
-from app.webhook_models import (
+from .authz import IngestionPrincipal, require_permission
+from .config import get_settings
+from .shared.tenant_resolution import resolve_principal_tenant_id
+from .shared.upload_limits import read_upload_with_limit, MAX_CSV_FILE_SIZE_BYTES
+from .webhook_models import (
     IngestEvent,
     IngestResponse,
     REQUIRED_KDES_BY_CTE,
     WebhookCTEType,
     WebhookPayload,
 )
-from app.webhook_compat import _verify_api_key, ingest_events
+from .webhook_compat import ingest_events
 
 logger = logging.getLogger("csv-templates")
 
@@ -472,9 +474,10 @@ async def ingest_csv(
     file: UploadFile = File(..., description="CSV file to ingest"),
     cte_type: Optional[str] = Form(None, description="CTE type (optional if CSV has cte_type column)"),
     source: str = Form("csv_upload", description="Source identifier"),
-    tenant_id: Optional[str] = Form(None, description="Tenant ID (default: 'default')"),
-    _: None = Depends(_verify_api_key),
+    tenant_id: Optional[str] = Form(None, description="Tenant ID for legacy/master-key callers"),
+    principal: IngestionPrincipal = Depends(require_permission("webhooks.ingest")),
     x_regengine_api_key: Optional[str] = Header(default=None, alias="X-RegEngine-API-Key"),
+    x_tenant_id: Optional[str] = Header(default=None, alias="X-Tenant-ID"),
 ):
     """Ingest a CSV file of CTE events (single-type or mixed-type)."""
 
@@ -486,8 +489,7 @@ async def ingest_csv(
             valid = ", ".join(sorted(set(_CTE_TYPE_ALIASES.values())))
             raise HTTPException(status_code=400, detail=f"Unknown CTE type '{cte_type}'. Valid: {valid}")
 
-    if not tenant_id:
-        tenant_id = "default"
+    tenant_id = resolve_principal_tenant_id(tenant_id, x_tenant_id, principal.tenant_id)
 
     # Read and parse CSV
     content = await read_upload_with_limit(file, max_bytes=MAX_CSV_FILE_SIZE_BYTES, label="CSV file")
@@ -601,7 +603,7 @@ async def ingest_csv(
     response = await ingest_events(payload, x_regengine_api_key=x_regengine_api_key)
 
     if parse_errors:
-        from app.webhook_models import EventResult
+        from .webhook_models import EventResult
         for err in parse_errors:
             response.events.append(EventResult(
                 traceability_lot_code="", cte_type=fallback_cte or "unknown",

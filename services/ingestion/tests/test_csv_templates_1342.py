@@ -29,6 +29,7 @@ from app.csv_templates import (
     _validate_kde_completeness,
     router,
 )
+from app.authz import IngestionPrincipal, get_ingestion_principal
 from app.webhook_compat import _verify_api_key
 from app.webhook_models import (
     EventResult,
@@ -43,10 +44,15 @@ from app.webhook_models import (
 # ---------------------------------------------------------------------------
 
 
-def _build_app() -> FastAPI:
+def _build_app(principal_tenant: Optional[str] = "t1") -> FastAPI:
     app = FastAPI()
     app.include_router(router)
     app.dependency_overrides[_verify_api_key] = lambda: None
+    app.dependency_overrides[get_ingestion_principal] = lambda: IngestionPrincipal(
+        key_id="test-key",
+        scopes=["*"],
+        tenant_id=principal_tenant,
+    )
     return app
 
 
@@ -684,7 +690,7 @@ class TestIngestCsv:
             for err in evt.get("errors", [])
         )
 
-    def test_tenant_default_when_absent(self, monkeypatch):
+    def test_tenant_derived_from_principal_when_absent(self, monkeypatch):
         captured: dict = {}
 
         async def _fake(payload, **kwargs):
@@ -705,9 +711,9 @@ class TestIngestCsv:
             data={"cte_type": "harvesting"},
         )
         assert resp.status_code == 200
-        assert captured["tenant_id"] == "default"
+        assert captured["tenant_id"] == "t1"
 
-    def test_tenant_id_passthrough(self, monkeypatch):
+    def test_legacy_master_tenant_id_passthrough(self, monkeypatch):
         captured: dict = {}
 
         async def _fake(payload, **kwargs):
@@ -722,7 +728,7 @@ class TestIngestCsv:
             "harvest_date,location_name,reference_document\n"
             "TLC1,Kale,10,lbs,2026-04-17,Farm A,REF\n"
         )
-        client = TestClient(_build_app())
+        client = TestClient(_build_app(principal_tenant=None))
         resp = client.post(
             "/api/v1/ingest/csv",
             files={"file": ("t.csv", csv_text.encode(), "text/csv")},
@@ -730,6 +736,25 @@ class TestIngestCsv:
         )
         assert captured["tenant_id"] == "my-tenant"
         assert captured["source"] == "portal"
+
+    def test_scoped_principal_rejects_tenant_override(self, monkeypatch):
+        async def _fake(payload, **kwargs):
+            return IngestResponse(accepted=1, rejected=0, total=1, events=[])
+
+        monkeypatch.setattr(ct, "ingest_events", _fake)
+
+        csv_text = (
+            "traceability_lot_code,product_description,quantity,unit_of_measure,"
+            "harvest_date,location_name,reference_document\n"
+            "TLC1,Kale,10,lbs,2026-04-17,Farm A,REF\n"
+        )
+        client = TestClient(_build_app(principal_tenant="tenant-a"))
+        resp = client.post(
+            "/api/v1/ingest/csv",
+            files={"file": ("t.csv", csv_text.encode(), "text/csv")},
+            data={"cte_type": "harvesting", "tenant_id": "tenant-b"},
+        )
+        assert resp.status_code == 403
 
     def test_input_lot_codes_parsed(self, monkeypatch):
         captured: dict = {}

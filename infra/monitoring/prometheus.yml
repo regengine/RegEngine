@@ -2,16 +2,46 @@ global:
   scrape_interval: 15s
   evaluation_interval: 15s
 
+rule_files:
+  - alert_rules.yml
+
 scrape_configs:
   - job_name: 'regengine-services'
     metrics_path: '/metrics'
+    scrape_timeout: 10s
+    # RegEngine services protect /metrics with X-Metrics-Key. Mount the
+    # METRICS_API_KEY value as this file in the Prometheus deployment.
+    # Requires Prometheus 2.55+ / 3.x custom scrape headers.
+    http_headers:
+      X-Metrics-Key:
+        files:
+          - /etc/prometheus/secrets/metrics-api-key
     static_configs:
       - targets:
-        - 'compliance-service:80'
-        - 'admin-service:80'
-        - 'ingestion-service:80'
-        - 'scheduler:80'
-  
+          - 'admin-service:80'
+        labels:
+          service: 'admin-service'
+      - targets:
+          - 'compliance-service:80'
+        labels:
+          service: 'compliance-service'
+      - targets:
+          - 'graph-service:80'
+        labels:
+          service: 'graph-service'
+      - targets:
+          - 'ingestion-service:80'
+        labels:
+          service: 'ingestion-service'
+      - targets:
+          - 'nlp-service:80'
+        labels:
+          service: 'nlp-service'
+      - targets:
+          - 'scheduler-service:80'
+        labels:
+          service: 'scheduler-service'
+
   - job_name: 'kubernetes-nodes'
     kubernetes_sd_configs:
       - role: node

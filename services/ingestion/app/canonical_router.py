@@ -29,8 +29,8 @@ from sqlalchemy import text
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
-from app.authz import require_permission, IngestionPrincipal
-from app.tenant_validation import validate_tenant_id, resolve_tenant
+from .authz import require_permission, IngestionPrincipal
+from .tenant_validation import validate_tenant_id, resolve_tenant
 from shared.canonical_persistence import CanonicalEventStore
 from shared.tenant_context import set_tenant_guc
 from shared.database import get_db_session

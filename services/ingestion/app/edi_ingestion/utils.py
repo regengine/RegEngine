@@ -8,7 +8,7 @@ from typing import Optional
 
 from fastapi import HTTPException
 
-from app.webhook_models import VALID_UNITS_OF_MEASURE
+from ..webhook_models import VALID_UNITS_OF_MEASURE
 
 from .constants import _X12_UOM_MAP
 

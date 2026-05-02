@@ -9,7 +9,7 @@ from typing import Any, Optional
 import redis
 import structlog
 
-from app.config import get_settings
+from ..config import get_settings
 
 logger = structlog.get_logger("stripe-billing")
 

@@ -20,7 +20,7 @@ from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 
-from app.sandbox.models import SandboxResponse
+from .sandbox.models import SandboxResponse
 
 
 router = APIRouter(prefix="/api/v1/inflow-workbench", tags=["Inflow Workbench"])
