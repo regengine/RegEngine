@@ -25,6 +25,8 @@ import {
     Upload,
     Info,
     RefreshCw,
+    Database,
+    Users,
 } from 'lucide-react';
 
 import { useAuth } from '@/lib/auth-context';
@@ -104,6 +106,85 @@ const STATUS_CONFIG = {
         text: 'text-re-danger',
     },
 };
+
+const COMPLIANCE_SETUP_STEPS = [
+    {
+        title: 'Load traceability records',
+        detail: 'Import a CSV, scan labels, or run Inflow Lab so the score has CTE and KDE evidence to evaluate.',
+        href: '/tools/inflow-lab',
+        action: 'Open Inflow Lab',
+        icon: Upload,
+    },
+    {
+        title: 'Add supplier context',
+        detail: 'Connect facilities and supplier portal links so gaps can be traced to the right owner.',
+        href: '/dashboard/suppliers',
+        action: 'Manage suppliers',
+        icon: Users,
+    },
+    {
+        title: 'Preview export readiness',
+        detail: 'Once records exist, configure FDA and EPCIS export jobs for audit-response workflows.',
+        href: '/dashboard/export-jobs',
+        action: 'Set up exports',
+        icon: Download,
+    },
+];
+
+function ComplianceSetupPanel({ title = 'No compliance score yet' }: { title?: string }) {
+    return (
+        <Card className="border-[var(--re-border-default)] bg-[var(--re-surface-elevated)]">
+            <CardContent className="p-5 sm:p-6">
+                <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
+                    <div>
+                        <div className="flex items-start gap-3">
+                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[var(--re-brand)]/10 text-[var(--re-brand)]">
+                                <Shield className="h-5 w-5" />
+                            </div>
+                            <div>
+                                <h2 className="text-base font-semibold text-foreground">{title}</h2>
+                                <p className="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground">
+                                    RegEngine calculates this dashboard after it has traceability events, supplier identity, and enough KDE fields to evaluate. Until then, use the steps below to create the first evidence path.
+                                </p>
+                            </div>
+                        </div>
+                        <div className="mt-5 grid gap-3 md:grid-cols-3">
+                            {COMPLIANCE_SETUP_STEPS.map((step) => (
+                                <div key={step.title} className="rounded-xl border border-[var(--re-border-default)] bg-background p-3">
+                                    <step.icon className="h-4 w-4 text-[var(--re-brand)]" />
+                                    <p className="mt-3 text-sm font-semibold text-foreground">{step.title}</p>
+                                    <p className="mt-1 text-xs leading-5 text-muted-foreground">{step.detail}</p>
+                                    <Link href={step.href}>
+                                        <Button variant="ghost" size="sm" className="mt-3 h-8 px-0 text-xs text-[var(--re-brand)] hover:bg-transparent">
+                                            {step.action} <ArrowRight className="ml-1 h-3 w-3" />
+                                        </Button>
+                                    </Link>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                    <div className="rounded-xl border border-[var(--re-border-default)] bg-background p-4">
+                        <p className="text-sm font-semibold text-foreground">What will appear here</p>
+                        <div className="mt-3 space-y-3 text-xs leading-5 text-muted-foreground">
+                            <div className="flex gap-2">
+                                <Database className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--re-brand)]" />
+                                <span>Overall readiness score, grade, and status banner.</span>
+                            </div>
+                            <div className="flex gap-2">
+                                <Activity className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--re-brand)]" />
+                                <span>Weighted CTE/KDE, chain integrity, product coverage, and export readiness breakdowns.</span>
+                            </div>
+                            <div className="flex gap-2">
+                                <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--re-brand)]" />
+                                <span>Prioritized actions that link directly to the page where the gap can be fixed.</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </CardContent>
+        </Card>
+    );
+}
 
 /* ── Dimension metadata ── */
 
@@ -312,10 +393,52 @@ export default function ComplianceDashboardPage() {
 
                 {/* Loading */}
                 {loading && !score && (
-                    <div className="flex flex-col items-center justify-center py-16 gap-3">
-                        <Spinner size="lg" />
-                        <p className="text-sm text-muted-foreground">Analyzing your traceability data...</p>
-                    </div>
+                    <Card className="border-[var(--re-border-default)] bg-[var(--re-surface-elevated)]">
+                        <CardContent className="p-6">
+                            <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+                                <div className="flex items-start gap-3">
+                                    <Spinner size="lg" />
+                                    <div>
+                                        <p className="text-sm font-semibold text-foreground">Analyzing your traceability data</p>
+                                        <p className="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground">
+                                            We are checking CTE coverage, KDE completeness, supplier identity, and export readiness. If this is your first visit, the setup guide will appear if no records are available.
+                                        </p>
+                                    </div>
+                                </div>
+                                <div className="grid min-w-[260px] gap-2 text-xs text-muted-foreground">
+                                    {['Traceability events', 'KDE field coverage', 'Export eligibility'].map((label) => (
+                                        <div key={label} className="flex items-center gap-2 rounded-lg border border-[var(--re-border-default)] bg-background px-3 py-2">
+                                            <div className="h-2 w-2 rounded-full bg-[var(--re-brand)]/60" />
+                                            {label}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                            <div className="mt-5 rounded-xl border border-[var(--re-border-default)] bg-background p-4">
+                                <p className="text-sm font-semibold">Need to set up the score?</p>
+                                <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                                    If this workspace is new, there may not be enough records yet. You can keep this page open, or jump directly to the setup paths below.
+                                </p>
+                                <div className="mt-3 flex flex-wrap gap-2">
+                                    <Link href="/tools/inflow-lab">
+                                        <Button variant="outline" size="sm" className="h-8 text-xs">
+                                            Open Inflow Lab
+                                        </Button>
+                                    </Link>
+                                    <Link href="/dashboard/receiving">
+                                        <Button variant="outline" size="sm" className="h-8 text-xs">
+                                            Start receiving
+                                        </Button>
+                                    </Link>
+                                    <Link href="/dashboard/suppliers">
+                                        <Button variant="outline" size="sm" className="h-8 text-xs">
+                                            Add suppliers
+                                        </Button>
+                                    </Link>
+                                </div>
+                            </div>
+                        </CardContent>
+                    </Card>
                 )}
 
                 {/* Error */}
@@ -632,27 +755,10 @@ export default function ComplianceDashboardPage() {
                 {/* Empty state — no score and not loading */}
                 {!score && !loading && !error && isLoggedIn && (
                     <motion.div
-                        className="flex flex-col items-center justify-center py-16 text-center"
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                     >
-                        <Shield className="h-12 w-12 text-muted-foreground/40 mb-4" />
-                        <h2 className="text-lg font-semibold">Welcome to Compliance Status</h2>
-                        <p className="text-sm text-muted-foreground mt-1 max-w-md">
-                            Start tracking your FSMA 204 readiness by importing traceability data or scanning product labels.
-                        </p>
-                        <div className="flex gap-3 mt-6">
-                            <Link href="/ingest">
-                                <Button variant="outline" size="sm">
-                                    <Upload className="mr-1.5 h-3.5 w-3.5" /> Import Data
-                                </Button>
-                            </Link>
-                            <Link href="/dashboard/scan">
-                                <Button size="sm" className="bg-[var(--re-brand)] hover:bg-[var(--re-brand)]/90 text-white">
-                                    <Activity className="mr-1.5 h-3.5 w-3.5" /> Scan Labels
-                                </Button>
-                            </Link>
-                        </div>
+                        <ComplianceSetupPanel />
                     </motion.div>
                 )}
 

@@ -1,9 +1,10 @@
 'use client';
 
 import { fetchWithCsrf } from '@/lib/fetch-with-csrf';
+import Link from 'next/link';
 import { useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Archive, Download, ShieldCheck, Clock, PlusCircle, Link2Off } from 'lucide-react';
+import { Archive, Download, ShieldCheck, Clock, PlusCircle, Link2Off, Database, Upload, ArrowRight, CheckCircle2 } from 'lucide-react';
 import type { ArchiveExportJob } from '@/lib/customer-readiness';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -35,7 +36,7 @@ export default function ExportJobsPage() {
     });
 
     const notConnected = exportResponse?.meta?.status === 'not_connected';
-    const jobs: ArchiveExportJob[] = exportResponse?.jobs ?? [];
+    const jobs: ArchiveExportJob[] = useMemo(() => exportResponse?.jobs ?? [], [exportResponse?.jobs]);
 
     const activeJobs = useMemo(
         () => jobs.filter((job) => job.status === 'active').length,
@@ -62,7 +63,13 @@ export default function ExportJobsPage() {
             return (await response.json()) as { job: ArchiveExportJob };
         },
         onSuccess: (data) => {
-            queryClient.setQueryData<ArchiveExportJob[]>(['export-jobs'], (old) => [data.job, ...(old ?? [])]);
+            queryClient.setQueryData<{
+                jobs?: ArchiveExportJob[];
+                meta?: { status?: string; message?: string };
+            }>(['export-jobs'], (old) => ({
+                ...(old ?? { meta: { status: 'ok' } }),
+                jobs: [data.job, ...(old?.jobs ?? [])],
+            }));
             setName('Weekly FSMA archive');
             setCadence('Weekly');
             setFormat('FDA Package');
@@ -81,6 +88,30 @@ export default function ExportJobsPage() {
     function handleSaveJob() {
         createJobMutation.mutate();
     }
+
+    const exportPrereqs = [
+        {
+            title: 'Connect source data',
+            detail: 'Use Inflow Lab or import tools so export jobs have accepted records to package.',
+            href: '/tools/inflow-lab',
+            action: 'Open Inflow Lab',
+            icon: Database,
+        },
+        {
+            title: 'Resolve open exceptions',
+            detail: 'Incomplete lots stay visible for review and should not be treated as evidence-ready.',
+            href: '/dashboard/compliance',
+            action: 'Check readiness',
+            icon: CheckCircle2,
+        },
+        {
+            title: 'Choose an archive destination',
+            detail: 'Pick downloadable bundles for manual review or object storage for long-term retention.',
+            href: '/dashboard/settings',
+            action: 'Review settings',
+            icon: Upload,
+        },
+    ];
 
     return (
         <div className="min-h-screen bg-background py-8 sm:py-10 px-4 sm:px-6">
@@ -106,11 +137,16 @@ export default function ExportJobsPage() {
                 </div>
 
                 {notConnected ? (
-                    <div className="rounded-xl border border-re-warning/20 bg-re-warning-muted0/[0.06] p-4 text-sm text-re-warning flex items-start gap-3">
-                        <Link2Off className="h-4 w-4 mt-0.5 flex-shrink-0 text-re-warning" />
-                        <span>
-                            No export jobs have been configured yet. Export job scheduling activates once your supply chain data is connected.
-                        </span>
+                    <div className="rounded-xl border border-re-warning/20 bg-re-warning-muted0/[0.06] p-4 text-sm text-re-warning">
+                        <div className="flex items-start gap-3">
+                            <Link2Off className="h-4 w-4 mt-0.5 flex-shrink-0 text-re-warning" />
+                            <div>
+                                <p className="font-semibold">Export scheduling is waiting for connected supply-chain data.</p>
+                                <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                                    Create jobs after at least one supplier feed, import, or validated Inflow Lab run exists. This keeps empty schedules from looking like audit evidence.
+                                </p>
+                            </div>
+                        </div>
                     </div>
                 ) : (
                     <div className="rounded-xl border border-[var(--re-brand)]/20 bg-[var(--re-brand)]/[0.04] p-4 text-sm text-muted-foreground">
@@ -234,17 +270,64 @@ export default function ExportJobsPage() {
                         </Card>
                     ))}
                     {status === 'loading' && jobs.length === 0 && (
-                        <div className="rounded-xl border border-[var(--re-border-default)] bg-[var(--re-surface-elevated)] p-4 text-sm text-muted-foreground">
-                            Loading export jobs...
+                        <div className="rounded-xl border border-[var(--re-border-default)] bg-[var(--re-surface-elevated)] p-5">
+                            <div className="flex items-start gap-3">
+                                <Clock className="mt-0.5 h-4 w-4 animate-pulse text-[var(--re-brand)]" />
+                                <div>
+                                    <p className="text-sm font-semibold">Loading export jobs</p>
+                                    <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                                        Checking scheduled exports, archive destinations, and the latest manifest state.
+                                    </p>
+                                </div>
+                            </div>
                         </div>
                     )}
-                    {status !== 'loading' && jobs.length === 0 && !notConnected && (
-                        <div className="rounded-xl border border-dashed border-[var(--re-border-default)] bg-[var(--re-surface-elevated)] p-8 text-center">
-                            <Archive className="h-10 w-10 text-muted-foreground mx-auto mb-3 opacity-40" />
-                            <p className="text-sm font-medium mb-1">No export jobs yet</p>
-                            <p className="text-xs text-muted-foreground max-w-md mx-auto">
-                                Configure a recurring export above and click &ldquo;Save Export Job&rdquo; to schedule your first archive. Jobs will appear here.
-                            </p>
+                    {status !== 'loading' && jobs.length === 0 && (
+                        <div className="rounded-xl border border-dashed border-[var(--re-border-default)] bg-[var(--re-surface-elevated)] p-5 sm:p-6">
+                            <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_300px]">
+                                <div>
+                                    <div className="flex items-start gap-3">
+                                        <Archive className="mt-0.5 h-8 w-8 text-[var(--re-brand)]" />
+                                        <div>
+                                            <p className="text-sm font-semibold">No export jobs yet</p>
+                                            <p className="mt-1 max-w-2xl text-xs leading-5 text-muted-foreground">
+                                                Export jobs package accepted traceability records into FDA, EPCIS, or audit bundles on a cadence. Set one up after your first clean source is connected, then every run will appear here with timing and manifest details.
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <div className="mt-5 grid gap-3 md:grid-cols-3">
+                                        {exportPrereqs.map((step) => (
+                                            <div key={step.title} className="rounded-xl border border-[var(--re-border-default)] bg-background p-3 text-left">
+                                                <step.icon className="h-4 w-4 text-[var(--re-brand)]" />
+                                                <p className="mt-3 text-xs font-semibold">{step.title}</p>
+                                                <p className="mt-1 text-[11px] leading-4 text-muted-foreground">{step.detail}</p>
+                                                <Link href={step.href}>
+                                                    <Button variant="ghost" size="sm" className="mt-3 h-7 px-0 text-[11px] text-[var(--re-brand)] hover:bg-transparent">
+                                                        {step.action} <ArrowRight className="ml-1 h-3 w-3" />
+                                                    </Button>
+                                                </Link>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                                <div className="rounded-xl border border-[var(--re-border-default)] bg-background p-4">
+                                    <p className="text-sm font-semibold">What a job will show</p>
+                                    <div className="mt-3 space-y-2 text-xs leading-5 text-muted-foreground">
+                                        <div className="flex items-center justify-between rounded-lg bg-[var(--re-surface-elevated)] px-3 py-2">
+                                            <span>Cadence</span>
+                                            <span className="font-medium text-foreground">Weekly / Daily / Monthly</span>
+                                        </div>
+                                        <div className="flex items-center justify-between rounded-lg bg-[var(--re-surface-elevated)] px-3 py-2">
+                                            <span>Bundle</span>
+                                            <span className="font-medium text-foreground">FDA or EPCIS</span>
+                                        </div>
+                                        <div className="flex items-center justify-between rounded-lg bg-[var(--re-surface-elevated)] px-3 py-2">
+                                            <span>Integrity</span>
+                                            <span className="font-medium text-foreground">Manifest hash</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     )}
                 </div>

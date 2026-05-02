@@ -79,6 +79,24 @@ function complianceLabel(score: number | null): { color: string; bg: string; lab
     return { color: '#ef4444', bg: 'rgba(239,68,68,0.08)', label: 'Non-Compliant', icon: XCircle };
 }
 
+const SUPPLIER_SETUP_STEPS = [
+    {
+        title: 'Add a facility',
+        detail: 'Create the supplier or distribution location you need to track for FSMA 204 readiness.',
+        icon: Users,
+    },
+    {
+        title: 'Invite data owners',
+        detail: 'Generate portal links so suppliers can submit shipment data without needing full dashboard access.',
+        icon: Link2,
+    },
+    {
+        title: 'Validate before evidence',
+        detail: 'Use Inflow Lab to test CSVs, fix missing KDEs, and save a preflight run before production import.',
+        icon: SlidersHorizontal,
+    },
+];
+
 /* ------------------------------------------------------------------ */
 /*  Page                                                               */
 /* ------------------------------------------------------------------ */
@@ -664,26 +682,82 @@ export default function SupplierDashboardPage() {
 
                 {/* Loading State */}
                 {loading && (
-                    <div className="flex items-center justify-center py-12">
-                        <Spinner size="lg" />
+                    <div className="rounded-xl border border-[var(--re-border-default)] bg-[var(--re-surface-elevated)] p-5">
+                        <div className="flex items-start gap-3">
+                            <Spinner size="lg" />
+                            <div>
+                                <p className="text-sm font-semibold">Loading supplier network</p>
+                                <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                                    Checking facilities, portal links, saved mapping profiles, compliance gaps, and latest lot activity.
+                                </p>
+                            </div>
+                        </div>
+                        <div className="mt-5 grid gap-3 md:grid-cols-3">
+                            {[1, 2, 3].map((item) => (
+                                <div key={item} className="h-20 animate-pulse rounded-xl bg-background" />
+                            ))}
+                        </div>
                     </div>
                 )}
 
                 {/* Empty State */}
                 {!loading && facilities.length === 0 && !error && (
                     <Card className="border-dashed">
-                        <CardContent className="py-12 text-center">
-                            <Users className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                            <p className="text-lg font-medium mb-1">No facilities yet</p>
-                            <p className="text-sm text-muted-foreground mb-4">
-                                Add your first supplier facility to start tracking FSMA 204 compliance.
-                            </p>
-                            <Button
-                                onClick={() => setShowAddForm(true)}
-                                className="bg-[var(--re-brand)] hover:brightness-110 text-white rounded-xl min-h-[48px] active:scale-[0.97]"
-                            >
-                                <Plus className="h-4 w-4 mr-1" /> Add Facility
-                            </Button>
+                        <CardContent className="p-5 sm:p-6">
+                            <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_300px]">
+                                <div>
+                                    <div className="flex items-start gap-3">
+                                        <Users className="mt-0.5 h-9 w-9 text-[var(--re-brand)]" />
+                                        <div>
+                                            <p className="text-base font-semibold">No supplier facilities yet</p>
+                                            <p className="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground">
+                                                Supplier Management is where each facility, portal link, mapping profile, and supplier-specific readiness signal comes together. Add one facility or invite a supplier to begin collecting traceability data.
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <div className="mt-5 grid gap-3 md:grid-cols-3">
+                                        {SUPPLIER_SETUP_STEPS.map((step) => (
+                                            <div key={step.title} className="rounded-xl border border-[var(--re-border-default)] bg-[var(--re-surface-elevated)] p-3">
+                                                <step.icon className="h-4 w-4 text-[var(--re-brand)]" />
+                                                <p className="mt-3 text-xs font-semibold">{step.title}</p>
+                                                <p className="mt-1 text-[11px] leading-4 text-muted-foreground">{step.detail}</p>
+                                            </div>
+                                        ))}
+                                    </div>
+                                    <div className="mt-5 flex flex-col gap-2 sm:flex-row">
+                                        <Button
+                                            onClick={() => setShowAddForm(true)}
+                                            className="bg-[var(--re-brand)] hover:brightness-110 text-white rounded-xl min-h-[44px] active:scale-[0.97]"
+                                        >
+                                            <Plus className="h-4 w-4 mr-1" /> Add Facility
+                                        </Button>
+                                        <Button
+                                            variant="outline"
+                                            onClick={() => setShowInviteForm(true)}
+                                            className="rounded-xl min-h-[44px]"
+                                        >
+                                            <Send className="h-4 w-4 mr-1" /> Invite Supplier
+                                        </Button>
+                                    </div>
+                                </div>
+                                <div className="rounded-xl border border-[var(--re-border-default)] bg-[var(--re-surface-elevated)] p-4">
+                                    <p className="text-sm font-semibold">What will populate after setup</p>
+                                    <div className="mt-3 space-y-2 text-xs leading-5 text-muted-foreground">
+                                        <div className="flex items-center justify-between rounded-lg bg-background px-3 py-2">
+                                            <span>Facility rows</span>
+                                            <span className="font-medium text-foreground">score + gaps</span>
+                                        </div>
+                                        <div className="flex items-center justify-between rounded-lg bg-background px-3 py-2">
+                                            <span>Portal links</span>
+                                            <span className="font-medium text-foreground">active / revoked</span>
+                                        </div>
+                                        <div className="flex items-center justify-between rounded-lg bg-background px-3 py-2">
+                                            <span>FDA exports</span>
+                                            <span className="font-medium text-foreground">per facility</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                         </CardContent>
                     </Card>
                 )}
