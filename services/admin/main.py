@@ -328,6 +328,13 @@ app.include_router(erasure_router)
 from app.data_export_routes import router as data_export_router
 app.include_router(data_export_router)
 
+# Partner Gateway (white-label) — skeleton implementation, see
+# regengine-partner-gateway-openapi.yaml for the contract and
+# services/admin/app/partner_gateway/router.py for the TODO list of
+# unimplemented operations.
+from app.partner_gateway.router import router as partner_gateway_router
+app.include_router(partner_gateway_router)
+
 
 
 # ---------------------------------------------------------------------------
