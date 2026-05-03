@@ -54,6 +54,10 @@ vi.mock('lucide-react', () => {
         Clock: stub,
         PlusCircle: stub,
         Link2Off: stub,
+        Database: stub,
+        Upload: stub,
+        ArrowRight: stub,
+        CheckCircle2: stub,
     };
 });
 
@@ -107,7 +111,7 @@ describe('ExportJobsPage', () => {
         global.fetch = vi.fn().mockReturnValue(new Promise(() => {}));
         render(<ExportJobsPage />, { wrapper: createWrapper() });
 
-        expect(screen.getByText('Loading export jobs...')).toBeInTheDocument();
+        expect(screen.getByText('Loading export jobs')).toBeInTheDocument();
     });
 
     it('renders jobs when fetch succeeds', async () => {
