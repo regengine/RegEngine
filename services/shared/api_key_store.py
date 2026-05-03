@@ -73,7 +73,16 @@ class APIKeyModel(Base):
     
     # Tenant association
     tenant_id = Column(String(36), nullable=True, index=True)  # UUID
-    
+
+    # Partner association (white-label / reseller).
+    # NULL for non-partner keys (internal admin keys, regular customer
+    # API keys). Populated for keys issued to partners; the partner
+    # gateway reads this column to scope queries to the partner's own
+    # client tenants. See ``services/admin/app/partner_gateway/auth.py``.
+    # Stored as the partner's internal id (matches ``partners.id``) —
+    # NOT a UUID by convention because partner ids are short slugs.
+    partner_id = Column(String(64), nullable=True, index=True)
+
     # Access control
     billing_tier = Column(String(50), nullable=True)  # DEVELOPER, PROFESSIONAL, ENTERPRISE
     allowed_jurisdictions = Column(ARRAY(String), default=list)
@@ -119,6 +128,7 @@ class APIKeyResponse(BaseModel):
     name: str
     description: Optional[str] = None
     tenant_id: Optional[str] = None
+    partner_id: Optional[str] = None
     billing_tier: Optional[str] = None
     allowed_jurisdictions: list[str] = Field(default_factory=list)
     scopes: list[str] = Field(default_factory=list)
@@ -367,6 +377,7 @@ class DatabaseAPIKeyStore:
         *,
         description: Optional[str] = None,
         tenant_id: Optional[str] = None,
+        partner_id: Optional[str] = None,
         billing_tier: Optional[str] = None,
         allowed_jurisdictions: Optional[list[str]] = None,
         scopes: Optional[list[str]] = None,
@@ -413,6 +424,7 @@ class DatabaseAPIKeyStore:
             name=name,
             description=description,
             tenant_id=tenant_id,
+            partner_id=partner_id,
             billing_tier=billing_tier,
             allowed_jurisdictions=allowed_jurisdictions or ["US"],
             scopes=scopes or [],
@@ -446,6 +458,7 @@ class DatabaseAPIKeyStore:
             name=name,
             description=description,
             tenant_id=tenant_id,
+            partner_id=partner_id,
             billing_tier=billing_tier,
             allowed_jurisdictions=allowed_jurisdictions or ["US"],
             scopes=scopes or [],
@@ -666,6 +679,7 @@ class DatabaseAPIKeyStore:
             name=f"{old_key.name} (rotated)",
             description=old_key.description,
             tenant_id=old_key.tenant_id,
+            partner_id=old_key.partner_id,
             billing_tier=old_key.billing_tier,
             allowed_jurisdictions=list(old_key.allowed_jurisdictions or []),
             scopes=list(old_key.scopes or []),
@@ -758,19 +772,23 @@ class DatabaseAPIKeyStore:
         rate_limit_per_minute: Optional[int] = None,
         rate_limit_per_hour: Optional[int] = None,
         rate_limit_per_day: Optional[int] = None,
-        scopes: Optional[list[str]] = None,
         enabled: Optional[bool] = None,
         metadata: Optional[dict[str, Any]] = None,
     ) -> Optional[APIKeyResponse]:
-        """Update API key settings.
-        
-        Note: Cannot update key_hash, tenant_id, or billing_tier.
-        Use rotate_key() to change security-sensitive fields.
-        
+        """Update non-security-sensitive API key settings.
+
+        Note: ``scopes`` is intentionally NOT accepted here. Scope changes
+        are a privilege boundary — silently broadening scopes through a
+        generic update path means a compromised admin session can escalate
+        any existing key without leaving an obvious audit trail. Use
+        :meth:`change_scopes` instead, which forces explicit auditing and
+        rotates the key by default. Cannot update key_hash, tenant_id, or
+        billing_tier — use rotate_key() for those.
+
         Args:
             key_id: The key identifier
             **kwargs: Fields to update
-            
+
         Returns:
             Updated APIKeyResponse or None if not found
         """
@@ -785,11 +803,14 @@ class DatabaseAPIKeyStore:
             updates["rate_limit_per_hour"] = rate_limit_per_hour
         if rate_limit_per_day is not None:
             updates["rate_limit_per_day"] = rate_limit_per_day
-        if scopes is not None:
-            updates["scopes"] = scopes
         if enabled is not None:
             updates["enabled"] = enabled
         if metadata is not None:
+            # ``extra_data`` is partner-controlled metadata and MUST NOT be
+            # consulted for authorization decisions. If you find yourself
+            # reaching for ``extra_data`` to gate access, add a real column
+            # or scope instead — anyone who can update_key() can also write
+            # whatever they want here.
             updates["extra_data"] = metadata
 
         if not updates:
@@ -808,6 +829,130 @@ class DatabaseAPIKeyStore:
                 return None
 
             return APIKeyResponse.model_validate(api_key)
+
+    async def change_scopes(
+        self,
+        key_id: str,
+        *,
+        new_scopes: list[str],
+        changed_by: Optional[str] = None,
+        reason: Optional[str] = None,
+        rotate: bool = True,
+    ) -> Optional[APIKeyResponse | APIKeyCreateResponse]:
+        """Change the scopes on an API key — privilege-sensitive operation.
+
+        Scope changes are the only way (short of issuing a new key) to
+        broaden what an existing API key can do. Routing them through a
+        dedicated method gives us three things the generic ``update_key``
+        path could not: an explicit audit event with the before/after
+        diff, a required ``reason`` for compliance, and key rotation by
+        default so the old raw_key cannot continue to operate under the
+        new scopes if it has leaked.
+
+        Args:
+            key_id: The key identifier to change scopes on.
+            new_scopes: Replacement scope list (full replacement, not a delta).
+            changed_by: User ID performing the change (for audit).
+            reason: Free-text justification — required for non-narrowing
+                changes; recommended in all cases.
+            rotate: When True (default) the key is rotated and the caller
+                receives a new raw_key (the old key is revoked). Pass
+                ``rotate=False`` ONLY when strictly narrowing scopes
+                (i.e. ``set(new_scopes).issubset(set(old_scopes))``).
+
+        Returns:
+            APIKeyCreateResponse (with new raw_key) when rotated, or
+            APIKeyResponse when narrowed in place. None if key not found.
+        """
+        async with self._session() as session:
+            result = await session.execute(
+                select(APIKeyModel).where(APIKeyModel.key_id == key_id)
+            )
+            existing = result.scalar_one_or_none()
+            if not existing:
+                return None
+            old_scopes = list(existing.scopes or [])
+
+        old_set = set(old_scopes)
+        new_set = set(new_scopes)
+        added = sorted(new_set - old_set)
+        removed = sorted(old_set - new_set)
+        is_narrowing_only = not added and bool(removed)
+
+        # Refuse silent broadening — broadening MUST rotate the key so a
+        # leaked old raw_key can't ride the new scopes.
+        if added and not rotate:
+            raise ValueError(
+                "change_scopes: rotate=False is only allowed for narrowing "
+                f"changes; this change adds scopes {added}. Re-run with "
+                "rotate=True (default) or remove the new scopes."
+            )
+
+        logger.info(
+            "api_key_scopes_changing",
+            key_id=key_id,
+            changed_by=changed_by,
+            reason=reason,
+            old_scopes=old_scopes,
+            new_scopes=list(new_scopes),
+            added_scopes=added,
+            removed_scopes=removed,
+            narrowing_only=is_narrowing_only,
+            rotate=rotate,
+        )
+
+        if rotate:
+            # Issue a new key with the new scopes, revoke the old. The
+            # caller must distribute the new raw_key — the old one stops
+            # working immediately.
+            new_response = await self.create_key(
+                name=f"{existing.name} (scope change)",
+                description=existing.description,
+                tenant_id=existing.tenant_id,
+                partner_id=existing.partner_id,
+                billing_tier=existing.billing_tier,
+                allowed_jurisdictions=list(existing.allowed_jurisdictions or []),
+                scopes=list(new_scopes),
+                rate_limit_per_minute=existing.rate_limit_per_minute,
+                rate_limit_per_hour=existing.rate_limit_per_hour,
+                rate_limit_per_day=existing.rate_limit_per_day,
+                expires_at=existing.expires_at,
+                created_by=changed_by,
+                metadata={
+                    **(existing.extra_data or {}),
+                    "scope_change_from_key_id": key_id,
+                    "scope_change_added": added,
+                    "scope_change_removed": removed,
+                    "scope_change_reason": reason,
+                },
+            )
+            await self.revoke_key(
+                key_id,
+                revoked_by=changed_by,
+                reason=f"Scope change → {new_response.key_id}: {reason or 'no reason given'}",
+            )
+            logger.info(
+                "api_key_scopes_changed_via_rotation",
+                old_key_id=key_id,
+                new_key_id=new_response.key_id,
+                added_scopes=added,
+                removed_scopes=removed,
+            )
+            return new_response
+
+        # In-place narrowing path: no new raw_key, just shrink the scope set.
+        async with self._session() as session:
+            await session.execute(
+                update(APIKeyModel)
+                .where(APIKeyModel.key_id == key_id)
+                .values(scopes=list(new_scopes))
+            )
+        logger.info(
+            "api_key_scopes_narrowed_in_place",
+            key_id=key_id,
+            removed_scopes=removed,
+        )
+        return await self.get_key(key_id)
 
     async def close(self) -> None:
         """Close database connections."""
