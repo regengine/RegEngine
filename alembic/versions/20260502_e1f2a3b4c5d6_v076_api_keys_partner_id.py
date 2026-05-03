@@ -21,6 +21,7 @@ Reversible.
 from typing import Sequence, Union
 
 from alembic import op
+import sqlalchemy as sa
 
 
 revision: str = "e1f2a3b4c5d6"  # pragma: allowlist secret
@@ -29,7 +30,20 @@ branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
 
+def _api_keys_exists() -> bool:
+    bind = op.get_bind()
+    if bind.dialect.name == "postgresql":
+        return bool(
+            bind.execute(sa.text("SELECT to_regclass('api_keys') IS NOT NULL")).scalar()
+        )
+
+    return sa.inspect(bind).has_table("api_keys")
+
+
 def upgrade() -> None:
+    if not _api_keys_exists():
+        return
+
     # Idempotent — safe to run twice if a partial deploy needs replay.
     op.execute(
         """
@@ -69,5 +83,8 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    if not _api_keys_exists():
+        return
+
     op.execute("DROP INDEX IF EXISTS ix_api_keys_partner_id")
     op.execute("ALTER TABLE api_keys DROP COLUMN IF EXISTS partner_id")
