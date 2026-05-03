@@ -19,7 +19,7 @@ declared in the OpenAPI spec.
 """
 from __future__ import annotations
 
-from typing import Optional, Union
+from typing import Any, Optional, Union
 
 import structlog
 from fastapi import Depends, Header, HTTPException, Request, status
@@ -30,6 +30,7 @@ from shared.auth import APIKey, get_key_store
 from shared.permissions import has_permission
 
 logger = structlog.get_logger("partner_gateway.auth")
+_DEFAULT_PARTNER_RATE_LIMIT_PER_MINUTE = 1000
 
 
 class PartnerPrincipal(BaseModel):
@@ -45,6 +46,42 @@ class PartnerPrincipal(BaseModel):
     tenant_id: Optional[str] = None
     partner_id: Optional[str] = None
     auth_mode: str = "partner_key"
+
+
+def _rate_limit_per_minute(api_key: Union[APIKey, APIKeyResponse]) -> int:
+    value = getattr(api_key, "rate_limit_per_minute", None)
+    try:
+        limit = int(value)
+    except (TypeError, ValueError):
+        return _DEFAULT_PARTNER_RATE_LIMIT_PER_MINUTE
+    return limit if limit > 0 else _DEFAULT_PARTNER_RATE_LIMIT_PER_MINUTE
+
+
+async def _enforce_partner_rate_limit(
+    key_store: Any,
+    api_key: Union[APIKey, APIKeyResponse],
+) -> None:
+    limit = _rate_limit_per_minute(api_key)
+    if isinstance(key_store, DatabaseAPIKeyStore):
+        rate_info = await key_store.check_rate_limit(api_key.key_id, limit)
+        if rate_info.allowed:
+            return
+        retry_after = getattr(rate_info, "retry_after", None) or 60
+    else:
+        if key_store.check_rate_limit(api_key.key_id, limit):
+            return
+        retry_after = 60
+
+    logger.warning(
+        "partner_rate_limit_exceeded",
+        key_id=api_key.key_id,
+        limit_per_minute=limit,
+    )
+    raise HTTPException(
+        status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+        detail="Rate limit exceeded",
+        headers={"Retry-After": str(retry_after)},
+    )
 
 
 async def get_partner_principal(
@@ -92,11 +129,25 @@ async def get_partner_principal(
     # compromised partner change which other partner's tenants they can
     # see. The scope check below independently gates access; this field
     # only narrows queries to "your own" partner data.
+    partner_id = getattr(api_key, "partner_id", None)
+    if not partner_id:
+        logger.warning(
+            "partner_key_missing_partner_id",
+            path=request.url.path,
+            key_id=api_key.key_id,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Partner API key is not bound to a partner",
+        )
+
+    await _enforce_partner_rate_limit(key_store, api_key)
+
     return PartnerPrincipal(
         key_id=api_key.key_id,
         scopes=list(api_key.scopes or []),
         tenant_id=getattr(api_key, "tenant_id", None),
-        partner_id=getattr(api_key, "partner_id", None),
+        partner_id=partner_id,
     )
 
 

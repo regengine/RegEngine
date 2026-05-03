@@ -52,8 +52,30 @@ def _fake_validated_key(
     k.scopes = scopes
     k.tenant_id = "00000000-0000-0000-0000-0000000000aa"
     k.partner_id = partner_id
+    k.rate_limit_per_minute = 1000
     k.extra_data = {}  # explicitly NOT used for partner_id resolution
     return k
+
+
+def _rate_info(allowed: bool = True, retry_after: int | None = None) -> MagicMock:
+    info = MagicMock()
+    info.allowed = allowed
+    info.retry_after = retry_after
+    return info
+
+
+def _fake_db_store(
+    validate_return,
+    *,
+    rate_allowed: bool = True,
+    retry_after: int | None = None,
+) -> MagicMock:
+    fake_store = MagicMock()
+    fake_store.validate_key = AsyncMock(return_value=validate_return)
+    fake_store.check_rate_limit = AsyncMock(
+        return_value=_rate_info(rate_allowed, retry_after)
+    )
+    return fake_store
 
 
 # ---------------------------------------------------------------------------
@@ -75,8 +97,7 @@ def test_invalid_partner_key_returns_401():
     """Header present but key store rejects it → 401."""
     app = _build_app()
 
-    fake_store = MagicMock()
-    fake_store.validate_key = AsyncMock(return_value=None)
+    fake_store = _fake_db_store(None)
 
     with patch(
         "app.partner_gateway.auth.get_key_store",
@@ -98,10 +119,7 @@ def test_valid_key_with_scope_passes_through_to_handler():
     """Happy path: valid key + matching scope → 200."""
     app = _build_app()
 
-    fake_store = MagicMock()
-    fake_store.validate_key = AsyncMock(
-        return_value=_fake_validated_key(["partner.clients.read"])
-    )
+    fake_store = _fake_db_store(_fake_validated_key(["partner.clients.read"]))
 
     with patch(
         "app.partner_gateway.auth.get_key_store",
@@ -119,16 +137,65 @@ def test_valid_key_with_scope_passes_through_to_handler():
     body = resp.json()
     assert body["_stub"] is True
     assert body["_principal_key_id"] == "rge_partner1"
+    fake_store.check_rate_limit.assert_awaited_once_with("rge_partner1", 1000)
+
+
+def test_valid_key_over_rate_limit_returns_429():
+    """Valid partner key still fails closed when its per-key quota is exhausted."""
+    app = _build_app()
+    fake_store = _fake_db_store(
+        _fake_validated_key(["partner.clients.read"]),
+        rate_allowed=False,
+        retry_after=37,
+    )
+
+    with patch(
+        "app.partner_gateway.auth.get_key_store",
+        return_value=fake_store,
+    ), patch(
+        "app.partner_gateway.auth.DatabaseAPIKeyStore",
+        new=type(fake_store),
+    ):
+        client = TestClient(app)
+        resp = client.get(
+            "/v1/partner/clients",
+            headers={"X-RegEngine-Partner-Key": "rge_partner1.secret"},
+        )
+
+    assert resp.status_code == 429
+    assert resp.headers["Retry-After"] == "37"
+
+
+def test_valid_key_without_partner_id_returns_403():
+    """Partner gateway keys must be bound to a real partner_id column value."""
+    app = _build_app()
+    fake_store = _fake_db_store(
+        _fake_validated_key(["partner.clients.read"], partner_id=None)
+    )
+
+    with patch(
+        "app.partner_gateway.auth.get_key_store",
+        return_value=fake_store,
+    ), patch(
+        "app.partner_gateway.auth.DatabaseAPIKeyStore",
+        new=type(fake_store),
+    ):
+        client = TestClient(app)
+        resp = client.get(
+            "/v1/partner/clients",
+            headers={"X-RegEngine-Partner-Key": "rge_partner1.secret"},
+        )
+
+    assert resp.status_code == 403
+    assert "not bound" in resp.json()["detail"]
+    fake_store.check_rate_limit.assert_not_awaited()
 
 
 def test_valid_key_with_namespace_wildcard_passes():
     """``partner.*`` should satisfy ``partner.clients.read``."""
     app = _build_app()
 
-    fake_store = MagicMock()
-    fake_store.validate_key = AsyncMock(
-        return_value=_fake_validated_key(["partner.*"])
-    )
+    fake_store = _fake_db_store(_fake_validated_key(["partner.*"]))
 
     with patch(
         "app.partner_gateway.auth.get_key_store",
@@ -154,10 +221,7 @@ def test_valid_key_with_wrong_scope_returns_403():
     """
     app = _build_app()
 
-    fake_store = MagicMock()
-    fake_store.validate_key = AsyncMock(
-        return_value=_fake_validated_key(["partner.clients.read"])
-    )
+    fake_store = _fake_db_store(_fake_validated_key(["partner.clients.read"]))
 
     with patch(
         "app.partner_gateway.auth.get_key_store",
@@ -179,10 +243,7 @@ def test_full_wildcard_scope_passes_every_endpoint():
     """A key with ``*`` should pass any scope check (admin-tier)."""
     app = _build_app()
 
-    fake_store = MagicMock()
-    fake_store.validate_key = AsyncMock(
-        return_value=_fake_validated_key(["*"])
-    )
+    fake_store = _fake_db_store(_fake_validated_key(["*"]))
 
     with patch(
         "app.partner_gateway.auth.get_key_store",
@@ -270,8 +331,7 @@ def _call(client: TestClient, method: str, path: str, body, headers):
 def test_endpoint_passes_with_exact_scope(method, path, scope, body):
     """Each endpoint succeeds when the key carries exactly its scope."""
     app = _build_app()
-    fake_store = MagicMock()
-    fake_store.validate_key = AsyncMock(return_value=_fake_validated_key([scope]))
+    fake_store = _fake_db_store(_fake_validated_key([scope]))
 
     with patch(
         "app.partner_gateway.auth.get_key_store", return_value=fake_store
@@ -298,10 +358,7 @@ def test_endpoint_403s_with_unrelated_scope(method, path, scope, body):
     not wired up for that route.
     """
     app = _build_app()
-    fake_store = MagicMock()
-    fake_store.validate_key = AsyncMock(
-        return_value=_fake_validated_key(["partner.unrelated.read"])
-    )
+    fake_store = _fake_db_store(_fake_validated_key(["partner.unrelated.read"]))
 
     with patch(
         "app.partner_gateway.auth.get_key_store", return_value=fake_store
@@ -341,10 +398,10 @@ async def test_partner_id_is_not_read_from_extra_data():
     fake_key.scopes = ["partner.clients.read"]
     fake_key.tenant_id = None
     fake_key.partner_id = "partner_legit"
+    fake_key.rate_limit_per_minute = 1000
     fake_key.extra_data = {"partner_id": "partner_evil"}
 
-    fake_store = MagicMock()
-    fake_store.validate_key = AsyncMock(return_value=fake_key)
+    fake_store = _fake_db_store(fake_key)
 
     fake_request = MagicMock()
     fake_request.url.path = "/v1/partner/clients"
@@ -377,10 +434,7 @@ def test_list_clients_empty_returns_200_not_404():
     """
     app = _build_app()
 
-    fake_store = MagicMock()
-    fake_store.validate_key = AsyncMock(
-        return_value=_fake_validated_key(["partner.clients.read"])
-    )
+    fake_store = _fake_db_store(_fake_validated_key(["partner.clients.read"]))
 
     with patch(
         "app.partner_gateway.auth.get_key_store",

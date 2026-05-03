@@ -255,16 +255,17 @@ class TestRateLimiting:
     """Test rate limiting functionality."""
 
     @pytest.mark.asyncio
-    async def test_rate_limit_without_redis_allows_all(self):
-        """Without Redis, rate limiting should be disabled (allow all)."""
+    async def test_rate_limit_without_redis_fails_closed(self):
+        """Without Redis, distributed DB-key rate limiting fails closed."""
         from shared.api_key_store import DatabaseAPIKeyStore
 
         store = DatabaseAPIKeyStore(database_url=TEST_DATABASE_URL)
         # No Redis configured
 
         info = await store.check_rate_limit("rge_test", limit=60)
-        assert info.allowed is True
-        assert info.remaining == 60
+        assert info.allowed is False
+        assert info.remaining == 0
+        assert info.retry_after == 60
 
     @pytest.mark.asyncio
     async def test_rate_limit_with_redis_tracks_usage(self):

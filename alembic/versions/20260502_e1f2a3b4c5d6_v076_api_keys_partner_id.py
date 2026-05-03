@@ -21,7 +21,6 @@ Reversible.
 from typing import Sequence, Union
 
 from alembic import op
-import sqlalchemy as sa
 
 
 revision: str = "e1f2a3b4c5d6"  # pragma: allowlist secret
@@ -36,6 +35,28 @@ def upgrade() -> None:
         """
         ALTER TABLE api_keys
             ADD COLUMN IF NOT EXISTS partner_id VARCHAR(64)
+        """
+    )
+    op.execute(
+        """
+        UPDATE api_keys
+        SET partner_id = btrim(extra_data ->> 'partner_id')
+        WHERE partner_id IS NULL
+          AND extra_data IS NOT NULL
+          AND jsonb_typeof(extra_data) = 'object'
+          AND NULLIF(btrim(extra_data ->> 'partner_id'), '') IS NOT NULL
+          AND length(btrim(extra_data ->> 'partner_id')) <= 64
+          AND EXISTS (
+              SELECT 1
+              FROM unnest(COALESCE(scopes, ARRAY[]::varchar[])) AS s(scope)
+              WHERE lower(replace(s.scope, ':', '.')) IN (
+                  '*',
+                  'admin.*',
+                  'super_admin',
+                  'partner.*'
+              )
+                 OR lower(replace(s.scope, ':', '.')) LIKE 'partner.%'
+          )
         """
     )
     op.execute(

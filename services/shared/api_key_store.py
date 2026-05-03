@@ -50,7 +50,6 @@ from sqlalchemy import (
     update,
 )
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB
-from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import declarative_base, sessionmaker
 
@@ -305,7 +304,7 @@ class DatabaseAPIKeyStore:
         try:
             yield session
             await session.commit()
-        except SQLAlchemyError:
+        except Exception:
             await session.rollback()
             raise
         finally:
@@ -866,92 +865,144 @@ class DatabaseAPIKeyStore:
         """
         async with self._session() as session:
             result = await session.execute(
-                select(APIKeyModel).where(APIKeyModel.key_id == key_id)
+                select(APIKeyModel)
+                .where(APIKeyModel.key_id == key_id)
+                .with_for_update()
             )
             existing = result.scalar_one_or_none()
             if not existing:
                 return None
             old_scopes = list(existing.scopes or [])
 
-        old_set = set(old_scopes)
-        new_set = set(new_scopes)
-        added = sorted(new_set - old_set)
-        removed = sorted(old_set - new_set)
-        is_narrowing_only = not added and bool(removed)
+            old_set = set(old_scopes)
+            new_set = set(new_scopes)
+            added = sorted(new_set - old_set)
+            removed = sorted(old_set - new_set)
+            is_narrowing_only = not added and bool(removed)
 
-        # Refuse silent broadening — broadening MUST rotate the key so a
-        # leaked old raw_key can't ride the new scopes.
-        if added and not rotate:
-            raise ValueError(
-                "change_scopes: rotate=False is only allowed for narrowing "
-                f"changes; this change adds scopes {added}. Re-run with "
-                "rotate=True (default) or remove the new scopes."
+            # Refuse silent broadening — broadening MUST rotate the key so a
+            # leaked old raw_key can't ride the new scopes.
+            if added and not rotate:
+                raise ValueError(
+                    "change_scopes: rotate=False is only allowed for narrowing "
+                    f"changes; this change adds scopes {added}. Re-run with "
+                    "rotate=True (default) or remove the new scopes."
+                )
+            if added and not (reason or "").strip():
+                raise ValueError(
+                    "change_scopes: reason is required when adding scopes"
+                )
+
+            logger.info(
+                "api_key_scopes_changing",
+                key_id=key_id,
+                changed_by=changed_by,
+                reason=reason,
+                old_scopes=old_scopes,
+                new_scopes=list(new_scopes),
+                added_scopes=added,
+                removed_scopes=removed,
+                narrowing_only=is_narrowing_only,
+                rotate=rotate,
             )
 
-        logger.info(
-            "api_key_scopes_changing",
-            key_id=key_id,
-            changed_by=changed_by,
-            reason=reason,
-            old_scopes=old_scopes,
-            new_scopes=list(new_scopes),
-            added_scopes=added,
-            removed_scopes=removed,
-            narrowing_only=is_narrowing_only,
-            rotate=rotate,
-        )
-
-        if rotate:
-            # Issue a new key with the new scopes, revoke the old. The
-            # caller must distribute the new raw_key — the old one stops
-            # working immediately.
-            new_response = await self.create_key(
-                name=f"{existing.name} (scope change)",
-                description=existing.description,
-                tenant_id=existing.tenant_id,
-                partner_id=existing.partner_id,
-                billing_tier=existing.billing_tier,
-                allowed_jurisdictions=list(existing.allowed_jurisdictions or []),
-                scopes=list(new_scopes),
-                rate_limit_per_minute=existing.rate_limit_per_minute,
-                rate_limit_per_hour=existing.rate_limit_per_hour,
-                rate_limit_per_day=existing.rate_limit_per_day,
-                expires_at=existing.expires_at,
-                created_by=changed_by,
-                metadata={
+            if rotate:
+                # Create the replacement key and revoke the old key in the
+                # same transaction, so a failure cannot leave both keys active.
+                new_key_id = self._generate_key_id()
+                raw_secret = self._generate_secret()
+                raw_key = f"{new_key_id}.{raw_secret}"
+                key_hash = self._hash_key(raw_key)
+                key_prefix = raw_key[:12]
+                now = datetime.now(timezone.utc)
+                metadata = {
                     **(existing.extra_data or {}),
                     "scope_change_from_key_id": key_id,
                     "scope_change_added": added,
                     "scope_change_removed": removed,
                     "scope_change_reason": reason,
-                },
-            )
-            await self.revoke_key(
-                key_id,
-                revoked_by=changed_by,
-                reason=f"Scope change → {new_response.key_id}: {reason or 'no reason given'}",
-            )
-            logger.info(
-                "api_key_scopes_changed_via_rotation",
-                old_key_id=key_id,
-                new_key_id=new_response.key_id,
-                added_scopes=added,
-                removed_scopes=removed,
-            )
-            return new_response
+                }
+                reason_text = reason.strip() if reason else "no reason given"
+                new_model = APIKeyModel(
+                    key_id=new_key_id,
+                    key_hash=key_hash,
+                    key_prefix=key_prefix,
+                    name=f"{existing.name} (scope change)",
+                    description=existing.description,
+                    tenant_id=existing.tenant_id,
+                    partner_id=existing.partner_id,
+                    billing_tier=existing.billing_tier,
+                    allowed_jurisdictions=list(existing.allowed_jurisdictions or []),
+                    scopes=list(new_scopes),
+                    rate_limit_per_minute=existing.rate_limit_per_minute,
+                    rate_limit_per_hour=existing.rate_limit_per_hour,
+                    rate_limit_per_day=existing.rate_limit_per_day,
+                    expires_at=existing.expires_at,
+                    created_by=changed_by,
+                    created_at=now,
+                    extra_data=metadata,
+                )
 
-        # In-place narrowing path: no new raw_key, just shrink the scope set.
-        async with self._session() as session:
+                if existing.tenant_id:
+                    await self._set_context(session, existing.tenant_id)
+                session.add(new_model)
+                revoke_result = await session.execute(
+                    update(APIKeyModel)
+                    .where(APIKeyModel.key_id == key_id)
+                    .values(
+                        enabled=False,
+                        revoked_at=now,
+                        revoked_by=changed_by,
+                        revoke_reason=(
+                            f"Scope change -> {new_key_id}: {reason_text}"
+                        ),
+                    )
+                )
+                if revoke_result.rowcount != 1:
+                    raise RuntimeError(
+                        f"change_scopes: failed to revoke old key {key_id}"
+                    )
+                await session.flush()
+
+                logger.info(
+                    "api_key_scopes_changed_via_rotation",
+                    old_key_id=key_id,
+                    new_key_id=new_key_id,
+                    added_scopes=added,
+                    removed_scopes=removed,
+                )
+                return APIKeyCreateResponse(
+                    key_id=new_key_id,
+                    key_prefix=key_prefix,
+                    name=new_model.name,
+                    description=existing.description,
+                    tenant_id=existing.tenant_id,
+                    partner_id=existing.partner_id,
+                    billing_tier=existing.billing_tier,
+                    allowed_jurisdictions=list(existing.allowed_jurisdictions or []),
+                    scopes=list(new_scopes),
+                    rate_limit_per_minute=existing.rate_limit_per_minute,
+                    rate_limit_per_hour=existing.rate_limit_per_hour,
+                    rate_limit_per_day=existing.rate_limit_per_day,
+                    enabled=True,
+                    created_at=now,
+                    expires_at=existing.expires_at,
+                    last_used_at=None,
+                    total_requests=0,
+                    raw_key=raw_key,
+                )
+
+            # In-place narrowing path: no new raw_key, just shrink the scope set.
             await session.execute(
                 update(APIKeyModel)
                 .where(APIKeyModel.key_id == key_id)
                 .values(scopes=list(new_scopes))
             )
-        logger.info(
-            "api_key_scopes_narrowed_in_place",
-            key_id=key_id,
-            removed_scopes=removed,
-        )
+            logger.info(
+                "api_key_scopes_narrowed_in_place",
+                key_id=key_id,
+                removed_scopes=removed,
+            )
         return await self.get_key(key_id)
 
     async def close(self) -> None:

@@ -15,6 +15,7 @@ DEFAULT_ALLOWED_HEADERS = [
     "X-Correlation-ID",
     "X-Metrics-Key",
     "X-RegEngine-API-Key",
+    "X-RegEngine-Partner-Key",
     "X-RegEngine-Tenant-ID",
     "X-Request-ID",
     "X-Requested-With",
