@@ -7,12 +7,40 @@ info:
 
     **Authentication:** All endpoints require a partner-scoped API key via
     the `X-RegEngine-Partner-Key` header. Partner keys are issued during
-    onboarding and scoped to the `partner` role with access limited to
-    tenants originated by the partner.
+    onboarding and are RLS-scoped so the partner can only access tenants
+    they originated.
+
+    **Authorization (scopes):** Each endpoint requires a specific scope on
+    the calling key. Scopes follow the namespace pattern
+    `partner.{resource}.{action}` and are matched by
+    `services/shared/permissions.py` (which supports exact match,
+    namespace wildcards like `partner.clients.*`, and full wildcards
+    `*` / `admin.*`). The full scope set is:
+
+      - `partner.clients.read` — list and read client tenants
+      - `partner.clients.write` — create and update client tenants
+      - `partner.compliance.read` — read client compliance state
+      - `partner.evidence.export` — trigger evidence package export
+      - `partner.api_keys.read` — list per-client API keys (metadata only)
+      - `partner.api_keys.write` — create per-client API keys
+      - `partner.revenue.read` — view partner revenue metrics
+      - `partner.payouts.read` — view payout records
+      - `partner.branding.read` — read white-label branding config
+      - `partner.branding.write` — update white-label branding config
+
+    Each operation declares its required scope via the `x-required-scopes`
+    extension. Keys issued with `partner.*` get full access; least-privilege
+    keys (e.g. ingest-only client keys) should be issued with the smallest
+    matching scope.
+
+    **Scope changes are privilege-sensitive.** Broadening scopes on an
+    existing key forces key rotation (the old `raw_key` is revoked) so a
+    leaked key cannot ride new permissions — see `change_scopes()` in
+    `services/shared/api_key_store.py`.
 
     **Multi-Tenancy:** All client data is isolated via PostgreSQL Row-Level
     Security + TenantContextMiddleware (ref: TDD §6). Partners can only
-    access tenants they created.
+    access tenants they created — scope checks layer on top of RLS.
 
     **Rate Limits:** 1,000 requests/minute (partner tier). Contact
     partnerships@regengine.co for higher limits.
@@ -37,6 +65,7 @@ paths:
   /clients:
     get:
       operationId: listClients
+      x-required-scopes: [partner.clients.read]
       summary: List all client tenants originated by this partner
       description: |
         Returns a paginated list of client tenants created by the
@@ -90,6 +119,7 @@ paths:
 
     post:
       operationId: createClient
+      x-required-scopes: [partner.clients.write]
       summary: Provision a new client tenant
       description: |
         Creates a new multi-tenant client under this partner's account.
@@ -129,6 +159,7 @@ paths:
   /clients/{client_id}:
     get:
       operationId: getClient
+      x-required-scopes: [partner.clients.read]
       summary: Get detailed client tenant information
       description: |
         Returns full details for a specific client tenant including
@@ -150,6 +181,7 @@ paths:
 
     patch:
       operationId: updateClient
+      x-required-scopes: [partner.clients.write]
       summary: Update client tenant configuration
       description: |
         Update client branding, billing tier, or notification settings.
@@ -175,6 +207,7 @@ paths:
   /clients/{client_id}/compliance:
     get:
       operationId: getClientCompliance
+      x-required-scopes: [partner.compliance.read]
       summary: Get client compliance dashboard data
       description: |
         Returns the client's current compliance posture including
@@ -206,6 +239,7 @@ paths:
   /clients/{client_id}/evidence/export:
     post:
       operationId: exportEvidence
+      x-required-scopes: [partner.evidence.export]
       summary: Export cryptographic evidence chain for audit
       description: |
         Generates a self-contained evidence export package containing:
@@ -242,6 +276,7 @@ paths:
   /clients/{client_id}/api-keys:
     get:
       operationId: listClientApiKeys
+      x-required-scopes: [partner.api_keys.read]
       summary: List API keys for a client tenant
       tags:
         - Client Management
@@ -257,6 +292,7 @@ paths:
 
     post:
       operationId: createClientApiKey
+      x-required-scopes: [partner.api_keys.write]
       summary: Create a new API key for a client tenant
       description: |
         Generates a new API key scoped to the specified client tenant.
@@ -284,6 +320,7 @@ paths:
   /revenue:
     get:
       operationId: getRevenueMetrics
+      x-required-scopes: [partner.revenue.read]
       summary: Get partner revenue share metrics
       description: |
         Returns revenue share calculations for the current billing
@@ -310,6 +347,7 @@ paths:
   /revenue/payouts:
     get:
       operationId: listPayouts
+      x-required-scopes: [partner.payouts.read]
       summary: List historical revenue share payouts
       tags:
         - Billing & Revenue
@@ -335,6 +373,7 @@ paths:
   /branding:
     get:
       operationId: getBranding
+      x-required-scopes: [partner.branding.read]
       summary: Get current partner branding configuration
       tags:
         - Branding
@@ -348,6 +387,7 @@ paths:
 
     put:
       operationId: updateBranding
+      x-required-scopes: [partner.branding.write]
       summary: Update partner branding (logo, colors, domain)
       description: |
         Configure white-label branding applied to all client-facing

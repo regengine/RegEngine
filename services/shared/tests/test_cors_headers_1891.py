@@ -17,6 +17,7 @@ def test_default_cors_headers_are_explicit(monkeypatch: pytest.MonkeyPatch) -> N
     assert "Authorization" in headers
     assert "Content-Type" in headers
     assert "X-RegEngine-API-Key" in headers
+    assert "X-RegEngine-Partner-Key" in headers
     assert "X-Tenant-ID" in headers
     assert "X-RegEngine-Tenant-ID" in headers
     assert "X-Request-ID" in headers

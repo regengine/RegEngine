@@ -136,6 +136,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 from shared.env import is_production
 _is_prod = is_production()
 
+
+def _env_flag(name: str, default: bool = False) -> bool:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
 app = FastAPI(
     title="RegEngine Admin API",
     version="1.0.0",
@@ -227,8 +235,17 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins,
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type", "X-RegEngine-API-Key", "X-Admin-Key", "X-Tenant-ID", "X-Request-ID", "X-Correlation-ID"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=[
+        "Authorization",
+        "Content-Type",
+        "X-RegEngine-API-Key",
+        "X-RegEngine-Partner-Key",
+        "X-Admin-Key",
+        "X-Tenant-ID",
+        "X-Request-ID",
+        "X-Correlation-ID",
+    ],
 )
 
 # Audit context middleware — captures IP, UA, request_id for tamper-evident audit trail
@@ -327,6 +344,18 @@ app.include_router(erasure_router)
 # GDPR right-to-access / data portability (Art. 15 / 20) -- #1094
 from app.data_export_routes import router as data_export_router
 app.include_router(data_export_router)
+
+# Partner Gateway (white-label) — currently stubbed. Keep it available in
+# non-production sandboxes but never mount 2xx stubs in production.
+if not _is_prod and _env_flag("ENABLE_PARTNER_GATEWAY_STUBS", default=True):
+    from app.partner_gateway.router import router as partner_gateway_router
+    app.include_router(partner_gateway_router)
+else:
+    structlog.get_logger("admin").info(
+        "partner_gateway_router_disabled",
+        production=_is_prod,
+        reason="stubbed_partner_gateway",
+    )
 
 
 

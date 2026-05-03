@@ -11,7 +11,8 @@ def test_permission_implies_exact_and_separator_normalization() -> None:
 def test_permission_implies_wildcards() -> None:
     assert permission_implies("*", "fda.export")
     assert permission_implies("fda.*", "fda.export")
-    assert permission_implies("admin", "simulations.write")
+    assert permission_implies("admin.*", "simulations.write")
+    assert not permission_implies("admin", "simulations.write")
 
 
 def test_has_permission_with_mixed_grants() -> None:
