@@ -12,7 +12,6 @@ import {
     Package,
     Plus,
     ScanLine,
-    Trash2,
     Truck,
     X,
 } from 'lucide-react';
@@ -74,6 +73,41 @@ export default function ReceivingDockPage() {
         });
         toast({ title: 'Receiving Session Started', description: `Supplier: ${supplier || 'Unknown'}` });
     }, [supplier, poNumber, toast]);
+
+    const startSampleSession = useCallback(() => {
+        const sampleSupplier = supplier || 'Valley Fresh Farms';
+        const samplePo = poNumber || 'PO-2026-0042';
+        setSupplier(sampleSupplier);
+        setPoNumber(samplePo);
+        setSession({
+            supplier: sampleSupplier,
+            poNumber: samplePo,
+            expectedItems: [
+                {
+                    id: 'sample-romaine',
+                    gtin: '00614141000012',
+                    lotCode: 'TLC-ROM-20260426-001',
+                    productName: 'Romaine Lettuce',
+                    quantity: 18,
+                    expiryDate: '',
+                    status: 'pending',
+                },
+                {
+                    id: 'sample-spring-mix',
+                    gtin: '00614141000029',
+                    lotCode: 'TLC-MIX-20260426-004',
+                    productName: 'Spring Mix',
+                    quantity: 12,
+                    expiryDate: '',
+                    status: 'pending',
+                },
+            ],
+            unexpectedScans: [],
+            startedAt: new Date().toISOString(),
+            status: 'active',
+        });
+        toast({ title: 'Sample Receiving Session Started', description: 'Two expected items are ready to scan.' });
+    }, [poNumber, supplier, toast]);
 
     /* ─── Add expected item ─── */
     const addExpectedItem = useCallback(() => {
@@ -242,11 +276,26 @@ export default function ReceivingDockPage() {
 
             {/* ─── Session Setup ─── */}
             {!session && (
-                <Card>
+                <Card className="border-[var(--re-border-default)]">
                     <CardHeader>
                         <CardTitle className="text-lg">Start Receiving Session</CardTitle>
+                        <p className="text-sm leading-6 text-muted-foreground">
+                            Use this dock when a shipment arrives. Start a session, add expected PO items if you have them, scan labels, then confirm the matched items into the traceability pipeline.
+                        </p>
                     </CardHeader>
                     <CardContent className="space-y-4">
+                        <div className="grid gap-3 md:grid-cols-3">
+                            {[
+                                ['1. Start session', 'Enter the supplier and PO or ASN so the receiving CTE has source context.'],
+                                ['2. Add or scan items', 'Add expected lots from the PO, or scan directly to capture unexpected items.'],
+                                ['3. Confirm & ingest', 'Accepted scans become receiving events for audit logs and compliance scoring.'],
+                            ].map(([title, detail]) => (
+                                <div key={title} className="rounded-lg border border-[var(--re-border-default)] bg-[var(--re-surface-elevated)] px-3 py-2">
+                                    <p className="text-xs font-semibold">{title}</p>
+                                    <p className="mt-1 text-[11px] leading-4 text-muted-foreground">{detail}</p>
+                                </div>
+                            ))}
+                        </div>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <div>
                                 <label className="text-xs font-medium text-muted-foreground mb-1 block">Supplier Name</label>
@@ -265,9 +314,14 @@ export default function ReceivingDockPage() {
                                 />
                             </div>
                         </div>
-                        <Button onClick={startSession} className="w-full sm:w-auto">
-                            <Truck className="mr-2 h-4 w-4" /> Start Receiving
-                        </Button>
+                        <div className="flex flex-col gap-2 sm:flex-row">
+                            <Button onClick={startSession} className="w-full sm:w-auto">
+                                <Truck className="mr-2 h-4 w-4" /> Start Receiving
+                            </Button>
+                            <Button variant="outline" onClick={startSampleSession} className="w-full sm:w-auto">
+                                Load sample PO
+                            </Button>
+                        </div>
                     </CardContent>
                 </Card>
             )}
@@ -370,9 +424,31 @@ export default function ReceivingDockPage() {
 
                             {/* Expected items list */}
                             {session.expectedItems.length === 0 ? (
-                                <p className="text-sm text-muted-foreground text-center py-6 italic">
-                                    No expected items added yet. Add items from your PO or start scanning directly.
-                                </p>
+                                <div className="rounded-xl border border-dashed border-[var(--re-border-default)] bg-[var(--re-surface-elevated)] p-5">
+                                    <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                                        <div>
+                                            <p className="text-sm font-semibold">No expected items added yet</p>
+                                            <p className="mt-1 max-w-2xl text-xs leading-5 text-muted-foreground">
+                                                Add the lots you expect from the PO to turn scans into pass/fail checks. If the shipment is unplanned, scan directly and the dock will capture the items as unexpected receiving records for review.
+                                            </p>
+                                        </div>
+                                        <Button variant="outline" size="sm" onClick={() => setShowAddExpected(true)} className="shrink-0">
+                                            <Plus className="mr-1 h-3.5 w-3.5" /> Add expected item
+                                        </Button>
+                                    </div>
+                                    <div className="mt-4 grid gap-2 md:grid-cols-3">
+                                        {[
+                                            ['GTIN / barcode', 'Optional, but helps match labels quickly.'],
+                                            ['Lot code', 'The traceability lot code used for FSMA records.'],
+                                            ['Quantity', 'The cases or units received for this item.'],
+                                        ].map(([label, detail]) => (
+                                            <div key={label} className="rounded-lg bg-background px-3 py-2">
+                                                <p className="text-[11px] font-semibold">{label}</p>
+                                                <p className="mt-0.5 text-[11px] leading-4 text-muted-foreground">{detail}</p>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
                             ) : (
                                 <div className="space-y-2">
                                     {session.expectedItems.map(item => (
