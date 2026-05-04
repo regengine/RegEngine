@@ -87,13 +87,17 @@ self.addEventListener('fetch', (event) => {
 // Background sync: retry failed API calls when back online
 self.addEventListener('sync', (event) => {
   if (event.tag === 'regengine-offline-queue') {
-    event.waitUntil(processOfflineQueue());
+    event.waitUntil(Promise.all([
+      notifyClientsToSync(),
+      processOfflineQueue(),
+    ]));
   }
 });
 
 async function processOfflineQueue() {
-  // IndexedDB queue is managed by the FieldCaptureClient component
-  // This handler retries queued CTE event submissions
+  // Field capture now uses RegEngineMobileDB as the durable queue owner.
+  // This handler drains legacy service-worker-owned records without deleting
+  // them until the backend acknowledges the replay with a 2xx response.
   try {
     const db = await openDB();
     const tx = db.transaction('offline-events', 'readonly');
@@ -101,30 +105,58 @@ async function processOfflineQueue() {
     const events = await getAllFromStore(store);
 
     for (const event of events) {
-      const queuedAt = getOfflineEventQueuedAt(event);
-      if (!queuedAt) {
-        await putOfflineEvent(db, { ...event, createdAt: Date.now() });
-      } else if (Date.now() - queuedAt > OFFLINE_EVENT_MAX_AGE_MS) {
-        await deleteOfflineEvent(db, event.id);
-        continue;
-      }
+      const retryEvent = normalizeOfflineEvent(event);
+      const queuedAt = getOfflineEventQueuedAt(retryEvent);
+      const retentionExceeded = queuedAt && Date.now() - queuedAt > OFFLINE_EVENT_MAX_AGE_MS;
 
       try {
-        await fetch(event.url, {
+        const response = await fetch(retryEvent.url, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(event.body),
+          credentials: 'include',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(retryEvent.headers || {}),
+          },
+          body: typeof retryEvent.body === 'string' ? retryEvent.body : JSON.stringify(retryEvent.body),
         });
-        // Remove from queue on success
-        await deleteOfflineEvent(db, event.id);
-      } catch {
-        // Still offline — leave in queue for next sync
+        if (!response.ok) {
+          throw new Error(`Replay failed: ${response.status}`);
+        }
+        await deleteOfflineEvent(db, retryEvent.id);
+      } catch (error) {
+        await putOfflineEvent(db, markOfflineEventFailure(retryEvent, error, retentionExceeded));
         break;
       }
     }
   } catch {
     // IndexedDB not available or empty — nothing to sync
   }
+}
+
+async function notifyClientsToSync() {
+  if (!self.clients?.matchAll) return;
+  const clients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+  for (const client of clients) {
+    client.postMessage({ type: 'REGENGINE_SYNC_OFFLINE_QUEUE' });
+  }
+}
+
+function normalizeOfflineEvent(event) {
+  return {
+    ...event,
+    createdAt: getOfflineEventQueuedAt(event) || Date.now(),
+  };
+}
+
+function markOfflineEventFailure(event, error, retentionExceeded) {
+  const attempts = Number.isFinite(event.syncAttempts) ? event.syncAttempts + 1 : 1;
+  return {
+    ...event,
+    syncAttempts: attempts,
+    lastSyncAttemptAt: Date.now(),
+    syncError: error instanceof Error ? error.message : String(error || 'Replay failed'),
+    ...(retentionExceeded && !event.retentionExceededAt ? { retentionExceededAt: Date.now() } : {}),
+  };
 }
 
 function openDB() {
