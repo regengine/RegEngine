@@ -298,6 +298,7 @@ export default function ComplianceDashboardPage() {
         },
         enabled: isLoggedIn && !!tenantId,
         refetchInterval: POLL_MS,
+        retry: false,
     });
 
     const {
@@ -308,6 +309,7 @@ export default function ComplianceDashboardPage() {
         queryFn: async () => fetchWorkbenchReadinessSummary(tenantId, apiKey || ''),
         enabled: isLoggedIn && !!tenantId,
         refetchInterval: POLL_MS,
+        retry: false,
     });
 
     const error = scoreError?.message ?? null;

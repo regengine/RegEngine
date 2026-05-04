@@ -42,26 +42,31 @@ export function ScanHistoryWidget() {
 
   useEffect(() => {
     if (!tenantId) {
-      setLoading(false);
       return;
     }
+    let cancelled = false;
     const load = async () => {
+      const search = new URLSearchParams({ tenant_id: tenantId, limit: "8" });
       try {
         const res = await fetch(
-          `${getServiceURL("ingestion")}/api/v1/webhooks/recent?tenant_id=${tenantId}&limit=8`,
-          { credentials: "include" },
+          `${getServiceURL("ingestion")}/api/v1/webhooks/recent?${search}`,
+          { credentials: "include", signal: AbortSignal.timeout(8000) },
         );
         if (res.ok) {
           const data = await res.json();
-          setEvents(data.events || []);
+          if (!cancelled) setEvents(data.events || []);
         }
       } catch {
         /* silent */
       }
-      setLoading(false);
+      if (!cancelled) setLoading(false);
     };
     void load();
+    return () => {
+      cancelled = true;
+    };
   }, [tenantId]);
+  const isLoading = Boolean(tenantId) && loading;
 
   return (
     <Card>
@@ -80,7 +85,7 @@ export function ScanHistoryWidget() {
         </div>
       </CardHeader>
       <CardContent>
-        {loading ? (
+        {isLoading ? (
           <div className="flex items-center justify-center py-8 text-sm text-muted-foreground">
             Loading...
           </div>

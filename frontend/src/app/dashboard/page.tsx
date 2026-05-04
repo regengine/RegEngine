@@ -285,6 +285,7 @@ export default function DashboardPage() {
       const res = await fetch(
         `/api/ingestion/api/v1/compliance/pending-reviews/${effectiveTenantId}`,
         {
+          signal: AbortSignal.timeout(8000),
           headers: {
             "Content-Type": "application/json",
             "X-RegEngine-API-Key": apiKey!,
@@ -295,6 +296,7 @@ export default function DashboardPage() {
       return res.json();
     },
     enabled: !!effectiveTenantId && !!apiKey,
+    retry: false,
   });
   const pendingReviews = pendingReviewsData?.pending_reviews ?? 0;
 
@@ -304,6 +306,7 @@ export default function DashboardPage() {
       fetchWorkbenchReadinessSummary(effectiveTenantId || "", apiKey || ""),
     enabled: !!effectiveTenantId && !!apiKey,
     staleTime: 60_000,
+    retry: false,
   });
 
   // Use real metrics from backend when available, fall back to zeros from hook

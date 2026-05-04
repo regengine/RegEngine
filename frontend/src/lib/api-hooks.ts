@@ -12,6 +12,11 @@ import { getServiceURL } from './api-config';
 import { fetchWithCsrf } from './fetch-with-csrf';
 
 const BASE = () => getServiceURL('ingestion');
+const API_FETCH_TIMEOUT_MS = 8000;
+
+function isAbortError(err: unknown): boolean {
+    return err instanceof Error && (err.name === 'AbortError' || err.name === 'TimeoutError');
+}
 
 /** Shared fetch helper with retry logic. Credentials are in HTTP-only cookies. */
 async function apiFetch<T>(path: string, _apiKey: string, options: RequestInit = {}): Promise<T> {
@@ -24,6 +29,7 @@ async function apiFetch<T>(path: string, _apiKey: string, options: RequestInit =
             const res = await fetchWithCsrf(`${BASE()}${path}`, {
                 ...options,
                 credentials: 'include', // Send HTTP-only cookies
+                signal: options.signal ?? AbortSignal.timeout(API_FETCH_TIMEOUT_MS),
                 headers: {
                     'Content-Type': 'application/json',
                     ...options.headers,
@@ -43,6 +49,9 @@ async function apiFetch<T>(path: string, _apiKey: string, options: RequestInit =
             lastError = new Error(`API error: ${res.status} ${res.statusText}`);
         } catch (err) {
             lastError = err instanceof Error ? err : new Error('Network request failed');
+            if (isAbortError(err)) {
+                throw lastError;
+            }
         }
 
         if (attempt < MAX_RETRIES) {

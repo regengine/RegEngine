@@ -100,10 +100,11 @@ export default function IssuesPage() {
             const { getServiceURL } = await import('@/lib/api-config');
             const base = getServiceURL('ingestion');
             const headers = { 'Content-Type': 'application/json', 'X-RegEngine-API-Key': apiKey! };
+            const signal = AbortSignal.timeout(8000);
 
             const [deadlineRes, pendingRes] = await Promise.allSettled([
-                fetch(`${base}/api/v1/requests/deadlines?tenant_id=${tenantId}`, { headers }),
-                fetch(`${base}/api/v1/compliance/pending-reviews/${tenantId}`, { headers }),
+                fetch(`${base}/api/v1/requests/deadlines?tenant_id=${tenantId}`, { headers, signal }),
+                fetch(`${base}/api/v1/compliance/pending-reviews/${tenantId}`, { headers, signal }),
             ]);
 
             let deadlines: DeadlineCase[] = [];
@@ -119,7 +120,7 @@ export default function IssuesPage() {
                     try {
                         const bRes = await fetch(
                             `${base}/api/v1/requests/${c.request_case_id}/blockers?tenant_id=${tenantId}`,
-                            { headers }
+                            { headers, signal: AbortSignal.timeout(5000) }
                         );
                         if (bRes.ok) {
                             const bData: BlockerCheck = await bRes.json();
@@ -138,6 +139,7 @@ export default function IssuesPage() {
             return { deadlines, blockers: allBlockers, warnings: allWarnings, pendingReviews };
         },
         enabled: !!tenantId && !!apiKey,
+        retry: false,
     });
 
     const deadlines = issuesData?.deadlines ?? [];

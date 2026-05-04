@@ -33,7 +33,9 @@ export function EmailGate({ toolName, children }: EmailGateProps) {
 
     // Check cookie on mount
     useEffect(() => {
-        fetchWithCsrf('/api/tools/check-access')
+        fetchWithCsrf('/api/tools/check-access', {
+            signal: AbortSignal.timeout(4000),
+        })
             .then((res) => res.json())
             .then((data) => setStep(data.hasAccess ? 'verified' : 'email'))
             .catch(() => setStep('email'));
@@ -60,6 +62,7 @@ export function EmailGate({ toolName, children }: EmailGateProps) {
             try {
                 const res = await fetchWithCsrf('/api/tools/verify', {
                     method: 'POST',
+                    signal: AbortSignal.timeout(12000),
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         action: 'verify',
@@ -95,6 +98,7 @@ export function EmailGate({ toolName, children }: EmailGateProps) {
             try {
                 const res = await fetchWithCsrf('/api/tools/verify', {
                     method: 'POST',
+                    signal: AbortSignal.timeout(12000),
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         action: 'confirm',
@@ -139,6 +143,7 @@ export function EmailGate({ toolName, children }: EmailGateProps) {
         try {
             const res = await fetchWithCsrf('/api/tools/verify', {
                 method: 'POST',
+                signal: AbortSignal.timeout(12000),
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     action: 'verify',

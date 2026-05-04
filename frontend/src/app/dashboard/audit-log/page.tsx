@@ -101,6 +101,7 @@ async function fetchAuditLog(tenantId: string, apiKey: string, page = 1, pageSiz
     const { getServiceURL } = await import('@/lib/api-config');
     const base = getServiceURL('ingestion');
     const res = await fetch(`${base}/api/v1/audit-log/${tenantId}?page=${page}&page_size=${pageSize}`, {
+        signal: AbortSignal.timeout(8000),
         headers: { 'Content-Type': 'application/json', 'X-RegEngine-API-Key': apiKey },
     });
     if (!res.ok) throw new Error(`API error: ${res.status} ${res.statusText}`);
@@ -159,9 +160,10 @@ export default function AuditLogPage() {
             }
         },
         enabled: isLoggedIn && !!effectiveTenantId,
+        retry: false,
     });
 
-    const entries = auditData?.entries ?? [];
+    const entries = useMemo(() => auditData?.entries ?? [], [auditData?.entries]);
     const total = auditData?.total ?? 0;
     const error = auditError?.message ?? null;
     const lastFetched = dataUpdatedAt ? new Date(dataUpdatedAt) : null;

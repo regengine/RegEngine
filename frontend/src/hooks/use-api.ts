@@ -67,7 +67,7 @@ async function fetchAggregatedStatus(): Promise<SystemStatusResponse> {
     serviceNames.map(async (name) => {
       const res = await fetch(`/api/${name}/health`, {
         credentials: 'include',
-        signal: AbortSignal.timeout(8000),
+        signal: AbortSignal.timeout(4000),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       return { name, ok: true };
@@ -100,7 +100,7 @@ export const useSystemStatus = () => {
     queryKey: ['system', 'status'],
     queryFn: fetchAggregatedStatus,
     refetchInterval: POLL_HEALTH,
-    retry: 1,
+    retry: false,
   });
   return {
     ...query,
@@ -113,7 +113,7 @@ export const useSystemMetrics = () => {
     queryKey: ['system', 'metrics'],
     queryFn: () => apiClient.getSystemMetrics(),
     refetchInterval: POLL_METRICS,
-    retry: 1,
+    retry: false,
   });
   return {
     ...query,
