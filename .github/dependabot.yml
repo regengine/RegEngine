@@ -1,18 +1,6 @@
 version: 2
 
 updates:
-  # GitHub Actions are pinned by SHA in privileged workflows. Keep Dependabot
-  # responsible for proposing SHA refreshes instead of relying on mutable tags.
-  - package-ecosystem: "github-actions"
-    directory: "/"
-    schedule:
-      interval: "weekly"
-      day: "monday"
-    open-pull-requests-limit: 5
-    labels:
-      - "dependencies"
-      - "ci"
-
   # Frontend (npm)
   - package-ecosystem: "npm"
     directory: "/frontend"
@@ -46,8 +34,8 @@ updates:
 
   # Python services — security-critical packages get solo PRs (no group entry
   # means Dependabot opens one PR per package). Dev/test tooling is grouped to
-  # reduce noise. Everything else is grouped by category with a max of 3 packages
-  # per group so large batches can't hide a dangerous transitive bump (#1178).
+  # reduce noise. Everything else is grouped by category while the per-ecosystem
+  # open PR limit keeps review volume bounded (#1178).
   #
   # Security-critical (solo PRs): cryptography, pyjwt, python-jose, sqlalchemy,
   # alembic, fastapi, starlette, stripe, httpx, opentelemetry-*
@@ -98,19 +86,17 @@ updates:
           - "freezegun"
           - "fakeredis"
       aws:
-        # AWS SDK family — grouped, max 3 per PR
+        # AWS SDK family
         patterns:
           - "boto3"
           - "botocore"
           - "s3transfer"
-        max-open-pull-requests: 3
       observability:
         # Non-security observability helpers
         patterns:
           - "sentry-sdk"
           - "structlog"
           - "prometheus-client"
-        max-open-pull-requests: 3
       # Security-critical packages are intentionally NOT listed in any group.
       # Dependabot will open one PR per package for:
       #   cryptography, pyjwt, python-jose, sqlalchemy, alembic,
@@ -140,13 +126,11 @@ updates:
           - "boto3"
           - "botocore"
           - "s3transfer"
-        max-open-pull-requests: 3
       observability:
         patterns:
           - "sentry-sdk"
           - "structlog"
           - "prometheus-client"
-        max-open-pull-requests: 3
 
   - package-ecosystem: "pip"
     directory: "/services/compliance"
@@ -172,13 +156,11 @@ updates:
           - "boto3"
           - "botocore"
           - "s3transfer"
-        max-open-pull-requests: 3
       observability:
         patterns:
           - "sentry-sdk"
           - "structlog"
           - "prometheus-client"
-        max-open-pull-requests: 3
 
   - package-ecosystem: "pip"
     directory: "/services/graph"
@@ -204,18 +186,15 @@ updates:
           - "boto3"
           - "botocore"
           - "s3transfer"
-        max-open-pull-requests: 3
       observability:
         patterns:
           - "sentry-sdk"
           - "structlog"
           - "prometheus-client"
-        max-open-pull-requests: 3
       neo4j:
         patterns:
           - "neo4j"
           - "neo4j-driver"
-        max-open-pull-requests: 3
 
   - package-ecosystem: "pip"
     directory: "/services/nlp"
@@ -241,21 +220,18 @@ updates:
           - "boto3"
           - "botocore"
           - "s3transfer"
-        max-open-pull-requests: 3
       observability:
         patterns:
           - "sentry-sdk"
           - "structlog"
           - "prometheus-client"
-        max-open-pull-requests: 3
       nlp-models:
-        # NLP/ML libraries — grouped, max 3 per PR
+        # NLP/ML libraries
         patterns:
           - "spacy*"
           - "transformers"
           - "torch"
           - "scikit-learn"
-        max-open-pull-requests: 3
 
   - package-ecosystem: "pip"
     directory: "/services/scheduler"
@@ -281,15 +257,15 @@ updates:
           - "boto3"
           - "botocore"
           - "s3transfer"
-        max-open-pull-requests: 3
       observability:
         patterns:
           - "sentry-sdk"
           - "structlog"
           - "prometheus-client"
-        max-open-pull-requests: 3
 
   # GitHub Actions
+  # Actions are pinned by SHA in privileged workflows. Keep Dependabot
+  # responsible for proposing SHA refreshes instead of relying on mutable tags.
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:

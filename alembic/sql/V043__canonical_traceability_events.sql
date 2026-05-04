@@ -138,7 +138,7 @@ CREATE TABLE IF NOT EXISTS fsma.traceability_events (
     -- Integrity (links to fsma.hash_chain)
     sha256_hash         TEXT,
     chain_hash          TEXT,
-    idempotency_key     TEXT UNIQUE,
+    idempotency_key     TEXT,
 
     -- EPCIS interop (nullable — only for EPCIS-ingested events)
     epcis_event_type    TEXT,
@@ -211,9 +211,8 @@ CREATE INDEX IF NOT EXISTS idx_trace_events_tenant_type
     ON fsma.traceability_events (tenant_id, event_type);
 CREATE INDEX IF NOT EXISTS idx_trace_events_timestamp
     ON fsma.traceability_events (event_timestamp DESC);
-CREATE INDEX IF NOT EXISTS idx_trace_events_idempotency
-    ON fsma.traceability_events (idempotency_key)
-    WHERE idempotency_key IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS ux_traceability_events_tenant_idempotency_key
+    ON fsma.traceability_events (tenant_id, idempotency_key);
 CREATE INDEX IF NOT EXISTS idx_trace_events_ingested
     ON fsma.traceability_events (ingested_at DESC);
 CREATE INDEX IF NOT EXISTS idx_trace_events_status
