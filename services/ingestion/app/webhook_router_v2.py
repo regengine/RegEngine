@@ -57,6 +57,10 @@ logger = structlog.get_logger("webhook-ingestion")
 router = APIRouter(prefix="/api/v1/webhooks", tags=["Webhook Ingestion"])
 
 
+class _CanonicalPersistenceError(Exception):
+    """Raised when canonical evidence cannot be persisted for an accepted event."""
+
+
 def _lookup_tenant_id_for_api_key(raw_api_key: Optional[str]) -> Optional[str]:
     """Resolve a legacy caller's API-key tenant when auth principal lacks one."""
     if not raw_api_key:
@@ -860,7 +864,7 @@ def _persist_canonical_and_eval(
     from shared.rules_engine import RulesEngine  # noqa: PLC0415
 
     canonical = normalize_webhook_event(event, tenant_id, source=source)
-    store = CanonicalEventStore(db_session, dual_write=False, skip_chain_write=True)
+    store = CanonicalEventStore(db_session, dual_write=False, skip_chain_write=False)
     store.persist_event(canonical)
     engine = RulesEngine(db_session)
 
@@ -1174,6 +1178,18 @@ async def ingest_events(
                 for store_result, event, precomputed_summary in zip(
                     store_results, event_objs, pre_eval_summaries
                 ):
+                    # Canonical normalization + rule evaluation + exception creation.
+                    # Canonical persistence is part of the same transaction as
+                    # the legacy write; an accepted event must have canonical
+                    # and chain evidence or the whole ingest rolls back.
+                    try:
+                        _persist_canonical_and_eval(
+                            db_session, event, tenant_id, precomputed_summary, source=payload.source,
+                        )
+                    except (ImportError, SQLAlchemyError, ValueError, TypeError, RuntimeError, KeyError, AttributeError) as canon_err:
+                        logger.error("canonical_write_failed", extra={"error": str(canon_err)})
+                        raise _CanonicalPersistenceError(str(canon_err)) from canon_err
+
                     results.append(EventResult(
                         traceability_lot_code=event.traceability_lot_code,
                         cte_type=event.cte_type.value,
@@ -1183,55 +1199,6 @@ async def ingest_events(
                         chain_hash=store_result.chain_hash,
                     ))
                     accepted += 1
-
-                    # Canonical normalization + rule evaluation + exception creation
-                    # (#1335) Fan-out timeout: the legacy write already committed;
-                    # the canonical write is best-effort during migration.  If it
-                    # blocks (e.g., DB lock contention), cap it so the webhook
-                    # response is not held indefinitely.
-                    _CANONICAL_WRITE_TIMEOUT_S: float = float(
-                        os.environ.get("CANONICAL_DUAL_WRITE_TIMEOUT_S", "5")
-                    )
-
-                    # Capture loop-bound vars in default kwargs so the
-                    # threaded closure sees the per-event values rather
-                    # than the last loop iteration's bindings. Body
-                    # lives in the module-level
-                    # ``_persist_canonical_and_eval`` helper so it's
-                    # unit-testable without mounting the full route —
-                    # see test_webhook_router_v2_canonical_helper.py.
-                    def _do_canonical_write(
-                        _event=event,
-                        _precomputed=precomputed_summary,
-                        _source=payload.source,
-                    ) -> None:
-                        _persist_canonical_and_eval(
-                            db_session, _event, tenant_id, _precomputed, source=_source,
-                        )
-
-                    # Run in a daemon thread so join(timeout=) returns promptly
-                    # if the canonical write is slow — the thread continues in
-                    # the background and the webhook response is not held.
-                    import threading  # noqa: PLC0415
-                    _canon_exc: list[BaseException] = []
-
-                    def _guarded_canonical_write() -> None:
-                        try:
-                            _do_canonical_write()
-                        except Exception as _exc:  # noqa: BLE001
-                            _canon_exc.append(_exc)
-
-                    _t = threading.Thread(target=_guarded_canonical_write, daemon=True)
-                    _t.start()
-                    _t.join(timeout=_CANONICAL_WRITE_TIMEOUT_S)
-                    if _t.is_alive():
-                        logger.warning(
-                            "canonical_write_timeout",
-                            event_id=getattr(store_result, "event_id", None),
-                            timeout_s=_CANONICAL_WRITE_TIMEOUT_S,
-                        )
-                    elif _canon_exc:
-                        logger.warning("canonical_write_skipped", error=str(_canon_exc[0]))
 
                     # Post-ingest graph sync (non-blocking)
                     _publish_graph_sync(store_result.event_id, event, tenant_id)
@@ -1251,6 +1218,8 @@ async def ingest_events(
                     except (ImportError, SQLAlchemyError, ValueError, TypeError, RuntimeError, KeyError) as learn_err:
                         logger.warning("catalog_learn_skipped: %s", str(learn_err))
 
+            except _CanonicalPersistenceError:
+                raise
             except (ValueError, TypeError, RuntimeError, AttributeError) as e:
                 logger.error(
                     "batch_persistence_failed",
@@ -1290,6 +1259,16 @@ async def ingest_events(
                             kdes=event.kdes,
                             alerts=alerts,
                         )
+                        # Canonical normalization + rule evaluation. This
+                        # remains in the same transaction as the legacy write.
+                        try:
+                            _persist_canonical_and_eval(
+                                db_session, event, tenant_id, _fb_summary, source=payload.source,
+                            )
+                        except (ImportError, SQLAlchemyError, ValueError, TypeError, RuntimeError, KeyError, AttributeError) as canon_err:
+                            logger.error("canonical_write_failed_fallback: %s", str(canon_err))
+                            raise _CanonicalPersistenceError(str(canon_err)) from canon_err
+
                         results.append(EventResult(
                             traceability_lot_code=event.traceability_lot_code,
                             cte_type=event.cte_type.value,
@@ -1299,20 +1278,6 @@ async def ingest_events(
                             chain_hash=store_result.chain_hash,
                         ))
                         accepted += 1
-
-                        # Canonical normalization + rule evaluation. Inline
-                        # (not threaded) since we already lost the batch
-                        # latency budget by hitting this fallback. Body
-                        # matches the happy-path threaded block — both
-                        # call ``_persist_canonical_and_eval`` so the
-                        # routing logic (persist_summary fast path vs.
-                        # evaluate_event fallback) lives in one place.
-                        try:
-                            _persist_canonical_and_eval(
-                                db_session, event, tenant_id, _fb_summary, source=payload.source,
-                            )
-                        except (ImportError, SQLAlchemyError, ValueError, TypeError, RuntimeError, KeyError, AttributeError) as canon_err:
-                            logger.warning("canonical_write_skipped_fallback: %s", str(canon_err))
 
                         _publish_graph_sync(store_result.event_id, event, tenant_id)
                         try:
