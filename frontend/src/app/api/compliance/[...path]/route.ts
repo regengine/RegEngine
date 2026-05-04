@@ -1,6 +1,5 @@
 import { NextRequest } from 'next/server';
-import { createJsonProxy } from '@/lib/proxy-factory';
-import { getServerApiKey } from '@/lib/api-proxy';
+import { applyCookieCredentials, createJsonProxy, passthroughRequestHeaders } from '@/lib/proxy-factory';
 import { getServerServiceURL } from '@/lib/api-config';
 
 // Proxy compliance API requests to the Compliance backend service
@@ -24,13 +23,16 @@ export const dynamic = 'force-dynamic';
 const { GET, POST, PUT, PATCH, DELETE } = createJsonProxy({
     serviceName: 'compliance',
     buildTargetUrl: (path, queryString) => `${COMPLIANCE_URL}/${path}${queryString}`,
-    buildHeaders: (_request: NextRequest) => {
+    buildHeaders: (request: NextRequest) => {
         const headers = new Headers({ 'Content-Type': 'application/json' });
-        const apiKey = getServerApiKey();
-        if (apiKey) {
-            headers.set('X-RegEngine-API-Key', apiKey);
-        }
-        return headers;
+        passthroughRequestHeaders(headers, request, [
+            'authorization',
+            'x-regengine-api-key',
+            'x-api-key',
+            'x-admin-key',
+            'x-tenant-id',
+        ]);
+        return applyCookieCredentials(headers, request);
     },
 });
 

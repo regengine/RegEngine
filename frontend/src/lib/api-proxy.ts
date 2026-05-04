@@ -9,6 +9,8 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
+import { jwtVerify } from 'jose';
+import { getVerificationKeys } from './jwt-keys';
 
 // ---------------------------------------------------------------------------
 // Path sanitisation
@@ -62,7 +64,6 @@ export function safeSegment(value: string | undefined | null): string | null {
   if (NULL_BYTE_RE.test(value)) return null;
   if (value.includes('/') || value.includes('\\')) return null;
   if (value === '.' || value === '..') return null;
-  // eslint-disable-next-line no-control-regex
   if (/[\u0000-\u001f\u007f]/.test(value)) return null;
   return encodeURIComponent(value);
 }
@@ -209,6 +210,26 @@ export function hasRealCallerCredential(request: NextRequest): boolean {
 export async function validateProxySession(
   request: NextRequest,
 ): Promise<NextResponse | null> {
+  const regengineToken = request.cookies.get('re_access_token')?.value;
+  if (isUsableCallerCredential(regengineToken)) {
+    const tokenPayload = await verifyRegEngineProxyToken(regengineToken);
+    if (!tokenPayload) {
+      return NextResponse.json(
+        { error: 'Session expired or invalid — please log in again' },
+        { status: 401 },
+      );
+    }
+
+    const tokenTenantId = extractJwtTenantId(tokenPayload);
+    const cookieTenantId = request.cookies.get('re_tenant_id')?.value;
+    if (tokenTenantId && cookieTenantId && tokenTenantId !== cookieTenantId) {
+      return NextResponse.json(
+        { error: 'Tenant context does not match authenticated session' },
+        { status: 403 },
+      );
+    }
+  }
+
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
@@ -257,6 +278,43 @@ export async function validateProxySession(
   }
 
   return null;
+}
+
+async function verifyRegEngineProxyToken(token: string): Promise<Record<string, unknown> | null> {
+  const keys = getVerificationKeys();
+  if (keys.length === 0) {
+    console.error('[proxy] No JWT verification keys configured for RegEngine session validation');
+    return null;
+  }
+
+  for (const key of keys) {
+    try {
+      const { payload } = await jwtVerify(token, key.secret, {
+        algorithms: ['HS256'],
+      });
+      if (isRegEngineSessionPayload(payload as Record<string, unknown>)) {
+        return payload as Record<string, unknown>;
+      }
+      return null;
+    } catch {
+      // Try the next configured key during rotation.
+    }
+  }
+  return null;
+}
+
+function extractJwtTenantId(payload: Record<string, unknown>): string | null {
+  const value = payload.tenant_id ?? payload.tid;
+  return typeof value === 'string' && value.length > 0 ? value : null;
+}
+
+function isRegEngineSessionPayload(payload: Record<string, unknown>): boolean {
+  const audience = payload.aud;
+  if (typeof audience === 'string' && audience !== 'regengine-api') return false;
+  if (Array.isArray(audience) && !audience.includes('regengine-api')) return false;
+  const issuer = payload.iss;
+  if (typeof issuer === 'string' && issuer !== 'regengine-admin') return false;
+  return true;
 }
 
 // ---------------------------------------------------------------------------

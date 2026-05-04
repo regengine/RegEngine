@@ -152,7 +152,7 @@ export function createJsonProxy(config: JsonProxyConfig): MethodHandlers {
             }
 
             if (process.env.NODE_ENV !== 'production') {
-                console.info(`[proxy/${config.serviceName}] ${method} ${path} → ${response.status}`);
+                console.warn(`[proxy/${config.serviceName}] ${method} ${path} → ${response.status}`);
             }
             return NextResponse.json(data);
         } catch (error: unknown) {
@@ -274,7 +274,7 @@ export function createStreamProxy(config: StreamProxyConfig): MethodHandlers {
                     }
 
                     if (process.env.NODE_ENV !== 'production') {
-                        console.info(`[proxy/${config.serviceName}] ${method} ${path} → ${response.status}`);
+                        console.warn(`[proxy/${config.serviceName}] ${method} ${path} → ${response.status}`);
                     }
 
                     return new NextResponse(response.body, {

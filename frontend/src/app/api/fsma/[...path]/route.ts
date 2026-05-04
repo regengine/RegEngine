@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { createJsonProxy } from '@/lib/proxy-factory';
+import { applyCookieCredentials, createJsonProxy, passthroughRequestHeaders } from '@/lib/proxy-factory';
 
 // Proxy FSMA-204 API requests across two backend services based on the path:
 //   - Graph service       — compliance/, traceability/, recall/, science/, metrics/,
@@ -48,22 +48,15 @@ const { GET, POST, PUT, PATCH, DELETE } = createJsonProxy({
         return `${COMPLIANCE_URL}/fsma-204/${path}${queryString}`;
     },
     buildHeaders: (request: NextRequest) => {
-        // FSMA proxy reads credentials from cookies first, falls back to incoming
-        // headers, then to the server env var — preserving the pre-refactor
-        // behavior which differed from the other JSON proxies.
-        const apiKey = request.cookies.get('re_api_key')?.value
-            || request.headers.get('X-RegEngine-API-Key')
-            || process.env.REGENGINE_API_KEY
-            || '';
-        const tenantId = request.cookies.get('re_tenant_id')?.value
-            || request.headers.get('X-Tenant-ID')
-            || '';
-        const headers = new Headers({
-            'Content-Type': 'application/json',
-            'X-RegEngine-API-Key': apiKey,
-        });
-        if (tenantId) headers.set('X-Tenant-ID', tenantId);
-        return headers;
+        const headers = new Headers({ 'Content-Type': 'application/json' });
+        passthroughRequestHeaders(headers, request, [
+            'authorization',
+            'x-regengine-api-key',
+            'x-api-key',
+            'x-admin-key',
+            'x-tenant-id',
+        ]);
+        return applyCookieCredentials(headers, request);
     },
 });
 
