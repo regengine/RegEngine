@@ -419,8 +419,8 @@ function summarizeFeederDiagnosis(result: SandboxEvaluationResult): FeederDiagno
                 : "Sandbox diagnosis found corrections before mapping",
         impact:
             status === "clear"
-                ? "This test run can move into import mapping, but it is still not authenticated evidence."
-                : "Correct the highlighted rows and fields before treating this source as a monitored authenticated feed.",
+                ? "This test run can move into import mapping, but it still cannot create FDA-ready evidence."
+                : "Correct the highlighted rows and fields before treating this source as a monitored production feed.",
         buckets: [
             { id: "events", label: "Rows checked", count: result.total_events, tone: "info" },
             { id: "passed", label: "Rows passing", count: result.compliant_events, tone: "success" },
@@ -447,12 +447,12 @@ function buildFeederRemediationPlan(result: SandboxEvaluationResult): FeederReme
     if (result.duplicate_warnings?.length || result.entity_warnings?.length) {
         steps.push({
             title: "Review duplicate and entity warnings",
-            detail: "Confirm aliases, facility names, and duplicate rows before connecting an authenticated feed.",
+            detail: "Confirm aliases, facility names, and duplicate rows before connecting a production feed.",
         });
     }
     steps.push({
         title: "Map only after diagnosis",
-        detail: "Use the test run to configure import mapping; production evidence still requires authenticated persisted records.",
+        detail: "Use the test run to configure import mapping; FDA-ready evidence still requires signed-in production records.",
     });
     return steps;
 }
@@ -524,8 +524,38 @@ function buildFixQueue(result: SandboxEvaluationResult | null, lotSummaries: {
     return items.slice(0, 8);
 }
 
-const standaloneTabs = ["Control room", "Data feeder", "Fix queue", "Scenarios", "Suppliers", "Lots", "Lineage", "Exports", "Event log", "Diagnostics"];
-const dashboardTabs = ["Overview", "Data feeder", "Fix queue", "Scenarios", "Suppliers", "Lots", "Lineage", "Exports", "Record log", "Diagnostics"];
+function getLotFixGuidance(lot: {
+    missingCtes: string[];
+    readiness: ReturnType<typeof getLotReadiness>;
+}) {
+    if (lot.readiness.state === "blocked") {
+        return {
+            reason: "Delivery failed or no traceability events were received.",
+            owner: "Integration owner",
+            next: "Review delivery status, then replay the source.",
+        };
+    }
+
+    const lowerMissing = lot.missingCtes.join(" ").toLowerCase();
+    if (lowerMissing.includes("shipping") || lowerMissing.includes("receiving")) {
+        return {
+            reason: `Missing handoff evidence for ${lot.missingCtes.join(", ")}.`,
+            owner: "Shipping or receiving source",
+            next: "Map the handoff fields or upload a corrected CSV.",
+        };
+    }
+
+    return {
+        reason: lot.missingCtes.length
+            ? `Missing source evidence for ${lot.missingCtes.join(", ")}.`
+            : "Delivery posted, but the lot is not test complete.",
+        owner: "Supplier data owner",
+        next: "Open the fix queue and rerun validation after correction.",
+    };
+}
+
+const standaloneTabs = ["Control room", "Data feeder", "Fix queue", "Scenarios", "Suppliers", "Lots", "Lineage", "Test previews", "Event log", "Diagnostics"];
+const dashboardTabs = ["Overview", "Data feeder", "Fix queue", "Lots", "Lineage", "Test previews", "Record log", "Diagnostics"];
 
 const lotCodes = [
     "00614141000012-20260426-000001",
@@ -1154,7 +1184,7 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
 
     const prepareExport = () => {
         setRunStage("exported");
-        setActiveTab("Exports");
+        setActiveTab("Test previews");
     };
 
     const startMachineDemo = async () => {
@@ -1265,55 +1295,60 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
     const supplierAverageScore = Math.round(
         supplierReadiness.reduce((total, supplier) => total + supplier.score, 0) / Math.max(1, supplierReadiness.length)
     );
-    const activeDataBoundary = feederResult ? "Public sandbox diagnosis" : serviceEvents.length ? "Mock Inflow Lab feed" : "Bundled mock fixture";
+    const activeDataBoundary = feederResult ? "Uploaded CSV test run" : serviceEvents.length ? "Mock feed data" : "Bundled mock fixture";
+    const boundaryStateDetail = feederResult
+        ? "You are viewing uploaded CSV data checked in this browser session."
+        : serviceEvents.length
+        ? "You are viewing mock feed data; no uploaded CSV sandbox run has been evaluated yet."
+        : "You are viewing bundled fixture data that is safe for testing and demos.";
     const boundarySteps = [
         {
             label: "Sandbox diagnosis",
-            value: feederResult ? "CSV evaluated in this browser session" : "No sandbox run loaded",
+            value: feederResult ? "Uploaded CSV was checked" : "No uploaded CSV run yet",
             tone: "border-blue-200 bg-blue-50 text-blue-900",
         },
         {
             label: "Mock Inflow Lab",
-            value: "Simulator and fixture data only; not production ingestion",
+            value: "Test records only; not production ingestion",
             tone: "border-amber-200 bg-amber-50 text-amber-950",
         },
         {
             label: "Authenticated feed",
-            value: "Production monitoring starts after signed-in import mapping",
+            value: "Starts after signed-in import mapping",
             tone: "border-slate-200 bg-white text-slate-900",
         },
         {
             label: "Production evidence",
-            value: "Authenticated persisted records only",
+            value: "FDA-ready evidence comes from signed-in production records",
             tone: "border-emerald-200 bg-emerald-50 text-emerald-950",
         },
     ];
     const machineDemoSteps = [
         {
-            label: "Load a source",
+            label: "Load test records",
             detail: visibleEvents.length > 0 ? `${visibleEvents.length} test records are loaded` : "Seed the mock leafy-greens feed",
             state: visibleEvents.length > 0 ? "complete" : "active",
         },
         {
-            label: "Run validation",
+            label: "Validate records",
             detail: runStage === "generating" || runStage === "delivering" ? "Inbound records are moving" : validationOutcome,
             state: runStage === "loaded" ? "pending" : runStage === "generating" || runStage === "delivering" ? "active" : "complete",
         },
         {
-            label: "Watch records post",
-            detail: `${postedCount} accepted, ${exceptionCount} exception${exceptionCount === 1 ? "" : "s"}`,
+            label: "Review exceptions",
+            detail: exceptionCount ? `${exceptionCount} exception${exceptionCount === 1 ? "" : "s"} to review` : "No exceptions in this test run",
             state: postedCount > 0 ? "complete" : "pending",
         },
         {
-            label: "Trace a lot",
+            label: "Trace selected lot",
             detail: selectedReadiness.exportReady
                 ? "Selected lot has a complete test chain"
                 : "Selected lot shows the missing handoffs",
             state: selectedLot ? "complete" : "pending",
         },
         {
-            label: "Preview handoff",
-            detail: "Mock filters only; production evidence stays authenticated",
+            label: "Preview test handoff",
+            detail: "Test filters only; FDA-ready evidence stays in production exports",
             state: runStage === "exported" ? "complete" : "pending",
         },
     ];
@@ -1345,13 +1380,13 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
                                         </Badge>
                                     </div>
                                     <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300">
-                                        Diagnose CSV data, run a mock FSMA 204 feed, and keep test data separate from authenticated persisted records.
+                                        Diagnose CSV data, run a mock FSMA 204 feed, and keep test records separate from signed-in production imports.
                                     </p>
                                 </div>
                                 <div className="mt-5 flex flex-wrap gap-2">
                                     <Button
-                                        variant="outline"
-                                        className="h-10 border-white/20 bg-white/10 text-white hover:bg-white/15"
+                                        variant="ghost"
+                                        className="h-10 border-slate-600 bg-slate-800 text-white hover:bg-slate-700"
                                         onClick={loadScenario}
                                         disabled={isBusy}
                                     >
@@ -1367,21 +1402,21 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
                                         Run pipeline
                                     </Button>
                                     <Button
-                                        variant="outline"
-                                        className="h-10 border-white/20 bg-white/10 text-white hover:bg-white/15"
+                                        variant="ghost"
+                                        className="h-10 border-slate-600 bg-slate-800 text-white hover:bg-slate-700"
                                         onClick={traceLatestLot}
                                     >
                                         <Search className="mr-2 h-4 w-4" />
                                         Trace latest lot
                                     </Button>
                                     <Button
-                                        variant="outline"
-                                        className="h-10 border-white/20 bg-white/10 text-white hover:bg-white/15"
+                                        variant="ghost"
+                                        className="h-10 border-slate-600 bg-slate-800 text-white hover:bg-slate-700"
                                         onClick={prepareExport}
                                         disabled={stageIndex[runStage] < 4}
                                     >
                                         <ArrowDownToLine className="mr-2 h-4 w-4" />
-                                        Preview export filters
+                                        Preview test filters
                                     </Button>
                                 </div>
                             </div>
@@ -1418,24 +1453,12 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
                                     <Badge className="border border-amber-200 bg-amber-50 text-amber-800">Mock environment</Badge>
                                 </div>
                                 <p className="mt-1.5 max-w-3xl text-sm leading-6 text-slate-600">
-                                    Validate sandbox and mock inbound data before production ingestion. Evidence is generated only from authenticated, persisted records outside this mock lab.
+                                    Test supplier traceability data before production import. This lab uses mock or uploaded test records only; FDA-ready evidence starts after signed-in production import.
                                 </p>
                                 <div data-dashboard-actions className="mt-3 flex flex-wrap gap-2">
-                                    <Button className="h-9 bg-emerald-700 text-white hover:bg-emerald-800" onClick={loadScenario} disabled={isBusy}>
-                                        <RefreshCcw className="mr-2 h-4 w-4" />
-                                        Load test data
-                                    </Button>
-                                    <Button variant="outline" className="h-9 border-slate-300 bg-white" onClick={runPipeline} disabled={isBusy}>
+                                    <Button className="h-9 bg-emerald-700 text-white hover:bg-emerald-800" onClick={startMachineDemo} disabled={isBusy}>
                                         <Play className="mr-2 h-4 w-4" />
-                                        Validate inbound data
-                                    </Button>
-                                    <Button variant="outline" className="h-9 border-slate-300 bg-white" onClick={traceLatestLot}>
-                                        <Search className="mr-2 h-4 w-4" />
-                                        Trace latest lot
-                                    </Button>
-                                    <Button variant="outline" className="h-9 border-slate-300 bg-white" onClick={prepareExport} disabled={stageIndex[runStage] < 4}>
-                                        <ArrowDownToLine className="mr-2 h-4 w-4" />
-                                        Preview export filters
+                                        Start guided test run
                                     </Button>
                                 </div>
                             </div>
@@ -1465,17 +1488,17 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
                     aria-label="Inflow Lab environment boundary"
                     className="rounded-lg border border-slate-300 bg-white p-3 shadow-sm sm:p-4"
                 >
-                    <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                    <div className="grid gap-3">
                         <div className="min-w-0">
                             <div className="flex flex-wrap items-center gap-2">
                                 <Badge className="border border-slate-300 bg-slate-100 text-slate-900">Boundary active</Badge>
                                 <span className="text-sm font-semibold text-slate-950">{activeDataBoundary}</span>
                             </div>
-                            <p className="mt-1 text-xs leading-5 text-slate-600">
-                                Sandbox rows and mock simulator events may diagnose, map, and monitor a source. They do not become production evidence. Evidence exports require an authenticated session and persisted tenant records.
+                            <p className="mt-1 max-w-4xl text-xs leading-5 text-slate-600">
+                                {boundaryStateDetail} The lab checks traceability handoffs (CTEs) and required data fields (KDEs), but it cannot create FDA-ready evidence.
                             </p>
                         </div>
-                        <div className="grid gap-2 sm:grid-cols-2 lg:min-w-[620px] xl:grid-cols-4">
+                        <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
                             {boundarySteps.map((step) => (
                                 <div key={step.label} className={cn("rounded-md border px-3 py-2", step.tone)}>
                                     <p className="text-[11px] font-semibold uppercase tracking-wide">{step.label}</p>
@@ -1492,8 +1515,8 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
                     </div>
                 )}
 
-                <section className={cn("grid xl:grid-cols-[minmax(0,1fr)_380px]", isStandalone ? "gap-5" : "gap-4")}>
-                    <Card className="rounded-lg border-slate-200 bg-white shadow-sm">
+                <section className={cn("grid grid-cols-[minmax(0,1fr)] xl:grid-cols-[minmax(0,1fr)_380px]", isStandalone ? "gap-5" : "gap-4")}>
+                    <Card className="min-w-0 rounded-lg border-slate-200 bg-white shadow-sm">
                         <CardHeader className={cn("border-b border-slate-200", isStandalone ? "p-4" : "p-3 sm:p-4")}>
                             <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                                 <div>
@@ -1502,8 +1525,8 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
                                     </CardTitle>
                                     <p className="mt-1 text-sm leading-5 text-slate-500">
                                         {isStandalone
-                                            ? "Review mock-generated records, trace lots, and preview export filters without mixing simulator data into production imports."
-                                            : "Validate FSMA 204 records, resolve exceptions, prove traceability, and keep production evidence limited to authenticated persisted records."}
+                                            ? "Review mock-generated records, trace lots, and preview test filters without mixing simulator data into production imports."
+                                            : "Validate FSMA 204 records, resolve exceptions, prove traceability, and keep FDA-ready evidence separate from test data."}
                                     </p>
                                 </div>
                                 <div className="flex w-full flex-col gap-2 sm:flex-row lg:w-auto">
@@ -1586,7 +1609,7 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
                                                 </div>
                                                 <p className="mt-2 text-sm text-slate-700">{exportReadinessLabel}</p>
                                                 <p className="mt-1 text-xs leading-5 text-slate-500">
-                                                    Mock export previews use the selected lot and date window. Production evidence exports require authenticated persisted records.
+                                                    Test previews use the selected lot and date window. FDA-ready evidence comes later from signed-in production imports.
                                                 </p>
                                             </div>
                                         </div>
@@ -1652,17 +1675,28 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
                                                             </div>
                                                         ) : (
                                                             <>
-                                                                {exceptionLots.map((lot) => (
-                                                                    <div key={lot.lotCode} className="rounded-md border border-amber-200 bg-white px-3 py-2">
-                                                                        <p className="text-xs font-semibold text-amber-950">{lot.product}</p>
-                                                                        <p className="mt-1 break-words font-mono text-[11px] text-amber-800">{lot.lotCode}</p>
-                                                                        <p className="mt-1 text-xs text-amber-800">
-                                                                            {lot.missingCtes.length > 0
-                                                                                ? `Missing KDE evidence for ${lot.missingCtes.join(", ")}.`
-                                                                                : `Delivery ${lot.readiness.deliveryLabel}; not test complete.`}
-                                                                        </p>
-                                                                    </div>
-                                                                ))}
+                                                                {exceptionLots.map((lot) => {
+                                                                    const guidance = getLotFixGuidance(lot);
+
+                                                                    return (
+                                                                        <div key={lot.lotCode} className="rounded-md border border-amber-200 bg-white px-3 py-2">
+                                                                            <p className="text-xs font-semibold text-amber-950">{lot.product}</p>
+                                                                            <p className="mt-1 break-words font-mono text-[11px] text-amber-800">{lot.lotCode}</p>
+                                                                            <p className="mt-1 text-xs text-amber-800">{guidance.reason}</p>
+                                                                            <div className="mt-2 grid gap-1 text-[11px] leading-4 text-amber-900">
+                                                                                <span>Likely owner: {guidance.owner}</span>
+                                                                                <span>Next: {guidance.next}</span>
+                                                                            </div>
+                                                                            <Button
+                                                                                variant="outline"
+                                                                                className="mt-2 h-8 border-amber-200 bg-amber-50 px-2 text-xs text-amber-900 hover:bg-amber-100"
+                                                                                onClick={() => setActiveTab("Fix queue")}
+                                                                            >
+                                                                                Open fix queue
+                                                                            </Button>
+                                                                        </div>
+                                                                    );
+                                                                })}
                                                                 {failedCount > 0 && (
                                                                     <div className="rounded-md border border-amber-200 bg-white px-3 py-2 text-xs text-amber-800">
                                                                         {failedCount} inbound delivery {failedCount === 1 ? "attempt needs" : "attempts need"} review.
@@ -1674,17 +1708,20 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
                                                 </div>
 
                                                 <div className={cn("rounded-lg border border-slate-200 bg-slate-950 text-white", isStandalone ? "p-4" : "p-3")}>
-                                                    <p className="text-sm font-semibold">Mock export preview</p>
+                                                    <p className="text-sm font-semibold">Test handoff preview</p>
                                                     <p className="mt-1 text-xs leading-5 text-slate-300">
-                                                        Preview CSV or EPCIS JSON-LD filters for test data. Generate production evidence only from authenticated persisted records.
+                                                        Preview test CSV or EPCIS JSON-LD filters. FDA-ready evidence is generated only from production records.
                                                     </p>
                                                     <div className={cn("grid grid-cols-1 gap-2 sm:grid-cols-2", isStandalone ? "mt-4" : "mt-3")}>
                                                         <Button asChild className="h-9 bg-emerald-600 text-white hover:bg-emerald-700">
-                                                            <a href={csvExportHref}>Preview CSV</a>
+                                                            <a href={csvExportHref}>Preview test CSV</a>
                                                         </Button>
-                                                        <Button asChild variant="outline" className="h-9 border-white/20 bg-white/10 text-white hover:bg-white/15">
-                                                            <a href={epcisExportHref}>Preview EPCIS</a>
-                                                        </Button>
+                                                        <a
+                                                            href={epcisExportHref}
+                                                            className="inline-flex h-9 items-center justify-center rounded-md border border-slate-600 bg-slate-800 px-3 text-[13px] font-semibold text-white transition-colors hover:bg-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50"
+                                                        >
+                                                            Preview test EPCIS
+                                                        </a>
                                                     </div>
                                                 </div>
                                             </div>
@@ -1899,7 +1936,7 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
                                                     <p className="text-sm font-semibold">Path to production</p>
                                                 </div>
                                                 <p className="mt-1 text-xs leading-5 text-slate-300">
-                                                    Move from free diagnosis to a monitored feed without treating sandbox rows as production evidence.
+                                                    Move from free diagnosis to a monitored feed without treating sandbox rows as FDA-ready evidence.
                                                 </p>
                                                 <div className="mt-4 space-y-3">
                                                     {[
@@ -1907,10 +1944,10 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
                                                         ["2", "Save as test run", workbenchRunId ? `Persisted as ${workbenchRunId}` : feederSavedAt ? `Saved ${formatServiceTime(feederSavedAt)}` : "Keep the sandbox result for handoff"],
                                                         ["3", "Convert to import mapping", "Turn headers and CTE aliases into an import setup"],
                                                         ["4", "Monitor live feed", "Watch connector health, failures, and exceptions"],
-                                                        ["5", "Generate production evidence", "Use authenticated persisted records only"],
+                                                        ["5", "Generate production evidence", "Use signed-in production records only"],
                                                     ].map(([step, title, detail]) => (
                                                         <div key={step} className="grid grid-cols-[28px_minmax(0,1fr)] gap-3">
-                                                            <span className="flex h-7 w-7 items-center justify-center rounded-full bg-white/10 text-xs font-semibold text-emerald-200">
+                                                            <span className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-800 text-xs font-semibold text-emerald-200">
                                                                 {step}
                                                             </span>
                                                             <div>
@@ -1929,13 +1966,13 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
                                                         <ClipboardList className="mr-2 h-4 w-4" />
                                                         Save test run
                                                     </Button>
-                                                    <Button asChild variant="outline" className="h-9 border-white/20 bg-white/10 text-white hover:bg-white/15">
+                                                    <Button asChild variant="ghost" className="h-9 border-slate-600 bg-slate-800 text-white hover:bg-slate-700">
                                                         <Link href="/ingest">Convert to import mapping</Link>
                                                     </Button>
-                                                    <Button asChild variant="outline" className="h-9 border-white/20 bg-white/10 text-white hover:bg-white/15">
+                                                    <Button asChild variant="ghost" className="h-9 border-slate-600 bg-slate-800 text-white hover:bg-slate-700">
                                                         <Link href="/dashboard/integrations">Monitor live feed</Link>
                                                     </Button>
-                                                    <Button asChild variant="outline" className="h-9 border-white/20 bg-white/10 text-white hover:bg-white/15">
+                                                    <Button asChild variant="ghost" className="h-9 border-slate-600 bg-slate-800 text-white hover:bg-slate-700">
                                                         <Link href="/dashboard/export-jobs">Generate production evidence</Link>
                                                     </Button>
                                                 </div>
@@ -1963,7 +2000,7 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
                                                     <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4">
                                                         <p className="text-sm font-semibold text-emerald-900">No open fixes in the current run</p>
                                                         <p className="mt-1 text-xs leading-5 text-emerald-800">
-                                                            Ready lots can move to authenticated import mapping. Sandbox and mock records still stay outside production evidence.
+                                                            Ready lots can move to production import mapping. Sandbox and mock records still stay outside FDA-ready evidence.
                                                         </p>
                                                     </div>
                                                 ) : (
@@ -2000,7 +2037,7 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
                                         <div className="rounded-lg border border-slate-200 bg-slate-950 p-4 text-white">
                                             <p className="text-sm font-semibold">Commit gate</p>
                                             <p className="mt-1 text-xs leading-5 text-slate-300">
-                                                Production evidence remains closed until records are authenticated, persisted, provenance-tagged, and export-eligible.
+                                                Production evidence remains closed until records are signed in, stored, provenance-tagged, and export eligible.
                                             </p>
                                             <div className="mt-4 space-y-2">
                                                 {[
@@ -2160,7 +2197,7 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
                                                 <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                                                     <div>
                                                         <p className="text-sm font-semibold text-slate-950">Run command center</p>
-                                                        <p className="mt-1 text-xs leading-5 text-slate-600">Harvest, cool, pack, ship, and receive one mock scenario through the test gateway. Production evidence stays in authenticated export jobs.</p>
+                                                        <p className="mt-1 text-xs leading-5 text-slate-600">Harvest, cool, pack, ship, and receive one mock scenario through the test gateway. Production evidence stays in export jobs.</p>
                                                     </div>
                                                     <div className="flex flex-wrap gap-2">
                                                         <Button className="h-9 bg-emerald-700 text-white hover:bg-emerald-800" onClick={runPipeline}>
@@ -2235,17 +2272,20 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
                                                 </div>
 
                                                 <div className="rounded-lg border border-slate-200 bg-slate-950 p-4 text-white">
-                                                    <p className="text-sm font-semibold">Mock export preview</p>
+                                                    <p className="text-sm font-semibold">Test handoff preview</p>
                                                     <p className="mt-1 text-xs leading-5 text-slate-300">
-                                                        {exportReadyCount} lots are test complete. {exceptionLots.length} exception lots remain visible. Production evidence requires authenticated persisted records.
+                                                        {exportReadyCount} lots are test complete. {exceptionLots.length} exception lots remain visible. FDA-ready evidence requires production records.
                                                     </p>
                                                     <div className="mt-4 grid grid-cols-2 gap-2">
                                                         <Button asChild className="h-9 bg-emerald-600 text-white hover:bg-emerald-700">
-                                                            <a href={csvExportHref}>Preview CSV</a>
+                                                            <a href={csvExportHref}>Preview test CSV</a>
                                                         </Button>
-                                                        <Button asChild variant="outline" className="h-9 border-white/20 bg-white/10 text-white hover:bg-white/15">
-                                                            <a href={epcisExportHref}>Preview EPCIS</a>
-                                                        </Button>
+                                                        <a
+                                                            href={epcisExportHref}
+                                                            className="inline-flex h-9 items-center justify-center rounded-md border border-slate-600 bg-slate-800 px-3 text-[13px] font-semibold text-white transition-colors hover:bg-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50"
+                                                        >
+                                                            Preview test EPCIS
+                                                        </a>
                                                     </div>
                                                 </div>
                                             </div>
@@ -2433,7 +2473,7 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
                                     </div>
                                 )}
 
-                                {activeTab === "Exports" && (
+                                {activeTab === "Test previews" && (
                                     <div className="mt-4">
                                         {!selectedIsExportReady && (
                                             <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
@@ -2443,22 +2483,22 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
                                         <div className="grid gap-3 md:grid-cols-2">
                                             <div className="rounded-lg border border-slate-200 bg-white p-4">
                                                 <FileSpreadsheet className="h-5 w-5 text-emerald-700" />
-                                                <p className="mt-3 text-sm font-semibold text-slate-950">CSV filter preview</p>
+                                                <p className="mt-3 text-sm font-semibold text-slate-950">Test CSV preview</p>
                                                 <p className="mt-1 text-xs leading-5 text-slate-500">
-                                                    Includes {exportReadyCount} test-complete lots. {exceptionLots.length} exception lots are flagged for review. Production evidence is generated only from authenticated persisted records.
+                                                    Includes {exportReadyCount} test-complete lots. {exceptionLots.length} exception lots are flagged for review. FDA-ready evidence is generated only from production records.
                                                 </p>
                                                 <Button asChild className="mt-4 h-9 bg-emerald-700 text-white hover:bg-emerald-800">
-                                                    <a href={csvExportHref}>Preview CSV</a>
+                                                    <a href={csvExportHref}>Preview test CSV</a>
                                                 </Button>
                                             </div>
                                             <div className="rounded-lg border border-slate-200 bg-white p-4">
                                                 <FileJson className="h-5 w-5 text-blue-700" />
-                                                <p className="mt-3 text-sm font-semibold text-slate-950">EPCIS JSON-LD filter preview</p>
+                                                <p className="mt-3 text-sm font-semibold text-slate-950">Test EPCIS preview</p>
                                                 <p className="mt-1 text-xs leading-5 text-slate-500">
                                                     Uses the same lot and date filters for interoperability testing. It is not production evidence.
                                                 </p>
                                                 <Button asChild variant="outline" className="mt-4 h-9 border-slate-300 bg-white">
-                                                    <a href={epcisExportHref}>Preview EPCIS</a>
+                                                    <a href={epcisExportHref}>Preview test EPCIS</a>
                                                 </Button>
                                             </div>
                                         </div>
@@ -2546,10 +2586,10 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
                             <CardHeader className="border-b border-slate-200 p-4">
                                 <CardTitle className="flex items-center gap-2 text-base font-semibold text-slate-950">
                                     <Play className="h-4 w-4 text-emerald-700" />
-                                    Watch the inflow machine work
+                                    Guided test run
                                 </CardTitle>
                                 <p className="mt-1 text-xs leading-5 text-slate-500">
-                                    Permanent demo guide for starting the mock feed, watching records post, tracing a lot, and previewing the handoff without claiming production evidence.
+                                    Load test records, validate them, review exceptions, trace a lot, and preview a test handoff without creating FDA-ready evidence.
                                 </p>
                             </CardHeader>
                             <CardContent className="space-y-4 p-4">
@@ -2557,12 +2597,12 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
                                     {isBusy ? (
                                         <>
                                             <RefreshCcw className="mr-2 h-4 w-4 animate-spin" />
-                                            Machine running
+                                            Running test run
                                         </>
                                     ) : (
                                         <>
                                             <Play className="mr-2 h-4 w-4" />
-                                            Start machine demo
+                                            Run guided test
                                         </>
                                     )}
                                 </Button>
@@ -2597,7 +2637,7 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
                                         Trace
                                     </Button>
                                     <Button variant="outline" className="h-9 border-slate-300 bg-white" onClick={prepareExport} disabled={stageIndex[runStage] < 4}>
-                                        Export
+                                        Preview
                                     </Button>
                                 </div>
                             </CardContent>
@@ -2694,7 +2734,7 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
                                         <div>
                                             <p className="text-sm font-semibold text-amber-950">Local simulation</p>
                                             <p className="mt-1 text-xs leading-5 text-amber-800">
-                                                This mock lab writes local events and validates the FSMA record shape before an authenticated feed is enabled.
+                                                This mock lab writes local events and validates the FSMA record shape before a production feed is enabled.
                                             </p>
                                         </div>
                                     </CardContent>
@@ -2715,7 +2755,7 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
                                 <CardHeader className="border-b border-slate-200 p-4">
                                     <CardTitle className="flex items-center gap-2 text-base font-semibold text-slate-950">
                                         <CalendarDays className="h-4 w-4 text-slate-700" />
-                                        Evidence filters
+                                        Test preview filters
                                     </CardTitle>
                                 </CardHeader>
                                 <CardContent className="space-y-3 p-4">
