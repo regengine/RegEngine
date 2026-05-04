@@ -51,6 +51,29 @@ import type { ReviewItem } from '@/types/review';
 
 const COOKIE_MANAGED_PLACEHOLDER = 'cookie-managed';
 
+type ReviewQueueResponse = ReviewItemRaw[] | {
+  items?: ReviewItemRaw[];
+  total?: number;
+  offset?: number;
+  limit?: number;
+};
+
+type ReviewItemRaw = {
+  review_id?: string;
+  id?: string;
+  doc_hash?: string;
+  confidence_score?: number;
+  text_preview?: string;
+  text_raw?: string;
+  source_text?: string;
+  extraction?: unknown;
+  extracted_data?: unknown;
+  status?: string;
+  created_at?: string;
+  updated_at?: string;
+  tenant_id?: string;
+};
+
 function isCookieManagedCredential(value: string | null | undefined): boolean {
   return value?.trim().toLowerCase() === COOKIE_MANAGED_PLACEHOLDER;
 }
@@ -60,6 +83,34 @@ function credentialHeader(name: string, value: string | null | undefined): Recor
     return {};
   }
   return { [name]: value };
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+}
+
+function normalizeReviewStatus(status: string | undefined): ReviewItem['status'] {
+  const normalized = status?.toUpperCase();
+  if (normalized === 'APPROVED' || normalized === 'REJECTED') return normalized;
+  return 'PENDING';
+}
+
+function normalizeReviewItem(item: ReviewItemRaw): ReviewItem {
+  const createdAt = item.created_at || new Date(0).toISOString();
+  const preview = item.text_preview || item.source_text || item.text_raw || '';
+
+  return {
+    id: item.review_id || item.id || '',
+    confidence_score: typeof item.confidence_score === 'number' ? item.confidence_score : 0,
+    source_text: preview,
+    extracted_data: asRecord(item.extraction ?? item.extracted_data),
+    status: normalizeReviewStatus(item.status),
+    created_at: createdAt,
+    updated_at: item.updated_at || createdAt,
+    tenant_id: item.tenant_id || '',
+  };
 }
 
 export interface SystemStatusResponse {
@@ -445,42 +496,29 @@ class APIClient {
 
   // Review Workflow
   async getReviewItems(adminKey: string, status: string = 'PENDING'): Promise<ReviewItem[]> {
-    // Call Admin API directly
-    const { data } = await this.adminClient.get('/v1/admin/review/flagged-extractions', {
-      params: { status },
+    const { data } = await this.adminClient.get<ReviewQueueResponse>('/v1/admin/review/flagged-extractions', {
+      params: { status_filter: status, limit: 50 },
       headers: credentialHeader('X-Admin-Key', adminKey)
     });
 
-    // The backend returns: review_id, text_raw, extraction
-    // We map to the frontend expected format here if the backend differs
-    return (data || []).map((item: {
-      review_id?: string;
-      id?: string;
-      text_raw?: string;
-      source_text?: string;
-      extraction?: unknown;
-      extracted_data?: unknown;
-      status?: string;
-    }) => ({
-      id: item.review_id || item.id,
-      source_text: item.text_raw || item.source_text,
-      extracted_data: item.extraction || item.extracted_data,
-      status: item.status
-    }));
+    const items = Array.isArray(data) ? data : data.items || [];
+    return items.map(normalizeReviewItem).filter((item) => item.id);
   }
 
   async approveReviewItem(adminKey: string, itemId: string): Promise<void> {
-    // Route through the Next.js proxy at /api/review/[...path] which maps
-    // /api/review/{id}/approve → /v1/admin/review/flagged-extractions/{id}/approve
-    await this.adminClient.post(`/v1/admin/review/flagged-extractions/${itemId}/approve`, {}, {
+    await this.adminClient.post(`/v1/admin/review/flagged-extractions/${itemId}/approve`, {
+      reviewer_id: 'web-frontend',
+      notes: 'Approved via web interface',
+    }, {
       headers: credentialHeader('X-Admin-Key', adminKey)
     });
   }
 
   async rejectReviewItem(adminKey: string, itemId: string): Promise<void> {
-    // Route through the Next.js proxy at /api/review/[...path] which maps
-    // /api/review/{id}/reject → /v1/admin/review/flagged-extractions/{id}/reject
-    await this.adminClient.post(`/v1/admin/review/flagged-extractions/${itemId}/reject`, {}, {
+    await this.adminClient.post(`/v1/admin/review/flagged-extractions/${itemId}/reject`, {
+      reviewer_id: 'web-frontend',
+      notes: 'Rejected via web interface',
+    }, {
       headers: credentialHeader('X-Admin-Key', adminKey)
     });
   }
