@@ -382,7 +382,7 @@ def fetch_v2_events(db_session, where_clause: str, params: dict) -> list:
                 e.source, e.sha256_hash, e.chain_hash, e.kdes, e.provenance,
                 e.ingested_at
             ORDER BY e.event_timestamp ASC
-            LIMIT 10000
+            LIMIT 10001
         """),
         params,
     ).fetchall()

@@ -33,6 +33,7 @@ from .formatters import (
     generate_csv_and_hash,
     make_timestamp,
 )
+from .coverage import _enforce_kde_coverage_gate
 
 logger = logging.getLogger("fda-export")
 
@@ -52,6 +53,7 @@ async def export_recall_filtered_handler(
     request_id: Optional[str] = None,
     user_agent: Optional[str] = None,
     source_ip: Optional[str] = None,
+    allow_incomplete: bool = False,
     include_pii: bool = False,
 ):
     """Generate recall-filtered FDA export with flexible search criteria.
@@ -125,6 +127,14 @@ async def export_recall_filtered_handler(
         )
 
         rows = fetch_recall_events(db_session, where_clause, params)
+        if len(rows) > 10000:
+            raise HTTPException(
+                status_code=413,
+                detail=(
+                    "Recall export exceeds the 10000-record synchronous limit. "
+                    "Narrow the filter scope or request a paginated/offline export."
+                ),
+            )
 
         if not rows:
             filters_used = []
@@ -145,6 +155,16 @@ async def export_recall_filtered_handler(
         csv_content, export_hash = generate_csv_and_hash(events, include_pii=include_pii)
         chain_verification = persistence.verify_chain(tenant_id=tenant_id)
         completeness_summary = _build_completeness_summary(events)
+        _enforce_kde_coverage_gate(
+            completeness_summary=completeness_summary,
+            allow_incomplete=allow_incomplete,
+            identity={
+                "user_id": user_id,
+                "request_id": request_id,
+            },
+            tenant_id=tenant_id,
+            export_scope=f"recall:{tlc or product or location or event_type}",
+        )
 
         # Log the recall export. If the audit-log write fails,
         # ``log_recall_export`` raises :class:`AuditLogWriteError`,
