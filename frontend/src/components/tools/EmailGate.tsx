@@ -12,6 +12,27 @@ interface EmailGateProps {
 
 type GateStep = 'checking' | 'email' | 'code' | 'verified';
 
+async function fetchWithCsrfTimeout(
+    input: RequestInfo | URL,
+    options: RequestInit = {},
+    timeoutMs = 12000,
+) {
+    if (typeof AbortController === 'undefined') {
+        return fetchWithCsrf(input, options);
+    }
+
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
+    try {
+        return await fetchWithCsrf(input, {
+            ...options,
+            signal: controller.signal,
+        });
+    } finally {
+        window.clearTimeout(timeoutId);
+    }
+}
+
 /**
  * Email verification gate for free tools.
  *
@@ -33,9 +54,9 @@ export function EmailGate({ toolName, children }: EmailGateProps) {
 
     // Check cookie on mount
     useEffect(() => {
-        fetchWithCsrf('/api/tools/check-access', {
-            signal: AbortSignal.timeout(4000),
-        })
+        let cancelled = false;
+
+        fetchWithCsrfTimeout('/api/tools/check-access', {}, 4000)
             .then((res) => res.json())
             .then((data) => {
                 if (!cancelled) setStep(data.hasAccess ? 'verified' : 'email');
@@ -68,9 +89,8 @@ export function EmailGate({ toolName, children }: EmailGateProps) {
             setLoading(true);
 
             try {
-                const res = await fetchWithCsrf('/api/tools/verify', {
+                const res = await fetchWithCsrfTimeout('/api/tools/verify', {
                     method: 'POST',
-                    signal: AbortSignal.timeout(12000),
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         action: 'verify',
@@ -104,9 +124,8 @@ export function EmailGate({ toolName, children }: EmailGateProps) {
             setLoading(true);
 
             try {
-                const res = await fetchWithCsrf('/api/tools/verify', {
+                const res = await fetchWithCsrfTimeout('/api/tools/verify', {
                     method: 'POST',
-                    signal: AbortSignal.timeout(12000),
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         action: 'confirm',
@@ -149,9 +168,8 @@ export function EmailGate({ toolName, children }: EmailGateProps) {
         setLoading(true);
 
         try {
-            const res = await fetchWithCsrf('/api/tools/verify', {
+            const res = await fetchWithCsrfTimeout('/api/tools/verify', {
                 method: 'POST',
-                signal: AbortSignal.timeout(12000),
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     action: 'verify',
