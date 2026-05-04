@@ -45,7 +45,7 @@ export default function FoodTraceabilitySoftwarePage() {
 
       {/* Main Content */}
       <section className="max-w-[900px] mx-auto px-4 sm:px-6 pb-12 sm:pb-16">
-        <article className="prose prose-invert max-w-none">
+        <article className="prose max-w-none prose-headings:text-[var(--re-text-primary)] prose-p:text-[var(--re-text-secondary)] prose-strong:text-[var(--re-text-primary)] prose-li:text-[var(--re-text-secondary)] prose-a:text-[var(--re-brand)]">
           {/* Section 1: The Selection Challenge */}
           <div className="mb-12">
             <h2 className="text-2xl font-bold mb-4 text-[var(--re-text-primary)]">The Selection Challenge</h2>
