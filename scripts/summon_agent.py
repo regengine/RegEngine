@@ -12,6 +12,7 @@ Usage:
 """
 
 import argparse
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 import re
@@ -22,6 +23,13 @@ AGENTS_DIR = REPO_ROOT / ".github" / "agents"
 ROOT_AGENT_GUIDE = REPO_ROOT / "AGENTS.md"
 OPERATING_MODEL = REPO_ROOT / "docs" / "engineering" / "AGENT_OPERATING_MODEL.md"
 
+SUPPORTED_AGENT_SPECS: Mapping[str, str] = {
+    "planner": "regengine-planner.agent.md",
+    "implementer": "regengine-implementer.agent.md",
+    "security_review": "regengine-security-review.agent.md",
+}
+_REQUIRED_FRONTMATTER = ("name", "description", "tools")
+
 
 @dataclass(frozen=True)
 class AgentDefinition:
@@ -30,6 +38,10 @@ class AgentDefinition:
     key: str
     label: str
     path: Path
+
+
+class AgentSpecError(RuntimeError):
+    """Raised when the supported agent specs drift from the small-scale model."""
 
 
 def _slug_to_role(slug: str) -> str:
@@ -48,22 +60,68 @@ def _frontmatter_value(text: str, key: str) -> str | None:
         return None
 
     frontmatter = text[3:end]
-    match = re.search(rf"^{re.escape(key)}:\s*(.+?)\s*$", frontmatter, re.MULTILINE)
+    match = re.search(rf"^{re.escape(key)}:[ \t]*(.*?)[ \t]*$", frontmatter, re.MULTILINE)
     if not match:
         return None
-    return match.group(1).strip().strip("'\"")
+    value = match.group(1).strip().strip("'\"")
+    return value or None
+
+
+def agent_spec_errors(agents_dir: Path = AGENTS_DIR) -> list[str]:
+    """Return validation errors for the supported agent specs."""
+    if not agents_dir.exists():
+        return [f"Missing agent specs directory: {agents_dir}"]
+
+    expected_files = set(SUPPORTED_AGENT_SPECS.values())
+    present_files = {path.name for path in agents_dir.glob("*.agent.md")}
+
+    errors: list[str] = []
+    for filename in sorted(expected_files - present_files):
+        errors.append(f"Missing supported agent spec: {filename}")
+    for filename in sorted(present_files - expected_files):
+        errors.append(f"Unexpected agent spec: {filename}")
+
+    for role, filename in SUPPORTED_AGENT_SPECS.items():
+        path = agents_dir / filename
+        if not path.exists():
+            continue
+
+        text = path.read_text(encoding="utf-8")
+        frontmatter_end = text.find("\n---", 3) if text.startswith("---") else -1
+        if frontmatter_end == -1:
+            errors.append(f"{filename} must start with YAML front matter")
+            continue
+
+        for key in _REQUIRED_FRONTMATTER:
+            if not _frontmatter_value(text, key):
+                errors.append(f"{filename} missing front matter field: {key}")
+
+        body = text[frontmatter_end + len("\n---") :].strip()
+        if not body:
+            errors.append(f"{filename} has no role instructions")
+
+        expected_role = _slug_to_role(filename.removesuffix(".md"))
+        if role != expected_role:
+            errors.append(f"{filename} maps to {expected_role!r}, expected {role!r}")
+
+    return errors
+
+
+def validate_supported_agent_specs(agents_dir: Path = AGENTS_DIR) -> None:
+    """Validate the checked-in agent specs before exposing them."""
+    errors = agent_spec_errors(agents_dir)
+    if errors:
+        raise AgentSpecError("\n".join(errors))
 
 
 def discover_agents() -> dict[str, AgentDefinition]:
     """Discover the supported checked-in GitHub agent specs."""
+    validate_supported_agent_specs()
     agents: dict[str, AgentDefinition] = {}
 
-    if not AGENTS_DIR.exists():
-        return agents
-
-    for md_file in sorted(AGENTS_DIR.glob("*.agent.md")):
+    for key, filename in SUPPORTED_AGENT_SPECS.items():
+        md_file = AGENTS_DIR / filename
         text = md_file.read_text(encoding="utf-8")
-        key = _slug_to_role(md_file.name.removesuffix(".md"))
         label = _frontmatter_value(text, "name") or key.replace("_", " ").title()
         agents[key] = AgentDefinition(key=key, label=label, path=md_file)
 
@@ -135,7 +193,13 @@ def list_roles(agents: dict[str, AgentDefinition]) -> None:
 
 
 def main() -> None:
-    agents = discover_agents()
+    try:
+        agents = discover_agents()
+    except AgentSpecError as exc:
+        print("ERROR: Supported agent specs are invalid:", file=sys.stderr)
+        for line in str(exc).splitlines():
+            print(f"  - {line}", file=sys.stderr)
+        sys.exit(1)
 
     parser = argparse.ArgumentParser(
         description="Summon a RegEngine agent prompt.",
