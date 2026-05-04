@@ -13,7 +13,6 @@ preserves the audit trail's integrity while removing PII.
 
 from __future__ import annotations
 
-import logging
 import os
 import uuid
 from typing import Optional
@@ -21,22 +20,33 @@ from typing import Optional
 import structlog
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
-from sqlalchemy.orm import Session
 
 from app.dependencies import get_current_user
 from shared.database import get_db
 
 logger = structlog.get_logger("erasure")
 
-# Cypher to detach-delete every node belonging to a tenant.
-# tenant_id is always passed as a parameter, never interpolated.
-_CYPHER_DELETE_TENANT_SUBGRAPH = (
-    "MATCH (n {tenant_id: $tenant_id}) DETACH DELETE n"
-)
+# Cypher to detach-delete only graph nodes that represent the erased user.
+# tenant_id and user_id are always passed as parameters, never interpolated.
+_CYPHER_DELETE_USER_GRAPH_DATA = """
+MATCH (n {tenant_id: $tenant_id})
+WHERE n.user_id = $user_id
+   OR n.actor_id = $user_id
+   OR (
+        n.id = $user_id
+        AND any(label IN labels(n) WHERE label IN [
+            'User',
+            'Account',
+            'TeamMember',
+            'SupplierContact'
+        ])
+   )
+DETACH DELETE n
+"""
 
 
-async def _delete_neo4j_tenant_subgraph(tenant_id: str) -> None:
-    """Delete all Neo4j nodes for *tenant_id* as part of GDPR erasure.
+async def _delete_neo4j_user_graph_data(tenant_id: str, user_id: str) -> None:
+    """Delete Neo4j nodes for *user_id* as part of GDPR erasure.
 
     This is best-effort: if Neo4j is not configured (``NEO4J_URI`` /
     ``NEO4J_URL`` absent) the call is skipped silently.  If the driver is
@@ -44,14 +54,26 @@ async def _delete_neo4j_tenant_subgraph(tenant_id: str) -> None:
     returns without raising so that the already-committed Postgres erasure
     is not affected.
 
-    ``tenant_id`` is passed as a Cypher parameter to prevent injection.
+    ``tenant_id`` and ``user_id`` are passed as Cypher parameters to prevent
+    injection.  The query must stay user-scoped: account erasure is not tenant
+    offboarding and must not delete the tenant's traceability graph.
     """
+    if not tenant_id or not user_id:
+        logger.debug(
+            "erasure_neo4j_skip",
+            reason="tenant_id/user_id missing",
+            tenant_id=tenant_id,
+            user_id=user_id,
+        )
+        return
+
     neo4j_uri = (os.getenv("NEO4J_URI") or os.getenv("NEO4J_URL") or "").strip()
     if not neo4j_uri:
         logger.debug(
             "erasure_neo4j_skip",
             reason="NEO4J_URI not configured",
             tenant_id=tenant_id,
+            user_id=user_id,
         )
         return
 
@@ -65,17 +87,20 @@ async def _delete_neo4j_tenant_subgraph(tenant_id: str) -> None:
         ) as neo4j_driver:
             async with neo4j_driver.session() as session:
                 await session.run(
-                    _CYPHER_DELETE_TENANT_SUBGRAPH,
+                    _CYPHER_DELETE_USER_GRAPH_DATA,
                     tenant_id=tenant_id,
+                    user_id=user_id,
                 )
         logger.info(
-            "erasure_neo4j_subgraph_deleted",
+            "erasure_neo4j_user_graph_data_deleted",
             tenant_id=tenant_id,
+            user_id=user_id,
         )
     except Exception as exc:  # noqa: BLE001
         logger.warning(
-            "erasure_neo4j_subgraph_failed",
+            "erasure_neo4j_user_graph_data_failed",
             tenant_id=tenant_id,
+            user_id=user_id,
             error=str(exc),
         )
 
@@ -201,10 +226,9 @@ async def request_erasure(
             # targeted the retention threshold (24-month-old rows) and
             # had the wrong semantics for a right-to-erasure request.
             anonymized_count = 0
-            anonymize_errors = 0
             if user_uuid is not None and tenant_uuid is not None:
                 try:
-                    anonymized_count, anonymize_errors = (
+                    anonymized_count, _anonymize_errors = (
                         await manager.anonymize_audit_logs_for_user(
                             db=db,
                             user_id=user_uuid,
@@ -221,7 +245,6 @@ async def request_erasure(
                         error=str(anon_err),
                     )
                     anonymized_count = 0
-                    anonymize_errors = 1
             else:
                 logger.warning(
                     "erasure_anonymize_audit_logs_skipped_non_uuid",
@@ -231,12 +254,13 @@ async def request_erasure(
 
             db.commit()
 
-        # 3. Best-effort Neo4j subgraph deletion (GDPR data minimisation).
+        # 3. Best-effort Neo4j user graph deletion (GDPR data minimisation).
         #    Runs AFTER the Postgres commit so the primary erasure is always
-        #    durable even if Neo4j is unavailable.  tenant_id is passed as a
-        #    Cypher parameter — never string-formatted — to prevent injection.
+        #    durable even if Neo4j is unavailable.  Parameters are never
+        #    string-formatted into Cypher.  This is user-scoped; tenant graph
+        #    deletion belongs to tenant offboarding, not account erasure.
         if tenant_id is not None:
-            await _delete_neo4j_tenant_subgraph(str(tenant_id))
+            await _delete_neo4j_user_graph_data(str(tenant_id), str(user_id))
 
         return ErasureResponse(
             status="accepted",
