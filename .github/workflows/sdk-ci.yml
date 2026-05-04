@@ -44,5 +44,9 @@ jobs:
 
       - name: Run SDK regression tests
         run: |
+          REPO_ROOT="$PWD"
+          . .venv-sdk/bin/activate
           python -m pip install pytest pytest-asyncio httpx requests
-          python -m pytest tests/sdk -q
+          TEST_TMP="$(mktemp -d)"
+          cd "$TEST_TMP"
+          PYTHONPATH= python -m pytest "$REPO_ROOT/tests/sdk" -q
