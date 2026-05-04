@@ -13,11 +13,15 @@
  */
 
 import { afterEach, describe, it, expect } from 'vitest';
-import { requireProxyAuth, sanitizePath, validateUuid, safeSegment } from '@/lib/api-proxy';
+import { createHmac } from 'node:crypto';
+import { requireProxyAuth, sanitizePath, validateProxySession, validateUuid, safeSegment } from '@/lib/api-proxy';
 import { applyCookieCredentials, passthroughRequestHeaders } from '@/lib/proxy-factory';
+import { _resetForTesting as resetJwtKeysForTesting } from '@/lib/jwt-keys';
 import type { NextRequest } from 'next/server';
 
 const ORIGINAL_REGENGINE_API_KEY = process.env.REGENGINE_API_KEY;
+const ORIGINAL_JWT_SIGNING_KEY = process.env.JWT_SIGNING_KEY;
+const ORIGINAL_AUTH_SECRET_KEY = process.env.AUTH_SECRET_KEY;
 
 afterEach(() => {
     if (ORIGINAL_REGENGINE_API_KEY === undefined) {
@@ -25,6 +29,17 @@ afterEach(() => {
     } else {
         process.env.REGENGINE_API_KEY = ORIGINAL_REGENGINE_API_KEY;
     }
+    if (ORIGINAL_JWT_SIGNING_KEY === undefined) {
+        delete process.env.JWT_SIGNING_KEY;
+    } else {
+        process.env.JWT_SIGNING_KEY = ORIGINAL_JWT_SIGNING_KEY;
+    }
+    if (ORIGINAL_AUTH_SECRET_KEY === undefined) {
+        delete process.env.AUTH_SECRET_KEY;
+    } else {
+        process.env.AUTH_SECRET_KEY = ORIGINAL_AUTH_SECRET_KEY;
+    }
+    resetJwtKeysForTesting();
 });
 
 function makeProxyRequest(headers: Record<string, string>, cookies: Record<string, string> = {}): NextRequest {
@@ -35,8 +50,19 @@ function makeProxyRequest(headers: Record<string, string>, cookies: Record<strin
                 const value = cookies[name];
                 return value ? { name, value } : undefined;
             },
+            getAll: () => Object.entries(cookies).map(([name, value]) => ({ name, value })),
         },
     } as unknown as NextRequest;
+}
+
+function base64url(value: string): string {
+    return Buffer.from(value, 'utf8').toString('base64url');
+}
+
+function primeJwtEnv(secret: string): void {
+    process.env.JWT_SIGNING_KEY = secret;
+    process.env.AUTH_SECRET_KEY = secret;
+    resetJwtKeysForTesting();
 }
 
 describe('requireProxyAuth', () => {
@@ -142,7 +168,6 @@ describe('validateUuid (named [tenantId]/[snapshotId] proxies)', () => {
     });
 
     it('rejects UUIDs with injected control chars', () => {
-        // eslint-disable-next-line no-control-regex
         expect(validateUuid('6ba7b810-9dad-41d1-a0b4-00c04fd430c8\r\n')).toBeNull();
     });
 });
@@ -267,7 +292,7 @@ describe('cookie-managed credential passthrough', () => {
         expect(outgoing.has('x-regengine-api-key')).toBe(false);
     });
 
-    it('injects the server API key only after a real session credential is present', () => {
+    it('does not convert a session credential into the server API key', () => {
         process.env.REGENGINE_API_KEY = 'server-side-key'; // pragma: allowlist secret
         const outgoing = new Headers();
         const request = makeProxyRequest({}, { re_access_token: 'real-token' });
@@ -275,7 +300,7 @@ describe('cookie-managed credential passthrough', () => {
         applyCookieCredentials(outgoing, request);
 
         expect(outgoing.get('authorization')).toBe('Bearer real-token');
-        expect(outgoing.get('x-regengine-api-key')).toBe('server-side-key');
+        expect(outgoing.has('x-regengine-api-key')).toBe(false);
     });
 
     it('prefers the tenant cookie over browser-provided tenant headers', () => {
@@ -300,5 +325,57 @@ describe('cookie-managed credential passthrough', () => {
         applyCookieCredentials(outgoing, request);
 
         expect(outgoing.has('x-tenant-id')).toBe(false);
+    });
+});
+
+describe('validateProxySession RegEngine JWT hardening', () => {
+    const testSigningMaterial = 'frontend-session-validation-material';
+
+    async function signToken(payload: Record<string, unknown>) {
+        const claims = {
+            ...payload,
+            exp: Math.floor(Date.now() / 1000) + 3600,
+        };
+        const header = base64url(JSON.stringify({ alg: 'HS256', typ: 'JWT' }));
+        const body = base64url(JSON.stringify(claims));
+        const signature = createHmac('sha256', testSigningMaterial)
+            .update(`${header}.${body}`)
+            .digest('base64url');
+        return `${header}.${body}.${signature}`;
+    }
+
+    it('rejects forged RegEngine session cookies before proxying', async () => {
+        primeJwtEnv(testSigningMaterial);
+
+        const response = await validateProxySession(makeProxyRequest({}, {
+            re_access_token: 'not-a-jwt',
+            re_tenant_id: 'tenant-a',
+        }));
+
+        expect(response?.status).toBe(401);
+    });
+
+    it('rejects tenant cookies that do not match the JWT tenant claim', async () => {
+        primeJwtEnv(testSigningMaterial);
+        const token = await signToken({ tenant_id: 'tenant-a' });
+
+        const response = await validateProxySession(makeProxyRequest({}, {
+            re_access_token: token,
+            re_tenant_id: 'tenant-b',
+        }));
+
+        expect(response?.status).toBe(403);
+    });
+
+    it('accepts a valid RegEngine JWT with matching tenant context', async () => {
+        primeJwtEnv(testSigningMaterial);
+        const token = await signToken({ tenant_id: 'tenant-a' });
+
+        const response = await validateProxySession(makeProxyRequest({}, {
+            re_access_token: token,
+            re_tenant_id: 'tenant-a',
+        }));
+
+        expect(response).toBeNull();
     });
 });
