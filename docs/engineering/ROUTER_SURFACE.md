@@ -18,8 +18,9 @@ The current behavior is:
 
 - Always mount a small system/ingestion base.
 - Mount every feature router unless its name is listed in `DISABLED_ROUTERS`.
+- In production, auto-disable experimental routers unless `ENABLE_EXPERIMENTAL_ROUTERS=true`.
 
-That means the production default is broad unless deployment configuration narrows it.
+That means the production default is narrower for explicitly experimental routers, while product/ops-adjacent routers still require deployment review.
 
 ## Always Mounted
 
@@ -118,14 +119,16 @@ Then review the Product/Ops Adjacent group and disable anything not required for
 
 ## Stronger Follow-Up
 
-Replace deny-by-configuration with allow-by-configuration for production:
+The first production guard is implemented: experimental routers require `ENABLE_EXPERIMENTAL_ROUTERS=true` in production.
+
+The stronger follow-up is to replace deny-by-configuration with allow-by-configuration for all optional production routers:
 
 ```text
 ENABLE_EXPERIMENTAL_ROUTERS=false
 ENABLED_ROUTERS=inflow_workbench,fda_export,csv,edi,epcis_ingestion,score,canonical_records,rules,exceptions,request_workflow,auditor,compliance_metrics,readiness,chain_verification,audit_export_log,sla_tracking,export_monitoring,supplier_validation,admin,fsma_compliance
 ```
 
-Recommended behavior:
+Recommended behavior for that follow-up:
 
 - Development/test may keep broad router mounting.
 - Production should mount only explicitly enabled routers.
@@ -140,4 +143,3 @@ No route should be considered production unless it has:
 - Invalid-input coverage
 - Failure-mode coverage
 - A direct connection to the FSMA pipeline or a documented operator requirement
-

@@ -42,9 +42,18 @@ Router exposure is currently controlled by:
 
 ```text
 DISABLED_ROUTERS
+ENABLE_EXPERIMENTAL_ROUTERS
 ```
 
-`DISABLED_ROUTERS` is a comma-separated list of router names to suppress at startup. The current model is deny-by-configuration: routers are mounted unless their names are listed.
+`DISABLED_ROUTERS` is a comma-separated list of router names to suppress at startup.
+
+In production, experimental routers are also suppressed unless:
+
+```text
+ENABLE_EXPERIMENTAL_ROUTERS=true
+```
+
+Development and test environments retain broad router mounting for local work and CI coverage.
 
 ## Experimental or Non-Core Surfaces
 
@@ -67,4 +76,3 @@ A route moves into the production surface only when it has:
 - A failure-mode test for invalid input
 - Clear ownership in documentation
 - A reason it belongs to the FSMA pipeline
-
