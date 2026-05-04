@@ -935,6 +935,67 @@ def _publish_graph_sync(event_id: str, event: IngestEvent, tenant_id: str) -> No
 _require_idempotency_key = IdempotencyDependency(strict=True)
 
 
+def _lookup_tenant_id_for_api_key(raw_api_key: str) -> Optional[str]:
+    """Best-effort legacy tenant lookup for callers without principal tenant context."""
+    try:
+        from shared.database import SessionLocal
+        from sqlalchemy import text as _text
+
+        _db = SessionLocal()
+        try:
+            _row = _db.execute(
+                _text("SELECT tenant_id FROM api_keys WHERE key_hash = encode(sha256(:raw::bytea), 'hex') LIMIT 1"),
+                {"raw": raw_api_key},
+            ).fetchone()
+            if _row and _row[0]:
+                return str(_row[0])
+        finally:
+            _db.close()
+    except (ImportError, SQLAlchemyError, ValueError, RuntimeError, ConnectionError, OSError) as _tenant_err:
+        logger.debug("tenant_key_lookup_failed", error=str(_tenant_err))
+    return None
+
+
+def _resolve_ingest_tenant_id(
+    *,
+    payload_tenant_id: Optional[str],
+    principal: IngestionPrincipal,
+    x_regengine_api_key: Optional[str],
+    x_tenant_id: Optional[str],
+) -> str:
+    """Resolve tenant context without letting request bodies override scoped keys.
+
+    Scoped API keys already carry tenant authority in ``principal.tenant_id``.
+    Any divergent body/header tenant is therefore an attempted cross-tenant
+    write and must fail before rate limiting or persistence (#2069).
+    """
+    if principal.tenant_id:
+        for source, requested in (
+            ("payload tenant_id", payload_tenant_id),
+            ("X-Tenant-ID", x_tenant_id),
+        ):
+            if requested and requested != principal.tenant_id:
+                raise HTTPException(
+                    status_code=403,
+                    detail=f"Tenant mismatch: {source} does not match authenticated API key tenant.",
+                )
+        validate_tenant_id(principal.tenant_id)
+        return principal.tenant_id
+
+    # Legacy master/dev-open callers do not carry a principal tenant. Preserve
+    # the historical fallback order for those modes only.
+    tenant_id = payload_tenant_id
+    if not tenant_id and x_regengine_api_key:
+        tenant_id = _lookup_tenant_id_for_api_key(x_regengine_api_key)
+    if not tenant_id and x_tenant_id:
+        tenant_id = x_tenant_id
+    if not tenant_id:
+        logger.error("Webhook rejected: no tenant_id resolved")
+        raise HTTPException(status_code=400, detail="Tenant context required")
+    validate_tenant_id(tenant_id)
+    return tenant_id
+
+
 @router.post(
     "/ingest",
     response_model=IngestResponse,
@@ -962,33 +1023,12 @@ async def ingest_events(
     db_session=Depends(get_db_session),
 ) -> IngestResponse:
     """Process incoming webhook events with persistent storage."""
-    # Resolve tenant: payload > API-key lookup > RBAC principal
-    tenant_id = payload.tenant_id
-    if not tenant_id and x_regengine_api_key:
-        try:
-            from shared.database import SessionLocal
-            _db = SessionLocal()
-            from sqlalchemy import text as _text
-            _row = _db.execute(
-                _text("SELECT tenant_id FROM api_keys WHERE key_hash = encode(sha256(:raw::bytea), 'hex') LIMIT 1"),
-                {"raw": x_regengine_api_key},
-            ).fetchone()
-            if _row and _row[0]:
-                tenant_id = str(_row[0])
-            _db.close()
-        except (ImportError, SQLAlchemyError, ValueError, RuntimeError, ConnectionError, OSError) as _tenant_err:
-            logger.debug("tenant_key_lookup_failed", error=str(_tenant_err))
-    # Fallback: use tenant from RBAC principal if available
-    if not tenant_id and principal.tenant_id:
-        tenant_id = principal.tenant_id
-    # Header fallback supports signed webhook clients that keep tenant context
-    # out of the payload body, including Inflow Lab's live delivery client.
-    if not tenant_id and x_tenant_id:
-        tenant_id = x_tenant_id
-    if not tenant_id:
-        logger.error("Webhook rejected: no tenant_id resolved")
-        raise HTTPException(status_code=400, detail="Tenant context required")
-    validate_tenant_id(tenant_id)
+    tenant_id = _resolve_ingest_tenant_id(
+        payload_tenant_id=payload.tenant_id,
+        principal=principal,
+        x_regengine_api_key=x_regengine_api_key,
+        x_tenant_id=x_tenant_id,
+    )
 
     # Rate limiting (tenant-scoped)
     _check_rate_limit(tenant_id)

@@ -25,8 +25,10 @@ import sys
 from types import ModuleType, SimpleNamespace
 
 import pytest
+from fastapi import HTTPException
 
 from services.ingestion.app import webhook_router_v2 as wrv2
+from services.ingestion.app.authz import IngestionPrincipal
 from services.shared.rules.types import EvaluationSummary, RuleEvaluationResult
 
 
@@ -117,6 +119,14 @@ def _install(monkeypatch, *, summary: EvaluationSummary, canonical_raises=None):
     monkeypatch.setitem(sys.modules, "shared.rules_engine", re_mod)
 
 
+def _principal(tenant_id: str | None, scopes: list[str] | None = None) -> IngestionPrincipal:
+    return IngestionPrincipal(
+        key_id="test-key",
+        tenant_id=tenant_id,
+        scopes=scopes or ["webhooks.ingest"],
+    )
+
+
 @pytest.fixture(autouse=True)
 def _silence_logger(monkeypatch):
     class _Silent:
@@ -185,6 +195,57 @@ class TestPreEvalOff:
         assert reason is None
         assert calls["normalize"] == 0, "normalize must be skipped in OFF mode"
         assert calls["evaluate"] == 0, "evaluate must be skipped in OFF mode"
+
+
+# ---------------------------------------------------------------------------
+# Tenant binding (#2069)
+# ---------------------------------------------------------------------------
+
+class TestIngestTenantBinding:
+
+    def test_scoped_key_rejects_payload_tenant_mismatch(self):
+        with pytest.raises(HTTPException) as exc:
+            wrv2._resolve_ingest_tenant_id(
+                payload_tenant_id="tenant-b",
+                principal=_principal("tenant-a"),
+                x_regengine_api_key="key-a",
+                x_tenant_id=None,
+            )
+
+        assert getattr(exc.value, "status_code", None) == 403
+        assert "does not match authenticated API key tenant" in exc.value.detail
+
+    def test_scoped_key_rejects_header_tenant_mismatch(self):
+        with pytest.raises(HTTPException) as exc:
+            wrv2._resolve_ingest_tenant_id(
+                payload_tenant_id=None,
+                principal=_principal("tenant-a"),
+                x_regengine_api_key="key-a",
+                x_tenant_id="tenant-b",
+            )
+
+        assert getattr(exc.value, "status_code", None) == 403
+        assert "does not match authenticated API key tenant" in exc.value.detail
+
+    def test_scoped_key_uses_principal_tenant_when_body_omits_tenant(self):
+        tenant_id = wrv2._resolve_ingest_tenant_id(
+            payload_tenant_id=None,
+            principal=_principal("tenant-a"),
+            x_regengine_api_key="key-a",
+            x_tenant_id=None,
+        )
+
+        assert tenant_id == "tenant-a"
+
+    def test_legacy_master_preserves_payload_tenant_context(self):
+        tenant_id = wrv2._resolve_ingest_tenant_id(
+            payload_tenant_id="tenant-body",
+            principal=_principal(None, scopes=["*"]),
+            x_regengine_api_key="legacy-master",
+            x_tenant_id="tenant-header",
+        )
+
+        assert tenant_id == "tenant-body"
 
 
 # ---------------------------------------------------------------------------
