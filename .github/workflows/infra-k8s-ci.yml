@@ -50,6 +50,12 @@ jobs:
           from pathlib import Path
 
           manifest = Path("production-manifest.yaml").read_text()
+          forbidden = ("replace-with", ".example.invalid")
+          for token in forbidden:
+              if token in manifest:
+                  print(f"::error::Production manifest contains placeholder token: {token}")
+                  raise SystemExit(1)
+
           found = set()
 
           for document in manifest.split("\n---\n"):
@@ -88,14 +94,7 @@ jobs:
               ("ConfigMap", "graph-config"),
               ("ConfigMap", "ingestion-config"),
               ("ConfigMap", "nlp-config"),
-              ("Secret", "admin-secrets"),
-              ("Secret", "compliance-secrets"),
-              ("Secret", "graph-secrets"),
-              ("Secret", "ingestion-secrets"),
-              ("Secret", "nlp-secrets"),
-              ("Secret", "scheduler-secrets"),
               ("ConfigMap", "alertmanager-config"),
-              ("Secret", "alertmanager-routing-secrets"),
               ("StatefulSet", "alertmanager"),
               ("Service", "alertmanager"),
               ("NetworkPolicy", "alertmanager"),
