@@ -47,6 +47,7 @@ from app.authz import IngestionPrincipal, get_ingestion_principal
 # ...). ``from app.fda_export import router`` returns the APIRouter object
 # because __init__ re-exports it; importlib avoids that package attribute.
 router_module = importlib.import_module("app.fda_export.router")
+recall_module = importlib.import_module("app.fda_export.recall")
 from app.fda_export.router import router as fda_router
 from app.fda_export_service import _generate_csv
 from app.subscription_gate import require_active_subscription
@@ -833,6 +834,69 @@ class TestExportRecallFiltered:
         assert resp.status_code == 401
         assert "resolvable key_id" in resp.json()["detail"]
 
+    def test_low_kde_coverage_without_ack_returns_409(self, monkeypatch):
+        app = _build_app_with_principal(scopes=["fda.export"])
+        _install_fake_dependencies(
+            monkeypatch,
+            session_factory=lambda: _FakeSession(),
+            persistence_cls=_FakePersistence,
+        )
+        monkeypatch.setattr(recall_module, "fetch_recall_events", lambda *a, **kw: [object()])
+        monkeypatch.setattr(recall_module, "rows_to_event_dicts", lambda _rows: [_SAMPLE_EVENT_1])
+
+        with TestClient(app) as client:
+            resp = client.get(
+                "/api/v1/fda/export/recall",
+                params={"tenant_id": "tenant-a", "product": "Romaine"},
+            )
+
+        assert resp.status_code == 409
+        assert resp.json()["detail"]["error"] == "kde_coverage_below_threshold"
+
+    def test_low_kde_coverage_acknowledged_succeeds(self, monkeypatch):
+        app = _build_app_with_principal(scopes=["fda.export"])
+        _install_fake_dependencies(
+            monkeypatch,
+            session_factory=lambda: _FakeSession(),
+            persistence_cls=_FakePersistence,
+        )
+        monkeypatch.setattr(recall_module, "fetch_recall_events", lambda *a, **kw: [object()])
+        monkeypatch.setattr(recall_module, "rows_to_event_dicts", lambda _rows: [_SAMPLE_EVENT_1])
+
+        with TestClient(app) as client:
+            resp = client.get(
+                "/api/v1/fda/export/recall",
+                params={
+                    "tenant_id": "tenant-a",
+                    "product": "Romaine",
+                    "allow_incomplete": "true",
+                },
+            )
+
+        assert resp.status_code == 200
+        assert resp.headers["x-kde-coverage"] != "1.0"
+
+    def test_over_limit_recall_export_returns_413(self, monkeypatch):
+        app = _build_app_with_principal(scopes=["fda.export"])
+        _install_fake_dependencies(
+            monkeypatch,
+            session_factory=lambda: _FakeSession(),
+            persistence_cls=_FakePersistence,
+        )
+        monkeypatch.setattr(
+            recall_module,
+            "fetch_recall_events",
+            lambda *a, **kw: [object()] * 10001,
+        )
+
+        with TestClient(app) as client:
+            resp = client.get(
+                "/api/v1/fda/export/recall",
+                params={"tenant_id": "tenant-a", "product": "Romaine"},
+            )
+
+        assert resp.status_code == 413
+
 
 # ---------------------------------------------------------------------------
 # /export/v2 — lines 996-1197, the big untested block
@@ -1099,6 +1163,22 @@ class TestExportV2:
             resp = client.get(
                 "/api/v1/fda/export/v2",
                 params={"tenant_id": "tenant-a"},
+            )
+        assert resp.status_code == 400
+        assert "start_date is required" in resp.json()["detail"]
+
+    def test_wildcard_tlc_without_dates_returns_400(self, monkeypatch):
+        self._install_v2_helpers(monkeypatch)
+        app = _build_app_with_principal(scopes=["fda.export"])
+        _install_fake_dependencies(
+            monkeypatch,
+            session_factory=lambda: _FakeSession(),
+            persistence_cls=_FakePersistence,
+        )
+        with TestClient(app) as client:
+            resp = client.get(
+                "/api/v1/fda/export/v2",
+                params={"tenant_id": "tenant-a", "tlc": "%"},
             )
         assert resp.status_code == 400
         assert "start_date is required" in resp.json()["detail"]

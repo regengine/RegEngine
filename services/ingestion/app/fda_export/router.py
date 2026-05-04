@@ -984,7 +984,8 @@ async def export_fda_spreadsheet_v2(
             ),
         )
 
-    if not tlc:
+    exact_tlc_filter = bool(tlc and tlc.strip() and "%" not in tlc)
+    if not exact_tlc_filter:
         try:
             validate_export_window(start_date, end_date)
         except ExportWindowError as exc:
