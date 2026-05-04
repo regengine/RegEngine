@@ -10,6 +10,7 @@ on:
       - "scripts/**"
       - "tests/**"
       - "docs/**"
+      - ".github/agents/**"
       - ".github/workflows/agent-sweep.yml"
       - ".github/workflows/legacy-code-scan.yml"
   push:
@@ -21,6 +22,7 @@ on:
       - "scripts/**"
       - "tests/**"
       - "docs/**"
+      - ".github/agents/**"
       - ".github/workflows/agent-sweep.yml"
       - ".github/workflows/legacy-code-scan.yml"
   schedule:
@@ -50,6 +52,9 @@ jobs:
         uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
         with:
           python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Validate supported agent helper specs
+        run: python3 scripts/summon_agent.py --list
 
       - name: Block known legacy files, imports, and scheduled agent sweeps
         run: python3 scripts/check_legacy_dead_code.py
