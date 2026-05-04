@@ -73,7 +73,11 @@ jobs:
           node-version: "20"
 
       - name: Install Railway CLI
-        run: npm install -g @railway/cli
+        env:
+          RAILWAY_CLI_VERSION: 4.44.0
+        run: |
+          npm install -g "@railway/cli@${RAILWAY_CLI_VERSION}"
+          railway --version
 
       - name: Validate Railway deployment secrets
         id: validate_railway

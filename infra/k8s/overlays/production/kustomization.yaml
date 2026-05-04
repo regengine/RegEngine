@@ -4,14 +4,61 @@ kind: Kustomization
 namespace: regengine-prod
 
 resources:
-  - ../../base/namespace.yaml
-  - ../../base/compliance/deployment.yaml
-  - ../../base/admin/deployment.yaml
-  - ../../base/ingestion/deployment.yaml
-  - ../../base/scheduler/deployment.yaml
-  - ../../base/graph/deployment.yaml
-  - ../../base/nlp/deployment.yaml
-  - ../../base/ingress.yaml
+  - namespace.yaml
+  - ../../base
+
+generatorOptions:
+  disableNameSuffixHash: true
+  labels:
+    app.kubernetes.io/part-of: regengine
+    app.kubernetes.io/managed-by: kustomize
+
+configMapGenerator:
+  - name: compliance-config
+    literals:
+      - REGENGINE_ENV=production
+      - ENVIRONMENT=production
+      - PORT=8000
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
+  - name: ingestion-config
+    literals:
+      - REGENGINE_ENV=production
+      - ENVIRONMENT=production
+      - PORT=8000
+      - REDIS_URL=redis://redis:6379/0
+      - KAFKA_BOOTSTRAP_SERVERS=redpanda:9092
+      - NEO4J_URI=bolt+s://neo4j:7687
+      - NEO4J_USER=neo4j
+      - ENABLE_NEO4J_SYNC=false
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
+  - name: graph-config
+    literals:
+      - REGENGINE_ENV=production
+      - ENVIRONMENT=production
+      - PORT=8200
+      - REDIS_URL=redis://redis:6379/2
+      - KAFKA_BOOTSTRAP_SERVERS=redpanda:9092
+      - KAFKA_TOPIC_NLP=nlp.extracted
+      - KAFKA_TOPIC_DLQ=fsma.events.dlq
+      - KAFKA_CONSUMER_GROUP_ID=fsma-graph-service
+      - NEO4J_URI=bolt+s://neo4j:7687
+      - NEO4J_USER=neo4j
+      - NEO4J_ENCRYPTED=true
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
+  - name: nlp-config
+    literals:
+      - REGENGINE_ENV=production
+      - ENVIRONMENT=production
+      - PORT=8100
+      - EVENT_BACKBONE=kafka
+      - KAFKA_BOOTSTRAP_SERVERS=redpanda:9092
+      - LLM_MODEL=gpt-4o-mini
+      - LLM_TIMEOUT_S=45
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
+
+# Production Secrets are provisioned outside this overlay by the cluster
+# secret manager. Do not generate placeholder Secret objects here; applying a
+# rendered placeholder would roll workloads with invalid credentials.
 
 # IMAGE_TAG is set by CI/CD (e.g. the git SHA or semver tag).
 # All base deployments use $(IMAGE_TAG) as a placeholder; kustomize
@@ -36,11 +83,16 @@ images:
     newName: ghcr.io/regengine/nlp
     newTag: v1.1.0
 
-patchesStrategicMerge:
-  - |-
-    apiVersion: apps/v1
-    kind: Deployment
-    metadata:
+patches:
+  - target:
+      group: apps
+      version: v1
+      kind: Deployment
       name: compliance-service
-    spec:
-      replicas: 5
+    patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: compliance-service
+      spec:
+        replicas: 5

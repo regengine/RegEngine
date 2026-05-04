@@ -1,0 +1,18 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - compliance/deployment.yaml
+  - compliance/networkpolicy.yaml
+  - admin/deployment.yaml
+  - admin/networkpolicy.yaml
+  - ingestion/deployment.yaml
+  - ingestion/networkpolicy.yaml
+  - scheduler/deployment.yaml
+  - scheduler/networkpolicy.yaml
+  - graph/deployment.yaml
+  - graph/networkpolicy.yaml
+  - nlp/deployment.yaml
+  - nlp/networkpolicy.yaml
+  - monitoring/alertmanager.yaml
+  - ingress.yaml

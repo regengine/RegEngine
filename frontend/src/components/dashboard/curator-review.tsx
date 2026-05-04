@@ -1,36 +1,17 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Spinner } from '@/components/ui/spinner';
 import { useReviewItems, useApproveReviewItem, useRejectReviewItem } from '@/hooks/use-review';
 import { useAuth } from '@/lib/auth-context';
-import { useTenant } from '@/lib/tenant-context';
-
-/* 
-const API_URL = '/api/review/items'; 
-*/
 
 type DecisionAction = 'approve' | 'reject';
 
-type ReviewItem = {
-  id: string;
-  doc_hash: string;
-  confidence_score: number;
-  created_at: string;
-  updated_at: string;
-  status: string;
-  tenant_id: string;
-  source_text: string;
-  extracted_data: Record<string, unknown>;
-};
-
-
 export function CuratorReview() {
   const { apiKey } = useAuth();
-  const { tenantId } = useTenant();
   const [processing, setProcessing] = useState<string | null>(null);
 
   const { data: items, isLoading, error } = useReviewItems(apiKey || '');
@@ -105,8 +86,10 @@ export function CuratorReview() {
           </CardHeader>
           <CardContent className="grid md:grid-cols-2 gap-4">
             <div className="bg-slate-100 p-3 rounded text-sm whitespace-pre-wrap dark:bg-slate-900/60 max-h-60 overflow-y-auto">
-              <div className="font-semibold text-xs text-muted-foreground mb-1 uppercase">Source Text</div>
-              {item.source_text}
+              <div className="font-semibold text-xs text-muted-foreground mb-1 uppercase">
+                Source Preview
+              </div>
+              {item.source_text || 'No source preview available.'}
             </div>
             <div className="space-y-3">
               <div className="font-semibold text-xs text-muted-foreground mb-1 uppercase">Extraction</div>

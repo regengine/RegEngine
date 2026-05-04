@@ -143,7 +143,7 @@ def fetch_recall_events(db_session, where_clause: str, params: dict) -> list:
             LEFT JOIN fsma.hash_chain h ON h.event_hash = e.sha256_hash AND h.tenant_id = e.tenant_id
             WHERE {where_clause}
             ORDER BY e.event_timestamp ASC
-            LIMIT 10000
+            LIMIT 10001
         """),
         params,
     ).fetchall()
@@ -382,7 +382,7 @@ def fetch_v2_events(db_session, where_clause: str, params: dict) -> list:
                 e.source, e.sha256_hash, e.chain_hash, e.kdes, e.provenance,
                 e.ingested_at
             ORDER BY e.event_timestamp ASC
-            LIMIT 10000
+            LIMIT 10001
         """),
         params,
     ).fetchall()

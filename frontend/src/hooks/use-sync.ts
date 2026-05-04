@@ -1,7 +1,14 @@
 import { fetchWithCsrf } from '@/lib/fetch-with-csrf';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { markScanSynced, markPhotoSynced, getPendingUploads, cleanupOfflineRecords } from '@/lib/db';
+import {
+    markScanSynced,
+    markPhotoSynced,
+    markScanSyncFailed,
+    markPhotoSyncFailed,
+    getPendingUploads,
+    cleanupOfflineRecords,
+} from '@/lib/db';
 import { useIngestFile } from '@/hooks/use-api';
 import { useAuth } from '@/lib/auth-context';
 import { useToast } from '@/components/ui/use-toast';
@@ -16,11 +23,26 @@ export function useSync() {
 
     const { mutateAsync: ingestFile } = useIngestFile();
 
+    const syncEndpoint = useCallback(async (payload: string) => {
+        const response = await fetchWithCsrf(`${getServiceURL('ingestion')}/api/v1/webhooks/ingest`, {
+            method: 'POST',
+            credentials: 'include', // Send HTTP-only cookies
+            headers: {
+                'Content-Type': 'application/json',
+                ...(tenantId ? { 'X-Tenant-ID': tenantId } : {}),
+            },
+            body: payload,
+        });
+        if (!response.ok) throw new Error(`Ingest failed: ${response.status}`);
+    }, [tenantId]);
+
     const sync = useCallback(async () => {
         if (!apiKey || isSyncingRef.current || !navigator.onLine) return;
 
         isSyncingRef.current = true;
         setIsSyncing(true);
+        let failedUploads = 0;
+        let successfulUploads = 0;
         try {
             try {
                 await cleanupOfflineRecords();
@@ -45,16 +67,7 @@ export function useSync() {
                 try {
                     if (scan.payload) {
                         // Structured payload saved by FieldCaptureClient — replay directly
-                        const response = await fetchWithCsrf(`${getServiceURL('ingestion')}/api/v1/webhooks/ingest`, {
-                            method: 'POST',
-                            credentials: 'include', // Send HTTP-only cookies
-                            headers: {
-                                'Content-Type': 'application/json',
-                                ...(tenantId ? { 'X-Tenant-ID': tenantId } : {}),
-                            },
-                            body: scan.payload,
-                        });
-                        if (!response.ok) throw new Error(`Ingest failed: ${response.status}`);
+                        await syncEndpoint(scan.payload);
                     } else {
                         // Legacy record with only raw barcode string — build minimal event
                         const payload = {
@@ -71,19 +84,17 @@ export function useSync() {
                                 kdes: { raw_scan: scan.content },
                             }],
                         };
-                        const response = await fetchWithCsrf(`${getServiceURL('ingestion')}/api/v1/webhooks/ingest`, {
-                            method: 'POST',
-                            credentials: 'include', // Send HTTP-only cookies
-                            headers: {
-                                'Content-Type': 'application/json',
-                                ...(tenantId ? { 'X-Tenant-ID': tenantId } : {}),
-                            },
-                            body: JSON.stringify(payload),
-                        });
-                        if (!response.ok) throw new Error(`Ingest failed: ${response.status}`);
+                        await syncEndpoint(JSON.stringify(payload));
                     }
-                    if (scan.id) await markScanSynced(scan.id);
+                    if (typeof scan.id === 'number') {
+                        await markScanSynced(scan.id);
+                    }
+                    successfulUploads += 1;
                 } catch (e) {
+                    failedUploads += 1;
+                    if (typeof scan.id === 'number') {
+                        await markScanSyncFailed(scan.id, e);
+                    }
                     if (process.env.NODE_ENV !== 'production') {
                         console.error("Failed to sync scan", {
                             id: scan.id,
@@ -103,8 +114,15 @@ export function useSync() {
                         file,
                         sourceSystem: "mobile_capture_pwa_offline"
                     });
-                    if (photo.id) await markPhotoSynced(photo.id);
+                    if (typeof photo.id === 'number') {
+                        await markPhotoSynced(photo.id);
+                    }
+                    successfulUploads += 1;
                 } catch (e) {
+                    failedUploads += 1;
+                    if (typeof photo.id === 'number') {
+                        await markPhotoSyncFailed(photo.id, e);
+                    }
                     if (process.env.NODE_ENV !== 'production') {
                         console.error("Failed to sync photo", {
                             id: photo.id,
@@ -114,11 +132,19 @@ export function useSync() {
                 }
             }
 
-            toast({
-                title: "Sync Complete",
-                description: "All offline data has been uploaded.",
-                variant: "default"
-            });
+            if (failedUploads > 0) {
+                toast({
+                    title: "Sync Partially Complete",
+                    description: `${successfulUploads} uploaded. ${failedUploads} item${failedUploads === 1 ? '' : 's'} remain queued for retry.`,
+                    variant: "destructive",
+                });
+            } else {
+                toast({
+                    title: "Sync Complete",
+                    description: "All offline data has been uploaded.",
+                    variant: "default"
+                });
+            }
 
             // Cleanup records created during this sync attempt.
             try {
@@ -133,7 +159,7 @@ export function useSync() {
             isSyncingRef.current = false;
             setIsSyncing(false);
         }
-    }, [apiKey, ingestFile, tenantId, toast]);
+    }, [apiKey, ingestFile, syncEndpoint, tenantId, toast]);
 
     useEffect(() => {
         // Initial check
@@ -159,6 +185,21 @@ export function useSync() {
         return () => {
             window.removeEventListener('online', handleOnline);
             window.removeEventListener('offline', handleOffline);
+        };
+    }, [sync]);
+
+    useEffect(() => {
+        if (!('serviceWorker' in navigator)) return;
+
+        const handleServiceWorkerMessage = (event: MessageEvent) => {
+            if (event.data?.type === 'REGENGINE_SYNC_OFFLINE_QUEUE') {
+                sync();
+            }
+        };
+
+        navigator.serviceWorker.addEventListener('message', handleServiceWorkerMessage);
+        return () => {
+            navigator.serviceWorker.removeEventListener('message', handleServiceWorkerMessage);
         };
     }, [sync]);
 

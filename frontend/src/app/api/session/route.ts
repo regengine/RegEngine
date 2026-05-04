@@ -13,7 +13,9 @@
  * Cookie settings: httpOnly, secure (prod), sameSite=lax, path=/, maxAge=7d
  */
 import { NextRequest, NextResponse } from 'next/server';
+import { jwtVerify } from 'jose';
 import { generateCsrfToken, signCsrfToken, CSRF_COOKIE, CSRF_SIG_COOKIE } from '@/lib/csrf';
+import { getVerificationKeys } from '@/lib/jwt-keys';
 
 const SEVEN_DAYS = 60 * 60 * 24 * 7;
 
@@ -30,6 +32,33 @@ export async function POST(request: NextRequest) {
         const body = await request.json();
         const { access_token, api_key, admin_key, tenant_id, user } = body;
 
+        let verifiedTenantId: string | null = null;
+        if (isUsableCredential(access_token)) {
+            const payload = await verifyRegEngineSessionToken(access_token);
+            if (!payload) {
+                return NextResponse.json({ error: 'Invalid session token' }, { status: 401 });
+            }
+            verifiedTenantId = extractJwtTenantId(payload);
+        } else if (isUsableCredential(tenant_id)) {
+            const existingAccessToken = request.cookies.get('re_access_token')?.value;
+            if (isUsableCredential(existingAccessToken)) {
+                const payload = await verifyRegEngineSessionToken(existingAccessToken);
+                if (!payload) {
+                    return NextResponse.json({ error: 'Invalid existing session token' }, { status: 401 });
+                }
+                verifiedTenantId = extractJwtTenantId(payload);
+            }
+        }
+
+        if (verifiedTenantId && isUsableCredential(tenant_id) && tenant_id !== verifiedTenantId) {
+            return NextResponse.json(
+                { error: 'Tenant context does not match authenticated session' },
+                { status: 403 },
+            );
+        }
+
+        const resolvedTenantId = isUsableCredential(tenant_id) ? tenant_id : verifiedTenantId;
+
         const response = NextResponse.json({ ok: true });
 
         if (access_token) {
@@ -41,8 +70,8 @@ export async function POST(request: NextRequest) {
         if (admin_key) {
             response.cookies.set('re_admin_key', admin_key, COOKIE_OPTIONS);
         }
-        if (tenant_id) {
-            response.cookies.set('re_tenant_id', tenant_id, {
+        if (resolvedTenantId) {
+            response.cookies.set('re_tenant_id', resolvedTenantId, {
                 ...COOKIE_OPTIONS,
                 httpOnly: false, // tenant_id is not sensitive — UI reads it
             });
@@ -69,6 +98,44 @@ export async function POST(request: NextRequest) {
     } catch {
         return NextResponse.json({ error: 'Invalid request' }, { status: 400 });
     }
+}
+
+async function verifyRegEngineSessionToken(token: string): Promise<Record<string, unknown> | null> {
+    const keys = getVerificationKeys();
+    if (keys.length === 0) return null;
+
+    for (const key of keys) {
+        try {
+            const { payload } = await jwtVerify(token, key.secret, {
+                algorithms: ['HS256'],
+            });
+            if (isRegEngineSessionPayload(payload as Record<string, unknown>)) {
+                return payload as Record<string, unknown>;
+            }
+            return null;
+        } catch {
+            // Try the next configured key during rotation.
+        }
+    }
+    return null;
+}
+
+function extractJwtTenantId(payload: Record<string, unknown>): string | null {
+    const value = payload.tenant_id ?? payload.tid;
+    return typeof value === 'string' && value.length > 0 ? value : null;
+}
+
+function isUsableCredential(value: unknown): value is string {
+    return typeof value === 'string' && value.trim().length > 0 && value !== 'cookie-managed';
+}
+
+function isRegEngineSessionPayload(payload: Record<string, unknown>): boolean {
+    const audience = payload.aud;
+    if (typeof audience === 'string' && audience !== 'regengine-api') return false;
+    if (Array.isArray(audience) && !audience.includes('regengine-api')) return false;
+    const issuer = payload.iss;
+    if (typeof issuer === 'string' && issuer !== 'regengine-admin') return false;
+    return true;
 }
 
 export async function GET(request: NextRequest) {

@@ -4,9 +4,9 @@ This module provides endpoints for the human-in-the-loop review workflow,
 allowing curators to approve or reject low-confidence NLP extractions.
 
 These endpoints delegate to the hallucination tracker which provides
-database-backed persistence of review items. The v1/admin/review/flagged-extractions
-endpoints in routes.py provide the full implementation -- these endpoints serve
-as a convenience alias for the frontend review UI.
+database-backed persistence of review items. The
+``/v1/admin/review/flagged-extractions`` endpoint family is retained as a
+compatibility alias for the frontend review UI.
 
 Security hardening (issues #1360 / #1361 / #1367 / #1369 / #1389):
   - approve/reject call ``tracker.resolve_hallucination`` with the
@@ -113,6 +113,7 @@ def _get_tracker():
 
 
 @router.get("/review/hallucinations", response_model=ReviewItemsResponse)
+@router.get("/review/flagged-extractions", response_model=ReviewItemsResponse)
 @limiter.limit("30/minute")
 async def get_review_queue(
     request: Request,
@@ -214,6 +215,7 @@ def _extract_actor_identity(request: Request) -> tuple[Optional[str], Optional[s
 
 
 @router.post("/review/{review_id}/approve", response_model=ReviewActionResponse)
+@router.post("/review/flagged-extractions/{review_id}/approve", response_model=ReviewActionResponse)
 async def approve_review_item(
     review_id: str,
     request: Request,
@@ -250,6 +252,7 @@ async def approve_review_item(
 
 
 @router.post("/review/{review_id}/reject", response_model=ReviewActionResponse)
+@router.post("/review/flagged-extractions/{review_id}/reject", response_model=ReviewActionResponse)
 async def reject_review_item(
     review_id: str,
     request: Request,

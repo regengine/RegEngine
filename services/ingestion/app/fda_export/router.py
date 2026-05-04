@@ -60,6 +60,7 @@ from .formatters import (
     make_timestamp,
     safe_filename_token,
 )
+from .coverage import _enforce_kde_coverage_gate
 from .merkle import get_merkle_root_handler, get_merkle_proof_handler
 from .queries import (
     AuditLogWriteError,
@@ -81,69 +82,6 @@ from .verification import verify_export_handler
 logger = logging.getLogger("fda-export")
 
 router = APIRouter(prefix="/api/v1/fda", tags=["FDA Export"])
-
-
-# FSMA-204 expects "adequate and reliable" traceability. We treat a
-# required-KDE coverage ratio below this threshold as a gate: exports
-# require an explicit ``allow_incomplete=true`` acknowledgement, and
-# every bypass is logged for audit review (issue #1222).
-_KDE_COVERAGE_THRESHOLD = 0.80
-
-
-def _enforce_kde_coverage_gate(
-    *,
-    completeness_summary: dict,
-    allow_incomplete: bool,
-    identity: dict,
-    tenant_id: str,
-    export_scope: str,
-) -> None:
-    """Raise HTTPException(409) when KDE coverage is below threshold
-    and the caller has not acknowledged via ``allow_incomplete=true``.
-
-    Bypasses are emitted at WARNING so they surface in ops dashboards
-    (issue #1222).
-    """
-    kde_coverage = completeness_summary["required_kde_coverage_ratio"]
-    if kde_coverage >= _KDE_COVERAGE_THRESHOLD:
-        return
-    if not allow_incomplete:
-        raise HTTPException(
-            status_code=409,
-            detail={
-                "error": "kde_coverage_below_threshold",
-                "kde_coverage_ratio": kde_coverage,
-                "threshold": _KDE_COVERAGE_THRESHOLD,
-                "events_with_missing_required_fields": completeness_summary[
-                    "events_with_missing_required_fields"
-                ],
-                "missing_required_by_field": completeness_summary.get(
-                    "missing_required_by_field", {}
-                ),
-                "message": (
-                    f"Required-KDE coverage is {kde_coverage:.2%}, below "
-                    f"the {_KDE_COVERAGE_THRESHOLD:.0%} FSMA-204 threshold. "
-                    "This export would not meet 'adequate and reliable' "
-                    "traceability. Fix missing KDEs, or re-submit with "
-                    "allow_incomplete=true if the gap is acceptable for "
-                    "this recall scope."
-                ),
-            },
-        )
-    logger.warning(
-        "fda_export_coverage_gate_bypass",
-        extra={
-            "tenant_id": tenant_id,
-            "user_id": identity["user_id"],
-            "request_id": identity["request_id"],
-            "export_scope": export_scope,
-            "kde_coverage_ratio": kde_coverage,
-            "threshold": _KDE_COVERAGE_THRESHOLD,
-            "events_with_missing_required_fields": completeness_summary[
-                "events_with_missing_required_fields"
-            ],
-        },
-    )
 
 
 # ---------------------------------------------------------------------------
@@ -903,6 +841,13 @@ async def export_recall_filtered(
         default="csv",
         description="Export format: package (zip bundle) or csv",
     ),
+    allow_incomplete: bool = Query(
+        default=False,
+        description=(
+            "Acknowledge KDE coverage <80% and proceed. Every bypass is "
+            "recorded in the audit trail."
+        ),
+    ),
     include_pii: bool = Query(
         default=False,
         description=(
@@ -949,6 +894,7 @@ async def export_recall_filtered(
         request_id=identity["request_id"],
         user_agent=identity["user_agent"],
         source_ip=identity["source_ip"],
+        allow_incomplete=allow_incomplete,
         include_pii=include_pii,
     )
 
@@ -1010,6 +956,13 @@ async def export_fda_spreadsheet_v2(
         default="csv",
         description="Export format: package (zip bundle) or csv",
     ),
+    allow_incomplete: bool = Query(
+        default=False,
+        description=(
+            "Acknowledge KDE coverage <80% and proceed. Every bypass is "
+            "recorded in the audit trail."
+        ),
+    ),
     include_pii: bool = Query(
         default=False,
         description=(
@@ -1030,6 +983,18 @@ async def export_fda_spreadsheet_v2(
                 "with a resolvable key_id."
             ),
         )
+
+    exact_tlc_filter = bool(tlc and tlc.strip() and "%" not in tlc)
+    if not exact_tlc_filter:
+        try:
+            validate_export_window(start_date, end_date)
+        except ExportWindowError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+    elif start_date or end_date:
+        try:
+            validate_export_window(start_date, end_date)
+        except ExportWindowError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     # Authorize PII access (issue #1219).
     _authorize_pii_access(
@@ -1058,6 +1023,14 @@ async def export_fda_spreadsheet_v2(
 
         # ----- Query from canonical model with rule evaluations -----
         rows = fetch_v2_events(db_session, where_clause, params)
+        if len(rows) > 10000:
+            raise HTTPException(
+                status_code=413,
+                detail=(
+                    "V2 export exceeds the 10000-record synchronous limit. "
+                    "Narrow the date range or request a paginated/offline export."
+                ),
+            )
 
         if not rows:
             detail_parts = [f"tenant_id='{tenant_id}'"]
@@ -1081,6 +1054,13 @@ async def export_fda_spreadsheet_v2(
         csv_content, export_hash = generate_csv_v2_and_hash(events, include_pii=include_pii)
         chain_verification = persistence.verify_chain(tenant_id=tenant_id)
         completeness_summary = _build_completeness_summary(events)
+        _enforce_kde_coverage_gate(
+            completeness_summary=completeness_summary,
+            allow_incomplete=allow_incomplete,
+            identity=identity,
+            tenant_id=tenant_id,
+            export_scope=f"v2:{tlc or 'all'}",
+        )
 
         # ----- Compute compliance summary stats -----
         total_events = len(events)

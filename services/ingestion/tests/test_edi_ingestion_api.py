@@ -261,6 +261,7 @@ def _next_isa13() -> bytes:
 def _build_856(
     ship_date: bytes = b"20260310",
     ship_time: bytes = b"1200",
+    unit: bytes = b"CA",
     isa13: bytes | None = None,
 ) -> bytes:
     """Assemble a minimal valid 856 with overridable BSN date/time."""
@@ -276,13 +277,45 @@ def _build_856(
         b"N1*SF*Valley Fresh Farms*92*0614141000005~"
         b"N1*ST*Metro Distribution Center*92*0614141000006~"
         b"LIN**SK*ROMAINE-12CT~"
-        b"SN1**200*CA~"
+        b"SN1**200*" + unit + b"~"
         b"REF*BM*BOL-9001~"
         b"TD5**2*ColdExpress~"
         b"SE*11*0001~"
         b"GE*1*1~"
         b"IEA*1*" + interchange_control + b"~"
     )
+
+
+def test_legacy_856_rejects_invalid_unit_before_units_placeholder_persistence(
+    client: TestClient, captured_payload: dict
+) -> None:
+    """#2072: invalid nonblank SN1 units must not normalize to ``units``."""
+    from app.edi_ingestion.rejection_log import reset_edi_rejections
+
+    reset_edi_rejections()
+    captured_payload.clear()
+
+    response = client.post(
+        "/api/v1/ingest/edi",
+        data={
+            "traceability_lot_code": "LOT-2026-EDI-BAD-UOM",
+            "tenant_id": TEST_TENANT_ID,
+        },
+        files={
+            "file": (
+                "bad-uom.edi",
+                _build_856(unit=b"ZZ", isa13=_next_isa13()),
+                "application/edi-x12",
+            )
+        },
+        headers={"X-Partner-ID": "WALMART"},
+    )
+
+    assert response.status_code == 422
+    detail = response.json()["detail"]
+    assert detail["error"] == "edi_856_missing_required_kdes"
+    assert "unit_of_measure" in detail["missing_kdes"]
+    assert "payload" not in captured_payload
 
 
 def test_document_ingest_fsma_strict_rejects_bad_tlc(

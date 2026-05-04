@@ -26,6 +26,7 @@ router's reference is the one replaced.
 from __future__ import annotations
 
 import hashlib
+import importlib
 import sys
 import types
 from pathlib import Path
@@ -43,9 +44,10 @@ pytest.importorskip("fastapi")
 from app.authz import IngestionPrincipal, get_ingestion_principal
 # Import the router.py module directly so monkeypatch can reach the
 # helper-function bindings (``build_v2_where_clause``, ``fetch_v2_events``
-# …). ``from app.fda_export import router`` returns the APIRouter object
-# because __init__ re-exports it — use the submodule path instead.
-import app.fda_export.router as router_module
+# ...). ``from app.fda_export import router`` returns the APIRouter object
+# because __init__ re-exports it; importlib avoids that package attribute.
+router_module = importlib.import_module("app.fda_export.router")
+recall_module = importlib.import_module("app.fda_export.recall")
 from app.fda_export.router import router as fda_router
 from app.fda_export_service import _generate_csv
 from app.subscription_gate import require_active_subscription
@@ -832,6 +834,69 @@ class TestExportRecallFiltered:
         assert resp.status_code == 401
         assert "resolvable key_id" in resp.json()["detail"]
 
+    def test_low_kde_coverage_without_ack_returns_409(self, monkeypatch):
+        app = _build_app_with_principal(scopes=["fda.export"])
+        _install_fake_dependencies(
+            monkeypatch,
+            session_factory=lambda: _FakeSession(),
+            persistence_cls=_FakePersistence,
+        )
+        monkeypatch.setattr(recall_module, "fetch_recall_events", lambda *a, **kw: [object()])
+        monkeypatch.setattr(recall_module, "rows_to_event_dicts", lambda _rows: [_SAMPLE_EVENT_1])
+
+        with TestClient(app) as client:
+            resp = client.get(
+                "/api/v1/fda/export/recall",
+                params={"tenant_id": "tenant-a", "product": "Romaine"},
+            )
+
+        assert resp.status_code == 409
+        assert resp.json()["detail"]["error"] == "kde_coverage_below_threshold"
+
+    def test_low_kde_coverage_acknowledged_succeeds(self, monkeypatch):
+        app = _build_app_with_principal(scopes=["fda.export"])
+        _install_fake_dependencies(
+            monkeypatch,
+            session_factory=lambda: _FakeSession(),
+            persistence_cls=_FakePersistence,
+        )
+        monkeypatch.setattr(recall_module, "fetch_recall_events", lambda *a, **kw: [object()])
+        monkeypatch.setattr(recall_module, "rows_to_event_dicts", lambda _rows: [_SAMPLE_EVENT_1])
+
+        with TestClient(app) as client:
+            resp = client.get(
+                "/api/v1/fda/export/recall",
+                params={
+                    "tenant_id": "tenant-a",
+                    "product": "Romaine",
+                    "allow_incomplete": "true",
+                },
+            )
+
+        assert resp.status_code == 200
+        assert resp.headers["x-kde-coverage"] != "1.0"
+
+    def test_over_limit_recall_export_returns_413(self, monkeypatch):
+        app = _build_app_with_principal(scopes=["fda.export"])
+        _install_fake_dependencies(
+            monkeypatch,
+            session_factory=lambda: _FakeSession(),
+            persistence_cls=_FakePersistence,
+        )
+        monkeypatch.setattr(
+            recall_module,
+            "fetch_recall_events",
+            lambda *a, **kw: [object()] * 10001,
+        )
+
+        with TestClient(app) as client:
+            resp = client.get(
+                "/api/v1/fda/export/recall",
+                params={"tenant_id": "tenant-a", "product": "Romaine"},
+            )
+
+        assert resp.status_code == 413
+
 
 # ---------------------------------------------------------------------------
 # /export/v2 — lines 996-1197, the big untested block
@@ -940,7 +1005,7 @@ class TestExportV2:
                     "tlc": "TLC-NONE",
                     "event_type": "shipping",
                     "start_date": "2026-01-01",
-                    "end_date": "2026-12-31",
+                    "end_date": "2026-01-31",
                 },
             )
         assert resp.status_code == 404
@@ -948,7 +1013,7 @@ class TestExportV2:
         assert "tlc='TLC-NONE'" in detail
         assert "event_type='shipping'" in detail
         assert "from=2026-01-01" in detail
-        assert "to=2026-12-31" in detail
+        assert "to=2026-01-31" in detail
 
     def test_missing_key_id_returns_401(self, monkeypatch):
         self._install_v2_helpers(monkeypatch)
@@ -961,7 +1026,11 @@ class TestExportV2:
         with TestClient(app) as client:
             resp = client.get(
                 "/api/v1/fda/export/v2",
-                params={"tenant_id": "tenant-a"},
+                params={
+                    "tenant_id": "tenant-a",
+                    "start_date": "2026-01-01",
+                    "end_date": "2026-01-31",
+                },
             )
         assert resp.status_code == 401
 
@@ -976,7 +1045,11 @@ class TestExportV2:
         with TestClient(app) as client:
             resp = client.get(
                 "/api/v1/fda/export/v2",
-                params={"tenant_id": "tenant-a", "include_pii": "true"},
+                params={
+                    "tenant_id": "tenant-a",
+                    "tlc": "TLC-2026-003",
+                    "include_pii": "true",
+                },
             )
         assert resp.status_code == 403
 
@@ -994,7 +1067,11 @@ class TestExportV2:
         with TestClient(app) as client:
             resp = client.get(
                 "/api/v1/fda/export/v2",
-                params={"tenant_id": "tenant-a"},
+                params={
+                    "tenant_id": "tenant-a",
+                    "start_date": "2026-01-01",
+                    "end_date": "2026-01-31",
+                },
             )
         assert resp.status_code == 503
         assert "audit-log write failed" in resp.json()["detail"]
@@ -1020,7 +1097,11 @@ class TestExportV2:
         with TestClient(app) as client:
             resp = client.get(
                 "/api/v1/fda/export/v2",
-                params={"tenant_id": "tenant-a"},
+                params={
+                    "tenant_id": "tenant-a",
+                    "start_date": "2026-01-01",
+                    "end_date": "2026-01-31",
+                },
             )
         assert resp.status_code == 500
         assert "V2 export failed" in resp.json()["detail"]
@@ -1060,11 +1141,84 @@ class TestExportV2:
         with TestClient(app) as client:
             resp = client.get(
                 "/api/v1/fda/export/v2",
-                params={"tenant_id": "tenant-a"},
+                params={
+                    "tenant_id": "tenant-a",
+                    "start_date": "2026-01-01",
+                    "end_date": "2026-01-31",
+                },
             )
         assert resp.status_code == 200
         # 1 pass / 3 total = 0.3333
         assert float(resp.headers["x-compliance-rate"]) == pytest.approx(0.3333, abs=1e-3)
+
+    def test_unbounded_full_tenant_export_returns_400(self, monkeypatch):
+        self._install_v2_helpers(monkeypatch)
+        app = _build_app_with_principal(scopes=["fda.export"])
+        _install_fake_dependencies(
+            monkeypatch,
+            session_factory=lambda: _FakeSession(),
+            persistence_cls=_FakePersistence,
+        )
+        with TestClient(app) as client:
+            resp = client.get(
+                "/api/v1/fda/export/v2",
+                params={"tenant_id": "tenant-a"},
+            )
+        assert resp.status_code == 400
+        assert "start_date is required" in resp.json()["detail"]
+
+    def test_wildcard_tlc_without_dates_returns_400(self, monkeypatch):
+        self._install_v2_helpers(monkeypatch)
+        app = _build_app_with_principal(scopes=["fda.export"])
+        _install_fake_dependencies(
+            monkeypatch,
+            session_factory=lambda: _FakeSession(),
+            persistence_cls=_FakePersistence,
+        )
+        with TestClient(app) as client:
+            resp = client.get(
+                "/api/v1/fda/export/v2",
+                params={"tenant_id": "tenant-a", "tlc": "%"},
+            )
+        assert resp.status_code == 400
+        assert "start_date is required" in resp.json()["detail"]
+
+    def test_low_kde_coverage_without_ack_returns_409(self, monkeypatch):
+        incomplete = [{**_SAMPLE_EVENT_1, "provenance": {}, "rule_results": []}]
+        self._install_v2_helpers(monkeypatch, events=incomplete)
+        app = _build_app_with_principal(scopes=["fda.export"])
+        _install_fake_dependencies(
+            monkeypatch,
+            session_factory=lambda: _FakeSession(),
+            persistence_cls=_FakePersistence,
+        )
+        with TestClient(app) as client:
+            resp = client.get(
+                "/api/v1/fda/export/v2",
+                params={"tenant_id": "tenant-a", "tlc": "TLC-2026-003"},
+            )
+        assert resp.status_code == 409
+        assert resp.json()["detail"]["error"] == "kde_coverage_below_threshold"
+
+    def test_over_limit_v2_export_returns_413(self, monkeypatch):
+        self._install_v2_helpers(monkeypatch, events=self._make_v2_events())
+        monkeypatch.setattr(router_module, "fetch_v2_events", lambda *a, **kw: ["row"] * 10001)
+        app = _build_app_with_principal(scopes=["fda.export"])
+        _install_fake_dependencies(
+            monkeypatch,
+            session_factory=lambda: _FakeSession(),
+            persistence_cls=_FakePersistence,
+        )
+        with TestClient(app) as client:
+            resp = client.get(
+                "/api/v1/fda/export/v2",
+                params={
+                    "tenant_id": "tenant-a",
+                    "start_date": "2026-01-01",
+                    "end_date": "2026-01-31",
+                },
+            )
+        assert resp.status_code == 413
 
 
 # ---------------------------------------------------------------------------
