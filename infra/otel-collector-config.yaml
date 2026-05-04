@@ -32,6 +32,12 @@ exporters:
     verbosity: basic
   debug/dlq:
     verbosity: basic
+  otlphttp/durable_logs:
+    endpoint: ${env:OTEL_DURABLE_LOGS_ENDPOINT}
+    compression: gzip
+    timeout: 10s
+    headers:
+      Authorization: ${env:OTEL_DURABLE_LOGS_AUTH_HEADER}
 
 service:
   pipelines:
@@ -46,4 +52,4 @@ service:
     logs:
       receivers: [otlp]
       processors: [memory_limiter, filter/dlq, batch]
-      exporters: [debug, debug/dlq]
+      exporters: [otlphttp/durable_logs, debug/dlq]
