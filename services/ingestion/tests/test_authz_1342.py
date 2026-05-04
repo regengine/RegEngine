@@ -16,6 +16,7 @@ Issue: #1342
 
 from __future__ import annotations
 
+import hashlib
 import time
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
@@ -502,6 +503,10 @@ class TestLookupScopedKeyFromDb:
         assert result.key_id == "k-id"
         assert result.tenant_id == "t-id"
         assert result.auth_mode == "scoped_key_db_fallback"
+        stmt, params = factory.last.execute_calls[0]
+        assert "key_hash = :key_hash" in str(stmt)
+        assert params == {"key_hash": hashlib.sha256(b"raw-key").hexdigest()}
+        assert "raw-key" not in str(stmt)
         assert factory.last.closed is True
 
     def test_no_row_returns_none(self, monkeypatch):

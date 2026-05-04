@@ -23,6 +23,7 @@ Tracks GitHub issue #1342.
 
 from __future__ import annotations
 
+import hashlib
 from unittest.mock import MagicMock
 
 import pytest
@@ -168,12 +169,13 @@ class TestApiKeyLookupHappyPath:
         )
         assert out == "tenant-xyz"
         assert db.closed is True
-        # The query was parameterized — the raw key goes in params, never
-        # interpolated into the SQL string (SQLi defense).
-        assert db.executed[0]["params"] == {"raw": "secret-key"}
+        # The query is parameterized and receives only the SHA-256 digest;
+        # the raw key is neither interpolated nor sent to the database.
+        assert db.executed[0]["params"] == {
+            "key_hash": hashlib.sha256(b"secret-key").hexdigest()
+        }
         sql = db.executed[0]["statement"]
         assert "api_keys" in sql
-        assert "sha256" in sql
         assert "secret-key" not in sql  # never in the SQL text
 
     def test_api_key_row_coerced_to_string(self, monkeypatch):

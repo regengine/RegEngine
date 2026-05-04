@@ -966,15 +966,12 @@ def _lookup_tenant_id_for_api_key(raw_api_key: str) -> Optional[str]:
         from shared.database import SessionLocal
         from sqlalchemy import text as _text
 
+        key_hash = hashlib.sha256(raw_api_key.encode("utf-8")).hexdigest()
         _db = SessionLocal()
         try:
             _row = _db.execute(
-                _text(
-                    "SELECT tenant_id FROM api_keys "
-                    "WHERE key_hash = encode(sha256(CAST(:raw AS bytea)), 'hex') "
-                    "LIMIT 1"
-                ),
-                {"raw": raw_api_key},
+                _text("SELECT tenant_id FROM api_keys WHERE key_hash = :key_hash LIMIT 1"),
+                {"key_hash": key_hash},
             ).fetchone()
             if _row and _row[0]:
                 return str(_row[0])
@@ -1213,7 +1210,7 @@ async def ingest_events(
                     # Canonical normalization + rule evaluation + exception creation.
                     # This is required evidence now: it runs synchronously in the
                     # request transaction so accepted legacy CTEs cannot diverge
-                    # from canonical rows or canonical hash-chain evidence.
+                    # from canonical rows or persisted rule-evaluation evidence.
                     _persist_required_canonical_and_eval(
                         db_session,
                         event,
