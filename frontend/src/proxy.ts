@@ -9,7 +9,7 @@ import {
     CSRF_PROTECTED_METHODS,
     isCsrfExempt,
 } from '@/lib/csrf';
-import { buildCsp, CSP_PROXY_MATCHER } from '@/lib/csp';
+import { buildCsp } from '@/lib/csp';
 import { isAuthenticatedAppRoute } from '@/lib/app-routes';
 
 // ---------------------------------------------------------------------------
@@ -544,5 +544,5 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-    matcher: [CSP_PROXY_MATCHER],
+    matcher: ['/((?!_next/static|_next/image|favicon.ico).*)'],
 };
