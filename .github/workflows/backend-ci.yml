@@ -150,7 +150,6 @@ jobs:
           # Per-service stubs are DEPRECATED and will be removed with
           # docker-compose (#1429).
           pip install --require-hashes -r requirements.lock
-          pip install pytest pytest-cov pytest-asyncio httpx
 
       - name: Run tests with coverage
         env:
@@ -414,11 +413,6 @@ jobs:
       - name: Install dependencies
         run: |
           pip install --require-hashes -r requirements.lock
-          # pytest-xdist is required for --dist=loadfile per-file worker
-          # isolation. Not in requirements.lock yet to avoid regenerating
-          # the whole lockfile in this PR; install ad-hoc matching the
-          # pattern used by the main ``test`` job.
-          pip install pytest pytest-xdist pytest-asyncio httpx
 
       - name: Run ingestion suite with per-file worker isolation
         env:

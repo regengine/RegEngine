@@ -16,10 +16,10 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from app.dependencies import get_current_user
-from app.database import get_session
-from app.audit import AuditLogger
-from app.sqlalchemy_models import (
+from .dependencies import get_current_user
+from .database import get_session
+from .audit import AuditLogger
+from .sqlalchemy_models import (
     AuditLogModel,
     MembershipModel,
     MFARecoveryCodeModel,

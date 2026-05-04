@@ -13,7 +13,7 @@ Based on test vectors from services/analytics/tests/test_drift_vectors.py
 """
 
 import numpy as np
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any, Optional, Tuple
 from scipy.stats import entropy
 from scipy.spatial.distance import jensenshannon
 from pydantic import BaseModel, Field
@@ -262,17 +262,10 @@ class DriftEngine:
         
         where the sum is over bins.
         """
-        # Create bins from reference data
-        _, bin_edges = np.histogram(reference_data, bins=self.num_bins)
-        
-        # Compute distributions
-        ref_counts, _ = np.histogram(reference_data, bins=bin_edges)
-        curr_counts, _ = np.histogram(current_data, bins=bin_edges)
-        
-        # Convert to percentages (add small epsilon to avoid division by zero)
-        epsilon = 1e-10
-        ref_percents = (ref_counts + epsilon) / (len(reference_data) + epsilon * self.num_bins)
-        curr_percents = (curr_counts + epsilon) / (len(current_data) + epsilon * self.num_bins)
+        ref_percents, curr_percents = self._distribution_probabilities(
+            reference_data,
+            current_data,
+        )
         
         # Compute PSI
         psi = np.sum((curr_percents - ref_percents) * np.log(curr_percents / ref_percents))
@@ -291,16 +284,10 @@ class DriftEngine:
         
         Measures how current distribution diverges from reference.
         """
-        # Create bins and compute distributions
-        _, bin_edges = np.histogram(reference_data, bins=self.num_bins)
-        
-        ref_counts, _ = np.histogram(reference_data, bins=bin_edges)
-        curr_counts, _ = np.histogram(current_data, bins=bin_edges)
-        
-        # Convert to probabilities
-        epsilon = 1e-10
-        ref_probs = (ref_counts + epsilon) / (len(reference_data) + epsilon * self.num_bins)
-        curr_probs = (curr_counts + epsilon) / (len(current_data) + epsilon * self.num_bins)
+        ref_probs, curr_probs = self._distribution_probabilities(
+            reference_data,
+            current_data,
+        )
         
         # Compute KL divergence using scipy
         kl_div = entropy(curr_probs, ref_probs)
@@ -320,21 +307,54 @@ class DriftEngine:
         
         Symmetric version of KL divergence, bounded [0, 1].
         """
-        # Create bins and compute distributions
-        _, bin_edges = np.histogram(reference_data, bins=self.num_bins)
-        
-        ref_counts, _ = np.histogram(reference_data, bins=bin_edges)
-        curr_counts, _ = np.histogram(current_data, bins=bin_edges)
-        
-        # Convert to probabilities
-        epsilon = 1e-10
-        ref_probs = (ref_counts + epsilon) / (len(reference_data) + epsilon * self.num_bins)
-        curr_probs = (curr_counts + epsilon) / (len(current_data) + epsilon * self.num_bins)
+        ref_probs, curr_probs = self._distribution_probabilities(
+            reference_data,
+            current_data,
+        )
         
         # Compute JS divergence using scipy
         js_div = jensenshannon(ref_probs, curr_probs)
         
         return float(js_div)
+
+    def _distribution_probabilities(
+        self,
+        reference_data: np.ndarray,
+        current_data: np.ndarray,
+    ) -> Tuple[np.ndarray, np.ndarray]:
+        """Build comparable histogram probabilities for reference and current samples."""
+        reference_data = np.asarray(reference_data, dtype=float)
+        current_data = np.asarray(current_data, dtype=float)
+        bin_edges = self._shared_bin_edges(reference_data, current_data)
+
+        ref_counts, _ = np.histogram(reference_data, bins=bin_edges)
+        curr_counts, _ = np.histogram(current_data, bins=bin_edges)
+
+        epsilon = 1e-6
+        ref_probs = (ref_counts + epsilon) / (ref_counts.sum() + epsilon * self.num_bins)
+        curr_probs = (curr_counts + epsilon) / (curr_counts.sum() + epsilon * self.num_bins)
+
+        return ref_probs, curr_probs
+
+    def _shared_bin_edges(
+        self,
+        reference_data: np.ndarray,
+        current_data: np.ndarray,
+    ) -> np.ndarray:
+        """Create bin edges that include both samples so metrics compare the same support."""
+        combined = np.concatenate([reference_data, current_data])
+        finite_values = combined[np.isfinite(combined)]
+        if finite_values.size == 0:
+            return np.linspace(0.0, 1.0, self.num_bins + 1)
+
+        min_value = float(np.min(finite_values))
+        max_value = float(np.max(finite_values))
+        if min_value == max_value:
+            padding = max(abs(min_value) * 0.001, 0.001)
+            min_value -= padding
+            max_value += padding
+
+        return np.linspace(min_value, max_value, self.num_bins + 1)
     
     def _determine_severity(self, psi: float) -> DriftSeverity:
         """

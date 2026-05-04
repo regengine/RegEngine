@@ -46,7 +46,7 @@ try:
 except ImportError:
     _HAS_PSYCOPG = False
 
-_SKIP_REASON = "testcontainers[postgresql] and psycopg required (pip install testcontainers[postgresql] psycopg[binary])"
+_SKIP_REASON = "testcontainers[postgres] and psycopg required (pip install testcontainers[postgres] psycopg[binary])"
 
 # ---------------------------------------------------------------------------
 # Paths

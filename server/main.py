@@ -58,6 +58,13 @@ from shared.observability import add_observability
 _is_prod = is_production()
 
 
+def _env_flag(name: str, default: bool = False) -> bool:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
 # ── Lifespan ─────────────────────────────────────────────────────
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -443,6 +450,9 @@ if _router_enabled("admin"):
     from services.admin.app.auth_routes import router as auth_router
     app.include_router(auth_router, tags=["Auth"])
 
+    from services.admin.app.password_reset_routes import router as password_reset_router
+    app.include_router(password_reset_router, tags=["Auth"])
+
     from services.admin.app.invite_routes import router as invite_router
     app.include_router(invite_router, prefix="/v1", tags=["Invites"])
 
@@ -461,6 +471,9 @@ if _router_enabled("admin"):
     from services.admin.app.supplier_funnel_routes import router as supplier_funnel_router
     app.include_router(supplier_funnel_router, prefix="/v1", tags=["Supplier Funnel"])
 
+    from services.admin.app.tenant_settings_routes import router as tenant_settings_router
+    app.include_router(tenant_settings_router, prefix="/v1", tags=["Tenant Settings"])
+
     from services.admin.app.bulk_upload.routes import router as bulk_upload_router
     app.include_router(bulk_upload_router, prefix="/v1/supplier/bulk-upload", tags=["Supplier Bulk Upload"])
 
@@ -469,6 +482,25 @@ if _router_enabled("admin"):
 
     from services.admin.app.audit_routes import router as admin_audit_router
     app.include_router(admin_audit_router, tags=["Admin Audit"])
+
+    from services.admin.app.tool_verification_routes import router as tool_verification_router
+    app.include_router(tool_verification_router, tags=["Tool Verification"])
+
+    from services.admin.app.erasure_routes import router as erasure_router
+    app.include_router(erasure_router, tags=["Account"])
+
+    from services.admin.app.data_export_routes import router as data_export_router
+    app.include_router(data_export_router, tags=["Account"])
+
+    if not _is_prod and _env_flag("ENABLE_PARTNER_GATEWAY_STUBS", default=True):
+        from services.admin.app.partner_gateway.router import router as partner_gateway_router
+        app.include_router(partner_gateway_router, tags=["Partner Gateway"])
+    else:
+        logger.info(
+            "partner_gateway_router_disabled",
+            production=_is_prod,
+            reason="stubbed_partner_gateway",
+        )
 
 
 # =====================================================================

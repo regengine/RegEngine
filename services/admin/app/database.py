@@ -39,11 +39,39 @@ from sqlalchemy.orm import Session, sessionmaker
 
 logger = structlog.get_logger("admin-db")
 
+_LOCAL_FALLBACK_ENVS = {"development", "dev", "test", "local"}
+_CLOUD_ENV_MARKERS = (
+    "RAILWAY_ENVIRONMENT",
+    "RAILWAY_SERVICE_NAME",
+    "RAILWAY_PROJECT_ID",
+    "VERCEL_ENV",
+    "VERCEL_URL",
+    "RENDER",
+    "FLY_APP_NAME",
+)
+
 
 def _sqlalchemy_url(url: str) -> str:
     if url.startswith("postgresql://"):
         return url.replace("postgresql://", "postgresql+psycopg://", 1)
     return url
+
+
+def _admin_fallback_environment() -> str:
+    """Return the explicitly configured environment for admin DB fallback checks."""
+    return (
+        os.getenv("REGENGINE_ENV", "").strip().lower()
+        or os.getenv("ENVIRONMENT", "").strip().lower()
+        or os.getenv("ENV", "").strip().lower()
+    )
+
+
+def _cloud_deployment_detected() -> bool:
+    return any(os.getenv(marker) for marker in _CLOUD_ENV_MARKERS)
+
+
+def _sqlite_fallback_allowed() -> bool:
+    return _admin_fallback_environment() in _LOCAL_FALLBACK_ENVS and not _cloud_deployment_detected()
 
 
 def _create_engine():
@@ -69,13 +97,33 @@ def _create_engine():
             connect_args={"prepare_threshold": None},
         )
 
-    fallback_url = os.getenv("ADMIN_FALLBACK_SQLITE", "sqlite:///./admin.db")
+    fallback_url = os.getenv("ADMIN_FALLBACK_SQLITE")
+    if not fallback_url or not _sqlite_fallback_allowed():
+        environment = _admin_fallback_environment() or "unset"
+        logger.critical(
+            "admin_database_url_missing",
+            environment=environment,
+            cloud_deployment=_cloud_deployment_detected(),
+            fallback_configured=bool(fallback_url),
+        )
+        raise RuntimeError(
+            "ADMIN_DATABASE_URL is required. SQLite fallback is only allowed when "
+            "ADMIN_FALLBACK_SQLITE is explicitly set with REGENGINE_ENV=development, "
+            "test, or local outside cloud deployments."
+        )
+
+    if not fallback_url.startswith("sqlite"):
+        raise RuntimeError("ADMIN_FALLBACK_SQLITE must be a sqlite URL")
+
     logger.warning(
-        "database_url_missing_using_fallback",
+        "admin_database_url_missing_using_explicit_sqlite_fallback",
         fallback=fallback_url,
     )
-    connect_args = {"check_same_thread": False} if fallback_url.startswith("sqlite") else {}
-    return create_engine(fallback_url, connect_args=connect_args, future=True)
+    return create_engine(
+        fallback_url,
+        connect_args={"check_same_thread": False},
+        future=True,
+    )
 
 
 
@@ -248,5 +296,4 @@ async def get_async_session() -> AsyncIterator[Session]:
     finally:
         session.rollback()
         session.close()
-
 

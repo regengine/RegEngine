@@ -1,22 +1,34 @@
 name: Agent Task
-description: Dispatch a scoped task to a RegEngine bot team
+description: Define a scoped engineering task for one of the supported agent roles
 title: "[AGENT] "
 labels: ["agent-task"]
 body:
   - type: dropdown
-    id: agent
+    id: role
     attributes:
-      label: Assigned Bot Team
-      description: Which lane should own the first pass?
+      label: Agent Role
+      description: Which supported role should handle this?
       options:
-        - "Bot-FSMA (FDA FSMA 204 Specialist)"
-        - "Bot-Inflow (Workbench and Supplier Ingest)"
-        - "Bot-Backend (FastAPI, Persistence, Migrations)"
-        - "Bot-Frontend (Next.js App Router and UX)"
-        - "Bot-Security (Auth, Tenant Isolation, Audit)"
-        - "Bot-Infra (Deploy, CI, Observability)"
-        - "Bot-QA (Tests and Regression Harnesses)"
-        - "Bot-Docs-Janitor (Stale Paths and Handoffs)"
+        - "planner"
+        - "implementer"
+        - "security_review"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: work-lane
+    attributes:
+      label: Work Lane
+      description: Which plain engineering lane owns the work?
+      options:
+        - "backend"
+        - "frontend"
+        - "security"
+        - "QA"
+        - "infra"
+        - "docs"
+        - "FSMA domain"
+        - "Inflow Workbench"
     validations:
       required: true
 
@@ -26,29 +38,14 @@ body:
       label: Task Type
       description: What kind of work is this?
       options:
-        - "feature — New functionality"
-        - "fix — Bug fix"
-        - "audit — Review existing code"
-        - "test — Add or improve tests"
-        - "docs — Documentation update"
-        - "refactor — Code improvement"
+        - "feature - New functionality"
+        - "fix - Bug fix"
+        - "audit - Review existing code"
+        - "test - Add or improve tests"
+        - "docs - Documentation update"
+        - "refactor - Code improvement"
     validations:
       required: true
-
-  - type: dropdown
-    id: chain
-    attributes:
-      label: Agent Chain (optional)
-      description: Should additional agents review after the primary agent completes?
-      options:
-        - "None — Single agent only"
-        - "Bot-Security review"
-        - "Bot-Security then Bot-QA"
-        - "Bot-Frontend then Bot-QA"
-        - "Bot-Infra then Bot-Security"
-        - "Bot-QA validation only"
-    validations:
-      required: false
 
   - type: dropdown
     id: production-spine
@@ -67,30 +64,59 @@ body:
     validations:
       required: true
 
-  - type: textarea
-    id: task-description
+  - type: dropdown
+    id: risk-level
     attributes:
-      label: Task Description
-      description: Detailed description of what the agent should accomplish
-      placeholder: |
-        Describe the task clearly. Include:
-        - What needs to be done
-        - Which files/services are affected
-        - Any constraints or requirements
-        - Expected outcome
+      label: Risk Level
+      description: How risky is the change?
+      options:
+        - "low"
+        - "medium"
+        - "high"
     validations:
       required: true
 
   - type: textarea
-    id: acceptance-criteria
+    id: goal
     attributes:
-      label: Acceptance Criteria
-      description: How will we know the task is complete?
+      label: Goal
+      description: What should be accomplished?
       placeholder: |
-        - [ ] Feature implemented and working
-        - [ ] Tests added with >80% coverage
-        - [ ] No security vulnerabilities introduced
-        - [ ] Documentation updated
+        One concise paragraph describing the target outcome.
+    validations:
+      required: true
+
+  - type: textarea
+    id: files
+    attributes:
+      label: Files Likely Touched
+      description: Name the expected files or directories. Use "unknown" only if discovery is the task.
+      placeholder: |
+        - services/ingestion/...
+        - frontend/src/...
+    validations:
+      required: true
+
+  - type: textarea
+    id: out-of-scope
+    attributes:
+      label: Out Of Scope
+      description: What must not be changed?
+      placeholder: |
+        - No schema changes
+        - No auth behavior changes
+        - No unrelated refactors
+    validations:
+      required: true
+
+  - type: textarea
+    id: tests
+    attributes:
+      label: Tests Required
+      description: Which commands must pass before closing?
+      placeholder: |
+        - python3 -m pytest ...
+        - cd frontend && npm run test:run
     validations:
       required: true
 

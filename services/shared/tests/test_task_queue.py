@@ -182,7 +182,7 @@ def _docker_available() -> bool:
 
 
 _INTEGRATION_SKIP_REASON = (
-    "integration tests require Docker + testcontainers[postgresql] + psycopg[binary]"
+    "integration tests require Docker + testcontainers[postgres] + psycopg[binary]"
 )
 
 integration_only = pytest.mark.skipif(

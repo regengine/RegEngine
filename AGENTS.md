@@ -28,29 +28,27 @@ Read these before large changes:
 - `frontend/package.json` for frontend commands
 - `.github/copilot-instructions.md` for editor-agent guidance
 
-## Bot Teams
+## Agent Roles
 
-Use these lanes when assigning work:
+Only three agent roles are supported:
 
-- Bot-FSMA: FSMA 204 CTE/KDE contracts, rules, FDA export, traceability evidence.
-- Bot-Inflow: Inflow Workbench, supplier portal, CSV/webhook/EPCIS/EDI ingest, readiness scoring.
-- Bot-Backend: FastAPI routers, `services/shared/`, Alembic migrations, server wiring, persistence.
-- Bot-Frontend: Next.js App Router, dashboard tools, auth UX, design-system consistency.
-- Bot-Security: auth, API keys, tenant isolation, RLS assumptions, audit logs, secrets, PII.
-- Bot-Infra: Docker, Railway, GitHub Actions, deployment config, health checks, observability.
-- Bot-QA: pytest/vitest/playwright coverage, fixtures, smoke scripts, regression harnesses.
-- Bot-Docs-Janitor: stale paths, obsolete non-FSMA docs, duplicated handoffs, agent instructions.
+- `planner`: read-only research, path checks, and implementation plans.
+- `implementer`: small scoped code or documentation changes.
+- `security_review`: review for auth, tenant isolation, secrets, database fallback, logging, and deploy risk.
+
+Use plain work lanes such as backend, frontend, security, QA, infra, or docs when triaging tasks. These are labels, not bot identities.
 
 ## Working Rules
 
 - Verify files and commands before acting. Do not follow stale paths from old audit docs.
-- Do not invent `.agent/` or `.agents/` directories to satisfy old instructions. Current editor agents live in `.github/agents/`.
+- Do not invent `.agent/` or `.agents/` directories to satisfy old instructions. Current agent specs live in `.github/agents/`.
 - Prefer existing patterns from nearby service/frontend code.
 - Keep diffs small and tied to the assigned lane.
 - Preserve tenant isolation, audit evidence, and schema validation on ingestion paths.
 - Use `python3`, not `python`, in local commands unless a virtual environment explicitly provides `python`.
 - Use `npm` in `frontend/`; `package-lock.json` is checked in.
 - The repo has no `Makefile`, so do not suggest `make` commands.
+- Agents do not decide product direction. They execute scoped engineering tasks against the FSMA production spine.
 
 ## Verification
 

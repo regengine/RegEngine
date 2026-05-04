@@ -5,6 +5,7 @@ These test vectors MUST pass for bias detection to be considered valid.
 """
 
 import pytest
+import math
 from typing import Dict, List, Tuple
 import numpy as np
 from scipy import stats
@@ -214,9 +215,13 @@ def test_disparate_impact_ratio(test_vector: BiasTestVector):
         test_vector.protected_total
     )
     
-    # Allow small floating point tolerance
-    assert abs(actual_dir - test_vector.expected_dir) < 0.01, \
-        f"{test_vector.name}: Expected DIR {test_vector.expected_dir}, got {actual_dir}"
+    if math.isinf(test_vector.expected_dir):
+        assert math.isinf(actual_dir), \
+            f"{test_vector.name}: Expected DIR {test_vector.expected_dir}, got {actual_dir}"
+    else:
+        # Allow small floating point tolerance
+        assert abs(actual_dir - test_vector.expected_dir) < 0.01, \
+            f"{test_vector.name}: Expected DIR {test_vector.expected_dir}, got {actual_dir}"
 
 
 @pytest.mark.parametrize("test_vector", [

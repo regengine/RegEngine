@@ -301,7 +301,7 @@ async function requireAppAuth(request: NextRequest, requestHeaders?: Headers): P
             // Uses a local cookie name check (no network call) to keep Edge latency low.
             if (!hasSomeSupabaseCookie(request)) {
                 if (process.env.NODE_ENV !== 'production') {
-                    console.info('[middleware] Custom JWT valid but Supabase session absent — forcing re-auth');
+                    console.warn('[middleware] Custom JWT valid but Supabase session absent — forcing re-auth');
                 }
                 const url = request.nextUrl.clone();
                 url.pathname = '/login';
@@ -317,7 +317,7 @@ async function requireAppAuth(request: NextRequest, requestHeaders?: Headers): P
         // Do NOT fall back to cookie presence — an expired JWT must trigger re-auth.
         // This prevents a compromised or expired token from being silently bypassed.
         if (process.env.NODE_ENV !== 'production') {
-            console.info('[middleware] JWT verification failed — redirecting to login');
+            console.warn('[middleware] JWT verification failed — redirecting to login');
         }
         const url = request.nextUrl.clone();
         url.pathname = '/login';
@@ -544,35 +544,5 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-    matcher: [
-        '/api/:path*',
-        '/dashboard/:path*',
-        '/admin/:path*',
-        '/sysadmin/:path*',
-        '/fsma/:path*',
-        '/settings/:path*',
-        '/onboarding/:path*',
-        '/owner/:path*',
-        '/verticals/:path*',
-        '/docs/:path*',
-        '/developer/:path*',
-        '/developers/:path*',
-        '/playground/:path*',
-        '/api-keys/:path*',
-        // Control Plane
-        '/rules/:path*',
-        '/records/:path*',
-        '/exceptions/:path*',
-        '/requests/:path*',
-        '/identity/:path*',
-        '/review/:path*',
-        '/audit/:path*',
-        '/incidents/:path*',
-        '/controls/:path*',
-        '/trace/:path*',
-        // Compliance
-        '/compliance/:path*',
-        // Ingestion
-        '/ingest/:path*',
-    ],
+    matcher: ['/((?!_next/static|_next/image|favicon.ico).*)'],
 };
