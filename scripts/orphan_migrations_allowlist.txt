@@ -15,23 +15,13 @@
 # Do not add new entries without a linked issue. See
 # scripts/check_orphan_migrations.py for the guard.
 
-services/admin/migrations/V10__add_membership_status.sql
-services/admin/migrations/V11__add_sessions_table.sql
 services/admin/migrations/V12__production_compliance_init.sql
-services/admin/migrations/V13__budget_intelligence_tables.sql
 services/admin/migrations/V14__tax_credit_tables.sql
 services/admin/migrations/V15__form_autofill_tables.sql
 services/admin/migrations/V16__classification_tables.sql
 services/admin/migrations/V17__paperwork_visa_tables.sql
 services/admin/migrations/V18__audit_provenance_tables.sql
-services/admin/migrations/V19__authority_lineage_tables.sql
 services/admin/migrations/V1__init_schema.sql
-services/admin/migrations/V20__schema_governance.sql
-services/admin/migrations/V21__vertical_expansion.sql
-services/admin/migrations/V22__immutable_evidence_log.sql
-services/admin/migrations/V23_5__performance_indexes.sql
-services/admin/migrations/V23__alpha_signups.sql
-services/admin/migrations/V24__remove_duplicate_compliance_snapshots.sql
 services/admin/migrations/V25__migrate_pcos_to_entertainment_db.sql
 services/admin/migrations/V26__deprecate_sessions_table.sql
 services/admin/migrations/V27_5__add_tenant_id_to_pcos_tables.sql
@@ -42,15 +32,9 @@ services/admin/migrations/V29__jwt_rls_integration.sql
 services/admin/migrations/V30__audit_logs_tamper_evident.sql
 services/admin/migrations/V31__fsma_204_infrastructure.sql
 services/admin/migrations/V32__enforce_supplier_cte_sequence_uniqueness.sql
-services/admin/migrations/V35__fix_audit_logs_constraints.sql
 services/admin/migrations/V36__funnel_events.sql
-services/admin/migrations/V37__password_reset_tokens.sql
-services/admin/migrations/V38__tool_leads.sql
 services/admin/migrations/V39__supplier_portal_tables.sql
 services/admin/migrations/V3__tenant_isolation.sql
-services/admin/migrations/V40__pcos_vertical_removed.sql
-services/admin/migrations/V41__sandbox_shares.sql
-services/admin/migrations/V43__invalidate_sha256_recovery_codes.sql
 services/admin/migrations/V4__create_review_items.sql
 services/admin/migrations/V5__add_production_indexes.sql
 services/admin/migrations/V6__create_compliance_snapshots.sql
