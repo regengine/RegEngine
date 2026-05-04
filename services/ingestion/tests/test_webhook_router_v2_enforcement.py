@@ -208,7 +208,7 @@ class TestIngestTenantBinding:
             wrv2._resolve_ingest_tenant_id(
                 payload_tenant_id="tenant-b",
                 principal=_principal("tenant-a"),
-                x_regengine_api_key="key-a",
+                x_regengine_api_key="key-a",  # pragma: allowlist secret
                 x_tenant_id=None,
             )
 
@@ -220,7 +220,7 @@ class TestIngestTenantBinding:
             wrv2._resolve_ingest_tenant_id(
                 payload_tenant_id=None,
                 principal=_principal("tenant-a"),
-                x_regengine_api_key="key-a",
+                x_regengine_api_key="key-a",  # pragma: allowlist secret
                 x_tenant_id="tenant-b",
             )
 
@@ -231,7 +231,7 @@ class TestIngestTenantBinding:
         tenant_id = wrv2._resolve_ingest_tenant_id(
             payload_tenant_id=None,
             principal=_principal("tenant-a"),
-            x_regengine_api_key="key-a",
+            x_regengine_api_key="key-a",  # pragma: allowlist secret
             x_tenant_id=None,
         )
 
@@ -241,7 +241,7 @@ class TestIngestTenantBinding:
         tenant_id = wrv2._resolve_ingest_tenant_id(
             payload_tenant_id="tenant-body",
             principal=_principal(None, scopes=["*"]),
-            x_regengine_api_key="legacy-master",
+            x_regengine_api_key="legacy-master",  # pragma: allowlist secret
             x_tenant_id="tenant-header",
         )
 
