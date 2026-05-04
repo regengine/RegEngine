@@ -1,6 +1,7 @@
 'use client';
 
 import { fetchWithCsrf } from '@/lib/fetch-with-csrf';
+import Link from 'next/link';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Mail, ArrowRight, Loader2, ChevronDown, ChevronUp } from 'lucide-react';
 
@@ -15,10 +16,9 @@ type GateStep = 'checking' | 'email' | 'code' | 'verified';
  * Email verification gate for free tools.
  *
  * Checks for the re_tool_access HTTP-only cookie on mount.
- * If missing, shows a modal requiring work email verification
- * before the tool content (children) is rendered.
- *
- * The modal cannot be dismissed — email is the cost of entry.
+ * If missing, shows an inline card requiring work email verification
+ * before the tool content (children) is rendered. Keeping the gate inline
+ * preserves the page header, footer, and browser navigation context.
  */
 export function EmailGate({ toolName, children }: EmailGateProps) {
     const [step, setStep] = useState<GateStep>('checking');
@@ -37,8 +37,16 @@ export function EmailGate({ toolName, children }: EmailGateProps) {
             signal: AbortSignal.timeout(4000),
         })
             .then((res) => res.json())
-            .then((data) => setStep(data.hasAccess ? 'verified' : 'email'))
-            .catch(() => setStep('email'));
+            .then((data) => {
+                if (!cancelled) setStep(data.hasAccess ? 'verified' : 'email');
+            })
+            .catch(() => {
+                if (!cancelled) setStep('email');
+            });
+
+        return () => {
+            cancelled = true;
+        };
     }, []);
 
     // Resend countdown timer
@@ -170,9 +178,12 @@ export function EmailGate({ toolName, children }: EmailGateProps) {
     // Loading state while checking cookie
     if (step === 'checking') {
         return (
-            <div className="flex items-center justify-center min-h-[40vh]">
-                <Loader2 className="h-6 w-6 animate-spin text-[var(--re-text-muted)]" />
-            </div>
+            <section className="mx-auto my-10 flex min-h-[220px] w-full max-w-xl items-center justify-center rounded-xl border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] p-8">
+                <div className="flex items-center gap-3 text-sm text-[var(--re-text-muted)]">
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                    Checking tool access
+                </div>
+            </section>
         );
     }
 
@@ -181,10 +192,10 @@ export function EmailGate({ toolName, children }: EmailGateProps) {
         return <>{children}</>;
     }
 
-    // Gate modal
+    // Gate card
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-            <div className="w-full max-w-md bg-[var(--re-surface-card)] border border-[var(--re-surface-border)] rounded-xl shadow-re-lg overflow-hidden">
+        <section className="mx-auto my-10 w-full max-w-xl px-4">
+            <div className="w-full overflow-hidden rounded-xl border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] shadow-re-lg">
                 {/* Header */}
                 <div className="px-6 pt-8 pb-2 text-center">
                     <div className="mx-auto mb-4 w-12 h-12 rounded-xl bg-[var(--re-brand-muted)] flex items-center justify-center">
@@ -219,7 +230,6 @@ export function EmailGate({ toolName, children }: EmailGateProps) {
                                     }}
                                     placeholder="you@company.com"
                                     required
-                                    autoFocus
                                     autoComplete="email"
                                     className="w-full px-4 py-3 rounded-lg bg-[var(--re-surface-elevated)] border border-[var(--re-surface-border)] text-[var(--re-text-primary)] placeholder:text-[var(--re-text-disabled)] text-sm focus:outline-none focus:ring-2 focus:ring-[var(--re-brand)] focus:border-transparent transition-all"
                                 />
@@ -243,6 +253,14 @@ export function EmailGate({ toolName, children }: EmailGateProps) {
                                     </>
                                 )}
                             </button>
+                            <div className="text-center">
+                                <Link
+                                    href="/tools"
+                                    className="text-xs text-[var(--re-text-muted)] underline-offset-4 hover:text-[var(--re-text-secondary)] hover:underline"
+                                >
+                                    Back to tools
+                                </Link>
+                            </div>
                         </form>
                     ) : (
                         <div className="space-y-4">
@@ -320,6 +338,6 @@ export function EmailGate({ toolName, children }: EmailGateProps) {
                     )}
                 </div>
             </div>
-        </div>
+        </section>
     );
 }
