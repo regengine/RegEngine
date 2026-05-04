@@ -1,19 +1,41 @@
-"""CLI entry point for the autonomous agent swarm.
+"""CLI entry point for the legacy autonomous agent swarm.
 
 Usage:
-    python -m regengine.swarm run --task "Add rate limiting to /api/ingest"
-    python -m regengine.swarm solve --issue 42 --repo owner/repo
-    python -m regengine.swarm label --repo owner/repo --dry-run
     python -m regengine.swarm status
+
+Legacy execution commands require REGENGINE_ENABLE_LEGACY_SWARM=1.
+The supported small-scale helper is:
+    python3 scripts/summon_agent.py --list
 """
 
 import argparse
 import json
 import os
 import sys
-from typing import Optional
 
 import structlog
+
+LEGACY_SWARM_ENV = "REGENGINE_ENABLE_LEGACY_SWARM"
+_TRUE_VALUES = {"1", "true", "yes", "on"}
+
+
+def _legacy_swarm_enabled() -> bool:
+    return os.getenv(LEGACY_SWARM_ENV, "").strip().lower() in _TRUE_VALUES
+
+
+def _legacy_swarm_notice(command: str) -> str:
+    return (
+        f"ERROR: regengine.swarm {command} is part of the legacy autonomous swarm runtime.\n"
+        "Autonomous swarm execution is disabled by default under the current agent operating model.\n"
+        f"Set {LEGACY_SWARM_ENV}=1 only for an explicitly approved legacy run.\n"
+        "Supported path: python3 scripts/summon_agent.py --list"
+    )
+
+
+def _require_legacy_swarm_enabled(command: str) -> None:
+    if not _legacy_swarm_enabled():
+        print(_legacy_swarm_notice(command), file=sys.stderr)
+        sys.exit(2)
 
 
 def configure_logging(verbose: bool = False) -> None:
@@ -31,6 +53,8 @@ def configure_logging(verbose: bool = False) -> None:
 
 def cmd_run(args) -> None:
     """Run the agent swarm on a natural language task."""
+    _require_legacy_swarm_enabled("run")
+
     from regengine.swarm.coordinator import AgentSwarm
     from regengine.swarm.llm import LLMClientFactory, MockLLMClient
 
@@ -186,6 +210,8 @@ def cmd_run(args) -> None:
 
 def cmd_troubleshoot(args) -> None:
     """Run the CI resilience agent to troubleshoot and heal failures."""
+    _require_legacy_swarm_enabled("troubleshoot")
+
     import asyncio
     from regengine.swarm.coordinator import AgentSwarm
 
@@ -218,6 +244,8 @@ def cmd_troubleshoot(args) -> None:
 
 def cmd_solve(args) -> None:
     """Solve a GitHub issue using the agent swarm."""
+    _require_legacy_swarm_enabled("solve")
+
     from regengine.swarm.github_integration import GitHubClient
     from regengine.swarm.coordinator import AgentSwarm
 
@@ -255,6 +283,8 @@ def cmd_solve(args) -> None:
 
 def cmd_label(args) -> None:
     """Auto-label GitHub issues using LLM classification."""
+    _require_legacy_swarm_enabled("label")
+
     from regengine.swarm.github_integration import GitHubClient, IssueLabelClassifier
     from regengine.swarm.llm import LLMClientFactory, MockLLMClient
 
@@ -295,8 +325,16 @@ def cmd_label(args) -> None:
 
 def cmd_status(args) -> None:
     """Show swarm status and configuration."""
+    if not _legacy_swarm_enabled():
+        print("RegEngine Agent Runtime Status")
+        print("")
+        print("Legacy autonomous swarm: disabled")
+        print(f"Opt-in env: {LEGACY_SWARM_ENV}=1")
+        print("Supported roles: planner, implementer, security_review")
+        print("Supported helper: python3 scripts/summon_agent.py --list")
+        return
+
     from regengine.swarm.coordinator import AgentSwarm
-    from regengine.swarm.llm import LLMClientFactory
 
     print("╔══════════════════════════════════════════════════════════════╗")
     print("║           🧬 RegEngine Autonomous Agent Swarm              ║")
@@ -326,6 +364,8 @@ def cmd_status(args) -> None:
 
 def cmd_sweep(args) -> None:
     """Execute a proactive sweep across horizontal technical debt."""
+    _require_legacy_swarm_enabled("sweep")
+
     import asyncio
     from scripts.swarm_sweep import SwarmSweeper
     sweeper = SwarmSweeper()
@@ -334,6 +374,8 @@ def cmd_sweep(args) -> None:
 
 def cmd_compliance(args) -> None:
     """Execute a proactive compliance rollout across the fleet."""
+    _require_legacy_swarm_enabled("compliance")
+
     import asyncio
     from scripts.compliance_sweep import roll_out_compliance
     asyncio.run(roll_out_compliance(standard=args.standard))
@@ -341,7 +383,7 @@ def cmd_compliance(args) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="RegEngine Autonomous Agent Swarm",
+        description="RegEngine legacy autonomous agent swarm",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument("-v", "--verbose", action="store_true", help="Verbose logging")

@@ -42,6 +42,7 @@ Use plain work lanes such as backend, frontend, security, QA, infra, or docs whe
 
 - Verify files and commands before acting. Do not follow stale paths from old audit docs.
 - Do not invent `.agent/` or `.agents/` directories to satisfy old instructions. Current agent specs live in `.github/agents/`.
+- Do not run the legacy `regengine.swarm` autonomous runtime unless a task explicitly approves `REGENGINE_ENABLE_LEGACY_SWARM=1`.
 - Prefer existing patterns from nearby service/frontend code.
 - Keep diffs small and tied to the assigned lane.
 - Preserve tenant isolation, audit evidence, and schema validation on ingestion paths.

@@ -60,4 +60,4 @@ QA review is required before closing changes to ingestion, persistence, FDA expo
 
 ## Banned Drift
 
-Do not add new agent frameworks, role directories, autonomous chains, or broad cleanup missions without a specific issue and owner. Keep the system small enough that a new engineer can understand it in one page.
+Do not add new agent frameworks, role directories, autonomous chains, or broad cleanup missions without a specific issue and owner. The legacy `regengine.swarm` runtime is disabled by default and requires an explicit `REGENGINE_ENABLE_LEGACY_SWARM=1` opt-in for approved recovery or compatibility work. Keep the system small enough that a new engineer can understand it in one page.

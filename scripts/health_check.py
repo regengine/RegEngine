@@ -2,16 +2,13 @@
 """
 🧬 RegEngine Founder's Health Check
 A unified diagnostic tool for solo builders to verify the entire stack.
-Checks: Ports, Database connectivity, Redis (Distributed Rate Limiting), and Agent Swarm.
+Checks: Ports, Database connectivity, Redis (Distributed Rate Limiting), and the supported agent helper.
 """
 
 import os
 import socket
-import sys
-import time
-import requests
+from pathlib import Path
 import structlog
-from typing import Dict, List
 
 # Configure pretty logging for the founder
 structlog.configure(
@@ -21,6 +18,8 @@ structlog.configure(
     logger_factory=structlog.PrintLoggerFactory(),
 )
 log = structlog.get_logger("health-check")
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
 
 SERVICES = {
     "Gateway": 80,
@@ -53,14 +52,18 @@ def check_redis_distributed() -> bool:
     except Exception:
         return False
 
-def check_agent_swarm() -> bool:
-    """Verify the agent swarm can initialize."""
-    try:
-        from regengine.swarm.coordinator import AgentSwarm
-        swarm = AgentSwarm()
-        return swarm is not None
-    except Exception:
+def check_agent_helper() -> bool:
+    """Verify the supported small-scale agent helper is present."""
+    expected_specs = {
+        "regengine-planner.agent.md",
+        "regengine-implementer.agent.md",
+        "regengine-security-review.agent.md",
+    }
+    agents_dir = REPO_ROOT / ".github" / "agents"
+    helper = REPO_ROOT / "scripts" / "summon_agent.py"
+    if not helper.exists() or not agents_dir.exists():
         return False
+    return expected_specs.issubset({path.name for path in agents_dir.glob("*.agent.md")})
 
 def run_diagnostics():
     print("\n" + "═" * 60)
@@ -88,14 +91,14 @@ def run_diagnostics():
         failure_count += 1
         log.error("  Redis connectivity: ❌ FAIL (Rate limiting will fall back to memory)")
 
-    # 3. Agent Swarm Check
+    # 3. Supported Agent Helper Check
     print("")
-    log.info("DIAGNOSTIC: Autonomous Swarm Initialization")
-    if check_agent_swarm():
-        log.info("  Swarm Factory: ✅ OK")
+    log.info("DIAGNOSTIC: Supported Agent Helper")
+    if check_agent_helper():
+        log.info("  summon_agent.py + role specs: ✅ OK")
     else:
         failure_count += 1
-        log.error("  Swarm Factory: ❌ FAIL (Check dependencies)")
+        log.error("  summon_agent.py + role specs: ❌ FAIL (Check .github/agents)")
 
     print("\n" + "═" * 60)
     if failure_count == 0:
