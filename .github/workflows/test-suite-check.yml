@@ -57,7 +57,6 @@ jobs:
           if [ -f requirements.lock ]; then
             pip install --require-hashes -r requirements.lock
           fi
-          pip install pytest pytest-asyncio email-validator scipy
 
       - name: Collect whole suite and fail on any error
         run: |
@@ -110,7 +109,6 @@ jobs:
           if [ -f requirements.lock ]; then
             pip install --require-hashes -r requirements.lock
           fi
-          pip install pytest pytest-asyncio
 
       - name: Run offline repo-root tests
         run: |
@@ -150,7 +148,6 @@ jobs:
           if [ -f requirements.lock ]; then
             pip install --require-hashes -r requirements.lock
           fi
-          pip install pytest pytest-asyncio
       
       - name: Setup Shared Module Bridge
         run: |
