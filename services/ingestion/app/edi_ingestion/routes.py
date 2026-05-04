@@ -24,6 +24,7 @@ from __future__ import annotations
 import importlib
 import logging
 import os
+import re
 from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, Query, UploadFile
@@ -36,6 +37,7 @@ from ..shared.upload_limits import read_upload_with_limit, MAX_EDI_FILE_SIZE_BYT
 from ..webhook_compat import ingest_events
 from ..webhook_models import (
     IngestEvent,
+    VALID_UNITS_OF_MEASURE,
     WebhookCTEType,
     WebhookPayload,
 )
@@ -45,6 +47,7 @@ from .constants import (
     _REQUIRED_856_SEGMENTS,
     _REQUIRED_SEGMENTS_BY_SET,
     _SUPPORTED_TRANSACTION_SETS,
+    _X12_UOM_MAP,
 )
 from .dedup import check_and_record_interchange, verify_trading_partner_allowed
 from .extractors import _extract_856_fields, _extract_fields_for_set
@@ -146,6 +149,20 @@ def _positive_float_or_none(value: Any) -> float | None:
     return parsed if parsed > 0 else None
 
 
+def _valid_unit_or_none(value: Any) -> str | None:
+    if value is None:
+        return None
+    raw = str(value).strip()
+    if not raw:
+        return None
+
+    x12_code = re.sub(r"[^A-Za-z]", "", raw).upper()
+    mapped = _X12_UOM_MAP.get(x12_code, raw.lower())
+    if mapped not in VALID_UNITS_OF_MEASURE:
+        return None
+    return mapped
+
+
 def _legacy_856_placeholder_errors(
     *,
     segments: list[list[str]],
@@ -179,11 +196,20 @@ def _legacy_856_placeholder_errors(
         )
 
     raw_unit = sn1[3] if len(sn1) > 3 else None
-    if unit_override is None and not (raw_unit and str(raw_unit).strip()):
+    unit_candidate = unit_override if unit_override is not None else raw_unit
+    if _valid_unit_or_none(unit_candidate) is None:
+        unit_message = (
+            "EDI 856 is missing SN1 unit of measure; refusing to synthesize unit_of_measure='units'."
+            if not (unit_candidate and str(unit_candidate).strip())
+            else (
+                "EDI 856 has an invalid unit of measure; refusing to "
+                "synthesize unit_of_measure='units'."
+            )
+        )
         _add(
             "unit_of_measure",
             "units",
-            "EDI 856 is missing SN1 unit of measure; refusing to synthesize unit_of_measure='units'.",
+            unit_message,
         )
 
     if not (product_description_override or extracted.get("product_description")):
