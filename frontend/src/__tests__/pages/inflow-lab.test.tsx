@@ -186,24 +186,26 @@ describe('Dashboard Inflow Lab', () => {
         expect(screen.getByText('Mock Inflow Lab')).toBeInTheDocument();
         expect(screen.getByText('Authenticated feed')).toBeInTheDocument();
         expect(screen.getByText('Production evidence')).toBeInTheDocument();
-        expect(screen.getByText('Authenticated persisted records only')).toBeInTheDocument();
-        expect(screen.getByText('Watch the inflow machine work')).toBeInTheDocument();
-        expect(screen.getByRole('button', { name: 'Start machine demo' })).toBeInTheDocument();
-        expect(screen.getByText('Load a source')).toBeInTheDocument();
-        expect(screen.getByText('Run validation')).toBeInTheDocument();
-        expect(screen.getByText('Watch records post')).toBeInTheDocument();
+        expect(screen.getByText('FDA-ready evidence comes from signed-in production records')).toBeInTheDocument();
+        expect(screen.getByText('Guided test run')).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Start guided test run' })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Run guided test' })).toBeInTheDocument();
+        expect(screen.getByText('Load test records')).toBeInTheDocument();
+        expect(screen.getByText('Validate records')).toBeInTheDocument();
+        expect(screen.getByText('Review exceptions')).toBeInTheDocument();
 
         await waitFor(() => {
             expect(screen.getAllByText('Connection ready').length).toBeGreaterThan(0);
         });
+        expect(await screen.findByText(/You are viewing mock feed data; no uploaded CSV sandbox run has been evaluated yet/i)).toBeInTheDocument();
         expect(screen.getAllByText('1 of 2 lots test complete').length).toBeGreaterThan(0);
     });
 
-    it('keeps a permanent startup demo that can run the mock inflow machine and open records', async () => {
+    it('keeps a guided test run that can run the mock inflow machine and open records', async () => {
         const user = userEvent.setup();
         render(<DashboardInflowLabPage />);
 
-        await user.click(screen.getByRole('button', { name: 'Start machine demo' }));
+        await user.click(screen.getByRole('button', { name: 'Start guided test run' }));
 
         await waitFor(() => {
             expect(mockFetch).toHaveBeenCalledWith(
@@ -216,7 +218,7 @@ describe('Dashboard Inflow Lab', () => {
             );
         });
         expect(screen.getByRole('button', { name: 'Record log' })).toHaveAttribute('aria-pressed', 'true');
-        expect(screen.getByText('Watch the inflow machine work')).toBeInTheDocument();
+        expect(screen.getByText('Guided test run')).toBeInTheDocument();
     });
 
     it('keeps tab navigation interactive and opens lineage from a selected lot', async () => {
@@ -240,12 +242,12 @@ describe('Dashboard Inflow Lab', () => {
 
         await user.click(screen.getByRole('button', { name: 'Lots' }));
         await user.click(await screen.findByRole('button', { name: new RegExp(partialLot) }));
-        await user.click(screen.getByRole('button', { name: 'Exports' }));
+        await user.click(screen.getByRole('button', { name: 'Test previews' }));
 
         expect(screen.getByText(/Selected lot is an exception/i)).toBeInTheDocument();
         expect(screen.getByText(/Includes 1 test-complete lots\. 1 exception lots are flagged for review/i)).toBeInTheDocument();
-        expect(screen.getByText(/Production evidence is generated only from authenticated persisted records/i)).toBeInTheDocument();
-        expect(screen.getByRole('link', { name: 'Preview CSV' })).toHaveAttribute(
+        expect(screen.getByText(/FDA-ready evidence is generated only from production records/i)).toBeInTheDocument();
+        expect(screen.getByRole('link', { name: 'Preview test CSV' })).toHaveAttribute(
             'href',
             expect.stringContaining('/api/inflow-lab/api/mock/regengine/export/fda-request'),
         );
@@ -264,7 +266,7 @@ describe('Dashboard Inflow Lab', () => {
         expect(screen.getByText('Diagnose free')).toBeInTheDocument();
         expect(screen.getByText('Save as test run')).toBeInTheDocument();
         expect(screen.getAllByText('Generate production evidence').length).toBeGreaterThan(0);
-        expect(screen.getByText('Use authenticated persisted records only')).toBeInTheDocument();
+        expect(screen.getByText('Use signed-in production records only')).toBeInTheDocument();
         expect(screen.getByRole('link', { name: 'Convert to import mapping' })).toHaveAttribute('href', '/ingest');
         expect(screen.getByRole('link', { name: 'Monitor live feed' })).toHaveAttribute('href', '/dashboard/integrations');
         expect(screen.getByRole('link', { name: 'Generate production evidence' })).toHaveAttribute('href', '/dashboard/export-jobs');
@@ -292,7 +294,7 @@ describe('Dashboard Inflow Lab', () => {
         expect(screen.getByText('Backend readiness')).toBeInTheDocument();
     });
 
-    it('surfaces the readiness score, fix queue, scenario library, and supplier readiness loop', async () => {
+    it('surfaces the readiness score, fix queue, and streamlined dashboard workflow', async () => {
         const user = userEvent.setup();
         render(<DashboardInflowLabPage />);
 
@@ -302,20 +304,8 @@ describe('Dashboard Inflow Lab', () => {
         await user.click(screen.getByRole('button', { name: 'Fix queue' }));
         expect(screen.getByText('Commit gate')).toBeInTheDocument();
         expect(screen.getByText(/Green Leaf Lettuce missing KDE evidence/i)).toBeInTheDocument();
-
-        await user.click(screen.getByRole('button', { name: 'Scenarios' }));
-        expect(screen.getByText('Replay and regression testing')).toBeInTheDocument();
-        expect(screen.getByText('Complete romaine lettuce flow')).toBeInTheDocument();
-        expect(screen.getByText('Missing shipping destination')).toBeInTheDocument();
-
-        const loadScenarioButtons = screen.getAllByRole('button', { name: 'Load scenario' });
-        await user.click(loadScenarioButtons[1]);
-        expect(screen.getByRole('button', { name: 'Data feeder' })).toHaveAttribute('aria-pressed', 'true');
-        expect((screen.getByLabelText('Inbound CSV data') as HTMLTextAreaElement).value).toContain('TLC-FEED-002');
-
-        await user.click(screen.getByRole('button', { name: 'Suppliers' }));
-        expect(screen.getByText('Supplier readiness')).toBeInTheDocument();
-        expect(screen.getByText(/Network average/i)).toBeInTheDocument();
-        expect(screen.getByText('Valley Fresh Farms')).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Test previews' })).toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: 'Scenarios' })).not.toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: 'Suppliers' })).not.toBeInTheDocument();
     });
 });
