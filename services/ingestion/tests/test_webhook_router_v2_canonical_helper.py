@@ -36,6 +36,7 @@ class _FakeCanonicalEventStore:
     persist_call_count: int = 0
     persist_args: list = []
     init_kwargs: list = []
+    result_event_id: str | None = None
 
     def __init__(self, db_session: Any, dual_write: bool = False, skip_chain_write: bool = False) -> None:
         self.db_session = db_session
@@ -44,9 +45,15 @@ class _FakeCanonicalEventStore:
             "skip_chain_write": skip_chain_write,
         })
 
-    def persist_event(self, canonical: Any) -> None:
+    def persist_event(self, canonical: Any) -> Any:
         _FakeCanonicalEventStore.persist_call_count += 1
         _FakeCanonicalEventStore.persist_args.append(canonical)
+        return SimpleNamespace(
+            event_id=_FakeCanonicalEventStore.result_event_id or canonical.event_id,
+            sha256_hash="sha256",
+            chain_hash="chain",
+            idempotent=_FakeCanonicalEventStore.result_event_id is not None,
+        )
 
 
 class _FakeEngine:
@@ -130,6 +137,7 @@ def _install(monkeypatch: pytest.MonkeyPatch) -> None:
     _FakeCanonicalEventStore.persist_call_count = 0
     _FakeCanonicalEventStore.persist_args = []
     _FakeCanonicalEventStore.init_kwargs = []
+    _FakeCanonicalEventStore.result_event_id = None
     _FakeEngine.summary_to_return = None
     _FakeEngine.evaluate_event_persist_true_calls = []
     _FakeEngine.evaluate_event_persist_false_calls = []
@@ -394,3 +402,30 @@ class TestCommonInvariants:
             {"dual_write": False, "skip_chain_write": True}
         ]
         assert _FakeEngine.persist_summary_calls[0]["event_id"] == legacy_event_id
+
+    def test_rule_evidence_uses_idempotent_canonical_store_result(self, _make_event):
+        """Retries can return an existing canonical row whose event_id differs
+        from the freshly normalized in-memory canonical event. Rule evidence
+        must point at the persisted row, not the discarded candidate UUID.
+        """
+        _FakeCanonicalEventStore.result_event_id = "persisted-canonical-row"
+        precomputed = _compliant_summary()
+
+        wrv2._persist_canonical_and_eval(
+            db_session=MagicMock(), event=_make_event, tenant_id="t-1",
+            precomputed_summary=precomputed,
+        )
+
+        assert _FakeEngine.persist_summary_calls[0]["event_id"] == "persisted-canonical-row"
+
+    def test_fallback_evaluation_uses_idempotent_canonical_store_result(self, _make_event):
+        _FakeCanonicalEventStore.result_event_id = "persisted-canonical-row"
+        _FakeEngine.summary_to_return = _compliant_summary()
+
+        wrv2._persist_canonical_and_eval(
+            db_session=MagicMock(), event=_make_event, tenant_id="t-1",
+            precomputed_summary=None,
+        )
+
+        ev_call = _FakeEngine.evaluate_event_persist_true_calls[0]
+        assert ev_call["event_data"]["event_id"] == "persisted-canonical-row"

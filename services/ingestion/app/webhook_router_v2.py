@@ -839,19 +839,20 @@ def _persist_canonical_and_eval(
         canonical.event_id = UUID(str(canonical_event_id))
         canonical.prepare_for_persistence()
     store = CanonicalEventStore(db_session, dual_write=False, skip_chain_write=True)
-    store.persist_event(canonical)
+    persist_result = store.persist_event(canonical)
+    persisted_event_id = str(getattr(persist_result, "event_id", None) or canonical.event_id)
     engine = RulesEngine(db_session)
 
     if precomputed_summary is not None and precomputed_summary.results:
         engine.persist_summary(
             precomputed_summary,
             tenant_id=tenant_id,
-            event_id=str(canonical.event_id),
+            event_id=persisted_event_id,
         )
         summary = precomputed_summary
     else:
         event_data = {
-            "event_id": str(canonical.event_id),
+            "event_id": persisted_event_id,
             "event_type": canonical.event_type.value,
             "traceability_lot_code": canonical.traceability_lot_code,
             "product_reference": canonical.product_reference,
