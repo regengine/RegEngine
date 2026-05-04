@@ -1,17 +1,15 @@
-"""RegEngine Autonomous Agent Swarm.
+"""RegEngine legacy autonomous agent swarm.
 
-Autonomous multi-agent framework that builds on the existing
-LLMClientFactory to create agents that think, act, and iterate.
+This package is retained for compatibility with older tooling. Autonomous
+execution is disabled by default; set REGENGINE_ENABLE_LEGACY_SWARM=1 only for
+an explicitly approved legacy run.
 
-Two execution layers coexist:
-  Layer 1: summon_agent.py / swarm_orchestrator.py — prompt generation for IDE use
-  Layer 2: regengine.swarm (this package) — autonomous execution with LLM brains
+The supported small-scale operating model uses checked-in editor-agent specs
+and prompt generation:
 
 Usage:
-    python -m regengine.swarm run --task "Add rate limiting to /api/ingest"
-    python -m regengine.swarm solve --issue 42 --repo owner/repo
-    python -m regengine.swarm label --repo owner/repo --dry-run
     python -m regengine.swarm status
+    python3 scripts/summon_agent.py --list
 """
 
 from regengine.swarm.base import (

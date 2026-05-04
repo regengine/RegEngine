@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
 """
-🛡️ RegEngine Compliance Sweep
-Proactively rolls out industry-standard compliance headers across the entire microservice fleet.
+RegEngine legacy compliance sweep.
+
+This script drives the legacy autonomous swarm runtime and is disabled by
+default. Use scoped agent tasks from scripts/summon_agent.py for normal work.
 """
 
 import os
 import sys
 import structlog
-from regengine.swarm.coordinator import AgentSwarm
+from regengine.swarm.coordinator import AgentSwarm, LEGACY_SWARM_ENV, legacy_swarm_enabled
 
 log = structlog.get_logger("compliance-sweep")
 
@@ -18,6 +20,12 @@ SERVICES = [
 
 async def roll_out_compliance(standard: str = "FSMA-204"):
     """Dispatch the swarm to roll out compliance headers to all services."""
+    if not legacy_swarm_enabled():
+        raise RuntimeError(
+            "Legacy compliance sweep is disabled by default. "
+            f"Set {LEGACY_SWARM_ENV}=1 only for an explicitly approved legacy run."
+        )
+
     swarm = AgentSwarm()
     os.environ["REGENGINE_CI_AUTO_FIX"] = "true"
     

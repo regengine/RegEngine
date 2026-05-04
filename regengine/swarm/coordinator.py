@@ -25,6 +25,18 @@ from regengine.swarm.llm import BaseLLMClient, LLMClientFactory
 
 logger = structlog.get_logger("swarm.coordinator")
 
+LEGACY_SWARM_ENV = "REGENGINE_ENABLE_LEGACY_SWARM"
+_TRUE_VALUES = {"1", "true", "yes", "on"}
+
+
+class LegacySwarmDisabledError(RuntimeError):
+    """Raised when legacy autonomous swarm execution has not been opted into."""
+
+
+def legacy_swarm_enabled() -> bool:
+    """Return whether the legacy autonomous swarm runtime is explicitly enabled."""
+    return os.getenv(LEGACY_SWARM_ENV, "").strip().lower() in _TRUE_VALUES
+
 
 @dataclass
 class SwarmResult:
@@ -77,6 +89,13 @@ class AgentSwarm:
         llm_client: Optional[BaseLLMClient] = None,
         max_iterations: int = 3,
     ):
+        if not legacy_swarm_enabled():
+            raise LegacySwarmDisabledError(
+                "Legacy autonomous swarm execution is disabled by default. "
+                f"Set {LEGACY_SWARM_ENV}=1 only for an explicitly approved legacy run; "
+                "use scripts/summon_agent.py for the supported small-scale operating model."
+            )
+
         self.llm = llm_client or LLMClientFactory.create()
         self.max_iterations = max_iterations
         self.message_bus: deque[AgentMessage] = deque(maxlen=1000)
