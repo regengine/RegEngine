@@ -21,12 +21,11 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 ROUTE_ENV = {
     "REGENGINE_ENV": "test",
     "ENVIRONMENT": "test",
-    "DATABASE_URL": "postgresql://regengine:regengine@localhost:5432/regengine_test",
+    "DATABASE_URL": "postgresql://localhost:5432/regengine_test",
     "ADMIN_DATABASE_URL": (
-        "postgresql+psycopg://regengine:regengine@localhost:5432/"
-        "regengine_admin_test"
+        "postgresql+psycopg://localhost:5432/regengine_admin_test"
     ),
-    "AUTH_SECRET_KEY": "test-secret-key-with-enough-length",
+    "AUTH_SECRET_KEY": "test-secret-key-with-enough-length",  # pragma: allowlist secret
     "ENABLE_PARTNER_GATEWAY_STUBS": "true",
     "ENABLE_EXPERIMENTAL_ROUTERS": "true",
 }
