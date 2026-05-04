@@ -9,7 +9,7 @@ import {
     CSRF_PROTECTED_METHODS,
     isCsrfExempt,
 } from '@/lib/csrf';
-import { buildCsp } from '@/lib/csp';
+import { buildCsp, CSP_PROXY_MATCHER } from '@/lib/csp';
 import { isAuthenticatedAppRoute } from '@/lib/app-routes';
 
 // ---------------------------------------------------------------------------
@@ -544,35 +544,5 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-    matcher: [
-        '/api/:path*',
-        '/dashboard/:path*',
-        '/admin/:path*',
-        '/sysadmin/:path*',
-        '/fsma/:path*',
-        '/settings/:path*',
-        '/onboarding/:path*',
-        '/owner/:path*',
-        '/verticals/:path*',
-        '/docs/:path*',
-        '/developer/:path*',
-        '/developers/:path*',
-        '/playground/:path*',
-        '/api-keys/:path*',
-        // Control Plane
-        '/rules/:path*',
-        '/records/:path*',
-        '/exceptions/:path*',
-        '/requests/:path*',
-        '/identity/:path*',
-        '/review/:path*',
-        '/audit/:path*',
-        '/incidents/:path*',
-        '/controls/:path*',
-        '/trace/:path*',
-        // Compliance
-        '/compliance/:path*',
-        // Ingestion
-        '/ingest/:path*',
-    ],
+    matcher: [CSP_PROXY_MATCHER],
 };
