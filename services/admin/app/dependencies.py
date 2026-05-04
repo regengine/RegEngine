@@ -1,9 +1,9 @@
-from fastapi import Depends, HTTPException, Path, status, Header
+from fastapi import Depends, HTTPException, Path, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 from sqlalchemy import select, text
 from uuid import UUID
-from typing import List, Optional
+from typing import Optional
 import structlog
 from jwt.exceptions import PyJWTError as JWTError
 import os
@@ -41,6 +41,18 @@ def _parse_token_version(value: object) -> Optional[int]:
         except ValueError:
             return None
     return None
+
+
+def _is_supabase_auth_exception(exc: Exception) -> bool:
+    """Return true for Supabase/Gotrue auth rejections such as invalid JWTs."""
+    cls = exc.__class__
+    module = getattr(cls, "__module__", "")
+    name = getattr(cls, "__name__", "")
+    return (
+        name in {"AuthApiError", "AuthInvalidCredentialsError", "AuthRetryableError"}
+        or module.startswith(("supabase_auth.", "gotrue."))
+    )
+
 
 def get_session_store() -> RedisSessionStore:
     """Dependency injection for Redis session store.
@@ -92,13 +104,22 @@ async def get_current_user(
                 token_version_claim = _parse_token_version(tv_raw)
 
                 # User existence verified at line 101 below (db.get raises if missing)
-        except (OSError, TimeoutError, ConnectionError, ValueError, AttributeError) as e:
+        except Exception as e:
+            if _is_supabase_auth_exception(e):
+                logger.warning(
+                    "supabase_auth_token_rejected",
+                    error=str(e),
+                    error_type=e.__class__.__name__,
+                )
+                raise credentials_exception from e
+            if not isinstance(e, (OSError, TimeoutError, ConnectionError, ValueError, AttributeError)):
+                raise
             logger.warning("supabase_auth_failed", error=str(e))
             # In production, fail closed — do not fall through to local JWT
             # unless explicitly opted out via ALLOW_LOCAL_JWT_FALLBACK=true
-            if is_production() and not os.getenv("ALLOW_LOCAL_JWT_FALLBACK", "").lower() in ("true", "1"):
+            if is_production() and os.getenv("ALLOW_LOCAL_JWT_FALLBACK", "").lower() not in ("true", "1"):
                 logger.error("supabase_auth_failed_production_fail_closed", error=str(e))
-                raise credentials_exception
+                raise credentials_exception from e
 
     # 2. Fallback to Local JWT (Legacy / Dev Path)
     # Only reached in dev, or if Supabase is not configured, or explicit opt-in
