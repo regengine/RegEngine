@@ -31,6 +31,7 @@ from .authz import require_permission, IngestionPrincipal
 from .subscription_gate import require_active_subscription
 from shared.database import get_db_session
 from .config import get_settings
+from .shared.tenant_resolution import resolve_principal_tenant_id
 from .tenant_validation import validate_tenant_id
 from shared.funnel_events import emit_funnel_event
 from shared.idempotency import IdempotencyDependency
@@ -54,6 +55,39 @@ _get_db_session = get_db_session
 logger = structlog.get_logger("webhook-ingestion")
 
 router = APIRouter(prefix="/api/v1/webhooks", tags=["Webhook Ingestion"])
+
+
+def _lookup_tenant_id_for_api_key(raw_api_key: Optional[str]) -> Optional[str]:
+    """Resolve a legacy caller's API-key tenant when auth principal lacks one."""
+    if not raw_api_key:
+        return None
+
+    db_session = None
+    try:
+        from shared.database import SessionLocal
+        from sqlalchemy import text as _text
+
+        db_session = SessionLocal()
+        row = db_session.execute(
+            _text(
+                """
+                SELECT tenant_id
+                FROM api_keys
+                WHERE key_hash = encode(sha256(:raw::bytea), 'hex')
+                LIMIT 1
+                """
+            ),
+            {"raw": raw_api_key},
+        ).fetchone()
+        if row and row[0]:
+            return str(row[0]).strip() or None
+    except (ImportError, SQLAlchemyError, ValueError, RuntimeError, ConnectionError, OSError) as exc:
+        logger.debug("tenant_key_lookup_failed", error=str(exc))
+    finally:
+        if db_session is not None:
+            db_session.close()
+
+    return None
 
 
 def _get_persistence(db_session=None):
@@ -962,32 +996,41 @@ async def ingest_events(
     db_session=Depends(get_db_session),
 ) -> IngestResponse:
     """Process incoming webhook events with persistent storage."""
-    # Resolve tenant: payload > API-key lookup > RBAC principal
-    tenant_id = payload.tenant_id
-    if not tenant_id and x_regengine_api_key:
-        try:
-            from shared.database import SessionLocal
-            _db = SessionLocal()
-            from sqlalchemy import text as _text
-            _row = _db.execute(
-                _text("SELECT tenant_id FROM api_keys WHERE key_hash = encode(sha256(:raw::bytea), 'hex') LIMIT 1"),
-                {"raw": x_regengine_api_key},
-            ).fetchone()
-            if _row and _row[0]:
-                tenant_id = str(_row[0])
-            _db.close()
-        except (ImportError, SQLAlchemyError, ValueError, RuntimeError, ConnectionError, OSError) as _tenant_err:
-            logger.debug("tenant_key_lookup_failed", error=str(_tenant_err))
-    # Fallback: use tenant from RBAC principal if available
-    if not tenant_id and principal.tenant_id:
-        tenant_id = principal.tenant_id
-    # Header fallback supports signed webhook clients that keep tenant context
-    # out of the payload body, including Inflow Lab's live delivery client.
-    if not tenant_id and x_tenant_id:
-        tenant_id = x_tenant_id
-    if not tenant_id:
-        logger.error("Webhook rejected: no tenant_id resolved")
-        raise HTTPException(status_code=400, detail="Tenant context required")
+    # Resolve tenant. Scoped principals are authoritative: body/header
+    # tenant_id is allowed only when it matches the principal tenant.
+    # Legacy/master callers without a scoped principal may still provide
+    # tenant_id in the payload/header or rely on the historical API-key
+    # lookup fallback.
+    if principal.tenant_id:
+        tenant_id = resolve_principal_tenant_id(
+            payload.tenant_id,
+            x_tenant_id,
+            principal.tenant_id,
+        )
+    else:
+        requested_tenant_id = None
+        if payload.tenant_id or x_tenant_id:
+            requested_tenant_id = resolve_principal_tenant_id(
+                payload.tenant_id,
+                x_tenant_id,
+                None,
+            )
+
+        api_key_tenant_id = _lookup_tenant_id_for_api_key(x_regengine_api_key)
+        if api_key_tenant_id:
+            if requested_tenant_id and requested_tenant_id != api_key_tenant_id:
+                raise HTTPException(
+                    status_code=403,
+                    detail="Tenant mismatch: your API key does not have access to this tenant.",
+                )
+            tenant_id = api_key_tenant_id
+        else:
+            tenant_id = requested_tenant_id
+
+        if not tenant_id:
+            logger.error("Webhook rejected: no tenant_id resolved")
+            raise HTTPException(status_code=400, detail="Tenant context required")
+
     validate_tenant_id(tenant_id)
 
     # Rate limiting (tenant-scoped)

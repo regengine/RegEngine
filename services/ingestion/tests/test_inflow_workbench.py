@@ -4,12 +4,35 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 import app.inflow_workbench as workbench
+from app.authz import IngestionPrincipal
 from app.inflow_workbench import router
 
 
-def _client(tmp_path, monkeypatch) -> TestClient:
+def _principal(
+    tenant_id: str | None = "tenant-a",
+    scopes: list[str] | None = None,
+) -> IngestionPrincipal:
+    return IngestionPrincipal(
+        key_id="test-key",
+        scopes=scopes or ["inflow.read", "inflow.write"],
+        tenant_id=tenant_id,
+        auth_mode="test",
+    )
+
+
+def _client(
+    tmp_path,
+    monkeypatch,
+    principal: IngestionPrincipal | None = None,
+    *,
+    override_auth: bool = True,
+) -> TestClient:
     monkeypatch.setenv("REGENGINE_INFLOW_WORKBENCH_PATH", str(tmp_path / "workbench.json"))
     app = FastAPI()
+    if override_auth:
+        principal = principal or _principal()
+        app.dependency_overrides[workbench.require_inflow_read] = lambda: principal
+        app.dependency_overrides[workbench.require_inflow_write] = lambda: principal
     app.include_router(router)
     return TestClient(app)
 
@@ -71,6 +94,15 @@ def test_lists_built_in_scenarios(tmp_path, monkeypatch):
     }
 
 
+def test_workbench_routes_require_authentication(tmp_path, monkeypatch):
+    monkeypatch.setenv("REGENGINE_ENV", "production")
+    client = _client(tmp_path, monkeypatch, override_auth=False)
+
+    response = client.get("/api/v1/inflow-workbench/scenarios?tenant_id=tenant-a")
+
+    assert response.status_code == 401
+
+
 def test_persists_custom_scenario_and_saved_run(tmp_path, monkeypatch):
     client = _client(tmp_path, monkeypatch)
 
@@ -119,6 +151,58 @@ def test_persists_custom_scenario_and_saved_run(tmp_path, monkeypatch):
     assert patch_resp.json()["owner"] == "Supplier A"
 
 
+def test_scoped_principal_cannot_override_tenant(tmp_path, monkeypatch):
+    client = _client(tmp_path, monkeypatch, _principal(tenant_id="tenant-a"))
+
+    response = client.post(
+        "/api/v1/inflow-workbench/scenarios",
+        json={
+            "tenant_id": "tenant-b",
+            "name": "Cross tenant scenario",
+            "outcome": "Should be rejected",
+            "csv": "cte_type,traceability_lot_code\nshipping,TLC-1",
+        },
+    )
+
+    assert response.status_code == 403
+    assert "Tenant mismatch" in response.json()["detail"]
+
+
+def test_scoped_principal_tenant_is_used_when_body_omits_tenant(tmp_path, monkeypatch):
+    client = _client(tmp_path, monkeypatch, _principal(tenant_id="tenant-a"))
+
+    response = client.post(
+        "/api/v1/inflow-workbench/scenarios",
+        json={
+            "name": "Principal scoped scenario",
+            "outcome": "Tenant comes from auth",
+            "csv": "cte_type,traceability_lot_code\nshipping,TLC-1",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["tenant_id"] == "tenant-a"
+
+
+def test_saved_run_is_not_visible_to_other_tenant(tmp_path, monkeypatch):
+    client_a = _client(tmp_path, monkeypatch, _principal(tenant_id="tenant-a"))
+    run_resp = client_a.post(
+        "/api/v1/inflow-workbench/runs",
+        json={
+            "source": "inflow-lab-data-feeder",
+            "csv": "cte_type,traceability_lot_code\nshipping,TLC-FEED-002",
+            "result": _sandbox_result(blocked=False),
+        },
+    )
+    assert run_resp.status_code == 200
+    run_id = run_resp.json()["run_id"]
+
+    client_b = _client(tmp_path, monkeypatch, _principal(tenant_id="tenant-b"))
+    leak_resp = client_b.get(f"/api/v1/inflow-workbench/runs/{run_id}")
+
+    assert leak_resp.status_code == 404
+
+
 def test_commit_gate_enforces_evidence_boundary(tmp_path, monkeypatch):
     client = _client(tmp_path, monkeypatch)
 
@@ -152,7 +236,8 @@ def test_commit_gate_enforces_evidence_boundary(tmp_path, monkeypatch):
 
 
 def test_uuid_tenant_saved_run_prefers_db_store_and_hashes_inputs(tmp_path, monkeypatch):
-    client = _client(tmp_path, monkeypatch)
+    tenant_id = "11111111-1111-1111-1111-111111111111"
+    client = _client(tmp_path, monkeypatch, _principal(tenant_id=tenant_id))
     captured: dict[str, workbench.WorkbenchRun] = {}
 
     def fake_db_save_run(run: workbench.WorkbenchRun) -> bool:
@@ -161,7 +246,6 @@ def test_uuid_tenant_saved_run_prefers_db_store_and_hashes_inputs(tmp_path, monk
 
     monkeypatch.setattr(workbench, "_db_save_run", fake_db_save_run)
 
-    tenant_id = "11111111-1111-1111-1111-111111111111"
     csv = "cte_type,traceability_lot_code\nshipping,TLC-FEED-002"
     response = client.post(
         "/api/v1/inflow-workbench/runs",
@@ -183,8 +267,8 @@ def test_uuid_tenant_saved_run_prefers_db_store_and_hashes_inputs(tmp_path, monk
 
 
 def test_tenant_qualified_fix_update_can_use_db_store(tmp_path, monkeypatch):
-    client = _client(tmp_path, monkeypatch)
     tenant_id = "22222222-2222-2222-2222-222222222222"
+    client = _client(tmp_path, monkeypatch, _principal(tenant_id=tenant_id))
     calls: list[tuple[str, str, str | None]] = []
 
     def fake_db_update_fix_item(

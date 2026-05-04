@@ -16,14 +16,18 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Literal, Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 
 from .sandbox.models import SandboxResponse
+from .authz import IngestionPrincipal, require_permission
+from .shared.tenant_resolution import resolve_principal_tenant_id
 
 
 router = APIRouter(prefix="/api/v1/inflow-workbench", tags=["Inflow Workbench"])
+require_inflow_read = require_permission("inflow.read")
+require_inflow_write = require_permission("inflow.write")
 
 FixStatus = Literal["open", "waiting", "corrected", "accepted"]
 FixSeverity = Literal["blocked", "warning", "info"]
@@ -96,7 +100,7 @@ class WorkbenchScenario(BaseModel):
 
 
 class CreateScenarioRequest(BaseModel):
-    tenant_id: str = Field(default="default")
+    tenant_id: Optional[str] = None
     name: str = Field(..., min_length=3, max_length=120)
     outcome: str = Field(default="Custom scenario")
     csv: str = Field(..., min_length=1)
@@ -136,7 +140,7 @@ class ReadinessSummary(BaseModel):
 
 class CommitGateRequest(BaseModel):
     mode: CommitMode
-    tenant_id: str = "default"
+    tenant_id: Optional[str] = None
     result: Optional[SandboxResponse] = None
     authenticated: bool = False
     persisted: bool = False
@@ -153,7 +157,7 @@ class CommitGateDecision(BaseModel):
 
 
 class SaveRunRequest(BaseModel):
-    tenant_id: str = Field(default="default")
+    tenant_id: Optional[str] = None
     source: str = Field(default="inflow-lab")
     csv: str = Field(default="")
     result: SandboxResponse
@@ -200,6 +204,21 @@ def _tenant_uuid(tenant_id: str) -> Optional[str]:
         return str(uuid.UUID(str(tenant_id)))
     except (TypeError, ValueError):
         return None
+
+
+def _resolve_workbench_tenant(
+    explicit_tenant_id: Optional[str],
+    x_tenant_id: Optional[str],
+    principal: IngestionPrincipal,
+) -> str:
+    """Resolve the tenant for a workbench request from authenticated context."""
+    if "*" in principal.scopes:
+        if explicit_tenant_id or x_tenant_id:
+            return resolve_principal_tenant_id(explicit_tenant_id, x_tenant_id, None)
+        if principal.tenant_id:
+            return principal.tenant_id
+        raise HTTPException(status_code=400, detail="Tenant context required")
+    return resolve_principal_tenant_id(explicit_tenant_id, x_tenant_id, principal.tenant_id)
 
 
 def _json_model(value: BaseModel) -> str:
@@ -827,7 +846,12 @@ def decide_commit_gate(payload: CommitGateRequest) -> CommitGateDecision:
 
 
 @router.get("/scenarios", response_model=list[WorkbenchScenario])
-async def list_scenarios(tenant_id: str = Query(default="default")) -> list[WorkbenchScenario]:
+async def list_scenarios(
+    tenant_id: Optional[str] = Query(default=None),
+    x_tenant_id: Optional[str] = Header(default=None, alias="X-Tenant-ID"),
+    principal: IngestionPrincipal = Depends(require_inflow_read),
+) -> list[WorkbenchScenario]:
+    tenant_id = _resolve_workbench_tenant(tenant_id, x_tenant_id, principal)
     db_scenarios = _db_list_scenarios(tenant_id)
     if db_scenarios is not None:
         return [WorkbenchScenario(**item) for item in BUILT_IN_SCENARIOS] + db_scenarios
@@ -843,8 +867,13 @@ async def list_scenarios(tenant_id: str = Query(default="default")) -> list[Work
 
 
 @router.post("/scenarios", response_model=WorkbenchScenario)
-async def create_scenario(payload: CreateScenarioRequest) -> WorkbenchScenario:
-    tenant_id = _tenant_uuid(payload.tenant_id) or payload.tenant_id
+async def create_scenario(
+    payload: CreateScenarioRequest,
+    x_tenant_id: Optional[str] = Header(default=None, alias="X-Tenant-ID"),
+    principal: IngestionPrincipal = Depends(require_inflow_write),
+) -> WorkbenchScenario:
+    tenant_id = _resolve_workbench_tenant(payload.tenant_id, x_tenant_id, principal)
+    tenant_id = _tenant_uuid(tenant_id) or tenant_id
     scenario = WorkbenchScenario(
         id=f"custom-{uuid.uuid4().hex[:12]}",
         tenant_id=tenant_id,
@@ -866,12 +895,20 @@ async def create_scenario(payload: CreateScenarioRequest) -> WorkbenchScenario:
 
 
 @router.post("/readiness/preview", response_model=ReadinessSummary)
-async def preview_readiness(result: SandboxResponse) -> ReadinessSummary:
+async def preview_readiness(
+    result: SandboxResponse,
+    _principal: IngestionPrincipal = Depends(require_inflow_read),
+) -> ReadinessSummary:
     return build_readiness_summary(result)
 
 
 @router.get("/readiness/summary", response_model=WorkbenchReadinessSnapshot)
-async def readiness_summary(tenant_id: str = Query(default="default")) -> WorkbenchReadinessSnapshot:
+async def readiness_summary(
+    tenant_id: Optional[str] = Query(default=None),
+    x_tenant_id: Optional[str] = Header(default=None, alias="X-Tenant-ID"),
+    principal: IngestionPrincipal = Depends(require_inflow_read),
+) -> WorkbenchReadinessSnapshot:
+    tenant_id = _resolve_workbench_tenant(tenant_id, x_tenant_id, principal)
     db_snapshot = _db_readiness_snapshot(tenant_id)
     if db_snapshot is not None:
         return db_snapshot
@@ -879,14 +916,24 @@ async def readiness_summary(tenant_id: str = Query(default="default")) -> Workbe
 
 
 @router.post("/commit-gate", response_model=CommitGateDecision)
-async def commit_gate(payload: CommitGateRequest) -> CommitGateDecision:
+async def commit_gate(
+    payload: CommitGateRequest,
+    x_tenant_id: Optional[str] = Header(default=None, alias="X-Tenant-ID"),
+    principal: IngestionPrincipal = Depends(require_inflow_write),
+) -> CommitGateDecision:
+    payload.tenant_id = _resolve_workbench_tenant(payload.tenant_id, x_tenant_id, principal)
     return decide_commit_gate(payload)
 
 
 @router.post("/runs", response_model=WorkbenchRun)
-async def save_run(payload: SaveRunRequest) -> WorkbenchRun:
+async def save_run(
+    payload: SaveRunRequest,
+    x_tenant_id: Optional[str] = Header(default=None, alias="X-Tenant-ID"),
+    principal: IngestionPrincipal = Depends(require_inflow_write),
+) -> WorkbenchRun:
     run_id = f"run-{uuid.uuid4().hex[:12]}"
-    tenant_id = _tenant_uuid(payload.tenant_id) or payload.tenant_id
+    tenant_id = _resolve_workbench_tenant(payload.tenant_id, x_tenant_id, principal)
+    tenant_id = _tenant_uuid(tenant_id) or tenant_id
     readiness = build_readiness_summary(payload.result)
     fix_queue = build_fix_queue(payload.result, tenant_id, run_id)
     commit_gate_decision = decide_commit_gate(
@@ -929,22 +976,32 @@ async def save_run(payload: SaveRunRequest) -> WorkbenchRun:
 
 
 @router.get("/runs/{run_id}", response_model=WorkbenchRun)
-async def get_run(run_id: str, tenant_id: Optional[str] = Query(default=None)) -> WorkbenchRun:
-    if tenant_id:
-        db_run = _db_get_run(run_id, tenant_id)
-        if db_run is not None:
-            return db_run
+async def get_run(
+    run_id: str,
+    tenant_id: Optional[str] = Query(default=None),
+    x_tenant_id: Optional[str] = Header(default=None, alias="X-Tenant-ID"),
+    principal: IngestionPrincipal = Depends(require_inflow_read),
+) -> WorkbenchRun:
+    tenant_id = _resolve_workbench_tenant(tenant_id, x_tenant_id, principal)
+    db_run = _db_get_run(run_id, tenant_id)
+    if db_run is not None:
+        return db_run
 
     with _STORE_LOCK:
         store = _read_store()
     run = store["runs"].get(run_id)
-    if not run:
+    if not run or run.get("tenant_id") != tenant_id:
         raise HTTPException(status_code=404, detail="Workbench run not found")
     return WorkbenchRun(**run)
 
 
 @router.get("/fix-queue", response_model=list[FixQueueItem])
-async def list_fix_queue(tenant_id: str = Query(default="default")) -> list[FixQueueItem]:
+async def list_fix_queue(
+    tenant_id: Optional[str] = Query(default=None),
+    x_tenant_id: Optional[str] = Header(default=None, alias="X-Tenant-ID"),
+    principal: IngestionPrincipal = Depends(require_inflow_read),
+) -> list[FixQueueItem]:
+    tenant_id = _resolve_workbench_tenant(tenant_id, x_tenant_id, principal)
     db_items = _db_list_fix_queue(tenant_id)
     if db_items is not None:
         return db_items
@@ -964,16 +1021,18 @@ async def update_fix_item(
     item_id: str,
     payload: UpdateFixItemRequest,
     tenant_id: Optional[str] = Query(default=None),
+    x_tenant_id: Optional[str] = Header(default=None, alias="X-Tenant-ID"),
+    principal: IngestionPrincipal = Depends(require_inflow_write),
 ) -> FixQueueItem:
-    if tenant_id:
-        db_item = _db_update_fix_item(item_id, tenant_id, payload)
-        if db_item is not None:
-            return db_item
+    tenant_id = _resolve_workbench_tenant(tenant_id, x_tenant_id, principal)
+    db_item = _db_update_fix_item(item_id, tenant_id, payload)
+    if db_item is not None:
+        return db_item
 
     with _STORE_LOCK:
         store = _read_store()
         item = store["fix_queue"].get(item_id)
-        if not item:
+        if not item or item.get("tenant_id") != tenant_id:
             raise HTTPException(status_code=404, detail="Fix queue item not found")
         if payload.status:
             item["status"] = payload.status

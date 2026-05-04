@@ -1355,6 +1355,69 @@ class TestIngestEndpoint:
         assert resp.status_code == 200
         assert persistence.batch_calls[0]["tenant_id"] == "tenant-from-header"
 
+    def test_scoped_principal_rejects_body_tenant_override(self, monkeypatch):
+        """#2069: a tenant-scoped key cannot write to another tenant by
+        smuggling tenant_id in the webhook body."""
+        client, _session, persistence = _client(monkeypatch)
+        client.app.dependency_overrides[get_ingestion_principal] = lambda: IngestionPrincipal(
+            key_id="scoped-key",
+            scopes=["webhooks.ingest"],
+            tenant_id="tenant-a",
+            auth_mode="scoped_key",
+        )
+
+        resp = client.post(
+            "/api/v1/webhooks/ingest",
+            json=self._payload(tenant_id="tenant-b"),
+            headers={"Idempotency-Key": "idem-scoped-mismatch"},
+        )
+
+        assert resp.status_code == 403
+        assert "Tenant mismatch" in resp.json()["detail"]
+        assert persistence.batch_calls == []
+
+    def test_scoped_principal_accepts_matching_body_tenant(self, monkeypatch):
+        """Matching body tenant_id is accepted, but persistence still uses
+        the scoped principal's tenant as the authority."""
+        client, _session, persistence = _client(monkeypatch)
+        client.app.dependency_overrides[get_ingestion_principal] = lambda: IngestionPrincipal(
+            key_id="scoped-key",
+            scopes=["webhooks.ingest"],
+            tenant_id="tenant-a",
+            auth_mode="scoped_key",
+        )
+
+        resp = client.post(
+            "/api/v1/webhooks/ingest",
+            json=self._payload(tenant_id="tenant-a"),
+            headers={"Idempotency-Key": "idem-scoped-match"},
+        )
+
+        assert resp.status_code == 200
+        assert persistence.batch_calls[0]["tenant_id"] == "tenant-a"
+
+    def test_scoped_principal_uses_tenant_when_body_omits_tenant(self, monkeypatch):
+        """#2069: scoped keys do not need body tenant_id; the principal
+        tenant becomes the persistence tenant."""
+        client, _session, persistence = _client(monkeypatch)
+        client.app.dependency_overrides[get_ingestion_principal] = lambda: IngestionPrincipal(
+            key_id="scoped-key",
+            scopes=["webhooks.ingest"],
+            tenant_id="tenant-a",
+            auth_mode="scoped_key",
+        )
+        payload = self._payload()
+        payload.pop("tenant_id")
+
+        resp = client.post(
+            "/api/v1/webhooks/ingest",
+            json=payload,
+            headers={"Idempotency-Key": "idem-scoped-omitted"},
+        )
+
+        assert resp.status_code == 200
+        assert persistence.batch_calls[0]["tenant_id"] == "tenant-a"
+
     def test_missing_tenant_returns_400(self, monkeypatch):
         client, _session, _persistence = _client(monkeypatch)
         payload = self._payload()
