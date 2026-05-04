@@ -267,7 +267,7 @@ describe('cookie-managed credential passthrough', () => {
         expect(outgoing.has('x-regengine-api-key')).toBe(false);
     });
 
-    it('injects the server API key only after a real session credential is present', () => {
+    it('does not convert a session credential into the server API key', () => {
         process.env.REGENGINE_API_KEY = 'server-side-key'; // pragma: allowlist secret
         const outgoing = new Headers();
         const request = makeProxyRequest({}, { re_access_token: 'real-token' });
@@ -275,7 +275,7 @@ describe('cookie-managed credential passthrough', () => {
         applyCookieCredentials(outgoing, request);
 
         expect(outgoing.get('authorization')).toBe('Bearer real-token');
-        expect(outgoing.get('x-regengine-api-key')).toBe('server-side-key');
+        expect(outgoing.has('x-regengine-api-key')).toBe(false);
     });
 
     it('prefers the tenant cookie over browser-provided tenant headers', () => {
