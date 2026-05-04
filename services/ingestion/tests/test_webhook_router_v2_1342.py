@@ -18,9 +18,6 @@ See #1342 for the overall coverage sweep plan.
 
 from __future__ import annotations
 
-import hashlib
-import hmac
-import json
 import sys
 import types
 from datetime import datetime, timedelta, timezone
@@ -36,10 +33,10 @@ sys.path.insert(0, str(service_dir))
 
 pytest.importorskip("fastapi")
 
-import app.webhook_router_v2 as wr
-from app.authz import IngestionPrincipal, get_ingestion_principal
-from app.webhook_models import IngestEvent, WebhookCTEType, WebhookPayload
-from shared.database import get_db_session
+import app.webhook_router_v2 as wr  # noqa: E402
+from app.authz import IngestionPrincipal, get_ingestion_principal  # noqa: E402
+from app.webhook_models import IngestEvent  # noqa: E402
+from shared.database import get_db_session  # noqa: E402
 
 
 # ---------------------------------------------------------------------------
@@ -80,8 +77,17 @@ def _make_shipping_event(
     return payload
 
 
+def _uuid_for_index(index: int) -> str:
+    return f"00000000-0000-0000-0000-{index:012d}"
+
+
 class _StoreResult:
-    def __init__(self, event_id: str = "evt-new", sha: str = "a" * 64, chain: str = "b" * 64):
+    def __init__(
+        self,
+        event_id: str = "00000000-0000-0000-0000-000000000001",
+        sha: str = "a" * 64,
+        chain: str = "b" * 64,
+    ):
         self.event_id = event_id
         self.sha256_hash = sha
         self.chain_hash = chain
@@ -116,7 +122,7 @@ class _FakePersistence:
         if self.batch_raises is not None:
             raise self.batch_raises
         return [
-            _StoreResult(event_id=f"evt-{i}", sha="a" * 64, chain="b" * 64)
+            _StoreResult(event_id=_uuid_for_index(i + 1), sha="a" * 64, chain="b" * 64)
             for i, _ in enumerate(events)
         ]
 
@@ -126,7 +132,7 @@ class _FakePersistence:
         )
         if self.store_raises is not None:
             raise self.store_raises
-        return _StoreResult(event_id=f"evt-{traceability_lot_code}")
+        return _StoreResult(event_id=_uuid_for_index(len(self.store_calls)))
 
     def verify_chain(self, tenant_id: str):
         _ = tenant_id
@@ -259,6 +265,9 @@ def _install_shared_stubs(
             self.from_entity_reference = None
             self.to_entity_reference = None
             self.kdes = {}
+
+        def prepare_for_persistence(self):
+            return self
 
     monkeypatch.setattr(
         wr, "normalize_webhook_event", lambda event, tenant_id, **_: _FakeCanonical(event.traceability_lot_code)

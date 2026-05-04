@@ -90,6 +90,26 @@ class _FakeExceptionQueueService:
         })
 
 
+class _FakeCanonical:
+    def __init__(self, event: Any) -> None:
+        self.event_id = "canonical-uuid-fresh"
+        self.event_type = SimpleNamespace(value=event.cte_type.value)
+        self.traceability_lot_code = event.traceability_lot_code
+        self.product_reference = None
+        self.quantity = event.quantity
+        self.unit_of_measure = event.unit_of_measure
+        self.from_facility_reference = None
+        self.to_facility_reference = None
+        self.from_entity_reference = None
+        self.to_entity_reference = None
+        self.kdes = event.kdes
+        self.prepare_call_count = 0
+
+    def prepare_for_persistence(self) -> "_FakeCanonical":
+        self.prepare_call_count += 1
+        return self
+
+
 def _fake_normalize_webhook_event(event: Any, tenant_id: str, **_: Any) -> Any:
     """Stub that returns a fresh canonical with a per-call unique event_id.
 
@@ -97,19 +117,7 @@ def _fake_normalize_webhook_event(event: Any, tenant_id: str, **_: Any) -> Any:
     don't need true UUIDs, but they DO need the event_id to be non-empty
     so the ``persist_summary`` event_id assertion is meaningful.
     """
-    return SimpleNamespace(
-        event_id="canonical-uuid-fresh",
-        event_type=SimpleNamespace(value=event.cte_type.value),
-        traceability_lot_code=event.traceability_lot_code,
-        product_reference=None,
-        quantity=event.quantity,
-        unit_of_measure=event.unit_of_measure,
-        from_facility_reference=None,
-        to_facility_reference=None,
-        from_entity_reference=None,
-        to_entity_reference=None,
-        kdes=event.kdes,
-    )
+    return _FakeCanonical(event)
 
 
 # ---------------------------------------------------------------------------
@@ -212,7 +220,7 @@ class TestFastPathUsingPreComputedSummary:
         # Canonical persisted exactly once.
         assert _FakeCanonicalEventStore.persist_call_count == 1
         assert _FakeCanonicalEventStore.init_kwargs == [
-            {"dual_write": False, "skip_chain_write": True}
+            {"dual_write": False, "skip_chain_write": False}
         ]
         # persist_summary called once with the pre-computed summary.
         assert len(_FakeEngine.persist_summary_calls) == 1
@@ -360,3 +368,26 @@ class TestCommonInvariants:
         call = _FakeEngine.persist_summary_calls[0]
         assert call["event_id"] == "canonical-uuid-fresh"
         assert call["event_id"] != "PRE_EVAL_SENTINEL_DO_NOT_USE"
+
+    def test_canonical_reuses_legacy_cte_event_id_for_required_chain_write(self, _make_event):
+        """``fsma.hash_chain.cte_event_id`` still FKs ``fsma.cte_events``.
+
+        Webhook ingestion writes the legacy CTE row first, then required
+        canonical persistence writes chain evidence in the same transaction.
+        The canonical event must therefore reuse the legacy CTE UUID instead
+        of minting a fresh UUID that the hash-chain FK cannot resolve.
+        """
+        legacy_event_id = "11111111-2222-3333-4444-555555555555"
+        precomputed = _compliant_summary()
+        wrv2._persist_canonical_and_eval(
+            db_session=MagicMock(),
+            event=_make_event,
+            tenant_id="t-1",
+            precomputed_summary=precomputed,
+            canonical_event_id=legacy_event_id,
+        )
+
+        canonical = _FakeCanonicalEventStore.persist_args[0]
+        assert str(canonical.event_id) == legacy_event_id
+        assert canonical.prepare_call_count == 1
+        assert _FakeEngine.persist_summary_calls[0]["event_id"] == legacy_event_id

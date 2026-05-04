@@ -18,6 +18,7 @@ import hmac
 import json
 import os
 from datetime import datetime, timedelta, timezone
+from uuid import UUID
 
 import structlog
 from typing import Optional
@@ -789,6 +790,7 @@ def _persist_canonical_and_eval(
     tenant_id: str,
     precomputed_summary,
     source: str = "webhook_api",
+    canonical_event_id: str | None = None,
 ) -> None:
     """Persist canonical event + write rule eval rows + create exception
     queue entries for non-compliant verdicts.
@@ -829,7 +831,14 @@ def _persist_canonical_and_eval(
     from shared.rules_engine import RulesEngine  # noqa: PLC0415
 
     canonical = normalize_webhook_event(event, tenant_id, source=source)
-    store = CanonicalEventStore(db_session, dual_write=False, skip_chain_write=True)
+    if canonical_event_id is not None:
+        # fsma.hash_chain.cte_event_id still references the legacy
+        # fsma.cte_events row. Bind the canonical row to the CTEPersistence
+        # UUID that was already inserted in this transaction before writing
+        # required canonical chain evidence.
+        canonical.event_id = UUID(str(canonical_event_id))
+        canonical.prepare_for_persistence()
+    store = CanonicalEventStore(db_session, dual_write=False, skip_chain_write=False)
     store.persist_event(canonical)
     engine = RulesEngine(db_session)
 
@@ -869,6 +878,7 @@ def _persist_required_canonical_and_eval(
     tenant_id: str,
     precomputed_summary,
     source: str = "webhook_api",
+    canonical_event_id: str | None = None,
 ) -> None:
     """Persist canonical evidence or fail the ingest transaction."""
     try:
@@ -878,6 +888,7 @@ def _persist_required_canonical_and_eval(
             tenant_id,
             precomputed_summary,
             source=source,
+            canonical_event_id=canonical_event_id,
         )
     except Exception as exc:  # noqa: BLE001
         raise _CanonicalPersistenceError(
@@ -1217,6 +1228,7 @@ async def ingest_events(
                         tenant_id,
                         precomputed_summary,
                         source=payload.source,
+                        canonical_event_id=store_result.event_id,
                     )
 
                     # Post-ingest graph sync (non-blocking)
@@ -1294,6 +1306,7 @@ async def ingest_events(
                             tenant_id,
                             _fb_summary,
                             source=payload.source,
+                            canonical_event_id=store_result.event_id,
                         )
 
                         _publish_graph_sync(store_result.event_id, event, tenant_id)
