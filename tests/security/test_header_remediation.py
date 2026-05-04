@@ -1,6 +1,4 @@
-import pytest
 import uuid
-import os
 
 from fastapi import FastAPI, Depends
 from fastapi.testclient import TestClient
@@ -78,3 +76,43 @@ def test_authenticated_internal_header_accepted(monkeypatch):
 
     assert response.status_code == 200
     assert response.json()["tenant_id"] == valid_tenant
+
+
+def test_tenant_extraction_errors_fail_closed_on_protected_paths(monkeypatch):
+    """Unexpected extraction errors must not silently continue as tenant=None."""
+
+    async def _boom(self, request):
+        raise ValueError("bad tenant material")
+
+    monkeypatch.setattr(TenantContextMiddleware, "_extract_tenant_id", _boom)
+
+    protected_app = FastAPI()
+    protected_app.add_middleware(TenantContextMiddleware)
+
+    @protected_app.get("/protected")
+    async def protected():
+        return {"ok": True}
+
+    response = TestClient(protected_app, raise_server_exceptions=False).get("/protected")
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Unable to establish tenant context"
+
+
+def test_tenant_extraction_errors_continue_on_exempt_paths(monkeypatch):
+    """Health/probe paths may proceed without tenant context."""
+
+    async def _boom(self, request):
+        raise ValueError("bad tenant material")
+
+    monkeypatch.setattr(TenantContextMiddleware, "_extract_tenant_id", _boom)
+
+    exempt_app = FastAPI()
+    exempt_app.add_middleware(TenantContextMiddleware)
+
+    @exempt_app.get("/health")
+    async def health():
+        return {"ok": True}
+
+    response = TestClient(exempt_app, raise_server_exceptions=False).get("/health")
+    assert response.status_code == 200
+    assert response.json() == {"ok": True}

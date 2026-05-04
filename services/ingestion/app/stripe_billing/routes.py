@@ -232,7 +232,7 @@ async def create_checkout(
 async def get_subscription(
     tenant_id: str,
     _: None = None,
-    principal: IngestionPrincipal = Depends(get_ingestion_principal),
+    principal: IngestionPrincipal = Depends(require_permission("billing.subscription.read")),
 ) -> SubscriptionStatus:
     """Get current subscription status for a tenant."""
     _helpers_mod._configure_stripe()

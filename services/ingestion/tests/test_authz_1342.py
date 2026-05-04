@@ -30,6 +30,7 @@ from app import authz
 from app.authz import (
     IngestionPrincipal,
     _check_auth_rate_limit,
+    _is_dev_env,
     _is_production_env,
     _lookup_scoped_key_from_db,
     _normalize_permission,
@@ -127,6 +128,8 @@ class TestAuthFailureRateLimit:
 
 
 class TestIsProductionEnv:
+    """Fail-closed environment detection for dev-open auth."""
+
     def test_regengine_env_production(self, _strip_env, monkeypatch):
         monkeypatch.setenv("REGENGINE_ENV", "production")
         assert _is_production_env() is True
@@ -147,14 +150,25 @@ class TestIsProductionEnv:
         monkeypatch.setenv("DATABASE_URL", "postgres://x@railway.app/db")
         assert _is_production_env() is True
 
-    def test_all_unset_returns_false(self, _strip_env):
-        assert _is_production_env() is False
+    def test_all_unset_is_production_fail_closed(self, _strip_env):
+        assert _is_production_env() is True
 
     def test_dev_env_returns_false(self, _strip_env, monkeypatch):
         monkeypatch.setenv("REGENGINE_ENV", "development")
         monkeypatch.setenv("ENV", "staging")
         monkeypatch.setenv("DATABASE_URL", "postgres://localhost:5432/db")
         assert _is_production_env() is False
+
+    def test_test_env_returns_false(self, _strip_env, monkeypatch):
+        monkeypatch.setenv("REGENGINE_ENV", "test")
+        assert _is_production_env() is False
+
+    def test_is_dev_env_requires_explicit_dev_or_test(self, _strip_env, monkeypatch):
+        assert _is_dev_env() is False
+        monkeypatch.setenv("REGENGINE_ENV", "staging")
+        assert _is_dev_env() is False
+        monkeypatch.setenv("REGENGINE_ENV", "development")
+        assert _is_dev_env() is True
 
 
 # ---------------------------------------------------------------------------
@@ -684,7 +698,7 @@ class TestGetIngestionPrincipal:
         from app import config as cfg
         cfg.get_settings.cache_clear()
         # API_KEY stripped via _strip_env
-        monkeypatch.setattr(authz, "_is_production_env", lambda: False)
+        monkeypatch.setattr(authz, "_is_dev_env", lambda: True)
         app = _build_app()
         client = TestClient(app)
         resp = client.get("/whoami")
@@ -696,7 +710,7 @@ class TestGetIngestionPrincipal:
     ):
         from app import config as cfg
         cfg.get_settings.cache_clear()
-        monkeypatch.setattr(authz, "_is_production_env", lambda: True)
+        monkeypatch.setattr(authz, "_is_dev_env", lambda: False)
         app = _build_app()
         client = TestClient(app)
         resp = client.get("/whoami")
@@ -707,7 +721,7 @@ class TestGetIngestionPrincipal:
     ):
         from app import config as cfg
         cfg.get_settings.cache_clear()
-        monkeypatch.setattr(authz, "_is_production_env", lambda: False)
+        monkeypatch.setattr(authz, "_is_dev_env", lambda: True)
 
         async def _fake_require(request, x_regengine_api_key):
             return SimpleNamespace(
@@ -728,7 +742,7 @@ class TestGetIngestionPrincipal:
     ):
         from app import config as cfg
         cfg.get_settings.cache_clear()
-        monkeypatch.setattr(authz, "_is_production_env", lambda: False)
+        monkeypatch.setattr(authz, "_is_dev_env", lambda: True)
 
         async def _fake_require(request, x_regengine_api_key):
             raise HTTPException(status_code=401, detail="no")
@@ -753,7 +767,7 @@ class TestGetIngestionPrincipal:
     ):
         from app import config as cfg
         cfg.get_settings.cache_clear()
-        monkeypatch.setattr(authz, "_is_production_env", lambda: False)
+        monkeypatch.setattr(authz, "_is_dev_env", lambda: True)
 
         async def _fake_require(request, x_regengine_api_key):
             raise HTTPException(status_code=401, detail="no")
@@ -772,7 +786,7 @@ class TestGetIngestionPrincipal:
     ):
         from app import config as cfg
         cfg.get_settings.cache_clear()
-        monkeypatch.setattr(authz, "_is_production_env", lambda: True)
+        monkeypatch.setattr(authz, "_is_dev_env", lambda: False)
 
         async def _fake_require(request, x_regengine_api_key):
             raise HTTPException(status_code=401, detail="no")
