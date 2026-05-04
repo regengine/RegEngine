@@ -56,49 +56,9 @@ configMapGenerator:
       - LLM_TIMEOUT_S=45
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
 
-secretGenerator:
-  - name: admin-secrets
-    literals:
-      - DATABASE_URL=replace-with-production-database-url
-      - REDIS_URL=replace-with-production-redis-url
-      - AUTH_SECRET_KEY=replace-with-production-auth-secret
-      - REGENGINE_API_KEY=replace-with-production-api-key
-      - ADMIN_MASTER_KEY=replace-with-production-admin-master-key
-      - METRICS_API_KEY=replace-with-production-metrics-key
-  - name: compliance-secrets
-    literals:
-      - DATABASE_URL=replace-with-production-database-url
-      - AUTH_SECRET_KEY=replace-with-production-auth-secret
-      - REGENGINE_API_KEY=replace-with-production-api-key
-      - METRICS_API_KEY=replace-with-production-metrics-key
-  - name: ingestion-secrets
-    literals:
-      - DATABASE_URL=replace-with-production-database-url
-      - AUTH_SECRET_KEY=replace-with-production-auth-secret
-      - REGENGINE_API_KEY=replace-with-production-api-key
-      - REGENGINE_INTERNAL_SECRET=replace-with-production-internal-secret
-      - METRICS_API_KEY=replace-with-production-metrics-key
-  - name: scheduler-secrets
-    literals:
-      - DATABASE_URL=replace-with-production-database-url
-      - REDIS_URL=replace-with-production-redis-url
-      - REGENGINE_INTERNAL_SECRET=replace-with-production-internal-secret
-      - METRICS_API_KEY=replace-with-production-metrics-key
-  - name: graph-secrets
-    literals:
-      - DATABASE_URL=replace-with-production-database-url
-      - REDIS_URL=replace-with-production-redis-url
-      - NEO4J_PASSWORD=replace-with-production-neo4j-password
-      - AUTH_SECRET_KEY=replace-with-production-auth-secret
-      - REGENGINE_API_KEY=replace-with-production-api-key
-      - METRICS_API_KEY=replace-with-production-metrics-key
-  - name: nlp-secrets
-    literals:
-      - DATABASE_URL=replace-with-production-database-url
-      - OPENAI_API_KEY=replace-with-production-openai-key
-      - AUTH_SECRET_KEY=replace-with-production-auth-secret
-      - REGENGINE_API_KEY=replace-with-production-api-key
-      - METRICS_API_KEY=replace-with-production-metrics-key
+# Production Secrets are provisioned outside this overlay by the cluster
+# secret manager. Do not generate placeholder Secret objects here; applying a
+# rendered placeholder would roll workloads with invalid credentials.
 
 # IMAGE_TAG is set by CI/CD (e.g. the git SHA or semver tag).
 # All base deployments use $(IMAGE_TAG) as a placeholder; kustomize

@@ -38,17 +38,6 @@ data:
           - send_resolved: true
             url_file: /etc/alertmanager/secrets/critical-webhook-url
 ---
-apiVersion: v1
-kind: Secret
-metadata:
-  name: alertmanager-routing-secrets
-  labels:
-    app: alertmanager
-type: Opaque
-stringData:
-  webhook-url: https://replace-with-durable-incident-webhook.example.invalid/alerts
-  critical-webhook-url: https://replace-with-critical-incident-webhook.example.invalid/alerts
----
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
@@ -117,6 +106,8 @@ spec:
             name: alertmanager-config
         - name: routing-secrets
           secret:
+            # Provisioned externally by the cluster secret manager. Do not
+            # render placeholder webhook URLs into production manifests.
             secretName: alertmanager-routing-secrets  # pragma: allowlist secret
   volumeClaimTemplates:
     - metadata:
