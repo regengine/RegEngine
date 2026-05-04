@@ -5,6 +5,7 @@ A unified diagnostic tool for solo builders to verify the entire stack.
 Checks: Ports, Database connectivity, Redis (Distributed Rate Limiting), and the supported agent helper.
 """
 
+import importlib.util
 import os
 import socket
 from pathlib import Path
@@ -54,16 +55,21 @@ def check_redis_distributed() -> bool:
 
 def check_agent_helper() -> bool:
     """Verify the supported small-scale agent helper is present."""
-    expected_specs = {
-        "regengine-planner.agent.md",
-        "regengine-implementer.agent.md",
-        "regengine-security-review.agent.md",
-    }
-    agents_dir = REPO_ROOT / ".github" / "agents"
     helper = REPO_ROOT / "scripts" / "summon_agent.py"
-    if not helper.exists() or not agents_dir.exists():
+    if not helper.exists():
         return False
-    return expected_specs.issubset({path.name for path in agents_dir.glob("*.agent.md")})
+
+    try:
+        spec = importlib.util.spec_from_file_location("summon_agent", helper)
+        if spec is None or spec.loader is None:
+            return False
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        module.validate_supported_agent_specs(REPO_ROOT / ".github" / "agents")
+    except Exception:
+        return False
+
+    return True
 
 def run_diagnostics():
     print("\n" + "═" * 60)
