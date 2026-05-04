@@ -6,6 +6,7 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
+from uuid import UUID
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -13,9 +14,9 @@ from fastapi.testclient import TestClient
 service_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(service_dir))
 
-import app.webhook_router_v2 as webhook_router_v2
-from app.authz import IngestionPrincipal, get_ingestion_principal
-from app.webhook_router_v2 import _verify_api_key, _get_db_session
+import app.webhook_router_v2 as webhook_router_v2  # noqa: E402
+from app.authz import IngestionPrincipal, get_ingestion_principal  # noqa: E402
+from app.webhook_router_v2 import _verify_api_key, _get_db_session  # noqa: E402
 
 
 class _FakeDBSession:
@@ -38,7 +39,7 @@ class _FakePersistence:
 
     def store_event(self, **_kwargs):
         return SimpleNamespace(
-            event_id="evt-1",
+            event_id="00000000-0000-0000-0000-000000000001",
             sha256_hash="abc123",
             chain_hash="def456",
             idempotent=False,
@@ -48,13 +49,60 @@ class _FakePersistence:
         events = _kwargs.get("events", [])
         return [
             SimpleNamespace(
-                event_id=f"evt-{i+1}",
+                event_id=f"00000000-0000-0000-0000-{i + 1:012d}",
                 sha256_hash="abc123",
                 chain_hash="def456",
                 idempotent=False,
             )
             for i in range(len(events))
         ]
+
+
+class _FakeCanonical:
+    def __init__(self, tlc: str):
+        self.event_id = UUID("00000000-0000-0000-0000-00000000cafe")
+        self.event_type = SimpleNamespace(value="shipping")
+        self.traceability_lot_code = tlc
+        self.product_reference = "prod-ref"
+        self.quantity = 10
+        self.unit_of_measure = "cases"
+        self.from_facility_reference = None
+        self.to_facility_reference = None
+        self.from_entity_reference = None
+        self.to_entity_reference = None
+        self.kdes = {}
+
+    def prepare_for_persistence(self):
+        return self
+
+
+class _FakeCanonicalStore:
+    def __init__(self, *_args, **_kwargs):
+        pass
+
+    def persist_event(self, *_args, **_kwargs):
+        return None
+
+
+class _FakeRulesSummary:
+    compliant = True
+    results = []
+
+
+class _FakeRulesEngine:
+    def __init__(self, *_args, **_kwargs):
+        pass
+
+    def evaluate_event(self, *_args, **_kwargs):
+        return _FakeRulesSummary()
+
+
+class _FakeExceptionQueue:
+    def __init__(self, *_args, **_kwargs):
+        pass
+
+    def create_exceptions_from_evaluation(self, *_args, **_kwargs):
+        return None
 
 
 def test_ingest_events_emits_first_ingest_funnel_event(monkeypatch) -> None:
@@ -83,6 +131,22 @@ def test_ingest_events_emits_first_ingest_funnel_event(monkeypatch) -> None:
 
     monkeypatch.setitem(sys.modules, "shared.database", SimpleNamespace(SessionLocal=lambda: _FakeDBSession()))
     monkeypatch.setitem(sys.modules, "shared.cte_persistence", SimpleNamespace(CTEPersistence=_FakePersistence))
+    monkeypatch.setitem(
+        sys.modules,
+        "shared.canonical_persistence",
+        SimpleNamespace(CanonicalEventStore=_FakeCanonicalStore),
+    )
+    monkeypatch.setitem(sys.modules, "shared.rules_engine", SimpleNamespace(RulesEngine=_FakeRulesEngine))
+    monkeypatch.setitem(
+        sys.modules,
+        "shared.exception_queue",
+        SimpleNamespace(ExceptionQueueService=_FakeExceptionQueue),
+    )
+    monkeypatch.setattr(
+        webhook_router_v2,
+        "normalize_webhook_event",
+        lambda event, tenant_id, **_kwargs: _FakeCanonical(event.traceability_lot_code),
+    )
 
     payload = {
         "tenant_id": "00000000-0000-0000-0000-000000000111",

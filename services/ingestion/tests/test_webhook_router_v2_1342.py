@@ -18,9 +18,6 @@ See #1342 for the overall coverage sweep plan.
 
 from __future__ import annotations
 
-import hashlib
-import hmac
-import json
 import sys
 import types
 from datetime import datetime, timedelta, timezone
@@ -36,10 +33,10 @@ sys.path.insert(0, str(service_dir))
 
 pytest.importorskip("fastapi")
 
-import app.webhook_router_v2 as wr
-from app.authz import IngestionPrincipal, get_ingestion_principal
-from app.webhook_models import IngestEvent, WebhookCTEType, WebhookPayload
-from shared.database import get_db_session
+import app.webhook_router_v2 as wr  # noqa: E402
+from app.authz import IngestionPrincipal, get_ingestion_principal  # noqa: E402
+from app.webhook_models import IngestEvent  # noqa: E402
+from shared.database import get_db_session  # noqa: E402
 
 
 # ---------------------------------------------------------------------------
@@ -80,8 +77,17 @@ def _make_shipping_event(
     return payload
 
 
+def _uuid_for_index(index: int) -> str:
+    return f"00000000-0000-0000-0000-{index:012d}"
+
+
 class _StoreResult:
-    def __init__(self, event_id: str = "evt-new", sha: str = "a" * 64, chain: str = "b" * 64):
+    def __init__(
+        self,
+        event_id: str = "00000000-0000-0000-0000-000000000001",
+        sha: str = "a" * 64,
+        chain: str = "b" * 64,
+    ):
         self.event_id = event_id
         self.sha256_hash = sha
         self.chain_hash = chain
@@ -116,7 +122,7 @@ class _FakePersistence:
         if self.batch_raises is not None:
             raise self.batch_raises
         return [
-            _StoreResult(event_id=f"evt-{i}", sha="a" * 64, chain="b" * 64)
+            _StoreResult(event_id=_uuid_for_index(i + 1), sha="a" * 64, chain="b" * 64)
             for i, _ in enumerate(events)
         ]
 
@@ -126,7 +132,7 @@ class _FakePersistence:
         )
         if self.store_raises is not None:
             raise self.store_raises
-        return _StoreResult(event_id=f"evt-{traceability_lot_code}")
+        return _StoreResult(event_id=_uuid_for_index(len(self.store_calls)))
 
     def verify_chain(self, tenant_id: str):
         _ = tenant_id
@@ -259,6 +265,9 @@ def _install_shared_stubs(
             self.from_entity_reference = None
             self.to_entity_reference = None
             self.kdes = {}
+
+        def prepare_for_persistence(self):
+            return self
 
     monkeypatch.setattr(
         wr, "normalize_webhook_event", lambda event, tenant_id, **_: _FakeCanonical(event.traceability_lot_code)
@@ -1560,8 +1569,8 @@ class TestIngestEndpoint:
         assert resp.status_code == 200
         assert exc_calls  # ExceptionQueue.create_exceptions_from_evaluation was called
 
-    def test_canonical_mirror_failure_is_silently_skipped(self, monkeypatch):
-        """A broken canonical mirror must not fail the ingest."""
+    def test_canonical_mirror_failure_fails_request_and_rolls_back(self, monkeypatch):
+        """A broken canonical mirror must fail the ingest before success."""
         session, persistence = _install_shared_stubs(monkeypatch)
 
         class _BrokenCanonical:
@@ -1588,9 +1597,9 @@ class TestIngestEndpoint:
             json=self._payload(),
             headers={"Idempotency-Key": "idem-canon"},
         )
-        assert resp.status_code == 200
-        # Still accepted despite the broken canonical mirror.
-        assert resp.json()["accepted"] == 1
+        assert resp.status_code == 500
+        assert session.rolled_back is True
+        assert session.committed is False
 
     def test_per_event_fallback_non_compliant_triggers_exception_queue(self, monkeypatch):
         """Covers lines 974-978: in the per-event fallback path, a non-compliant
@@ -1641,10 +1650,8 @@ class TestIngestEndpoint:
         # The per-event fallback hit the non-compliant branch.
         assert exc_calls
 
-    def test_per_event_fallback_canonical_failure_is_silently_skipped(self, monkeypatch):
-        """Covers lines 977-978: the canonical-persist/rules-engine failure in
-        the per-event fallback path lands in the except clause, is logged, and
-        does not fail the overall ingest."""
+    def test_per_event_fallback_canonical_failure_fails_request(self, monkeypatch):
+        """Canonical failure in per-event fallback must fail the request."""
         session = _FakeSession()
         persistence = _FakePersistence(session, batch_raises=ValueError("batch fail"))
         _install_shared_stubs(monkeypatch, session=session, persistence=persistence)
@@ -1673,9 +1680,9 @@ class TestIngestEndpoint:
             json=self._payload(),
             headers={"Idempotency-Key": "idem-fb-canon"},
         )
-        assert resp.status_code == 200
-        # Still accepted despite the broken canonical mirror in the fallback.
-        assert resp.json()["accepted"] == 1
+        assert resp.status_code == 500
+        assert session.rolled_back is True
+        assert session.committed is False
 
     def test_per_event_fallback_catalog_failure_is_silently_skipped(self, monkeypatch):
         """Covers lines 992-993: the catalog-learn failure in the per-event

@@ -6,6 +6,7 @@ Replaces duplicate implementations in edi_ingestion, epcis_ingestion, and exchan
 
 from __future__ import annotations
 
+import hashlib
 import logging
 from typing import Optional
 
@@ -45,16 +46,17 @@ def _lookup_api_key_tenant_id(x_regengine_api_key: Optional[str]) -> Optional[st
 
     db = get_db_safe()
     try:
+        key_hash = hashlib.sha256(raw_api_key.encode("utf-8")).hexdigest()
         row = db.execute(
             text(
                 """
                 SELECT tenant_id
                 FROM api_keys
-                WHERE key_hash = encode(sha256(:raw::bytea), 'hex')
+                WHERE key_hash = :key_hash
                 LIMIT 1
                 """
             ),
-            {"raw": raw_api_key},
+            {"key_hash": key_hash},
         ).fetchone()
         if row and row[0]:
             return str(row[0]).strip()

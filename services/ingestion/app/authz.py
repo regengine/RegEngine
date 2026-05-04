@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+import hashlib
 import hmac
 import importlib
 import logging
 import os
-import time
 import threading
+import time
 from datetime import datetime, timezone
 from functools import lru_cache
 from typing import Optional
@@ -204,17 +205,18 @@ def _lookup_scoped_key_from_db(raw_api_key: str) -> Optional[IngestionPrincipal]
     try:
         from shared.database import SessionLocal
 
+        key_hash = hashlib.sha256(raw_api_key.encode("utf-8")).hexdigest()
         db_session = SessionLocal()
         row = db_session.execute(
             text(
                 """
                 SELECT key_id, tenant_id, scopes, enabled, expires_at
                 FROM api_keys
-                WHERE key_hash = encode(sha256(:raw::bytea), 'hex')
+                WHERE key_hash = :key_hash
                 LIMIT 1
                 """
             ),
-            {"raw": raw_api_key},
+            {"key_hash": key_hash},
         ).fetchone()
         if not row:
             return None
