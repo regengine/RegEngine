@@ -1,7 +1,7 @@
 'use client';
 
 import { fetchWithCsrf } from '@/lib/fetch-with-csrf';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
 
@@ -27,20 +27,7 @@ export default function MyControlsPage() {
   });
   const router = useRouter();
 
-  useEffect(() => {
-    if (!isHydrated) {
-      return;
-    }
-
-    if (!isAuthenticated || !apiKey) {
-      setLoading(false);
-      return;
-    }
-
-    fetchControls();
-  }, [apiKey, isAuthenticated, isHydrated]);
-
-  const fetchControls = async () => {
+  const fetchControls = useCallback(async () => {
     try {
       const response = await fetchWithCsrf('/api/controls/controls', {
         headers: {
@@ -54,7 +41,20 @@ export default function MyControlsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [apiKey]);
+
+  useEffect(() => {
+    if (!isHydrated) {
+      return;
+    }
+
+    if (!isAuthenticated) {
+      setLoading(false);
+      return;
+    }
+
+    fetchControls();
+  }, [fetchControls, isAuthenticated, isHydrated]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -102,7 +102,7 @@ export default function MyControlsPage() {
     );
   }
 
-  if (!isAuthenticated || !apiKey) {
+  if (!isAuthenticated) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-xl">Sign in to view your controls.</div>

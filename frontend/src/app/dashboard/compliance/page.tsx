@@ -111,7 +111,7 @@ const COMPLIANCE_SETUP_STEPS = [
     {
         title: 'Load traceability records',
         detail: 'Import a CSV, scan labels, or run Inflow Lab so the score has CTE and KDE evidence to evaluate.',
-        href: '/tools/inflow-lab',
+        href: '/dashboard/inflow-lab',
         action: 'Open Inflow Lab',
         icon: Upload,
     },
@@ -420,7 +420,7 @@ export default function ComplianceDashboardPage() {
                                     If this workspace is new, there may not be enough records yet. You can keep this page open, or jump directly to the setup paths below.
                                 </p>
                                 <div className="mt-3 flex flex-wrap gap-2">
-                                    <Link href="/tools/inflow-lab">
+                                    <Link href="/dashboard/inflow-lab">
                                         <Button variant="outline" size="sm" className="h-8 text-xs">
                                             Open Inflow Lab
                                         </Button>
@@ -541,7 +541,7 @@ export default function ComplianceDashboardPage() {
                                             </span>
                                         </div>
                                     </div>
-                                    <Link href="/tools/inflow-lab">
+                                    <Link href="/dashboard/inflow-lab">
                                         <Button variant="outline" className="w-full h-9 rounded-xl text-xs">
                                             Open Workbench <ArrowRight className="ml-1 h-3 w-3" />
                                         </Button>
@@ -579,7 +579,7 @@ export default function ComplianceDashboardPage() {
                                     </CardTitle>
                                 </CardHeader>
                                 <CardContent className="grid grid-cols-2 gap-2 sm:gap-3">
-                                    <Link href="/tools/drill-simulator">
+                                    <Link href="/dashboard/recall-drills">
                                         <Button variant="outline" className="w-full h-auto min-h-[56px] py-3 flex flex-col gap-1.5 rounded-xl active:scale-[0.97] hover:border-[var(--re-brand)] transition-colors">
                                             <Timer className="h-5 w-5 text-[var(--re-brand)]" />
                                             <span className="text-xs font-medium">Mock Drill</span>

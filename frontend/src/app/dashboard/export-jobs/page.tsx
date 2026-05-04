@@ -93,7 +93,7 @@ export default function ExportJobsPage() {
         {
             title: 'Connect source data',
             detail: 'Use Inflow Lab or import tools so export jobs have accepted records to package.',
-            href: '/tools/inflow-lab',
+            href: '/dashboard/inflow-lab',
             action: 'Open Inflow Lab',
             icon: Database,
         },

@@ -5,6 +5,7 @@ import { motion } from 'framer-motion';
 import Link from 'next/link';
 
 import { PageContainer } from '@/components/layout/page-container';
+import DashboardLayout from '../dashboard/layout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -105,6 +106,7 @@ export default function FSMADashboardPage() {
   );
 
   return (
+    <DashboardLayout>
     <div className="min-h-screen bg-gradient-to-b from-background to-muted/20">
       <PageContainer>
         <motion.div
@@ -504,5 +506,6 @@ export default function FSMADashboardPage() {
         </motion.div>
       </PageContainer>
     </div>
+    </DashboardLayout>
   );
 }
