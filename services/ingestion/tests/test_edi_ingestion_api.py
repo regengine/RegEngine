@@ -225,6 +225,86 @@ def _build_856(
     )
 
 
+def _build_856_missing_placeholder_kdes(isa13: bytes | None = None) -> bytes:
+    """Minimal 856 with required envelope/control segments only.
+
+    It is structurally parseable but lacks the data the legacy route
+    previously replaced with persisted placeholders.
+    """
+    interchange_control = isa13 or _next_isa13()
+    return (
+        b"ISA*00*          *00*          *ZZ*SENDERID       *ZZ*RECEIVERID     *260310*1200*U*00401*"
+        + interchange_control
+        + b"*0*P*>~"
+        b"GS*SH*SENDERID*RECEIVERID*20260310*1200*1*X*004010~"
+        b"ST*856*0001~"
+        b"BSN*00*ASN-12345*20260310*1200~"
+        b"HL*1**S~"
+        b"SE*5*0001~"
+        b"GE*1*1~"
+        b"IEA*1*" + interchange_control + b"~"
+    )
+
+
+def test_legacy_856_rejects_missing_kdes_before_placeholder_persistence(
+    client: TestClient, captured_payload: dict
+) -> None:
+    """#2072: the legacy 856 route must not turn missing supplier KDEs
+    into persisted placeholders such as 1.0, Unknown, or EDI 856 Shipment.
+    """
+    from app.edi_ingestion.rejection_log import (
+        list_edi_rejections,
+        reset_edi_rejections,
+    )
+
+    reset_edi_rejections()
+    captured_payload.clear()
+
+    response = client.post(
+        "/api/v1/ingest/edi",
+        data={
+            "traceability_lot_code": "LOT-2026-EDI-MISSING",
+            "tenant_id": TEST_TENANT_ID,
+        },
+        files={
+            "file": (
+                "missing-kdes.edi",
+                _build_856_missing_placeholder_kdes(),
+                "application/edi-x12",
+            )
+        },
+        headers={"X-Partner-ID": "WALMART"},
+    )
+
+    assert response.status_code == 422
+    detail = response.json()["detail"]
+    assert detail["error"] == "edi_856_missing_required_kdes"
+    assert set(detail["missing_kdes"]) >= {
+        "quantity",
+        "unit_of_measure",
+        "product_description",
+        "ship_from_location",
+        "ship_to_location",
+    }
+    placeholders = {err["placeholder_blocked"] for err in detail["errors"]}
+    assert {
+        "1.0",
+        "units",
+        "EDI 856 Shipment",
+        "Unknown ship-from",
+        "Unknown ship-to",
+    } <= placeholders
+
+    assert "payload" not in captured_payload, (
+        "legacy 856 placeholder rejections must not call webhook ingest"
+    )
+
+    rejections = list_edi_rejections(TEST_TENANT_ID)
+    assert len(rejections) == 1
+    assert rejections[0]["rejection_id"] == detail["rejection_id"]
+    assert len(rejections[0]["errors"]) == len(detail["errors"])
+
+
 def test_document_ingest_fsma_strict_rejects_bad_tlc(
     client: TestClient, captured_payload: dict
 ) -> None:
