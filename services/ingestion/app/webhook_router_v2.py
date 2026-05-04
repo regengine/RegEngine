@@ -13,7 +13,6 @@ V2: Replaced in-memory storage with CTEPersistence (Postgres-backed).
 
 from __future__ import annotations
 
-import asyncio
 import hashlib
 import hmac
 import json
@@ -54,6 +53,10 @@ _get_db_session = get_db_session
 logger = structlog.get_logger("webhook-ingestion")
 
 router = APIRouter(prefix="/api/v1/webhooks", tags=["Webhook Ingestion"])
+
+
+class _CanonicalPersistenceError(Exception):
+    """Raised when required canonical persistence cannot complete."""
 
 
 def _get_persistence(db_session=None):
@@ -562,7 +565,7 @@ def _check_obligations(db_session, event: IngestEvent, event_id: str, tenant_id:
             elif validation_rule == "record_exists":
                 # Verify that records exist in the chain for this TLC
                 # (i.e., this isn't an orphan event with no audit trail)
-                chain_count = db_session.execute(
+                _chain_count = db_session.execute(
                     text("""
                         SELECT COUNT(*) FROM fsma.hash_chain h
                         JOIN fsma.cte_events e ON e.id = h.cte_event_id
@@ -790,8 +793,8 @@ def _persist_canonical_and_eval(
     """Persist canonical event + write rule eval rows + create exception
     queue entries for non-compliant verdicts.
 
-    Module-level so the happy-path threaded closure and the fallback-
-    path inline block can share a single implementation, AND so the
+    Module-level so the happy-path batch block and the fallback path
+    can share a single implementation, AND so the
     routing logic (use ``persist_summary`` when the pre-computed summary
     is available, else fall back to ``evaluate_event(persist=True)``)
     can be unit-tested without mounting the full ``ingest_events`` route.
@@ -826,7 +829,7 @@ def _persist_canonical_and_eval(
     from shared.rules_engine import RulesEngine  # noqa: PLC0415
 
     canonical = normalize_webhook_event(event, tenant_id, source=source)
-    store = CanonicalEventStore(db_session, dual_write=False, skip_chain_write=True)
+    store = CanonicalEventStore(db_session, dual_write=False, skip_chain_write=False)
     store.persist_event(canonical)
     engine = RulesEngine(db_session)
 
@@ -858,6 +861,28 @@ def _persist_canonical_and_eval(
         ExceptionQueueService(db_session).create_exceptions_from_evaluation(
             tenant_id, summary
         )
+
+
+def _persist_required_canonical_and_eval(
+    db_session,
+    event: IngestEvent,
+    tenant_id: str,
+    precomputed_summary,
+    source: str = "webhook_api",
+) -> None:
+    """Persist canonical evidence or fail the ingest transaction."""
+    try:
+        _persist_canonical_and_eval(
+            db_session,
+            event,
+            tenant_id,
+            precomputed_summary,
+            source=source,
+        )
+    except Exception as exc:  # noqa: BLE001
+        raise _CanonicalPersistenceError(
+            f"Canonical persistence failed for TLC {event.traceability_lot_code}: {exc}"
+        ) from exc
 
 
 def _publish_graph_sync(event_id: str, event: IngestEvent, tenant_id: str) -> None:
@@ -1181,54 +1206,17 @@ async def ingest_events(
                     ))
                     accepted += 1
 
-                    # Canonical normalization + rule evaluation + exception creation
-                    # (#1335) Fan-out timeout: the legacy write already committed;
-                    # the canonical write is best-effort during migration.  If it
-                    # blocks (e.g., DB lock contention), cap it so the webhook
-                    # response is not held indefinitely.
-                    _CANONICAL_WRITE_TIMEOUT_S: float = float(
-                        os.environ.get("CANONICAL_DUAL_WRITE_TIMEOUT_S", "5")
+                    # Canonical normalization + rule evaluation + exception creation.
+                    # This is required evidence now: it runs synchronously in the
+                    # request transaction so accepted legacy CTEs cannot diverge
+                    # from canonical rows or canonical hash-chain evidence.
+                    _persist_required_canonical_and_eval(
+                        db_session,
+                        event,
+                        tenant_id,
+                        precomputed_summary,
+                        source=payload.source,
                     )
-
-                    # Capture loop-bound vars in default kwargs so the
-                    # threaded closure sees the per-event values rather
-                    # than the last loop iteration's bindings. Body
-                    # lives in the module-level
-                    # ``_persist_canonical_and_eval`` helper so it's
-                    # unit-testable without mounting the full route —
-                    # see test_webhook_router_v2_canonical_helper.py.
-                    def _do_canonical_write(
-                        _event=event,
-                        _precomputed=precomputed_summary,
-                        _source=payload.source,
-                    ) -> None:
-                        _persist_canonical_and_eval(
-                            db_session, _event, tenant_id, _precomputed, source=_source,
-                        )
-
-                    # Run in a daemon thread so join(timeout=) returns promptly
-                    # if the canonical write is slow — the thread continues in
-                    # the background and the webhook response is not held.
-                    import threading  # noqa: PLC0415
-                    _canon_exc: list[BaseException] = []
-
-                    def _guarded_canonical_write() -> None:
-                        try:
-                            _do_canonical_write()
-                        except Exception as _exc:  # noqa: BLE001
-                            _canon_exc.append(_exc)
-
-                    _t = threading.Thread(target=_guarded_canonical_write, daemon=True)
-                    _t.start()
-                    _t.join(timeout=_CANONICAL_WRITE_TIMEOUT_S)
-                    if _t.is_alive():
-                        logger.warning(
-                            "canonical_write_timeout",
-                            event_id=getattr(store_result, "event_id", None),
-                            timeout_s=_CANONICAL_WRITE_TIMEOUT_S,
-                        )
-                    elif _canon_exc:
-                        logger.warning("canonical_write_skipped", error=str(_canon_exc[0]))
 
                     # Post-ingest graph sync (non-blocking)
                     _publish_graph_sync(store_result.event_id, event, tenant_id)
@@ -1297,19 +1285,15 @@ async def ingest_events(
                         ))
                         accepted += 1
 
-                        # Canonical normalization + rule evaluation. Inline
-                        # (not threaded) since we already lost the batch
-                        # latency budget by hitting this fallback. Body
-                        # matches the happy-path threaded block — both
-                        # call ``_persist_canonical_and_eval`` so the
-                        # routing logic (persist_summary fast path vs.
-                        # evaluate_event fallback) lives in one place.
-                        try:
-                            _persist_canonical_and_eval(
-                                db_session, event, tenant_id, _fb_summary, source=payload.source,
-                            )
-                        except (ImportError, SQLAlchemyError, ValueError, TypeError, RuntimeError, KeyError, AttributeError) as canon_err:
-                            logger.warning("canonical_write_skipped_fallback: %s", str(canon_err))
+                        # Canonical normalization + rule evaluation. Required in
+                        # the same transaction as the legacy fallback write.
+                        _persist_required_canonical_and_eval(
+                            db_session,
+                            event,
+                            tenant_id,
+                            _fb_summary,
+                            source=payload.source,
+                        )
 
                         _publish_graph_sync(store_result.event_id, event, tenant_id)
                         try:

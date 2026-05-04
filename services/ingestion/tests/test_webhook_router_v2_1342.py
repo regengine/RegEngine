@@ -1560,8 +1560,8 @@ class TestIngestEndpoint:
         assert resp.status_code == 200
         assert exc_calls  # ExceptionQueue.create_exceptions_from_evaluation was called
 
-    def test_canonical_mirror_failure_is_silently_skipped(self, monkeypatch):
-        """A broken canonical mirror must not fail the ingest."""
+    def test_canonical_mirror_failure_fails_request_and_rolls_back(self, monkeypatch):
+        """A broken canonical mirror must fail the ingest before success."""
         session, persistence = _install_shared_stubs(monkeypatch)
 
         class _BrokenCanonical:
@@ -1588,9 +1588,9 @@ class TestIngestEndpoint:
             json=self._payload(),
             headers={"Idempotency-Key": "idem-canon"},
         )
-        assert resp.status_code == 200
-        # Still accepted despite the broken canonical mirror.
-        assert resp.json()["accepted"] == 1
+        assert resp.status_code == 500
+        assert session.rolled_back is True
+        assert session.committed is False
 
     def test_per_event_fallback_non_compliant_triggers_exception_queue(self, monkeypatch):
         """Covers lines 974-978: in the per-event fallback path, a non-compliant
@@ -1641,10 +1641,8 @@ class TestIngestEndpoint:
         # The per-event fallback hit the non-compliant branch.
         assert exc_calls
 
-    def test_per_event_fallback_canonical_failure_is_silently_skipped(self, monkeypatch):
-        """Covers lines 977-978: the canonical-persist/rules-engine failure in
-        the per-event fallback path lands in the except clause, is logged, and
-        does not fail the overall ingest."""
+    def test_per_event_fallback_canonical_failure_fails_request(self, monkeypatch):
+        """Canonical failure in per-event fallback must fail the request."""
         session = _FakeSession()
         persistence = _FakePersistence(session, batch_raises=ValueError("batch fail"))
         _install_shared_stubs(monkeypatch, session=session, persistence=persistence)
@@ -1673,9 +1671,9 @@ class TestIngestEndpoint:
             json=self._payload(),
             headers={"Idempotency-Key": "idem-fb-canon"},
         )
-        assert resp.status_code == 200
-        # Still accepted despite the broken canonical mirror in the fallback.
-        assert resp.json()["accepted"] == 1
+        assert resp.status_code == 500
+        assert session.rolled_back is True
+        assert session.committed is False
 
     def test_per_event_fallback_catalog_failure_is_silently_skipped(self, monkeypatch):
         """Covers lines 992-993: the catalog-learn failure in the per-event

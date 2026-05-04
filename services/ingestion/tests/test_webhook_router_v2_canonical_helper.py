@@ -35,9 +35,14 @@ from services.shared.rules.types import EvaluationSummary, RuleEvaluationResult
 class _FakeCanonicalEventStore:
     persist_call_count: int = 0
     persist_args: list = []
+    init_kwargs: list = []
 
     def __init__(self, db_session: Any, dual_write: bool = False, skip_chain_write: bool = False) -> None:
         self.db_session = db_session
+        _FakeCanonicalEventStore.init_kwargs.append({
+            "dual_write": dual_write,
+            "skip_chain_write": skip_chain_write,
+        })
 
     def persist_event(self, canonical: Any) -> None:
         _FakeCanonicalEventStore.persist_call_count += 1
@@ -116,6 +121,7 @@ def _install(monkeypatch: pytest.MonkeyPatch) -> None:
     # Reset class-var trackers between tests.
     _FakeCanonicalEventStore.persist_call_count = 0
     _FakeCanonicalEventStore.persist_args = []
+    _FakeCanonicalEventStore.init_kwargs = []
     _FakeEngine.summary_to_return = None
     _FakeEngine.evaluate_event_persist_true_calls = []
     _FakeEngine.evaluate_event_persist_false_calls = []
@@ -205,6 +211,9 @@ class TestFastPathUsingPreComputedSummary:
         )
         # Canonical persisted exactly once.
         assert _FakeCanonicalEventStore.persist_call_count == 1
+        assert _FakeCanonicalEventStore.init_kwargs == [
+            {"dual_write": False, "skip_chain_write": False}
+        ]
         # persist_summary called once with the pre-computed summary.
         assert len(_FakeEngine.persist_summary_calls) == 1
         call = _FakeEngine.persist_summary_calls[0]
