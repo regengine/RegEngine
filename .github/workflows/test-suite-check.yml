@@ -114,7 +114,13 @@ jobs:
 
       - name: Run offline repo-root tests
         run: |
-          python3 -m pytest tests/sdk tests/swarm tests/scripts -q
+          python3 -m pytest \
+            tests/sdk \
+            tests/swarm \
+            tests/scripts \
+            tests/test_monolith_route_parity.py \
+            tests/test_server_import_smoke.py \
+            -q
 
   # ── Per-service collection checks ───────────────────────
   test-environment-check:
