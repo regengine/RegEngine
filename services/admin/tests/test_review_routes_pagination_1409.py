@@ -149,6 +149,19 @@ def test_list_hallucinations_limit_100_allowed(app_and_tracker):
     assert response.status_code == 200, response.text
 
 
+def test_flagged_extractions_alias_uses_same_bounded_list_contract(app_and_tracker):
+    app, tracker, _ = app_and_tracker
+    with TestClient(app) as client:
+        response = client.get("/v1/admin/review/flagged-extractions?limit=50")
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["items"]
+    assert tracker.calls[-1]["limit"] == 50
+    assert "text_preview" in body["items"][0]
+    assert "source_text" not in body["items"][0]
+
+
 def test_list_hallucinations_limit_1000_rejected_matches_issue_1409(app_and_tracker):
     """The original bug: ``limit=1000`` was accepted and returned
     multi-GB responses. Must now 422."""
