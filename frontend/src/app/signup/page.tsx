@@ -149,11 +149,11 @@ function SignupForm() {
         <Card className="border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)] shadow-md">
           <CardHeader className="space-y-1">
             <h1 className="text-2xl font-semibold leading-none tracking-tight text-[var(--re-text-primary)]">
-              {partnerTier === 'founding' ? 'Create Your Partner Workspace' : 'Create Your Workspace'}
+              {partnerTier === 'founding' ? 'Apply for Founding Partner Access' : 'Create Your RegEngine Account'}
             </h1>
             <CardDescription className="text-[var(--re-text-muted)]">
               {partnerTier === 'founding'
-                ? 'Founding partner access. No credit card required.'
+                ? 'Join the design partner cohort. No credit card required.'
                 : '14-day free trial. No credit card required.'}
             </CardDescription>
           </CardHeader>
@@ -229,7 +229,7 @@ function SignupForm() {
                     Creating account...
                   </>
                 ) : (
-                  'Create Account'
+                  partnerTier === 'founding' ? 'Request Partner Access' : 'Create Account'
                 )}
               </Button>
             </form>
