@@ -188,7 +188,7 @@ export default function WhyRegEnginePage() {
                         RegEngine is the only FSMA 204 platform with an API-first architecture, transparent pricing, and a 48-hour path to FDA-ready compliance. No 6-month implementations. No hidden costs. No vendor lock-in.
                     </p>
                     <div className="flex flex-col sm:flex-row gap-4">
-                        <Button asChild size="lg" className="bg-re-info hover:bg-re-info text-[var(--re-text-primary)]">
+                        <Button asChild size="lg">
                             <Link href="/signup">
                                 Start Free Trial
                                 <ArrowRight className="ml-2 h-4 w-4" />
