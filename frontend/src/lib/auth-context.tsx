@@ -287,10 +287,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             status: 'active',
             role_name: validatedUser.user_metadata?.role || 'member',
           };
-          // Await cookie write before updating state — ensures middleware
-          // sees the cookie before any React re-render triggers navigation.
+          // Do not write a Supabase token or placeholder into re_access_token.
+          // Middleware verifies that cookie as a RegEngine JWT; writing any
+          // other value causes the next protected navigation to bounce to
+          // /login?error=session_expired. Keep profile/tenant cookies in sync
+          // and let middleware use the Supabase-cookie fallback when no
+          // RegEngine JWT exists.
           await setSessionCookies({
-            accessToken: COOKIE_MANAGED_PLACEHOLDER,
             user: appUser,
             tenantId: validatedUser.user_metadata?.tenant_id || null,
           });
@@ -316,7 +319,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // clobber a freshly-set re_access_token with a stale Supabase
         // value (or null it), producing the intermittent "you got logged
         // out" reports. Only two events should mutate auth state:
-        //   TOKEN_REFRESHED — Supabase rotated a token; sync the cookie.
+        //   TOKEN_REFRESHED — Supabase rotated; sync non-JWT session metadata.
         //   SIGNED_OUT      — user (or another tab) signed out; clear state.
         // INITIAL_SESSION and SIGNED_IN are bootstrapped by the dedicated
         // getUser().then(...) block above; we ignore them here so replays
@@ -344,9 +347,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             status: 'active',
             role_name: session.user.user_metadata?.role || 'member',
           };
-          // Await cookie write before updating state — prevents race where
-          // middleware rejects requests because cookie isn't set yet.
-          await setSessionCookies({ accessToken: session.access_token, user: appUser });
+          // Never write session.access_token to re_access_token. That cookie is
+          // reserved for the custom RegEngine JWT minted by the backend login
+          // endpoint; middleware rejects Supabase JWTs in that slot.
+          await setSessionCookies({
+            user: appUser,
+            tenantId: session.user.user_metadata?.tenant_id || null,
+          });
           setAccessTokenState(COOKIE_MANAGED_PLACEHOLDER);
           setUserState(appUser);
           apiClient.setAccessToken(COOKIE_MANAGED_PLACEHOLDER);
@@ -376,10 +383,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [accessToken]);
 
   // ---- Proactive token refresh timer ----
-  // The custom JWT (re_access_token) expires after ACCESS_TOKEN_EXPIRE_MINUTES
-  // (default 60 min). Supabase sessions persist longer. This timer refreshes
-  // the custom JWT cookie from the Supabase session before expiration so the
-  // user isn't bounced to /login mid-session.
+  // Supabase sessions persist longer than the custom RegEngine JWT. This timer
+  // keeps non-sensitive profile metadata fresh, but it must not overwrite
+  // re_access_token with a Supabase token. Middleware verifies re_access_token
+  // using the RegEngine JWT key.
   const refreshTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
@@ -405,11 +412,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const supabase = createSupabaseBrowserClient();
         const { data: { session } } = await supabase.auth.getSession();
         if (session?.access_token && session.user) {
-          // Re-write the session cookie with the current Supabase token
-          // This resets the re_access_token cookie to a fresh value that
-          // middleware will accept for another 60 minutes.
+          // Keep profile and tenant cookies fresh without touching
+          // re_access_token. A future backend endpoint can mint a fresh
+          // RegEngine JWT; until then, preserving the existing custom JWT is
+          // safer than replacing it with an unverifiable Supabase JWT.
           await setSessionCookies({
-            accessToken: session.access_token,
+            tenantId: session.user.user_metadata?.tenant_id || null,
             user: {
               id: session.user.id,
               email: session.user.email || '',

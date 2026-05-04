@@ -13,6 +13,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, act, waitFor } from '@testing-library/react';
 import { useAuth, AuthProvider } from '@/lib/auth-context';
 import { apiClient } from '@/lib/api-client';
+import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import type { ReactNode } from 'react';
 
 // Mock apiClient
@@ -59,6 +60,9 @@ describe('useAuth Hook', () => {
     beforeEach(() => {
         vi.clearAllMocks();
         localStorageMock.clear();
+        (createSupabaseBrowserClient as any).mockImplementation(() => {
+            throw new Error('Supabase not configured');
+        });
 
         // Default: /api/session GET returns no session, POST succeeds
         mockFetch.mockImplementation((url: string, options?: RequestInit) => {
@@ -232,6 +236,82 @@ describe('useAuth Hook', () => {
 
             const lastPostBody = JSON.parse(sessionPostCalls[sessionPostCalls.length - 1][1].body);
             expect(lastPostBody.access_token).toBe('test-token');
+        });
+
+        it('does not replace the RegEngine JWT cookie with Supabase tokens', async () => {
+            const mockUser = {
+                id: '123',
+                email: 'test@example.com',
+                name: 'Test User',
+                is_sysadmin: false,
+                tenant_id: 'tenant-123',
+                role_id: 'role-1',
+                is_active: true,
+                status: 'active',
+                created_at: '2026-01-01T00:00:00Z',
+                updated_at: '2026-01-27T00:00:00Z',
+            };
+
+            const supabaseUser = {
+                id: 'supabase-user',
+                email: 'test@example.com',
+                user_metadata: {
+                    tenant_id: 'tenant-123',
+                    role: 'member',
+                    is_sysadmin: false,
+                },
+            };
+            let authStateCallback:
+                | ((event: string, session: { access_token: string; user: typeof supabaseUser }) => Promise<void>)
+                | undefined;
+            const supabaseAuth = {
+                getUser: vi.fn().mockResolvedValue({ data: { user: null } }),
+                getSession: vi.fn().mockResolvedValue({
+                    data: {
+                        session: {
+                            access_token: 'supabase-session-token',
+                            user: supabaseUser,
+                        },
+                    },
+                }),
+                onAuthStateChange: vi.fn((callback) => {
+                    authStateCallback = callback;
+                    return { data: { subscription: { unsubscribe: vi.fn() } } };
+                }),
+                signOut: vi.fn(),
+            };
+            (createSupabaseBrowserClient as any).mockReturnValue({ auth: supabaseAuth });
+
+            const { result } = renderHook(() => useAuth(), { wrapper });
+
+            await waitFor(() => expect(result.current.isHydrated).toBe(true));
+
+            await act(async () => {
+                await result.current.login('regengine-jwt', mockUser, 'tenant-123');
+            });
+
+            await waitFor(() => expect(supabaseAuth.getSession).toHaveBeenCalled());
+
+            await act(async () => {
+                await authStateCallback?.('TOKEN_REFRESHED', {
+                    access_token: 'supabase-refresh-token',
+                    user: supabaseUser,
+                });
+            });
+
+            const sessionPostBodies = mockFetch.mock.calls
+                .filter(
+                    ([url, opts]) =>
+                        typeof url === 'string' &&
+                        url.includes('/api/session') &&
+                        (opts as RequestInit | undefined)?.method === 'POST'
+                )
+                .map(([, opts]) => JSON.parse((opts as RequestInit).body as string));
+
+            expect(sessionPostBodies.some((body) => body.access_token === 'regengine-jwt')).toBe(true);
+            expect(sessionPostBodies.some((body) => body.access_token === 'supabase-session-token')).toBe(false);
+            expect(sessionPostBodies.some((body) => body.access_token === 'supabase-refresh-token')).toBe(false);
+            expect(sessionPostBodies.some((body) => body.access_token === 'cookie-managed')).toBe(false);
         });
 
         it('calls apiClient.setAccessToken on login', async () => {
