@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import os
 import sys
-import threading
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -158,24 +157,72 @@ validate_auth_config()
 
 
 # ── Router feature flags ─────────────────────────────────────────
+_VALID_ROUTER_NAMES = {
+    "scraping", "discovery", "sources", "sandbox", "inflow_workbench",
+    "fda_export", "csv", "sensitech", "edi", "score", "portal", "audit",
+    "sop", "export", "epcis_ingestion", "qr_decoder", "label_vision",
+    "exchange", "billing", "alerts", "onboarding", "recall",
+    "recall_simulations", "supplier_mgmt", "audit_log", "product_catalog",
+    "notification_prefs", "team_mgmt", "settings", "integration",
+    "canonical_records", "rules", "exceptions", "request_workflow",
+    "identity", "auditor", "compliance_metrics", "readiness", "incidents",
+    "chain_verification", "audit_export_log", "sla_tracking",
+    "export_monitoring", "supplier_validation", "disaster_recovery",
+    "admin", "graph", "nlp", "fsma_compliance",
+}
+
+_EXPERIMENTAL_ROUTERS = {
+    "scraping", "discovery", "sources", "sandbox", "sensitech", "audit",
+    "sop", "export", "qr_decoder", "label_vision", "exchange",
+    "recall_simulations", "graph", "nlp",
+}
+
 _DISABLED_ROUTERS = {
     r.strip().lower()
     for r in os.getenv("DISABLED_ROUTERS", "").split(",")
     if r.strip()
 }
+_ENABLE_EXPERIMENTAL_ROUTERS = (
+    os.getenv("ENABLE_EXPERIMENTAL_ROUTERS", "").strip().lower()
+    in {"1", "true", "yes", "on"}
+)
 _MOUNTED_ROUTERS: list[str] = []
+_AUTO_DISABLED_ROUTERS: list[str] = []
+
+_unknown_router_flags = _DISABLED_ROUTERS - _VALID_ROUTER_NAMES
+if _unknown_router_flags:
+    logger.error(
+        "unknown_router_names_in_DISABLED_ROUTERS",
+        unknown=sorted(_unknown_router_flags),
+        valid=sorted(_VALID_ROUTER_NAMES),
+    )
 
 
 def _router_enabled(name: str) -> bool:
-    enabled = name.lower() not in _DISABLED_ROUTERS
+    router_name = name.lower()
+    enabled = router_name not in _DISABLED_ROUTERS
+    if (
+        enabled
+        and _is_prod
+        and router_name in _EXPERIMENTAL_ROUTERS
+        and not _ENABLE_EXPERIMENTAL_ROUTERS
+    ):
+        enabled = False
+        _AUTO_DISABLED_ROUTERS.append(router_name)
+
     if enabled:
-        _MOUNTED_ROUTERS.append(name.lower())
+        _MOUNTED_ROUTERS.append(router_name)
     return enabled
 
 
 @app.get("/api/v1/features", tags=["system"])
 async def list_enabled_features():
-    return {"enabled": _MOUNTED_ROUTERS, "disabled": sorted(_DISABLED_ROUTERS)}
+    return {
+        "enabled": _MOUNTED_ROUTERS,
+        "disabled": sorted(_DISABLED_ROUTERS),
+        "auto_disabled": sorted(_AUTO_DISABLED_ROUTERS),
+        "experimental_enabled": _ENABLE_EXPERIMENTAL_ROUTERS,
+    }
 
 
 # =====================================================================
@@ -473,7 +520,6 @@ async def readiness():
     Use this for load balancer health checks so traffic isn't routed
     to instances that can't actually serve requests.
     """
-    import asyncio
     from fastapi.responses import JSONResponse
 
     checks: dict[str, dict] = {}
