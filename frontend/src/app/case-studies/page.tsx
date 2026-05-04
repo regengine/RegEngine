@@ -66,15 +66,15 @@ const NORMALIZATION_EXAMPLES = [
 
 export default function CaseStudy() {
     return (
-        <main className="bg-black text-white">
+        <main className="bg-[var(--re-surface-base)] text-[var(--re-text-primary)]">
             {/* Hero */}
-            <section className="min-h-[80vh] flex items-center px-4 sm:px-6 lg:px-8 pt-20 pb-10 bg-gradient-to-b from-slate-950 via-black to-slate-900">
+            <section className="min-h-[80vh] flex items-center px-4 sm:px-6 lg:px-8 pt-20 pb-10 bg-[var(--re-surface-base)] border-b border-[var(--re-surface-border)]">
                 <div className="max-w-5xl mx-auto w-full">
                     <div className="mb-6 flex items-center gap-3">
-                        <span className="inline-block px-3 py-1 text-sm font-medium bg-re-brand/30 border border-re-brand/50 rounded-full text-re-brand-light">
+                        <span className="inline-block px-3 py-1 text-sm font-medium bg-re-brand/30 border border-re-brand/50 rounded-full text-re-brand">
                             Product Validation
                         </span>
-                        <span className="inline-block px-3 py-1 text-sm font-medium bg-blue-900/30 border border-blue-700/50 rounded-full text-blue-300">
+                        <span className="inline-block px-3 py-1 text-sm font-medium bg-re-info-muted border border-re-info/30 rounded-full text-re-info">
                             Leafy Greens &amp; Fresh-Cut Produce
                         </span>
                     </div>
@@ -82,7 +82,7 @@ export default function CaseStudy() {
                         1,200 CTE Events.
                         <span className="block text-re-brand">5 Hard Metrics.</span>
                     </h1>
-                    <p className="text-xl text-slate-300 mb-10 max-w-3xl">
+                    <p className="text-xl text-[var(--re-text-secondary)] mb-10 max-w-3xl">
                         We ran a representative leafy greens supply chain through RegEngine — from Salinas Valley
                         harvest to grocery DC receiving — and measured every step. No composites. No projections.
                         System-measured results.
@@ -91,10 +91,10 @@ export default function CaseStudy() {
                     {/* Metric cards */}
                     <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-10">
                         {HERO_METRICS.map((m) => (
-                            <div key={m.label} className="bg-white/[0.03] border border-white/10 rounded-lg p-4">
+                            <div key={m.label} className="bg-[var(--re-surface-card)] border border-[var(--re-surface-border)] rounded-lg p-4">
                                 <p className="text-2xl sm:text-3xl font-bold text-re-brand mb-1">{m.value}</p>
-                                <p className="text-sm font-medium text-white mb-1">{m.label}</p>
-                                <p className="text-xs text-slate-500">{m.detail}</p>
+                                <p className="text-sm font-medium text-[var(--re-text-primary)] mb-1">{m.label}</p>
+                                <p className="text-xs text-[var(--re-text-muted)]">{m.detail}</p>
                             </div>
                         ))}
                     </div>
@@ -102,13 +102,13 @@ export default function CaseStudy() {
                     <div className="flex flex-col sm:flex-row gap-4">
                         <Link
                             href="/signup"
-                            className="inline-flex items-center justify-center px-6 py-3 bg-re-brand hover:bg-re-brand text-white font-semibold rounded-lg transition-colors"
+                            className="inline-flex items-center justify-center px-6 py-3 bg-primary hover:bg-[var(--re-text-secondary)] text-primary-foreground font-semibold rounded-lg transition-colors border border-primary"
                         >
                             Run Your Own Validation <ArrowRight className="w-5 h-5 ml-2" />
                         </Link>
                         <Link
                             href="/tools/ftl-checker"
-                            className="inline-flex items-center justify-center px-6 py-3 bg-slate-800 hover:bg-slate-700 text-white font-semibold rounded-lg transition-colors border border-slate-700"
+                            className="inline-flex items-center justify-center px-6 py-3 bg-[var(--re-surface-elevated)] hover:bg-[var(--re-surface-card)] text-[var(--re-text-primary)] font-semibold rounded-lg transition-colors border border-[var(--re-surface-border)]"
                         >
                             Test with Your Data
                         </Link>
@@ -117,10 +117,10 @@ export default function CaseStudy() {
             </section>
 
             {/* Scenario Description */}
-            <section className="px-4 sm:px-6 lg:px-8 py-16 bg-slate-950/50">
+            <section className="px-4 sm:px-6 lg:px-8 py-16 bg-[var(--re-surface-elevated)]">
                 <div className="max-w-5xl mx-auto">
                     <h2 className="text-3xl font-bold mb-4">The Scenario</h2>
-                    <p className="text-slate-300 mb-8 max-w-3xl">
+                    <p className="text-[var(--re-text-secondary)] mb-8 max-w-3xl">
                         A mid-size California fresh-cut produce packer-distributor with 8 grower partners, a
                         processing facility (wash, cut, blend), and distribution to regional grocery chains and
                         food service buyers. Products: romaine hearts, spring mix, chopped salad kits.
@@ -130,34 +130,34 @@ export default function CaseStudy() {
                     <div className="overflow-x-auto">
                         <table className="w-full text-sm">
                             <thead>
-                                <tr className="border-b border-white/10">
-                                    <th className="text-left py-3 px-4 text-slate-400 font-medium">Step</th>
-                                    <th className="text-left py-3 px-4 text-slate-400 font-medium">Entity</th>
-                                    <th className="text-left py-3 px-4 text-slate-400 font-medium">CTE Type</th>
-                                    <th className="text-right py-3 px-4 text-slate-400 font-medium">Records</th>
+                                <tr className="border-b border-[var(--re-surface-border)]">
+                                    <th className="text-left py-3 px-4 text-[var(--re-text-tertiary)] font-medium">Step</th>
+                                    <th className="text-left py-3 px-4 text-[var(--re-text-tertiary)] font-medium">Entity</th>
+                                    <th className="text-left py-3 px-4 text-[var(--re-text-tertiary)] font-medium">CTE Type</th>
+                                    <th className="text-right py-3 px-4 text-[var(--re-text-tertiary)] font-medium">Records</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {SUPPLY_CHAIN.map((row, i) => (
-                                    <tr key={i} className="border-b border-white/5">
-                                        <td className="py-3 px-4 text-slate-300">{row.step}</td>
-                                        <td className="py-3 px-4 text-slate-300">{row.entity}</td>
+                                    <tr key={i} className="border-b border-[var(--re-surface-border)]">
+                                        <td className="py-3 px-4 text-[var(--re-text-secondary)]">{row.step}</td>
+                                        <td className="py-3 px-4 text-[var(--re-text-secondary)]">{row.entity}</td>
                                         <td className="py-3 px-4">
                                             <code className="text-re-brand text-xs bg-re-brand/20 px-2 py-0.5 rounded">
                                                 {row.cte}
                                             </code>
                                         </td>
-                                        <td className="py-3 px-4 text-right text-slate-300">{row.records}</td>
+                                        <td className="py-3 px-4 text-right text-[var(--re-text-secondary)]">{row.records}</td>
                                     </tr>
                                 ))}
-                                <tr className="border-t border-white/20">
-                                    <td colSpan={3} className="py-3 px-4 font-semibold text-white">Total</td>
+                                <tr className="border-t border-[var(--re-border-strong)]">
+                                    <td colSpan={3} className="py-3 px-4 font-semibold text-[var(--re-text-primary)]">Total</td>
                                     <td className="py-3 px-4 text-right font-semibold text-re-brand">1,200</td>
                                 </tr>
                             </tbody>
                         </table>
                     </div>
-                    <p className="text-xs text-slate-500 mt-4">
+                    <p className="text-xs text-[var(--re-text-muted)] mt-4">
                         All 7 FSMA 204 CTE types represented. Data generated to match real-world
                         patterns: mixed date formats, inconsistent UoMs, OCR artifacts in lot codes,
                         abbreviation-heavy location names.
@@ -174,54 +174,54 @@ export default function CaseStudy() {
                                 <Timer className="w-6 h-6 text-re-brand" />
                                 <h2 className="text-2xl font-bold">Metric 1: Time to First Ingest</h2>
                             </div>
-                            <p className="text-slate-300 mb-6">
+                            <p className="text-[var(--re-text-secondary)] mb-6">
                                 Clock starts at account creation. Clock stops when the first CTE event
                                 is accepted and validated by the system.
                             </p>
                             <div className="space-y-4">
-                                <div className="flex justify-between items-center border-b border-white/10 pb-3">
-                                    <span className="text-slate-400">Create account + API key</span>
-                                    <span className="text-white font-mono">2.1 min</span>
+                                <div className="flex justify-between items-center border-b border-[var(--re-surface-border)] pb-3">
+                                    <span className="text-[var(--re-text-tertiary)]">Create account + API key</span>
+                                    <span className="text-[var(--re-text-primary)] font-mono">2.1 min</span>
                                 </div>
-                                <div className="flex justify-between items-center border-b border-white/10 pb-3">
-                                    <span className="text-slate-400">Create facility (POST /facilities)</span>
-                                    <span className="text-white font-mono">0.8 min</span>
+                                <div className="flex justify-between items-center border-b border-[var(--re-surface-border)] pb-3">
+                                    <span className="text-[var(--re-text-tertiary)]">Create facility (POST /facilities)</span>
+                                    <span className="text-[var(--re-text-primary)] font-mono">0.8 min</span>
                                 </div>
-                                <div className="flex justify-between items-center border-b border-white/10 pb-3">
-                                    <span className="text-slate-400">Download CSV template (harvesting)</span>
-                                    <span className="text-white font-mono">0.3 min</span>
+                                <div className="flex justify-between items-center border-b border-[var(--re-surface-border)] pb-3">
+                                    <span className="text-[var(--re-text-tertiary)]">Download CSV template (harvesting)</span>
+                                    <span className="text-[var(--re-text-primary)] font-mono">0.3 min</span>
                                 </div>
-                                <div className="flex justify-between items-center border-b border-white/10 pb-3">
-                                    <span className="text-slate-400">Fill 5 sample rows</span>
-                                    <span className="text-white font-mono">4.2 min</span>
+                                <div className="flex justify-between items-center border-b border-[var(--re-surface-border)] pb-3">
+                                    <span className="text-[var(--re-text-tertiary)]">Fill 5 sample rows</span>
+                                    <span className="text-[var(--re-text-primary)] font-mono">4.2 min</span>
                                 </div>
-                                <div className="flex justify-between items-center border-b border-white/10 pb-3">
-                                    <span className="text-slate-400">Upload + validation response</span>
-                                    <span className="text-white font-mono">1.0 min</span>
+                                <div className="flex justify-between items-center border-b border-[var(--re-surface-border)] pb-3">
+                                    <span className="text-[var(--re-text-tertiary)]">Upload + validation response</span>
+                                    <span className="text-[var(--re-text-primary)] font-mono">1.0 min</span>
                                 </div>
                                 <div className="flex justify-between items-center pt-2">
-                                    <span className="text-white font-semibold">Total</span>
+                                    <span className="text-[var(--re-text-primary)] font-semibold">Total</span>
                                     <span className="text-re-brand font-bold text-xl">8.4 min</span>
                                 </div>
                             </div>
                         </div>
-                        <div className="bg-slate-900/50 border border-slate-800 rounded-lg p-6">
-                            <h3 className="text-sm font-semibold text-slate-400 mb-4">What this measures</h3>
-                            <p className="text-sm text-slate-300 mb-4">
+                        <div className="bg-[var(--re-surface-card)] border border-[var(--re-surface-border)] rounded-lg p-6">
+                            <h3 className="text-sm font-semibold text-[var(--re-text-tertiary)] mb-4">What this measures</h3>
+                            <p className="text-sm text-[var(--re-text-secondary)] mb-4">
                                 Self-serve onboarding speed. No implementation consultant, no scheduled
                                 call, no contract negotiation. A food safety manager with basic spreadsheet
                                 skills can get from zero to first validated CTE in under 10 minutes.
                             </p>
-                            <div className="bg-black/50 border border-white/10 rounded p-4">
-                                <p className="text-xs text-slate-500 mb-2">Industry comparison</p>
+                            <div className="bg-[var(--re-surface-elevated)] border border-[var(--re-surface-border)] rounded p-4">
+                                <p className="text-xs text-[var(--re-text-muted)] mb-2">Industry comparison</p>
                                 <div className="space-y-2">
                                     <div className="flex justify-between text-sm">
-                                        <span className="text-slate-400">Enterprise platforms (typical)</span>
-                                        <span className="text-slate-500">3-6 months</span>
+                                        <span className="text-[var(--re-text-tertiary)]">Enterprise platforms (typical)</span>
+                                        <span className="text-[var(--re-text-muted)]">3-6 months</span>
                                     </div>
                                     <div className="flex justify-between text-sm">
-                                        <span className="text-slate-400">Mid-market SaaS (typical)</span>
-                                        <span className="text-slate-500">1-4 weeks</span>
+                                        <span className="text-[var(--re-text-tertiary)]">Mid-market SaaS (typical)</span>
+                                        <span className="text-[var(--re-text-muted)]">1-4 weeks</span>
                                     </div>
                                     <div className="flex justify-between text-sm">
                                         <span className="text-re-brand font-medium">RegEngine</span>
@@ -235,13 +235,13 @@ export default function CaseStudy() {
             </section>
 
             {/* Metric 2: Auto-normalization Rate */}
-            <section className="px-4 sm:px-6 lg:px-8 py-16 bg-slate-950/50">
+            <section className="px-4 sm:px-6 lg:px-8 py-16 bg-[var(--re-surface-elevated)]">
                 <div className="max-w-5xl mx-auto">
                     <div className="flex items-center gap-3 mb-4">
                         <Gauge className="w-6 h-6 text-re-brand" />
                         <h2 className="text-2xl font-bold">Metric 2: Auto-Normalization Rate</h2>
                     </div>
-                    <p className="text-slate-300 mb-8 max-w-3xl">
+                    <p className="text-[var(--re-text-secondary)] mb-8 max-w-3xl">
                         Percentage of incoming data fields that RegEngine normalizes to FSMA 204-compliant
                         format without human intervention. Measured across 1,200 records with 14 KDE fields each
                         (16,800 total field values).
@@ -250,17 +250,17 @@ export default function CaseStudy() {
                     <div className="overflow-x-auto">
                         <table className="w-full text-sm">
                             <thead>
-                                <tr className="border-b border-white/10">
-                                    <th className="text-left py-3 px-4 text-slate-400 font-medium">Field Type</th>
-                                    <th className="text-left py-3 px-4 text-slate-400 font-medium">Raw Input Examples</th>
-                                    <th className="text-left py-3 px-4 text-slate-400 font-medium">Normalized Output</th>
-                                    <th className="text-right py-3 px-4 text-slate-400 font-medium">Auto Rate</th>
+                                <tr className="border-b border-[var(--re-surface-border)]">
+                                    <th className="text-left py-3 px-4 text-[var(--re-text-tertiary)] font-medium">Field Type</th>
+                                    <th className="text-left py-3 px-4 text-[var(--re-text-tertiary)] font-medium">Raw Input Examples</th>
+                                    <th className="text-left py-3 px-4 text-[var(--re-text-tertiary)] font-medium">Normalized Output</th>
+                                    <th className="text-right py-3 px-4 text-[var(--re-text-tertiary)] font-medium">Auto Rate</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {NORMALIZATION_EXAMPLES.map((ex, i) => (
-                                    <tr key={i} className="border-b border-white/5">
-                                        <td className="py-3 px-4 text-white font-medium">{ex.field}</td>
+                                    <tr key={i} className="border-b border-[var(--re-surface-border)]">
+                                        <td className="py-3 px-4 text-[var(--re-text-primary)] font-medium">{ex.field}</td>
                                         <td className="py-3 px-4">
                                             <div className="flex flex-wrap gap-1">
                                                 {ex.raw.map((r) => (
@@ -271,7 +271,7 @@ export default function CaseStudy() {
                                             </div>
                                         </td>
                                         <td className="py-3 px-4">
-                                            <code className="text-xs text-re-brand-light bg-re-brand/20 px-1.5 py-0.5 rounded">
+                                            <code className="text-xs text-re-brand bg-re-brand/20 px-1.5 py-0.5 rounded">
                                                 {ex.normalized}
                                             </code>
                                         </td>
@@ -285,19 +285,19 @@ export default function CaseStudy() {
                     <div className="mt-8 grid sm:grid-cols-3 gap-6">
                         <div className="bg-re-brand/10 border border-re-brand/30 rounded-lg p-5 text-center">
                             <p className="text-3xl font-bold text-re-brand">94.2%</p>
-                            <p className="text-sm text-slate-400 mt-1">Overall auto-normalization rate</p>
+                            <p className="text-sm text-[var(--re-text-tertiary)] mt-1">Overall auto-normalization rate</p>
                         </div>
-                        <div className="bg-white/[0.03] border border-white/10 rounded-lg p-5 text-center">
-                            <p className="text-3xl font-bold text-white">15,811</p>
-                            <p className="text-sm text-slate-400 mt-1">Fields normalized automatically</p>
+                        <div className="bg-[var(--re-surface-card)] border border-[var(--re-surface-border)] rounded-lg p-5 text-center">
+                            <p className="text-3xl font-bold text-[var(--re-text-primary)]">15,811</p>
+                            <p className="text-sm text-[var(--re-text-tertiary)] mt-1">Fields normalized automatically</p>
                         </div>
-                        <div className="bg-white/[0.03] border border-white/10 rounded-lg p-5 text-center">
-                            <p className="text-3xl font-bold text-white">989</p>
-                            <p className="text-sm text-slate-400 mt-1">Fields flagged for review</p>
+                        <div className="bg-[var(--re-surface-card)] border border-[var(--re-surface-border)] rounded-lg p-5 text-center">
+                            <p className="text-3xl font-bold text-[var(--re-text-primary)]">989</p>
+                            <p className="text-sm text-[var(--re-text-tertiary)] mt-1">Fields flagged for review</p>
                         </div>
                     </div>
 
-                    <p className="text-xs text-slate-500 mt-6">
+                    <p className="text-xs text-[var(--re-text-muted)] mt-6">
                         Normalization is deterministic (rule-based pattern matching), not ML. Rules cover 40+ UoM
                         variants, 13 location abbreviation patterns, 5+ date formats, and CTE type alias mapping.
                         Lot code integrity checks flag suspicious OCR artifacts (O/0 and I/1 swaps adjacent to digits)
@@ -315,45 +315,45 @@ export default function CaseStudy() {
                                 <HandMetal className="w-6 h-6 text-re-brand" />
                                 <h2 className="text-2xl font-bold">Metric 3: Manual Touches per 1,000 Rows</h2>
                             </div>
-                            <p className="text-slate-300 mb-6">
+                            <p className="text-[var(--re-text-secondary)] mb-6">
                                 A "manual touch" is any point where a human must review, correct, or
                                 approve a record before it can proceed to FDA-ready export. Lower is better.
                             </p>
                             <div className="space-y-4">
-                                <div className="bg-black/50 border border-white/10 rounded-lg p-4">
+                                <div className="bg-[var(--re-surface-elevated)] border border-[var(--re-surface-border)] rounded-lg p-4">
                                     <div className="flex justify-between items-center mb-2">
-                                        <span className="text-white font-medium">Lot code integrity warnings</span>
+                                        <span className="text-[var(--re-text-primary)] font-medium">Lot code integrity warnings</span>
                                         <span className="text-re-warning font-mono">0.6 / 1,000</span>
                                     </div>
-                                    <p className="text-xs text-slate-500">
+                                    <p className="text-xs text-[var(--re-text-muted)]">
                                         OCR artifacts where O/0 or I/1 swap could change lot identity.
                                         System flags but doesn't auto-correct — lot codes are too critical.
                                     </p>
                                 </div>
-                                <div className="bg-black/50 border border-white/10 rounded-lg p-4">
+                                <div className="bg-[var(--re-surface-elevated)] border border-[var(--re-surface-border)] rounded-lg p-4">
                                     <div className="flex justify-between items-center mb-2">
-                                        <span className="text-white font-medium">Missing required KDEs</span>
+                                        <span className="text-[var(--re-text-primary)] font-medium">Missing required KDEs</span>
                                         <span className="text-re-warning font-mono">0.2 / 1,000</span>
                                     </div>
-                                    <p className="text-xs text-slate-500">
+                                    <p className="text-xs text-[var(--re-text-muted)]">
                                         Records where a required field (e.g., origin location) was blank.
                                         Cannot be inferred — requires source data correction.
                                     </p>
                                 </div>
-                                <div className="flex justify-between items-center pt-4 border-t border-white/20">
-                                    <span className="text-white font-semibold">Total manual touches</span>
+                                <div className="flex justify-between items-center pt-4 border-t border-[var(--re-border-strong)]">
+                                    <span className="text-[var(--re-text-primary)] font-semibold">Total manual touches</span>
                                     <span className="text-re-brand font-bold text-xl">0.8 / 1,000 rows</span>
                                 </div>
                             </div>
                         </div>
-                        <div className="bg-slate-900/50 border border-slate-800 rounded-lg p-6">
-                            <h3 className="text-sm font-semibold text-slate-400 mb-4">Why this matters</h3>
-                            <p className="text-sm text-slate-300 mb-4">
+                        <div className="bg-[var(--re-surface-card)] border border-[var(--re-surface-border)] rounded-lg p-6">
+                            <h3 className="text-sm font-semibold text-[var(--re-text-tertiary)] mb-4">Why this matters</h3>
+                            <p className="text-sm text-[var(--re-text-secondary)] mb-4">
                                 Manual data cleaning is the hidden cost of compliance. A mid-size produce
                                 operation processing 10,000 CTE events/month at industry-typical error
                                 rates (5-15%) would require 500-1,500 manual corrections monthly.
                             </p>
-                            <p className="text-sm text-slate-300 mb-4">
+                            <p className="text-sm text-[var(--re-text-secondary)] mb-4">
                                 At 0.8 touches per 1,000 rows, the same operation needs 8 corrections
                                 per month. The difference: one person spending 2 minutes vs. one person
                                 spending 2 weeks.
@@ -374,78 +374,78 @@ export default function CaseStudy() {
             </section>
 
             {/* Metric 4: Trace Latency */}
-            <section className="px-4 sm:px-6 lg:px-8 py-16 bg-slate-950/50">
+            <section className="px-4 sm:px-6 lg:px-8 py-16 bg-[var(--re-surface-elevated)]">
                 <div className="max-w-5xl mx-auto">
                     <div className="flex items-center gap-3 mb-4">
                         <Workflow className="w-6 h-6 text-re-brand" />
                         <h2 className="text-2xl font-bold">Metric 4: Trace Latency</h2>
                     </div>
-                    <p className="text-slate-300 mb-8 max-w-3xl">
+                    <p className="text-[var(--re-text-secondary)] mb-8 max-w-3xl">
                         Time to execute a forward + backward trace through the supply chain. FSMA 204
                         requires records within 24 hours of an FDA request. Speed here is the difference between
                         a controlled recall and a crisis.
                     </p>
 
                     <div className="grid sm:grid-cols-2 gap-8">
-                        <div className="bg-black/50 border border-white/10 rounded-lg p-6">
-                            <h3 className="text-lg font-semibold mb-4 text-white">Trace Benchmarks</h3>
+                        <div className="bg-[var(--re-surface-elevated)] border border-[var(--re-surface-border)] rounded-lg p-6">
+                            <h3 className="text-lg font-semibold mb-4 text-[var(--re-text-primary)]">Trace Benchmarks</h3>
                             <div className="space-y-4">
                                 <div>
                                     <div className="flex justify-between mb-1">
-                                        <span className="text-sm text-slate-400">Forward trace (farm → retail, 5 hops)</span>
+                                        <span className="text-sm text-[var(--re-text-tertiary)]">Forward trace (farm → retail, 5 hops)</span>
                                         <span className="text-re-brand font-mono text-sm">340 ms</span>
                                     </div>
-                                    <div className="w-full bg-slate-800 rounded-full h-1.5">
+                                    <div className="w-full bg-[var(--re-surface-elevated)] rounded-full h-1.5">
                                         <div className="bg-re-brand h-1.5 rounded-full" style={{ width: '34%' }}></div>
                                     </div>
                                 </div>
                                 <div>
                                     <div className="flex justify-between mb-1">
-                                        <span className="text-sm text-slate-400">Backward trace (retail → farm, 5 hops)</span>
+                                        <span className="text-sm text-[var(--re-text-tertiary)]">Backward trace (retail → farm, 5 hops)</span>
                                         <span className="text-re-brand font-mono text-sm">380 ms</span>
                                     </div>
-                                    <div className="w-full bg-slate-800 rounded-full h-1.5">
+                                    <div className="w-full bg-[var(--re-surface-elevated)] rounded-full h-1.5">
                                         <div className="bg-re-brand h-1.5 rounded-full" style={{ width: '38%' }}></div>
                                     </div>
                                 </div>
                                 <div>
                                     <div className="flex justify-between mb-1">
-                                        <span className="text-sm text-slate-400">Full bidirectional trace</span>
+                                        <span className="text-sm text-[var(--re-text-tertiary)]">Full bidirectional trace</span>
                                         <span className="text-re-brand font-mono text-sm">720 ms</span>
                                     </div>
-                                    <div className="w-full bg-slate-800 rounded-full h-1.5">
+                                    <div className="w-full bg-[var(--re-surface-elevated)] rounded-full h-1.5">
                                         <div className="bg-re-brand h-1.5 rounded-full" style={{ width: '72%' }}></div>
                                     </div>
                                 </div>
                                 <div>
                                     <div className="flex justify-between mb-1">
-                                        <span className="text-sm text-slate-400">Transformation trace (salad mix → ingredients)</span>
+                                        <span className="text-sm text-[var(--re-text-tertiary)]">Transformation trace (salad mix → ingredients)</span>
                                         <span className="text-re-brand font-mono text-sm">280 ms</span>
                                     </div>
-                                    <div className="w-full bg-slate-800 rounded-full h-1.5">
+                                    <div className="w-full bg-[var(--re-surface-elevated)] rounded-full h-1.5">
                                         <div className="bg-re-brand h-1.5 rounded-full" style={{ width: '28%' }}></div>
                                     </div>
                                 </div>
                             </div>
                         </div>
-                        <div className="bg-black/50 border border-white/10 rounded-lg p-6">
-                            <h3 className="text-lg font-semibold mb-4 text-white">How It Works</h3>
-                            <p className="text-sm text-slate-300 mb-4">
+                        <div className="bg-[var(--re-surface-elevated)] border border-[var(--re-surface-border)] rounded-lg p-6">
+                            <h3 className="text-lg font-semibold mb-4 text-[var(--re-text-primary)]">How It Works</h3>
+                            <p className="text-sm text-[var(--re-text-secondary)] mb-4">
                                 Tracing uses PostgreSQL recursive CTEs with time-arrow validation.
                                 No graph database required. The query walks the event chain hop-by-hop,
                                 validating temporal ordering at each step (a product can't be received
                                 before it's shipped).
                             </p>
-                            <div className="font-mono text-xs bg-black/50 rounded p-3 text-slate-400 overflow-x-auto">
+                            <div className="font-mono text-xs bg-[var(--re-surface-elevated)] rounded p-3 text-[var(--re-text-tertiary)] overflow-x-auto">
                                 <p className="text-re-brand">-- Trace romaine lot RM-0314-A</p>
                                 <p>GET /api/v1/trace/RM-0314-A</p>
                                 <p>&nbsp;&nbsp;?direction=both</p>
                                 <p>&nbsp;&nbsp;&depth=20</p>
-                                <p className="text-slate-600 mt-2">→ 5 hops, 12 linked events</p>
-                                <p className="text-slate-600">→ 720ms total latency</p>
-                                <p className="text-slate-600">→ Time-arrow: VALID</p>
+                                <p className="text-[var(--re-text-disabled)] mt-2">→ 5 hops, 12 linked events</p>
+                                <p className="text-[var(--re-text-disabled)]">→ 720ms total latency</p>
+                                <p className="text-[var(--re-text-disabled)]">→ Time-arrow: VALID</p>
                             </div>
-                            <p className="text-xs text-slate-500 mt-4">
+                            <p className="text-xs text-[var(--re-text-muted)] mt-4">
                                 Measured on PostgreSQL 15 with 1,200 events indexed. Latency scales
                                 with hop depth, not total event count.
                             </p>
@@ -463,40 +463,40 @@ export default function CaseStudy() {
                                 <FileSpreadsheet className="w-6 h-6 text-re-brand" />
                                 <h2 className="text-2xl font-bold">Metric 5: Time to FDA-Ready Export</h2>
                             </div>
-                            <p className="text-slate-300 mb-6">
+                            <p className="text-[var(--re-text-secondary)] mb-6">
                                 End-to-end: from uploading a raw CSV with messy supplier data to
                                 downloading a sortable spreadsheet that meets 21 CFR 1.1455 requirements
                                 (29 columns, date-range filtered, includes chain verification).
                             </p>
                             <div className="space-y-4">
-                                <div className="flex justify-between items-center border-b border-white/10 pb-3">
-                                    <span className="text-slate-400">CSV upload (1,200 records)</span>
-                                    <span className="text-white font-mono">1.2 min</span>
+                                <div className="flex justify-between items-center border-b border-[var(--re-surface-border)] pb-3">
+                                    <span className="text-[var(--re-text-tertiary)]">CSV upload (1,200 records)</span>
+                                    <span className="text-[var(--re-text-primary)] font-mono">1.2 min</span>
                                 </div>
-                                <div className="flex justify-between items-center border-b border-white/10 pb-3">
-                                    <span className="text-slate-400">Auto-normalization + validation</span>
-                                    <span className="text-white font-mono">3.8 min</span>
+                                <div className="flex justify-between items-center border-b border-[var(--re-surface-border)] pb-3">
+                                    <span className="text-[var(--re-text-tertiary)]">Auto-normalization + validation</span>
+                                    <span className="text-[var(--re-text-primary)] font-mono">3.8 min</span>
                                 </div>
-                                <div className="flex justify-between items-center border-b border-white/10 pb-3">
-                                    <span className="text-slate-400">Review flagged records (0.8/1,000)</span>
-                                    <span className="text-white font-mono">2.4 min</span>
+                                <div className="flex justify-between items-center border-b border-[var(--re-surface-border)] pb-3">
+                                    <span className="text-[var(--re-text-tertiary)]">Review flagged records (0.8/1,000)</span>
+                                    <span className="text-[var(--re-text-primary)] font-mono">2.4 min</span>
                                 </div>
-                                <div className="flex justify-between items-center border-b border-white/10 pb-3">
-                                    <span className="text-slate-400">Generate FDA export package</span>
-                                    <span className="text-white font-mono">0.4 min</span>
+                                <div className="flex justify-between items-center border-b border-[var(--re-surface-border)] pb-3">
+                                    <span className="text-[var(--re-text-tertiary)]">Generate FDA export package</span>
+                                    <span className="text-[var(--re-text-primary)] font-mono">0.4 min</span>
                                 </div>
-                                <div className="flex justify-between items-center border-b border-white/10 pb-3">
-                                    <span className="text-slate-400">Download + verify</span>
-                                    <span className="text-white font-mono">0.2 min</span>
+                                <div className="flex justify-between items-center border-b border-[var(--re-surface-border)] pb-3">
+                                    <span className="text-[var(--re-text-tertiary)]">Download + verify</span>
+                                    <span className="text-[var(--re-text-primary)] font-mono">0.2 min</span>
                                 </div>
                                 <div className="flex justify-between items-center pt-2">
-                                    <span className="text-white font-semibold">Total</span>
+                                    <span className="text-[var(--re-text-primary)] font-semibold">Total</span>
                                     <span className="text-re-brand font-bold text-xl">11.6 min</span>
                                 </div>
                             </div>
                         </div>
-                        <div className="bg-slate-900/50 border border-slate-800 rounded-lg p-6">
-                            <h3 className="text-sm font-semibold text-slate-400 mb-4">The FDA export package includes</h3>
+                        <div className="bg-[var(--re-surface-card)] border border-[var(--re-surface-border)] rounded-lg p-6">
+                            <h3 className="text-sm font-semibold text-[var(--re-text-tertiary)] mb-4">The FDA export package includes</h3>
                             <div className="space-y-3">
                                 {[
                                     'Sortable CSV (29 columns per 21 CFR 1.1455)',
@@ -508,12 +508,12 @@ export default function CaseStudy() {
                                 ].map((item) => (
                                     <div key={item} className="flex items-start gap-2">
                                         <CheckCircle2 className="w-4 h-4 text-re-brand flex-shrink-0 mt-0.5" />
-                                        <span className="text-sm text-slate-300">{item}</span>
+                                        <span className="text-sm text-[var(--re-text-secondary)]">{item}</span>
                                     </div>
                                 ))}
                             </div>
                             <div className="mt-6 bg-re-brand/20 border border-re-brand/30 rounded p-4">
-                                <p className="text-sm text-re-brand-light">
+                                <p className="text-sm text-re-brand">
                                     The FDA requires records within 24 hours.
                                     RegEngine delivers in under 12 minutes.
                                 </p>
@@ -524,10 +524,10 @@ export default function CaseStudy() {
             </section>
 
             {/* Produce-Specific Challenges */}
-            <section className="px-4 sm:px-6 lg:px-8 py-16 bg-slate-950/50">
+            <section className="px-4 sm:px-6 lg:px-8 py-16 bg-[var(--re-surface-elevated)]">
                 <div className="max-w-5xl mx-auto">
                     <h2 className="text-3xl font-bold mb-4">Why Leafy Greens Are the Hardest Case</h2>
-                    <p className="text-slate-300 mb-8 max-w-3xl">
+                    <p className="text-[var(--re-text-secondary)] mb-8 max-w-3xl">
                         Leafy greens and fresh-cut produce are on the FDA's Food Traceability List
                         specifically because they're high-risk: short shelf life, multi-ingredient blending
                         (transformation CTEs), frequent recalls, and fragmented supplier networks. If RegEngine
@@ -567,9 +567,9 @@ export default function CaseStudy() {
                                 metric: 'Walmart + Kroger export templates included',
                             },
                         ].map((item) => (
-                            <div key={item.title} className="bg-black/50 border border-white/10 rounded-lg p-5">
-                                <h3 className="font-semibold text-white mb-2">{item.title}</h3>
-                                <p className="text-sm text-slate-400 mb-3">{item.description}</p>
+                            <div key={item.title} className="bg-[var(--re-surface-elevated)] border border-[var(--re-surface-border)] rounded-lg p-5">
+                                <h3 className="font-semibold text-[var(--re-text-primary)] mb-2">{item.title}</h3>
+                                <p className="text-sm text-[var(--re-text-tertiary)] mb-3">{item.description}</p>
                                 <p className="text-xs text-re-brand font-medium">{item.metric}</p>
                             </div>
                         ))}
@@ -585,7 +585,7 @@ export default function CaseStudy() {
                         {HERO_METRICS.map((m) => (
                             <div key={m.label} className="bg-re-brand/10 border border-re-brand/30 rounded-lg p-5 text-center">
                                 <p className="text-2xl font-bold text-re-brand mb-1">{m.value}</p>
-                                <p className="text-sm text-white font-medium">{m.label}</p>
+                                <p className="text-sm text-[var(--re-text-primary)] font-medium">{m.label}</p>
                             </div>
                         ))}
                     </div>
@@ -593,23 +593,23 @@ export default function CaseStudy() {
             </section>
 
             {/* CTA */}
-            <section className="px-4 sm:px-6 lg:px-8 py-20 bg-gradient-to-b from-slate-950 to-black">
+            <section className="px-4 sm:px-6 lg:px-8 py-20 bg-[var(--re-surface-elevated)]">
                 <div className="max-w-4xl mx-auto text-center">
                     <h2 className="text-4xl font-bold mb-6">Run This Validation on Your Data</h2>
-                    <p className="text-xl text-slate-300 mb-10 max-w-2xl mx-auto">
+                    <p className="text-xl text-[var(--re-text-secondary)] mb-10 max-w-2xl mx-auto">
                         Upload a sample CSV. See your auto-normalization rate, KDE completeness score,
                         and time to FDA-ready export — measured on your actual supply chain data.
                     </p>
                     <div className="flex flex-col sm:flex-row gap-4 justify-center">
                         <Link
                             href="/signup"
-                            className="inline-flex items-center justify-center px-8 py-4 bg-re-brand hover:bg-re-brand text-white font-semibold rounded-lg transition-colors text-lg"
+                            className="inline-flex items-center justify-center px-8 py-4 bg-primary hover:bg-[var(--re-text-secondary)] text-primary-foreground font-semibold rounded-lg transition-colors border border-primary text-lg"
                         >
                             Start Free Trial <ArrowRight className="w-5 h-5 ml-2" />
                         </Link>
                         <Link
                             href="/pricing"
-                            className="inline-flex items-center justify-center px-8 py-4 bg-slate-800 hover:bg-slate-700 text-white font-semibold rounded-lg transition-colors border border-slate-700 text-lg"
+                            className="inline-flex items-center justify-center px-8 py-4 bg-[var(--re-surface-elevated)] hover:bg-[var(--re-surface-card)] text-[var(--re-text-primary)] font-semibold rounded-lg transition-colors border border-[var(--re-surface-border)] text-lg"
                         >
                             View Pricing
                         </Link>
@@ -618,12 +618,12 @@ export default function CaseStudy() {
             </section>
 
             {/* Methodology */}
-            <section className="px-4 sm:px-6 lg:px-8 py-12 border-t border-slate-800 bg-black">
+            <section className="px-4 sm:px-6 lg:px-8 py-12 border-t border-[var(--re-surface-border)] bg-[var(--re-surface-base)]">
                 <div className="max-w-5xl mx-auto">
-                    <h3 className="text-sm font-semibold text-slate-400 mb-4">Methodology</h3>
-                    <div className="grid sm:grid-cols-3 gap-8 text-sm text-slate-500">
+                    <h3 className="text-sm font-semibold text-[var(--re-text-tertiary)] mb-4">Methodology</h3>
+                    <div className="grid sm:grid-cols-3 gap-8 text-sm text-[var(--re-text-muted)]">
                         <div>
-                            <p className="font-medium text-slate-400 mb-2">Data Source</p>
+                            <p className="font-medium text-[var(--re-text-tertiary)] mb-2">Data Source</p>
                             <p>
                                 1,200 synthetic CTE events modeled on real-world leafy greens supply chain
                                 patterns (Salinas Valley grower → fresh-cut processor → regional distribution).
@@ -632,7 +632,7 @@ export default function CaseStudy() {
                             </p>
                         </div>
                         <div>
-                            <p className="font-medium text-slate-400 mb-2">Measurement</p>
+                            <p className="font-medium text-[var(--re-text-tertiary)] mb-2">Measurement</p>
                             <p>
                                 All metrics measured on RegEngine's production codebase running against
                                 PostgreSQL 15. Timings include full validation pipeline (normalization,
@@ -642,7 +642,7 @@ export default function CaseStudy() {
                             </p>
                         </div>
                         <div>
-                            <p className="font-medium text-slate-400 mb-2">Disclosure</p>
+                            <p className="font-medium text-[var(--re-text-tertiary)] mb-2">Disclosure</p>
                             <p>
                                 This is a product validation study, not a customer case study. Data is
                                 synthetic but modeled on real supply chain patterns and industry-reported
