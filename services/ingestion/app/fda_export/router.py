@@ -903,6 +903,13 @@ async def export_recall_filtered(
         default="csv",
         description="Export format: package (zip bundle) or csv",
     ),
+    allow_incomplete: bool = Query(
+        default=False,
+        description=(
+            "Acknowledge KDE coverage <80% and proceed. Every bypass is "
+            "recorded in the audit trail."
+        ),
+    ),
     include_pii: bool = Query(
         default=False,
         description=(
@@ -1010,6 +1017,13 @@ async def export_fda_spreadsheet_v2(
         default="csv",
         description="Export format: package (zip bundle) or csv",
     ),
+    allow_incomplete: bool = Query(
+        default=False,
+        description=(
+            "Acknowledge KDE coverage <80% and proceed. Every bypass is "
+            "recorded in the audit trail."
+        ),
+    ),
     include_pii: bool = Query(
         default=False,
         description=(
@@ -1030,6 +1044,17 @@ async def export_fda_spreadsheet_v2(
                 "with a resolvable key_id."
             ),
         )
+
+    if not tlc:
+        try:
+            validate_export_window(start_date, end_date)
+        except ExportWindowError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+    elif start_date or end_date:
+        try:
+            validate_export_window(start_date, end_date)
+        except ExportWindowError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     # Authorize PII access (issue #1219).
     _authorize_pii_access(
@@ -1058,6 +1083,14 @@ async def export_fda_spreadsheet_v2(
 
         # ----- Query from canonical model with rule evaluations -----
         rows = fetch_v2_events(db_session, where_clause, params)
+        if len(rows) > 10000:
+            raise HTTPException(
+                status_code=413,
+                detail=(
+                    "V2 export exceeds the 10000-record synchronous limit. "
+                    "Narrow the date range or request a paginated/offline export."
+                ),
+            )
 
         if not rows:
             detail_parts = [f"tenant_id='{tenant_id}'"]
@@ -1081,6 +1114,13 @@ async def export_fda_spreadsheet_v2(
         csv_content, export_hash = generate_csv_v2_and_hash(events, include_pii=include_pii)
         chain_verification = persistence.verify_chain(tenant_id=tenant_id)
         completeness_summary = _build_completeness_summary(events)
+        _enforce_kde_coverage_gate(
+            completeness_summary=completeness_summary,
+            allow_incomplete=allow_incomplete,
+            identity=identity,
+            tenant_id=tenant_id,
+            export_scope=f"v2:{tlc or 'all'}",
+        )
 
         # ----- Compute compliance summary stats -----
         total_events = len(events)
