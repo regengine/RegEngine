@@ -13,10 +13,10 @@ sys.path.insert(0, str(service_dir))
 
 pytest.importorskip("fastapi")
 
-from app.authz import IngestionPrincipal, get_ingestion_principal
-import app.edi_ingestion.routes as edi_ingestion_routes
-from app.edi_ingestion import router as edi_router
-from app.webhook_models import EventResult, IngestResponse, WebhookCTEType
+from app.authz import IngestionPrincipal, get_ingestion_principal  # noqa: E402
+import app.edi_ingestion.routes as edi_ingestion_routes  # noqa: E402
+from app.edi_ingestion import router as edi_router  # noqa: E402
+from app.webhook_models import EventResult, IngestResponse, WebhookCTEType  # noqa: E402
 
 TEST_TENANT_ID = "00000000-0000-0000-0000-000000000123"
 
@@ -56,6 +56,17 @@ MISSING_REQUIRED_SEGMENT = (
     b"SE*4*0001~"
     b"GE*1*1~"
     b"IEA*1*000000001~"
+)
+
+LEGACY_856_MISSING_KDES = (
+    b"ISA*00*          *00*          *ZZ*SENDERID       *ZZ*RECEIVERID     *260310*1200*U*00401*000000099*0*P*>~"
+    b"GS*SH*SENDERID*RECEIVERID*20260310*1200*99*X*004010~"
+    b"ST*856*0099~"
+    b"BSN*00*ASN-12345~"
+    b"HL*1**S~"
+    b"SE*4*0099~"
+    b"GE*1*99~"
+    b"IEA*1*000000099~"
 )
 
 
@@ -158,6 +169,55 @@ def test_ingest_rejects_missing_required_segments(client: TestClient) -> None:
     detail = response.json()["detail"]
     assert detail["message"] == "EDI 856 missing required segments"
     assert "HL" in detail["missing_segments"]
+
+
+def test_legacy_856_rejects_missing_kdes_without_placeholder_persistence(
+    client: TestClient,
+    captured_payload: dict,
+) -> None:
+    """#2072: legacy 856 must reject missing KDEs instead of synthesizing
+    quantity=1.0, Unknown locations, generic products, or current dates.
+    """
+    from app.edi_ingestion.rejection_log import (
+        list_edi_rejections,
+        reset_edi_rejections,
+    )
+
+    reset_edi_rejections()
+    captured_payload.clear()
+
+    response = client.post(
+        "/api/v1/ingest/edi",
+        data={
+            "traceability_lot_code": "LOT-2026-EDI-MISSING-KDES",
+            "tenant_id": TEST_TENANT_ID,
+        },
+        files={"file": ("bad.edi", LEGACY_856_MISSING_KDES, "application/edi-x12")},
+        headers={"X-Partner-ID": "WALMART"},
+    )
+
+    assert response.status_code == 422
+    detail = response.json()["detail"]
+    assert detail["error"] == "edi_856_missing_required_kdes"
+    assert set(detail["missing_kdes"]) >= {
+        "quantity",
+        "unit_of_measure",
+        "product_description",
+        "ship_from_location",
+        "ship_to_location",
+        "ship_date",
+    }
+    assert "payload" not in captured_payload
+
+    blocked_placeholders = {
+        error["placeholder_blocked"] for error in detail["errors"]
+    }
+    assert {"1.0", "Unknown ship-from", "Unknown ship-to", "EDI 856 Shipment"} <= blocked_placeholders
+
+    rejections = list_edi_rejections(TEST_TENANT_ID)
+    assert len(rejections) == 1
+    assert rejections[0]["rejection_id"] == detail["rejection_id"]
+    assert rejections[0]["traceability_lot_code"] == "LOT-2026-EDI-MISSING-KDES"
 
 
 def test_ingest_denied_without_edi_ingest_scope() -> None:
