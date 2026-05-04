@@ -30,7 +30,6 @@ import {
     requireProxyAuth,
     validateProxySession,
     staticExportGuard,
-    hasRealCallerCredential,
     isCookieManagedCredentialHeader,
     isUsableCallerCredential,
 } from './api-proxy';
@@ -354,7 +353,7 @@ export function passthroughRequestHeaders(
  *
  *  Populates (when present and not already set):
  *    - Authorization: Bearer {re_access_token}
- *    - X-RegEngine-API-Key: {re_api_key} or REGENGINE_API_KEY env
+ *    - X-RegEngine-API-Key: {re_api_key}
  *    - X-Admin-Key: {re_admin_key}
  *    - X-Tenant-ID: {re_tenant_id}
  *
@@ -368,8 +367,6 @@ export function applyCookieCredentials(
     request: NextRequest,
     options: { respectExistingAuthHeader?: boolean } = {},
 ): Headers {
-    const hasRealCredential = hasRealCallerCredential(request);
-
     const cookieAccessToken = request.cookies.get('re_access_token')?.value;
     const headerAuth = headers.get('authorization');
     if (headerAuth && isCookieManagedCredentialHeader('authorization', headerAuth)) {
@@ -394,8 +391,6 @@ export function applyCookieCredentials(
         const cookieApiKey = request.cookies.get('re_api_key')?.value;
         if (isUsableCallerCredential(cookieApiKey)) {
             headers.set('x-regengine-api-key', cookieApiKey);
-        } else if (hasRealCredential && process.env.REGENGINE_API_KEY) {
-            headers.set('x-regengine-api-key', process.env.REGENGINE_API_KEY);
         }
     }
 
