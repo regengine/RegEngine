@@ -176,7 +176,7 @@ export default function RecallReportPage() {
                             <RefreshCw className={`h-3.5 w-3.5 mr-1.5 ${isLoading ? 'animate-spin' : ''}`} />
                             Refresh
                         </Button>
-                        <Link href="/tools/drill-simulator">
+                        <Link href="/dashboard/recall-drills">
                             <Button variant="outline" size="sm" className="rounded-xl min-h-[44px] active:scale-[0.97]">
                                 <Play className="h-3.5 w-3.5 mr-1.5" /> Run Mock Drill
                             </Button>
@@ -437,7 +437,7 @@ export default function RecallReportPage() {
                                 <p className="text-sm text-muted-foreground mt-1 max-w-md">
                                     Your system is ready to respond to a 24-hour FDA records request. Run a mock drill to validate your team&apos;s response speed.
                                 </p>
-                                <Link href="/tools/drill-simulator">
+                                <Link href="/dashboard/recall-drills">
                                     <Button size="sm" className="mt-4 rounded-xl min-h-[44px]">
                                         <Play className="mr-1.5 h-3.5 w-3.5" /> Simulate Recall Drill
                                     </Button>

@@ -107,6 +107,7 @@ export default function AlertsDashboardPage() {
             return data.alerts || [];
         },
         enabled: isLoggedIn && !!tenantId,
+        retry: false,
     });
 
     const alerts = alertsData ?? [];

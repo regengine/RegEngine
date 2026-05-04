@@ -33,8 +33,6 @@ export function EmailGate({ toolName, children }: EmailGateProps) {
 
     // Check cookie on mount
     useEffect(() => {
-        let cancelled = false;
-
         fetchWithCsrf('/api/tools/check-access', {
             signal: AbortSignal.timeout(4000),
         })

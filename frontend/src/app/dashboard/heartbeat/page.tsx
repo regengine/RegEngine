@@ -386,11 +386,11 @@ export default function HeartbeatPage() {
         },
         enabled: !!effectiveTenantId,
         refetchInterval: POLL_MS,
-        retry: 2,
+        retry: false,
     });
 
     const compliance = heartbeatData?.compliance ?? null;
-    const alerts = heartbeatData?.alerts ?? [];
+    const alerts = useMemo(() => heartbeatData?.alerts ?? [], [heartbeatData?.alerts]);
     const partialError = heartbeatData?.partialError ?? null;
     const error = heartbeatError?.message ?? partialError;
     const lastRefresh = dataUpdatedAt ? new Date(dataUpdatedAt) : new Date();

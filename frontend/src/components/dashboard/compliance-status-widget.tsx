@@ -206,7 +206,7 @@ export function ComplianceStatusWidget({ tenantId, onAlertClick }: ComplianceSta
 
     if (!status) return null;
 
-    const config = STATUS_CONFIG[status.status];
+    const config = STATUS_CONFIG[status.status] ?? STATUS_CONFIG.AT_RISK;
     const StatusIcon = config.Icon;
 
     return (

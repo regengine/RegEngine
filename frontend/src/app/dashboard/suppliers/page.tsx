@@ -437,7 +437,7 @@ export default function SupplierDashboardPage() {
                                     variant="outline"
                                     size="sm"
                                     className="rounded-xl min-h-[36px] text-xs active:scale-[0.97]"
-                                    onClick={() => { window.location.href = '/tools/inflow-lab'; }}
+                                    onClick={() => { window.location.href = '/dashboard/inflow-lab'; }}
                                 >
                                     Open Workbench <ArrowRight className="h-3.5 w-3.5 ml-1" />
                                 </Button>

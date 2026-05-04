@@ -227,7 +227,7 @@ class APIClient {
   }
 
   async getSystemMetrics(): Promise<SystemMetricsResponse> {
-    const { data } = await this.adminClient.get('/v1/system/metrics');
+    const { data } = await this.adminClient.get('/v1/system/metrics', { timeout: 8000 });
     return data;
   }
 
