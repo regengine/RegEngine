@@ -12,7 +12,8 @@ Read [AGENTS.md](../AGENTS.md) first.
 - The repository is a Python services monorepo plus a Next.js frontend in `frontend/`.
 - `frontend/package-lock.json` is checked in, so default to `npm` for frontend commands.
 - The repo does not contain a `Makefile` or a repo-root `conftest.py`.
-- The repo-local swarm scripts still use `.agent/`; editor-facing rules, workflows, and skills live in `.agents/`.
+- Current editor agent specs live in `.github/agents/`.
+- Legacy `.agent/` and `.agents/` directories may be absent in this checkout; do not depend on them unless a task explicitly restores that layer.
 
 ## Prefer these sources of truth
 

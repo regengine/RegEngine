@@ -1,20 +1,22 @@
-name: 🤖 Agent Task
-description: Dispatch a task to a specific agent in the Fractal Agent Swarm
+name: Agent Task
+description: Dispatch a scoped task to a RegEngine bot team
 title: "[AGENT] "
 labels: ["agent-task"]
 body:
   - type: dropdown
     id: agent
     attributes:
-      label: Assigned Agent
-      description: Which agent should handle this task?
+      label: Assigned Bot Team
+      description: Which lane should own the first pass?
       options:
         - "Bot-FSMA (FDA FSMA 204 Specialist)"
-        - "Bot-PCOS (Union Payroll & Fringe Benefits)"
-        - "Bot-Security (The CISO)"
-        - "Bot-Infra (The SRE)"
-        - "Bot-UI (Design System Guardian)"
-        - "Bot-QA (Quality Assurance)"
+        - "Bot-Inflow (Workbench and Supplier Ingest)"
+        - "Bot-Backend (FastAPI, Persistence, Migrations)"
+        - "Bot-Frontend (Next.js App Router and UX)"
+        - "Bot-Security (Auth, Tenant Isolation, Audit)"
+        - "Bot-Infra (Deploy, CI, Observability)"
+        - "Bot-QA (Tests and Regression Harnesses)"
+        - "Bot-Docs-Janitor (Stale Paths and Handoffs)"
     validations:
       required: true
 
@@ -40,12 +42,30 @@ body:
       description: Should additional agents review after the primary agent completes?
       options:
         - "None — Single agent only"
-        - "→ Bot-Security (Security review)"
-        - "→ Bot-Security → Bot-QA (Security + QA)"
-        - "→ Bot-Security → Bot-UI → Bot-QA (Full review)"
-        - "→ Bot-QA (QA validation only)"
+        - "Bot-Security review"
+        - "Bot-Security then Bot-QA"
+        - "Bot-Frontend then Bot-QA"
+        - "Bot-Infra then Bot-Security"
+        - "Bot-QA validation only"
     validations:
       required: false
+
+  - type: dropdown
+    id: production-spine
+    attributes:
+      label: Production Spine
+      description: Which part of the FSMA path is affected?
+      options:
+        - "ingest"
+        - "normalize"
+        - "validate"
+        - "persist evidence"
+        - "export"
+        - "admin/operator workflow"
+        - "infra/CI only"
+        - "docs only"
+    validations:
+      required: true
 
   - type: textarea
     id: task-description
