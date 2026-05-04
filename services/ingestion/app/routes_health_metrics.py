@@ -58,3 +58,15 @@ def health() -> dict[str, str]:
         "service": "regengine",
         "kafka": kafka_status,
     }
+
+
+@router.get("/healthz", include_in_schema=False)
+def healthz() -> dict[str, str]:
+    """Compatibility liveness path used by older probes and frontend checks."""
+    return health()
+
+
+@router.get("/api/health", include_in_schema=False)
+def api_health() -> dict[str, str]:
+    """Compatibility liveness path used by frontend service discovery."""
+    return health()

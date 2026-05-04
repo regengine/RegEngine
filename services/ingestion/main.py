@@ -200,6 +200,9 @@ app.include_router(ingestion_router, tags=["Document Ingestion"])
 from app.routes_health_metrics import router as health_metrics_router
 app.include_router(health_metrics_router, tags=["Health & Metrics"])
 
+from app.fsma_readiness_compat import router as fsma_readiness_compat_router
+app.include_router(fsma_readiness_compat_router)
+
 
 # Decomposed sub-routers (extracted from routes.py god file)
 if _router_enabled("scraping"):
@@ -315,7 +318,12 @@ if _router_enabled("exchange"):
 # Stripe Billing
 if _router_enabled("billing"):
     from app.stripe_billing import router as billing_router
+    from app.stripe_billing.routes import list_plans as _list_billing_plans
     app.include_router(billing_router, tags=["Billing"])
+
+    @app.get("/billing/plans", tags=["Billing"], include_in_schema=False)
+    async def list_billing_plans_compat():
+        return await _list_billing_plans()
 
 
 # Alerts & Notifications

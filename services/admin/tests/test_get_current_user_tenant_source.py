@@ -153,6 +153,33 @@ def test_app_metadata_tenant_used(monkeypatch):
 
 
 @pytest.mark.security
+def test_supabase_invalid_jwt_rejected_without_local_fallback(monkeypatch):
+    """Supabase invalid-JWT errors must be a 401, not a 500 or local fallback."""
+    from services.admin.app import dependencies as deps
+
+    class AuthApiError(Exception):
+        pass
+
+    fake_sb = MagicMock()
+    fake_sb.auth.get_user.side_effect = AuthApiError(
+        "invalid JWT: unable to parse or verify signature"
+    )
+    monkeypatch.setattr(deps, "get_supabase", lambda: fake_sb)
+
+    decode_access_token = MagicMock()
+    monkeypatch.setattr(deps, "decode_access_token", decode_access_token)
+
+    user_mock = MagicMock(id=USER_ID, is_sysadmin=False)
+    db = _FakeDB(memberships=[_membership(TENANT_A)], user_mock=user_mock)
+
+    with pytest.raises(HTTPException) as exc:
+        _run(deps.get_current_user(token="bad-supabase-token", db=db))
+
+    assert exc.value.status_code == 401
+    decode_access_token.assert_not_called()
+
+
+@pytest.mark.security
 def test_sole_membership_used_when_no_claim(monkeypatch):
     """With no trusted claim, a single active membership is the tenant."""
     from services.admin.app import dependencies as deps
