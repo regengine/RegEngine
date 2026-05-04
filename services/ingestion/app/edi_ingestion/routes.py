@@ -137,6 +137,120 @@ def _edi_strict_mode() -> bool:
         return True
     return explicit.strip().lower() in {"1", "true", "yes", "on", "strict"}
 
+
+def _positive_float_or_none(value: Any) -> float | None:
+    try:
+        parsed = float(str(value).strip())
+    except (TypeError, ValueError):
+        return None
+    return parsed if parsed > 0 else None
+
+
+def _legacy_856_placeholder_errors(
+    *,
+    segments: list[list[str]],
+    extracted: dict[str, Any],
+    product_description_override: str | None,
+    quantity_override: float | None,
+    unit_override: str | None,
+    ship_from_override: str | None,
+    ship_to_override: str | None,
+) -> list[dict[str, Any]]:
+    """Find missing 856 KDEs that the legacy route used to synthesize."""
+    errors: list[dict[str, Any]] = []
+
+    def _add(field: str, placeholder: str, message: str) -> None:
+        errors.append(
+            {
+                "loc": [field],
+                "msg": message,
+                "type": "missing_required_kde",
+                "placeholder_blocked": placeholder,
+            }
+        )
+
+    sn1 = _first_segment(segments, "SN1") or []
+    raw_quantity = sn1[2] if len(sn1) > 2 else None
+    if quantity_override is None and _positive_float_or_none(raw_quantity) is None:
+        _add(
+            "quantity",
+            "1.0",
+            "EDI 856 is missing a positive SN1 quantity; refusing to synthesize quantity=1.0.",
+        )
+
+    raw_unit = sn1[3] if len(sn1) > 3 else None
+    if unit_override is None and not (raw_unit and str(raw_unit).strip()):
+        _add(
+            "unit_of_measure",
+            "units",
+            "EDI 856 is missing SN1 unit of measure; refusing to synthesize unit_of_measure='units'.",
+        )
+
+    if not (product_description_override or extracted.get("product_description")):
+        _add(
+            "product_description",
+            "EDI 856 Shipment",
+            "EDI 856 is missing product identification/description; refusing to synthesize a generic product.",
+        )
+
+    if not (ship_from_override or extracted.get("ship_from_name")):
+        _add(
+            "ship_from_location",
+            "Unknown ship-from",
+            "EDI 856 is missing ship-from location; refusing to synthesize an unknown location.",
+        )
+
+    if not (ship_to_override or extracted.get("ship_to_name")):
+        _add(
+            "ship_to_location",
+            "Unknown ship-to",
+            "EDI 856 is missing ship-to location; refusing to synthesize an unknown location.",
+        )
+
+    if not extracted.get("ship_date_raw"):
+        _add(
+            "ship_date",
+            "current date",
+            "EDI 856 is missing BSN ship date; refusing to synthesize the current date.",
+        )
+
+    return errors
+
+
+def _reject_legacy_856_placeholders(
+    *,
+    errors: list[dict[str, Any]],
+    sender_tenant_id: str,
+    traceability_lot_code: str,
+    extracted: dict[str, Any],
+    partner_id: str | None,
+    source: str,
+) -> None:
+    rejection_record = _record_edi_rejection(
+        tenant_id=sender_tenant_id,
+        transaction_set="856",
+        traceability_lot_code=traceability_lot_code,
+        errors=errors,
+        extracted=extracted,
+        partner_id=partner_id,
+        source=source,
+    )
+    raise HTTPException(
+        status_code=422,
+        detail={
+            "error": "edi_856_missing_required_kdes",
+            "message": (
+                "EDI 856 is missing required FSMA KDEs. No events were "
+                "persisted; fix the supplier document or provide explicit "
+                "operator-reviewed overrides."
+            ),
+            "missing_kdes": [err["loc"][0] for err in errors],
+            "rejection_id": rejection_record["rejection_id"],
+            "errors": errors,
+        },
+    )
+
+
 router = APIRouter(prefix="/api/v1/ingest/edi", tags=["EDI Import"])
 
 _resolve_tenant_id = resolve_tenant_id
@@ -311,6 +425,25 @@ async def ingest_edi_856(
 
     # #1160 + #1165: envelope mismatch / allowlist / ISA13 dedup.
     _enforce_envelope_integrity(extracted, sender_tenant_id, "856")
+
+    placeholder_errors = _legacy_856_placeholder_errors(
+        segments=segments,
+        extracted=extracted,
+        product_description_override=product_description,
+        quantity_override=quantity_override,
+        unit_override=unit_of_measure_override,
+        ship_from_override=ship_from_location_override,
+        ship_to_override=ship_to_location_override,
+    )
+    if placeholder_errors:
+        _reject_legacy_856_placeholders(
+            errors=placeholder_errors,
+            sender_tenant_id=sender_tenant_id,
+            traceability_lot_code=traceability_lot_code,
+            extracted=extracted,
+            partner_id=x_partner_id,
+            source=source,
+        )
 
     timestamp, ship_date = _ship_timestamp_and_date(
         extracted.get("ship_date_raw"),
