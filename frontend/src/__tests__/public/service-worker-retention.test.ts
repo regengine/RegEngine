@@ -51,7 +51,10 @@ function loadServiceWorker(records: OfflineEvent[], fetchImpl = vi.fn().mockReso
         self: {
             addEventListener: vi.fn(),
             skipWaiting: vi.fn(),
-            clients: { claim: vi.fn() },
+            clients: {
+                claim: vi.fn(),
+                matchAll: vi.fn().mockResolvedValue([]),
+            },
         },
         caches: {
             open: vi.fn(),
@@ -82,7 +85,7 @@ function loadServiceWorker(records: OfflineEvent[], fetchImpl = vi.fn().mockReso
 }
 
 describe('service worker offline queue retention', () => {
-    it('drops expired events before retrying fresh events', async () => {
+    it('only deletes queued events after a successful backend acknowledgement', async () => {
         const now = Date.now();
         const oldEvent = {
             id: 1,
@@ -101,14 +104,45 @@ describe('service worker offline queue retention', () => {
         await context.processOfflineQueue();
 
         expect(deleteCalls).toEqual([1, 2]);
-        expect(fetchImpl).toHaveBeenCalledTimes(1);
+        expect(fetchImpl).toHaveBeenCalledTimes(2);
+        expect(fetchImpl).toHaveBeenCalledWith('/expired', expect.objectContaining({
+            method: 'POST',
+            credentials: 'include',
+            body: JSON.stringify(oldEvent.body),
+        }));
         expect(fetchImpl).toHaveBeenCalledWith('/fresh', expect.objectContaining({
             method: 'POST',
+            credentials: 'include',
             body: JSON.stringify(freshEvent.body),
         }));
     });
 
-    it('hydrates legacy events with a retention timestamp when retry fails', async () => {
+    it('keeps expired events queued when replay fails', async () => {
+        const event = {
+            id: 1,
+            url: '/expired',
+            body: { traceability_lot_code: 'expired' },
+            createdAt: Date.now() - 31 * 24 * 60 * 60 * 1000,
+        };
+        const { context, putCalls, deleteCalls, records } = loadServiceWorker(
+            [event],
+            vi.fn().mockResolvedValue({ ok: false, status: 500 })
+        );
+
+        await context.processOfflineQueue();
+
+        expect(deleteCalls).toEqual([]);
+        expect(putCalls).toHaveLength(1);
+        expect(records).toHaveLength(1);
+        expect(records[0]).toEqual(expect.objectContaining({
+            id: 1,
+            syncAttempts: 1,
+            syncError: 'Replay failed: 500',
+            retentionExceededAt: expect.any(Number),
+        }));
+    });
+
+    it('hydrates legacy events with retry metadata when replay fails', async () => {
         const event = {
             id: 1,
             url: '/legacy',
@@ -122,7 +156,12 @@ describe('service worker offline queue retention', () => {
         await context.processOfflineQueue();
 
         expect(putCalls).toHaveLength(1);
-        expect(putCalls[0]).toEqual(expect.objectContaining({ id: 1, createdAt: expect.any(Number) }));
+        expect(putCalls[0]).toEqual(expect.objectContaining({
+            id: 1,
+            createdAt: expect.any(Number),
+            syncAttempts: 1,
+            lastSyncAttemptAt: expect.any(Number),
+        }));
         expect(records).toHaveLength(1);
         expect(records[0].createdAt).toEqual(expect.any(Number));
     });
