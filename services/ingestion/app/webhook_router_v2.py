@@ -830,7 +830,11 @@ def _persist_canonical_and_eval(
     from shared.rules_engine import RulesEngine  # noqa: PLC0415
 
     canonical = normalize_webhook_event(event, tenant_id, source=source)
-    store = CanonicalEventStore(db_session, dual_write=False, skip_chain_write=False)
+    # The legacy CTEPersistence path already writes fsma.hash_chain for the
+    # accepted fsma.cte_events row. CanonicalEventStore's chain writer still
+    # targets that legacy FK, so this helper requires canonical evidence
+    # without attempting a second chain entry for a canonical-only UUID.
+    store = CanonicalEventStore(db_session, dual_write=False, skip_chain_write=True)
     store.persist_event(canonical)
     engine = RulesEngine(db_session)
 
