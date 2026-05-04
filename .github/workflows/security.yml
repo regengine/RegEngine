@@ -469,18 +469,16 @@ jobs:
         # signature remains verifiable without requiring Docker Hub auth.
         run: |
           cosign sign-blob --yes \
-            --output-signature sbom.spdx.json.sig \
-            --output-certificate sbom.spdx.json.pem \
+            --bundle sbom.spdx.sigstore.json \
             sbom.spdx.json
 
-      - name: Upload SBOM signatures
+      - name: Upload SBOM signature bundle
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7
         with:
           name: sbom-signature
           path: |
-            sbom.spdx.json.sig
-            sbom.spdx.json.pem
+            sbom.spdx.sigstore.json
           retention-days: 90
 
   # ──────────────────────────────────────────────
