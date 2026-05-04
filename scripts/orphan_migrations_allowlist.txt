@@ -21,7 +21,6 @@ services/admin/migrations/V15__form_autofill_tables.sql
 services/admin/migrations/V16__classification_tables.sql
 services/admin/migrations/V17__paperwork_visa_tables.sql
 services/admin/migrations/V18__audit_provenance_tables.sql
-services/admin/migrations/V1__init_schema.sql
 services/admin/migrations/V25__migrate_pcos_to_entertainment_db.sql
 services/admin/migrations/V26__deprecate_sessions_table.sql
 services/admin/migrations/V27_5__add_tenant_id_to_pcos_tables.sql
@@ -31,14 +30,7 @@ services/admin/migrations/V28__rls_pcos_vertical_tables.sql
 services/admin/migrations/V29__jwt_rls_integration.sql
 services/admin/migrations/V30__audit_logs_tamper_evident.sql
 services/admin/migrations/V31__fsma_204_infrastructure.sql
-services/admin/migrations/V32__enforce_supplier_cte_sequence_uniqueness.sql
-services/admin/migrations/V36__funnel_events.sql
 services/admin/migrations/V39__supplier_portal_tables.sql
 services/admin/migrations/V3__tenant_isolation.sql
-services/admin/migrations/V4__create_review_items.sql
-services/admin/migrations/V5__add_production_indexes.sql
-services/admin/migrations/V6__create_compliance_snapshots.sql
 services/admin/migrations/V7__create_compliance_status.sql
-services/admin/migrations/V8__rls_fixes.sql
-services/admin/migrations/V9__create_invites_table.sql
 services/ingestion/migrations/V001__ingestion_schema.sql
