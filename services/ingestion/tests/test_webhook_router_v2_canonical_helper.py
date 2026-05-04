@@ -418,6 +418,19 @@ class TestCommonInvariants:
 
         assert _FakeEngine.persist_summary_calls[0]["event_id"] == "persisted-canonical-row"
 
+    def test_exception_evidence_uses_idempotent_canonical_store_result(self, _make_event):
+        _FakeCanonicalEventStore.result_event_id = "persisted-canonical-row"
+        precomputed = _warning_only_summary()
+
+        wrv2._persist_canonical_and_eval(
+            db_session=MagicMock(), event=_make_event, tenant_id="t-1",
+            precomputed_summary=precomputed,
+        )
+
+        assert _FakeEngine.persist_summary_calls[0]["event_id"] == "persisted-canonical-row"
+        assert precomputed.event_id == "persisted-canonical-row"
+        assert _FakeExceptionQueueService.create_calls[0]["summary"].event_id == "persisted-canonical-row"
+
     def test_fallback_evaluation_uses_idempotent_canonical_store_result(self, _make_event):
         _FakeCanonicalEventStore.result_event_id = "persisted-canonical-row"
         _FakeEngine.summary_to_return = _compliant_summary()

@@ -866,6 +866,11 @@ def _persist_canonical_and_eval(
         }
         summary = engine.evaluate_event(event_data, persist=True, tenant_id=tenant_id)
 
+    # ExceptionQueueService links cases from summary.event_id; idempotent
+    # canonical persistence may return an existing row whose id differs from
+    # the freshly normalized/pre-evaluated candidate.
+    summary.event_id = persisted_event_id
+
     if not summary.compliant:
         from shared.exception_queue import ExceptionQueueService  # noqa: PLC0415
         ExceptionQueueService(db_session).create_exceptions_from_evaluation(
