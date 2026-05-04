@@ -71,12 +71,18 @@ function deriveKidSync(secret: string): string {
 }
 
 function buildKey(secret: string, dateStr?: string): JWTKey {
-    const encoder = new TextEncoder();
+    const encodedSecret = typeof Buffer !== 'undefined'
+        ? Uint8Array.from(Buffer.from(secret, 'utf8'))
+        : new TextEncoder().encode(secret);
     return {
         kid: deriveKidSync(secret),
-        secret: encoder.encode(secret),
+        secret: encodedSecret,
         createdAt: dateStr ? new Date(dateStr) : null,
     };
+}
+
+function readEnv(name: string): string | undefined {
+    return globalThis.process?.env?.[name] ?? process.env[name];
 }
 
 // ---------------------------------------------------------------------------
@@ -92,19 +98,19 @@ function ensureInitialized(): void {
     _initialized = true;
 
     const currentSecret =
-        process.env.JWT_SIGNING_KEY || process.env.AUTH_SECRET_KEY;
+        readEnv('JWT_SIGNING_KEY') || readEnv('AUTH_SECRET_KEY');
     if (currentSecret) {
         _signingKey = buildKey(
             currentSecret,
-            process.env.JWT_SIGNING_KEY_DATE,
+            readEnv('JWT_SIGNING_KEY_DATE'),
         );
     }
 
-    const previousSecret = process.env.JWT_PREVIOUS_KEY;
+    const previousSecret = readEnv('JWT_PREVIOUS_KEY');
     if (previousSecret) {
         _previousKey = buildKey(
             previousSecret,
-            process.env.JWT_PREVIOUS_KEY_DATE,
+            readEnv('JWT_PREVIOUS_KEY_DATE'),
         );
     }
 }
