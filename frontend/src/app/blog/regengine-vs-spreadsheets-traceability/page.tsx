@@ -16,7 +16,7 @@ export default function RegEngineVsSpreadsheets() {
   return (
     <div className="overflow-x-hidden bg-[var(--re-surface-base)]">
       {/* Hero */}
-      <section className="max-w-[800px] mx-auto px-4 sm:px-6 pt-14 sm:pt-20 pb-8 sm:pb-12">
+      <section className="max-w-[900px] mx-auto px-4 sm:px-6 pt-14 sm:pt-20 pb-8 sm:pb-12">
         <div className="mb-8">
           <Link
             href="/blog"
@@ -41,8 +41,8 @@ export default function RegEngineVsSpreadsheets() {
       </section>
 
       {/* Content */}
-      <section className="max-w-[800px] mx-auto px-4 sm:px-6 pb-16 sm:pb-24">
-        <article className="prose prose-invert max-w-none">
+      <section className="max-w-[900px] mx-auto px-4 sm:px-6 pb-16 sm:pb-24">
+        <article className="prose max-w-none prose-headings:text-[var(--re-text-primary)] prose-p:text-[var(--re-text-secondary)] prose-strong:text-[var(--re-text-primary)] prose-li:text-[var(--re-text-secondary)] prose-a:text-[var(--re-brand)]">
           {/* Introduction */}
           <div className="mb-10">
             <p className="text-[1.05rem] text-[var(--re-text-secondary)] leading-relaxed mb-6">

@@ -16,7 +16,7 @@ export default function CTEKDEGuidePage() {
   return (
     <div className="overflow-x-hidden bg-[var(--re-surface-base)]">
       {/* Back to Blog Link */}
-      <div className="max-w-[800px] mx-auto px-4 sm:px-6 pt-8 pb-4">
+      <div className="max-w-[900px] mx-auto px-4 sm:px-6 pt-8 pb-4">
         <Link href="/blog" className="inline-flex items-center gap-2 text-[var(--re-text-secondary)] hover:text-[var(--re-brand)] transition-colors">
           <ArrowRight className="w-4 h-4 rotate-180" />
           Back to Blog
@@ -24,7 +24,7 @@ export default function CTEKDEGuidePage() {
       </div>
 
       {/* Hero Section */}
-      <section className="max-w-[800px] mx-auto px-4 sm:px-6 py-12 sm:py-16">
+      <section className="max-w-[900px] mx-auto px-4 sm:px-6 py-12 sm:py-16">
         <p className="font-mono text-xs font-medium text-[var(--re-brand)] uppercase tracking-[0.08em] mb-4">
           FSMA 204 Technical Guide
         </p>
@@ -41,8 +41,8 @@ export default function CTEKDEGuidePage() {
       </section>
 
       {/* Main Article */}
-      <section className="max-w-[800px] mx-auto px-4 sm:px-6 pb-12 sm:pb-16">
-        <article className="prose prose-invert max-w-none">
+      <section className="max-w-[900px] mx-auto px-4 sm:px-6 pb-12 sm:pb-16">
+        <article className="prose max-w-none prose-headings:text-[var(--re-text-primary)] prose-p:text-[var(--re-text-secondary)] prose-strong:text-[var(--re-text-primary)] prose-li:text-[var(--re-text-secondary)] prose-a:text-[var(--re-brand)]">
           {/* Overview */}
           <div className="mb-10 p-6 rounded-lg bg-[var(--re-surface-secondary)] border border-[var(--re-surface-border)]">
             <h2 className="text-[var(--re-text-primary)] font-bold text-xl mb-3 flex items-center gap-3">
@@ -79,7 +79,7 @@ export default function CTEKDEGuidePage() {
             <p className="text-[var(--re-text-secondary)] mb-4">
               For raw agricultural commodities (produce, grains, etc.), the point where the commodity is harvested from the growing environment.
             </p>
-            <div className="bg-black/30 rounded p-4 mb-4 font-mono text-xs text-[var(--re-text-tertiary)] overflow-x-auto">
+            <div className="bg-[var(--re-surface-elevated)] border border-[var(--re-surface-border)] rounded p-4 mb-4 font-mono text-xs text-[var(--re-text-tertiary)] overflow-x-auto">
               <code>{`Required KDEs:
 • Traceability Lot Code
 • Product Description
@@ -101,7 +101,7 @@ export default function CTEKDEGuidePage() {
             <p className="text-[var(--re-text-secondary)] mb-4">
               If applicable, the first cooling step applied to produce (hydrocooling, air cooling, etc.) before further processing.
             </p>
-            <div className="bg-black/30 rounded p-4 mb-4 font-mono text-xs text-[var(--re-text-tertiary)] overflow-x-auto">
+            <div className="bg-[var(--re-surface-elevated)] border border-[var(--re-surface-border)] rounded p-4 mb-4 font-mono text-xs text-[var(--re-text-tertiary)] overflow-x-auto">
               <code>{`Required KDEs:
 • Traceability Lot Code (from Harvesting)
 • Cooling Date & Time
@@ -123,7 +123,7 @@ export default function CTEKDEGuidePage() {
             <p className="text-[var(--re-text-secondary)] mb-4">
               The first packing operation for raw agricultural commodities or first use of a traceability lot code for all food categories.
             </p>
-            <div className="bg-black/30 rounded p-4 mb-4 font-mono text-xs text-[var(--re-text-tertiary)] overflow-x-auto">
+            <div className="bg-[var(--re-surface-elevated)] border border-[var(--re-surface-border)] rounded p-4 mb-4 font-mono text-xs text-[var(--re-text-tertiary)] overflow-x-auto">
               <code>{`Required KDEs:
 • Traceability Lot Code
 • Product Description
@@ -146,7 +146,7 @@ export default function CTEKDEGuidePage() {
             <p className="text-[var(--re-text-secondary)] mb-4">
               Processing that changes the identity or characteristics of food, such as cooking, mixing, drying, fermentation, or any value-added process.
             </p>
-            <div className="bg-black/30 rounded p-4 mb-4 font-mono text-xs text-[var(--re-text-tertiary)] overflow-x-auto">
+            <div className="bg-[var(--re-surface-elevated)] border border-[var(--re-surface-border)] rounded p-4 mb-4 font-mono text-xs text-[var(--re-text-tertiary)] overflow-x-auto">
               <code>{`Required KDEs:
 • Source Traceability Lot Codes (input ingredients)
 • Input Ingredient Details
@@ -169,7 +169,7 @@ export default function CTEKDEGuidePage() {
             <p className="text-[var(--re-text-secondary)] mb-4">
               The point where you transfer food to a recipient (customer, distributor, retailer). This includes both outbound shipments and inter-facility transfers.
             </p>
-            <div className="bg-black/30 rounded p-4 mb-4 font-mono text-xs text-[var(--re-text-tertiary)] overflow-x-auto">
+            <div className="bg-[var(--re-surface-elevated)] border border-[var(--re-surface-border)] rounded p-4 mb-4 font-mono text-xs text-[var(--re-text-tertiary)] overflow-x-auto">
               <code>{`Required KDEs:
 • Traceability Lot Code
 • Shipped Quantity & Unit
@@ -193,7 +193,7 @@ export default function CTEKDEGuidePage() {
             <p className="text-[var(--re-text-secondary)] mb-4">
               When you receive food from your suppliers. All food received (whether from suppliers or in-house transfers) must be tracked at receipt.
             </p>
-            <div className="bg-black/30 rounded p-4 mb-4 font-mono text-xs text-[var(--re-text-tertiary)] overflow-x-auto">
+            <div className="bg-[var(--re-surface-elevated)] border border-[var(--re-surface-border)] rounded p-4 mb-4 font-mono text-xs text-[var(--re-text-tertiary)] overflow-x-auto">
               <code>{`Required KDEs:
 • Traceability Lot Code (from supplier)
 • Product Description
@@ -217,7 +217,7 @@ export default function CTEKDEGuidePage() {
             <p className="text-[var(--re-text-secondary)] mb-4">
               Specific to imported foods. The first receipt of food at a U.S. port of entry or facility. Required for seafood and produce imported from outside the U.S.
             </p>
-            <div className="bg-black/30 rounded p-4 mb-4 font-mono text-xs text-[var(--re-text-tertiary)] overflow-x-auto">
+            <div className="bg-[var(--re-surface-elevated)] border border-[var(--re-surface-border)] rounded p-4 mb-4 font-mono text-xs text-[var(--re-text-tertiary)] overflow-x-auto">
               <code>{`Required KDEs:
 • Foreign Traceability Lot Code
 • Product Description
