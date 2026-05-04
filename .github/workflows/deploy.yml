@@ -1,21 +1,9 @@
 name: Deploy to Railway
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'alembic/**'
-      - 'server/**'
-      - 'services/**'
-      - 'shared/**'
-      - 'kernel/**'
-      - 'plugins/fsma/**'
-      - 'Dockerfile'
-      - 'railway.toml'
-      - 'requirements.in'
-      - 'requirements.lock'
-      - 'scripts/run-migrations.sh'
-      - '.github/workflows/deploy.yml'
+  # Railway rollout healthchecks are currently failing for unchanged backend
+  # images while the live service remains healthy. Keep deploys explicit until
+  # platform/startup logs are reviewed and automatic deploys are re-enabled.
   workflow_dispatch:
 
 permissions:
