@@ -10,7 +10,6 @@ on:
       - 'shared/**'
       - 'kernel/**'
       - 'plugins/fsma/**'
-      - 'frontend/**'
       - 'Dockerfile'
       - 'railway.toml'
       - 'requirements.in'
