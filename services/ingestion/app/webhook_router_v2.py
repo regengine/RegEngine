@@ -829,7 +829,7 @@ def _persist_canonical_and_eval(
     from shared.rules_engine import RulesEngine  # noqa: PLC0415
 
     canonical = normalize_webhook_event(event, tenant_id, source=source)
-    store = CanonicalEventStore(db_session, dual_write=False, skip_chain_write=False)
+    store = CanonicalEventStore(db_session, dual_write=False, skip_chain_write=True)
     store.persist_event(canonical)
     engine = RulesEngine(db_session)
 
@@ -969,7 +969,11 @@ def _lookup_tenant_id_for_api_key(raw_api_key: str) -> Optional[str]:
         _db = SessionLocal()
         try:
             _row = _db.execute(
-                _text("SELECT tenant_id FROM api_keys WHERE key_hash = encode(sha256(:raw::bytea), 'hex') LIMIT 1"),
+                _text(
+                    "SELECT tenant_id FROM api_keys "
+                    "WHERE key_hash = encode(sha256(CAST(:raw AS bytea)), 'hex') "
+                    "LIMIT 1"
+                ),
                 {"raw": raw_api_key},
             ).fetchone()
             if _row and _row[0]:

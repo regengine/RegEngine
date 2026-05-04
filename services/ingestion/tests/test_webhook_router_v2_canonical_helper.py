@@ -212,7 +212,7 @@ class TestFastPathUsingPreComputedSummary:
         # Canonical persisted exactly once.
         assert _FakeCanonicalEventStore.persist_call_count == 1
         assert _FakeCanonicalEventStore.init_kwargs == [
-            {"dual_write": False, "skip_chain_write": False}
+            {"dual_write": False, "skip_chain_write": True}
         ]
         # persist_summary called once with the pre-computed summary.
         assert len(_FakeEngine.persist_summary_calls) == 1
