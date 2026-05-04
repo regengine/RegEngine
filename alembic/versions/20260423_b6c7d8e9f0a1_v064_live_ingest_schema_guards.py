@@ -49,6 +49,9 @@ def upgrade() -> None:
         DO $$
         BEGIN
             IF to_regclass('fsma.traceability_events') IS NOT NULL THEN
+                ALTER TABLE fsma.traceability_events
+                DROP CONSTRAINT IF EXISTS traceability_events_idempotency_key_key;
+
                 CREATE UNIQUE INDEX IF NOT EXISTS ux_traceability_events_tenant_idempotency_key
                 ON fsma.traceability_events (tenant_id, idempotency_key);
             END IF;
