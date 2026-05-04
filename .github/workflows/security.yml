@@ -26,6 +26,54 @@ permissions:
 
 jobs:
   # ──────────────────────────────────────────────
+  # 0. Privileged Workflow Tool Pinning
+  # ──────────────────────────────────────────────
+  workflow-tool-pinning:
+    name: Privileged Workflow Tool Pinning
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+
+      - name: Reject mutable action refs and privileged tool installs
+        run: |
+          python3 - <<'PY'
+          import re
+          from pathlib import Path
+
+          files = [
+              Path(".github/workflows/deploy.yml"),
+              Path(".github/workflows/security.yml"),
+          ]
+          action_ref = re.compile("uses:" + r"\s*([^@\s#]+)@([^\s#]+)")
+          pinned_sha = re.compile(r"^[0-9a-f]{40}$")
+          install_patterns = [
+              re.compile(r"npm\s+install\s+-g\s+@railway/cli(?!@)"),
+              re.compile(r"pip\s+install(?:\s+[^\n#]*)?\s+semgrep(?!==)"),
+              re.compile(r"pip\s+install(?:\s+[^\n#]*)?\s+pip-audit(?!==)"),
+              re.compile(r"python\s+-m\s+pip\s+install(?:\s+[^\n#]*)?\s+semgrep(?!==)"),
+              re.compile(r"python\s+-m\s+pip\s+install(?:\s+[^\n#]*)?\s+pip-audit(?!==)"),
+          ]
+
+          failures = []
+          for path in files:
+              for lineno, line in enumerate(path.read_text().splitlines(), start=1):
+                  match = action_ref.search(line)
+                  if match and not pinned_sha.match(match.group(2)):
+                      failures.append(f"{path}:{lineno}: action ref is not pinned to a 40-char SHA: {match.group(0)}")
+
+                  for pattern in install_patterns:
+                      if pattern.search(line):
+                          failures.append(f"{path}:{lineno}: privileged tool install is not version-pinned: {line.strip()}")
+
+          if failures:
+              for failure in failures:
+                  print(f"::error::{failure}")
+              raise SystemExit(1)
+
+          print("Privileged workflow tooling is pinned")
+          PY
+
+  # ──────────────────────────────────────────────
   # 1. Secrets Scan (gitleaks)
   # ──────────────────────────────────────────────
   secrets:
@@ -39,8 +87,10 @@ jobs:
       - name: Install gitleaks CLI
         env:
           GITLEAKS_VERSION: v8.30.0
+          GITLEAKS_SHA256: 79a3ab579b53f71efd634f3aaf7e04a0fa0cf206b7ed434638d1547a2470a66e  # pragma: allowlist secret
         run: |
           curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION#v}_linux_x64.tar.gz" -o /tmp/gitleaks.tar.gz
+          echo "${GITLEAKS_SHA256}  /tmp/gitleaks.tar.gz" | sha256sum -c -
           tar -xzf /tmp/gitleaks.tar.gz -C /tmp gitleaks
           sudo install -m 0755 /tmp/gitleaks /usr/local/bin/gitleaks
           gitleaks version
@@ -132,7 +182,7 @@ jobs:
           python-version: "3.11"
 
       - name: Install Semgrep
-        run: pip install semgrep
+        run: python -m pip install semgrep==1.161.0
 
       - name: Semgrep OWASP hard gate (fail on any finding)
         # Original behavior: --error with no severity filter. Do not add
@@ -248,7 +298,7 @@ jobs:
 
       - name: pip-audit
         run: |
-          python -m pip install -U pip pip-audit
+          python -m pip install pip-audit==2.10.0
           # Include root requirements.lock (pip-compile output, #1139) alongside
           # any per-service requirements*.txt files still present.
           python_files=$( { find . -name requirements.txt -not -path "./.venv/*" -not -path "./frontend/*"; [ -f requirements.lock ] && echo ./requirements.lock; } | sort)
@@ -403,7 +453,7 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
 
       - name: Generate SBOM
-        uses: anchore/sbom-action@v0
+        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610  # v0
         with:
           path: .
           artifact-name: sbom.spdx.json
@@ -411,7 +461,7 @@ jobs:
           format: spdx-json
 
       - name: Install cosign
-        uses: sigstore/cosign-installer@v3
+        uses: sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac  # v3
 
       - name: Sign SBOM artifact (keyless via Sigstore)
         # This workflow generates an SPDX artifact for review; it does not push

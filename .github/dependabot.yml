@@ -1,6 +1,18 @@
 version: 2
 
 updates:
+  # GitHub Actions are pinned by SHA in privileged workflows. Keep Dependabot
+  # responsible for proposing SHA refreshes instead of relying on mutable tags.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "ci"
+
   # Frontend (npm)
   - package-ecosystem: "npm"
     directory: "/frontend"
@@ -39,6 +51,31 @@ updates:
   #
   # Security-critical (solo PRs): cryptography, pyjwt, python-jose, sqlalchemy,
   # alembic, fastapi, starlette, stripe, httpx, opentelemetry-*
+
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "backend"
+    groups:
+      root-backend-runtime:
+        patterns:
+          - "*"
+        exclude-patterns:
+          - "cryptography"
+          - "pyjwt"
+          - "python-jose"
+          - "sqlalchemy"
+          - "alembic"
+          - "fastapi"
+          - "starlette"
+          - "stripe"
+          - "httpx"
+          - "opentelemetry-*"
 
   - package-ecosystem: "pip"
     directory: "/services/admin"
