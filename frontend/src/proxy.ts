@@ -301,7 +301,7 @@ async function requireAppAuth(request: NextRequest, requestHeaders?: Headers): P
             // Uses a local cookie name check (no network call) to keep Edge latency low.
             if (!hasSomeSupabaseCookie(request)) {
                 if (process.env.NODE_ENV !== 'production') {
-                    console.info('[middleware] Custom JWT valid but Supabase session absent — forcing re-auth');
+                    console.warn('[middleware] Custom JWT valid but Supabase session absent — forcing re-auth');
                 }
                 const url = request.nextUrl.clone();
                 url.pathname = '/login';
@@ -317,7 +317,7 @@ async function requireAppAuth(request: NextRequest, requestHeaders?: Headers): P
         // Do NOT fall back to cookie presence — an expired JWT must trigger re-auth.
         // This prevents a compromised or expired token from being silently bypassed.
         if (process.env.NODE_ENV !== 'production') {
-            console.info('[middleware] JWT verification failed — redirecting to login');
+            console.warn('[middleware] JWT verification failed — redirecting to login');
         }
         const url = request.nextUrl.clone();
         url.pathname = '/login';
