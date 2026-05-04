@@ -220,7 +220,7 @@ class TestFastPathUsingPreComputedSummary:
         # Canonical persisted exactly once.
         assert _FakeCanonicalEventStore.persist_call_count == 1
         assert _FakeCanonicalEventStore.init_kwargs == [
-            {"dual_write": False, "skip_chain_write": False}
+            {"dual_write": False, "skip_chain_write": True}
         ]
         # persist_summary called once with the pre-computed summary.
         assert len(_FakeEngine.persist_summary_calls) == 1
@@ -369,13 +369,13 @@ class TestCommonInvariants:
         assert call["event_id"] == "canonical-uuid-fresh"
         assert call["event_id"] != "PRE_EVAL_SENTINEL_DO_NOT_USE"
 
-    def test_canonical_reuses_legacy_cte_event_id_for_required_chain_write(self, _make_event):
+    def test_canonical_reuses_legacy_cte_event_id_without_second_chain_write(self, _make_event):
         """``fsma.hash_chain.cte_event_id`` still FKs ``fsma.cte_events``.
 
-        Webhook ingestion writes the legacy CTE row first, then required
-        canonical persistence writes chain evidence in the same transaction.
-        The canonical event must therefore reuse the legacy CTE UUID instead
-        of minting a fresh UUID that the hash-chain FK cannot resolve.
+        Webhook ingestion writes the legacy CTE row and hash-chain evidence
+        first. The canonical event reuses that legacy CTE UUID so canonical
+        rows and rule evaluations reconcile to the same event without adding
+        a duplicate row to the shared hash-chain ledger.
         """
         legacy_event_id = "11111111-2222-3333-4444-555555555555"
         precomputed = _compliant_summary()
@@ -390,4 +390,7 @@ class TestCommonInvariants:
         canonical = _FakeCanonicalEventStore.persist_args[0]
         assert str(canonical.event_id) == legacy_event_id
         assert canonical.prepare_call_count == 1
+        assert _FakeCanonicalEventStore.init_kwargs == [
+            {"dual_write": False, "skip_chain_write": True}
+        ]
         assert _FakeEngine.persist_summary_calls[0]["event_id"] == legacy_event_id

@@ -832,13 +832,13 @@ def _persist_canonical_and_eval(
 
     canonical = normalize_webhook_event(event, tenant_id, source=source)
     if canonical_event_id is not None:
-        # fsma.hash_chain.cte_event_id still references the legacy
-        # fsma.cte_events row. Bind the canonical row to the CTEPersistence
-        # UUID that was already inserted in this transaction before writing
-        # required canonical chain evidence.
+        # Reuse the legacy fsma.cte_events UUID for the canonical row and
+        # rule-evaluation anchor. The legacy CTEPersistence path already
+        # writes fsma.hash_chain for this event; canonical persistence must
+        # not append a second chain row to the same shared ledger.
         canonical.event_id = UUID(str(canonical_event_id))
         canonical.prepare_for_persistence()
-    store = CanonicalEventStore(db_session, dual_write=False, skip_chain_write=False)
+    store = CanonicalEventStore(db_session, dual_write=False, skip_chain_write=True)
     store.persist_event(canonical)
     engine = RulesEngine(db_session)
 
