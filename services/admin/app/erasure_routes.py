@@ -23,7 +23,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from app.dependencies import get_current_user
+from .dependencies import get_current_user
 from shared.database import get_db
 
 logger = structlog.get_logger("erasure")

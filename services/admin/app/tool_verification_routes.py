@@ -24,7 +24,7 @@ from shared.env import is_production
 from shared.pii import mask_email
 from shared.rate_limit import limiter
 
-from app.auth_utils import SESSION_ISSUER, TOOL_ACCESS_AUDIENCE
+from .auth_utils import SESSION_ISSUER, TOOL_ACCESS_AUDIENCE
 
 logger = structlog.get_logger("tool_verification")
 
@@ -414,7 +414,7 @@ async def confirm_lead_erasure(
     # .lower(). The statement runs even when no row exists; we do not
     # return DELETE rowcount -- exposing "0 deleted" would reintroduce
     # the enumeration oracle the /request endpoint is careful to avoid.
-    from app.database import SessionLocal
+    from .database import SessionLocal
     from sqlalchemy import text
 
     session = SessionLocal()
@@ -531,7 +531,7 @@ def decode_tool_access_token(token: str) -> dict:
 # ---------------------------------------------------------------------------
 def _save_lead(email: str, domain: str, tool_name: str) -> None:
     """Insert or update a tool lead row. Uses the Admin DB sync session."""
-    from app.database import SessionLocal
+    from .database import SessionLocal
     from sqlalchemy import text
 
     session = SessionLocal()
