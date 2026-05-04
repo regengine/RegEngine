@@ -10,6 +10,7 @@ on:
       - "scripts/**"
       - "tests/**"
       - "docs/**"
+      - ".github/workflows/agent-sweep.yml"
       - ".github/workflows/legacy-code-scan.yml"
   push:
     branches: [main]
@@ -20,6 +21,7 @@ on:
       - "scripts/**"
       - "tests/**"
       - "docs/**"
+      - ".github/workflows/agent-sweep.yml"
       - ".github/workflows/legacy-code-scan.yml"
   schedule:
     - cron: "17 11 * * *"
@@ -49,7 +51,7 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Block known legacy files and imports
+      - name: Block known legacy files, imports, and scheduled agent sweeps
         run: python3 scripts/check_legacy_dead_code.py
 
   frontend-unused-files:

@@ -1,8 +1,6 @@
-name: Agent Sweep — Automated Audits
+name: Agent Sweep - Manual Audits
 
 on:
-  schedule:
-    - cron: '0 9 * * 1'  # Every Monday at 9:00 AM UTC
   workflow_dispatch:
     inputs:
       sweep_type:
@@ -21,12 +19,11 @@ permissions:
   issues: write
 
 jobs:
-  # ── Bot-Security: Weekly Security Sweep ──────────────────
+  # ── Bot-Security: Manual Security Sweep ──────────────────
   security-sweep:
     name: 🔒 Bot-Security Sweep
     runs-on: ubuntu-latest
     if: >
-      github.event_name == 'schedule' ||
       github.event.inputs.sweep_type == 'security' ||
       github.event.inputs.sweep_type == 'full-audit'
     steps:
@@ -106,7 +103,7 @@ jobs:
           if grep -q "⚠️" security-report.md; then
             BODY=$(cat security-report.md)
             gh issue create \
-              --title "🔒 [Bot-Security] Weekly Sweep — Findings $(date +%Y-%m-%d)" \
+              --title "🔒 [Bot-Security] Manual Sweep - Findings $(date +%Y-%m-%d)" \
               --body "$BODY" \
               --label "agent-task,security,agent:security" \
               || echo "Issue creation skipped (may lack permissions)"
@@ -116,12 +113,11 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  # ── Bot-UI: Weekly UI Drift Check ────────────────────────
+  # ── Bot-UI: Manual UI Drift Check ────────────────────────
   ui-drift-check:
     name: 🎨 Bot-UI Drift Check
     runs-on: ubuntu-latest
     if: >
-      github.event_name == 'schedule' ||
       github.event.inputs.sweep_type == 'ui-drift' ||
       github.event.inputs.sweep_type == 'full-audit'
     steps:
@@ -176,7 +172,7 @@ jobs:
           if grep -q "⚠️" ui-report.md; then
             BODY=$(cat ui-report.md)
             gh issue create \
-              --title "🎨 [Bot-UI] Weekly Drift Check — Findings $(date +%Y-%m-%d)" \
+              --title "🎨 [Bot-UI] Manual Drift Check - Findings $(date +%Y-%m-%d)" \
               --body "$BODY" \
               --label "agent-task,frontend,agent:ui" \
               || echo "Issue creation skipped (may lack permissions)"
