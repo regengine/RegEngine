@@ -2,7 +2,7 @@
     "version": 2,
     "public": true,
     "buildCommand": "npm run build",
-    "installCommand": "npm ci",
+    "installCommand": "npm install",
     "framework": "nextjs",
     "outputDirectory": ".next",
     "regions": [
