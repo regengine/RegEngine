@@ -150,7 +150,6 @@ jobs:
           # Per-service stubs are DEPRECATED and will be removed with
           # docker-compose (#1429).
           pip install --require-hashes -r requirements.lock
-          pip install pytest pytest-cov pytest-asyncio httpx
 
       - name: Run tests with coverage
         env:
