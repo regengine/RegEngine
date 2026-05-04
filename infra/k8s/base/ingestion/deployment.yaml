@@ -31,6 +31,8 @@ spec:
         envFrom:
         - configMapRef:
             name: ingestion-config
+        - secretRef:
+            name: ingestion-secrets
         resources:
           requests:
             cpu: "200m"
