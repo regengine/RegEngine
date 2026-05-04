@@ -16,8 +16,12 @@ from fastapi import Depends, Header, HTTPException, Request
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 
-logger = logging.getLogger("authz")
+from shared.api_key_store import APIKeyResponse
 from shared.auth import APIKey, require_api_key
+from shared.permissions import has_permission
+from shared.tenant_rate_limiting import consume_tenant_rate_limit
+
+logger = logging.getLogger("authz")
 
 
 # ---------------------------------------------------------------------------
@@ -48,22 +52,23 @@ def _record_auth_failure(client_ip: str) -> None:
         _auth_failures.setdefault(client_ip, []).append(time.time())
 
 
-def _is_production_env() -> bool:
-    """Detect production environment.
+def _is_dev_env() -> bool:
+    """Return True only when development/test mode is explicit.
 
-    Checks REGENGINE_ENV first (canonical), then falls back to ENV and
-    DATABASE_URL heuristics for backwards compatibility.
+    Fail closed: unset, staging, preview, and any unknown value all require
+    real authentication.
     """
-    regengine_env = os.getenv("REGENGINE_ENV", "").lower()
-    if regengine_env == "production":
-        return True
-    if os.getenv("ENV", "").lower() == "production":
-        return True
-    db_url = os.getenv("DATABASE_URL", "")
-    return "pooler.supabase.com" in db_url or "railway" in db_url
-from shared.api_key_store import APIKeyResponse
-from shared.permissions import has_permission
-from shared.tenant_rate_limiting import consume_tenant_rate_limit
+    return os.getenv("REGENGINE_ENV", "").strip().lower() in {"development", "test"}
+
+
+def _is_production_env() -> bool:
+    """Backward-compatible fail-closed production check.
+
+    Existing callers and tests still reference this name. The semantics are
+    now intentionally conservative: anything that is not explicit dev/test is
+    treated as production.
+    """
+    return not _is_dev_env()
 
 
 class IngestionPrincipal(BaseModel):
@@ -283,10 +288,17 @@ async def get_ingestion_principal(
             raise exc
 
     # Local-dev/test default when API_KEY is not configured.
-    _prod = _is_production_env()
+    _dev = _is_dev_env()
     if not x_regengine_api_key:
-        if _prod:
+        if not _dev:
             raise HTTPException(status_code=401, detail="Invalid or missing API key")
+        logger.warning(
+            "dev_open_auth_activated: path=%s client_ip=%s - "
+            "Request authenticated with dev-open fallback; "
+            "this MUST NOT appear outside local development",
+            request.url.path,
+            client_ip,
+        )
         return IngestionPrincipal(
             key_id="dev-open",
             scopes=["*"],
@@ -306,8 +318,15 @@ async def get_ingestion_principal(
         principal = _lookup_scoped_key_from_db(x_regengine_api_key)
         if principal:
             return principal
-        if _prod:
+        if not _dev:
             raise HTTPException(status_code=401, detail="Invalid or missing API key")
+        logger.warning(
+            "dev_open_auth_activated: path=%s client_ip=%s - "
+            "Request authenticated with dev-open fallback; "
+            "this MUST NOT appear outside local development",
+            request.url.path,
+            client_ip,
+        )
         return IngestionPrincipal(
             key_id="dev-open",
             scopes=["*"],

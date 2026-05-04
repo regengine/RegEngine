@@ -6,8 +6,6 @@ requirements. All Stripe API calls are mocked -- no live keys needed.
 """
 from __future__ import annotations
 
-import json
-from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -24,7 +22,6 @@ from services.ingestion.app.stripe_billing import (
     _normalize_plan_id,
     _process_stripe_webhook,
     _resolve_price_id,
-    _update_subscription_status,
 )
 
 
@@ -636,21 +633,18 @@ class TestUnknownWebhookEvents:
 class TestAuthenticationRequirements:
     """Verify that billing endpoints requiring auth declare dependencies."""
 
-    def test_subscription_endpoint_requires_api_key(self):
-        """GET /subscription/{tenant_id} should depend on _verify_api_key."""
+    def test_subscription_endpoint_requires_subscription_read_permission(self):
+        """GET /subscription/{tenant_id} should require subscription read scope."""
         from services.ingestion.app.stripe_billing import get_subscription
 
-        # FastAPI stores dependencies on the route function
-        deps = getattr(get_subscription, "__depends__", None)
-        # Check via the route's dependant params instead
         import inspect
         sig = inspect.signature(get_subscription)
         params = sig.parameters
 
-        # The '_' parameter should have a Depends default
-        assert "_" in params, "get_subscription should have an auth dependency parameter"
-        default = params["_"].default
-        assert hasattr(default, "dependency"), "Auth parameter should be a Depends() instance"
+        assert "principal" in params, "get_subscription should depend on a principal"
+        default = params["principal"].default
+        assert hasattr(default, "dependency"), "principal should be a Depends() instance"
+        assert default.dependency.__qualname__ == "require_permission.<locals>._dependency"
 
     def test_portal_endpoint_requires_principal(self):
         """POST /portal should depend on get_ingestion_principal."""

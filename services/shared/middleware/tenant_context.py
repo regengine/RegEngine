@@ -28,17 +28,38 @@ import uuid
 import logging
 from typing import Optional, Callable
 
-from fastapi import Request, HTTPException, Depends
+from fastapi import Request, HTTPException
+from fastapi.responses import JSONResponse
 from prometheus_client import Counter
 from starlette.middleware.base import BaseHTTPMiddleware
 
 logger = logging.getLogger(__name__)
+
+_TENANT_EXEMPT_PATHS: frozenset[str] = frozenset({
+    "/",
+    "/health",
+    "/ready",
+    "/readiness",
+    "/metrics",
+    "/docs",
+    "/openapi.json",
+    "/redoc",
+    "/api/v1/billing/plans",
+    "/api/v1/billing/webhooks",
+    "/api/v1/billing/webhook/stripe",
+})
 
 # Track spoofing attempts for alerting
 tenant_header_rejected_total = Counter(
     "tenant_header_rejected_total",
     "Unauthenticated X-RegEngine-Tenant-ID header rejections",
     ["client_host"],
+)
+
+tenant_extraction_failed_total = Counter(
+    "tenant_extraction_failed_total",
+    "Tenant context extraction failures on non-exempt paths",
+    ["error_type"],
 )
 
 
@@ -53,7 +74,13 @@ class TenantContextMiddleware(BaseHTTPMiddleware):
     """
     
     async def dispatch(self, request: Request, call_next: Callable):
-        """Process request and extract tenant context."""
+        """Process request and extract tenant context.
+
+        Fail closed on unexpected extraction errors for protected paths. Public
+        infrastructure and webhook paths may continue without tenant context.
+        """
+        path = request.url.path.rstrip("/") or "/"
+        is_exempt = path in _TENANT_EXEMPT_PATHS
         try:
             tenant_id = await self._extract_tenant_id(request)
             
@@ -74,9 +101,25 @@ class TenantContextMiddleware(BaseHTTPMiddleware):
             # TypeError: unexpected type conversions during extraction
             # AttributeError: missing request attributes
             # KeyError: missing JWT claims
-            logger.error(f"Error extracting tenant context: {e}")
-            # Continue without tenant_id - let route handlers decide if required
-            request.state.tenant_id = None
+            error_type = type(e).__name__
+            tenant_extraction_failed_total.labels(error_type=error_type).inc()
+            if is_exempt:
+                logger.debug(
+                    "Tenant extraction failed on exempt path %s: %s",
+                    path,
+                    e,
+                )
+                request.state.tenant_id = None
+            else:
+                logger.error(
+                    "Tenant extraction failed on protected path %s: %s - rejecting request",
+                    path,
+                    e,
+                )
+                return JSONResponse(
+                    status_code=401,
+                    content={"detail": "Unable to establish tenant context"},
+                )
         
         response = await call_next(request)
         return response
@@ -148,7 +191,11 @@ class TenantContextMiddleware(BaseHTTPMiddleware):
         if api_key:
             configured_key = os.getenv("REGENGINE_API_KEY")
             configured_tenant = os.getenv("REGENGINE_API_KEY_TENANT_ID")
-            if configured_key and configured_tenant and api_key == configured_key:
+            if (
+                configured_key
+                and configured_tenant
+                and hmac.compare_digest(api_key, configured_key)
+            ):
                 try:
                     return uuid.UUID(configured_tenant)
                 except ValueError:
