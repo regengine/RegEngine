@@ -48,9 +48,32 @@ permissions:
   pull-requests: write
 
 jobs:
+  # ── Dependency Lock Freshness ────────────────────────────
+  dependency-lock:
+    name: Dependency Lock Freshness
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+
+      - name: Setup Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
+        with:
+          # requirements.lock was generated with Python 3.12; keep this
+          # freshness check on the same interpreter to avoid header-only diffs.
+          python-version: "3.12"
+
+      - name: Verify requirements.lock freshness
+        run: |
+          python -m pip install pip-tools==7.5.2
+          pip-compile --allow-unsafe --generate-hashes --output-file=requirements.lock requirements.in
+          git diff --exit-code -- requirements.lock
+
   # ── Test Matrix ──────────────────────────────────────────
   test:
     name: Test ${{ matrix.service }}
+    needs: dependency-lock
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -169,7 +192,8 @@ jobs:
           OBJECT_STORAGE_ENDPOINT_URL: http://localhost:4566
           PYTHONDONTWRITEBYTECODE: 1
         run: |
-          export PYTHONPATH=$(pwd):$PYTHONPATH
+          repo_root="$(pwd)"
+          export PYTHONPATH="${repo_root}:${PYTHONPATH}"
           cd services/${{ matrix.service }}
           # Per-service coverage thresholds — ratcheted up 2026-04-20 (#1348).
           # Actual coverage measured 2026-04-20; thresholds set at (actual - 5%)
@@ -423,7 +447,8 @@ jobs:
           SUPABASE_KEY: test-key-for-ci
           PYTHONDONTWRITEBYTECODE: 1
         run: |
-          export PYTHONPATH=$(pwd):$PYTHONPATH
+          repo_root="$(pwd)"
+          export PYTHONPATH="${repo_root}:${PYTHONPATH}"
           # --dist=loadfile pins all tests from one file to one worker
           # process. Each worker has its own sys.modules, so module-level
           # stubbing can't poison other files.
@@ -477,18 +502,19 @@ jobs:
           # to pip-compile lockfile). The matrix still fans out by service name
           # to preserve historical check names on branch-protection rules;
           # every job audits the same consolidated dependency set.
-          pip install pip-audit
+          python -m pip install pip-audit==2.10.0
           pip-audit -r requirements.lock --desc on
 
   # ── CI Summary ───────────────────────────────────────────
   ci-status:
     name: CI Status Gate
     if: always()
-    needs: [test, lint, lint-shared, ingestion-full-suite, docker-build, security, rls-fallback-check, alembic-revision-check, dep-version-check, tenant-id-uuid-check]
+    needs: [dependency-lock, test, lint, lint-shared, ingestion-full-suite, docker-build, security, rls-fallback-check, alembic-revision-check, dep-version-check, tenant-id-uuid-check]
     runs-on: ubuntu-latest
     steps:
       - name: Check results
         run: |
+          echo "Dependency lock:   ${{ needs.dependency-lock.result }}"
           echo "Test:              ${{ needs.test.result }}"
           echo "Lint:              ${{ needs.lint.result }}"
           echo "Lint shared/:      ${{ needs.lint-shared.result }}"
@@ -503,16 +529,18 @@ jobs:
           # have caught PR #1482's NLP NameError class of bugs if this
           # gate had been enforcing. Promoting lint to a hard gate so
           # the next occurrence trips on PR open rather than in prod.
-          if [[ "${{ needs.test.result }}" == "failure" \
-             || "${{ needs.lint.result }}" == "failure" \
-             || "${{ needs.lint-shared.result }}" == "failure" \
-             || "${{ needs.ingestion-full-suite.result }}" == "failure" \
-             || "${{ needs.security.result }}" == "failure" \
-             || "${{ needs.rls-fallback-check.result }}" == "failure" \
-             || "${{ needs.alembic-revision-check.result }}" == "failure" \
-             || "${{ needs.dep-version-check.result }}" == "failure" \
-             || "${{ needs.tenant-id-uuid-check.result }}" == "failure" ]]; then
-            echo "::error::Test, Lint, Ingestion full suite, Security Audit, RLS fallback, Alembic revision ID, dep version drift, or tenant_id UUID guard failed"
+          if [[ "${{ needs.dependency-lock.result }}" != "success" \
+             || "${{ needs.test.result }}" != "success" \
+             || "${{ needs.lint.result }}" != "success" \
+             || "${{ needs.lint-shared.result }}" != "success" \
+             || "${{ needs.ingestion-full-suite.result }}" != "success" \
+             || "${{ needs.docker-build.result }}" != "success" \
+             || "${{ needs.security.result }}" != "success" \
+             || "${{ needs.rls-fallback-check.result }}" != "success" \
+             || "${{ needs.alembic-revision-check.result }}" != "success" \
+             || "${{ needs.dep-version-check.result }}" != "success" \
+             || "${{ needs.tenant-id-uuid-check.result }}" != "success" ]]; then
+            echo "::error::One or more required backend checks failed, were cancelled, or were skipped"
             exit 1
           fi
           echo "All checks passed"
