@@ -63,6 +63,7 @@ async function apiFetchProducts(tenantId: string, apiKey: string): Promise<Produ
     const { getServiceURL } = await import('@/lib/api-config');
     const base = getServiceURL('ingestion');
     const res = await fetchWithCsrf(`${base}/api/v1/products/${tenantId}`, {
+        signal: AbortSignal.timeout(8000),
         headers: { 'Content-Type': 'application/json', 'X-RegEngine-API-Key': apiKey },
     });
     if (!res.ok) throw new Error(`API error: ${res.status} ${res.statusText}`);
@@ -74,6 +75,7 @@ async function apiAddProduct(tenantId: string, apiKey: string, name: string, cat
     const base = getServiceURL('ingestion');
     const res = await fetchWithCsrf(`${base}/api/v1/products/${tenantId}`, {
         method: 'POST',
+        signal: AbortSignal.timeout(12000),
         headers: { 'Content-Type': 'application/json', 'X-RegEngine-API-Key': apiKey },
         body: JSON.stringify({ name, category, sku: sku || undefined }),
     });
@@ -140,6 +142,7 @@ export default function ProductCatalogPage() {
             return { products: [], categories: [], totalFtl: 0 };
         },
         enabled: isLoggedIn && !!effectiveTenantId,
+        retry: false,
     });
 
     const products = productsData?.products ?? [];

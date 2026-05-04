@@ -158,12 +158,24 @@ function sectionsWithActiveRoute(pathname: string): Set<string> {
     const active = new Set<string>();
     for (const section of COLLAPSIBLE_SECTIONS) {
         for (const item of section.items) {
-            if (pathname === item.href || pathname.startsWith(item.href + '/')) {
+            if (isNavItemActive(pathname, item.href)) {
                 active.add(section.key);
             }
         }
     }
     return active;
+}
+
+function isNavItemActive(pathname: string, href: string): boolean {
+    if (href === '/dashboard') {
+        return pathname === href;
+    }
+
+    if (href === '/compliance/profile') {
+        return pathname === href || pathname.startsWith('/compliance/');
+    }
+
+    return pathname === href || pathname.startsWith(`${href}/`);
 }
 
 // ---------------------------------------------------------------------------
@@ -218,7 +230,7 @@ function CollapsibleNavSection({
                 <div ref={contentRef} className="px-2.5 pl-5 space-y-0.5 pb-1" role="list">
                     {section.items.map((item) => {
                         const Icon = item.icon;
-                        const isActive = pathname === item.href;
+                        const isActive = isNavItemActive(pathname, item.href);
                         return (
                             <Link
                                 key={item.href + item.label}
@@ -360,7 +372,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     <div className="px-2.5 space-y-0.5" role="list">
                         {TOP_ITEMS.map((item) => {
                             const Icon = item.icon;
-                            const isActive = pathname === item.href;
+                            const isActive = isNavItemActive(pathname, item.href);
                             return (
                                 <Link
                                     key={item.href}

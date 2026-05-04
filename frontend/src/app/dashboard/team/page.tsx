@@ -58,6 +58,7 @@ async function apiFetchTeam(tenantId: string, apiKey: string): Promise<TeamRespo
     const { getServiceURL } = await import('@/lib/api-config');
     const base = getServiceURL('ingestion');
     const res = await fetchWithCsrf(`${base}/api/v1/team/${tenantId}`, {
+        signal: AbortSignal.timeout(8000),
         headers: { 'Content-Type': 'application/json', 'X-RegEngine-API-Key': apiKey },
     });
     if (!res.ok) throw new Error(`API error: ${res.status} ${res.statusText}`);
@@ -69,6 +70,7 @@ async function apiInviteMember(tenantId: string, apiKey: string, name: string, e
     const base = getServiceURL('ingestion');
     const res = await fetchWithCsrf(`${base}/api/v1/team/${tenantId}/invite`, {
         method: 'POST',
+        signal: AbortSignal.timeout(12000),
         headers: { 'Content-Type': 'application/json', 'X-RegEngine-API-Key': apiKey },
         body: JSON.stringify({ name, email, role }),
     });
@@ -86,6 +88,7 @@ export default function TeamPage() {
         queryKey: ['team', tenantId],
         queryFn: () => apiFetchTeam(tenantId, apiKey || ''),
         enabled: isLoggedIn && !!tenantId,
+        retry: false,
     });
 
     const team = teamData?.members ?? [];

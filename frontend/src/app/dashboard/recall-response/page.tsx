@@ -88,6 +88,7 @@ export default function RecallResponsePage() {
   const createRequest = useCreateSLARequest();
 
   const [selectedRequestId, setSelectedRequestId] = useState<string | null>(null);
+  const [renderedAt] = useState(() => Date.now());
 
   // Find the active (non-completed) request, or the selected one
   const activeRequests = (requests ?? []).filter(r => r.status !== 'completed');
@@ -197,7 +198,7 @@ export default function RecallResponsePage() {
               <CardContent>
                 <PhaseGates
                   elapsedSeconds={
-                    Math.floor((Date.now() - new Date(focusedRequest.requested_at).getTime()) / 1000)
+                    Math.floor((renderedAt - new Date(focusedRequest.requested_at).getTime()) / 1000)
                   }
                   isComplete={focusedRequest.status === 'completed'}
                 />
@@ -224,7 +225,7 @@ export default function RecallResponsePage() {
                 </Button>
                 <ExportAndCompleteButton request={focusedRequest} />
                 <Button variant="outline" asChild>
-                  <Link href="/tools/drill-simulator">
+                  <Link href="/dashboard/recall-drills">
                     <Clock className="w-4 h-4 mr-2" />
                     Run Mock Drill
                   </Link>

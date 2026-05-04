@@ -21,6 +21,7 @@ export default function RecallDrillsPage() {
         queryKey: ['recall-drills'],
         queryFn: async () => {
             const response = await fetchWithCsrf('/api/fsma/customer-readiness/recall-drills', {
+                signal: AbortSignal.timeout(8000),
                 headers: { 'X-RegEngine-API-Key': apiKey || '' },
             });
             if (!response.ok) return { items: [], meta: { status: 'error' } };
@@ -30,6 +31,7 @@ export default function RecallDrillsPage() {
                 meta?: { status?: string; message?: string };
             }>;
         },
+        retry: false,
     });
 
     const notConnected = drillsResponse?.meta?.status === 'not_connected';
@@ -39,6 +41,7 @@ export default function RecallDrillsPage() {
         mutationFn: async () => {
             const response = await fetchWithCsrf('/api/fsma/customer-readiness/recall-drills', {
                 method: 'POST',
+                signal: AbortSignal.timeout(12000),
                 headers: { 'Content-Type': 'application/json', 'X-RegEngine-API-Key': apiKey || '' },
                 body: JSON.stringify({
                     scenario,

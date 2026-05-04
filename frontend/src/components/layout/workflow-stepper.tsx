@@ -16,7 +16,7 @@ const steps = [
   { id: 'setup' as const, label: 'Setup', href: '/onboarding', icon: Settings, description: 'Configure credentials' },
   { id: 'ingest' as const, label: 'Ingest', href: '/ingest', icon: Upload, description: 'Upload documents' },
   { id: 'review' as const, label: 'Review', href: '/review', icon: CheckSquare, description: 'Validate extractions' },
-  { id: 'analyze' as const, label: 'Analyze', href: '/opportunities', icon: BarChart3, description: 'Discover insights' },
+  { id: 'analyze' as const, label: 'Analyze', href: '/dashboard/compliance', icon: BarChart3, description: 'Discover insights' },
 ];
 
 export function WorkflowStepper({ currentStep, completedSteps = [], className }: WorkflowStepperProps) {
