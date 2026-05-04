@@ -1,7 +1,7 @@
 # Agent Guidelines for RegEngine
 
-> **This file is a redirect.** The authoritative agent swarm constitution lives at:
+> **This file is a redirect.** The authoritative agent guide lives at:
 >
-> **[`.agent/CONSTITUTION.md`](../.agent/CONSTITUTION.md)**
+> **[`../../AGENTS.md`](../../AGENTS.md)**
 >
-> All agent personas live in **[`.agent/personas/`](../.agent/personas/)**.
+> Current editor agent specs live in **[`../../.github/agents/`](../../.github/agents/)**.
