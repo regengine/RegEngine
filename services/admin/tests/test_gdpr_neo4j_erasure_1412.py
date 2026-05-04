@@ -1,13 +1,16 @@
 """
-Tests for issue #1412: GDPR erasure must delete the tenant's Neo4j subgraph.
+Tests for GDPR Neo4j erasure cleanup.
 
-Two scenarios are covered:
+Scenarios covered:
 
 1. Neo4j configured and reachable — ``DETACH DELETE`` Cypher is executed
-   with the correct ``tenant_id`` parameter (never string-formatted).
+   with the correct ``tenant_id`` and ``user_id`` parameters (never
+   string-formatted).
 
 2. Neo4j unavailable (driver raises) — erasure still succeeds (Postgres path
    completed), and a warning is logged instead of raising.
+
+3. Issue #2074 — user erasure must not delete the tenant's whole graph.
 """
 
 from __future__ import annotations
@@ -23,6 +26,7 @@ import pytest
 # ---------------------------------------------------------------------------
 
 TEST_TENANT_ID = "aaaabbbb-cccc-dddd-eeee-ffffffffffff"
+TEST_USER_ID = "11112222-3333-4444-5555-666677778888"
 
 
 def _make_async_driver_mock(run_side_effect=None):
@@ -49,14 +53,14 @@ def _make_async_driver_mock(run_side_effect=None):
 
 
 # ---------------------------------------------------------------------------
-# Test 1: Neo4j configured — DETACH DELETE executed with correct tenant_id
+# Test 1: Neo4j configured — DETACH DELETE executed with correct identifiers
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
-async def test_neo4j_subgraph_deleted_with_correct_tenant_id(monkeypatch):
-    """When NEO4J_URI is set, DETACH DELETE is called with tenant_id as a
-    Cypher parameter (not string-formatted into the query)."""
+async def test_neo4j_user_graph_data_deleted_with_correct_parameters(monkeypatch):
+    """When NEO4J_URI is set, DETACH DELETE is called with tenant_id/user_id as
+    Cypher parameters (not string-formatted into the query)."""
     monkeypatch.setenv("NEO4J_URI", "bolt://neo4j-test:7687")
     monkeypatch.setenv("NEO4J_PASSWORD", "testpass")
 
@@ -68,20 +72,25 @@ async def test_neo4j_subgraph_deleted_with_correct_tenant_id(monkeypatch):
         import services.admin.app.erasure_routes as mod
         importlib.reload(mod)
 
-        await mod._delete_neo4j_tenant_subgraph(TEST_TENANT_ID)
+        await mod._delete_neo4j_user_graph_data(TEST_TENANT_ID, TEST_USER_ID)
 
     mock_session.run.assert_awaited_once()
     call_args = mock_session.run.call_args
     cypher = call_args[0][0]
     kwargs = call_args[1]
 
-    # Cypher must use parameter placeholder, not a formatted tenant_id
+    # Cypher must use parameter placeholders, not formatted identifiers.
     assert "$tenant_id" in cypher, "tenant_id must be a Cypher parameter"
+    assert "$user_id" in cypher, "user_id must be a Cypher parameter"
     assert TEST_TENANT_ID not in cypher, (
         "tenant_id must NOT be string-formatted into the Cypher query"
     )
-    # The actual tenant_id value must be passed as a parameter
+    assert TEST_USER_ID not in cypher, (
+        "user_id must NOT be string-formatted into the Cypher query"
+    )
+    # The actual values must be passed as parameters.
     assert kwargs.get("tenant_id") == TEST_TENANT_ID
+    assert kwargs.get("user_id") == TEST_USER_ID
 
 
 # ---------------------------------------------------------------------------
@@ -116,7 +125,7 @@ async def test_neo4j_unavailable_erasure_succeeds_and_warns(monkeypatch):
 
         with structlog.testing.capture_logs() as cap_logs:
             # Must not raise
-            await mod._delete_neo4j_tenant_subgraph(TEST_TENANT_ID)
+            await mod._delete_neo4j_user_graph_data(TEST_TENANT_ID, TEST_USER_ID)
 
     # A warning must have been emitted
     warning_logs = [e for e in cap_logs if e.get("log_level") == "warning"]
@@ -146,19 +155,18 @@ async def test_neo4j_skipped_when_uri_not_set(monkeypatch):
         importlib.reload(mod)
 
         # Must not raise and must not call driver()
-        await mod._delete_neo4j_tenant_subgraph(TEST_TENANT_ID)
+        await mod._delete_neo4j_user_graph_data(TEST_TENANT_ID, TEST_USER_ID)
 
     mock_async_gdb.driver.assert_not_called()
 
 
 # ---------------------------------------------------------------------------
-# Test 4: Source-level guardrail — tenant_id never string-formatted in Cypher
+# Test 4: Source-level guardrail — no tenant-wide delete for account erasure
 # ---------------------------------------------------------------------------
 
 
-def test_cypher_constant_uses_parameter_not_fstring():
-    """The module-level Cypher constant must use $tenant_id (parameter),
-    never an f-string or .format() call."""
+def test_cypher_constant_is_user_scoped_not_tenant_wide():
+    """Issue #2074: account erasure must not delete the whole tenant graph."""
     import pathlib
 
     source = (
@@ -167,8 +175,7 @@ def test_cypher_constant_uses_parameter_not_fstring():
         / "erasure_routes.py"
     ).read_text()
 
-    assert "$tenant_id" in source, (
-        "Cypher query must use $tenant_id parameter placeholder"
-    )
-    # Ensure the delete cypher is present in source
+    assert "$tenant_id" in source
+    assert "$user_id" in source
     assert "DETACH DELETE" in source, "DETACH DELETE must appear in erasure_routes.py"
+    assert "MATCH (n {tenant_id: $tenant_id}) DETACH DELETE n" not in source
