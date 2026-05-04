@@ -15,6 +15,19 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 
+def _clear_cloud_markers(monkeypatch):
+    for key in (
+        "RAILWAY_ENVIRONMENT",
+        "RAILWAY_SERVICE_NAME",
+        "RAILWAY_PROJECT_ID",
+        "VERCEL_ENV",
+        "VERCEL_URL",
+        "RENDER",
+        "FLY_APP_NAME",
+    ):
+        monkeypatch.delenv(key, raising=False)
+
+
 class TestCreateEngine:
     """Tests for database engine creation."""
 
@@ -34,9 +47,11 @@ class TestCreateEngine:
             # Verify create_engine was called
             assert mock_create.called or engine is not None
 
-    def test_falls_back_to_sqlite_when_no_url(self, monkeypatch):
-        """Verify SQLite fallback when DATABASE_URL not set."""
+    def test_allows_explicit_sqlite_fallback_in_test_env(self, monkeypatch):
+        """Verify SQLite fallback requires an explicit local/test opt-in."""
+        _clear_cloud_markers(monkeypatch)
         monkeypatch.delenv("ADMIN_DATABASE_URL", raising=False)
+        monkeypatch.setenv("REGENGINE_ENV", "test")
         monkeypatch.setenv("ADMIN_FALLBACK_SQLITE", "sqlite:///./test_admin.db")
         
         with patch("services.admin.app.database.create_engine") as mock_create:
@@ -53,17 +68,57 @@ class TestCreateEngine:
                 url = call_args[0][0]
                 assert "sqlite" in url
 
+    def test_missing_admin_database_url_fails_closed_in_production(self, monkeypatch):
+        """Production must not silently create a local admin SQLite DB."""
+        _clear_cloud_markers(monkeypatch)
+        monkeypatch.delenv("ADMIN_DATABASE_URL", raising=False)
+        monkeypatch.setenv("REGENGINE_ENV", "production")
+        monkeypatch.setenv("ADMIN_FALLBACK_SQLITE", "sqlite:///./test_admin.db")
+
+        from services.admin.app.database import _create_engine
+
+        with pytest.raises(RuntimeError, match="ADMIN_DATABASE_URL is required"):
+            _create_engine()
+
+    def test_missing_admin_database_url_fails_closed_in_cloud(self, monkeypatch):
+        """Cloud markers disable local fallback even if env is mis-set."""
+        monkeypatch.delenv("ADMIN_DATABASE_URL", raising=False)
+        monkeypatch.setenv("REGENGINE_ENV", "development")
+        monkeypatch.setenv("RAILWAY_ENVIRONMENT", "production")
+        monkeypatch.setenv("ADMIN_FALLBACK_SQLITE", "sqlite:///./test_admin.db")
+
+        from services.admin.app.database import _create_engine
+
+        with pytest.raises(RuntimeError, match="ADMIN_DATABASE_URL is required"):
+            _create_engine()
+
+    def test_missing_admin_database_url_fails_without_explicit_fallback(self, monkeypatch):
+        """Local/test mode still requires ADMIN_FALLBACK_SQLITE to be explicit."""
+        _clear_cloud_markers(monkeypatch)
+        monkeypatch.delenv("ADMIN_DATABASE_URL", raising=False)
+        monkeypatch.delenv("ADMIN_FALLBACK_SQLITE", raising=False)
+        monkeypatch.setenv("REGENGINE_ENV", "test")
+
+        from services.admin.app.database import _create_engine
+
+        with pytest.raises(RuntimeError, match="ADMIN_DATABASE_URL is required"):
+            _create_engine()
+
 
 class TestInitDb:
     """Tests for database initialization."""
 
     def test_init_db_creates_tables(self):
         """Verify init_db creates all tables."""
-        from services.admin.app.database import init_db
+        import services.admin.app.database as database
         from services.admin.app.sqlalchemy_models import Base
-        
+
+        mock_engine = MagicMock()
+        mock_engine.dialect.name = "sqlite"
+
         with patch.object(Base.metadata, "create_all") as mock_create:
-            init_db()
+            with patch.object(database, "_engine", mock_engine):
+                database.init_db()
             
             mock_create.assert_called_once()
 
@@ -126,7 +181,7 @@ class TestGetTenantSession:
             mock_session = MagicMock()
             mock_session_class.return_value = mock_session
             
-            gen = get_tenant_session("tenant-123")
+            gen = get_tenant_session("00000000-0000-0000-0000-000000000123")
             session = next(gen)
             
             # Should have executed SET statement
@@ -165,7 +220,7 @@ class TestGetTenantSession:
             mock_session = MagicMock()
             mock_session_class.return_value = mock_session
             
-            gen = get_tenant_session("tenant-123")
+            gen = get_tenant_session("00000000-0000-0000-0000-000000000123")
             session = next(gen)
             
             try:
@@ -212,17 +267,18 @@ class TestDatabaseConnection:
             # This is verified by code review of _create_engine
             pass
 
-    def test_sqlite_check_same_thread_disabled(self):
+    def test_sqlite_check_same_thread_disabled(self, monkeypatch):
         """Verify SQLite allows multi-threaded access."""
         # SQLite needs check_same_thread=False for FastAPI
+        _clear_cloud_markers(monkeypatch)
+        monkeypatch.delenv("ADMIN_DATABASE_URL", raising=False)
+        monkeypatch.setenv("REGENGINE_ENV", "test")
+        monkeypatch.setenv("ADMIN_FALLBACK_SQLITE", "sqlite:///./test.db")
+
         with patch("services.admin.app.database.create_engine") as mock_create:
             mock_engine = MagicMock()
             mock_create.return_value = mock_engine
-            
-            import os
-            os.environ.pop("ADMIN_DATABASE_URL", None)
-            os.environ["ADMIN_FALLBACK_SQLITE"] = "sqlite:///./test.db"
-            
+
             from services.admin.app.database import _create_engine
             
             engine = _create_engine()

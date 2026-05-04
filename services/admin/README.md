@@ -12,4 +12,4 @@ Set `ADMIN_DATABASE_URL` to a Postgres connection string accessible from the con
 export ADMIN_DATABASE_URL="postgresql://admin:password@postgres:5432/regengine"
 ```
 
-If `ADMIN_DATABASE_URL` is not provided, migrations are skipped and a warning is logged. In production, ensure the variable is configured so tenant isolation policies are applied before serving requests.
+`ADMIN_DATABASE_URL` is required outside explicit local/test use. The service only permits SQLite fallback when `ADMIN_FALLBACK_SQLITE` is set and `REGENGINE_ENV` is `development`, `test`, or `local`; cloud deployment markers such as Railway or Vercel disable the fallback. In production, configure `ADMIN_DATABASE_URL` so tenant isolation policies are applied before serving requests.
