@@ -5,3 +5,5 @@
 > **[`../../AGENTS.md`](../../AGENTS.md)**
 >
 > Current editor agent specs live in **[`../../.github/agents/`](../../.github/agents/)**.
+>
+> The small-scale operating model lives at **[`AGENT_OPERATING_MODEL.md`](AGENT_OPERATING_MODEL.md)**.

@@ -14,22 +14,23 @@ _SPEC.loader.exec_module(_MODULE)
 
 
 def test_discovers_checked_in_github_agents() -> None:
-    personas = _MODULE.discover_personas()
+    agents = _MODULE.discover_agents()
 
-    assert {"planner", "implementer", "security_review"}.issubset(personas)
-    assert personas["planner"].source == ".github/agents"
+    assert set(agents) == {"planner", "implementer", "security_review"}
+    assert agents["planner"].path.name == "regengine-planner.agent.md"
 
 
 def test_build_prompt_includes_root_agent_guide_and_task() -> None:
-    personas = _MODULE.discover_personas()
+    agents = _MODULE.discover_agents()
 
     prompt = _MODULE.build_prompt(
         "implementer",
-        personas,
+        agents,
         task="Wire the FSMA export smoke test.",
         output_format="json",
     )
 
     assert "RegEngine Agent Guide" in prompt
+    assert "Agent Operating Model" in prompt
     assert "Wire the FSMA export smoke test." in prompt
     assert "Return a valid JSON object" in prompt

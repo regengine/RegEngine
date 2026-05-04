@@ -13,7 +13,7 @@ Read [AGENTS.md](../AGENTS.md) first.
 - `frontend/package-lock.json` is checked in, so default to `npm` for frontend commands.
 - The repo does not contain a `Makefile` or a repo-root `conftest.py`.
 - Current editor agent specs live in `.github/agents/`.
-- Legacy `.agent/` and `.agents/` directories may be absent in this checkout; do not depend on them unless a task explicitly restores that layer.
+- Legacy `.agent/` and `.agents/` directories are not part of the current operating model.
 
 ## Prefer these sources of truth
 
