@@ -26,6 +26,8 @@ spec:
           capabilities:
             drop:
               - ALL
+        ports:
+        - containerPort: 8600
         envFrom:
         - secretRef:
             name: scheduler-secrets

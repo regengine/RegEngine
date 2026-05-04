@@ -1,59 +1,49 @@
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: admin-service
+  name: compliance-service
   labels:
-    app: admin
+    app: compliance
 spec:
   podSelector:
     matchLabels:
-      app: admin
+      app: compliance
   policyTypes:
     - Ingress
     - Egress
-
-  # Allow ingress only from the NGINX ingress controller
   ingress:
     - from:
         - podSelector:
             matchLabels:
               app.kubernetes.io/name: ingress-nginx
-      ports:
-        - protocol: TCP
-          port: 8400
-
-  # Allow egress to PostgreSQL, Redis, external HTTPS, and internal services
-  egress:
-    # PostgreSQL
-    - to: []
-      ports:
-        - protocol: TCP
-          port: 5432
-    # Redis
-    - to: []
-      ports:
-        - protocol: TCP
-          port: 6379
-    # External HTTPS
-    - to: []
-      ports:
-        - protocol: TCP
-          port: 443
-    # Internal service communication (ingestion, compliance, scheduler)
-    - to:
         - podSelector:
             matchLabels:
-              app: ingestion
-        - podSelector:
-            matchLabels:
-              app: compliance
+              app: admin
         - podSelector:
             matchLabels:
               app: scheduler
       ports:
         - protocol: TCP
           port: 8000
-    # DNS resolution
+  egress:
+    - to: []
+      ports:
+        - protocol: TCP
+          port: 5432
+    - to: []
+      ports:
+        - protocol: TCP
+          port: 6379
+    - to: []
+      ports:
+        - protocol: TCP
+          port: 9092
+        - protocol: TCP
+          port: 9644
+    - to: []
+      ports:
+        - protocol: TCP
+          port: 443
     - to: []
       ports:
         - protocol: UDP
