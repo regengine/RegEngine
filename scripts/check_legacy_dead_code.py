@@ -70,6 +70,8 @@ EXCLUDED_FILES = {
     "scripts/check_legacy_dead_code.py",
 }
 
+AGENT_SWEEP_WORKFLOW = ".github/workflows/agent-sweep.yml"
+
 
 @dataclass(frozen=True)
 class LegacyFile:
@@ -354,6 +356,41 @@ def check_patterns(files: Iterable[Path], root: Path) -> list[Finding]:
     return findings
 
 
+def check_manual_agent_sweep(root: Path) -> list[Finding]:
+    """Keep broad agent sweeps manual-only to avoid unattended issue churn."""
+    workflow = root / AGENT_SWEEP_WORKFLOW
+    if not workflow.exists():
+        return []
+
+    try:
+        lines = workflow.read_text(encoding="utf-8", errors="ignore").splitlines()
+    except OSError as exc:
+        return [
+            Finding(
+                code="agent-sweep-read-error",
+                path=AGENT_SWEEP_WORKFLOW,
+                line=1,
+                message=f"Could not read agent sweep workflow: {exc}",
+            )
+        ]
+
+    findings: list[Finding] = []
+    for line_number, line in enumerate(lines, start=1):
+        if re.match(r"^\s*schedule\s*:", line):
+            findings.append(
+                Finding(
+                    code="scheduled-agent-sweep",
+                    path=AGENT_SWEEP_WORKFLOW,
+                    line=line_number,
+                    message=(
+                        "Agent sweep must stay workflow_dispatch-only. "
+                        "Use explicit, scoped helper prompts instead of scheduled bot sweeps."
+                    ),
+                )
+            )
+    return findings
+
+
 def normalize_knip_file(file_entry: object) -> str | None:
     if isinstance(file_entry, str):
         return file_entry
@@ -444,6 +481,7 @@ def main() -> int:
         files = git_files(root)
         findings.extend(check_banned_files(files, root))
         findings.extend(check_patterns(files, root))
+        findings.extend(check_manual_agent_sweep(root))
 
     if args.knip_json:
         findings.extend(check_knip_json(args.knip_json, root))
