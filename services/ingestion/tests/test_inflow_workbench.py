@@ -3,14 +3,38 @@ from __future__ import annotations
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+import app.authz as authz
 import app.inflow_workbench as workbench
+from app.authz import IngestionPrincipal, get_ingestion_principal
 from app.inflow_workbench import router
 
 
-def _client(tmp_path, monkeypatch) -> TestClient:
+def _principal(
+    *,
+    scopes: list[str] | None = None,
+    tenant_id: str | None = "tenant-a",
+) -> IngestionPrincipal:
+    return IngestionPrincipal(
+        key_id="test-key",
+        scopes=scopes or ["*"],
+        tenant_id=tenant_id,
+        auth_mode="test",
+    )
+
+
+def _client(
+    tmp_path,
+    monkeypatch,
+    *,
+    principal: IngestionPrincipal | None = None,
+    authenticated: bool = True,
+) -> TestClient:
     monkeypatch.setenv("REGENGINE_INFLOW_WORKBENCH_PATH", str(tmp_path / "workbench.json"))
+    monkeypatch.setattr(authz, "consume_tenant_rate_limit", lambda **_kw: (True, 99))
     app = FastAPI()
     app.include_router(router)
+    if authenticated:
+        app.dependency_overrides[get_ingestion_principal] = lambda: principal or _principal()
     return TestClient(app)
 
 
@@ -57,6 +81,138 @@ def _sandbox_result(*, blocked: bool = True) -> dict:
             }
         ],
     }
+
+
+def test_anonymous_workbench_routes_require_auth(tmp_path, monkeypatch):
+    monkeypatch.setenv("REGENGINE_ENV", "production")
+    client = _client(tmp_path, monkeypatch, authenticated=False)
+    scenario_body = {
+        "tenant_id": "tenant-a",
+        "name": "Supplier missing BOL",
+        "outcome": "Blocked reference document",
+        "csv": "cte_type,traceability_lot_code\nshipping,TLC-1",
+    }
+    run_body = {
+        "tenant_id": "tenant-a",
+        "source": "inflow-lab-data-feeder",
+        "csv": "cte_type,traceability_lot_code\nshipping,TLC-FEED-002",
+        "result": _sandbox_result(blocked=True),
+    }
+    commit_body = {
+        "mode": "staging",
+        "tenant_id": "tenant-a",
+        "result": _sandbox_result(blocked=False),
+    }
+
+    checks = [
+        ("GET", "/api/v1/inflow-workbench/scenarios", None),
+        ("POST", "/api/v1/inflow-workbench/scenarios", scenario_body),
+        ("POST", "/api/v1/inflow-workbench/readiness/preview", _sandbox_result(blocked=False)),
+        ("GET", "/api/v1/inflow-workbench/readiness/summary?tenant_id=tenant-a", None),
+        ("POST", "/api/v1/inflow-workbench/commit-gate", commit_body),
+        ("POST", "/api/v1/inflow-workbench/runs", run_body),
+        ("GET", "/api/v1/inflow-workbench/runs/run-missing?tenant_id=tenant-a", None),
+        ("GET", "/api/v1/inflow-workbench/fix-queue?tenant_id=tenant-a", None),
+        ("PATCH", "/api/v1/inflow-workbench/fix-queue/item-1?tenant_id=tenant-a", {"status": "corrected"}),
+    ]
+
+    for method, url, body in checks:
+        response = client.request(method, url, json=body) if body is not None else client.request(method, url)
+        assert response.status_code == 401, (method, url, response.text)
+
+
+def test_scoped_principal_rejects_cross_tenant_workbench_write(tmp_path, monkeypatch):
+    client = _client(
+        tmp_path,
+        monkeypatch,
+        principal=_principal(scopes=["inflow.write"], tenant_id="tenant-a"),
+    )
+
+    response = client.post(
+        "/api/v1/inflow-workbench/runs",
+        json={
+            "tenant_id": "tenant-b",
+            "source": "inflow-lab-data-feeder",
+            "csv": "cte_type,traceability_lot_code\nshipping,TLC-FEED-002",
+            "result": _sandbox_result(blocked=False),
+        },
+    )
+
+    assert response.status_code == 403
+    assert "Tenant mismatch" in response.json()["detail"]
+
+
+def test_scoped_principal_supplies_tenant_when_body_omits_it(tmp_path, monkeypatch):
+    client = _client(
+        tmp_path,
+        monkeypatch,
+        principal=_principal(scopes=["inflow.write"], tenant_id="tenant-a"),
+    )
+
+    response = client.post(
+        "/api/v1/inflow-workbench/runs",
+        json={
+            "source": "inflow-lab-data-feeder",
+            "csv": "cte_type,traceability_lot_code\nshipping,TLC-FEED-002",
+            "result": _sandbox_result(blocked=False),
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["tenant_id"] == "tenant-a"
+
+
+def test_workbench_scopes_split_read_and_write_permissions(tmp_path, monkeypatch):
+    read_only = _client(
+        tmp_path,
+        monkeypatch,
+        principal=_principal(scopes=["inflow.read"], tenant_id="tenant-a"),
+    )
+    write_denied = read_only.post(
+        "/api/v1/inflow-workbench/scenarios",
+        json={
+            "tenant_id": "tenant-a",
+            "name": "Supplier missing BOL",
+            "outcome": "Blocked reference document",
+            "csv": "cte_type,traceability_lot_code\nshipping,TLC-1",
+        },
+    )
+    assert write_denied.status_code == 403
+
+    write_only = _client(
+        tmp_path,
+        monkeypatch,
+        principal=_principal(scopes=["inflow.write"], tenant_id="tenant-a"),
+    )
+    read_denied = write_only.get("/api/v1/inflow-workbench/scenarios")
+    assert read_denied.status_code == 403
+
+
+def test_workbench_run_reads_are_tenant_scoped(tmp_path, monkeypatch):
+    writer = _client(
+        tmp_path,
+        monkeypatch,
+        principal=_principal(scopes=["inflow.write"], tenant_id="tenant-a"),
+    )
+    run_resp = writer.post(
+        "/api/v1/inflow-workbench/runs",
+        json={
+            "source": "inflow-lab-data-feeder",
+            "csv": "cte_type,traceability_lot_code\nshipping,TLC-FEED-002",
+            "result": _sandbox_result(blocked=False),
+        },
+    )
+    assert run_resp.status_code == 200
+    run_id = run_resp.json()["run_id"]
+
+    other_tenant_reader = _client(
+        tmp_path,
+        monkeypatch,
+        principal=_principal(scopes=["inflow.read"], tenant_id="tenant-b"),
+    )
+    response = other_tenant_reader.get(f"/api/v1/inflow-workbench/runs/{run_id}")
+
+    assert response.status_code == 404
 
 
 def test_lists_built_in_scenarios(tmp_path, monkeypatch):
