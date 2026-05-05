@@ -1,7 +1,9 @@
 'use client';
 
 import { fetchWithCsrf } from '@/lib/fetch-with-csrf';
+import type { MouseEvent } from 'react';
 import { useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { ArrowRight, Loader2 } from 'lucide-react';
@@ -30,11 +32,14 @@ export function PricingCheckoutButton({
     const router = useRouter();
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const signupHref = `/signup?plan=${encodeURIComponent(tierId)}&billing=${billingPeriod}`;
 
-    const handleCheckout = async () => {
-        // Premium tier → contact sales
+    const handleCheckout = async (event: MouseEvent<HTMLAnchorElement>) => {
+        event.preventDefault();
+
+        // Premium has the same no-JS signup fallback, but no Stripe checkout yet.
         if (tierId === 'premium') {
-            router.push('/contact?plan=premium');
+            router.push(signupHref);
             return;
         }
 
@@ -56,12 +61,7 @@ export function PricingCheckoutButton({
             const data = await response.json();
 
             if (!response.ok) {
-                // If Stripe isn't configured, fall through to signup
-                if (response.status === 502 || response.status === 500) {
-                    router.push(`/signup?plan=${tierId}`);
-                    return;
-                }
-                setError(data.error || 'Checkout failed');
+                router.push(signupHref);
                 return;
             }
 
@@ -70,11 +70,11 @@ export function PricingCheckoutButton({
                 window.location.href = data.checkout_url;
             } else {
                 // Fallback: go to signup with plan context
-                router.push(`/signup?plan=${tierId}`);
+                router.push(signupHref);
             }
         } catch {
             // Network error or Stripe not configured — fall through to signup
-            router.push(`/signup?plan=${tierId}`);
+            router.push(signupHref);
         } finally {
             setIsLoading(false);
         }
@@ -83,8 +83,7 @@ export function PricingCheckoutButton({
     return (
         <div>
             <Button
-                onClick={handleCheckout}
-                disabled={isLoading}
+                asChild
                 style={{
                     width: '100%',
                     marginTop: '24px',
@@ -95,17 +94,24 @@ export function PricingCheckoutButton({
                     ...style,
                 }}
             >
-                {isLoading ? (
-                    <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Redirecting to checkout...
-                    </>
-                ) : (
-                    <>
-                        {label}
-                        <ArrowRight className="ml-2 w-4 h-4" />
-                    </>
-                )}
+                <Link
+                    href={signupHref}
+                    onClick={handleCheckout}
+                    aria-disabled={isLoading}
+                    data-cta-target={signupHref}
+                >
+                    {isLoading ? (
+                        <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Redirecting to checkout...
+                        </>
+                    ) : (
+                        <>
+                            {label}
+                            <ArrowRight className="ml-2 w-4 h-4" />
+                        </>
+                    )}
+                </Link>
             </Button>
             {error && (
                 <p className="text-red-500 text-xs mt-2 text-center">

@@ -1,6 +1,13 @@
+import type { Metadata } from 'next';
 import Link from 'next/link';
 import { ArrowLeft, FileText } from 'lucide-react';
 import { T as _T } from '@/lib/design-tokens';
+
+export const metadata: Metadata = {
+    title: 'Changelog | RegEngine',
+    description:
+        'Latest RegEngine product updates, API improvements, and FSMA 204 compliance workflow releases.',
+};
 
 const T = {
   ..._T,

@@ -12,6 +12,28 @@ interface EmailGateProps {
 
 type GateStep = 'checking' | 'email' | 'code' | 'verified';
 
+const TOOL_RESULT_LABELS: Record<string, string> = {
+    ask: 'AI traceability answers',
+    'cte-mapper': 'CTE map',
+    'data-import': 'import mapping report',
+    'drill-simulator': 'recall drill result',
+    export: 'FDA export package',
+    'fsma-unified': 'cold-chain anomaly report',
+    'ftl-checker': 'FTL coverage result',
+    'kde-checker': 'KDE checklist',
+    'knowledge-graph': 'traceability graph',
+    'label-scanner': 'label scan result',
+    'notice-validator': 'FDA request review',
+    'obligation-scanner': 'obligation scan',
+    'readiness-assessment': 'readiness assessment',
+    'recall-readiness': 'recall readiness score',
+    'retailer-readiness': 'retailer readiness assessment',
+    'roi-calculator': 'ROI calculation',
+    scan: 'GS1 scan result',
+    'sop-generator': 'SOP draft',
+    'tlc-validator': 'TLC validation result',
+};
+
 async function fetchWithCsrfTimeout(
     input: RequestInfo | URL,
     options: RequestInit = {},
@@ -34,12 +56,11 @@ async function fetchWithCsrfTimeout(
 }
 
 /**
- * Email verification gate for free tools.
+ * Optional email verification panel for free tools.
  *
  * Checks for the re_tool_access HTTP-only cookie on mount.
- * If missing, shows an inline card requiring work email verification
- * before the tool content (children) is rendered. Keeping the gate inline
- * preserves the page header, footer, and browser navigation context.
+ * Tool content is always rendered first so public pages have meaningful SSR
+ * HTML for visitors, crawlers, and no-JS fallbacks.
  */
 export function EmailGate({ toolName, children }: EmailGateProps) {
     const [step, setStep] = useState<GateStep>('checking');
@@ -51,6 +72,7 @@ export function EmailGate({ toolName, children }: EmailGateProps) {
     const [whyExpanded, setWhyExpanded] = useState(false);
 
     const codeInputRef = useRef<HTMLInputElement>(null);
+    const resultLabel = TOOL_RESULT_LABELS[toolName] ?? 'free-tool result';
 
     // Check cookie on mount
     useEffect(() => {
@@ -193,169 +215,159 @@ export function EmailGate({ toolName, children }: EmailGateProps) {
         }
     }, [email, toolName, resendCountdown]);
 
-    // Loading state while checking cookie
-    if (step === 'checking') {
-        return (
-            <section className="mx-auto my-10 flex min-h-[220px] w-full max-w-xl items-center justify-center rounded-xl border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] p-8">
-                <div className="flex items-center gap-3 text-sm text-[var(--re-text-muted)]">
-                    <Loader2 className="h-5 w-5 animate-spin" />
-                    Checking tool access
-                </div>
-            </section>
-        );
-    }
-
-    // Verified — render the tool
-    if (step === 'verified') {
+    // Verified or still checking — render only the public tool/page content.
+    if (step === 'verified' || step === 'checking') {
         return <>{children}</>;
     }
 
-    // Gate card
     return (
-        <section className="mx-auto my-10 w-full max-w-xl px-4">
-            <div className="w-full overflow-hidden rounded-xl border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] shadow-re-lg">
-                {/* Header */}
-                <div className="px-6 pt-8 pb-2 text-center">
-                    <div className="mx-auto mb-4 w-12 h-12 rounded-xl bg-[var(--re-brand-muted)] flex items-center justify-center">
-                        <Mail className="h-6 w-6 text-[var(--re-brand)]" />
-                    </div>
-                    <h2 className="font-display text-xl font-bold text-[var(--re-text-primary)] mb-1">
-                        Unlock free compliance tools
-                    </h2>
-                    <p className="text-sm text-[var(--re-text-tertiary)]">
-                        {step === 'email'
-                            ? 'Enter your work email — no account required, no credit card, no spam.'
-                            : (
-                                <>
-                                    Check your inbox — we sent a 6-digit code to{' '}
-                                    <span className="text-[var(--re-text-primary)] font-medium">{email}</span>
-                                </>
-                            )}
-                    </p>
-                </div>
-
-                {/* Body */}
-                <div className="px-6 py-5">
-                    {step === 'email' ? (
-                        <form onSubmit={handleEmailSubmit} className="space-y-4">
-                            <div>
-                                <input
-                                    type="email"
-                                    value={email}
-                                    onChange={(e) => {
-                                        setEmail(e.target.value);
-                                        if (error) setError('');
-                                    }}
-                                    placeholder="you@company.com"
-                                    required
-                                    autoComplete="email"
-                                    className="w-full px-4 py-3 rounded-lg bg-[var(--re-surface-elevated)] border border-[var(--re-surface-border)] text-[var(--re-text-primary)] placeholder:text-[var(--re-text-disabled)] text-sm focus:outline-none focus:ring-2 focus:ring-[var(--re-brand)] focus:border-transparent transition-all"
-                                />
-                            </div>
-
-                            {error && (
-                                <p className="text-sm text-re-danger">{error}</p>
-                            )}
-
-                            <button
-                                type="submit"
-                                disabled={loading || !email.includes('@')}
-                                className="w-full flex items-center justify-center gap-2 bg-[var(--re-brand)] text-white px-5 py-3 rounded-lg text-sm font-semibold hover:bg-[var(--re-brand-dark)] disabled:opacity-50 disabled:cursor-not-allowed transition-all min-h-[48px]"
-                            >
-                                {loading ? (
-                                    <Loader2 className="h-4 w-4 animate-spin" />
-                                ) : (
+        <>
+            {children}
+            <section className="mx-auto my-10 w-full max-w-xl px-4">
+                <div className="w-full overflow-hidden rounded-xl border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] shadow-re-lg">
+                    {/* Header */}
+                    <div className="px-6 pt-8 pb-2 text-center">
+                        <div className="mx-auto mb-4 w-12 h-12 rounded-xl bg-[var(--re-brand-muted)] flex items-center justify-center">
+                            <Mail className="h-6 w-6 text-[var(--re-brand)]" />
+                        </div>
+                        <h2 className="font-display text-xl font-bold text-[var(--re-text-primary)] mb-1">
+                            Save your {resultLabel}
+                        </h2>
+                        <p className="text-sm text-[var(--re-text-tertiary)]">
+                            {step === 'email'
+                                ? 'Enter your work email to save results and receive a verification code. No account required, no credit card, no spam.'
+                                : (
                                     <>
-                                        Send verification code
-                                        <ArrowRight className="h-4 w-4" />
+                                        Check your inbox — we sent a 6-digit code to{' '}
+                                        <span className="text-[var(--re-text-primary)] font-medium">{email}</span>
                                     </>
                                 )}
-                            </button>
-                            <div className="text-center">
-                                <Link
-                                    href="/tools"
-                                    className="text-xs text-[var(--re-text-muted)] underline-offset-4 hover:text-[var(--re-text-secondary)] hover:underline"
-                                >
-                                    Back to tools
-                                </Link>
-                            </div>
-                        </form>
-                    ) : (
-                        <div className="space-y-4">
-                            <div>
-                                <input
-                                    ref={codeInputRef}
-                                    type="text"
-                                    inputMode="numeric"
-                                    value={code}
-                                    onChange={(e) => handleCodeChange(e.target.value)}
-                                    placeholder="000000"
-                                    maxLength={6}
-                                    autoComplete="one-time-code"
-                                    className="w-full px-4 py-3 rounded-lg bg-[var(--re-surface-elevated)] border border-[var(--re-surface-border)] text-[var(--re-text-primary)] placeholder:text-[var(--re-text-disabled)] text-center text-xl font-mono tracking-[0.5em] focus:outline-none focus:ring-2 focus:ring-[var(--re-brand)] focus:border-transparent transition-all"
-                                />
-                            </div>
-
-                            {error && (
-                                <p className="text-sm text-re-danger">{error}</p>
-                            )}
-
-                            {loading && (
-                                <div className="flex justify-center">
-                                    <Loader2 className="h-5 w-5 animate-spin text-[var(--re-brand)]" />
-                                </div>
-                            )}
-
-                            <div className="flex items-center justify-between text-xs">
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        setStep('email');
-                                        setCode('');
-                                        setError('');
-                                    }}
-                                    className="text-[var(--re-text-muted)] hover:text-[var(--re-text-secondary)] transition-colors"
-                                >
-                                    Change email
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={handleResend}
-                                    disabled={resendCountdown > 0}
-                                    className="text-[var(--re-brand)] hover:text-[var(--re-brand-dark)] disabled:text-[var(--re-text-disabled)] disabled:cursor-not-allowed transition-colors"
-                                >
-                                    {resendCountdown > 0
-                                        ? `Resend in ${resendCountdown}s`
-                                        : 'Resend code'}
-                                </button>
-                            </div>
-                        </div>
-                    )}
-                </div>
-
-                {/* Why do we ask? */}
-                <div className="px-6 pb-6">
-                    <button
-                        type="button"
-                        onClick={() => setWhyExpanded(!whyExpanded)}
-                        className="flex items-center gap-1.5 text-xs text-[var(--re-text-muted)] hover:text-[var(--re-text-secondary)] transition-colors"
-                    >
-                        {whyExpanded ? (
-                            <ChevronUp className="h-3 w-3" />
-                        ) : (
-                            <ChevronDown className="h-3 w-3" />
-                        )}
-                        Why do we ask?
-                    </button>
-                    {whyExpanded && (
-                        <p className="mt-2 text-xs text-[var(--re-text-muted)] leading-relaxed">
-                            We use your work email to verify you&apos;re a food industry professional.
-                            Your email is never sold or shared. You&apos;ll receive your verification
-                            code and nothing else.
                         </p>
-                    )}
+                    </div>
+
+                    {/* Body */}
+                    <div className="px-6 py-5">
+                        {step === 'email' ? (
+                            <form onSubmit={handleEmailSubmit} className="space-y-4">
+                                <div>
+                                    <input
+                                        type="email"
+                                        value={email}
+                                        onChange={(e) => {
+                                            setEmail(e.target.value);
+                                            if (error) setError('');
+                                        }}
+                                        placeholder="you@company.com"
+                                        required
+                                        autoComplete="email"
+                                        className="w-full px-4 py-3 rounded-lg bg-[var(--re-surface-elevated)] border border-[var(--re-surface-border)] text-[var(--re-text-primary)] placeholder:text-[var(--re-text-disabled)] text-sm focus:outline-none focus:ring-2 focus:ring-[var(--re-brand)] focus:border-transparent transition-all"
+                                    />
+                                </div>
+
+                                {error && (
+                                    <p className="text-sm text-re-danger">{error}</p>
+                                )}
+
+                                <button
+                                    type="submit"
+                                    disabled={loading || !email.includes('@')}
+                                    className="w-full flex items-center justify-center gap-2 bg-[var(--re-brand)] text-white px-5 py-3 rounded-lg text-sm font-semibold hover:bg-[var(--re-brand-dark)] disabled:opacity-50 disabled:cursor-not-allowed transition-all min-h-[48px]"
+                                >
+                                    {loading ? (
+                                        <Loader2 className="h-4 w-4 animate-spin" />
+                                    ) : (
+                                        <>
+                                            Send verification code
+                                            <ArrowRight className="h-4 w-4" />
+                                        </>
+                                    )}
+                                </button>
+                                <div className="text-center">
+                                    <Link
+                                        href="/tools"
+                                        className="text-xs text-[var(--re-text-muted)] underline-offset-4 hover:text-[var(--re-text-secondary)] hover:underline"
+                                    >
+                                        Back to tools
+                                    </Link>
+                                </div>
+                            </form>
+                        ) : (
+                            <div className="space-y-4">
+                                <div>
+                                    <input
+                                        ref={codeInputRef}
+                                        type="text"
+                                        inputMode="numeric"
+                                        value={code}
+                                        onChange={(e) => handleCodeChange(e.target.value)}
+                                        placeholder="000000"
+                                        maxLength={6}
+                                        autoComplete="one-time-code"
+                                        className="w-full px-4 py-3 rounded-lg bg-[var(--re-surface-elevated)] border border-[var(--re-surface-border)] text-[var(--re-text-primary)] placeholder:text-[var(--re-text-disabled)] text-center text-xl font-mono tracking-[0.5em] focus:outline-none focus:ring-2 focus:ring-[var(--re-brand)] focus:border-transparent transition-all"
+                                    />
+                                </div>
+
+                                {error && (
+                                    <p className="text-sm text-re-danger">{error}</p>
+                                )}
+
+                                {loading && (
+                                    <div className="flex justify-center">
+                                        <Loader2 className="h-5 w-5 animate-spin text-[var(--re-brand)]" />
+                                    </div>
+                                )}
+
+                                <div className="flex items-center justify-between text-xs">
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setStep('email');
+                                            setCode('');
+                                            setError('');
+                                        }}
+                                        className="text-[var(--re-text-muted)] hover:text-[var(--re-text-secondary)] transition-colors"
+                                    >
+                                        Change email
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={handleResend}
+                                        disabled={resendCountdown > 0}
+                                        className="text-[var(--re-brand)] hover:text-[var(--re-brand-dark)] disabled:text-[var(--re-text-disabled)] disabled:cursor-not-allowed transition-colors"
+                                    >
+                                        {resendCountdown > 0
+                                            ? `Resend in ${resendCountdown}s`
+                                            : 'Resend code'}
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Why do we ask? */}
+                    <div className="px-6 pb-6">
+                        <button
+                            type="button"
+                            onClick={() => setWhyExpanded(!whyExpanded)}
+                            className="flex items-center gap-1.5 text-xs text-[var(--re-text-muted)] hover:text-[var(--re-text-secondary)] transition-colors"
+                        >
+                            {whyExpanded ? (
+                                <ChevronUp className="h-3 w-3" />
+                            ) : (
+                                <ChevronDown className="h-3 w-3" />
+                            )}
+                            Why do we ask?
+                        </button>
+                        {whyExpanded && (
+                            <p className="mt-2 text-xs text-[var(--re-text-muted)] leading-relaxed">
+                                We use your work email to verify you&apos;re a food industry professional.
+                                Your email is never sold or shared. You&apos;ll receive your verification
+                                code and nothing else.
+                            </p>
+                        )}
+                    </div>
                 </div>
-            </div>
-        </section>
+            </section>
+        </>
     );
 }

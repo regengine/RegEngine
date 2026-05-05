@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { PricingPageClient } from '@/components/pricing/PricingPageClient';
+import type { PricingComparisonRow, PricingFaqItem } from '@/components/pricing/PricingPageClient';
 
 export const metadata: Metadata = {
     title: 'FSMA 204 Pricing | RegEngine',
@@ -126,8 +127,8 @@ const PRICING_TIERS = [
     },
 ];
 
-const COMPETITOR_COMPARISON = [
-    { feature: 'Time to First FDA-Ready Export', regengine: 'Under 10 minutes', foodlogiq: 'Weeks', repositrak: 'Hours–days', tracegains: 'Weeks' },
+const COMPETITOR_COMPARISON: PricingComparisonRow[] = [
+    { feature: 'Time to First FDA-Ready Export', regengine: 'under 12 minutes', foodlogiq: 'Weeks', repositrak: 'Hours–days', tracegains: 'Weeks' },
     { feature: 'Public API + OpenAPI Docs', regengine: '✓', foodlogiq: '✗', repositrak: '✗', tracegains: '✗' },
     { feature: 'Self-Serve Signup', regengine: '✓', foodlogiq: '✗', repositrak: '✗', tracegains: '✗' },
     { feature: 'Developer Sandbox', regengine: '✓', foodlogiq: '✗', repositrak: '✗', tracegains: '✗' },
@@ -136,7 +137,7 @@ const COMPETITOR_COMPARISON = [
     { feature: 'Pricing Model', regengine: 'Published, per-facility', foodlogiq: 'Enterprise contract', repositrak: 'Per-supplier tiers', tracegains: 'Enterprise contract' },
 ];
 
-const FAQ = [
+const FAQ: PricingFaqItem[] = [
     { q: 'How do I choose between Base, Standard, and Premium?', a: 'It comes down to facility count. Base covers 1 facility with up to 500 CTEs/month. Standard handles 2–3 facilities with unlimited CTEs. Premium is for 4+ facilities with dedicated support and quarterly compliance reviews.' },
     { q: 'What do Founding Design Partners get?', a: 'Founding Design Partners lock in 50% off GA pricing for the life of their account. You also get white-glove onboarding, custom integration scoping, direct founder support, and a dedicated Slack channel. Your partner rate never increases.' },
     { q: 'Can I switch plans anytime?', a: "Yes! Upgrade anytime and we'll prorate. Downgrade at the end of your billing cycle." },
@@ -145,7 +146,7 @@ const FAQ = [
     { q: 'What integrations are available?', a: 'Core APIs and export flows are available today. ERP, retailer, and partner-system integrations are evaluated per delivery mode: native API, webhook, CSV/SFTP import, or custom-scoped implementation.' },
     { q: 'What if the FDA delays enforcement again?', a: 'Retailers like Walmart and Kroger are already requiring traceability from suppliers, regardless of the FDA timeline. RegEngine keeps you audit-ready for both.' },
     { q: 'Do I need this if I\'m a small farm?', a: 'FSMA 204 applies to entities on the Food Traceability List handling specific foods. Use our free FTL Checker to see if your products are covered.' },
-    { q: 'Can I integrate with my existing ERP?', a: 'Yes. RegEngine accepts data via API, CSV upload, or direct ERP connectors. Most customers are up and running within 48 hours.' },
+    { q: 'Can I integrate with my existing ERP?', a: 'Yes. RegEngine accepts data via API, CSV upload, or scoped ERP integration. Onboarding typically takes under 48 hours.' },
     { q: 'What happens to my data?', a: 'Your data is encrypted at rest (AES-256) and in transit (TLS 1.3). Each tenant gets row-level security isolation. We never share or sell your data.' },
 ];
 
@@ -171,5 +172,5 @@ export default async function PricingPage() {
           })
         : PRICING_TIERS;
 
-    return <PricingPageClient pricingTiers={pricingTiers} />;
+    return <PricingPageClient pricingTiers={pricingTiers} comparisonRows={COMPETITOR_COMPARISON} faq={FAQ} />;
 }

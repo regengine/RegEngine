@@ -512,7 +512,7 @@ export default function LoginPage() {
                                     </p>
                                     <Link href="/" className="inline-flex items-center justify-center gap-2 font-medium text-[var(--re-text-secondary)] transition-colors hover:text-[var(--re-text-primary)]">
                                         <LayoutDashboard className="h-4 w-4" />
-                                        Return to RegEngine.com
+                                        Return to RegEngine.co
                                     </Link>
                                 </div>
                             </form>

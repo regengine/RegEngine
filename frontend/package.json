@@ -10,6 +10,7 @@
     "test": "vitest",
     "test:run": "vitest run",
     "test:coverage": "vitest run --coverage",
+    "verify:ssr": "node scripts/verify-public-ssr.mjs",
     "test:e2e": "playwright test",
     "test:demo-smoke": "playwright test --config=playwright.demo-smoke.config.ts"
   },

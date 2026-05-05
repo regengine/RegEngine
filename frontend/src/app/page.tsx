@@ -135,16 +135,21 @@ function ActionLink({
 
 function MetricRail() {
   return (
-    <div className="re-home-command-rail mt-8">
-      {readinessMetrics.map((metric) => (
-        <div key={metric.label} className="border-b border-r border-[var(--re-surface-border)] p-4 last:border-r-0 md:border-b-0">
-          <p className="text-2xl font-semibold leading-none text-[var(--re-text-primary)]">{metric.value}</p>
-          <div className="mt-3 flex flex-col gap-2">
-            <p className="re-label">{metric.label}</p>
-            <ComplianceStateBadge state={metric.state} />
+    <div className="mt-8">
+      <p className="mb-3 inline-flex border border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)] px-3 py-1 font-mono text-[11px] uppercase text-[var(--re-text-muted)]">
+        Demo workspace · sample data
+      </p>
+      <div className="re-home-command-rail">
+        {readinessMetrics.map((metric) => (
+          <div key={metric.label} className="border-b border-r border-[var(--re-surface-border)] p-4 last:border-r-0 md:border-b-0">
+            <p className="text-2xl font-semibold leading-none text-[var(--re-text-primary)]">{metric.value}</p>
+            <div className="mt-3 flex flex-col gap-2">
+              <p className="re-label">{metric.label}</p>
+              <ComplianceStateBadge state={metric.state} />
+            </div>
           </div>
-        </div>
-      ))}
+        ))}
+      </div>
     </div>
   );
 }
@@ -183,6 +188,11 @@ function SupplierGapRadar() {
 function CommandCenterPreview() {
   return (
     <div className="re-home-grid-panel border border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)] p-3 shadow-[var(--re-shadow-md)]">
+      <div className="mb-3 flex justify-end">
+        <span className="border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] px-2.5 py-1 font-mono text-[11px] uppercase text-[var(--re-text-muted)]">
+          Demo workspace
+        </span>
+      </div>
       <div className="grid gap-3 xl:grid-cols-[250px_minmax(0,1fr)]">
         <ReadinessScore
           score={86}

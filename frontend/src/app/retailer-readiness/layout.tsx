@@ -1,9 +1,9 @@
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
-    title: 'Retailer Supplier FSMA 204 Compliance | RegEngine — FDA-Ready Export in 48 Hours',
+    title: 'Retailer Supplier FSMA 204 Compliance | RegEngine — Retailer-Ready in 48 Hours',
     description:
-        'Meet major retailer traceability requirements before their internal deadlines. API-first FSMA 204 compliance for food suppliers — automated CTEs, 5-second trace, and FDA-ready exports. Free assessment available.',
+        'Meet major retailer traceability requirements before their internal deadlines. API-first FSMA 204 compliance for food suppliers — automated CTEs, 5-second trace, and FDA-ready exports in under 12 minutes. Free assessment available.',
     keywords: [
         'retailer FSMA 204 compliance',
         'food supplier traceability',
@@ -15,15 +15,15 @@ export const metadata: Metadata = {
         'CTE KDE traceability',
     ],
     openGraph: {
-        title: 'FDA-Ready Export in 48 Hours | RegEngine FSMA 204 Compliance',
+        title: 'Retailer-Ready in 48 Hours | RegEngine FSMA 204 Compliance',
         description:
-            'API-first traceability for food suppliers. Automated CTEs, 5-second trace, FDA-ready exports. Free assessment.',
+            'API-first traceability for food suppliers. Automated CTEs, 5-second trace, and FDA-ready exports in under 12 minutes. Free assessment.',
         type: 'website',
         url: 'https://regengine.co/retailer-readiness',
     },
     twitter: {
         card: 'summary_large_image',
-        title: 'FDA-Ready Export in 48 Hours | RegEngine',
+        title: 'Retailer-Ready in 48 Hours | RegEngine',
         description:
             'Meet major retailer FSMA 204 requirements before their internal deadlines. Free compliance assessment.',
     },

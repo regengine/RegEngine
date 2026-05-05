@@ -29,30 +29,28 @@ interface PricingTier {
     features: string[];
 }
 
-const COMPETITOR_COMPARISON = [
-    { feature: 'Time to First FDA-Ready Export', regengine: 'Under 10 minutes', foodlogiq: 'Weeks', repositrak: 'Hours–days', tracegains: 'Weeks' },
-    { feature: 'Public API + OpenAPI Docs', regengine: '✓', foodlogiq: '✗', repositrak: '✗', tracegains: '✗' },
-    { feature: 'Self-Serve Signup', regengine: '✓', foodlogiq: '✗', repositrak: '✗', tracegains: '✗' },
-    { feature: 'Developer Sandbox', regengine: '✓', foodlogiq: '✗', repositrak: '✗', tracegains: '✗' },
-    { feature: 'Cryptographic Audit Trail', regengine: '✓', foodlogiq: '✗', repositrak: '✗', tracegains: '✗' },
-    { feature: 'Free Trial', regengine: '14 days', foodlogiq: 'Demo only', repositrak: 'Demo only', tracegains: 'Demo only' },
-    { feature: 'Pricing Model', regengine: 'Published, per-facility', foodlogiq: 'Enterprise contract', repositrak: 'Per-supplier tiers', tracegains: 'Enterprise contract' },
-];
+export interface PricingComparisonRow {
+    feature: string;
+    regengine: string;
+    foodlogiq: string;
+    repositrak: string;
+    tracegains: string;
+}
 
-const FAQ = [
-    { q: 'How do I choose between Base, Standard, and Premium?', a: 'It comes down to facility count. Base covers 1 facility with up to 500 CTEs/month. Standard handles 2–3 facilities with unlimited CTEs. Premium is for 4+ facilities with dedicated support and quarterly compliance reviews.' },
-    { q: 'What do Founding Design Partners get?', a: 'Founding Design Partners lock in 50% off GA pricing for the life of their account. You also get white-glove onboarding, custom integration scoping, direct founder support, and a dedicated Slack channel. Your partner rate never increases.' },
-    { q: 'Can I switch plans anytime?', a: "Yes! Upgrade anytime and we'll prorate. Downgrade at the end of your billing cycle." },
-    { q: 'Do you offer annual billing?', a: 'Yes. Annual billing saves ~15% compared to monthly. Both options are available on all plans.' },
-    { q: 'Does my partner pricing ever change?', a: 'No. Founding Design Partners lock in 50% off for the life of their account. Your rate never increases. This is our commitment to the partners who helped shape the product.' },
-    { q: 'What integrations are available?', a: 'Core APIs and export flows are available today. ERP, retailer, and partner-system integrations are evaluated per delivery mode: native API, webhook, CSV/SFTP import, or custom-scoped implementation.' },
-    { q: 'What if the FDA delays enforcement again?', a: 'Retailers like Walmart and Kroger are already requiring traceability from suppliers, regardless of the FDA timeline. RegEngine keeps you audit-ready for both.' },
-    { q: 'Do I need this if I\'m a small farm?', a: 'FSMA 204 applies to entities on the Food Traceability List handling specific foods. Use our free FTL Checker to see if your products are covered.' },
-    { q: 'Can I integrate with my existing ERP?', a: 'Yes. RegEngine accepts data via API, CSV upload, or direct ERP connectors. Most customers are up and running within 48 hours.' },
-    { q: 'What happens to my data?', a: 'Your data is encrypted at rest (AES-256) and in transit (TLS 1.3). Each tenant gets row-level security isolation. We never share or sell your data.' },
-];
+export interface PricingFaqItem {
+    q: string;
+    a: string;
+}
 
-export function PricingPageClient({ pricingTiers }: { pricingTiers: PricingTier[] }) {
+export function PricingPageClient({
+    pricingTiers,
+    comparisonRows,
+    faq,
+}: {
+    pricingTiers: PricingTier[];
+    comparisonRows: PricingComparisonRow[];
+    faq: PricingFaqItem[];
+}) {
     useEffect(() => {
         analytics.pricingPageView();
     }, []);
@@ -166,7 +164,7 @@ export function PricingPageClient({ pricingTiers }: { pricingTiers: PricingTier[
                     <p className="text-[13px] text-[var(--re-text-disabled)] leading-relaxed max-w-[480px] mx-auto mb-5">
                         Includes a 14-day free trial — no charge until day 15. Cancel anytime during the trial at no cost. We accept Visa, Mastercard, American Express, ACH bank transfer, and wire.
                     </p>
-                    <Link href="/onboarding">
+                    <Link href="/signup">
                         <Button className="bg-[var(--re-text-primary)] text-[var(--re-surface-base)] font-semibold rounded-sm px-7 py-3 shadow-none">
                             Apply as founding design partner <ArrowRight className="ml-2 w-4 h-4" />
                         </Button>
@@ -221,7 +219,7 @@ export function PricingPageClient({ pricingTiers }: { pricingTiers: PricingTier[
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {COMPETITOR_COMPARISON.map((row, i) => (
+                                    {comparisonRows.map((row, i) => (
                                         <tr key={i} className={`border-b border-[var(--re-surface-border)] ${i % 2 === 1 ? 'bg-[var(--re-surface-elevated)]' : 'bg-transparent'}`}>
                                             <td className="px-4 py-3.5 text-[13px] text-[var(--re-text-secondary)] font-medium">{row.feature}</td>
                                             <td className="text-center px-4 py-3.5 text-[13px] bg-[var(--re-brand-muted)] text-[var(--re-brand)] font-semibold">{row.regengine}</td>
@@ -245,7 +243,7 @@ export function PricingPageClient({ pricingTiers }: { pricingTiers: PricingTier[
                     Frequently Asked Questions
                 </h2>
                 <div className="flex flex-col gap-4">
-                    {FAQ.map((item, i) => (
+                    {faq.map((item, i) => (
                         <div key={i} className="bg-[var(--re-surface-card)] border border-[var(--re-surface-border)] rounded-sm p-5">
                             <div className="flex items-start gap-3 mb-3">
                                 <HelpCircle className="w-[18px] h-[18px] text-[var(--re-brand)] mt-0.5 shrink-0" />
@@ -266,7 +264,7 @@ export function PricingPageClient({ pricingTiers }: { pricingTiers: PricingTier[
                         Founding Design Partners start at $425/mo, billed annually. Apply now and get the product shaped around real supplier data.
                     </p>
                     <div className="flex gap-3 justify-center flex-wrap">
-                        <Link href="/onboarding">
+                        <Link href="/signup">
                             <Button className="bg-[var(--re-surface-base)] text-[var(--re-text-primary)] font-semibold px-6 py-3.5">
                                 Apply now <ArrowRight className="ml-2 w-4 h-4" />
                             </Button>
