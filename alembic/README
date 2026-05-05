@@ -11,8 +11,8 @@ To upgrade to the latest head:
 
 Run `alembic history` to see the full chain.
 
-## Admin service migrations (separate runner)
+## Legacy service migrations
 
-`services/admin/migrations/V1–V40` are managed **outside Alembic** by the
-admin service's own migration runner. They will be merged into the main
-Alembic chain during monolith consolidation (Phase 4).
+The old service-level Flyway files under `services/*/migrations/V*.sql`
+were burned down in #2004. Any active DDL from those files is now
+forward-ported through `alembic/versions/`.

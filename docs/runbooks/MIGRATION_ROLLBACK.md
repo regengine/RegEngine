@@ -57,18 +57,18 @@ d4e5f6a7b8c9  — Task Queue (V050: pg_notify task queue replacing Kafka)
 e5f6a7b8c9d0  — RLS Hardening (V051: tenant table RLS + sysadmin defense-in-depth + reference table RLS)
 ```
 
-### System B: Raw SQL (Legacy — Stateless)
+### System B: Raw SQL (Retired)
 
 | Property | Value |
 |----------|-------|
-| Migration files | `migrations/*.sql` (numbered V002–V053) |
-| Service-level files | `services/admin/migrations/V1–V27.sql`, `services/ingestion/migrations/V001.sql` |
-| Tracking | **None.** No tracking table. Applied via `psql -f` with `ON_ERROR_STOP=1`. |
-| Runner | `scripts/railway/apply_sql_migrations.sh` |
-| Rollback | **Manual.** No automated down migration. |
-| Connection | `$DATABASE_URL` or `$ADMIN_DATABASE_URL` passed to `psql` |
+| Migration files | Retired service-level `V*.sql` files were removed in #2004 |
+| Service-level files | Active DDL is forward-ported through Alembic |
+| Tracking | Alembic revision table only |
+| Runner | `alembic upgrade head` |
+| Rollback | Corrective forward migration or database snapshot restore |
+| Connection | `$DATABASE_URL` |
 
-The raw SQL runner (`apply_sql_migrations.sh`) applies files in sort order with `psql -v ON_ERROR_STOP=1`. It has **no state tracking** — it doesn't know which migrations have already been applied. Files with `CREATE TABLE IF NOT EXISTS` and `CREATE INDEX IF NOT EXISTS` are idempotent; others are not.
+The old raw SQL runner remains only as a compatibility wrapper for stale runbooks. It should not be used for production deploys.
 
 ### How They Overlap
 
@@ -684,8 +684,8 @@ DATABASE_URL=<url> ./scripts/run-migrations.sh
 | `alembic/env.py` | Database connection (reads `DATABASE_URL`), ORM metadata |
 | `alembic/versions/*.py` | Alembic revisions with `upgrade()` and `downgrade()` functions |
 | `migrations/*.sql` | Raw SQL migration source files |
-| `services/admin/migrations/*.sql` | Admin service schema migrations |
-| `services/ingestion/migrations/V001.sql` | Ingestion service bootstrap |
+| `services/admin/migrations/*.sql` | Retired; active DDL is in Alembic |
+| `services/ingestion/migrations/V001.sql` | Retired; active DDL is in Alembic |
 | `scripts/run-migrations.sh` | Idempotent Alembic runner (stamp if needed, then upgrade) |
 | `scripts/railway/apply_sql_migrations.sh` | Raw SQL runner (psql with ON_ERROR_STOP) |
 | `scripts/utilities/deploy_migrations.py` | Legacy deployment script for specific migrations |

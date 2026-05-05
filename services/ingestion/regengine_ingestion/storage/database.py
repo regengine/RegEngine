@@ -73,7 +73,7 @@ class DatabaseManager:
            reset on the implicit commit. Effectively a no-op.
 
         The SECURITY DEFINER function ``set_tenant_context(uuid)``
-        defined in ``services/admin/migrations/V3__tenant_isolation.sql``
+        enforced by the repository-level Alembic RLS migrations.
         uses ``set_config('app.tenant_id', ..., FALSE)`` which is
         session-scoped — the right shape under autocommit, where the
         connection is the unit of context.

@@ -1,7 +1,7 @@
 """RLS fail-closed hardening verification (#1091).
 
-For every table rewritten by
-``alembic/versions/20260417_rls_fail_closed_hardening_v059.py`` we assert:
+For representative tenant-scoped tables covered by the active Alembic RLS
+hardening chain we assert:
 
 1. A row inserted with ``tenant_id = A`` is visible when
    ``app.tenant_id = A`` is set.
@@ -21,7 +21,6 @@ the static safety net.
 from __future__ import annotations
 
 import uuid
-from pathlib import Path
 from typing import Iterator
 
 import pytest
@@ -36,10 +35,8 @@ from sqlalchemy.exc import InternalError, ProgrammingError  # noqa: E402
 from testcontainers.postgres import PostgresContainer  # noqa: E402
 
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-MIGRATIONS_DIR = REPO_ROOT / "services" / "admin" / "migrations"
-
-# Subset of tables hardened by v059. We don't need to re-verify every one —
+# Subset of tenant-scoped tables covered by the active RLS hardening chain.
+# We don't need to re-verify every one —
 # a representative sample across each source migration is sufficient to
 # prove the pattern is correct. Each entry: (table, required_cols)
 # where required_cols is the minimum INSERT shape needed.
@@ -70,8 +67,7 @@ def _set_tenant_context(conn, tenant_id: uuid.UUID) -> None:
 
 @pytest.fixture(scope="module")
 def pg_engine() -> Iterator[Engine]:
-    """Spin up a disposable PostgreSQL container, apply the relevant
-    migrations up to and including v059, yield an engine."""
+    """Spin up a disposable PostgreSQL container and apply a focused RLS fixture."""
     try:
         container = PostgresContainer("postgres:16", driver="psycopg")
         container.start()
@@ -85,7 +81,7 @@ def pg_engine() -> Iterator[Engine]:
         engine = create_engine(url, future=True)
 
         _bootstrap_schema(engine)
-        _apply_v059_pattern(engine)
+        _apply_rls_hardening_pattern(engine)
         yield engine
     finally:
         engine.dispose()
@@ -145,9 +141,9 @@ def _bootstrap_schema(engine: Engine) -> None:
             conn.execute(text(f"GRANT SELECT ON {tbl} TO authenticated"))
 
 
-def _apply_v059_pattern(engine: Engine) -> None:
+def _apply_rls_hardening_pattern(engine: Engine) -> None:
     """Apply the get_tenant_context() helper + hardened policies +
-    FORCE RLS on the sample tables. Mirrors the v059 migration shape
+    FORCE RLS on the sample tables. Mirrors the active hardening shape
     for the subset of tables we test."""
     with engine.begin() as conn:
         conn.execute(text("""

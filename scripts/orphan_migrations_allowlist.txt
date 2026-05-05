@@ -1,36 +1,12 @@
-# Orphan migrations allowlist — grandfathered entries only.
+# Orphan migrations allowlist — zero-state guard.
 #
-# These files exist today but do NOT run on Railway (Flyway is dead;
-# abandoned_migrations_* were quarantined during the 2026-04-20
-# consolidation incident). Every entry is tech debt with a latent
-# risk of becoming a prod 500.
+# This file intentionally contains no non-comment entries. Raw Flyway-style
+# service migrations and quarantined abandoned Alembic files are not part of
+# the active Railway/Alembic deploy path and must not be reintroduced.
 #
-# To shrink the list:
-#   1. Forward-port the DDL to a new alembic migration (idempotent)
-#      OR verify the file is dead code.
-#   2. Delete the file from disk.
-#   3. Delete its line from this allowlist.
+# If this file ever gains a path entry, scripts/check_orphan_migrations.py
+# fails CI. Forward-port required DDL through alembic/versions/ instead.
 #
-# Tracked in meta-issue: #1876
-# Do not add new entries without a linked issue. See
+# Burned down in meta-issue: #2004.
+# Do not add new entries. See
 # scripts/check_orphan_migrations.py for the guard.
-
-services/admin/migrations/V12__production_compliance_init.sql
-services/admin/migrations/V14__tax_credit_tables.sql
-services/admin/migrations/V15__form_autofill_tables.sql
-services/admin/migrations/V16__classification_tables.sql
-services/admin/migrations/V17__paperwork_visa_tables.sql
-services/admin/migrations/V18__audit_provenance_tables.sql
-services/admin/migrations/V25__migrate_pcos_to_entertainment_db.sql
-services/admin/migrations/V26__deprecate_sessions_table.sql
-services/admin/migrations/V27_5__add_tenant_id_to_pcos_tables.sql
-services/admin/migrations/V27__rls_core_security_tables.sql
-services/admin/migrations/V28_5__fix_rls_fail_closed.sql
-services/admin/migrations/V28__rls_pcos_vertical_tables.sql
-services/admin/migrations/V29__jwt_rls_integration.sql
-services/admin/migrations/V30__audit_logs_tamper_evident.sql
-services/admin/migrations/V31__fsma_204_infrastructure.sql
-services/admin/migrations/V39__supplier_portal_tables.sql
-services/admin/migrations/V3__tenant_isolation.sql
-services/admin/migrations/V7__create_compliance_status.sql
-services/ingestion/migrations/V001__ingestion_schema.sql

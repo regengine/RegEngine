@@ -78,14 +78,13 @@ export ADMIN_DATABASE_URL="$DATABASE_URL"
 export INGESTION_DATABASE_URL="$DATABASE_URL"
 export COMPLIANCE_DATABASE_URL="$DATABASE_URL"
 
-bash scripts/railway/run_phase1a_migrations.sh
+alembic upgrade head
 ```
 
 What this executes:
-- `services/admin/migrations/V*.sql`
-- `services/ingestion/migrations/V*.sql`
-- `migrations/V*.sql` (FSMA persistence migration lives here)
-- `services/compliance/migrations/V*.sql`
+- The repository Alembic chain under `alembic/versions/`
+- Embedded SQL sources under `alembic/sql/`
+- Active DDL forward-ported from retired service-level migration files
 
 Confirm Alembic v073 is applied before allowing design-partner data through
 Inflow Workbench production evidence mode:

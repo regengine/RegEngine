@@ -22,7 +22,6 @@ FORBIDDEN_KEYWORDS = [
 EXCLUDED_FILES = [
     "services/admin/seeds/healthcare_demo.py", # Explicitly allows mock data for demos
     "scripts/security/scan_phi.py", # The scanner itself
-    "services/admin/migrations/V12__production_compliance_init.sql" # Production/Film Vertical (Employee PII, not Patient PHI)
 ]
 
 def scan_file(file_path: Path) -> List[str]:
