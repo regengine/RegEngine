@@ -104,7 +104,7 @@ describe('LoginPage', () => {
         it('renders return to public site link', () => {
             render(<LoginPage />);
 
-            const link = screen.getByRole('link', { name: /return to regengine\.com/i });
+            const link = screen.getByRole('link', { name: /return to regengine\.co/i });
             expect(link).toBeInTheDocument();
             expect(link).toHaveAttribute('href', '/');
         });

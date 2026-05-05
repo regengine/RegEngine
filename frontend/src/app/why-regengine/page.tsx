@@ -465,10 +465,10 @@ HTTP 201
                     <div className="grid md:grid-cols-2 gap-8 items-center">
                         <div>
                             <h3 className="text-2xl sm:text-3xl font-bold text-[var(--re-text-primary)] mb-4">
-                                48 Hours to FDA-Ready Compliance
+                                48 Hours to Retailer-Ready Onboarding
                             </h3>
                             <p className="text-re-text-secondary mb-4 leading-relaxed">
-                                When a recall hits, every hour matters. RegEngine gets you from zero to first CTE export in 48 hours. No integration services. No custom dev. Just upload, validate, export.
+                                When a recall hits, every hour matters. RegEngine gets you from signup to mapped supplier data and retailer-readiness review in 48 hours. Once records are mapped, FDA-ready exports build in under 12 minutes.
                             </p>
                             <p className="text-re-text-tertiary text-sm mb-6">
                                 Competitors average 3–6 months to first export. Your supply chain can't wait that long.

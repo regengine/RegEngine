@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""CI guard: prevent new orphan migrations from being introduced.
+"""CI guard: keep orphan migrations at zero.
 
 RegEngine had two categories of "ghost" migrations that drifted prod DB
 state away from the code's expectations:
@@ -16,19 +16,16 @@ state away from the code's expectations:
    others not yet surfaced.
 
 This guard:
-- Lists every currently-tracked orphan file as a grandfathered allowlist
-  (``scripts/orphan_migrations_allowlist.txt``).
-- Fails CI if any file outside that allowlist appears in either
-  orphan-prone location.
-- Succeeds when an allowlist entry is *removed from the allowlist AND
-  deleted from disk* — that's the incremental cleanup path.
+- Fails CI if any file appears in either orphan-prone location.
+- Fails CI if ``scripts/orphan_migrations_allowlist.txt`` contains any
+  non-comment entry. The file is retained only as documentation of the
+  zero-state contract after #2004.
 
 Usage (local): ``python3 scripts/check_orphan_migrations.py``
 Usage (CI):    same. Non-zero exit fails the step.
 
-Add/remove entries in ``scripts/orphan_migrations_allowlist.txt`` as
-you forward-port or delete files. Keep the allowlist monotonically
-shrinking.
+Forward-port any required DDL through ``alembic/versions/``. Do not add
+new grandfathered entries to ``scripts/orphan_migrations_allowlist.txt``.
 """
 from __future__ import annotations
 
@@ -72,46 +69,40 @@ def main() -> int:
     allowlist = _load_allowlist()
     orphans = _find_orphans()
 
-    new_orphans = sorted(orphans - allowlist)
-    stale_allowlist = sorted(allowlist - orphans)
+    forbidden_allowlist = sorted(allowlist)
 
-    if new_orphans:
-        print("ERROR: new orphan migration file(s) introduced.", file=sys.stderr)
+    if forbidden_allowlist:
+        print("ERROR: orphan migration allowlist entries are no longer permitted.", file=sys.stderr)
+        print(
+            f"{ALLOWLIST_FILE.relative_to(ROOT)} must contain comments only. "
+            "Forward-port required DDL through alembic/versions/ and delete "
+            "the orphan source file.",
+            file=sys.stderr,
+        )
+        for p in forbidden_allowlist:
+            print(f"  forbidden allowlist entry: {p}", file=sys.stderr)
+        return 1
+
+    if orphans:
+        print("ERROR: orphan migration file(s) introduced.", file=sys.stderr)
         print(
             "These are not executed by the Railway alembic runner — every "
             "column/table added here is a latent 500 in prod (#1864, #1872).",
             file=sys.stderr,
         )
-        for p in new_orphans:
-            print(f"  new orphan: {p}", file=sys.stderr)
+        for p in sorted(orphans):
+            print(f"  orphan: {p}", file=sys.stderr)
         print(
             "\nFix options:\n"
             "  (a) Forward-port the DDL to a new alembic migration in "
             "alembic/versions/ (idempotent IF NOT EXISTS pattern) and "
             "delete this file.\n"
-            "  (b) If the DDL is dead code, delete the file outright.\n"
-            "  (c) Grandfather it by adding the path to "
-            f"{ALLOWLIST_FILE.relative_to(ROOT)} — only if forward-port "
-            "is tracked in a linked issue.",
+            "  (b) If the DDL is dead code, delete the file outright.",
             file=sys.stderr,
         )
         return 1
 
-    if stale_allowlist:
-        print("ERROR: allowlist contains entries for files that no longer exist.", file=sys.stderr)
-        print(
-            "The allowlist must shrink as files are forward-ported or "
-            "deleted. Remove these stale entries so the guard tightens.",
-            file=sys.stderr,
-        )
-        for p in stale_allowlist:
-            print(f"  stale allowlist entry: {p}", file=sys.stderr)
-        return 1
-
-    print(
-        f"OK — {len(orphans)} orphan file(s), all grandfathered. "
-        f"Allowlist is clean. Target: 0."
-    )
+    print("OK — 0 orphan migration file(s); allowlist is comments-only.")
     return 0
 
 

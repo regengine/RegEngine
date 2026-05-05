@@ -27,6 +27,7 @@ describe("HomePage Compliance OS foundation", () => {
   it("uses compliance-specific metrics instead of generic SaaS proof", () => {
     render(<HomePage />);
 
+    expect(screen.getByText("Demo workspace · sample data")).toBeInTheDocument();
     expect(screen.getByText("FTL coverage")).toBeInTheDocument();
     expect(screen.getByText("KDE completeness")).toBeInTheDocument();
     expect(screen.getByText("Records with full provenance")).toBeInTheDocument();

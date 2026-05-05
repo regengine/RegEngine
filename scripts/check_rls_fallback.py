@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """CI guard — reject new RLS policies that fall back to the sandbox tenant UUID.
 
-Scans migration files (both the raw-SQL `services/*/migrations/` and the
-alembic `alembic/versions/` directories) for the fail-open pattern:
+Scans active Alembic migration files and any remaining service migration
+helpers for the fail-open pattern:
 
     USING (tenant_id = COALESCE(
         NULLIF(current_setting('app.tenant_id', TRUE), '')::UUID,
@@ -13,10 +13,8 @@ and for the silently-fail-open variant:
 
     USING (tenant_id = COALESCE(current_setting('app.tenant_id', TRUE)::UUID, tenant_id))
 
-Legacy migrations (V12–V28) are grandfathered — they are superseded by the
-v059 migration which rewrites every policy via ``get_tenant_context()``.
-The guard's purpose is to prevent the pattern from reappearing in NEW
-migrations.
+Legacy service-level Flyway migrations were removed in #2004. The guard's
+purpose is to prevent the pattern from reappearing in active migrations.
 
 Exit code 0 = clean. Non-zero = fail-open pattern detected in a
 non-grandfathered file (or an unexpected file).
@@ -39,28 +37,8 @@ SCAN_DIRS = [
     REPO_ROOT / "alembic" / "versions",
 ]
 
-# Files that are allowed to keep the pattern (historical migrations already
-# superseded by v059). These are the origin of the bug — rewriting them in
-# place would break idempotency for environments that have already run
-# them. The fix migration (v059) rebuilds the policies.
-GRANDFATHERED = {
-    # Admin raw-SQL migrations that defined the fail-open policies.
-    # Superseded by alembic/versions/20260417_rls_fail_closed_hardening_v059.py.
-    "services/admin/migrations/V3__tenant_isolation.sql",
-    "services/admin/migrations/V12__production_compliance_init.sql",
-    "services/admin/migrations/V14__tax_credit_tables.sql",
-    "services/admin/migrations/V15__form_autofill_tables.sql",
-    "services/admin/migrations/V16__classification_tables.sql",
-    "services/admin/migrations/V17__paperwork_visa_tables.sql",
-    "services/admin/migrations/V18__audit_provenance_tables.sql",
-    "services/admin/migrations/V27__rls_core_security_tables.sql",
-    "services/admin/migrations/V28__rls_pcos_vertical_tables.sql",
-    "services/admin/migrations/V28_5__fix_rls_fail_closed.sql",  # references UUID in comment
-    "services/admin/migrations/V29__jwt_rls_integration.sql",    # get_user_tenant_id fallback
-    # The fix migration itself references the pattern in its downgrade() —
-    # that's the whole point.
-    "alembic/versions/20260417_rls_fail_closed_hardening_v059.py",
-}
+# No active migration file is allowed to keep the fail-open pattern.
+GRANDFATHERED: set[str] = set()
 
 FALLBACK_UUID = "00000000-0000-0000-0000-000000000001"
 
@@ -148,9 +126,8 @@ def main() -> int:
         print(
             "\nRLS fallback-UUID pattern detected in a non-grandfathered file.\n"
             "Every new RLS policy MUST use `get_tenant_context()` instead of\n"
-            "COALESCE-to-fallback. See #1091 and\n"
-            "alembic/versions/20260417_rls_fail_closed_hardening_v059.py\n"
-            "for the approved pattern."
+            "COALESCE-to-fallback. See #1091 and the active Alembic RLS\n"
+            "hardening migrations for the approved fail-closed pattern."
         )
         return 1
     print("\nOK — no fail-open RLS patterns in non-grandfathered migrations.")

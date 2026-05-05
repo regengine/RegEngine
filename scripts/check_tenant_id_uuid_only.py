@@ -60,13 +60,8 @@ GRANDFATHERED = {
     "alembic/versions/20260420_eaba6af7ae2c_v060_dlq_replay_columns.py",
     "alembic/versions/20260422_85cebda8e7f7_v063_task_queue.py",
     "alembic/versions/20260424_e9f0a1b2c3d4_v067_tenant_id_uuid_standardization.py",
-    # V29 declares ``jwt_tenant_id TEXT`` as a function-local variable
-    # (not a column) before casting to UUID. Pattern in the file matches
-    # our regex but is structurally fine.
-    "services/admin/migrations/V29__jwt_rls_integration.sql",
-    # Quarantined incident files — kept under abandoned_migrations_*
-    # directories with their original content. Not active in any
-    # deploy path.
+    # Quarantined incident files, if present in historical checkouts, are
+    # skipped by path below. They are not active in any deploy path.
 }
 
 # Patterns: ``tenant_id TEXT`` (case-insensitive), ``tenant_id VARCHAR(36)``,

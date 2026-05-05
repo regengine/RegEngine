@@ -351,10 +351,10 @@ class SupplierFunnelEventModel(Base):
 class ReviewItemModel(Base):
     """Database model for review queue items with tenant isolation.
 
-    tenant_id is NOT NULL as of migration v059 (fix for #1389) -- rows
+    tenant_id is NOT NULL in the Alembic migration chain (fix for #1389) -- rows
     without a tenant would otherwise leak across every tenant in
     ``list_hallucinations`` when the caller's API key has no tenant
-    binding. See `20260417_review_items_tenant_not_null_v059.py`.
+    binding.
     """
 
     __tablename__ = "review_items"
@@ -409,4 +409,3 @@ class SessionModel(Base):
         Index("ix_sessions_refresh_token_hash", "refresh_token_hash"),
         Index("ix_sessions_family_id", "family_id"),
     )
-
