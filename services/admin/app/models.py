@@ -21,7 +21,7 @@ class Tenant(BaseModel):
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 
     class Config:
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "name": "Example Corp",
                 "slug": "example-corp",
@@ -43,7 +43,7 @@ class User(BaseModel):
     last_login_at: Optional[datetime] = None  # Added by migration v053
 
     class Config:
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "email": "user@example.com",
                 "is_sysadmin": False,
@@ -62,7 +62,7 @@ class Role(BaseModel):
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
     class Config:
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "name": "Compliance Manager",
                 "permissions": ["compliance.read", "compliance.write"],
@@ -109,7 +109,7 @@ class ReviewItem(BaseModel):
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 
     class Config:
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "tenant_id": "550e8400-e29b-41d4-a716-446655440000",
                 "document_id": "doc_001",
@@ -138,7 +138,7 @@ class APIKeyDB(BaseModel):
     last_used_at: Optional[datetime] = None
 
     class Config:
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "tenant_id": "550e8400-e29b-41d4-a716-446655440000",
                 "name": "Production API Key",
@@ -163,7 +163,7 @@ class AssessmentResult(BaseModel):
     assessed_by: Optional[str] = None
 
     class Config:
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "tenant_id": "550e8400-e29b-41d4-a716-446655440000",
                 "product_id": "romaine-lettuce-12ct",
@@ -191,7 +191,7 @@ class TenantOverride(BaseModel):
     notes: Optional[str] = None
 
     class Config:
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "tenant_id": "550e8400-e29b-41d4-a716-446655440000",
                 "provision_hash": "abc123def456",

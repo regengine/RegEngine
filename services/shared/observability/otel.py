@@ -16,7 +16,6 @@ from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExport
 from opentelemetry.exporter.otlp.proto.grpc._log_exporter import OTLPLogExporter
 from opentelemetry.sdk._logs import LoggerProvider, LoggingHandler
 from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
-from opentelemetry.trace import NoOpTracerProvider
 from fastapi import FastAPI
 import os
 import structlog
@@ -32,6 +31,28 @@ def _otel_enabled() -> bool:
     don't produce noisy gRPC connection errors to otel-collector.
     """
     return os.getenv("ENABLE_OTEL", "false").lower() == "true"
+
+
+def _tracer_provider_already_configured() -> bool:
+    get_provider = getattr(trace, "get_tracer_provider", None)
+    if get_provider is None:
+        return False
+
+    try:
+        provider = get_provider()
+    except Exception:
+        return False
+
+    return type(provider).__name__ != "ProxyTracerProvider"
+
+
+def _set_tracer_provider_if_unset(trace_provider: TracerProvider, service_name: str) -> bool:
+    if _tracer_provider_already_configured():
+        logger.info("otel_tracer_provider_already_configured", service=service_name)
+        return False
+
+    trace.set_tracer_provider(trace_provider)
+    return True
 
 
 def get_shared_resource(service_name: str):
@@ -86,7 +107,6 @@ def _instrument_downstream_clients() -> None:
 def add_observability(app: FastAPI, service_name: str):
     """Unified entry point for FastAPI OTel (Tracing + Baggage + Logs)."""
     if not _otel_enabled():
-        trace.set_tracer_provider(NoOpTracerProvider())
         logger.info("otel_disabled", service=service_name)
         return
 
@@ -97,9 +117,9 @@ def add_observability(app: FastAPI, service_name: str):
         # 1. Tracing
         sampling_rate = float(os.getenv("OTEL_TRACE_SAMPLING_RATE", "0.1"))
         trace_provider = TracerProvider(sampler=TraceIdRatioBased(sampling_rate), resource=resource)
-        trace.set_tracer_provider(trace_provider)
-        trace_exporter = OTLPSpanExporter(endpoint=endpoint)
-        trace_provider.add_span_processor(BatchSpanProcessor(trace_exporter))
+        if _set_tracer_provider_if_unset(trace_provider, service_name):
+            trace_exporter = OTLPSpanExporter(endpoint=endpoint)
+            trace_provider.add_span_processor(BatchSpanProcessor(trace_exporter))
 
         # 2. Logging (OTLP)
         try:
@@ -118,7 +138,6 @@ def add_observability(app: FastAPI, service_name: str):
 def setup_standalone_observability(service_name: str):
     """Setup OTel for workers and consumers (no FastAPI app)."""
     if not _otel_enabled():
-        trace.set_tracer_provider(NoOpTracerProvider())
         logger.info("otel_disabled", service=service_name)
         return trace.get_tracer(service_name)
 
@@ -129,9 +148,9 @@ def setup_standalone_observability(service_name: str):
         # 1. Tracing
         sampling_rate = float(os.getenv("OTEL_TRACE_SAMPLING_RATE", "0.1"))
         trace_provider = TracerProvider(sampler=TraceIdRatioBased(sampling_rate), resource=resource)
-        trace.set_tracer_provider(trace_provider)
-        trace_exporter = OTLPSpanExporter(endpoint=endpoint)
-        trace_provider.add_span_processor(BatchSpanProcessor(trace_exporter))
+        if _set_tracer_provider_if_unset(trace_provider, service_name):
+            trace_exporter = OTLPSpanExporter(endpoint=endpoint)
+            trace_provider.add_span_processor(BatchSpanProcessor(trace_exporter))
 
         # 2. Logging (OTLP)
         try:
