@@ -82,7 +82,15 @@ def _ensure_stubs():
 
     sdk_e = sys.modules["opentelemetry.sdk.trace.export"]
     if not hasattr(sdk_e, "BatchSpanProcessor"):
-        sdk_e.BatchSpanProcessor = type("BatchSpanProcessor", (), {"__init__": lambda s, e: None})
+        sdk_e.BatchSpanProcessor = type(
+            "BatchSpanProcessor",
+            (),
+            {
+                "__init__": lambda s, e: None,
+                "shutdown": lambda s: None,
+                "force_flush": lambda s, timeout_millis=None: True,
+            },
+        )
 
     sdk_s = sys.modules["opentelemetry.sdk.trace.sampling"]
     if not hasattr(sdk_s, "TraceIdRatioBased"):
@@ -226,6 +234,45 @@ class TestAddObservabilityCallsInstrumentation:
         otel_mod.add_observability(FastAPI(), "svc")
 
         assert not called, "_instrument_downstream_clients must not be called when OTel is off"
+
+    def test_disabled_mode_does_not_reset_global_tracer_provider(self, monkeypatch):
+        monkeypatch.setenv("ENABLE_OTEL", "false")
+        otel_mod = _load_fresh_otel_module()
+        set_tracer_provider = MagicMock()
+        monkeypatch.setattr(
+            otel_mod.trace,
+            "set_tracer_provider",
+            set_tracer_provider,
+            raising=False,
+        )
+
+        from fastapi import FastAPI
+        otel_mod.add_observability(FastAPI(), "svc")
+
+        set_tracer_provider.assert_not_called()
+
+    def test_existing_tracer_provider_is_not_overridden(self, monkeypatch):
+        _enable_otel(monkeypatch)
+        otel_mod = _load_fresh_otel_module()
+        set_tracer_provider = MagicMock()
+        monkeypatch.setattr(
+            otel_mod.trace,
+            "get_tracer_provider",
+            MagicMock(return_value=object()),
+            raising=False,
+        )
+        monkeypatch.setattr(
+            otel_mod.trace,
+            "set_tracer_provider",
+            set_tracer_provider,
+            raising=False,
+        )
+        otel_mod._instrument_downstream_clients = lambda: None
+
+        from fastapi import FastAPI
+        otel_mod.add_observability(FastAPI(), "svc")
+
+        set_tracer_provider.assert_not_called()
 
 
 # ---------------------------------------------------------------------------

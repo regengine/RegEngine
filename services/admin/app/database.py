@@ -39,6 +39,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 logger = structlog.get_logger("admin-db")
 
+_ADMIN_DB_INIT_LOCK_ID = 2026050402
 _LOCAL_FALLBACK_ENVS = {"development", "dev", "test", "local"}
 _CLOUD_ENV_MARKERS = (
     "RAILWAY_ENVIRONMENT",
@@ -211,7 +212,11 @@ def init_db() -> None:
 
     # Create RLS helper functions in Admin DB (use CREATE OR REPLACE to
     # avoid DROP errors when columns have DEFAULT dependencies on these fns)
-    with _engine.connect() as conn:
+    with _engine.begin() as conn:
+        conn.execute(
+            text("SELECT pg_advisory_xact_lock(:lock_id)"),
+            {"lock_id": _ADMIN_DB_INIT_LOCK_ID},
+        )
         conn.execute(text("""
             CREATE OR REPLACE FUNCTION set_tenant_context(tenant_id text) RETURNS void AS $$
             BEGIN
@@ -246,7 +251,6 @@ def init_db() -> None:
             END;
             $$ LANGUAGE plpgsql;
         """))
-        conn.commit()
     logger.info("database_tables_initialized", dialect="postgresql")
 
 
@@ -296,4 +300,3 @@ async def get_async_session() -> AsyncIterator[Session]:
     finally:
         session.rollback()
         session.close()
-

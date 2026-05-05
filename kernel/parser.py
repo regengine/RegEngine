@@ -5,6 +5,8 @@ import os
 import re
 from typing import Any, Dict, List, Optional
 
+os.environ.setdefault("USER_AGENT", "RegEngine/1.0 (+https://regengine.com)")
+
 # Note: These imports require langchain, pypdf, docx2txt, and langchain-groq to be installed
 try:
     # Try modern namespace (0.1.0+)

@@ -13,6 +13,8 @@ import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
 
+os.environ.setdefault("USER_AGENT", "RegEngine/1.0 (+https://regengine.com)")
+
 # ── Path bootstrap ───────────────────────────────────────────────
 # Ensure services/ and services/shared are importable
 _APP_DIR = Path(__file__).resolve().parent
