@@ -16,7 +16,7 @@ import json
 import time
 import uuid
 from types import SimpleNamespace
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -285,12 +285,15 @@ def test_resolve_tenant_returns_tid_on_success():
     from services.admin.app.system_routes import _resolve_tenant
 
     db = MagicMock()
-    db.execute.return_value.fetchone.return_value = (
-        "11111111-1111-1111-1111-111111111111",
-    )
-    assert (
-        _resolve_tenant(db) == "11111111-1111-1111-1111-111111111111"
-    )
+    tenant_id = uuid.UUID("11111111-1111-1111-1111-111111111111")
+
+    with patch(
+        "services.admin.app.system_routes.TenantContext.get_tenant_context",
+        return_value=tenant_id,
+    ) as mock_get_tenant_context:
+        assert _resolve_tenant(db) == str(tenant_id)
+
+    mock_get_tenant_context.assert_called_once_with(db)
 
 
 def test_resolve_tenant_does_not_fall_back_to_demo_uuid():
