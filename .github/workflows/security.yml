@@ -221,9 +221,24 @@ jobs:
           # Advisory-only while EPIC-A rollout is in flight. Emits findings
           # to the log but does not fail the build. Each finding corresponds
           # to a call site that an EPIC-A child issue is migrating to
-          # resolve_tenant_context(). Promote to --error (blocking) once
-          # the open EPIC-A children under label `epic-a-tenant-trust` reach
-          # zero. See services/shared/tenant_context.py.
+          # resolve_tenant_context(). See services/shared/tenant_context.py.
+          #
+          # PROMOTION STATUS (2026-05-06): the `epic-a-tenant-trust` label is
+          # at zero open issues, BUT the scan still finds 22 violations (13
+          # `tenant-id-from-request-body`, 9 `tenant-id-from-query-string`)
+          # across 14 service files. Label-zero ≠ scan-zero. The violations
+          # below need migration to resolve_tenant_context() before this
+          # step can be promoted to --error:
+          #   services/ingestion/app/authz.py (×5)
+          #   services/graph/scripts/fsma_sync_worker.py (×3)
+          #   services/ingestion/app/subscription_gate.py (×2)
+          #   services/nlp/app/routes.py (×2)
+          #   services/admin/app/{auth/confirm_router,dependencies,review_consumer}.py (×3)
+          #   services/graph/app/consumers/fsma_consumer.py
+          #   services/ingestion/app/{notification_prefs,settings,supplier_portal}.py
+          #   services/ingestion/app/stripe_billing/{customers,routes,webhooks}.py
+          # Promote to --error (drop the trailing `|| true`) once the scan
+          # returns 0 results.
           semgrep --config=.semgrep/tenant-trust.yaml . \
             --json --output semgrep-tenant-trust.json || true
           # Summary line for reviewers (count by rule).
@@ -363,9 +378,11 @@ jobs:
         run: |
           # Install from the root requirements.lock (pip-compile output; #1139).
           # Falls back silently if the file isn't present so tenant-isolation
-          # tests still run on branches predating this migration.
+          # tests still run on branches predating this migration. If the file
+          # IS present, hash-verified install must succeed — fail loud on
+          # hash mismatch or missing dep instead of silently swallowing.
           if [ -f requirements.lock ]; then
-            pip install --require-hashes -r requirements.lock || true
+            pip install --require-hashes -r requirements.lock
           fi
           pip install pytest httpx pytest-json-report pytest-asyncio requests sqlalchemy psycopg2-binary
 
