@@ -50,7 +50,7 @@ export function MetricsOverviewWidget() {
           <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0" />
           <span>
             {systemHealthy
-              ? "Metrics temporarily unavailable — retrying."
+              ? "Sample data shown — connect a supplier feed to see live metrics."
               : "Backend services unreachable — data will appear once services are connected."}
           </span>
         </div>
