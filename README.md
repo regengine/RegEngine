@@ -223,7 +223,9 @@ These are current repo facts, not speculation:
 
 - The codebase still contains both consolidated-monolith wiring and legacy service entrypoints.
 - Legacy/orphan migration files still exist and are guarded by an allowlist. See [scripts/orphan_migrations_allowlist.txt](scripts/orphan_migrations_allowlist.txt).
-- A live ORM-to-database type assertion startup check is not implemented yet.
+- A live ORM-to-database type assertion startup check now runs during startup for
+  the admin ORM/schema path; extend that coverage deliberately if more ORM
+  surfaces become part of the production contract.
 - Rule failures are not universally blocking unless the relevant enforcement mode is enabled and the route supports it.
 - Some architecture documentation is older than the current Dockerfile/server wiring; verify against code before using docs as operational truth.
 - Neo4j, Redis, Redpanda/Kafka-compatible code paths exist, but the default local dev compose file starts only PostgreSQL.
@@ -231,7 +233,7 @@ These are current repo facts, not speculation:
 
 ## Documentation Map
 
-- [ARCHITECTURE.md](ARCHITECTURE.md) - architecture notes and debt register; verify stale sections against code and CI.
+- [ARCHITECTURE.md](ARCHITECTURE.md) - current runtime shape and debt register.
 - [CURRENT_SYSTEM_MAP.md](CURRENT_SYSTEM_MAP.md) - system map.
 - [ASYNC_PROCESSES.md](ASYNC_PROCESSES.md) - async and background processing notes.
 - [CANONICAL_OWNERSHIP.md](CANONICAL_OWNERSHIP.md) - module ownership notes.
