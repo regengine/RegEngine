@@ -373,14 +373,11 @@ def test_export_denied_cross_tenant(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_export_denied_cross_tenant_via_header(monkeypatch: pytest.MonkeyPatch) -> None:
     """Sibling to test_export_denied_cross_tenant covering the ``X-Tenant-ID``
-    header as the tenant-carrier.
+    header as the tenant-carrier instead of the query param.
 
-    EPIC-A #1651 update: ``_requested_tenant_context`` now reads ONLY from
-    headers (the query-string fallback was removed because Semgrep rule
-    ``tenant-id-from-query-string`` correctly flagged it as untrustworthy).
-    A request with ``?tenant_id=t-a`` AND ``X-Tenant-ID: t-b`` no longer
-    raises 400 'Conflicting tenant context' — the query is silently dropped
-    and the header (t-b) drives the cross-tenant 403.
+    ``_requested_tenant_context`` in authz.py accepts either source; the
+    cross-tenant check must fire on either. Without this test, a caller
+    could circumvent the query-param check by switching to a header.
     """
     app = FastAPI()
     app.include_router(fda_router)
@@ -406,20 +403,18 @@ def test_export_denied_cross_tenant_via_header(monkeypatch: pytest.MonkeyPatch) 
         response = test_client.get(
             "/api/v1/fda/export",
             params={
-                # Query tenant_id is silently dropped (EPIC-A #1651);
-                # the header drives the cross-tenant detection.
+                # Query and header disagree — _requested_tenant_context
+                # rejects the conflict before even reaching the tenant check.
                 "tenant_id": tenant_a,
                 "tlc": "TLC-2026-001",
             },
             headers={"X-Tenant-ID": tenant_b},
         )
 
-    # 403 (tenant mismatch) is the only acceptable outcome now: query is
-    # ignored, header asserts tenant_b, principal is tenant_a → cross-tenant
-    # block. The legacy 400 'Conflicting tenant context' path is unreachable
-    # because the query read was removed. The important negative is that
-    # the request MUST NOT produce a 200 with tenant B's data.
-    assert response.status_code == 403, (
-        f"Cross-tenant access must be rejected but got {response.status_code}: "
+    # Either 400 (conflicting tenant context) or 403 (tenant mismatch) is
+    # acceptable — both refuse cross-tenant access. The important negative
+    # is that the request MUST NOT produce a 200 with tenant B's data.
+    assert response.status_code in (400, 403), (
+        f"Conflicting tenant context must be rejected but got {response.status_code}: "
         f"{response.text}"
     )

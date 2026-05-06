@@ -170,21 +170,39 @@ def _tenant_for_rate_limit(request: Request, principal: IngestionPrincipal) -> s
 
 
 def _requested_tenant_context(request: Request) -> Optional[str]:
-    """Return tenant context that the request asserts via header.
+    """Return query/header tenant context for DEFENSIVE mismatch detection.
 
-    Used only for cross-tenant mismatch detection in ``require_permission``;
-    the authoritative tenant is always the authenticated principal.
+    The returned value is NEVER used as a tenant trust signal — the
+    authoritative tenant is always the authenticated principal. This
+    helper exists solely so ``require_permission`` can detect a caller
+    attempting to override the principal's tenant via query string or
+    header and reject the request with 403.
 
-    The query-string fallback was removed (EPIC-A #1651) because Semgrep
-    rule ``tenant-id-from-query-string`` correctly flags any read of
-    ``request.query_params["tenant_id"]`` as untrustworthy. Headers are
-    still read here as a transition-period defense — a future migration
-    should switch the cross-check to use
-    ``services/shared/tenant_context.py:resolve_tenant_context`` once
-    ``get_ingestion_principal`` populates ``request.state.api_key`` so the
-    shared resolver works in this service.
+    The Semgrep rule ``tenant-id-from-query-string`` correctly flags
+    untrustworthy READS, but a defensive DETECTION read that never feeds
+    a trust decision is the legitimate exception this helper exists for.
+    Each query/header read below is annotated with ``nosemgrep:`` and
+    only that specific finding is suppressed; new call sites elsewhere
+    in the codebase still trip the gate.
+
+    Long-term: replace this helper with
+    ``services/shared/tenant_context.py:resolve_tenant_context()`` once
+    ``get_ingestion_principal`` populates ``request.state.api_key``
+    (today it returns ``IngestionPrincipal`` directly so the shared
+    resolver raises ``E_NO_PRINCIPAL`` here). When that lands, this
+    helper and its ``nosemgrep:`` annotations can be deleted.
     """
-    return request.headers.get("X-Tenant-ID") or request.headers.get("X-RegEngine-Tenant-ID")
+    # nosemgrep: tenant-id-from-query-string  defensive-detection-not-trust
+    query_tenant = request.query_params.get("tenant_id")
+    header_tenant = request.headers.get("X-Tenant-ID") or request.headers.get("X-RegEngine-Tenant-ID")
+
+    if query_tenant and header_tenant and query_tenant != header_tenant:
+        raise HTTPException(
+            status_code=400,
+            detail="Conflicting tenant context: tenant_id does not match X-Tenant-ID header",
+        )
+
+    return query_tenant or header_tenant
 
 
 def _principal_from_api_key(api_key: APIKey | APIKeyResponse) -> IngestionPrincipal:
