@@ -1,97 +1,105 @@
 # RegEngine Architecture
 
+Last verified: 2026-05-06
+
 ## Deployment Model
 
-RegEngine runs as **6 independent microservices** behind a Next.js frontend. Each service has its own Dockerfile, Railway deployment, and test suite.
+RegEngine is deployed as **one consolidated FastAPI app** behind a Next.js
+frontend. The checked-in Railway config builds the repo-root `Dockerfile`, and
+that image starts `server.main:app`.
 
-## Active Services
+The repository still keeps six former service directories because they remain
+useful decomposition seams in the codebase:
 
-| Service | Port | Purpose | Tests |
-|---------|------|---------|-------|
-| `services/admin` | 8400 | Tenant management, API keys, user auth, bulk upload | 15 files |
-| `services/ingestion` | 8002 | Webhook ingestion, CTE/KDE validation, EPCIS normalization | 31 files |
-| `services/compliance` | 8500 | Compliance scoring, rule evaluation, export generation | 2 files |
-| `services/graph` | 8200 | Knowledge graph, identity resolution, supply chain queries | 15 files |
-| `services/nlp` | 8100 | Document ingestion, regulatory text extraction | 9 files |
-| `services/scheduler` | 8005 | Cron jobs, recall drills, export scheduling | 4 files |
+| Directory | Current role |
+| --- | --- |
+| `services/admin` | tenants, users, roles, MFA, API keys, audit logs, admin routes |
+| `services/ingestion` | webhook, CSV, EPCIS, EDI, sandbox, export, CTE persistence integration |
+| `services/compliance` | compliance validation routes and FSMA rules JSON |
+| `services/graph` | graph and supply-chain query modules |
+| `services/nlp` | regulatory and document extraction modules |
+| `services/scheduler` | scheduled jobs, operational checks, and metrics |
 
-## Shared Code
+## Current Runtime Shape
 
-`services/shared/` contains cross-service utilities (identity resolution, error handling, path setup). Imported by all 6 services (433 import references).
-
-## Frontend
-
-Next.js App Router deployed to Vercel. Browser API calls should use service route handlers such as `/api/admin/[...path]`, `/api/ingestion/[...path]`, `/api/compliance/[...path]`, and `/api/graph/[...path]`. The generic `/api/proxy` route is legacy-only and accepts relative RegEngine API paths only.
+- `server/main.py` mounts routers from the service directories into a single
+  FastAPI process.
+- Legacy entrypoints like `services/ingestion/main.py` still exist for local
+  debugging and compatibility, but they are not the checked-in production
+  deploy target.
+- Production can auto-disable experimental routers unless
+  `ENABLE_EXPERIMENTAL_ROUTERS=true`. See
+  `docs/engineering/ROUTER_SURFACE.md` for the current surface audit.
 
 ## Infrastructure
 
-- **Backend hosting:** Railway (per-service containers)
-- **Frontend hosting:** Vercel
-- **Database:** PostgreSQL (Supabase)
-- **Cache:** Redis
-- **Message queue:** Redpanda (Kafka-compatible)
+- **Backend hosting:** Railway via one monolith container defined by
+  `railway.toml`.
+- **Frontend:** Next.js App Router app in `frontend/` with a separate CI
+  workflow.
+- **Database:** PostgreSQL via `DATABASE_URL`.
+- **Runtime helpers:** Redis is used by rate limiting, session/JWT paths, and
+  task-processing helpers when configured.
+- **Async/event backbone:** the consolidated deploy path uses PostgreSQL-backed
+  task processing via `server/workers/task_processor.py` and
+  `services/shared/task_queue.py`. Legacy Kafka/Redpanda code paths still exist
+  in-tree and should be treated as remediation drift, not the primary deploy
+  contract.
+- **Graph:** Neo4j integration code and health checks exist, but the default
+  local development stack does not start Neo4j.
 
-## Target Architecture
+## Current Architecture Direction
 
-The long-term plan is to consolidate the 6 services into a single monolith, replacing Kafka/Redis with PostgreSQL-native patterns. This consolidation has not started — all services are currently independently deployed and tested.
+- The deployed shape is already consolidated.
+- Current remediation work is about reducing drift between the monolith deploy
+  path and older service-shaped scaffolding in code and docs.
+- The service directories are code-organization boundaries, not proof of six
+  live backend deploys.
+- The production spine remains:
+
+```text
+ingest -> canonicalize -> validate -> persist evidence -> export
+```
 
 ## Dependency Management
 
 ### Backend (Python)
 
-Dependencies use `>=` pins for flexibility during active development.
-Before production freeze, generate locked requirements with `pip-compile`:
+Backend dependencies are managed at the repository root:
 
-```bash
-pip install pip-tools
-for svc in admin compliance graph ingestion nlp scheduler; do
-  pip-compile services/$svc/requirements.txt \
-    --output-file services/$svc/requirements.lock \
-    --strip-extras --no-header
-done
-```
+- `requirements.in` is the human-edited dependency spec.
+- `requirements.lock` is the fully pinned, hash-verified install set used by CI
+  and the production Docker build.
+- `pyproject.toml` declares the supported Python version range.
 
-Current state by service:
-
-| Service | Deps | Pinned | Notes |
-|---------|------|--------|-------|
-| admin | 39 | 4 (OpenTelemetry) | Largest surface after ingestion |
-| ingestion | 57 | 4 (OpenTelemetry) | Most deps — webhook/EPCIS/connector breadth |
-| graph | 35 | 4 (OpenTelemetry) | Neo4j driver, networkx |
-| nlp | 22 | 4 (OpenTelemetry) | Document parsing, spaCy |
-| compliance | 15 | 4 (OpenTelemetry) | Lean — scoring + export only |
-| scheduler | 14 | 0 | Cron jobs — no OTel yet |
-
-All services share common `>=` pins for FastAPI, SQLAlchemy, Pydantic, and Alembic.
-Only OpenTelemetry packages are exact-pinned (`==`) due to cross-package version sensitivity.
+Backend CI and security checks run against the root lockfile. Do not treat old
+service-scoped dependency assumptions as current deploy truth unless a file
+explicitly says it is legacy-only.
 
 ### Frontend (Node.js)
 
-Dependencies are locked via `package-lock.json` (npm).
-`next`, `@sentry/nextjs`, and `@supabase/supabase-js` are pinned to exact versions
-(no `^` or `~`) — bumped manually after testing due to prior production incidents.
+Frontend dependencies are locked via `frontend/package-lock.json`. The Next.js
+application is validated in its own workflow.
 
 ## Known Technical Debt
 
-### Large files (>1,000 lines)
+### Large Modules
 
-These files work correctly but exceed recommended size thresholds. Splitting is tracked for post-funding engineering:
+Representative source modules above 1,000 lines as of 2026-05-06:
 
-| File | Lines | Service | Split strategy |
-|------|-------|---------|----------------|
-| `sandbox_router.py` | 1,576 | Ingestion | Extract sandbox models + validation |
-| `rules_engine.py` | 1,547 | Shared | Split rule types into submodules |
-| `epcis_ingestion.py` | 1,365 | Ingestion | Extract EPCIS parser + validator |
-| `fda_export_router.py` | 1,362 | Ingestion | Extract PDF generator + CSV builder |
-| `fsma_utils.py` | 1,353 | Graph | Extract trace builder + graph queries |
-| `fsma_extractor.py` | 1,344 | NLP | Extract entity resolver + classifier |
-| `cte_persistence.py` | 1,284 | Shared | Extract query builder + batch ops |
-| `identity_resolution.py` | 1,283 | Shared | Extract matcher + scorer |
-| `fsma_recall.py` | 1,203 | Graph | Extract recall simulator + reporter |
-| `stripe_billing.py` | 1,185 | Ingestion | Extract webhook handler + plan mgmt |
-| `audit_logging.py` | 1,069 | Shared | Extract formatters + storage |
-| `edi_ingestion.py` | 1,043 | Ingestion | Extract parser + segment mapper |
-| `canonical_persistence.py` | 1,034 | Shared | Extract query layer + migrations |
-| `compliance.py` | 1,008 | Graph | Extract scoring + export |
+| File | Lines | Area | Likely split direction |
+| --- | ---: | --- | --- |
+| `services/shared/cte_persistence/core.py` | 2041 | shared persistence | extract query builder, batch ops, and verification helpers |
+| `services/shared/identity_resolution/service.py` | 1987 | shared identity resolution | extract matcher, scorer, and orchestration paths |
+| `services/nlp/app/consumer.py` | 1875 | NLP ingestion worker | separate consumer loop, auth, DLQ, and routing concerns |
+| `services/nlp/app/extractors/fsma_extractor.py` | 1664 | NLP extraction | split entity resolution, classifiers, and mapping logic |
+| `services/ingestion/app/webhook_router_v2.py` | 1476 | ingestion API | extract auth, validation, persistence, and response shaping |
+| `services/ingestion/app/fda_export/router.py` | 1294 | export API | separate query, bundle assembly, and format writers |
+| `services/scheduler/main.py` | 1234 | scheduler runtime | split job registration, health, and retention flows |
+| `kernel/reporting/fsma_engine.py` | 1198 | reporting engine | separate scoring, report assembly, and formatting |
+| `services/shared/canonical_persistence/writer.py` | 1155 | shared persistence | extract write-path helpers and transaction orchestration |
+| `services/shared/api_key_store.py` | 1077 | shared auth | split storage adapters from validation helpers |
+| `services/admin/app/metrics.py` | 1053 | admin observability | separate metric definitions from collectors/endpoints |
+| `services/ingestion/app/routes.py` | 1050 | ingestion API | split non-core routes into narrower router modules |
 
-Each file is functional, tested, and production-stable. Splitting is a refactoring task, not a bug fix.
+These are refactor candidates, not proof of broken behavior by themselves.
