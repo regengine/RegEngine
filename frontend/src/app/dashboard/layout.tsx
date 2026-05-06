@@ -78,7 +78,6 @@ const COLLAPSIBLE_SECTIONS: CollapsibleSection[] = [
         key: 'fda-response',
         title: 'Response',
         items: [
-            { label: 'FDA Export', href: '/dashboard/export-jobs', icon: Archive },
             { label: 'Recall Drills', href: '/dashboard/recall-drills', icon: Zap },
             { label: 'Recall Report', href: '/dashboard/recall-report', icon: ShieldCheck },
         ],
