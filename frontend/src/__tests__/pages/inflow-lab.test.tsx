@@ -2,17 +2,25 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
-vi.mock('@/lib/auth-context', () => ({
-    useAuth: vi.fn().mockReturnValue({
-        isAuthenticated: false,
-        isHydrated: true,
-        tenantId: null,
-    }),
-}));
+vi.mock('@/lib/auth-context', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('@/lib/auth-context')>();
+    return {
+        ...actual,
+        useAuth: vi.fn().mockReturnValue({
+            isAuthenticated: false,
+            isHydrated: true,
+            tenantId: null,
+        }),
+    };
+});
 
-vi.mock('@/lib/tenant-context', () => ({
-    useTenant: vi.fn().mockReturnValue({ tenantId: null }),
-}));
+vi.mock('@/lib/tenant-context', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('@/lib/tenant-context')>();
+    return {
+        ...actual,
+        useTenant: vi.fn().mockReturnValue({ tenantId: null }),
+    };
+});
 
 vi.mock('@/lib/fetch-with-csrf', () => ({
     fetchWithCsrf: vi.fn((input: RequestInfo | URL, init?: RequestInit) =>
