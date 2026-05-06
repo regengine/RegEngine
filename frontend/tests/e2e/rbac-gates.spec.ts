@@ -49,8 +49,8 @@ test.describe('RBAC Gates', () => {
         await expect(page).toHaveURL(/\/login/);
 
         // Login form should be visible
-        await expect(page.locator('input[type="email"]')).toBeVisible();
-        await expect(page.locator('input[type="password"]')).toBeVisible();
+        await expect(page.getByRole('textbox', { name: /email address/i }).first()).toBeVisible();
+        await expect(page.getByLabel(/password/i).first()).toBeVisible();
     });
 
     test('Unauthenticated cannot access sysadmin', async ({ page }) => {

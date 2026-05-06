@@ -17,6 +17,8 @@ const UNAUTHENTICATED_AUTH_PATHS = new Set([
     'auth/signup',
     'auth/refresh',
     'auth/register',
+    'auth/accept-invite',
+    'v1/auth/accept-invite',
     // Password reset — caller passes a Supabase recovery token, not a RegEngine JWT.
     // Backend validates it via sb.auth.get_user(); no RegEngine session required.
     'auth/reset-password',

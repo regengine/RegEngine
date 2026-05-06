@@ -274,37 +274,56 @@ def _db_get_integration_profile_summary(tenant_id: str, profile_id: Optional[str
     if not profile_id:
         return None
     db = get_db_safe()
-    if not db:
+    if db:
+        try:
+            db.execute(text("SELECT set_config('app.tenant_id', :tenant_id, true)"), {"tenant_id": tenant_id})
+            row = db.execute(
+                # nosemgrep: avoid-sqlalchemy-text — parameterized with :param
+                text("""
+                    SELECT profile_id, display_name, source_type, default_cte_type, status,
+                           confidence, supplier_name
+                    FROM fsma.supplier_integration_profiles
+                    WHERE tenant_id = CAST(:tenant_id AS uuid)
+                      AND profile_id = :profile_id
+                """),
+                {"tenant_id": tenant_id, "profile_id": profile_id},
+            ).fetchone()
+            if row:
+                return {
+                    "profile_id": row[0],
+                    "display_name": row[1],
+                    "source_type": row[2],
+                    "default_cte_type": row[3],
+                    "status": row[4],
+                    "confidence": float(row[5] or 0),
+                    "supplier_name": row[6],
+                }
+        except Exception as exc:
+            logger.warning("portal_profile_summary_failed portal_profile=%s error=%s", profile_id, str(exc))
+        finally:
+            db.close()
+
+    if not _allow_memory_fallback():
         return None
+
     try:
-        db.execute(text("SELECT set_config('app.tenant_id', :tenant_id, true)"), {"tenant_id": tenant_id})
-        row = db.execute(
-            # nosemgrep: avoid-sqlalchemy-text — parameterized with :param
-            text("""
-                SELECT profile_id, display_name, source_type, default_cte_type, status,
-                       confidence, supplier_name
-                FROM fsma.supplier_integration_profiles
-                WHERE tenant_id = CAST(:tenant_id AS uuid)
-                  AND profile_id = :profile_id
-            """),
-            {"tenant_id": tenant_id, "profile_id": profile_id},
-        ).fetchone()
-        if not row:
+        from .integration_router import _memory_get_profile
+
+        profile = _memory_get_profile(tenant_id, profile_id)
+        if not profile:
             return None
         return {
-            "profile_id": row[0],
-            "display_name": row[1],
-            "source_type": row[2],
-            "default_cte_type": row[3],
-            "status": row[4],
-            "confidence": float(row[5] or 0),
-            "supplier_name": row[6],
+            "profile_id": profile.profile_id,
+            "display_name": profile.display_name,
+            "source_type": profile.source_type,
+            "default_cte_type": profile.default_cte_type,
+            "status": profile.status,
+            "confidence": float(profile.confidence or 0),
+            "supplier_name": profile.supplier_name,
         }
     except Exception as exc:
-        logger.warning("portal_profile_summary_failed portal_profile=%s error=%s", profile_id, str(exc))
+        logger.warning("portal_profile_summary_memory_failed portal_profile=%s error=%s", profile_id, str(exc))
         return None
-    finally:
-        db.close()
 
 
 class CreatePortalLinkRequest(BaseModel):

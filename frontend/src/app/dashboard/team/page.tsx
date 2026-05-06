@@ -87,7 +87,7 @@ export default function TeamPage() {
     const { data: teamData, isLoading: loading, error: teamError, refetch: loadTeam } = useQuery({
         queryKey: ['team', tenantId],
         queryFn: () => apiFetchTeam(tenantId, apiKey || ''),
-        enabled: isLoggedIn && !!tenantId,
+        enabled: isLoggedIn && !!tenantId && !!apiKey,
         retry: false,
     });
 

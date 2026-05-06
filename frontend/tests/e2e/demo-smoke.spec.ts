@@ -3,6 +3,9 @@ import { writeFile } from 'node:fs/promises';
 
 const DEMO_EMAIL = process.env.DEMO_SMOKE_EMAIL || process.env.TEST_USER_EMAIL || '';
 const DEMO_PASSWORD = process.env.DEMO_SMOKE_PASSWORD || process.env.TEST_PASSWORD || '';
+const DEMO_API_KEY = process.env.DEMO_SMOKE_API_KEY || '';
+const DEMO_ADMIN_MASTER_KEY =
+    process.env.DEMO_SMOKE_ADMIN_MASTER_KEY || process.env.ADMIN_MASTER_KEY || '';
 const COMMIT_MODE = process.env.DEMO_SMOKE_COMMIT_MODE || 'preflight';
 const ALLOW_PRODUCTION_EVIDENCE = process.env.DEMO_SMOKE_ALLOW_PRODUCTION_EVIDENCE === 'true'
     || process.env.DEMO_SMOKE_ALLOW_COMMIT === 'true';
@@ -54,6 +57,71 @@ async function csrfHeaders(context: BrowserContext): Promise<Record<string, stri
     };
 }
 
+async function postWithCsrf(
+    page: Page,
+    context: BrowserContext,
+    url: string,
+    data: unknown,
+    extraHeaders: Record<string, string> = {},
+) {
+    return page.request.post(url, {
+        headers: {
+            ...(await csrfHeaders(context)),
+            ...extraHeaders,
+        },
+        data,
+    });
+}
+
+async function bootstrapApiKey(
+    page: Page,
+    context: BrowserContext,
+    tenantId: string,
+    runPrefix: string,
+): Promise<string> {
+    if (DEMO_API_KEY) {
+        await expectJson<JsonObject>(
+            await page.request.post('/api/session', {
+                data: { api_key: DEMO_API_KEY },
+            }),
+            'api key cookie bootstrap',
+        );
+        return DEMO_API_KEY;
+    }
+
+    expect(
+        DEMO_ADMIN_MASTER_KEY,
+        'Set DEMO_SMOKE_API_KEY or ADMIN_MASTER_KEY to provision an ingestion API key for demo smoke.',
+    ).toBeTruthy();
+
+    const created = await expectJson<JsonObject>(
+        await postWithCsrf(
+            page,
+            context,
+            '/api/admin/v1/admin/keys',
+            {
+                name: `${runPrefix} Demo Smoke Key`,
+                tenant_id: tenantId,
+                scopes: ['inflow.read', 'inflow.write', 'webhooks.ingest'],
+            },
+            { 'x-admin-key': DEMO_ADMIN_MASTER_KEY },
+        ),
+        'demo smoke API key create',
+    );
+
+    const apiKey = String(created.api_key || '');
+    expect(apiKey, 'API key creation should return a raw key once').toBeTruthy();
+
+    await expectJson<JsonObject>(
+        await page.request.post('/api/session', {
+            data: { api_key: apiKey },
+        }),
+        'api key cookie bootstrap',
+    );
+
+    return apiKey;
+}
+
 async function expectJson<T>(response: APIResponse, label: string): Promise<T> {
     if (!response.ok()) {
         throw new Error(`${label} failed with ${response.status()}: ${await response.text()}`);
@@ -77,15 +145,14 @@ test.describe('Design-partner demo smoke', () => {
 
         const runPrefix = `demo-smoke-${Date.now()}`;
         const { tenantId } = await login(page);
-        const headers = await csrfHeaders(context);
+        const apiKey = await bootstrapApiKey(page, context, tenantId, runPrefix);
 
         await page.goto('/tools/inflow-lab');
         await expect(page.getByRole('button', { name: /Data feeder/i })).toBeVisible({ timeout: 20_000 });
-        const defaultTenantInput = page.locator('input[value="mock-tenant"]').first();
-        if (await defaultTenantInput.count()) {
-            await defaultTenantInput.fill(tenantId);
+        const tenantInput = page.getByLabel(/^Tenant$/i).first();
+        if (await tenantInput.isVisible()) {
+            await tenantInput.fill(tenantId);
         }
-
         await page.getByRole('button', { name: /Data feeder/i }).click();
         await page.getByLabel('Inbound CSV data').fill(MESSY_SUPPLIER_CSV);
         await page.getByRole('button', { name: /Evaluate data/i }).click();
@@ -107,14 +174,11 @@ test.describe('Design-partner demo smoke', () => {
         ).toBeGreaterThan(0);
 
         const savedRun = await expectJson<JsonObject>(
-            await page.request.post('/api/ingestion/api/v1/inflow-workbench/runs', {
-                headers,
-                data: {
-                    tenant_id: tenantId,
-                    source: 'demo-smoke',
-                    csv: MESSY_SUPPLIER_CSV,
-                    result: sandboxResult,
-                },
+            await postWithCsrf(page, context, '/api/ingestion/api/v1/inflow-workbench/runs', {
+                tenant_id: tenantId,
+                source: 'demo-smoke',
+                csv: MESSY_SUPPLIER_CSV,
+                result: sandboxResult,
             }),
             'workbench run save',
         );
@@ -137,17 +201,14 @@ test.describe('Design-partner demo smoke', () => {
         expect(fixQueue.length).toBeGreaterThan(0);
 
         const commitGate = await expectJson<JsonObject>(
-            await page.request.post('/api/ingestion/api/v1/inflow-workbench/commit-gate', {
-                headers,
-                data: {
-                    mode: COMMIT_MODE,
-                    tenant_id: tenantId,
-                    result: sandboxResult,
-                    authenticated: true,
-                    persisted: true,
-                    provenance_attached: true,
-                    unresolved_fix_count: fixQueue.length,
-                },
+            await postWithCsrf(page, context, '/api/ingestion/api/v1/inflow-workbench/commit-gate', {
+                mode: COMMIT_MODE,
+                tenant_id: tenantId,
+                result: sandboxResult,
+                authenticated: true,
+                persisted: true,
+                provenance_attached: true,
+                unresolved_fix_count: fixQueue.length,
             }),
             'commit gate',
         );
@@ -155,27 +216,24 @@ test.describe('Design-partner demo smoke', () => {
         expect(commitGate.export_eligible).toBe(COMMIT_MODE === 'production_evidence' && fixQueue.length === 0);
 
         const profile = await expectJson<JsonObject>(
-            await page.request.post(`/api/ingestion/api/v1/integrations/profiles/${tenantId}`, {
-                headers,
-                data: {
-                    display_name: `${runPrefix} FreshPack CSV`,
-                    source_type: 'csv',
-                    default_cte_type: 'shipping',
-                    status: 'active',
-                    confidence: 0.91,
-                    supplier_name: `${runPrefix} FreshPack Central`,
-                    notes: 'Created by automated design-partner demo smoke.',
-                    field_mapping: {
-                        cte_type: 'type',
-                        traceability_lot_code: 'lot',
-                        product_description: 'sku',
-                        quantity: 'qty',
-                        unit_of_measure: 'uom',
-                        ship_from_location: 'from',
-                        ship_to_location: 'to',
-                        reference_document: 'bol_number',
-                        timestamp: 'event_time',
-                    },
+            await postWithCsrf(page, context, `/api/ingestion/api/v1/integrations/profiles/${tenantId}`, {
+                display_name: `${runPrefix} FreshPack CSV`,
+                source_type: 'csv',
+                default_cte_type: 'shipping',
+                status: 'active',
+                confidence: 0.91,
+                supplier_name: `${runPrefix} FreshPack Central`,
+                notes: 'Created by automated design-partner demo smoke.',
+                field_mapping: {
+                    cte_type: 'type',
+                    traceability_lot_code: 'lot',
+                    product_description: 'sku',
+                    quantity: 'qty',
+                    unit_of_measure: 'uom',
+                    ship_from_location: 'from',
+                    ship_to_location: 'to',
+                    reference_document: 'bol_number',
+                    timestamp: 'event_time',
                 },
             }),
             'integration profile create',
@@ -184,21 +242,18 @@ test.describe('Design-partner demo smoke', () => {
         expect(profileId).toEqual(expect.stringMatching(/^prof_/));
 
         const preview = await expectJson<JsonObject>(
-            await page.request.post(`/api/ingestion/api/v1/integrations/profiles/${tenantId}/${profileId}/preview`, {
-                headers,
-                data: {
-                    events: [{
-                        type: 'shipping',
-                        lot: 'TLC-DEMO-SMOKE-001',
-                        sku: 'Romaine Lettuce',
-                        qty: 103,
-                        uom: 'cases',
-                        from: 'Salinas Packhouse',
-                        to: 'Bay Area DC',
-                        bol_number: 'BOL-SMOKE-001',
-                        event_time: '2026-04-26T22:41:00Z',
-                    }],
-                },
+            await postWithCsrf(page, context, `/api/ingestion/api/v1/integrations/profiles/${tenantId}/${profileId}/preview`, {
+                events: [{
+                    type: 'shipping',
+                    lot: 'TLC-DEMO-SMOKE-001',
+                    sku: 'Romaine Lettuce',
+                    qty: 103,
+                    uom: 'cases',
+                    from: 'Salinas Packhouse',
+                    to: 'Bay Area DC',
+                    bol_number: 'BOL-SMOKE-001',
+                    event_time: '2026-04-26T22:41:00Z',
+                }],
             }),
             'integration profile preview',
         );
@@ -206,15 +261,12 @@ test.describe('Design-partner demo smoke', () => {
         expect(((preview.events as JsonObject[])[0] || {})._integration_profile_id).toBe(profileId);
 
         const portalLink = await expectJson<JsonObject>(
-            await page.request.post('/api/ingestion/api/v1/portal/links', {
-                headers,
-                data: {
-                    tenant_id: tenantId,
-                    supplier_name: `${runPrefix} FreshPack Central`,
-                    supplier_email: `supplier+${runPrefix}@example.com`,
-                    expires_days: 7,
-                    integration_profile_id: profileId,
-                },
+            await postWithCsrf(page, context, '/api/ingestion/api/v1/portal/links', {
+                tenant_id: tenantId,
+                supplier_name: `${runPrefix} FreshPack Central`,
+                supplier_email: `supplier+${runPrefix}@example.com`,
+                expires_days: 7,
+                integration_profile_id: profileId,
             }),
             'supplier portal link create',
         );
@@ -236,6 +288,7 @@ test.describe('Design-partner demo smoke', () => {
             integration_profile_id: profileId,
             portal_id: portalLink.portal_id,
             portal_path: portalPath,
+            api_key_prefix: apiKey.slice(0, 12),
         });
     });
 });

@@ -263,7 +263,7 @@ function CollapsibleNavSection({
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
     const pathname = usePathname();
     const router = useRouter();
-    const { clearCredentials, demoMode, isAuthenticated, isHydrated } = useAuth();
+    const { demoMode, isAuthenticated, isHydrated, logout } = useAuth();
 
     // ------ Collapsible section state with localStorage persistence ------
     const [expandedSections, setExpandedSections] = React.useState<Record<string, boolean>>({});
@@ -430,7 +430,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                             Onboarding
                         </Link>
                         <button
-                            onClick={() => { clearCredentials(); router.push('/login'); }}
+                            onClick={async () => {
+                                await logout();
+                                router.replace('/login');
+                            }}
                             className="flex items-center justify-center gap-1 flex-1 py-1.5 rounded-md text-[11px] text-[var(--re-text-disabled)] hover:text-destructive hover:bg-destructive/5 transition-colors"
                         >
                             <LogOut className="h-3 w-3" />

@@ -16,6 +16,7 @@ import LoginPage from '@/app/login/page';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
 import { apiClient } from '@/lib/api-client';
+import { createSupabaseBrowserClient, isSupabaseConfigured } from '@/lib/supabase/client';
 
 // Mock Next.js router
 vi.mock('next/navigation', () => ({
@@ -38,6 +39,7 @@ vi.mock('@/lib/api-client', () => ({
 
 // Mock Supabase session sync so login tests stay local and deterministic.
 vi.mock('@/lib/supabase/client', () => ({
+    isSupabaseConfigured: vi.fn(() => true),
     createSupabaseBrowserClient: vi.fn(() => ({
         auth: {
             signInWithPassword: vi.fn().mockResolvedValue({ error: null }),
@@ -76,6 +78,12 @@ describe('LoginPage', () => {
         authState = { clearCredentials: mockClearCredentials, login: mockLogin, user: null, isHydrated: true };
         (useAuth as any).mockReturnValue(authState);
         (apiClient.getOnboardingStatus as any).mockResolvedValue({ is_complete: true });
+        (isSupabaseConfigured as any).mockReturnValue(true);
+        (createSupabaseBrowserClient as any).mockReturnValue({
+            auth: {
+                signInWithPassword: vi.fn().mockResolvedValue({ error: null }),
+            },
+        });
         if (typeof window !== 'undefined' && window.localStorage?.clear) {
             window.localStorage.clear();
         }
@@ -226,6 +234,34 @@ describe('LoginPage', () => {
                     'tenant-123'
                 );
             });
+        });
+
+        it('does not require Supabase session sync when browser Supabase config is absent', async () => {
+            const user = userEvent.setup();
+            const mockResponse = {
+                access_token: 'test-token',
+                user: { id: '123', email: 'test@example.com', is_sysadmin: false },
+                tenant_id: 'tenant-123',
+            };
+
+            (isSupabaseConfigured as any).mockReturnValue(false);
+            (apiClient.login as any).mockResolvedValueOnce(mockResponse);
+
+            render(<LoginPage />);
+
+            await user.type(screen.getByLabelText(/email/i), 'test@example.com');
+            await user.type(screen.getByLabelText(/^password$/i), 'password123');
+            await user.click(screen.getByRole('button', { name: /sign in/i }));
+
+            await waitFor(() => {
+                expect(mockLogin).toHaveBeenCalledWith(
+                    'test-token',
+                    mockResponse.user,
+                    'tenant-123'
+                );
+            });
+            expect(createSupabaseBrowserClient).not.toHaveBeenCalled();
+            expect(mockPush).toHaveBeenCalledWith('/dashboard');
         });
 
         it('redirects to dashboard for regular users', async () => {

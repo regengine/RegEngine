@@ -40,10 +40,74 @@ export default async function globalSetup() {
 
     const adminServiceUrl =
         process.env.ADMIN_SERVICE_URL ||
+        (!isCI ? 'http://localhost:8000' : undefined) ||
         'https://regengine-production.up.railway.app';
 
     const email = process.env.TEST_USER_EMAIL;
     const password = process.env.TEST_PASSWORD;
+    const adminEmail = process.env.TEST_ADMIN_EMAIL;
+    const adminPassword = process.env.TEST_ADMIN_PASSWORD;
+    const hasDistinctAdmin =
+        Boolean(adminEmail && adminPassword) && adminEmail !== email;
+
+    const loginAndReadRole = async (loginEmail: string, loginPassword: string) => {
+        const response = await fetch(`${adminServiceUrl}/auth/login`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: loginEmail, password: loginPassword }),
+        });
+
+        if (!response.ok) {
+            return null;
+        }
+
+        const payload = await response.json().catch(() => null);
+        return {
+            ok: true,
+            isSysadmin: Boolean(payload?.user?.is_sysadmin),
+        };
+    };
+
+    if (hasDistinctAdmin && adminEmail && adminPassword) {
+        console.log(`[globalSetup] Bootstrapping sysadmin test user: ${adminEmail}`);
+
+        try {
+            const response = await fetch(`${adminServiceUrl}/auth/register`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    email: adminEmail,
+                    password: adminPassword,
+                    tenant_name: 'E2E Sysadmin Org',
+                }),
+            });
+
+            if (response.ok) {
+                console.log(`[globalSetup] ✓ Sysadmin test user created: ${adminEmail}`);
+            } else if (response.status === 403) {
+                const existingAdmin = await loginAndReadRole(adminEmail, adminPassword);
+                if (existingAdmin?.ok && existingAdmin.isSysadmin) {
+                    console.log(`[globalSetup] ✓ Sysadmin test user already provisioned: ${adminEmail}`);
+                } else {
+                    const body = await response.text().catch(() => '');
+                    console.warn(
+                        `[globalSetup] ⚠ Could not bootstrap sysadmin test user.\n` +
+                        `  /auth/register returned 403 and login did not confirm a sysadmin account.\n` +
+                        `  Response: ${body}`
+                    );
+                }
+            } else {
+                const body = await response.text().catch(() => '');
+                console.warn(`[globalSetup] ⚠ Sysadmin bootstrap returned ${response.status}: ${body}`);
+            }
+        } catch (err) {
+            console.warn(
+                `[globalSetup] ⚠ Could not bootstrap sysadmin test user.\n` +
+                `  Dedicated sysadmin E2E coverage may be skipped or fail.\n` +
+                `  Error: ${err}`
+            );
+        }
+    }
 
     if (!email || !password || password === 'test-placeholder') {
         console.log(
@@ -94,30 +158,6 @@ export default async function globalSetup() {
             `  Tests requiring login will fail.\n` +
             `  Error: ${err}`
         );
-    }
-
-    // Provision admin user if separate credentials are configured
-    const adminEmail = process.env.TEST_ADMIN_EMAIL;
-    const adminPassword = process.env.TEST_ADMIN_PASSWORD;
-
-    if (adminEmail && adminPassword && adminEmail !== email) {
-        console.log(`[globalSetup] Provisioning admin test user: ${adminEmail}`);
-        try {
-            const response = await fetch(`${adminServiceUrl}/auth/signup`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    email: adminEmail,
-                    password: adminPassword,
-                    tenant_name: 'E2E Admin Org',
-                }),
-            });
-            if (response.ok || response.status === 409 || response.status === 400) {
-                console.log(`[globalSetup] ✓ Admin test user provisioned: ${adminEmail}`);
-            }
-        } catch {
-            // Non-fatal — admin tests may fail but regular tests still run
-        }
     }
 
     // ── Smoke test: login and verify JWT locally ─────────────────────────

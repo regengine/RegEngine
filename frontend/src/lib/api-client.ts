@@ -58,6 +58,14 @@ type ReviewQueueResponse = ReviewItemRaw[] | {
   limit?: number;
 };
 
+type CollectionResponse<T> = T[] | {
+  items?: T[];
+  total?: number;
+  skip?: number;
+  offset?: number;
+  limit?: number;
+};
+
 type ReviewItemRaw = {
   review_id?: string;
   id?: string;
@@ -89,6 +97,16 @@ function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value)
     ? value as Record<string, unknown>
     : {};
+}
+
+function normalizeCollection<T>(data: CollectionResponse<T> | undefined | null): T[] {
+  if (Array.isArray(data)) {
+    return data;
+  }
+  if (data && Array.isArray(data.items)) {
+    return data.items;
+  }
+  return [];
 }
 
 function normalizeReviewStatus(status: string | undefined): ReviewItem['status'] {
@@ -221,7 +239,10 @@ class APIClient {
           originalRequest._retried = true;
           try {
             // Dynamically import to avoid circular deps
-            const { createSupabaseBrowserClient } = await import('@/lib/supabase/client');
+            const { createSupabaseBrowserClient, isSupabaseConfigured } = await import('@/lib/supabase/client');
+            if (!isSupabaseConfigured()) {
+              return Promise.reject(error);
+            }
             const supabase = createSupabaseBrowserClient();
             const { data: { session } } = await supabase.auth.getSession();
             if (session?.access_token) {
@@ -501,7 +522,7 @@ class APIClient {
       headers: credentialHeader('X-Admin-Key', adminKey)
     });
 
-    const items = Array.isArray(data) ? data : data.items || [];
+    const items = normalizeCollection(data);
     return items.map(normalizeReviewItem).filter((item) => item.id);
   }
 
@@ -562,8 +583,8 @@ class APIClient {
   // --- User Management ---
 
   async getUsers(): Promise<User[]> {
-    const { data } = await this.adminClient.get<User[]>('/v1/admin/users');
-    return data;
+    const { data } = await this.adminClient.get<CollectionResponse<User>>('/v1/admin/users');
+    return normalizeCollection(data);
   }
 
   async updateUserRole(userId: string, roleId: string): Promise<void> {
@@ -575,16 +596,16 @@ class APIClient {
   }
 
   async getRoles(): Promise<Role[]> {
-    const { data } = await this.adminClient.get<Role[]>('/v1/admin/roles');
-    return data;
+    const { data } = await this.adminClient.get<CollectionResponse<Role>>('/v1/admin/roles');
+    return normalizeCollection(data);
   }
 
   // --- Invites ---
 
 
   async getInvites(): Promise<Invite[]> {
-    const { data } = await this.adminClient.get<Invite[]>('/v1/admin/invites');
-    return data;
+    const { data } = await this.adminClient.get<CollectionResponse<Invite>>('/v1/admin/invites');
+    return normalizeCollection(data);
   }
 
   async createInvite(invite: InviteCreate): Promise<Invite> {

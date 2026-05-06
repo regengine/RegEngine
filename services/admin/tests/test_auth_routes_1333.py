@@ -80,6 +80,32 @@ from services.admin.app.session_store import SessionData
 
 
 # ──────────────────────────────────────────────────────────────────────────────
+# Login route configuration
+# ──────────────────────────────────────────────────────────────────────────────
+
+
+def test_login_rate_limit_defaults_to_hardened_value_in_production(monkeypatch):
+    monkeypatch.delenv("AUTH_LOGIN_RATE_LIMIT", raising=False)
+    monkeypatch.setenv("REGENGINE_ENV", "production")
+
+    assert _login_router_mod._login_rate_limit() == "5/minute"
+
+
+def test_login_rate_limit_relaxes_for_local_automation(monkeypatch):
+    monkeypatch.delenv("AUTH_LOGIN_RATE_LIMIT", raising=False)
+    monkeypatch.setenv("REGENGINE_ENV", "development")
+
+    assert _login_router_mod._login_rate_limit() == "120/minute"
+
+
+def test_login_rate_limit_honors_explicit_override(monkeypatch):
+    monkeypatch.setenv("AUTH_LOGIN_RATE_LIMIT", "42/minute")
+    monkeypatch.setenv("REGENGINE_ENV", "production")
+
+    assert _login_router_mod._login_rate_limit() == "42/minute"
+
+
+# ──────────────────────────────────────────────────────────────────────────────
 # Helpers
 # ──────────────────────────────────────────────────────────────────────────────
 
@@ -446,9 +472,9 @@ class TestLogin:
         assert exc.value.status_code == 403
 
     @pytest.mark.asyncio
-    async def test_login_jwt_contains_tenant_id_and_tv(self, monkeypatch):
-        """Access token must carry tenant_id, tid, tv, and sub."""
-        user = _make_user(email="u@x.com", password="pw", token_version=3)
+    async def test_login_jwt_contains_tenant_id_sysadmin_and_tv(self, monkeypatch):
+        """Access token must carry tenant_id, tid, is_sysadmin, tv, and sub."""
+        user = _make_user(email="u@x.com", password="pw", is_sysadmin=True, token_version=3)
         tenant = _make_tenant()
         membership = _make_membership(user, tenant)
         db = _make_db_with_user(user, tenant, membership)
@@ -465,6 +491,7 @@ class TestLogin:
         assert payload["sub"] == str(user.id)
         assert payload["tenant_id"] == str(tenant.id)
         assert payload["tid"] == str(tenant.id)
+        assert payload["is_sysadmin"] is True
         assert payload["tv"] == 3
 
     @pytest.mark.asyncio
@@ -583,6 +610,7 @@ class TestRefreshToken:
         assert result.refresh_token != raw_token
         payload = decode_access_token(result.access_token)
         assert payload["sub"] == str(user.id)
+        assert payload["is_sysadmin"] is False
         session_store.update_session.assert_awaited_once()
         assert session_store.update_session.await_args.kwargs["new_token_hash"] == hash_token(result.refresh_token)
         assert session_store.update_session.await_args.kwargs["old_token_hash"] == hash_token(raw_token)

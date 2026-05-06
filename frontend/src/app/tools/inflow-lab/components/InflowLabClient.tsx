@@ -37,6 +37,8 @@ import {
     TableRow,
 } from "@/components/ui/table";
 import { fetchWithCsrf } from "@/lib/fetch-with-csrf";
+import { useAuth } from "@/lib/auth-context";
+import { useTenant } from "@/lib/tenant-context";
 import { cn } from "@/lib/utils";
 
 type RunStage = "loaded" | "generating" | "delivering" | "validating" | "complete" | "exported";
@@ -777,6 +779,8 @@ type InflowLabClientProps = {
 };
 
 export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
+    const { isAuthenticated, isHydrated } = useAuth();
+    const { tenantId: activeTenantId } = useTenant();
     const isStandalone = mode === "standalone";
     const primaryTab = isStandalone ? "Control room" : "Overview";
     const tabs = isStandalone ? standaloneTabs : dashboardTabs;
@@ -811,6 +815,16 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
     const [workbenchRunId, setWorkbenchRunId] = useState<string | null>(null);
     const [workbenchError, setWorkbenchError] = useState<string | null>(null);
     const feederFileInputRef = useRef<HTMLInputElement>(null);
+
+    useEffect(() => {
+        if (!isHydrated || !isAuthenticated || !activeTenantId) {
+            return;
+        }
+
+        setTenantId((currentTenantId) =>
+            currentTenantId === activeTenantId ? currentTenantId : activeTenantId
+        );
+    }, [activeTenantId, isAuthenticated, isHydrated]);
 
     const refreshService = async () => {
         const [healthPayload, statusPayload, eventsPayload] = await Promise.all([
@@ -866,15 +880,6 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
             document.body.dataset.inflowLab = "true";
         }
         refreshService().catch((error) => setServiceError(error instanceof Error ? error.message : "Inflow Lab service unavailable"));
-        workbenchJson<WorkbenchScenario[]>(`/scenarios?tenant_id=${encodeURIComponent(tenantId)}`)
-            .then((scenarios) => {
-                if (scenarios.length) {
-                    setWorkbenchScenarios(scenarios);
-                }
-            })
-            .catch(() => {
-                setWorkbenchScenarios(scenarioLibrary);
-            });
         return () => {
             if (isStandalone) {
                 delete document.body.dataset.inflowLab;
@@ -882,6 +887,29 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isStandalone]);
+
+    useEffect(() => {
+        if (!isHydrated) {
+            return;
+        }
+
+        if (!isAuthenticated) {
+            setWorkbenchScenarios(scenarioLibrary);
+            return;
+        }
+
+        workbenchJson<WorkbenchScenario[]>("/scenarios")
+            .then((scenarios) => {
+                if (scenarios.length) {
+                    setWorkbenchScenarios(scenarios);
+                    return;
+                }
+                setWorkbenchScenarios(scenarioLibrary);
+            })
+            .catch(() => {
+                setWorkbenchScenarios(scenarioLibrary);
+            });
+    }, [isAuthenticated, isHydrated]);
 
     useEffect(() => {
         if (!serviceEvents.length || !selectedLot || serviceLineage[selectedLot]) return;

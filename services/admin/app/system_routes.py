@@ -8,9 +8,11 @@ import asyncio
 import os
 import uuid as uuid_module
 from sqlalchemy import text, select
+from sqlalchemy.exc import SQLAlchemyError
 from shared.resilient_http import resilient_client
 from .dependencies import get_current_user, get_session
 from .sqlalchemy_models import UserModel
+from .models import TenantContext
 from sqlalchemy.orm import Session
 
 router = APIRouter(prefix="/system", tags=["system"])
@@ -153,10 +155,7 @@ def _resolve_tenant(db: Session) -> str:
     500 so ops notices rather than a silent cross-tenant leak.
     """
     try:
-        row = db.execute(
-            text("SELECT current_setting('app.tenant_id', true)")
-        ).fetchone()
-        tid = row[0] if row else None
+        tid = TenantContext.get_tenant_context(db)
     except (RuntimeError, OSError, ValueError, KeyError) as exc:
         logger.error("resolve_tenant_lookup_failed", error=str(exc))
         raise HTTPException(
@@ -183,7 +182,7 @@ def _resolve_tenant(db: Session) -> str:
             ),
         )
 
-    return tid
+    return str(tid)
 
 
 @router.get("/metrics", response_model=SystemMetricsResponse)
@@ -248,7 +247,7 @@ async def get_system_metrics(
                 SupplierCTEEventModel.tenant_id == tenant_uuid,
             )
         ).scalar() or 0
-    except (RuntimeError, OSError, ValueError, KeyError, ImportError, AttributeError) as exc:
+    except (RuntimeError, OSError, ValueError, KeyError, ImportError, AttributeError, SQLAlchemyError) as exc:
         logger.warning("supplier_metrics_query_failed", error=str(exc))
 
     # Use the higher of ingestion vs supplier counts (they're separate data paths)
@@ -269,7 +268,7 @@ async def get_system_metrics(
             {"tid": tenant},
         ).fetchone()
         open_alert_count = alert_row[0] if alert_row else 0
-    except (RuntimeError, OSError, ValueError, KeyError) as exc:
+    except (RuntimeError, OSError, ValueError, KeyError, SQLAlchemyError) as exc:
         logger.warning("metrics_alert_count_failed", error=str(exc))
 
     return SystemMetricsResponse(

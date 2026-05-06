@@ -125,10 +125,10 @@ export default function FSMADashboardPage() {
                   <h1 className="text-4xl font-bold">FSMA 204 Dashboard</h1>
                   <Badge className="bg-re-brand-muted text-re-brand-dark border border-re-brand/20 text-xs">GA</Badge>
                 </div>
-                <p className="text-muted-foreground mt-1">
-                  Food Safety Traceability & Recall Management
+                <div className="mt-1 flex items-center gap-1 text-muted-foreground">
+                  <p>Food Safety Traceability & Recall Management</p>
                   <HelpTooltip content="FDA Food Safety Modernization Act Section 204 requires food facilities to maintain traceability records and respond to recalls within 24 hours." />
-                </p>
+                </div>
               </div>
             </div>
 

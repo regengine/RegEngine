@@ -421,8 +421,10 @@ export default function IngestPage() {
                 <form onSubmit={handleSubmit} className="space-y-4">
                   <div>
                     <label className="text-sm font-medium mb-2 block">
-                      API Key
-                      <HelpTooltip content="Your RegEngine API key starting with 'rge_'. Get one from the Admin page or setup wizard." />
+                      <span className="inline-flex items-center gap-1">
+                        <span>API Key</span>
+                        <HelpTooltip content="Your RegEngine API key starting with 'rge_'. Get one from the Admin page or setup wizard." />
+                      </span>
                     </label>
                     <Input
                       type="password"
@@ -447,8 +449,10 @@ export default function IngestPage() {
                     <TabsContent value="url" className="space-y-4 pt-4">
                       <div>
                         <label className="text-sm font-medium mb-2 block">
-                          Document URL
-                          <HelpTooltip content="Publicly accessible URL to a PDF, HTML, or JSON document." />
+                          <span className="inline-flex items-center gap-1">
+                            <span>Document URL</span>
+                            <HelpTooltip content="Publicly accessible URL to a PDF, HTML, or JSON document." />
+                          </span>
                         </label>
                         <div className="relative">
                           <Link2 className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
@@ -485,8 +489,10 @@ export default function IngestPage() {
                     <TabsContent value="file" className="space-y-4 pt-4">
                       <div>
                         <label className="text-sm font-medium mb-2 block">
-                          Select Document
-                          <HelpTooltip content="Upload PDF, DOCX, HTML, JSON, or XML file." />
+                          <span className="inline-flex items-center gap-1">
+                            <span>Select Document</span>
+                            <HelpTooltip content="Upload PDF, DOCX, HTML, JSON, or XML file." />
+                          </span>
                         </label>
                         <div className="border-2 border-dashed rounded-lg p-8 text-center hover:bg-muted/50 transition-colors">
                           <Input

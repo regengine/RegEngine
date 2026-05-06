@@ -32,11 +32,11 @@ test.describe('Login → Dashboard Flow', () => {
         // onboarding state in the Railway admin service.
         await page.goto('/login?next=/dashboard');
 
-        // Verify login page loaded — the login card heading is h2 ("Welcome back").
-        // The page also has a marketing h1 ("API-first regulatory compliance.") so
-        // we target h2 specifically to avoid a strict-mode mismatch.
+        // Verify login page loaded using user-facing roles instead of brittle
+        // copy tied to a previous marketing iteration.
         await expect(page).toHaveTitle(/RegEngine/);
-        await expect(page.locator('h2').filter({ hasText: /welcome back/i })).toBeVisible();
+        await expect(page.getByRole('heading', { level: 2, name: /^sign in$/i })).toBeVisible();
+        await expect(page.getByRole('textbox', { name: /email address/i })).toBeVisible();
 
         // Fill in login form
         await page.fill('input[type="email"]', TEST_USER_EMAIL);
@@ -76,15 +76,15 @@ test.describe('Login → Dashboard Flow', () => {
         await page.goto('/login');
 
         // Email input should have label
-        const emailInput = page.locator('input[type="email"]');
+        const emailInput = page.getByRole('textbox', { name: /email address/i }).first();
         await expect(emailInput).toHaveAttribute('autocomplete', 'email');
 
         // Password input should have label
-        const passwordInput = page.locator('input[type="password"]');
+        const passwordInput = page.getByLabel(/password/i).first();
         await expect(passwordInput).toHaveAttribute('autocomplete', 'current-password');
 
         // Submit button should be keyboard accessible
-        const submitButton = page.locator('button[type="submit"]');
+        const submitButton = page.getByRole('button', { name: /^sign in$/i }).first();
         await expect(submitButton).toBeEnabled();
     });
 

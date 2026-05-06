@@ -13,7 +13,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, act, waitFor } from '@testing-library/react';
 import { useAuth, AuthProvider } from '@/lib/auth-context';
 import { apiClient } from '@/lib/api-client';
-import { createSupabaseBrowserClient } from '@/lib/supabase/client';
+import { createSupabaseBrowserClient, isSupabaseConfigured } from '@/lib/supabase/client';
 import type { ReactNode } from 'react';
 
 // Mock apiClient
@@ -28,6 +28,7 @@ vi.mock('@/lib/api-client', () => ({
 
 // Mock supabase client to avoid real auth calls
 vi.mock('@/lib/supabase/client', () => ({
+    isSupabaseConfigured: vi.fn(() => false),
     createSupabaseBrowserClient: vi.fn(() => {
         throw new Error('Supabase not configured');
     }),
@@ -60,6 +61,7 @@ describe('useAuth Hook', () => {
     beforeEach(() => {
         vi.clearAllMocks();
         localStorageMock.clear();
+        (isSupabaseConfigured as any).mockReturnValue(false);
         (createSupabaseBrowserClient as any).mockImplementation(() => {
             throw new Error('Supabase not configured');
         });
@@ -280,6 +282,7 @@ describe('useAuth Hook', () => {
                 }),
                 signOut: vi.fn(),
             };
+            (isSupabaseConfigured as any).mockReturnValue(true);
             (createSupabaseBrowserClient as any).mockReturnValue({ auth: supabaseAuth });
 
             const { result } = renderHook(() => useAuth(), { wrapper });
@@ -363,8 +366,8 @@ describe('useAuth Hook', () => {
             });
 
             // Then logout
-            act(() => {
-                result.current.logout();
+            await act(async () => {
+                await result.current.logout();
             });
 
             expect(result.current.user).toBeNull();
@@ -393,8 +396,8 @@ describe('useAuth Hook', () => {
             });
 
             // Then logout
-            act(() => {
-                result.current.logout();
+            await act(async () => {
+                await result.current.logout();
             });
 
             expect(localStorageMock.getItem('regengine_user')).toBeNull();
@@ -426,12 +429,127 @@ describe('useAuth Hook', () => {
             vi.clearAllMocks();
 
             // Then logout
-            act(() => {
-                result.current.logout();
+            await act(async () => {
+                await result.current.logout();
             });
 
             expect(apiClient.setAccessToken).toHaveBeenCalledWith(null);
             expect(apiClient.setUser).toHaveBeenCalledWith(null);
+        });
+
+        it('waits for cookie teardown and signs out Supabase before logout resolves', async () => {
+            const mockUser = {
+                id: '123',
+                email: 'test@example.com',
+                name: 'Test User',
+                is_sysadmin: false,
+                tenant_id: 'tenant-123',
+                role_id: 'role-1',
+                is_active: true,
+                status: 'active',
+                created_at: '2026-01-01T00:00:00Z',
+                updated_at: '2026-01-27T00:00:00Z',
+            };
+
+            type DeleteResponse = { ok: boolean; json: () => Promise<Record<string, never>> };
+            let resolveDelete: ((value: DeleteResponse) => void) | undefined;
+            const signOut = vi.fn().mockResolvedValue({ error: null });
+
+            mockFetch.mockImplementation((url: string, options?: RequestInit) => {
+                if (typeof url === 'string' && url.includes('/api/session')) {
+                    if (options?.method === 'DELETE') {
+                        return new Promise<DeleteResponse>((resolve) => {
+                            resolveDelete = resolve;
+                        });
+                    }
+                    if (options?.method === 'POST') {
+                        return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+                    }
+                    return Promise.resolve({
+                        ok: true,
+                        json: () => Promise.resolve({
+                            authenticated: false,
+                            has_api_key: false,
+                            has_admin_key: false,
+                            has_credentials: false,
+                            tenant_id: null,
+                            user: null,
+                        }),
+                    });
+                }
+                return Promise.reject(new Error(`Unmocked fetch: ${url}`));
+            });
+
+            (createSupabaseBrowserClient as any).mockReturnValue({
+                auth: {
+                    getUser: vi.fn().mockResolvedValue({ data: { user: null } }),
+                    getSession: vi.fn().mockResolvedValue({ data: { session: null } }),
+                    onAuthStateChange: vi.fn(() => ({
+                        data: { subscription: { unsubscribe: vi.fn() } },
+                    })),
+                    signOut,
+                },
+            });
+            (isSupabaseConfigured as any).mockReturnValue(true);
+
+            const { result } = renderHook(() => useAuth(), { wrapper });
+
+            await waitFor(() => expect(result.current.isHydrated).toBe(true));
+
+            await act(async () => {
+                await result.current.login('test-token', mockUser, 'tenant-123');
+            });
+
+            let resolved = false;
+            const logoutPromise = act(async () => {
+                await result.current.logout();
+                resolved = true;
+            });
+
+            await Promise.resolve();
+
+            expect(resolved).toBe(false);
+            expect(signOut).not.toHaveBeenCalled();
+
+            if (!resolveDelete) {
+                throw new Error('Expected deferred logout request resolver to be set');
+            }
+            resolveDelete({ ok: true, json: () => Promise.resolve({}) });
+            await logoutPromise;
+
+            expect(signOut).toHaveBeenCalledTimes(1);
+            expect(resolved).toBe(true);
+        });
+
+        it('does not instantiate Supabase on logout when browser Supabase config is absent', async () => {
+            const mockUser = {
+                id: '123',
+                email: 'test@example.com',
+                name: 'Test User',
+                is_sysadmin: false,
+                tenant_id: 'tenant-123',
+                role_id: 'role-1',
+                is_active: true,
+                status: 'active',
+                created_at: '2026-01-01T00:00:00Z',
+                updated_at: '2026-01-27T00:00:00Z',
+            };
+
+            const { result } = renderHook(() => useAuth(), { wrapper });
+
+            await act(async () => {
+                await result.current.login('test-token', mockUser, 'tenant-123');
+            });
+
+            vi.clearAllMocks();
+            (isSupabaseConfigured as any).mockReturnValue(false);
+
+            await act(async () => {
+                await result.current.logout();
+            });
+
+            expect(createSupabaseBrowserClient).not.toHaveBeenCalled();
+            expect(apiClient.setAccessToken).toHaveBeenCalledWith(null);
         });
     });
 

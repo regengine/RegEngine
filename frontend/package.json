@@ -11,8 +11,8 @@
     "test:run": "vitest run",
     "test:coverage": "vitest run --coverage",
     "verify:ssr": "node scripts/verify-public-ssr.mjs",
-    "test:e2e": "playwright test",
-    "test:demo-smoke": "playwright test --config=playwright.demo-smoke.config.ts"
+    "test:e2e": "env -u NO_COLOR playwright test",
+    "test:demo-smoke": "env -u NO_COLOR playwright test --config=playwright.demo-smoke.config.ts"
   },
   "//": "Pinning policy (#569): next, @sentry/nextjs, and @supabase/supabase-js are pinned to exact versions (no ^ or ~ prefix) because breaking changes in these packages have caused production incidents. Bump them deliberately after testing. All other deps use ^ for minor/patch auto-updates.",
   "dependencies": {

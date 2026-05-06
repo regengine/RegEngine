@@ -143,15 +143,8 @@ test.describe('Tenant Isolation', () => {
 
         // Page should load
         await expect(page).toHaveURL(/\/review/);
-
-        // Review queue container should exist (may be empty)
-        const reviewContent = page.locator('[class*="review"], [data-testid*="review"]');
-        const hasReviewContent = await reviewContent.count() > 0;
-
-        // Alternatively, check for common review page elements
-        const pageLoaded = await page.getByText(/Review|Queue|Pending|Items/i).count() > 0;
-
-        expect(hasReviewContent || pageLoaded).toBeTruthy();
+        await expect(page.getByRole('heading', { name: /Curator Review/i })).toBeVisible();
+        await expect(page.getByRole('heading', { name: /Review Queue/i })).toBeVisible();
     });
 
     test('Overlay controls are tenant-scoped', async ({ page }) => {
@@ -162,16 +155,18 @@ test.describe('Tenant Isolation', () => {
         // Navigate to controls/overlay section if it exists
         await page.goto('/controls');
 
+        // The controls screen is client-rendered and waits on auth hydration,
+        // so give the loading shell a chance to clear before asserting.
+        await page.getByText('Loading controls...').waitFor({ state: 'detached', timeout: 15000 }).catch(() => null);
+
         // If page exists, verify it loads tenant-scoped data
         const is404 = await page.getByText(/404|Not Found/i).count() > 0;
 
         if (!is404) {
             // Controls page exists, verify tenant context
             await expect(page).not.toHaveURL(/\/login/);
-
-            // Check for controls-related content
-            const hasControls = await page.getByText(/Control|Framework|NIST|SOC/i).count() > 0;
-            expect(hasControls).toBeTruthy();
+            await expect(page.getByRole('heading', { name: /My Controls/i })).toBeVisible();
+            await expect(page.getByRole('columnheader', { name: 'Control ID' })).toBeVisible();
         }
         // If 404, controls page doesn't exist (acceptable)
     });

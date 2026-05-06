@@ -2,10 +2,13 @@
  * Content-Security-Policy builder (#543).
  *
  * CSP is enforced (not report-only) and uses a per-request nonce to allow
- * Next.js inline scripts without falling back to unsafe-inline or unsafe-eval.
+ * Next.js inline scripts without falling back to unsafe-inline.
  *
  * 'strict-dynamic' propagates trust from the nonce-bearing parent script to
  * dynamically-loaded scripts (required for Next.js hydration bundles).
+ *
+ * Local Next.js development still relies on eval-based tooling in a few
+ * places, so we allow 'unsafe-eval' only when explicitly opted into.
  *
  * style-src retains 'unsafe-inline' — Tailwind and inline style attributes
  * are not executable and carry no XSS risk at this level. Google Fonts
@@ -29,12 +32,31 @@ export function shouldApplyCspProxy(pathname: string): boolean {
   );
 }
 
-export function buildCsp(nonce: string): string {
+type BuildCspOptions = {
+  allowDevUnsafeEval?: boolean;
+  allowDevUnsafeInline?: boolean;
+};
+
+export function buildCsp(nonce: string, options: BuildCspOptions = {}): string {
+  const scriptSrc = [
+    "'self'",
+    `'nonce-${nonce}'`,
+    "'strict-dynamic'",
+  ];
+
+  if (options.allowDevUnsafeEval) {
+    scriptSrc.push("'unsafe-eval'");
+  }
+
+  if (options.allowDevUnsafeInline) {
+    scriptSrc.push("'unsafe-inline'");
+  }
+
   const directives = [
     "default-src 'self'",
     // Next.js hydration uses inline scripts. 'strict-dynamic' propagates the nonce
     // to child scripts so dynamically-injected bundles also execute.
-    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'`,
+    `script-src ${scriptSrc.join(' ')}`,
     // Tailwind/CSS-in-JS requires unsafe-inline; styles cannot execute JS
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
     "img-src 'self' data: blob: https:",

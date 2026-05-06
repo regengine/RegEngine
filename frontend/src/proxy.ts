@@ -459,10 +459,14 @@ export async function proxy(request: NextRequest) {
     // Per-request nonce for enforced Content-Security-Policy (#543)
     // The nonce is injected into request headers so server components can
     // read it via `headers().get('x-nonce')` and attach it to inline scripts.
-    // CSP is enforced (not report-only); unsafe-inline/unsafe-eval are removed.
+    // CSP is enforced (not report-only). Local dev keeps unsafe-eval only for
+    // Next.js tooling; production stays nonce-only.
     // -----------------------------------------------------------------------
     const nonce = Buffer.from(crypto.randomUUID()).toString('base64');
-    const csp = buildCsp(nonce);
+    const csp = buildCsp(nonce, {
+        allowDevUnsafeEval: process.env.NODE_ENV === 'development',
+        allowDevUnsafeInline: process.env.NODE_ENV === 'development',
+    });
 
     // Clone request headers and inject the nonce so server components can use it
     const requestHeaders = new Headers(request.headers);

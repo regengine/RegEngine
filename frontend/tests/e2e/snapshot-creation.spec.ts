@@ -15,16 +15,23 @@ import { authenticatedE2ESkipReason, hasAuthenticatedE2E } from './auth-prereqs'
 const TEST_USER_EMAIL = process.env.TEST_USER_EMAIL || 'test@example.com';
 const TEST_PASSWORD = process.env.TEST_PASSWORD || 'test-placeholder';
 
+async function loginAndWaitForDashboard(page: import('@playwright/test').Page) {
+    await page.goto('/login?next=/dashboard');
+    await page.fill('input[type="email"]', TEST_USER_EMAIL);
+    await page.fill('input[type="password"]', TEST_PASSWORD);
+    await page.click('button[type="submit"]');
+    await page.waitForURL(/\/dashboard/, { timeout: 15000 });
+    // Let the dashboard finish its initial background fetches before we
+    // navigate away; otherwise Playwright cancels those requests and the
+    // dev proxy logs noisy ECONNRESET "aborted" errors.
+    await page.waitForLoadState('networkidle');
+}
+
 test.describe('Energy Snapshot Creation', () => {
     test.skip(!hasAuthenticatedE2E, authenticatedE2ESkipReason);
 
     test.beforeEach(async ({ page }) => {
-        // Login
-        await page.goto('/login?next=/dashboard');
-        await page.fill('input[type="email"]', TEST_USER_EMAIL);
-        await page.fill('input[type="password"]', TEST_PASSWORD);
-        await page.click('button[type="submit"]');
-        await page.waitForURL(/\/dashboard/, { timeout: 15000 });
+        await loginAndWaitForDashboard(page);
 
         // Navigate to Energy section
         const energyLink = page.locator('a:has-text("Energy")').first();
@@ -114,11 +121,7 @@ test.describe('Snapshot Verification', () => {
     test.skip(!hasAuthenticatedE2E, authenticatedE2ESkipReason);
 
     test.beforeEach(async ({ page }) => {
-        await page.goto('/login?next=/dashboard');
-        await page.fill('input[type="email"]', TEST_USER_EMAIL);
-        await page.fill('input[type="password"]', TEST_PASSWORD);
-        await page.click('button[type="submit"]');
-        await page.waitForURL(/\/dashboard/, { timeout: 15000 });
+        await loginAndWaitForDashboard(page);
         await page.goto('/energy');
     });
 

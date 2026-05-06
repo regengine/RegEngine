@@ -16,10 +16,13 @@ Performance:
 
 from __future__ import annotations
 
+import asyncio
+import fnmatch
 import json
+import os
 import structlog
 from datetime import datetime, timezone, timedelta
-from typing import Optional, List
+from typing import Any, Optional, List
 from urllib.parse import urlsplit, urlunsplit
 from uuid import UUID
 from pydantic import BaseModel, Field
@@ -27,6 +30,295 @@ from pydantic import BaseModel, Field
 import redis.asyncio as redis
 
 logger = structlog.get_logger("session_store")
+
+
+class _ImmediateResult:
+    """Awaitable wrapper so pipeline methods work with or without ``await``."""
+
+    def __init__(self, value: Any = None):
+        self._value = value
+
+    def __await__(self):
+        async def _resolve():
+            return self._value
+
+        return _resolve().__await__()
+
+
+class InMemoryAsyncRedisPipeline:
+    """Minimal async Redis pipeline emulator for local/dev session storage."""
+
+    def __init__(self, client: "InMemoryAsyncRedis"):
+        self._client = client
+        self._ops: list[tuple[str, tuple[Any, ...], dict[str, Any]]] = []
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc, tb):
+        self._ops.clear()
+        return False
+
+    def _queue(self, name: str, *args: Any, **kwargs: Any) -> _ImmediateResult:
+        self._ops.append((name, args, kwargs))
+        return _ImmediateResult(None)
+
+    def hset(self, *args: Any, **kwargs: Any) -> _ImmediateResult:
+        return self._queue("hset", *args, **kwargs)
+
+    def expire(self, *args: Any, **kwargs: Any) -> _ImmediateResult:
+        return self._queue("expire", *args, **kwargs)
+
+    def sadd(self, *args: Any, **kwargs: Any) -> _ImmediateResult:
+        return self._queue("sadd", *args, **kwargs)
+
+    def setex(self, *args: Any, **kwargs: Any) -> _ImmediateResult:
+        return self._queue("setex", *args, **kwargs)
+
+    def hgetall(self, *args: Any, **kwargs: Any) -> _ImmediateResult:
+        return self._queue("hgetall", *args, **kwargs)
+
+    def delete(self, *args: Any, **kwargs: Any) -> _ImmediateResult:
+        return self._queue("delete", *args, **kwargs)
+
+    def srem(self, *args: Any, **kwargs: Any) -> _ImmediateResult:
+        return self._queue("srem", *args, **kwargs)
+
+    def incr(self, *args: Any, **kwargs: Any) -> _ImmediateResult:
+        return self._queue("incr", *args, **kwargs)
+
+    async def execute(self) -> list[Any]:
+        results: list[Any] = []
+        for name, args, kwargs in self._ops:
+            method = getattr(self._client, name)
+            results.append(await method(*args, **kwargs))
+        self._ops.clear()
+        return results
+
+
+class InMemoryAsyncRedis:
+    """Tiny subset of Redis commands used by auth/session code paths."""
+
+    def __init__(self):
+        self._store: dict[str, dict[str, Any]] = {}
+        self._lock = asyncio.Lock()
+
+    def pipeline(self, transaction: bool = True) -> InMemoryAsyncRedisPipeline:
+        del transaction
+        return InMemoryAsyncRedisPipeline(self)
+
+    async def close(self):
+        async with self._lock:
+            self._store.clear()
+
+    async def ping(self) -> bool:
+        return True
+
+    def _expiry(self, ttl_seconds: Optional[int]) -> Optional[datetime]:
+        if ttl_seconds is None:
+            return None
+        return datetime.now(timezone.utc) + timedelta(seconds=max(int(ttl_seconds), 0))
+
+    def _purge_expired_locked(self, key: str) -> None:
+        item = self._store.get(key)
+        if not item:
+            return
+        expires_at = item.get("expires_at")
+        if expires_at and expires_at <= datetime.now(timezone.utc):
+            self._store.pop(key, None)
+
+    def _ensure_type_locked(self, key: str, expected: str) -> tuple[Any, Optional[datetime]]:
+        self._purge_expired_locked(key)
+        item = self._store.get(key)
+        if not item:
+            if expected == "hash":
+                return {}, None
+            if expected == "set":
+                return set(), None
+            return None, None
+        if item["type"] != expected:
+            raise TypeError(f"Redis key {key!r} has type {item['type']}, expected {expected}")
+        return item["value"], item.get("expires_at")
+
+    async def get(self, key: str) -> Optional[str]:
+        async with self._lock:
+            self._purge_expired_locked(key)
+            item = self._store.get(key)
+            if not item or item["type"] != "string":
+                return None
+            return item["value"]
+
+    async def set(
+        self,
+        key: str,
+        value: Any,
+        *,
+        nx: bool = False,
+        ex: Optional[int] = None,
+    ) -> bool:
+        async with self._lock:
+            self._purge_expired_locked(key)
+            if nx and key in self._store:
+                return False
+            self._store[key] = {
+                "type": "string",
+                "value": str(value),
+                "expires_at": self._expiry(ex),
+            }
+            return True
+
+    async def setex(self, key: str, ttl_seconds: int, value: Any) -> bool:
+        return await self.set(key, value, ex=ttl_seconds)
+
+    async def getdel(self, key: str) -> Optional[str]:
+        async with self._lock:
+            self._purge_expired_locked(key)
+            item = self._store.pop(key, None)
+            if not item or item["type"] != "string":
+                return None
+            return item["value"]
+
+    async def delete(self, *keys: str) -> int:
+        deleted = 0
+        async with self._lock:
+            for key in keys:
+                self._purge_expired_locked(key)
+                if key in self._store:
+                    self._store.pop(key, None)
+                    deleted += 1
+        return deleted
+
+    async def incr(self, key: str) -> int:
+        async with self._lock:
+            self._purge_expired_locked(key)
+            item = self._store.get(key)
+            current = 0
+            expires_at = None
+            if item:
+                if item["type"] != "string":
+                    raise TypeError(f"Redis key {key!r} is not a string counter")
+                current = int(item["value"])
+                expires_at = item.get("expires_at")
+            current += 1
+            self._store[key] = {
+                "type": "string",
+                "value": str(current),
+                "expires_at": expires_at,
+            }
+            return current
+
+    async def expire(self, key: str, ttl_seconds: int) -> bool:
+        async with self._lock:
+            self._purge_expired_locked(key)
+            item = self._store.get(key)
+            if not item:
+                return False
+            item["expires_at"] = self._expiry(ttl_seconds)
+            return True
+
+    async def ttl(self, key: str) -> int:
+        async with self._lock:
+            self._purge_expired_locked(key)
+            item = self._store.get(key)
+            if not item:
+                return -2
+            expires_at = item.get("expires_at")
+            if expires_at is None:
+                return -1
+            remaining = int((expires_at - datetime.now(timezone.utc)).total_seconds())
+            return max(remaining, 0)
+
+    async def exists(self, key: str) -> int:
+        async with self._lock:
+            self._purge_expired_locked(key)
+            return int(key in self._store)
+
+    async def hset(
+        self,
+        key: str,
+        field: Optional[str] = None,
+        value: Optional[Any] = None,
+        mapping: Optional[dict[str, Any]] = None,
+    ) -> int:
+        async with self._lock:
+            data, expires_at = self._ensure_type_locked(key, "hash")
+            added = 0
+            if mapping:
+                for map_key, map_value in mapping.items():
+                    if map_key not in data:
+                        added += 1
+                    data[str(map_key)] = str(map_value)
+            if field is not None:
+                if field not in data:
+                    added += 1
+                data[str(field)] = str(value)
+            self._store[key] = {
+                "type": "hash",
+                "value": dict(data),
+                "expires_at": expires_at,
+            }
+            return added
+
+    async def hgetall(self, key: str) -> dict[str, str]:
+        async with self._lock:
+            data, _ = self._ensure_type_locked(key, "hash")
+            return dict(data)
+
+    async def sadd(self, key: str, *values: Any) -> int:
+        async with self._lock:
+            data, expires_at = self._ensure_type_locked(key, "set")
+            added = 0
+            for raw_value in values:
+                value = str(raw_value)
+                if value not in data:
+                    data.add(value)
+                    added += 1
+            self._store[key] = {
+                "type": "set",
+                "value": set(data),
+                "expires_at": expires_at,
+            }
+            return added
+
+    async def srem(self, key: str, *values: Any) -> int:
+        async with self._lock:
+            data, expires_at = self._ensure_type_locked(key, "set")
+            removed = 0
+            for raw_value in values:
+                value = str(raw_value)
+                if value in data:
+                    data.remove(value)
+                    removed += 1
+            if data:
+                self._store[key] = {
+                    "type": "set",
+                    "value": set(data),
+                    "expires_at": expires_at,
+                }
+            else:
+                self._store.pop(key, None)
+            return removed
+
+    async def smembers(self, key: str) -> set[str]:
+        async with self._lock:
+            data, _ = self._ensure_type_locked(key, "set")
+            return set(data)
+
+    async def scan(
+        self,
+        cursor: int = 0,
+        *,
+        match: Optional[str] = None,
+        count: Optional[int] = None,
+    ) -> tuple[int, list[str]]:
+        del cursor, count
+        async with self._lock:
+            for key in list(self._store):
+                self._purge_expired_locked(key)
+            keys = sorted(self._store.keys())
+            if match:
+                keys = [key for key in keys if fnmatch.fnmatch(key, match)]
+            return 0, keys
 
 
 def redact_connection_url(url: str) -> str:
@@ -131,7 +423,7 @@ class RedisSessionStore:
     async def _get_client(self) -> redis.Redis:
         """Get or create Redis client (lazy initialization)."""
         if self._client is None:
-            self._client = await redis.from_url(
+            self._client = redis.from_url(
                 self.redis_url,
                 encoding="utf-8",
                 decode_responses=True,
@@ -634,3 +926,27 @@ class RedisSessionStore:
         except Exception as e:
             logger.error("redis_health_check_failed", error=str(e))
             return False
+
+
+class InMemorySessionStore(RedisSessionStore):
+    """Drop-in session store for local/dev runs without a Redis daemon."""
+
+    def __init__(self, default_ttl_days: int = 30):
+        self.redis_url = "inmemory://session-store"
+        self.default_ttl_days = default_ttl_days
+        self._client: Optional[InMemoryAsyncRedis] = InMemoryAsyncRedis()
+        logger.warning(
+            "in_memory_session_store_enabled",
+            reason=os.getenv("SESSION_STORE_BACKEND", "") or "redis_not_configured",
+            default_ttl_days=default_ttl_days,
+        )
+
+    async def _get_client(self) -> InMemoryAsyncRedis:
+        if self._client is None:
+            self._client = InMemoryAsyncRedis()
+        return self._client
+
+    async def close(self):
+        if self._client:
+            await self._client.close()
+            self._client = None

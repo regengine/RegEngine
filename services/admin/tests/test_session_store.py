@@ -12,9 +12,9 @@ Tests cover:
 import pytest
 import uuid
 from datetime import datetime, timezone, timedelta
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
-from app.session_store import RedisSessionStore, SessionData
+from app.session_store import InMemorySessionStore, RedisSessionStore, SessionData
 
 
 @pytest.fixture
@@ -259,7 +259,8 @@ class TestRedisSessionStore:
         
         # Verify
         assert result is False
-    
+
+
     @pytest.mark.asyncio
     async def test_list_user_sessions(self, session_store, mock_redis, sample_session):
         """Test listing user sessions."""
@@ -376,3 +377,54 @@ class TestRedisSessionStore:
         assert session_store._session_key(session_id) == f"session:{session_id}"
         assert session_store._user_sessions_key(user_id) == f"user_sessions:{user_id}"
         assert session_store._token_hash_key(token_hash) == f"token_hash:{token_hash}"
+
+
+class TestInMemorySessionStore:
+    """Integration-style tests for the local Redis fallback."""
+
+    @pytest.fixture
+    def in_memory_store(self):
+        return InMemorySessionStore()
+
+    @pytest.mark.asyncio
+    async def test_round_trip_and_rotation(self, in_memory_store, sample_session):
+        await in_memory_store.create_session(sample_session)
+
+        by_id = await in_memory_store.get_session(sample_session.id)
+        assert by_id is not None
+        assert by_id.refresh_token_hash == sample_session.refresh_token_hash
+
+        by_token = await in_memory_store.get_session_by_token(sample_session.refresh_token_hash)
+        assert by_token is not None
+        assert by_token.id == sample_session.id
+
+        claimed = await in_memory_store.claim_session_by_token(sample_session.refresh_token_hash)
+        assert claimed is not None
+        assert claimed.id == sample_session.id
+        assert await in_memory_store.get_session_by_token(sample_session.refresh_token_hash) is None
+
+        rotated = await in_memory_store.update_session(
+            sample_session.id,
+            {"last_used_at": datetime.now(timezone.utc).isoformat()},
+            new_token_hash="rotated-hash",
+            old_token_hash=sample_session.refresh_token_hash,
+        )
+        assert rotated is True
+
+        rotated_session = await in_memory_store.get_session_by_token("rotated-hash")
+        assert rotated_session is not None
+        assert rotated_session.id == sample_session.id
+
+    @pytest.mark.asyncio
+    async def test_raw_client_supports_nx_and_ttl(self, in_memory_store):
+        client = await in_memory_store._get_client()
+
+        inserted = await client.set("auth:recovery:used:test", "1", nx=True, ex=120)
+        duplicate = await client.set("auth:recovery:used:test", "1", nx=True, ex=120)
+        ttl = await client.ttl("auth:recovery:used:test")
+        count = await client.incr("login_attempts:test@example.com")
+
+        assert inserted is True
+        assert duplicate is False
+        assert ttl > 0
+        assert count == 1
