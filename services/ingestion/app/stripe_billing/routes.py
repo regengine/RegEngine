@@ -42,6 +42,18 @@ logger = structlog.get_logger("stripe-billing")
 router = APIRouter(prefix="/api/v1/billing", tags=["Billing & Subscriptions"])
 
 
+def _allow_subscription_read_fallback() -> bool:
+    """Allow local/test callers to treat a missing billing state store as empty.
+
+    The settings page only needs a best-effort subscription snapshot. During
+    Playwright/local dev runs we intentionally boot without Redis, so returning
+    "no plan" is less noisy than surfacing a background 503 while still keeping
+    production fail-closed unless this fallback is explicitly enabled.
+    """
+    raw = os.getenv("ALLOW_BILLING_STATE_READ_FALLBACK", "").strip().lower()
+    return raw in {"1", "true", "yes"}
+
+
 @router.get(
     "/plans",
     summary="List available plans",
@@ -235,15 +247,22 @@ async def get_subscription(
     principal: IngestionPrincipal = Depends(require_permission("billing.subscription.read")),
 ) -> SubscriptionStatus:
     """Get current subscription status for a tenant."""
-    _helpers_mod._configure_stripe()
     safe_principal = principal if isinstance(principal, IngestionPrincipal) else None
     resolved_tenant_id = _helpers_mod._resolve_tenant_context(tenant_id, None, safe_principal)
 
     try:
         mapping = _state_mod._get_subscription_mapping(resolved_tenant_id)
     except redis.RedisError as exc:
-        logger.error("subscription_mapping_read_failed", tenant_id=resolved_tenant_id, error=str(exc))
-        raise HTTPException(status_code=503, detail="Billing state store unavailable") from exc
+        if _allow_subscription_read_fallback():
+            logger.info(
+                "subscription_mapping_read_fallback_empty",
+                tenant_id=resolved_tenant_id,
+                error=str(exc),
+            )
+            mapping = {}
+        else:
+            logger.error("subscription_mapping_read_failed", tenant_id=resolved_tenant_id, error=str(exc))
+            raise HTTPException(status_code=503, detail="Billing state store unavailable") from exc
 
     if not mapping:
         return SubscriptionStatus(
@@ -259,11 +278,13 @@ async def get_subscription(
 
     plan_id = _plans_mod._normalize_plan_id(mapping.get("plan_id", "growth"))
     status = mapping.get("status", "none")
+    billing_period = mapping.get("billing_period") or None
     current_period_end = mapping.get("current_period_end") or None
     subscription_id = mapping.get("subscription_id")
 
     if subscription_id:
         try:
+            _helpers_mod._configure_stripe()
             subscription = stripe.Subscription.retrieve(subscription_id)
             status = subscription.get("status", status)
             current_period_end = _format_period_end(subscription.get("current_period_end"))
@@ -271,6 +292,14 @@ async def get_subscription(
             mapping["status"] = status
             mapping["current_period_end"] = current_period_end or ""
             _state_mod._store_subscription_mapping(resolved_tenant_id, mapping)
+        except HTTPException as exc:
+            if getattr(exc, "status_code", None) != 500:
+                raise
+            logger.warning(
+                "subscription_refresh_skipped_stripe_unconfigured",
+                tenant_id=resolved_tenant_id,
+                subscription_id=subscription_id,
+            )
         except stripe.error.StripeError as exc:  # pragma: no cover - network/API errors
             logger.warning("subscription_retrieve_failed", tenant_id=resolved_tenant_id, error=str(exc))
 
@@ -280,6 +309,7 @@ async def get_subscription(
         tenant_id=resolved_tenant_id,
         plan=plan_id,
         status=status,
+        billing_period=billing_period,
         current_period_end=current_period_end,
         events_used=0,
         events_limit=limits.get("events_per_month", 0),

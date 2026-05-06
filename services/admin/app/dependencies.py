@@ -18,7 +18,7 @@ from shared.permissions import has_permission
 from shared.env import is_production
 
 # Redis Session Store
-from .session_store import RedisSessionStore, redact_connection_url
+from .session_store import InMemorySessionStore, RedisSessionStore, redact_connection_url
 
 # Define oauth2_scheme (although we use custom login mostly, this helps Swagger UI)
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
@@ -27,6 +27,18 @@ logger = structlog.get_logger("auth_dependency")
 
 # Global session store instance (singleton)
 _session_store: Optional[RedisSessionStore] = None
+
+
+def _should_use_in_memory_session_store() -> bool:
+    backend = os.getenv("SESSION_STORE_BACKEND", "").strip().lower()
+    if backend in {"memory", "inmemory", "local"}:
+        return True
+
+    allow_in_memory = os.getenv("ALLOW_INMEMORY_SESSION_STORE", "").strip().lower()
+    if allow_in_memory in {"1", "true", "yes", "on"}:
+        return True
+
+    return not is_production() and not os.getenv("REDIS_URL")
 
 
 def _parse_token_version(value: object) -> Optional[int]:
@@ -62,9 +74,17 @@ def get_session_store() -> RedisSessionStore:
     """
     global _session_store
     if _session_store is None:
-        redis_url = os.getenv("REDIS_URL", "rediss://redis:6379/0")
-        _session_store = RedisSessionStore(redis_url)
-        logger.info("session_store_initialized", redis_url=redact_connection_url(redis_url))
+        if _should_use_in_memory_session_store():
+            _session_store = InMemorySessionStore()
+            logger.info("session_store_initialized", backend="in_memory")
+        else:
+            redis_url = os.getenv("REDIS_URL", "rediss://redis:6379/0")
+            _session_store = RedisSessionStore(redis_url)
+            logger.info(
+                "session_store_initialized",
+                backend="redis",
+                redis_url=redact_connection_url(redis_url),
+            )
     return _session_store
 
 
@@ -161,7 +181,7 @@ async def get_current_user(
     # on this pooled connection from a prior request. If this request's JWT
     # has no resolvable tenant and the user is not a sysadmin, we want RLS
     # to fail closed, not inherit the previous caller's scope.
-    if db.bind and db.bind.dialect.name != "sqlite":
+    if db.bind:
         try:
             TenantContext.clear_tenant_context(db)
         except (RuntimeError, OSError, AttributeError):  # pragma: no cover
@@ -254,9 +274,9 @@ async def get_current_user(
     # Store tenant context in request state or handle via DB session context
     if tenant_id:
         try:
-            # Enforce RLS context (PostgreSQL only — SQLite has no RLS)
-            if db.bind and db.bind.dialect.name != "sqlite":
-                TenantContext.set_tenant_context(db, UUID(tenant_id))
+            # PostgreSQL uses session-scoped RLS state; SQLite stores the same
+            # tenant context in session.info so local/dev parity is preserved.
+            TenantContext.set_tenant_context(db, UUID(tenant_id))
             # Verify membership exists for this tenant
             membership = db.execute(
                 select(MembershipModel).where(

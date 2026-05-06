@@ -359,8 +359,8 @@ class AcceptInviteExistingUserRequest(BaseModel):
 @router.post("/auth/accept-invite", response_model=AcceptInviteResponse, status_code=201)
 @limiter.limit("10/minute")
 async def accept_invite(
-    request: AcceptInviteRequest,
-    http_request: Request,
+    payload: AcceptInviteRequest,
+    request: Request,
     db: Session = Depends(get_session),
 ):
     """Accept an invite.
@@ -382,7 +382,7 @@ async def accept_invite(
     generic_400 = HTTPException(status_code=400, detail="Invite is not usable")
 
     # Verify Token (hashed lookup; tokens stay opaque at rest).
-    token_hash = hashlib.sha256(request.token.encode()).hexdigest()
+    token_hash = hashlib.sha256(payload.token.encode()).hexdigest()
 
     invite = db.execute(
         select(InviteModel).where(InviteModel.token_hash == token_hash)
@@ -391,7 +391,10 @@ async def accept_invite(
     # Uniform 400 for all not-usable cases (#1337).
     if not invite:
         raise generic_400
-    if invite.expires_at < datetime.now(timezone.utc):
+    invite_expires_at = invite.expires_at
+    if invite_expires_at.tzinfo is None:
+        invite_expires_at = invite_expires_at.replace(tzinfo=timezone.utc)
+    if invite_expires_at < datetime.now(timezone.utc):
         raise generic_400
     if invite.revoked_at or invite.accepted_at:
         raise generic_400
@@ -414,7 +417,7 @@ async def accept_invite(
         # The password field on AcceptInviteRequest doubles as the existing
         # password when the email already has an account. We intentionally use
         # the same field so the frontend can post the same payload shape.
-        supplied_password = request.password or ""
+        supplied_password = payload.password or ""
         if not supplied_password or not verify_password(supplied_password, user.password_hash):
             logger.warning(
                 "accept_invite_existing_user_auth_failed",
@@ -427,13 +430,13 @@ async def accept_invite(
         # Path A — create new user with invite-supplied password.
         # Enforce password policy FIRST so we don't flush half-constructed rows.
         try:
-            validate_password(request.password, user_context={'email': invite.email})
+            validate_password(payload.password, user_context={'email': invite.email})
         except PasswordPolicyError as e:
             raise HTTPException(status_code=400, detail=e.message)
 
         user = UserModel(
             email=invite.email,
-            password_hash=get_password_hash(request.password),
+            password_hash=get_password_hash(payload.password),
             status="active",
             is_sysadmin=False,
         )

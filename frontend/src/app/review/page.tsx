@@ -39,10 +39,10 @@ export default function ReviewPage() {
             </div>
             <div className="flex-1">
               <h1 className="text-4xl font-bold">Curator Review</h1>
-              <p className="text-muted-foreground mt-1">
-                Review extracted regulatory data and validate ML extractions
+              <div className="mt-1 flex items-center gap-1 text-muted-foreground">
+                <p>Review extracted regulatory data and validate ML extractions</p>
                 <HelpTooltip content="Items here were extracted with lower confidence and need human validation before being added to the knowledge graph." />
-              </p>
+              </div>
             </div>
             <Button
               variant="outline"

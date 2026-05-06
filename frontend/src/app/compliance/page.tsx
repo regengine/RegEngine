@@ -42,10 +42,10 @@ export default function CompliancePage() {
             </div>
             <div>
               <h1 className="text-3xl sm:text-4xl font-bold">Compliance Checklists</h1>
-              <p className="text-muted-foreground mt-1">
-                Browse and validate against FSMA 204 compliance requirements
+              <div className="mt-1 flex items-center gap-1 text-muted-foreground">
+                <p>Browse and validate against FSMA 204 compliance requirements</p>
                 <HelpTooltip content="Pre-built checklists help you validate your configuration against FSMA 204 traceability requirements." />
-              </p>
+              </div>
             </div>
           </div>
 

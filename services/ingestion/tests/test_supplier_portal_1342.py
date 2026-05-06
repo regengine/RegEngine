@@ -14,6 +14,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from app import integration_router as ir
 from app import supplier_portal as sp
 from app.supplier_portal import (
     CreatePortalLinkRequest,
@@ -39,8 +40,10 @@ from app.webhook_models import EventResult, IngestResponse
 @pytest.fixture(autouse=True)
 def _clear_portal_links():
     sp._portal_links.clear()
+    ir._profile_store.clear()
     yield
     sp._portal_links.clear()
+    ir._profile_store.clear()
 
 
 class _FakeResult:
@@ -648,6 +651,40 @@ class TestGetPortalDetails:
         assert body["supplier_name"] == "Acme"
         assert body["allowed_cte_types"] == ["shipping"]
         assert body["status"] == "active"
+
+    def test_active_link_includes_memory_profile_summary(self, monkeypatch):
+        future = (datetime.now(timezone.utc) + timedelta(days=10)).isoformat()
+        sp._portal_links["tok"] = {
+            "tenant_id": "t1",
+            "supplier_name": "Acme",
+            "allowed_cte_types": ["shipping"],
+            "integration_profile_id": "prof_123",
+            "expires_at": future,
+        }
+        ir._profile_store["t1"] = {
+            "prof_123": ir.IntegrationProfile(
+                profile_id="prof_123",
+                tenant_id="t1",
+                display_name="FreshPack CSV",
+                source_type="csv",
+                default_cte_type="shipping",
+                status="active",
+                confidence=0.91,
+                supplier_name="Acme",
+                created_at=future,
+                updated_at=future,
+            ),
+        }
+        monkeypatch.setattr(sp, "_db_get_portal_link", lambda _pid: None)
+        monkeypatch.setattr(sp, "get_db_safe", lambda: None)
+        monkeypatch.setattr(sp, "_allow_memory_fallback", lambda: True)
+
+        client = TestClient(_build_app())
+        resp = client.get("/api/v1/portal/tok")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["integration_profile"]["display_name"] == "FreshPack CSV"
+        assert body["integration_profile"]["confidence"] == pytest.approx(0.91)
 
     def test_missing_returns_404(self, monkeypatch):
         monkeypatch.setattr(sp, "_db_get_portal_link", lambda _pid: None)

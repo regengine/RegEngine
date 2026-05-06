@@ -7,6 +7,7 @@ export const dynamic = 'force-dynamic';
 export async function GET(request: NextRequest) {
     const { searchParams, origin } = new URL(request.url)
     const code = searchParams.get('code')
+    const nonce = request.headers.get('x-nonce') ?? ''
     // Default to /dashboard for regular users; developer portal flows pass ?next=/developer/portal explicitly
     const next = searchParams.get('next') ?? '/dashboard'
 
@@ -58,7 +59,7 @@ export async function GET(request: NextRequest) {
     //   a) forwards an implicit recovery token to /reset-password (old emails), or
     //   b) sends the user to /forgot-password with an expiry notice.
     return new Response(
-        `<!doctype html><html><head><meta charset="utf-8"></head><body><script>
+        `<!doctype html><html><head><meta charset="utf-8"></head><body><script nonce="${nonce}">
 (function(){
   var h = window.location.hash;
   if (h.indexOf('type=recovery') !== -1 && h.indexOf('access_token=') !== -1) {

@@ -2,6 +2,7 @@
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { apiClient } from './api-client';
+import { useAuth } from './auth-context';
 
 // Default to System Tenant if no other context is available
 const DEFAULT_TENANT_ID = '00000000-0000-0000-0000-000000000001';
@@ -14,12 +15,25 @@ interface TenantContextType {
 
 const TenantContext = createContext<TenantContextType | undefined>(undefined);
 
+function readStoredTenantId(): string | null {
+    if (typeof window === 'undefined') {
+        return null;
+    }
+
+    try {
+        return localStorage.getItem('regengine_tenant_id');
+    } catch {
+        return null;
+    }
+}
+
 export function TenantProvider({ children }: { children: React.ReactNode }) {
-    const [tenantId, setTenantId] = useState<string>(DEFAULT_TENANT_ID);
+    const { tenantId: authTenantId, isHydrated } = useAuth();
+    const [tenantId, setTenantId] = useState<string>(() => readStoredTenantId() || DEFAULT_TENANT_ID);
 
     // Load from local storage on mount
     useEffect(() => {
-        const stored = localStorage.getItem('regengine_tenant_id');
+        const stored = readStoredTenantId();
         if (stored) {
             setTenantId(stored);
             // Sync with API client
@@ -30,10 +44,28 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
         }
     }, []);
 
+    useEffect(() => {
+        if (!isHydrated) {
+            return;
+        }
+
+        const resolvedTenantId = authTenantId || readStoredTenantId();
+        if (!resolvedTenantId || resolvedTenantId === tenantId) {
+            return;
+        }
+
+        setTenantId(resolvedTenantId);
+        apiClient.setCurrentTenant(resolvedTenantId);
+    }, [authTenantId, isHydrated, tenantId]);
+
     // Update local storage and API client on change
     const updateTenant = (id: string) => {
         setTenantId(id);
-        localStorage.setItem('regengine_tenant_id', id);
+        try {
+            localStorage.setItem('regengine_tenant_id', id);
+        } catch {
+            // Ignore storage write failures; in-memory state still updates.
+        }
         // Sync with API client for X-Tenant-ID header
         apiClient.setCurrentTenant(id);
     };
@@ -69,4 +101,3 @@ export function useTenantContext() {
         isSystemTenant,
     };
 }
-

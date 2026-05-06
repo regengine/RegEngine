@@ -4,7 +4,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import { User } from '@/types/api';
 import { apiClient } from './api-client';
 import { fetchWithCsrf } from './fetch-with-csrf';
-import { createSupabaseBrowserClient } from '@/lib/supabase/client';
+import { createSupabaseBrowserClient, isSupabaseConfigured } from '@/lib/supabase/client';
 
 interface AuthContextType {
   user: User | null;
@@ -22,9 +22,9 @@ interface AuthContextType {
   setTenantId: (id: string | null) => Promise<void>;
   setDemoMode: (enabled: boolean) => void;
   completeOnboarding: () => void;
-  clearCredentials: () => void;
+  clearCredentials: () => Promise<void>;
   login: (token: string, user: User, tenantId?: string) => Promise<void>;
-  logout: () => void;
+  logout: () => Promise<void>;
   isAuthenticated: boolean;
 }
 
@@ -102,10 +102,19 @@ async function setSessionCookies(params: {
   }
 }
 
-/** Clear all session cookies via /api/session DELETE. */
-function clearSessionCookies() {
+/** Clear all session cookies via /api/session DELETE. Must be awaited before navigation. */
+async function clearSessionCookies(): Promise<void> {
   if (typeof window === 'undefined') return;
-  fetchWithCsrf('/api/session', { method: 'DELETE' }).catch(() => {});
+  try {
+    const res = await fetchWithCsrf('/api/session', { method: 'DELETE' });
+    if (!res.ok && process.env.NODE_ENV !== 'production') {
+      console.error('[auth] Failed to clear session cookie:', res.status);
+    }
+  } catch (err) {
+    if (process.env.NODE_ENV !== 'production') {
+      console.error('[auth] Failed to clear session cookie:', err);
+    }
+  }
 }
 
 /** Check current session via /api/session GET — never returns raw tokens. */
@@ -182,6 +191,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isOnboarded, setIsOnboarded] = useState(false);
   const [demoMode, setDemoModeState] = useState(false);
   const [isHydrated, setIsHydrated] = useState(false);
+  const logoutInProgressRef = useRef(false);
 
   // ---- Hydration: migrate localStorage, then hydrate from cookie session ----
   useEffect(() => {
@@ -261,6 +271,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // ---- Supabase auth state listener ----
   useEffect(() => {
+    if (!isSupabaseConfigured()) {
+      return;
+    }
+
     // If the middleware redirected to /login with an error param, the custom
     // JWT session is dead. Don't let a surviving Supabase session silently
     // re-authenticate — that causes stale nav state where the UI flickers
@@ -278,7 +292,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // against the Supabase auth server, while getSession() only reads the
       // local cookie/storage (which can be spoofed).
       supabase.auth.getUser().then(async ({ data: { user: validatedUser } }) => {
-        if (isAuthErrorRedirect) return;
+        if (isAuthErrorRedirect || logoutInProgressRef.current) return;
         if (validatedUser && !accessToken) {
           const appUser: User = {
             id: validatedUser.id,
@@ -311,7 +325,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
 
       const { data } = supabase.auth.onAuthStateChange(async (event, session) => {
-        if (isAuthErrorRedirect && event !== 'SIGNED_OUT') return;
+        if ((isAuthErrorRedirect || logoutInProgressRef.current) && event !== 'SIGNED_OUT') return;
 
         // #1073 Scope listener reactions explicitly. Supabase replays
         // INITIAL_SESSION and SIGNED_IN on network reconnect, sleep/wake,
@@ -366,13 +380,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setUserState(null);
           setApiKeyState(null);
           setAdminKeyState(null);
+          setTenantIdState(null);
+          setIsOnboarded(false);
+          setDemoModeState(false);
           apiClient.setAccessToken(null);
           apiClient.setUser(null);
           apiClient.setCurrentTenant(null);
           if (typeof window !== 'undefined') {
             Object.values(STORAGE_KEYS).forEach(key => localStorage.removeItem(key));
           }
-          clearSessionCookies();
+          await clearSessionCookies();
+          logoutInProgressRef.current = false;
         }
       });
       subscription = data.subscription;
@@ -391,7 +409,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     // Only run when authenticated
-    if (!accessToken || !isHydrated) return;
+    if (!accessToken || !isHydrated || !isSupabaseConfigured()) return;
 
     // #1075 Shorten the proactive refresh cadence. Access-token TTL is 60 min
     // and the backend has no per-token rotation marker — the old token stays
@@ -511,6 +529,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const login = useCallback(async (token: string, loginUser: User, loginTenantId?: string) => {
+    logoutInProgressRef.current = false;
+
     // Non-React state — these don't trigger re-renders or effects.
     apiClient.setAccessToken(COOKIE_MANAGED_PLACEHOLDER);
     apiClient.setUser(loginUser);
@@ -555,7 +575,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (loginTenantId) setTenantIdState(loginTenantId);
   }, []);
 
-  const clearCredentials = useCallback(() => {
+  const clearCredentials = useCallback(async () => {
     setApiKeyState(null);
     setAdminKeyState(null);
     setTenantIdState(null);
@@ -571,19 +591,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (typeof window !== 'undefined') {
       Object.values(STORAGE_KEYS).forEach(key => localStorage.removeItem(key));
     }
-    clearSessionCookies();
+    await clearSessionCookies();
   }, []);
 
-  const logout = useCallback(() => {
-    clearCredentials();
+  const logout = useCallback(async () => {
+    logoutInProgressRef.current = true;
+    await clearCredentials();
     // Sign out from Supabase too — prevents the dual-auth desync where
     // custom JWT cookies are cleared but Supabase session persists,
     // causing the onAuthStateChange listener to silently re-authenticate.
+    if (!isSupabaseConfigured()) {
+      logoutInProgressRef.current = false;
+      return;
+    }
+
     try {
       const supabase = createSupabaseBrowserClient();
-      supabase.auth.signOut().catch(() => {});
+      await supabase.auth.signOut();
     } catch {
-      // Supabase not configured — skip
+      logoutInProgressRef.current = false;
     }
   }, [clearCredentials]);
 

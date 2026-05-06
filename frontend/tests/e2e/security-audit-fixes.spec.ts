@@ -714,12 +714,13 @@ test.describe('Security Audit Fixes', () => {
             await userPage.fill('input[type="email"]', REGULAR_USER_EMAIL);
             await userPage.fill('input[type="password"]', REGULAR_USER_PASSWORD);
             await userPage.click('button[type="submit"]');
-            await expect(userPage).toHaveURL(/\/dashboard/);
+            await expect(userPage).toHaveURL(/\/(dashboard|onboarding)/);
             await userPage.goto('/sysadmin');
 
             const userRedirected =
                 userPage.url().includes('/login') ||
                 userPage.url().includes('/dashboard') ||
+                userPage.url().includes('/onboarding') ||
                 (await userPage.getByText(/403|forbidden|access denied/i).count()) > 0;
 
             expect(userRedirected).toBe(true);

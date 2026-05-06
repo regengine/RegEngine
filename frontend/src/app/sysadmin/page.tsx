@@ -27,7 +27,7 @@ interface SystemMetrics {
 }
 
 export default function SysAdminDashboard() {
-    const { user, accessToken, isHydrated, clearCredentials } = useAuth()
+    const { user, accessToken, isHydrated, logout } = useAuth()
     const router = useRouter()
     const [status, setStatus] = useState<SystemStatus | null>(null)
     const [metrics, setMetrics] = useState<SystemMetrics | null>(null)
@@ -93,7 +93,7 @@ export default function SysAdminDashboard() {
                         <RefreshCw className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`} />
                         Refresh
                     </Button>
-                    <Button variant="outline" onClick={() => { clearCredentials(); router.push("/login"); }}>
+                    <Button variant="outline" onClick={async () => { await logout(); router.replace("/login"); }}>
                         <LogOut className="mr-2 h-4 w-4" />
                         Sign Out
                     </Button>

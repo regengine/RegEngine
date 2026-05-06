@@ -39,6 +39,7 @@ class SubscriptionStatus(BaseModel):
     tenant_id: str
     plan: str
     status: str  # active, trialing, past_due, canceled, none
+    billing_period: Optional[str] = None
     current_period_end: Optional[str] = None
     events_used: int = 0
     events_limit: int = 0

@@ -261,6 +261,7 @@ async def refresh_session(
         "tenant_id": str(active_tenant_id) if active_tenant_id else None,  # For RLS
         "tid": str(active_tenant_id) if active_tenant_id else None,  # Backward compat
         "tenant_status": real_tenant_status,  # #1401: re-queried, never hardcoded
+        "is_sysadmin": bool(user.is_sysadmin),
         "tv": int(getattr(user, "token_version", 0) or 0),
     }
     access_token = create_access_token(access_token_data)

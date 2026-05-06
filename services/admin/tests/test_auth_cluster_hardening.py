@@ -23,7 +23,7 @@ import os
 import sys
 import types as _types
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
 from typing import TYPE_CHECKING
@@ -331,7 +331,7 @@ async def test_accept_invite_existing_user_without_password_refused(monkeypatch)
 
     # Call __wrapped__ to bypass the SlowAPI decorator.
     with pytest.raises(HTTPException) as exc:
-        await accept_invite.__wrapped__(request=req, http_request=http_req, db=db)
+        await accept_invite.__wrapped__(payload=req, request=http_req, db=db)
     assert exc.value.status_code == 400
     # Uniform error: no distinction between "expired" / "existing" / etc.
     assert exc.value.detail == "Invite is not usable"
@@ -367,7 +367,42 @@ async def test_accept_invite_existing_user_with_correct_password_succeeds(monkey
 
     req = AcceptInviteRequest(token="raw", password="real-password", name="x")
     http_req = _make_starlette_request()
-    out = await accept_invite.__wrapped__(request=req, http_request=http_req, db=db)
+    out = await accept_invite.__wrapped__(payload=req, request=http_req, db=db)
+    assert out["status"] == "success"
+    assert out["user_id"] == str(existing_user.id)
+
+
+@pytest.mark.asyncio
+async def test_accept_invite_existing_user_with_naive_expiry_succeeds(monkeypatch):
+    from services.admin.app.invite_routes import accept_invite, AcceptInviteRequest
+    from services.admin.app.auth_utils import get_password_hash
+
+    invite = _make_invite(email="alice@acme.com")
+    invite.expires_at = datetime.utcnow() + timedelta(days=1)
+    existing_user = SimpleNamespace(
+        id=uuid.uuid4(),
+        email="alice@acme.com",
+        password_hash=get_password_hash("real-password"),
+        status="active",
+    )
+    db = MagicMock()
+    db.execute.side_effect = [
+        _FakeResult(invite),
+        _FakeResult(existing_user),
+        _FakeResult(None),
+    ]
+    monkeypatch.setattr(
+        "services.admin.app.invite_routes.AuditLogger",
+        MagicMock(log_event=MagicMock(return_value=None)),
+    )
+    monkeypatch.setattr(
+        "services.admin.app.invite_routes.supplier_graph_sync",
+        MagicMock(record_invite_accepted=MagicMock(return_value=None)),
+    )
+
+    req = AcceptInviteRequest(token="raw", password="real-password", name="x")
+    http_req = _make_starlette_request()
+    out = await accept_invite.__wrapped__(payload=req, request=http_req, db=db)
     assert out["status"] == "success"
     assert out["user_id"] == str(existing_user.id)
 
@@ -394,7 +429,7 @@ async def test_accept_invite_inactive_user_refused(monkeypatch):
     http_req = _make_starlette_request()
 
     with pytest.raises(HTTPException) as exc:
-        await accept_invite.__wrapped__(request=req, http_request=http_req, db=db)
+        await accept_invite.__wrapped__(payload=req, request=http_req, db=db)
     assert exc.value.status_code == 400
 
 
@@ -433,7 +468,7 @@ async def test_accept_invite_uniform_400_for_all_unusable():
         db = MagicMock()
         db.execute.return_value = _FakeResult(invite)
         with pytest.raises(HTTPException) as exc:
-            await accept_invite.__wrapped__(request=req, http_request=http_req, db=db)
+            await accept_invite.__wrapped__(payload=req, request=http_req, db=db)
         assert exc.value.status_code == 400
         details.append(exc.value.detail)
     # All three messages identical — no side-channel.

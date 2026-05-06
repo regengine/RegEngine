@@ -362,6 +362,22 @@ class TestGetSubscription:
         assert getattr(exc, "status_code", None) == 503
 
     @pytest.mark.asyncio
+    async def test_redis_error_returns_empty_subscription_when_fallback_enabled(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        def _boom(_tenant_id: str) -> None:
+            raise redis.RedisError("conn dropped")
+
+        monkeypatch.setenv("ALLOW_BILLING_STATE_READ_FALLBACK", "true")
+        monkeypatch.setattr(state_mod, "_get_subscription_mapping", _boom)
+
+        result = await routes_mod.get_subscription("tenant-dev-fallback", _=None)
+        assert result.tenant_id == "tenant-dev-fallback"
+        assert result.plan == "none"
+        assert result.status == "none"
+        assert result.events_limit == 0
+
+    @pytest.mark.asyncio
     async def test_missing_mapping_returns_none_plan(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
@@ -390,6 +406,7 @@ class TestGetSubscription:
         result = await routes_mod.get_subscription("tenant-mid-flow", _=None)
         assert result.plan == "growth"
         assert result.status == "checkout_pending"
+        assert result.billing_period is None
         assert result.current_period_end == "2030-01-01T00:00:00+00:00"
 
     @pytest.mark.asyncio
@@ -425,10 +442,43 @@ class TestGetSubscription:
 
         result = await routes_mod.get_subscription("tenant-sub-refresh", _=None)
         assert result.status == "active"
+        assert result.billing_period is None
         assert result.current_period_end is not None
         assert "2027" in result.current_period_end  # 1_800_000_000 ≈ 2027
         # The refreshed state was persisted.
         assert stored["status"] == "active"
+
+    @pytest.mark.asyncio
+    async def test_missing_stripe_config_keeps_stored_subscription_snapshot(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(
+            state_mod,
+            "_get_subscription_mapping",
+            lambda _t: {
+                "plan_id": "growth",
+                "status": "active",
+                "billing_period": "annual",
+                "subscription_id": "sub_live_1",
+                "current_period_end": "2030-01-01T00:00:00+00:00",
+            },
+        )
+        monkeypatch.setattr(
+            helpers_mod,
+            "_configure_stripe",
+            lambda: (_ for _ in ()).throw(
+                routes_mod.HTTPException(
+                    status_code=500,
+                    detail="STRIPE_SECRET_KEY is not configured",
+                )
+            ),
+        )
+
+        result = await routes_mod.get_subscription("tenant-no-stripe", _=None)
+        assert result.plan == "growth"
+        assert result.status == "active"
+        assert result.billing_period == "annual"
+        assert result.current_period_end == "2030-01-01T00:00:00+00:00"
 
 
 # ── stripe_webhooks / stripe_webhook_legacy thin wrappers ──────────────────

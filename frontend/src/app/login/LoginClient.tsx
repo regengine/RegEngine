@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
 import { apiClient } from '@/lib/api-client';
-import { createSupabaseBrowserClient } from '@/lib/supabase/client';
+import { createSupabaseBrowserClient, isSupabaseConfigured } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader } from '@/components/ui/card';
@@ -187,22 +187,27 @@ export default function LoginPage() {
                 response.tenant_id
             );
 
-            // #538 fix: Establish Supabase session alongside custom JWT.
-            // The middleware cross-validates both auth systems — a valid
-            // re_access_token JWT without a Supabase cookie triggers a
-            // session_expired redirect. This sets the Supabase cookies that
-            // hasSomeSupabaseCookie() checks for.
-            //
-            // Runs AFTER login() so React state is set, which prevents the
-            // onAuthStateChange callback from clobbering re_access_token.
-            const supabase = createSupabaseBrowserClient();
-            const { error: sbError } = await supabase.auth.signInWithPassword({ email, password });
-            if (sbError) {
-                if (process.env.NODE_ENV !== 'production') {
-                    console.error('[login] Supabase session sync failed:', sbError.message);
+            // E2E and some local setups intentionally run in JWT-only mode
+            // with Supabase disabled. Only establish the second auth session
+            // when browser Supabase config is actually present.
+            if (isSupabaseConfigured()) {
+                // #538 fix: Establish Supabase session alongside custom JWT.
+                // The middleware cross-validates both auth systems — a valid
+                // re_access_token JWT without a Supabase cookie triggers a
+                // session_expired redirect. This sets the Supabase cookies that
+                // hasSomeSupabaseCookie() checks for.
+                //
+                // Runs AFTER login() so React state is set, which prevents the
+                // onAuthStateChange callback from clobbering re_access_token.
+                const supabase = createSupabaseBrowserClient();
+                const { error: sbError } = await supabase.auth.signInWithPassword({ email, password });
+                if (sbError) {
+                    if (process.env.NODE_ENV !== 'production') {
+                        console.error('[login] Supabase session sync failed:', sbError.message);
+                    }
+                    await clearCredentials();
+                    throw new Error('Secure session could not be established. Please try again.');
                 }
-                clearCredentials();
-                throw new Error('Secure session could not be established. Please try again.');
             }
 
             // Clear any error params (e.g. ?error=session_expired) left by
@@ -220,14 +225,20 @@ export default function LoginPage() {
             router.refresh();
         } catch (err: unknown) {
             setIsSessionSyncing(false);
-            if (process.env.NODE_ENV !== 'production') {
-                console.error('Login error:', err);
-            }
             const apiError = err as {
                 response?: { status?: number; data?: unknown };
                 message?: string;
                 code?: string;
             };
+            const shouldLogUnexpectedError =
+                process.env.NODE_ENV !== 'production' &&
+                ![401, 403, 404, 502].includes(apiError.response?.status ?? -1) &&
+                apiError.code !== 'ERR_NETWORK' &&
+                apiError.message !== 'Secure session could not be established. Please try again.';
+
+            if (shouldLogUnexpectedError) {
+                console.error('Login error:', err);
+            }
             const errorDetail = extractApiErrorMessage(apiError.response?.data);
 
             if (apiError.response?.status === 401) {

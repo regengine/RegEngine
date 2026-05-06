@@ -6,6 +6,7 @@ Exposes:
 """
 from __future__ import annotations
 
+import os
 import uuid
 from datetime import datetime, timedelta, timezone
 
@@ -37,13 +38,27 @@ from .lockout import (
 from .schemas import LoginRequest, TokenResponse
 from .session_helpers import _persist_session
 from shared.rate_limit import limiter
+from shared.env import is_production
 
 router = APIRouter()
 logger = structlog.get_logger("auth")
 
 
+def _login_rate_limit() -> str:
+    """Return the route-level login rate limit for this environment.
+
+    Production keeps the hardened default of ``5/minute``. Local dev and test
+    runs get a higher ceiling so Playwright and other automated verification
+    flows do not trip the per-IP SlowAPI guard before the deeper email-scoped
+    lockout protections engage.
+    """
+    return os.getenv("AUTH_LOGIN_RATE_LIMIT") or (
+        "5/minute" if is_production() else "120/minute"
+    )
+
+
 @router.post("/login", response_model=TokenResponse)
-@limiter.limit("5/minute")
+@limiter.limit(_login_rate_limit())
 async def login(
     payload: LoginRequest,
     request: Request,
@@ -137,6 +152,7 @@ async def login(
         "tenant_id": str(active_tenant_id) if active_tenant_id else None,
         "tid": str(active_tenant_id) if active_tenant_id else None,
         "tenant_status": active_tenant_status,
+        "is_sysadmin": bool(user.is_sysadmin),
         # #1349 / #1375 — token_version binds this access token to the user's
         # current password/session generation. Bumped on reset or logout-all.
         "tv": int(getattr(user, "token_version", 0) or 0),

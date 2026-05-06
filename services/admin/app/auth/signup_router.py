@@ -281,6 +281,7 @@ async def signup(
         "email": new_user.email,
         "tenant_id": str(new_tenant.id),
         "tid": str(new_tenant.id),
+        "is_sysadmin": bool(new_user.is_sysadmin),
         "tv": int(getattr(new_user, "token_version", 0) or 0),
     }
     access_token = create_access_token(access_token_data)

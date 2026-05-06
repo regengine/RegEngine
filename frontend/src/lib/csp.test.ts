@@ -21,7 +21,7 @@ function parseDirectives(policy: string): Record<string, string[]> {
 }
 
 describe('buildCsp', () => {
-  it('builds an enforced nonce-based script policy without unsafe script fallbacks', () => {
+  it('builds an enforced nonce-based script policy without unsafe script fallbacks in production mode', () => {
     const directives = parseDirectives(buildCsp('test-nonce'));
 
     expect(directives['script-src']).toEqual(
@@ -29,6 +29,18 @@ describe('buildCsp', () => {
     );
     expect(directives['script-src']).not.toContain("'unsafe-inline'");
     expect(directives['script-src']).not.toContain("'unsafe-eval'");
+  });
+
+  it('allows unsafe-eval only when explicitly enabled for local dev tooling', () => {
+    const directives = parseDirectives(
+      buildCsp('test-nonce', {
+        allowDevUnsafeEval: true,
+        allowDevUnsafeInline: true,
+      }),
+    );
+
+    expect(directives['script-src']).toContain("'unsafe-eval'");
+    expect(directives['script-src']).toContain("'unsafe-inline'");
   });
 
   it('allows required first-party integrations without weakening framing or object policy', () => {

@@ -107,6 +107,9 @@ export const CSRF_PROTECTED_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']
 const CSRF_EXEMPT_PREFIXES = [
     '/api/auth/',
     '/api/admin/auth/',
+    // Public invite acceptance arrives without an authenticated session and is
+    // authorized by the opaque invite token itself.
+    '/api/admin/v1/auth/accept-invite',
     // Both webhook paths: /api/webhooks/* for local handlers, /api/v1/webhooks/*
     // for the next.config.js rewrite to the ingestion service. External senders
     // authenticate via HMAC signatures, not Bearer tokens, so they don't hit

@@ -47,9 +47,9 @@ export function DeveloperPortalShell({ children }: { children: React.ReactNode }
     const { logout } = useAuth();
     const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
 
-    function handleLogout() {
-        logout();
-        router.push('/login');
+    async function handleLogout() {
+        await logout();
+        router.replace('/login');
         router.refresh();
     }
 

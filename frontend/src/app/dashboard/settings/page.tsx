@@ -53,7 +53,7 @@ export default function SettingsPage() {
     const { tenantId } = useTenant();
     const { organizations } = useOrganizations();
     const currentOrg = organizations.find(o => o.id === tenantId);
-    const { data: subscriptionData, isLoading: subLoading, isError: subError } = useCurrentSubscription();
+    const { data: subscriptionData, isLoading: subLoading, isError: subError } = useCurrentSubscription(tenantId, apiKey);
 
     const [saved, setSaved] = useState(false);
     const [showKey, setShowKey] = useState(false);
@@ -112,10 +112,10 @@ export default function SettingsPage() {
     // Distinguish between: API error (unavailable), API success with no plan, API success with plan
     const planName = subError
         ? 'Billing information unavailable'
-        : subscriptionData?.subscription?.tier_id
-            ? subscriptionData.subscription.tier_id.charAt(0).toUpperCase() + subscriptionData.subscription.tier_id.slice(1) + ' Plan'
+        : subscriptionData?.plan && subscriptionData.plan !== 'none'
+            ? subscriptionData.plan.charAt(0).toUpperCase() + subscriptionData.plan.slice(1) + ' Plan'
             : 'No Plan Selected';
-    const billingCycle = subscriptionData?.subscription?.billing_cycle || '';
+    const billingCycle = subscriptionData?.billing_period || '';
 
     const saveProfileMutation = useMutation({
         mutationFn: async () => {

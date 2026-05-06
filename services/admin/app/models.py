@@ -383,6 +383,11 @@ class TenantContext:
     """
 
     @staticmethod
+    def _uses_sqlite(session) -> bool:
+        bind = getattr(session, "bind", None)
+        return bool(bind) and getattr(bind.dialect, "name", None) == "sqlite"
+
+    @staticmethod
     def set_tenant_context(session, tenant_id: UUID) -> None:
         """Set tenant context for PostgreSQL RLS (session-scoped).
 
@@ -395,6 +400,10 @@ class TenantContext:
         intentional here and why ``set_tenant_guc`` (transaction-scope)
         is NOT the right migration target for this caller.
         """
+        if TenantContext._uses_sqlite(session):
+            session.info["tenant_id"] = str(tenant_id)
+            return
+
         session.execute(
             text("SELECT set_tenant_context(:tid)"),
             {"tid": str(tenant_id)}
@@ -410,6 +419,14 @@ class TenantContext:
         Returns:
             Current tenant UUID or None if not set
         """
+        if TenantContext._uses_sqlite(session):
+            result = session.info.get("tenant_id")
+            if not result:
+                return None
+            if isinstance(result, UUID):
+                return result
+            return UUID(str(result))
+
         result = session.execute(text("SELECT get_tenant_context()")).scalar()
         if result is None:
             return None
@@ -438,6 +455,10 @@ class TenantContext:
             session: SQLAlchemy session
             is_sysadmin: Whether to enable sysadmin bypass
         """
+        if TenantContext._uses_sqlite(session):
+            session.info["is_admin"] = bool(is_sysadmin)
+            return
+
         import structlog
         _logger = structlog.get_logger("rls-admin-context")
         if is_sysadmin:
@@ -462,4 +483,9 @@ class TenantContext:
             This should only be used for admin operations that need
             to access data across all tenants.
         """
+        if TenantContext._uses_sqlite(session):
+            session.info.pop("tenant_id", None)
+            session.info.pop("is_admin", None)
+            return
+
         session.execute(text("SELECT set_config('app.tenant_id', '', FALSE)"))

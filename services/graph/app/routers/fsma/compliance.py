@@ -170,7 +170,7 @@ async def export_epcis(
     request: Request,
     start_date: str = Query(..., description="Start Date (YYYY-MM-DD)"),
     end_date: str = Query(..., description="End Date (YYYY-MM-DD)"),
-    format: str = Query("json-ld", regex="^(json-ld|xml)$", description="EPCIS format"),
+    format: str = Query("json-ld", pattern="^(json-ld|xml)$", description="EPCIS format"),
     tenant_id: uuid.UUID = Depends(get_current_tenant_id),
     api_key=Depends(require_api_key),
 ):
@@ -378,7 +378,7 @@ def _epcis_to_xml(epcis_doc: dict) -> str:
 async def export_trace_csv(
     request: Request,
     tlc: str,
-    direction: str = Query("forward", regex="^(forward|backward)$"),
+    direction: str = Query("forward", pattern="^(forward|backward)$"),
     max_depth: int = Query(10, ge=1, le=20),
     tenant_id: uuid.UUID = Depends(get_current_tenant_id),
     api_key=Depends(require_api_key),
@@ -773,7 +773,7 @@ class TraceabilityPlanRequest(BaseModel):
 def generate_traceability_plan(
     request: Request,
     payload: TraceabilityPlanRequest,
-    format: str = Query("json", regex="^(json|markdown)$"),
+    format: str = Query("json", pattern="^(json|markdown)$"),
     api_key=Depends(require_api_key),
 ):
     """

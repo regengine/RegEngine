@@ -9,10 +9,9 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import { getServiceURL } from '@/lib/api-config';
 import { fetchWithCsrf } from '@/lib/fetch-with-csrf';
 
-// Billing queries are proxied through the admin Next.js API route to avoid
-// CORS issues and to keep credentials server-side. The dead port 8800 is
-// NOT used — all billing reads go through /api/admin which proxies to the
-// admin service.
+// Legacy billing helpers still route through the admin proxy when those
+// endpoints exist there. Subscription status is fetched separately from the
+// ingestion billing API because that is where the live route now lives.
 const BILLING_API_BASE = '/api/admin';
 
 // ── API Client Functions ──────────────────────────────────────────
@@ -122,16 +121,15 @@ export interface TiersResponse {
 }
 
 export interface SubscriptionData {
-    subscription: {
-        id: string;
-        tenant_id: string;
-        tier_id: string;
-        status: string;
-        billing_cycle: string;
-        current_period_start: string;
-        current_period_end: string;
-    } | null;
-    message?: string;
+    tenant_id: string;
+    plan: string;
+    status: string;
+    billing_period?: string | null;
+    current_period_end: string | null;
+    events_used: number;
+    events_limit: number;
+    facilities_used: number;
+    facilities_limit: number;
 }
 
 export interface CreditBalanceData {
@@ -181,11 +179,37 @@ export function usePricingTiers() {
     });
 }
 
+async function fetchCurrentSubscription(
+    tenantId: string,
+    apiKey?: string | null,
+): Promise<SubscriptionData> {
+    const headers = new Headers({
+        'Content-Type': 'application/json',
+    });
+
+    if (apiKey) {
+        headers.set('X-RegEngine-API-Key', apiKey);
+    }
+
+    const res = await fetchWithCsrf(
+        `${getServiceURL('ingestion')}/api/v1/billing/subscription/${tenantId}`,
+        { headers },
+    );
+
+    if (!res.ok) {
+        const error = await res.json().catch(() => ({ detail: 'Request failed' }));
+        throw new Error(error.detail || `Billing API error: ${res.status}`);
+    }
+
+    return res.json();
+}
+
 /** Fetch current subscription for the tenant */
-export function useCurrentSubscription() {
+export function useCurrentSubscription(tenantId?: string, apiKey?: string | null) {
     return useQuery<SubscriptionData>({
-        queryKey: ['billing', 'subscription'],
-        queryFn: () => billingFetch('/v1/billing/subscriptions/current'),
+        queryKey: ['billing', 'subscription', tenantId],
+        queryFn: () => fetchCurrentSubscription(tenantId!, apiKey),
+        enabled: !!tenantId,
         staleTime: 30_000,
     });
 }
@@ -235,7 +259,7 @@ export function useRedeemCredit() {
 /** Create a new subscription */
 export function useCreateSubscription() {
     return useMutation<
-        { subscription: SubscriptionData['subscription']; message: string },
+        { subscription: SubscriptionData | null; message: string },
         Error,
         { tier_id: string; billing_cycle?: string }
     >({

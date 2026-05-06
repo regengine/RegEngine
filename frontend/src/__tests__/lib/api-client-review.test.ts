@@ -102,4 +102,64 @@ describe('apiClient review queue contract', () => {
             { headers: { 'X-Admin-Key': 'admin-key' } },
         );
     });
+
+    it('unwraps paginated admin user-management responses', async () => {
+        const { apiClient } = await import('@/lib/api-client');
+        const adminClient = axiosMock.clients[0];
+        adminClient.get
+            .mockResolvedValueOnce({
+                data: {
+                    items: [
+                        { id: 'user-1', email: 'owner@example.com', is_sysadmin: false, status: 'active' },
+                    ],
+                    total: 1,
+                    skip: 0,
+                    limit: 20,
+                },
+            })
+            .mockResolvedValueOnce({
+                data: {
+                    items: [
+                        { id: 'role-1', name: 'Viewer', is_system: true },
+                    ],
+                    total: 1,
+                    skip: 0,
+                    limit: 20,
+                },
+            })
+            .mockResolvedValueOnce({
+                data: {
+                    items: [
+                        {
+                            id: 'invite-1',
+                            email: 'pending@example.com',
+                            role_id: 'role-1',
+                            status: 'pending',
+                            created_at: '2026-05-05T00:00:00.000Z',
+                            expires_at: '2026-05-12T00:00:00.000Z',
+                        },
+                    ],
+                    total: 1,
+                    skip: 0,
+                    limit: 20,
+                },
+            });
+
+        await expect(apiClient.getUsers()).resolves.toEqual([
+            { id: 'user-1', email: 'owner@example.com', is_sysadmin: false, status: 'active' },
+        ]);
+        await expect(apiClient.getRoles()).resolves.toEqual([
+            { id: 'role-1', name: 'Viewer', is_system: true },
+        ]);
+        await expect(apiClient.getInvites()).resolves.toEqual([
+            {
+                id: 'invite-1',
+                email: 'pending@example.com',
+                role_id: 'role-1',
+                status: 'pending',
+                created_at: '2026-05-05T00:00:00.000Z',
+                expires_at: '2026-05-12T00:00:00.000Z',
+            },
+        ]);
+    });
 });

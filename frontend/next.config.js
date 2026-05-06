@@ -25,14 +25,6 @@ if (!isStatic && isDevServer) {
             'The dashboard will fall back to demo data.'
         );
     }
-
-    if (!apiGatewayUrl && hasIndividualServiceUrls) {
-        console.warn(
-            'Warning: NEXT_PUBLIC_API_BASE_URL is not set. ' +
-            'Individual service URLs are present so routing will work, ' +
-            'but the /api/v1/health proxy rewrite will be skipped.'
-        );
-    }
 }
 
 const nextConfig = {
@@ -42,7 +34,7 @@ const nextConfig = {
     // both server-rendered and static-export builds — do not disable for static.
     images: {},
     async headers() {
-        return [
+        const headers = [
             // ── Security headers — all routes (#543 enforced CSP lives in src/proxy.ts)
             {
                 source: '/(.*)',
@@ -57,50 +49,57 @@ const nextConfig = {
                     // nonce by src/proxy.ts (#543). See frontend/src/lib/csp.ts.
                 ],
             },
-            // ── Cache-Control headers (#557) ─────────────────────────────────────────
-            // Hashed static assets: immutable — content-addressable filenames change on
-            // every build so browsers can cache indefinitely.
-            {
-                source: '/_next/static/(.*)',
-                headers: [
-                    {
-                        key: 'Cache-Control',
-                        value: 'public, max-age=31536000, immutable',
-                    },
-                ],
-            },
-            // Public static files (images, fonts, favicon, etc.)
-            {
-                source: '/static/(.*)',
-                headers: [
-                    {
-                        key: 'Cache-Control',
-                        value: 'public, max-age=31536000, immutable',
-                    },
-                ],
-            },
-            // API routes: never cache — always fetch fresh data
-            {
-                source: '/api/(.*)',
-                headers: [
-                    {
-                        key: 'Cache-Control',
-                        value: 'no-store',
-                    },
-                ],
-            },
-            // HTML pages: revalidate on every request; CDN may serve stale for 60 s
-            // while revalidating in the background (stale-while-revalidate).
-            {
-                source: '/((?!_next/static|_next/image|favicon.ico|api/).*)',
-                headers: [
-                    {
-                        key: 'Cache-Control',
-                        value: 'public, max-age=0, must-revalidate',
-                    },
-                ],
-            },
         ];
+
+        if (!isDevServer) {
+            headers.push(
+                // ── Cache-Control headers (#557) ─────────────────────────────────────
+                // Hashed static assets: immutable — content-addressable filenames
+                // change on every build so browsers can cache indefinitely.
+                {
+                    source: '/_next/static/(.*)',
+                    headers: [
+                        {
+                            key: 'Cache-Control',
+                            value: 'public, max-age=31536000, immutable',
+                        },
+                    ],
+                },
+                // Public static files (images, fonts, favicon, etc.)
+                {
+                    source: '/static/(.*)',
+                    headers: [
+                        {
+                            key: 'Cache-Control',
+                            value: 'public, max-age=31536000, immutable',
+                        },
+                    ],
+                },
+                // API routes: never cache — always fetch fresh data
+                {
+                    source: '/api/(.*)',
+                    headers: [
+                        {
+                            key: 'Cache-Control',
+                            value: 'no-store',
+                        },
+                    ],
+                },
+                // HTML pages: revalidate on every request; CDN may serve stale for
+                // 60 s while revalidating in the background (stale-while-revalidate).
+                {
+                    source: '/((?!_next/static|_next/image|favicon.ico|api/).*)',
+                    headers: [
+                        {
+                            key: 'Cache-Control',
+                            value: 'public, max-age=0, must-revalidate',
+                        },
+                    ],
+                },
+            );
+        }
+
+        return headers;
     },
     async redirects() {
         return [
