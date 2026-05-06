@@ -2,6 +2,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import DashboardInflowLabPage from '@/app/dashboard/inflow-lab/page';
+import { AuthProvider } from '@/lib/auth-context';
+import { TenantProvider } from '@/lib/tenant-context';
 
 const completeLot = '00614141000012-20260426-000001';
 const partialLot = '00614141000012-20260426-000003';
@@ -66,6 +68,16 @@ function jsonResponse(payload: unknown, init?: ResponseInit) {
             headers: { 'content-type': 'application/json' },
             ...init,
         }),
+    );
+}
+
+function renderDashboardInflowLabPage() {
+    return render(
+        <AuthProvider>
+            <TenantProvider>
+                <DashboardInflowLabPage />
+            </TenantProvider>
+        </AuthProvider>,
     );
 }
 
@@ -177,7 +189,7 @@ describe('Dashboard Inflow Lab', () => {
     });
 
     it('renders the dashboard Inflow Lab workspace and reports a healthy proxy connection', async () => {
-        render(<DashboardInflowLabPage />);
+        renderDashboardInflowLabPage();
 
         expect(screen.getByRole('heading', { name: 'Inflow Lab' })).toBeInTheDocument();
         expect(screen.getByText('Mock environment')).toBeInTheDocument();
@@ -203,7 +215,7 @@ describe('Dashboard Inflow Lab', () => {
 
     it('keeps a guided test run that can run the mock inflow machine and open records', async () => {
         const user = userEvent.setup();
-        render(<DashboardInflowLabPage />);
+        renderDashboardInflowLabPage();
 
         await user.click(screen.getByRole('button', { name: 'Start guided test run' }));
 
@@ -223,7 +235,7 @@ describe('Dashboard Inflow Lab', () => {
 
     it('keeps tab navigation interactive and opens lineage from a selected lot', async () => {
         const user = userEvent.setup();
-        render(<DashboardInflowLabPage />);
+        renderDashboardInflowLabPage();
 
         await user.click(screen.getByRole('button', { name: 'Lots' }));
         const partialLotCard = await screen.findByRole('button', { name: new RegExp(partialLot) });
@@ -238,7 +250,7 @@ describe('Dashboard Inflow Lab', () => {
 
     it('shows export preview copy that keeps partial lots outside production evidence', async () => {
         const user = userEvent.setup();
-        render(<DashboardInflowLabPage />);
+        renderDashboardInflowLabPage();
 
         await user.click(screen.getByRole('button', { name: 'Lots' }));
         await user.click(await screen.findByRole('button', { name: new RegExp(partialLot) }));
@@ -255,7 +267,7 @@ describe('Dashboard Inflow Lab', () => {
 
     it('makes the feeder-to-production path explicit from the dashboard lab', async () => {
         const user = userEvent.setup();
-        render(<DashboardInflowLabPage />);
+        renderDashboardInflowLabPage();
 
         await user.click(screen.getByRole('button', { name: 'Data feeder' }));
 
@@ -274,7 +286,7 @@ describe('Dashboard Inflow Lab', () => {
 
     it('saves evaluated feeder data as a test run without promoting it to evidence', async () => {
         const user = userEvent.setup();
-        render(<DashboardInflowLabPage />);
+        renderDashboardInflowLabPage();
 
         await user.click(screen.getByRole('button', { name: 'Data feeder' }));
         await user.click(screen.getByRole('button', { name: 'Evaluate data' }));
@@ -296,7 +308,7 @@ describe('Dashboard Inflow Lab', () => {
 
     it('surfaces the readiness score, fix queue, and streamlined dashboard workflow', async () => {
         const user = userEvent.setup();
-        render(<DashboardInflowLabPage />);
+        renderDashboardInflowLabPage();
 
         expect(await screen.findByText('Readiness score')).toBeInTheDocument();
         expect(screen.getByText('Traceability Readiness Score')).toBeInTheDocument();
