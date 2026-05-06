@@ -1,6 +1,25 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+
+vi.mock('@/lib/auth-context', () => ({
+    useAuth: vi.fn().mockReturnValue({
+        isAuthenticated: false,
+        isHydrated: true,
+        tenantId: null,
+    }),
+}));
+
+vi.mock('@/lib/tenant-context', () => ({
+    useTenant: vi.fn().mockReturnValue({ tenantId: null }),
+}));
+
+vi.mock('@/lib/fetch-with-csrf', () => ({
+    fetchWithCsrf: vi.fn((input: RequestInfo | URL, init?: RequestInit) =>
+        (globalThis as unknown as { fetch: typeof fetch }).fetch(input, init),
+    ),
+}));
+
 import DashboardInflowLabPage from '@/app/dashboard/inflow-lab/page';
 import { AuthProvider } from '@/lib/auth-context';
 import { TenantProvider } from '@/lib/tenant-context';
@@ -128,39 +147,6 @@ describe('Dashboard Inflow Lab', () => {
                     components: [],
                 });
             }
-            if (url.endsWith('/api/ingestion/api/v1/inflow-workbench/commit-gate')) {
-                return jsonResponse({
-                    mode: 'preflight',
-                    allowed: true,
-                    export_eligible: false,
-                    reasons: ['Allowed for sandbox diagnosis only; no production evidence is created.'],
-                    next_state: 'staging',
-                });
-            }
-            if (url.endsWith('/api/ingestion/api/v1/inflow-workbench/runs')) {
-                return jsonResponse({
-                    run_id: 'run-test-001',
-                    tenant_id: 'mock-tenant',
-                    source: 'inflow-lab-data-feeder',
-                    saved_at: '2026-04-30T10:00:00.000Z',
-                    readiness: {
-                        score: 94,
-                        label: 'export ready after authenticated commit',
-                        components: [],
-                    },
-                    fix_queue: [],
-                    commit_gate: {
-                        mode: 'staging',
-                        allowed: true,
-                        export_eligible: false,
-                        reasons: ['Ready to request authenticated production commit.'],
-                        next_state: 'production_evidence',
-                    },
-                });
-            }
-            if (url.includes('/api/ingestion/api/v1/inflow-workbench/scenarios')) {
-                return jsonResponse([]);
-            }
             if (url.endsWith('/api/healthz')) {
                 return jsonResponse({ ok: true, build: { version: 'test-build' } });
             }
@@ -181,143 +167,121 @@ describe('Dashboard Inflow Lab', () => {
                 return jsonResponse({ records: completeLotRecords });
             }
             if (url.includes(`/api/lineage/${encodeURIComponent(partialLot)}`)) {
-                return jsonResponse({ records: serviceRecords.filter((record) => record.event.traceability_lot_code === partialLot) });
+                return jsonResponse({
+                    records: serviceRecords.filter(
+                        (record) => record.event.traceability_lot_code === partialLot,
+                    ),
+                });
             }
             return jsonResponse({});
         });
         vi.stubGlobal('fetch', mockFetch);
     });
 
-    it('renders the dashboard Inflow Lab workspace and reports a healthy proxy connection', async () => {
+    it('renders the Inflow Lab header with one Sandbox chip and a single boundary banner', async () => {
         renderDashboardInflowLabPage();
 
         expect(screen.getByRole('heading', { name: 'Inflow Lab' })).toBeInTheDocument();
-        expect(screen.getByText('Mock environment')).toBeInTheDocument();
-        expect(screen.getByText('Boundary active')).toBeInTheDocument();
-        expect(screen.getByText('Sandbox diagnosis')).toBeInTheDocument();
-        expect(screen.getByText('Mock Inflow Lab')).toBeInTheDocument();
-        expect(screen.getByText('Authenticated feed')).toBeInTheDocument();
-        expect(screen.getByText('Production evidence')).toBeInTheDocument();
-        expect(screen.getByText('FDA-ready evidence comes from signed-in production records')).toBeInTheDocument();
-        expect(screen.getByText('Guided test run')).toBeInTheDocument();
-        expect(screen.getByRole('button', { name: 'Start guided test run' })).toBeInTheDocument();
-        expect(screen.getByRole('button', { name: 'Run guided test' })).toBeInTheDocument();
-        expect(screen.getByText('Load test records')).toBeInTheDocument();
-        expect(screen.getByText('Validate records')).toBeInTheDocument();
-        expect(screen.getByText('Review exceptions')).toBeInTheDocument();
 
-        await waitFor(() => {
-            expect(screen.getAllByText('Connection ready').length).toBeGreaterThan(0);
-        });
-        expect(await screen.findByText(/You are viewing mock feed data; no uploaded CSV sandbox run has been evaluated yet/i)).toBeInTheDocument();
-        expect(screen.getAllByText('1 of 2 lots test complete').length).toBeGreaterThan(0);
-    });
+        const sandboxChips = screen.getAllByText('Sandbox');
+        expect(sandboxChips).toHaveLength(1);
 
-    it('keeps a guided test run that can run the mock inflow machine and open records', async () => {
-        const user = userEvent.setup();
-        renderDashboardInflowLabPage();
-
-        await user.click(screen.getByRole('button', { name: 'Start guided test run' }));
-
-        await waitFor(() => {
-            expect(mockFetch).toHaveBeenCalledWith(
-                expect.stringContaining('/api/inflow-lab/api/simulate/start'),
-                expect.objectContaining({ method: 'POST' }),
-            );
-            expect(mockFetch).toHaveBeenCalledWith(
-                expect.stringContaining('/api/inflow-lab/api/simulate/stop'),
-                expect.objectContaining({ method: 'POST' }),
-            );
-        });
-        expect(screen.getByRole('button', { name: 'Record log' })).toHaveAttribute('aria-pressed', 'true');
-        expect(screen.getByText('Guided test run')).toBeInTheDocument();
-    });
-
-    it('keeps tab navigation interactive and opens lineage from a selected lot', async () => {
-        const user = userEvent.setup();
-        renderDashboardInflowLabPage();
-
-        await user.click(screen.getByRole('button', { name: 'Lots' }));
-        const partialLotCard = await screen.findByRole('button', { name: new RegExp(partialLot) });
-        expect(within(partialLotCard).getByText('exception')).toBeInTheDocument();
-
-        await user.click(partialLotCard);
-
-        expect(screen.getByRole('button', { name: 'Lineage' })).toHaveAttribute('aria-pressed', 'true');
-        expect(await screen.findByText(`Lineage for ${partialLot}`)).toBeInTheDocument();
-        expect(screen.getByText(/Capture missing KDE evidence for initial packing, shipping, DC receiving before this lot is counted as test complete/i)).toBeInTheDocument();
-    });
-
-    it('shows export preview copy that keeps partial lots outside production evidence', async () => {
-        const user = userEvent.setup();
-        renderDashboardInflowLabPage();
-
-        await user.click(screen.getByRole('button', { name: 'Lots' }));
-        await user.click(await screen.findByRole('button', { name: new RegExp(partialLot) }));
-        await user.click(screen.getByRole('button', { name: 'Test previews' }));
-
-        expect(screen.getByText(/Selected lot is an exception/i)).toBeInTheDocument();
-        expect(screen.getByText(/Includes 1 test-complete lots\. 1 exception lots are flagged for review/i)).toBeInTheDocument();
-        expect(screen.getByText(/FDA-ready evidence is generated only from production records/i)).toBeInTheDocument();
-        expect(screen.getByRole('link', { name: 'Preview test CSV' })).toHaveAttribute(
-            'href',
-            expect.stringContaining('/api/inflow-lab/api/mock/regengine/export/fda-request'),
+        const banner = screen.getByRole('status');
+        expect(banner).toHaveTextContent('Sandbox preview only.');
+        expect(banner).toHaveTextContent(
+            /Production FDA exports stay sealed and audit-ready — nothing here writes to them\./,
         );
+
+        expect(screen.queryByText('Mock environment')).not.toBeInTheDocument();
+        expect(screen.queryByText('Boundary active')).not.toBeInTheDocument();
+        expect(screen.queryByText('Sandbox diagnosis')).not.toBeInTheDocument();
     });
 
-    it('makes the feeder-to-production path explicit from the dashboard lab', async () => {
-        const user = userEvent.setup();
+    it('renders the 5-step funnel with a single Run sandbox test CTA in the active step', async () => {
         renderDashboardInflowLabPage();
 
-        await user.click(screen.getByRole('button', { name: 'Data feeder' }));
+        const funnel = await screen.findByTestId('inflow-funnel');
+        expect(within(funnel).getByText('Loaded')).toBeInTheDocument();
+        expect(within(funnel).getByText('Validated')).toBeInTheDocument();
+        expect(within(funnel).getByText('Passing')).toBeInTheDocument();
+        expect(within(funnel).getByText('Preview-ready')).toBeInTheDocument();
+        expect(within(funnel).getByText('Production import')).toBeInTheDocument();
 
-        expect(screen.getByText('Paste or upload inbound CSV')).toBeInTheDocument();
-        expect(screen.getByText(/public stateless sandbox evaluator/i)).toBeInTheDocument();
-        expect(screen.getByText(/without being stored or promoted to production ingestion/i)).toBeInTheDocument();
-        expect(screen.getByText('Path to production')).toBeInTheDocument();
-        expect(screen.getByText('Diagnose free')).toBeInTheDocument();
-        expect(screen.getByText('Save as test run')).toBeInTheDocument();
-        expect(screen.getAllByText('Generate production evidence').length).toBeGreaterThan(0);
-        expect(screen.getByText('Use signed-in production records only')).toBeInTheDocument();
-        expect(screen.getByRole('link', { name: 'Convert to import mapping' })).toHaveAttribute('href', '/ingest');
-        expect(screen.getByRole('link', { name: 'Monitor live feed' })).toHaveAttribute('href', '/dashboard/integrations');
-        expect(screen.getByRole('link', { name: 'Generate production evidence' })).toHaveAttribute('href', '/dashboard/export-jobs');
+        const sandboxButtons = screen.getAllByRole('button', { name: /Run sandbox test/i });
+        expect(sandboxButtons).toHaveLength(1);
+
+        const activeStep = funnel.querySelector('[data-funnel-step="passing"]');
+        expect(activeStep).not.toBeNull();
+        expect(activeStep!).toContainElement(sandboxButtons[0]);
     });
 
-    it('saves evaluated feeder data as a test run without promoting it to evidence', async () => {
-        const user = userEvent.setup();
+    it('renders the readiness panel with five stacked-bar factors', async () => {
         renderDashboardInflowLabPage();
 
-        await user.click(screen.getByRole('button', { name: 'Data feeder' }));
-        await user.click(screen.getByRole('button', { name: 'Evaluate data' }));
-
-        expect(await screen.findByText('1 events evaluated')).toBeInTheDocument();
-        await user.click(screen.getByRole('button', { name: 'Save test run' }));
-
-        const savedRun = JSON.parse(window.localStorage.getItem('regengine:inflow-lab:last-feeder-run') || '{}');
-        expect(savedRun).toMatchObject({
-            source: 'inflow-lab-data-feeder',
-            csv: expect.stringContaining('traceability_lot_code'),
-            result: sandboxEvaluation,
+        await waitFor(() => {
+            expect(screen.getByText('KDE completeness')).toBeInTheDocument();
         });
-        expect(savedRun.saved_at).toEqual(expect.any(String));
-        expect(window.sessionStorage.getItem('regengine:sandbox-handoff')).toBeNull();
-        expect(await screen.findByText(/Persisted as run-test-001/)).toBeInTheDocument();
-        expect(screen.getByText('Backend readiness')).toBeInTheDocument();
+        expect(screen.getByText('CTE lifecycle')).toBeInTheDocument();
+        expect(screen.getByText('Delivery quality')).toBeInTheDocument();
+        expect(screen.getByText('Sandbox pass rate')).toBeInTheDocument();
+        expect(screen.getByText('Connection health')).toBeInTheDocument();
+        expect(screen.getByText('not run')).toBeInTheDocument();
     });
 
-    it('surfaces the readiness score, fix queue, and streamlined dashboard workflow', async () => {
+    it('renders exceptions as 3 grouped patterns and never as 35 stacked cards', async () => {
+        renderDashboardInflowLabPage();
+
+        await waitFor(() => {
+            expect(screen.getByText('Exceptions')).toBeInTheDocument();
+        });
+        expect(screen.getByText('Missing handoff evidence')).toBeInTheDocument();
+        expect(screen.getByText('Missing source evidence')).toBeInTheDocument();
+        expect(screen.getByText('Mixed / multi-cause')).toBeInTheDocument();
+    });
+
+    it('renders the mixed group without a Fix all bulk CTA', async () => {
+        renderDashboardInflowLabPage();
+        const mixedGroup = await waitFor(() => {
+            const node = document.querySelector('[data-exception-group="mixed"]');
+            if (!node) throw new Error('mixed group not found');
+            return node as HTMLElement;
+        });
+        expect(within(mixedGroup).queryByText(/^Fix all /)).not.toBeInTheDocument();
+    });
+
+    it('keeps the selected lot detail in a sticky right rail with Lifecycle and KDE tiles', async () => {
+        renderDashboardInflowLabPage();
+
+        await waitFor(() => {
+            expect(screen.getByText('Selected lot')).toBeInTheDocument();
+        });
+        expect(screen.getByText('Lifecycle')).toBeInTheDocument();
+        expect(screen.getByText('Lot KDE summary')).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Fix this lot' })).toBeInTheDocument();
+    });
+
+    it('triggers a sandbox evaluation when Run sandbox test is pressed in the funnel', async () => {
         const user = userEvent.setup();
         renderDashboardInflowLabPage();
 
-        expect(await screen.findByText('Readiness score')).toBeInTheDocument();
-        expect(screen.getByText('Traceability Readiness Score')).toBeInTheDocument();
+        await user.click(screen.getByRole('button', { name: /Run sandbox test/i }));
+        expect(screen.getByText(/Paste CSV text or upload a CSV file before evaluating\./i)).toBeInTheDocument();
+    });
 
-        await user.click(screen.getByRole('button', { name: 'Fix queue' }));
-        expect(screen.getByText('Commit gate')).toBeInTheDocument();
-        expect(screen.getByText(/Green Leaf Lettuce missing KDE evidence/i)).toBeInTheDocument();
-        expect(screen.getByRole('button', { name: 'Test previews' })).toBeInTheDocument();
-        expect(screen.queryByRole('button', { name: 'Scenarios' })).not.toBeInTheDocument();
-        expect(screen.queryByRole('button', { name: 'Suppliers' })).not.toBeInTheDocument();
+    it('opens fix queue navigation from the section-level button', async () => {
+        renderDashboardInflowLabPage();
+        const link = await screen.findByRole('link', { name: 'Open fix queue' });
+        expect(link).toHaveAttribute('href', '/dashboard/exceptions');
+    });
+
+    it('exposes filter chips for all/handoff/source/mixed', async () => {
+        renderDashboardInflowLabPage();
+        await waitFor(() => {
+            expect(screen.getByText('Filter')).toBeInTheDocument();
+        });
+        expect(screen.getByRole('button', { name: 'all' })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'handoff' })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'source' })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'mixed' })).toBeInTheDocument();
     });
 });

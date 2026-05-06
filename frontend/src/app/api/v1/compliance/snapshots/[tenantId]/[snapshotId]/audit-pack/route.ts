@@ -8,7 +8,7 @@ import {
 } from '@/lib/api-proxy';
 import {
     allowDevComplianceSnapshotFallback,
-    exportDevComplianceSnapshot,
+    buildDevComplianceSnapshotAuditPack,
 } from '@/lib/dev-compliance-snapshots';
 
 export const dynamic = 'force-dynamic';
@@ -17,7 +17,7 @@ function getComplianceUrl(): string {
     const url = process.env.COMPLIANCE_SERVICE_URL || getServerServiceURL('compliance');
     const onVercel = Boolean(process.env.VERCEL || process.env.VERCEL_URL);
     if (onVercel && url.includes('.railway.internal')) {
-        console.warn('[proxy/export] COMPLIANCE_SERVICE_URL points to internal Railway URL — unreachable from Vercel.');
+        console.warn('[proxy/audit-pack] COMPLIANCE_SERVICE_URL points to internal Railway URL — unreachable from Vercel.');
         return getServerServiceURL('compliance');
     }
     return url;
@@ -29,19 +29,15 @@ interface Props {
 
 export async function GET(
     request: NextRequest,
-    { params }: Props
+    { params }: Props,
 ) {
-    // Defense-in-depth: reject requests with no auth credentials before proxying
     const authError = requireProxyAuth(request);
     if (authError) return authError;
 
-    // Validate Supabase session tokens (expired/revoked sessions get 401)
     const sessionError = await validateProxySession(request);
     if (sessionError) return sessionError;
 
     const { tenantId: rawTenantId, snapshotId: rawSnapshotId } = await params;
-    // Validate UUIDs before interpolating into the upstream URL (see
-    // verify/route.ts — same hardening applied to every named-segment proxy).
     const tenantId = validateUuid(rawTenantId);
     const snapshotId = validateUuid(rawSnapshotId);
     if (!tenantId || !snapshotId) {
@@ -50,11 +46,8 @@ export async function GET(
             { status: 400 },
         );
     }
-    const url = new URL(request.url);
-    const queryString = url.search;
 
     const COMPLIANCE_URL = getComplianceUrl();
-
     const headers: Record<string, string> = {
         'Content-Type': 'application/json',
     };
@@ -66,31 +59,33 @@ export async function GET(
 
     try {
         const response = await fetch(
-            `${COMPLIANCE_URL}/v1/compliance/snapshots/${tenantId}/${snapshotId}/export${queryString}`,
-            {
-                method: 'GET',
-                headers,
-            }
+            `${COMPLIANCE_URL}/v1/compliance/snapshots/${tenantId}/${snapshotId}/audit-pack`,
+            { headers },
         );
 
         if (!response.ok) {
             const data = await response.json().catch(() => ({}));
             if (allowFallback && (response.status === 404 || response.status === 503)) {
-                const exportPayload = exportDevComplianceSnapshot({ tenantId, snapshotId });
-                if (exportPayload) {
-                    return NextResponse.json(exportPayload);
+                const auditPack = buildDevComplianceSnapshotAuditPack({ tenantId, snapshotId });
+                if (auditPack) {
+                    return new NextResponse(auditPack, {
+                        status: 200,
+                        headers: {
+                            'content-type': 'text/plain; charset=utf-8',
+                            'content-disposition': `attachment; filename="ZeroTrust-AuditPack-${snapshotId}.txt"`,
+                            'cache-control': 'no-store',
+                        },
+                    });
                 }
             }
             return NextResponse.json(
-                { error: data.detail || 'Export failed' },
-                { status: response.status }
+                { error: data.detail || 'Audit pack generation failed' },
+                { status: response.status },
             );
         }
 
-        // Pass through the response body and content headers for file downloads
         const outgoingHeaders = new Headers();
-        const passthroughHeaders = ['content-type', 'content-disposition', 'cache-control'];
-        for (const header of passthroughHeaders) {
+        for (const header of ['content-type', 'content-disposition', 'cache-control']) {
             const value = response.headers.get(header);
             if (value) {
                 outgoingHeaders.set(header, value);
@@ -101,18 +96,24 @@ export async function GET(
             status: response.status,
             headers: outgoingHeaders,
         });
-
     } catch (error: unknown) {
-        console.error('[proxy/export] Backend unreachable:', error);
+        console.error('[proxy/audit-pack] Backend unreachable:', error);
         if (allowFallback) {
-            const exportPayload = exportDevComplianceSnapshot({ tenantId, snapshotId });
-            if (exportPayload) {
-                return NextResponse.json(exportPayload);
+            const auditPack = buildDevComplianceSnapshotAuditPack({ tenantId, snapshotId });
+            if (auditPack) {
+                return new NextResponse(auditPack, {
+                    status: 200,
+                    headers: {
+                        'content-type': 'text/plain; charset=utf-8',
+                        'content-disposition': `attachment; filename="ZeroTrust-AuditPack-${snapshotId}.txt"`,
+                        'cache-control': 'no-store',
+                    },
+                });
             }
         }
         return NextResponse.json(
-            { error: 'Export service unavailable' },
-            { status: 503 }
+            { error: 'Audit pack service unavailable' },
+            { status: 503 },
         );
     }
 }

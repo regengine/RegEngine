@@ -81,6 +81,35 @@ interface DiffResult {
     changes?: DiffChange[];
 }
 
+async function loadSnapshotsForTenant(tenantId: string): Promise<{
+    items: Snapshot[];
+    error: string | null;
+}> {
+    try {
+        const response = await fetchWithCsrf(`/api/v1/compliance/snapshots/${tenantId}`);
+        if (response.ok) {
+            const data = await response.json();
+            if (Array.isArray(data)) {
+                return { items: data, error: null };
+            }
+            if (data && Array.isArray(data.items)) {
+                return { items: data.items, error: null };
+            }
+            return { items: [], error: null };
+        }
+
+        return {
+            items: [],
+            error: `Snapshot API returned ${response.status}`,
+        };
+    } catch {
+        return {
+            items: [],
+            error: 'Unable to reach snapshot service. Check your connection.',
+        };
+    }
+}
+
 export default function SnapshotsPage() {
     const { tenantId } = useTenant();
     const { user } = useAuth();
@@ -111,35 +140,34 @@ export default function SnapshotsPage() {
     const [attestTitle, setAttestTitle] = useState('');
 
     useEffect(() => {
-        fetchSnapshots();
+        let disposed = false;
+
+        const syncSnapshots = async () => {
+            const result = await loadSnapshotsForTenant(tenantId);
+            if (disposed) return;
+
+            setFetchError(result.error);
+            setSnapshots(result.items);
+            setLoading(false);
+        };
+
+        void syncSnapshots();
         // Refresh countdown every 30 seconds
-        const interval = setInterval(fetchSnapshots, 30000);
-        return () => clearInterval(interval);
+        const interval = setInterval(() => {
+            void syncSnapshots();
+        }, 30000);
+
+        return () => {
+            disposed = true;
+            clearInterval(interval);
+        };
     }, [tenantId]);
 
-    const fetchSnapshots = async () => {
-        setFetchError(null);
-        try {
-            const response = await fetchWithCsrf(`/api/admin/v1/compliance/snapshots/${tenantId}`);
-            if (response.ok) {
-                const data = await response.json();
-                if (Array.isArray(data)) {
-                    setSnapshots(data);
-                } else if (data && Array.isArray(data.items)) {
-                    setSnapshots(data.items);
-                } else {
-                    setSnapshots([]);
-                }
-            } else {
-                setFetchError(`Snapshot API returned ${response.status}`);
-                setSnapshots([]);
-            }
-        } catch (error) {
-            setFetchError('Unable to reach snapshot service. Check your connection.');
-            setSnapshots([]);
-        } finally {
-            setLoading(false);
-        }
+    const refreshSnapshots = async () => {
+        const result = await loadSnapshotsForTenant(tenantId);
+        setFetchError(result.error);
+        setSnapshots(result.items);
+        setLoading(false);
     };
 
     const createSnapshot = async () => {
@@ -147,7 +175,7 @@ export default function SnapshotsPage() {
 
         setCreating(true);
         try {
-            const response = await fetchWithCsrf(`/api/admin/v1/compliance/snapshots/${tenantId}`, {
+            const response = await fetchWithCsrf(`/api/v1/compliance/snapshots/${tenantId}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -158,7 +186,7 @@ export default function SnapshotsPage() {
             });
 
             if (response.ok) {
-                await fetchSnapshots();
+                await refreshSnapshots();
                 setShowCreateModal(false);
                 setSnapshotName('');
                 setSnapshotReason('');
@@ -174,7 +202,7 @@ export default function SnapshotsPage() {
         if (!attestingSnapshotId || !attestName.trim() || !attestTitle.trim()) return;
 
         try {
-            const response = await fetchWithCsrf(`/api/admin/v1/compliance/snapshots/${tenantId}/${attestingSnapshotId}/attest`, {
+            const response = await fetchWithCsrf(`/api/v1/compliance/snapshots/${tenantId}/${attestingSnapshotId}/attest`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -184,7 +212,7 @@ export default function SnapshotsPage() {
             });
 
             if (response.ok) {
-                await fetchSnapshots();
+                await refreshSnapshots();
                 setShowAttestModal(false);
                 setAttestingSnapshotId(null);
                 setAttestName('');
@@ -198,14 +226,14 @@ export default function SnapshotsPage() {
     const verifySnapshot = async (snapshotId: string) => {
         try {
             const response = await fetchWithCsrf(
-                `/api/admin/v1/compliance/snapshots/${tenantId}/${snapshotId}/verify?verified_by=${encodeURIComponent(userEmail)}`
+                `/api/v1/compliance/snapshots/${tenantId}/${snapshotId}/verify?verified_by=${encodeURIComponent(userEmail)}`
             );
 
             if (response.ok) {
                 const result = await response.json();
                 setVerifyResult(result);
                 setShowVerifyModal(true);
-                await fetchSnapshots();
+                await refreshSnapshots();
             }
         } catch (error) {
             console.error('Failed to verify snapshot:', error);
@@ -215,7 +243,7 @@ export default function SnapshotsPage() {
     const downloadAuditPack = async (snapshotId: string, snapshotName: string) => {
         try {
             const response = await fetchWithCsrf(
-                `/api/admin/v1/compliance/snapshots/${tenantId}/${snapshotId}/audit-pack`
+                `/api/v1/compliance/snapshots/${tenantId}/${snapshotId}/audit-pack`
             );
 
             if (response.ok) {
@@ -238,7 +266,7 @@ export default function SnapshotsPage() {
     const exportSnapshot = async (snapshotId: string, snapshotName: string) => {
         try {
             const response = await fetchWithCsrf(
-                `/api/admin/v1/compliance/snapshots/${tenantId}/${snapshotId}/export`
+                `/api/v1/compliance/snapshots/${tenantId}/${snapshotId}/export`
             );
 
             if (response.ok) {
@@ -346,7 +374,7 @@ export default function SnapshotsPage() {
     const refreezeSnapshot = async (snapshotId: string) => {
         try {
             const response = await fetchWithCsrf(
-                `/api/admin/v1/compliance/snapshots/${tenantId}/${snapshotId}/refreeze`,
+                `/api/v1/compliance/snapshots/${tenantId}/${snapshotId}/refreeze`,
                 {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -355,7 +383,7 @@ export default function SnapshotsPage() {
             );
 
             if (response.ok) {
-                await fetchSnapshots();
+                await refreshSnapshots();
             }
         } catch (error) {
             console.error('Failed to refreeze snapshot:', error);
@@ -365,7 +393,7 @@ export default function SnapshotsPage() {
     const getFdaResponse = async (snapshotId: string) => {
         try {
             const response = await fetchWithCsrf(
-                `/api/admin/v1/compliance/snapshots/${tenantId}/${snapshotId}/fda-response`
+                `/api/v1/compliance/snapshots/${tenantId}/${snapshotId}/fda-response`
             );
 
             if (response.ok) {
@@ -391,7 +419,7 @@ export default function SnapshotsPage() {
 
         try {
             const response = await fetchWithCsrf(
-                `/api/admin/v1/compliance/snapshots/${tenantId}/diff?snapshot_a=${selectedForDiff[0]}&snapshot_b=${selectedForDiff[1]}`
+                `/api/v1/compliance/snapshots/${tenantId}/diff?snapshot_a=${selectedForDiff[0]}&snapshot_b=${selectedForDiff[1]}`
             );
 
             if (response.ok) {
@@ -504,7 +532,10 @@ export default function SnapshotsPage() {
                 {loading ? (
                     <div className="text-center py-12 text-re-text-tertiary">Loading snapshots...</div>
                 ) : snapshots.length === 0 && !fetchError ? (
-                    <div className="text-center py-16 bg-white/5 rounded-xl border border-white/10">
+                    <div
+                        data-testid="snapshot-empty-state"
+                        className="text-center py-16 bg-white/5 rounded-xl border border-white/10"
+                    >
                         <Camera className="h-16 w-16 text-re-text-disabled mx-auto mb-4" />
                         <h3 className="text-xl font-semibold text-re-text-secondary mb-2">No Snapshots Yet</h3>
                         <p className="text-re-text-muted mb-2">
@@ -519,6 +550,7 @@ export default function SnapshotsPage() {
                         {snapshots.map((snapshot) => (
                             <div
                                 key={snapshot.id}
+                                data-testid={`snapshot-card-${snapshot.id}`}
                                 className={`bg-white/5 rounded-xl border p-6 transition-all ${snapshot.is_auto_created && !snapshot.is_attested
                                     ? 'border-orange-500/50 shadow-lg shadow-orange-500/10'
                                     : 'border-white/10 hover:border-white/20'
@@ -611,6 +643,12 @@ export default function SnapshotsPage() {
                                                 </span>
                                             )}
                                         </div>
+
+                                        {snapshot.snapshot_reason && (
+                                            <p className="mt-4 text-sm text-re-text-secondary">
+                                                {snapshot.snapshot_reason}
+                                            </p>
+                                        )}
                                     </div>
 
                                     <div className="flex flex-col items-end gap-2">
@@ -643,6 +681,8 @@ export default function SnapshotsPage() {
                                             {/* Compare checkbox */}
                                             <button
                                                 onClick={() => toggleDiffSelection(snapshot.id)}
+                                                aria-label={`Select snapshot ${snapshot.snapshot_name} for comparison`}
+                                                title={`Select snapshot ${snapshot.snapshot_name} for comparison`}
                                                 className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all ${selectedForDiff.includes(snapshot.id)
                                                     ? 'bg-re-info text-white'
                                                     : 'bg-re-surface-elevated/20 hover:bg-re-surface-elevated/30 text-re-text-tertiary'
@@ -659,6 +699,7 @@ export default function SnapshotsPage() {
                                             </button>
                                             <button
                                                 onClick={() => verifySnapshot(snapshot.id)}
+                                                aria-label={`Verify snapshot ${snapshot.snapshot_name}`}
                                                 className="flex items-center gap-2 px-4 py-2 bg-re-info/20 hover:bg-re-info/30 text-re-info rounded-lg transition-all"
                                             >
                                                 <FileCheck className="h-4 w-4" />
@@ -707,6 +748,7 @@ export default function SnapshotsPage() {
                                     </label>
                                     <input
                                         type="text"
+                                        aria-label="Snapshot Name"
                                         value={snapshotName}
                                         onChange={(e) => setSnapshotName(e.target.value)}
                                         placeholder="e.g., Pre-Audit Q1 2026"
@@ -719,6 +761,7 @@ export default function SnapshotsPage() {
                                         Reason (optional)
                                     </label>
                                     <textarea
+                                        aria-label="Snapshot Reason"
                                         value={snapshotReason}
                                         onChange={(e) => setSnapshotReason(e.target.value)}
                                         placeholder="e.g., FDA audit scheduled for next week"
@@ -833,7 +876,10 @@ export default function SnapshotsPage() {
 
                 {/* Verify Result Modal */}
                 {showVerifyModal && verifyResult && (
-                    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
+                    <div
+                        data-testid="snapshot-verify-modal"
+                        className="fixed inset-0 bg-black/70 flex items-center justify-center z-50"
+                    >
                         <div className="bg-re-surface-base rounded-2xl border border-white/10 p-8 max-w-lg w-full mx-4">
                             <div className="text-center">
                                 {verifyResult.is_valid ? (
@@ -890,7 +936,10 @@ export default function SnapshotsPage() {
 
                 {/* FDA Response Modal */}
                 {showFdaModal && (
-                    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
+                    <div
+                        data-testid="snapshot-fda-modal"
+                        className="fixed inset-0 bg-black/70 flex items-center justify-center z-50"
+                    >
                         <div className="bg-re-surface-base rounded-2xl border border-purple-500/30 p-8 max-w-3xl w-full mx-4 max-h-[80vh] overflow-y-auto">
                             <h2 className="text-2xl font-bold mb-4 flex items-center gap-3 text-purple-400">
                                 📋 FDA Response Template
@@ -923,7 +972,10 @@ export default function SnapshotsPage() {
 
                 {/* Diff Modal */}
                 {showDiffModal && diffResult && (
-                    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
+                    <div
+                        data-testid="snapshot-diff-modal"
+                        className="fixed inset-0 bg-black/70 flex items-center justify-center z-50"
+                    >
                         <div className="bg-re-surface-base rounded-2xl border border-re-info/30 p-8 max-w-2xl w-full mx-4">
                             <h2 className="text-2xl font-bold mb-4 flex items-center gap-3 text-re-info">
                                 📊 Snapshot Comparison

@@ -1,21 +1,22 @@
 /**
- * E2E Test: Energy Snapshot Creation Flow
- * 
- * Tests the complete snapshot creation journey:
- * 1. Navigate to Energy dashboard
- * 2. Click create snapshot button
- * 3. Fill in snapshot form
- * 4. Submit and verify creation
- * 5. View snapshot in list
+ * E2E Test: Compliance Snapshot Workspace
+ *
+ * Exercises the real `/compliance/snapshots` surface instead of the old
+ * placeholder `/energy` route. Covers the actual manual-freeze, verify, and
+ * comparison flows that the snapshots workspace exposes today.
  */
 
-import { test, expect } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 import { authenticatedE2ESkipReason, hasAuthenticatedE2E } from './auth-prereqs';
 
 const TEST_USER_EMAIL = process.env.TEST_USER_EMAIL || 'test@example.com';
 const TEST_PASSWORD = process.env.TEST_PASSWORD || 'test-placeholder';
 
-async function loginAndWaitForDashboard(page: import('@playwright/test').Page) {
+function uniqueSnapshotName(prefix: string): string {
+    return `${prefix} ${Date.now()}`;
+}
+
+async function loginAndWaitForDashboard(page: Page) {
     await page.goto('/login?next=/dashboard');
     await page.fill('input[type="email"]', TEST_USER_EMAIL);
     await page.fill('input[type="password"]', TEST_PASSWORD);
@@ -27,129 +28,183 @@ async function loginAndWaitForDashboard(page: import('@playwright/test').Page) {
     await page.waitForLoadState('networkidle');
 }
 
-test.describe('Energy Snapshot Creation', () => {
+async function openSnapshotsWorkspace(page: Page) {
+    await loginAndWaitForDashboard(page);
+
+    const snapshotsLoad = page.waitForResponse((response) =>
+        response.request().method() === 'GET' &&
+        response.url().includes('/api/v1/compliance/snapshots/')
+    );
+
+    await page.goto('/compliance/snapshots');
+    await snapshotsLoad;
+
+    await expect(
+        page.getByRole('heading', { name: 'Compliance Snapshots' }),
+    ).toBeVisible();
+    await expect(page.getByText('Living Compliance Artifacts')).toBeVisible();
+}
+
+function snapshotCard(page: Page, snapshotName: string) {
+    return page
+        .locator('[data-testid^="snapshot-card-"]')
+        .filter({ hasText: snapshotName })
+        .first();
+}
+
+async function createSnapshotViaUi(page: Page, snapshotName: string, reason?: string) {
+    await page.getByRole('button', { name: 'Manual Freeze', exact: true }).click();
+    await expect(
+        page.getByRole('heading', { name: 'Manual Compliance Freeze' }),
+    ).toBeVisible();
+
+    await page.getByLabel('Snapshot Name').fill(snapshotName);
+    if (reason) {
+        await page.getByLabel('Snapshot Reason').fill(reason);
+    }
+
+    const createResponse = page.waitForResponse((response) =>
+        response.request().method() === 'POST' &&
+        response.url().includes('/api/v1/compliance/snapshots/') &&
+        response.ok()
+    );
+
+    await page.getByRole('button', { name: 'Create Snapshot' }).click();
+    await createResponse;
+
+    await expect(
+        page.getByRole('heading', { name: 'Manual Compliance Freeze' }),
+    ).toBeHidden();
+
+    const card = snapshotCard(page, snapshotName);
+    await expect(card).toBeVisible();
+    return card;
+}
+
+test.describe('Compliance Snapshot Workspace', () => {
     test.skip(!hasAuthenticatedE2E, authenticatedE2ESkipReason);
 
     test.beforeEach(async ({ page }) => {
-        await loginAndWaitForDashboard(page);
-
-        // Navigate to Energy section
-        const energyLink = page.locator('a:has-text("Energy")').first();
-        if (await energyLink.isVisible()) {
-            await energyLink.click();
-            await page.waitForTimeout(500);
-        } else {
-            // Try direct navigation
-            await page.goto('/energy');
-        }
+        await openSnapshotsWorkspace(page);
     });
 
-    test('create new compliance snapshot', async ({ page }) => {
-        // Look for create snapshot button
-        const createButton = page.locator('button:has-text("Create"), button:has-text("New Snapshot")').first();
+    test('renders the real snapshots workspace state', async ({ page }) => {
+        const cards = page.locator('[data-testid^="snapshot-card-"]');
+        const cardCount = await cards.count();
 
-        if (await createButton.isVisible()) {
-            await createButton.click();
-
-            // Fill in snapshot form (fields may vary)
-            const substationInput = page.locator('input[name="substation_id"], input[placeholder*="substation" i]').first();
-            if (await substationInput.isVisible()) {
-                await substationInput.fill('SUB-001');
-            }
-
-            // Submit form
-            const submitButton = page.locator('button[type="submit"], button:has-text("Create"), button:has-text("Save")').first();
-            await submitButton.click();
-
-            // Wait for success message or redirect
-            await page.waitForTimeout(1000);
-
-            // Verify snapshot appears in list or success message
-            const successIndicator = page.locator('text=/success|created|snapshot/i').first();
-            await expect(successIndicator).toBeVisible({ timeout: 5000 });
-        }
-    });
-
-    test('snapshot list displays existing snapshots', async ({ page }) => {
-        // Skip gracefully if the /energy route doesn't exist (feature not yet implemented).
-        // Next.js serves a 404 at /energy since there is no src/app/energy/ directory.
-        const is404 = await page.getByText(/404|this page could not be found|not found/i).count() > 0;
-        if (is404) {
-            // Energy feature not yet implemented — skip the assertion
+        if (cardCount === 0) {
+            const emptyState = page.getByTestId('snapshot-empty-state');
+            await expect(emptyState).toBeVisible();
+            await expect(emptyState).toContainText('No Snapshots Yet');
+            await expect(emptyState).toContainText('manual snapshot');
             return;
         }
-        // Should see snapshot list/table or an empty state message
-        const snapshotList = page.locator('table, ul, [role="list"]').first();
-        const emptyState = page.getByText(/no snapshots|no data|empty|get started|create/i).first();
-        const hasContent = (await snapshotList.count() > 0) || (await emptyState.count() > 0);
-        expect(hasContent).toBe(true);
+
+        await expect(cards.first()).toBeVisible();
+        await expect(
+            cards.first().getByRole('button', { name: /Verify snapshot/i }),
+        ).toBeVisible();
     });
 
-    test('can filter snapshots by substation', async ({ page }) => {
-        // Look for filter input
-        const filterInput = page.locator('input[placeholder*="filter" i], input[placeholder*="search" i]').first();
+    test('can create a manual compliance snapshot', async ({ page }) => {
+        const snapshotName = uniqueSnapshotName('E2E manual freeze');
+        const reason = 'Playwright manual-freeze coverage';
+        const card = await createSnapshotViaUi(page, snapshotName, reason);
 
-        if (await filterInput.isVisible()) {
-            await filterInput.fill('SUB-001');
-            await page.waitForTimeout(500);
-
-            // Results should update
-            // This is a basic check - actual implementation may vary
-            const results = page.locator('table tbody tr, ul li').count();
-            expect(await results).toBeGreaterThanOrEqual(0);
-        }
+        await expect(card).toContainText(reason);
+        await expect(card).toContainText('Verify');
+        await expect(card).toContainText('PDF');
     });
 
-    test('snapshot details are viewable', async ({ page }) => {
-        // Find first snapshot in list
-        const firstSnapshot = page.locator('table tbody tr, ul li, [data-testid*="snapshot"]').first();
+    test('can open an FDA response template from the workspace', async ({ page }) => {
+        const snapshotName = uniqueSnapshotName('E2E fda snapshot');
+        const card = await createSnapshotViaUi(page, snapshotName, 'FDA fallback coverage');
 
-        if (await firstSnapshot.isVisible()) {
-            await firstSnapshot.click();
+        const fdaResponse = page.waitForResponse((response) =>
+            response.request().method() === 'GET' &&
+            response.url().includes('/fda-response') &&
+            response.ok()
+        );
 
-            // Should show detail view
-            await page.waitForTimeout(500);
+        await card.locator('button[title="Generate FDA Response"]').click();
+        await fdaResponse;
 
-            // Should have some detail content
-            const detailView = page.locator('text=/snapshot|details|created/i').first();
-            await expect(detailView).toBeVisible();
-        }
-    });
-});
-
-test.describe('Snapshot Verification', () => {
-    test.skip(!hasAuthenticatedE2E, authenticatedE2ESkipReason);
-
-    test.beforeEach(async ({ page }) => {
-        await loginAndWaitForDashboard(page);
-        await page.goto('/energy');
+        const fdaModal = page.getByTestId('snapshot-fda-modal');
+        await expect(
+            fdaModal.getByRole('heading', { name: /FDA Response Template/i }),
+        ).toBeVisible();
+        await expect(fdaModal.locator('pre')).toContainText(snapshotName);
     });
 
-    test('verify chain integrity button works', async ({ page }) => {
-        // Look for verify button
-        const verifyButton = page.locator('button:has-text("Verify"), button:has-text("Check Integrity")').first();
+    test('can download a zero-trust audit pack from the workspace', async ({ page }) => {
+        const snapshotName = uniqueSnapshotName('E2E audit pack');
+        const card = await createSnapshotViaUi(page, snapshotName);
 
-        if (await verifyButton.isVisible()) {
-            await verifyButton.click();
-            await page.waitForTimeout(1000);
+        const auditPackResponse = page.waitForResponse((response) =>
+            response.request().method() === 'GET' &&
+            response.url().includes('/audit-pack') &&
+            response.ok()
+        );
+        const downloadPromise = page.waitForEvent('download');
 
-            // Should show verification result
-            const result = page.locator('text=/valid|integrity|verified/i').first();
-            await expect(result).toBeVisible({ timeout: 5000 });
-        }
+        await card.getByRole('button', { name: 'Audit Pack', exact: true }).click();
+
+        await auditPackResponse;
+        const download = await downloadPromise;
+        expect(download.suggestedFilename()).toContain('ZeroTrust-AuditPack-');
     });
 
-    test('mismatch detection displays warnings', async ({ page }) => {
-        // Navigate to mismatches tab/section
-        const mismatchTab = page.locator('text=/mismatch|violation|issue/i').first();
+    test('can verify snapshot integrity from the workspace', async ({ page }) => {
+        const snapshotName = uniqueSnapshotName('E2E verify snapshot');
+        const card = await createSnapshotViaUi(page, snapshotName);
 
-        if (await mismatchTab.isVisible()) {
-            await mismatchTab.click();
-            await page.waitForTimeout(500);
+        const verifyResponse = page.waitForResponse((response) =>
+            response.request().method() === 'GET' &&
+            response.url().includes('/verify?verified_by=') &&
+            response.ok()
+        );
 
-            // Should show mismatch list or empty state
-            const mismatchContent = page.locator('text=/mismatch|no issues|all compliant/i').first();
-            await expect(mismatchContent).toBeVisible();
-        }
+        const verifyButton = card.getByRole('button', {
+            name: `Verify snapshot ${snapshotName}`,
+        });
+        await verifyButton.scrollIntoViewIfNeeded();
+        await verifyButton.click();
+        await verifyResponse;
+
+        await expect(
+            page.getByRole('heading', { name: /Integrity Verified/i }),
+        ).toBeVisible();
+        await expect(page.getByText('Verified by:')).toBeVisible();
+    });
+
+    test('can compare two snapshots from the workspace', async ({ page }) => {
+        const snapshotA = uniqueSnapshotName('E2E compare A');
+        const snapshotB = uniqueSnapshotName('E2E compare B');
+
+        const cardA = await createSnapshotViaUi(page, snapshotA);
+        const cardB = await createSnapshotViaUi(page, snapshotB);
+
+        await cardA.getByRole('button', {
+            name: `Select snapshot ${snapshotA} for comparison`,
+        }).click();
+        await cardB.getByRole('button', {
+            name: `Select snapshot ${snapshotB} for comparison`,
+        }).click();
+
+        const compareResponse = page.waitForResponse((response) =>
+            response.request().method() === 'GET' &&
+            response.url().includes('/diff?snapshot_a=') &&
+            response.ok()
+        );
+
+        await page.getByRole('button', { name: 'Compare Selected' }).click();
+        await compareResponse;
+
+        const diffModal = page.getByTestId('snapshot-diff-modal');
+        await expect(
+            diffModal.getByRole('heading', { name: 'Snapshot Comparison' }),
+        ).toBeVisible();
+        await expect(diffModal).toContainText(`From: ${snapshotA}`);
+        await expect(diffModal).toContainText(`To: ${snapshotB}`);
     });
 });
