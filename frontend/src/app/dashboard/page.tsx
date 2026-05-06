@@ -32,13 +32,9 @@ import {
   AlertTriangle,
   TrendingUp,
   Activity,
-  Clock,
   ArrowRight,
-  Archive,
   BarChart3,
   Building2,
-  FlaskConical,
-  Link2,
   Truck,
   Settings,
   CheckCircle2,
@@ -181,45 +177,6 @@ const getQuickActions = (tenantType: "retailer" | "supplier" | "system") => {
     },
   ];
 };
-
-const DATA_INFLOW_ENTRY_POINTS = [
-  {
-    title: "Import files",
-    description:
-      "Use for regulatory documents, CSV files, and normal customer uploads that need parsing and curation.",
-    href: "/ingest",
-    icon: Upload,
-    color: "text-re-info",
-    bg: "bg-re-info-muted dark:bg-re-info/30",
-  },
-  {
-    title: "Inflow Lab",
-    description:
-      "Use for FSMA 204 event simulation, webhook contract checks, and tagged demo traffic.",
-    href: "/dashboard/inflow-lab",
-    icon: FlaskConical,
-    color: "text-re-brand",
-    bg: "bg-re-brand-muted dark:bg-re-brand/30",
-  },
-  {
-    title: "Integrations",
-    description:
-      "Use to confirm connector readiness, mapping exceptions, and customer-visible support claims.",
-    href: "/dashboard/integrations",
-    icon: Link2,
-    color: "text-re-warning",
-    bg: "bg-re-warning-muted dark:bg-re-warning/30",
-  },
-  {
-    title: "FDA Export",
-    description:
-      "Use after data is curated and ready for recall, archive, or regulator response packages.",
-    href: "/dashboard/export-jobs",
-    icon: Archive,
-    color: "text-re-text-secondary",
-    bg: "bg-re-surface-elevated",
-  },
-];
 
 export default function DashboardPage() {
   const { user, isHydrated, apiKey } = useAuth();
@@ -498,84 +455,6 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* Quick Stats - Now tenant-specific */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
-            <Card>
-              <CardContent className="pt-4 sm:pt-6 pb-4">
-                <div className="flex items-center gap-2 sm:gap-3">
-                  <div className="p-1.5 sm:p-2 rounded-sm border border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)] flex-shrink-0">
-                    <FileCheck className="h-4 w-4 sm:h-5 sm:w-5 text-re-info" />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-xl sm:text-2xl font-bold truncate">
-                      {metrics.documentsIngested > 0
-                        ? metrics.documentsIngested.toLocaleString()
-                        : "—"}
-                    </p>
-                    <p className="text-[11px] sm:text-xs text-muted-foreground">
-                      Documents Ingested
-                    </p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="pt-4 sm:pt-6 pb-4">
-                <div className="flex items-center gap-2 sm:gap-3">
-                  <div className="p-1.5 sm:p-2 rounded-sm border border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)] flex-shrink-0">
-                    <Shield className="h-4 w-4 sm:h-5 sm:w-5 text-re-brand" />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-xl sm:text-2xl font-bold truncate">
-                      {metrics.complianceScore > 0
-                        ? `${metrics.complianceScore}%`
-                        : "—"}
-                    </p>
-                    <p className="text-[11px] sm:text-xs text-muted-foreground">
-                      Compliance Score
-                    </p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="pt-4 sm:pt-6 pb-4">
-                <div className="flex items-center gap-2 sm:gap-3">
-                  <div className="p-1.5 sm:p-2 rounded-sm border border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)] flex-shrink-0">
-                    <AlertTriangle className="h-4 w-4 sm:h-5 sm:w-5 text-re-warning" />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-xl sm:text-2xl font-bold">
-                      {metrics.openAlerts}
-                    </p>
-                    <p className="text-[11px] sm:text-xs text-muted-foreground">
-                      Open Alerts
-                    </p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="pt-4 sm:pt-6 pb-4">
-                <div className="flex items-center gap-2 sm:gap-3">
-                  <div className="p-1.5 sm:p-2 rounded-sm border border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)] flex-shrink-0">
-                    <Clock className="h-4 w-4 sm:h-5 sm:w-5 text-re-text-secondary" />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-xl sm:text-2xl font-bold truncate">
-                      {metrics.pendingReviews > 0
-                        ? metrics.pendingReviews
-                        : "—"}
-                    </p>
-                    <p className="text-[11px] sm:text-xs text-muted-foreground">
-                      Pending Reviews
-                    </p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
           {/* Quick Actions - Now tenant-type specific */}
           <div>
             <h2 className="text-xl font-semibold mb-4">Quick Actions</h2>
@@ -612,52 +491,6 @@ export default function DashboardPage() {
                     </Card>
                   </Link>
                 </motion.div>
-              ))}
-            </div>
-          </div>
-
-          <div>
-            <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-2 mb-4">
-              <div>
-                <h2 className="text-xl font-semibold">Intake</h2>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Choose the path by source: import for customer files, Inflow
-                  Lab for simulated FSMA events, integrations for connector
-                  status, export for FDA packages.
-                </p>
-              </div>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
-              {DATA_INFLOW_ENTRY_POINTS.map((entry) => (
-                <Link
-                  key={entry.href}
-                  href={entry.href}
-                  aria-label={`Open ${entry.title}`}
-                >
-                  <Card className="h-full hover:border-primary/50 active:scale-[0.98] transition-all cursor-pointer group">
-                    <CardContent className="pt-4 sm:pt-5 pb-4 min-h-[156px] flex flex-col">
-                      <div className="flex items-start gap-3">
-                        <div
-                          className={`p-2.5 rounded-sm border border-[var(--re-surface-border)] ${entry.bg} flex-shrink-0`}
-                        >
-                          <entry.icon className={`h-5 w-5 ${entry.color}`} />
-                        </div>
-                        <div className="min-w-0">
-                          <h3 className="font-semibold text-sm sm:text-base group-hover:text-primary transition-colors">
-                            {entry.title}
-                          </h3>
-                          <p className="text-xs sm:text-sm text-muted-foreground mt-1 leading-relaxed">
-                            {entry.description}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="mt-auto pt-4 flex items-center text-xs font-medium text-primary">
-                        Open
-                        <ArrowRight className="ml-1.5 h-3.5 w-3.5 group-hover:translate-x-1 transition-transform" />
-                      </div>
-                    </CardContent>
-                  </Card>
-                </Link>
               ))}
             </div>
           </div>
