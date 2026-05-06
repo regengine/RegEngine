@@ -160,23 +160,31 @@ def _tenant_for_rate_limit(request: Request, principal: IngestionPrincipal) -> s
     header_tenant = request.headers.get("X-Tenant-ID") or request.headers.get("X-RegEngine-Tenant-ID")
     if header_tenant:
         return str(header_tenant)
-    if request.query_params.get("tenant_id"):
-        return str(request.query_params["tenant_id"])
+    # Query-string fallback removed (EPIC-A #1651): attacker-controllable
+    # input must not determine the rate-limit bucket. A request that lands
+    # here with no authenticated principal AND no X-Tenant-ID header gets
+    # the shared "global" bucket, preventing tenant-bucket isolation
+    # attacks. Header fallback retained for master-key callers; long-term,
+    # all paths should resolve via services/shared/tenant_context.py.
     return "global"
 
 
 def _requested_tenant_context(request: Request) -> Optional[str]:
-    """Return query/header tenant context, rejecting conflicts."""
-    query_tenant = request.query_params.get("tenant_id")
-    header_tenant = request.headers.get("X-Tenant-ID") or request.headers.get("X-RegEngine-Tenant-ID")
+    """Return tenant context that the request asserts via header.
 
-    if query_tenant and header_tenant and query_tenant != header_tenant:
-        raise HTTPException(
-            status_code=400,
-            detail="Conflicting tenant context: tenant_id does not match X-Tenant-ID header",
-        )
+    Used only for cross-tenant mismatch detection in ``require_permission``;
+    the authoritative tenant is always the authenticated principal.
 
-    return query_tenant or header_tenant
+    The query-string fallback was removed (EPIC-A #1651) because Semgrep
+    rule ``tenant-id-from-query-string`` correctly flags any read of
+    ``request.query_params["tenant_id"]`` as untrustworthy. Headers are
+    still read here as a transition-period defense — a future migration
+    should switch the cross-check to use
+    ``services/shared/tenant_context.py:resolve_tenant_context`` once
+    ``get_ingestion_principal`` populates ``request.state.api_key`` so the
+    shared resolver works in this service.
+    """
+    return request.headers.get("X-Tenant-ID") or request.headers.get("X-RegEngine-Tenant-ID")
 
 
 def _principal_from_api_key(api_key: APIKey | APIKeyResponse) -> IngestionPrincipal:

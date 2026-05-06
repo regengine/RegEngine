@@ -407,10 +407,15 @@ class TestTenantForRateLimit:
         req = _fake_request(regengine_tenant_header="regengine-header-t", tenant_query="query-t")
         assert _tenant_for_rate_limit(req, p) == "regengine-header-t"
 
-    def test_query_fallback(self):
+    def test_query_string_ignored_returns_global(self):
+        """EPIC-A #1651: query-string tenant_id is attacker-controllable
+        and must not determine the rate-limit bucket. With no principal
+        tenant and no X-Tenant-ID header, the bucket falls through to
+        "global" — a query-only request cannot isolate itself into a
+        low-traffic per-tenant bucket."""
         p = IngestionPrincipal(key_id="k")
         req = _fake_request(tenant_query="query-t")
-        assert _tenant_for_rate_limit(req, p) == "query-t"
+        assert _tenant_for_rate_limit(req, p) == "global"
 
     def test_global_default(self):
         p = IngestionPrincipal(key_id="k")
@@ -419,8 +424,12 @@ class TestTenantForRateLimit:
 
 
 class TestRequestedTenantContext:
-    def test_query_only(self):
-        assert _requested_tenant_context(_fake_request(tenant_query="query-t")) == "query-t"
+    def test_query_string_ignored(self):
+        """EPIC-A #1651: query-string tenant_id is no longer read.
+        A request that only asserts tenant via query string returns
+        None — the cross-tenant mismatch check in require_permission
+        relies on the header (or the principal itself)."""
+        assert _requested_tenant_context(_fake_request(tenant_query="query-t")) is None
 
     def test_x_tenant_header_only(self):
         assert _requested_tenant_context(_fake_request(tenant_header="header-t")) == "header-t"
@@ -429,16 +438,13 @@ class TestRequestedTenantContext:
         req = _fake_request(regengine_tenant_header="regengine-header-t")
         assert _requested_tenant_context(req) == "regengine-header-t"
 
-    def test_matching_query_and_header_ok(self):
-        req = _fake_request(tenant_header="tenant-a", tenant_query="tenant-a")
-        assert _requested_tenant_context(req) == "tenant-a"
-
-    def test_conflicting_query_and_header_rejected(self):
+    def test_header_returned_query_silently_dropped(self):
+        """When both query and header are present, header wins; query is
+        silently ignored (no 400 conflict raised — query is no longer
+        read at all). The conflict-detection logic was removed because
+        it required reading the attacker-controllable query value."""
         req = _fake_request(tenant_header="header-t", tenant_query="query-t")
-        with pytest.raises(HTTPException) as exc:
-            _requested_tenant_context(req)
-        assert exc.value.status_code == 400
-        assert "Conflicting tenant context" in exc.value.detail
+        assert _requested_tenant_context(req) == "header-t"
 
 
 # ---------------------------------------------------------------------------
@@ -917,15 +923,21 @@ class TestRequirePermission:
         assert resp.status_code == 403
         assert "Tenant mismatch" in resp.json()["detail"]
 
-    def test_conflicting_query_and_header_400(self, monkeypatch):
+    def test_query_ignored_header_mismatch_403(self, monkeypatch):
+        """EPIC-A #1651: query-string tenant_id is no longer read, so
+        ``?tenant_id=t-a`` is silently dropped. The header ``X-Tenant-ID:
+        t-b`` is still read, mismatches the principal's t-a tenant, and
+        triggers the cross-tenant 403 (not the legacy 400 'Conflicting
+        tenant context' which is unreachable now that query reads are
+        gone)."""
         p = IngestionPrincipal(
             key_id="k", scopes=["fda.export"], tenant_id="t-a"
         )
         app, _ = self._app_with(p, monkeypatch)
         client = TestClient(app)
         resp = client.get("/protected?tenant_id=t-a", headers={"X-Tenant-ID": "t-b"})
-        assert resp.status_code == 400
-        assert "Conflicting tenant context" in resp.json()["detail"]
+        assert resp.status_code == 403
+        assert "Tenant mismatch" in resp.json()["detail"]
 
     def test_cross_tenant_allowed_with_wildcard(self, monkeypatch):
         p = IngestionPrincipal(
