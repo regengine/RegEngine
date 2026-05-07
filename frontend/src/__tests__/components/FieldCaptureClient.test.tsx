@@ -192,7 +192,10 @@ describe('FieldCaptureClient tenant hinting', () => {
         setCaptureUrl('?tenant_id=hinted-tenant');
         mocks.fetchWithCsrf
             .mockResolvedValueOnce(jsonResponse({ products: [] }))
-            .mockResolvedValueOnce(new Response(new Blob(['fake-image'], { type: 'image/jpeg' })))
+            .mockResolvedValueOnce(new Response('fake-image', {
+                status: 200,
+                headers: { 'content-type': 'image/jpeg' },
+            }))
             .mockResolvedValueOnce(new Response('vision unavailable', { status: 503 }));
         mocks.ingestFileMutation.mutateAsync.mockResolvedValue({ job_id: 'job-123' });
 
