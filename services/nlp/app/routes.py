@@ -6,7 +6,6 @@ import time
 from typing import Any, Optional
 from urllib.parse import quote
 import uuid
-from uuid import UUID
 
 import httpx
 import structlog
@@ -25,6 +24,7 @@ from shared.rate_limit import limiter
 from shared.api_key_store import APIKeyResponse
 from shared.funnel_events import emit_funnel_event
 from shared.permissions import has_permission
+from shared.tenant_context import resolve_tenant_context
 
 logger = structlog.get_logger("nlp.test")
 router = APIRouter()
@@ -81,7 +81,9 @@ async def query_traceability(
             detail="Insufficient permissions: requires 'graph.query'",
         )
 
-    tenant_id = _resolve_tenant_id(api_key, request)
+    request.state.api_key = api_key
+    ctx = await resolve_tenant_context(request)
+    tenant_id = ctx.tenant_id
     plan = parse_query(
         payload.query,
         limit=payload.limit,
@@ -116,31 +118,6 @@ async def query_traceability(
         evidence=evidence,
         confidence=plan.confidence,
         warnings=plan.warnings,
-    )
-
-
-def _resolve_tenant_id(
-    api_key: APIKey | APIKeyResponse,
-    request: Request,
-) -> str:
-    candidates: list[Optional[str]] = [
-        getattr(api_key, "tenant_id", None),
-        request.headers.get("X-Tenant-ID"),
-        request.headers.get("X-RegEngine-Tenant-ID"),
-        request.query_params.get("tenant_id"),
-    ]
-
-    for candidate in candidates:
-        if not candidate:
-            continue
-        try:
-            return str(UUID(str(candidate)))
-        except ValueError:
-            continue
-
-    raise HTTPException(
-        status_code=401,
-        detail="Tenant context not found on API key or request",
     )
 
 
