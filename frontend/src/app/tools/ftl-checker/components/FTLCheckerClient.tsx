@@ -37,6 +37,7 @@ import { useToast } from '@/components/ui/use-toast';
 import Link from 'next/link';
 import { generateBrandedPDF } from '@/lib/pdf-report';
 import { LeadGate } from '@/components/lead-gate/LeadGate';
+import { submitAssessment } from '@/app/actions/submit-assessment';
 
 /* ─────────────────────────────────────────────────────────────
    DESIGN TOKENS (Unified Dark Theme)
@@ -598,12 +599,11 @@ export function FTLCheckerClient() {
     const handleEmailSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         if (email) {
-            // Email no longer stored in localStorage — it was plain-text PII.
-            // The email is captured server-side via PostHog identify below.
             setEmailSubmitted(true);
 
-            // Capture lead
             const results = getResults();
+
+            // PostHog event for funnel analytics
             posthog?.capture('ftl_report_requested', {
                 email: email,
                 categories_selected: selectedCategories,
@@ -612,7 +612,24 @@ export function FTLCheckerClient() {
             });
             posthog?.identify(email, { email: email });
 
-            toast({ title: "We'll be in touch!", description: "A member of our team will review your coverage and reach out shortly." });
+            // Persist lead to assessment_submissions so it survives without PostHog access.
+            // Fire-and-forget: UI transitions optimistically, errors logged but not surfaced.
+            submitAssessment({
+                name: email.split('@')[0],
+                email,
+                company: 'Unknown (FTL Checker)',
+                role: '',
+                source: 'ftl-checker',
+                toolInputs: {
+                    selectedCategories,
+                    coveredCount: results.coveredCount,
+                    riskLevel: results.coveredCount > 0 ? 'HIGH' : 'LOW',
+                },
+            }).catch((err) => {
+                console.error('[ftl-checker] submitAssessment failed:', err);
+            });
+
+            toast({ title: "Request received", description: "A member of our team may follow up about your FTL coverage." });
         }
     };
 
@@ -1086,17 +1103,17 @@ export function FTLCheckerClient() {
                                             <p style={{ fontSize: '13px', opacity: 0.8, margin: '0 0 20px' }}>But major retailers are already requiring traceability NOW.</p>
                                             {!emailSubmitted ? (
                                                 <form onSubmit={handleEmailSubmit} className="flex flex-col gap-3">
-                                                    <p style={{ fontWeight: 600, margin: 0 }}>Get Your Full Compliance Report</p>
+                                                    <p style={{ fontWeight: 600, margin: 0 }}>Request a Follow-Up Review</p>
                                                     <input type="email" placeholder="Enter your email" value={email} onChange={(e) => setEmail(e.target.value)} required style={{ padding: '12px 16px', borderRadius: '8px', border: 'none', background: 'rgba(255,255,255,0.2)', color: '#fff', fontSize: '14px' }} />
                                                     <button type="submit" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '12px', borderRadius: '8px', border: 'none', background: '#fff', color: T.accent, fontSize: '14px', fontWeight: 600, cursor: 'pointer' }}>
-                                                        <Mail size={16} /> Send Me the Report
+                                                        <Mail size={16} /> Request Follow-Up
                                                     </button>
                                                 </form>
                                             ) : (
                                                 <div style={{ textAlign: 'center', padding: '16px', background: 'rgba(255,255,255,0.2)', borderRadius: '10px' }}>
                                                     <CheckCircle2 size={32} style={{ margin: '0 auto 8px' }} />
                                                     <p style={{ fontWeight: 600, margin: 0 }}>Request Received!</p>
-                                                    <p style={{ fontSize: '13px', opacity: 0.8, margin: '4px 0 0' }}>We'll be in touch shortly</p>
+                                                    <p style={{ fontSize: '13px', opacity: 0.8, margin: '4px 0 0' }}>We may follow up if a review would be helpful</p>
                                                 </div>
                                             )}
                                         </>

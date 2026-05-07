@@ -185,7 +185,7 @@ export default function RecallReportPage() {
                         <Button
                             size="sm"
                             className="rounded-xl min-h-[44px] bg-re-danger hover:bg-re-danger text-white active:scale-[0.97]"
-                            disabled={exporting}
+                            disabled={exporting || isDemo}
                             onClick={async () => {
                                 if (!tenantId) return;
                                 setExporting(true);
@@ -217,7 +217,7 @@ export default function RecallReportPage() {
                             {exporting ? (
                                 <><Clock className="h-3.5 w-3.5 mr-1.5 animate-spin" /> Generating...</>
                             ) : (
-                                <><Download className="h-3.5 w-3.5 mr-1.5" /> Generate FDA 24-Hour Response</>
+                                <><Download className="h-3.5 w-3.5 mr-1.5" /> {isDemo ? 'Connect Live Data To Enable FDA Export' : 'Generate FDA 24-Hour Response'}</>
                             )}
                         </Button>
                     </div>
@@ -245,7 +245,7 @@ export default function RecallReportPage() {
                         <Info className="h-3.5 w-3.5 flex-shrink-0" />
                         <span>
                             {report?.demo_disclaimer ??
-                                'Sample Scenario — Explore a realistic recall investigation. Your live data populates automatically after onboarding.'}
+                                'Sample scenario only. Live recall evidence appears after tenant data and export workflows are connected for this workspace.'}
                         </span>
                     </div>
                 )}

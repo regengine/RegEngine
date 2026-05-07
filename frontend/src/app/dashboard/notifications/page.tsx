@@ -175,7 +175,7 @@ export default function NotificationPrefsPage() {
                             Notification Preferences
                         </h1>
                         <p className="text-xs sm:text-sm text-muted-foreground mt-1">
-                            Configure how and when you receive compliance alerts
+                            Configure alert delivery for the channels currently enabled on this workspace
                         </p>
                     </div>
                     {!fetchFailed && (
@@ -235,7 +235,7 @@ export default function NotificationPrefsPage() {
                                     <Bell className="h-4 w-4 text-[var(--re-brand)]" />
                                     Delivery Channels
                                 </CardTitle>
-                                <CardDescription>Choose how alerts reach you</CardDescription>
+                                <CardDescription>Only channels configured for this tenant appear here.</CardDescription>
                             </CardHeader>
                             <CardContent className="space-y-2 sm:space-y-3">
                                 {effectivePrefs.channels.map((ch) => {

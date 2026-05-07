@@ -8,7 +8,7 @@ import {
     LayoutDashboard, Key, BarChart3, BookOpen, LogOut,
     ShieldCheck, Terminal, Code2, Webhook, Package,
     AlertCircle, ChevronDown, ChevronRight, Zap,
-    FileText, ExternalLink,
+    FileText,
 } from 'lucide-react';
 
 const NAV_SECTIONS = [
@@ -122,17 +122,13 @@ export function DeveloperPortalShell({ children }: { children: React.ReactNode }
                 </nav>
 
                 <div className="p-2 space-y-0.5 border-t border-[var(--re-border-subtle)]">
-                    <a
-                        href="https://status.regengine.co"
-                        target="_blank"
-                        rel="noopener"
-                        className="flex items-center gap-2.5 px-3 py-1.5 rounded-md text-[13px] no-underline transition-colors"
+                    <div
+                        className="flex items-center gap-2.5 px-3 py-1.5 rounded-md text-[13px]"
                         style={{ color: 'var(--re-text-disabled)' }}
                     >
                         <div className="w-1.5 h-1.5 rounded-full bg-re-success" />
-                        API Status
-                        <ExternalLink className="w-3 h-3 ml-auto" />
-                    </a>
+                        Service updates available through support
+                    </div>
                     <button
                         onClick={handleLogout}
                         className="flex items-center gap-2.5 px-3 py-1.5 rounded-md text-[13px] w-full transition-colors hover:bg-re-danger-muted0/10 no-underline"

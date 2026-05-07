@@ -36,27 +36,27 @@ const STACK_LAYERS = [
         layer: 'Frontend',
         technology: 'Next.js 15 on Vercel',
         detail:
-            'Server-side rendered React app with edge caching. All API calls route through serverless proxy functions — the browser never talks directly to backend services.',
+            'Current deployment posture uses a server-rendered React app with edge caching and proxy-based API routing so browser traffic is mediated before it reaches backend services.',
     },
     {
         Icon: Server,
         layer: 'Ingestion Service',
         technology: 'FastAPI on Railway',
         detail:
-            'Stateless Python service that handles CTE event ingestion, webhook validation, CSV parsing, compliance scoring, and alert generation. Horizontally scalable behind a load balancer.',
+            'Python service layer for CTE ingestion, webhook validation, CSV parsing, compliance scoring, and alert generation. Exact scaling posture depends on the active deployment.',
     },
     {
         Icon: Database,
         layer: 'Database',
         technology: 'PostgreSQL on Supabase',
         detail:
-            'Row-Level Security enforces tenant isolation at the database layer. Immutable audit triggers prevent modification of compliance records. Connection pooling via PgBouncer.',
+            'Current database posture uses PostgreSQL tenant-scoping controls, append-oriented audit protections, and managed connection pooling.',
     },    {
         Icon: Cloud,
         layer: 'Infrastructure',
         technology: 'US-based hosting',
         detail:
-            'All services run in US data centers. TLS 1.3 in transit, AES-256 at rest. No data leaves US jurisdiction in the default deployment posture.',
+            'Default hosting posture is US-based infrastructure with encrypted transport and encrypted storage. Regional deployment details may vary by environment and contract.',
     },
 ];
 
@@ -64,19 +64,19 @@ const DATA_FLOW_STEPS = [
     {
         step: '1',
         title: 'Ingest',
-        description: 'CTE events arrive via CSV upload, webhook, or API call. Each event is validated against FSMA 204 KDE requirements for its CTE type.',
+        description: 'CTE events can arrive via CSV upload, webhook, or API call. Validation behavior depends on the workflow configured for that ingest path.',
         color: 'bg-re-info-muted0/15 text-re-info',
     },
     {
         step: '2',
         title: 'Normalize',
-        description: 'Raw event data is mapped to FSMA CTE/KDE structures. Lot codes, GLNs, and facility identities are standardized. Missing required KDEs trigger rejection with actionable errors.',
+        description: 'Raw event data is mapped to FSMA CTE/KDE structures. Lot codes, GLNs, and facility identities may be standardized, with exceptions or missing KDEs surfaced for review.',
         color: 'bg-purple-500/15 text-purple-400',
     },
     {
         step: '3',
         title: 'Hash & Chain',
-        description: 'Each validated event is SHA-256 hashed and appended to a per-tenant hash chain. The chain is append-only — database triggers block updates and deletes on compliance tables.',
+        description: 'Validated events are designed to be SHA-256 hashed and linked into tenant-scoped integrity records. Final implementation details depend on the active evidence workflow.',
         color: 'bg-re-brand/15 text-re-brand',
     },    {
         step: '4',
@@ -87,7 +87,7 @@ const DATA_FLOW_STEPS = [
     {
         step: '5',
         title: 'Export',
-        description: 'Compliance records are exportable in EPCIS 2.0 JSON-LD, FDA sortable spreadsheet, or CSV. Each export includes a manifest hash for integrity verification.',
+        description: 'Compliance records may be exported in one or more supported formats such as EPCIS 2.0, FDA-oriented spreadsheets, or CSV, depending on the enabled workflow.',
         color: 'bg-re-danger-muted0/15 text-re-danger',
     },
 ];
@@ -96,21 +96,21 @@ const ISOLATION_CONTROLS = [
     {
         Icon: Lock,
         title: 'Row-Level Security',
-        detail: 'Every database query is scoped to the authenticated tenant at the PostgreSQL policy level. Cross-tenant data access is structurally impossible.',
+        detail: 'Current architecture is intended to scope database access to the authenticated tenant at the database-policy layer rather than relying only on application checks.',
     },
     {
         Icon: Hash,
         title: 'Per-tenant hash chains',
-        detail: 'Each tenant has an independent SHA-256 hash chain. Chains are cryptographically isolated — one tenant\'s chain cannot reference another\'s records.',
+        detail: 'Integrity records are designed to remain tenant-scoped so one customer workspace does not depend on another customer\'s evidence chain.',
     },    {
         Icon: Shield,
         title: 'API key scoping',
-        detail: 'API keys are bound to a single tenant. The serverless proxy injects tenant context on every request — backend services never trust client-supplied tenant IDs.',
+        detail: 'API credentials and tenant context are intended to be scoped per customer workspace, with server-side mediation preferred over trusting raw client context.',
     },
     {
         Icon: ShieldCheck,
         title: 'Immutable audit trail',
-        detail: 'Database triggers enforce append-only on compliance tables. No UPDATE or DELETE is possible on extracted facts, rule evaluations, or audit events.',
+        detail: 'Audit posture is designed around append-oriented evidence handling rather than in-place mutation of compliance records.',
     },
 ];
 
@@ -142,7 +142,7 @@ export default function ArchitecturePage() {
                 <div className="max-w-[980px] mx-auto py-10 sm:py-14 px-4 sm:px-6">
                     <h2 className="font-display text-2xl font-bold text-[var(--re-text-primary)] mb-2">Service topology</h2>
                     <p className="text-sm text-[var(--re-text-muted)] mb-6 max-w-[720px]">
-                        RegEngine runs as three services with strict separation of concerns. The browser never communicates directly with backend infrastructure.
+                        This page describes the current service topology and intended control boundaries. Exact infrastructure details can vary by deployment and environment.
                     </p>
                     <div className="grid gap-4 md:grid-cols-2">
                         {STACK_LAYERS.map((layer) => {
@@ -169,7 +169,7 @@ export default function ArchitecturePage() {
             <section className="relative z-[2] max-w-[980px] mx-auto py-10 sm:py-14 px-4 sm:px-6">
                 <h2 className="font-display text-2xl font-bold text-[var(--re-text-primary)] mb-2">Data flow: ingest to export</h2>
                 <p className="text-sm text-[var(--re-text-muted)] mb-6 max-w-[720px]">
-                    Every CTE event follows the same five-stage pipeline. Records are immutable after stage 3 — the hash chain is append-only.
+                    The current product posture aims for a consistent five-stage pipeline from ingest to export, with integrity controls applied after validation.
                 </p>
                 <div className="space-y-3">
                     {DATA_FLOW_STEPS.map((step, i) => (
@@ -190,7 +190,7 @@ export default function ArchitecturePage() {
                 <div className="max-w-[980px] mx-auto py-10 sm:py-14 px-4 sm:px-6">
                     <h2 className="font-display text-2xl font-bold text-[var(--re-text-primary)] mb-2">Tenant isolation model</h2>
                     <p className="text-sm text-[var(--re-text-muted)] mb-6 max-w-[720px]">
-                        Isolation is enforced at the database layer, not the application layer. Even if application code has a bug, PostgreSQL RLS policies prevent cross-tenant data access.
+                        Isolation is intended to be enforced as close to the data layer as possible rather than depending solely on application logic.
                     </p>
                     <div className="grid gap-4 md:grid-cols-2">
                         {ISOLATION_CONTROLS.map((control) => {
@@ -213,12 +213,12 @@ export default function ArchitecturePage() {
             <section className="relative z-[2] max-w-[980px] mx-auto py-10 sm:py-14 px-4 sm:px-6">
                 <h2 className="font-display text-2xl font-bold text-[var(--re-text-primary)] mb-4">Infrastructure controls</h2>
                 <div className="grid gap-3 md:grid-cols-3">                    {[
-                        { label: 'Encryption at rest', value: 'AES-256', detail: 'All database volumes and backups' },
-                        { label: 'Encryption in transit', value: 'TLS 1.3', detail: 'All service-to-service and client connections' },
-                        { label: 'Data residency', value: 'US', detail: 'Default posture for all deployments' },
-                        { label: 'Backup cadence', value: 'Daily', detail: 'Point-in-time recovery via Supabase' },
-                        { label: 'CI/CD security', value: 'SAST + secrets scan', detail: 'Every commit scanned before deploy' },
-                        { label: 'Branch protection', value: 'Required reviews', detail: 'No force-push to main' },
+                        { label: 'Encryption at rest', value: 'Managed-cloud default', detail: 'Encrypted storage is part of the current managed infrastructure posture' },
+                        { label: 'Encryption in transit', value: 'Encrypted transport', detail: 'Client and service connections are intended to use encrypted transport' },
+                        { label: 'Data residency', value: 'US default', detail: 'Current default posture for active deployments' },
+                        { label: 'Backup cadence', value: 'Platform managed', detail: 'Backup and recovery posture depends on the active hosting configuration' },
+                        { label: 'CI/CD security', value: 'Current workflow controls', detail: 'Security scanning and secret-handling practices depend on the active delivery pipeline' },
+                        { label: 'Branch protection', value: 'Repository controlled', detail: 'Review and merge controls are managed at the repository level' },
                     ].map((item) => (
                         <div key={item.label} className={`${card} p-4`}>
                             <div className="text-xs uppercase tracking-widest text-[var(--re-text-disabled)]">{item.label}</div>

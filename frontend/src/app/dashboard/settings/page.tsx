@@ -16,8 +16,8 @@ import { useOrganizations } from '@/hooks/use-organizations';
 import { useCurrentSubscription } from '@/hooks/use-billing';
 import {
     AlertTriangle, Settings, Building2, Key, Database, Plug,
-    Save, CheckCircle2, Copy, Eye, EyeOff, CreditCard, BarChart3,
-    Shield, RefreshCw, Clock, ExternalLink, ChevronRight,
+    Save, CheckCircle2, CreditCard,
+    Shield, Clock, ExternalLink,
     Zap, Globe, ArrowRight, Lock, Loader2,
 } from 'lucide-react';
 
@@ -56,8 +56,6 @@ export default function SettingsPage() {
     const { data: subscriptionData, isLoading: subLoading, isError: subError } = useCurrentSubscription(tenantId);
 
     const [saved, setSaved] = useState(false);
-    const [showKey, setShowKey] = useState(false);
-    const [copiedKey, setCopiedKey] = useState<string | null>(null);
     const [activeTab, setActiveTab] = useState<'profile' | 'api' | 'retention' | 'integrations'>('profile');
 
     const [profile, setProfile] = useState({
@@ -145,17 +143,6 @@ export default function SettingsPage() {
         if (!tenantId || !isAuthenticated) return;
         saveProfileMutation.mutate();
     }, [isAuthenticated, tenantId, saveProfileMutation]);
-    const handleCopy = (text: string, id: string) => {
-        navigator.clipboard.writeText(text);
-        setCopiedKey(id);
-        setTimeout(() => setCopiedKey(null), 2000);
-    };
-
-    const API_KEYS = [
-        { id: 'prod', name: 'Production API Key', prefix: 'rge_prod_', full: 'rge_prod_a1b2c3d4e5f6g7h8', status: 'active', created: 'Jan 15, 2026', lastUsed: '2 min ago' },
-        { id: 'dev', name: 'Development Key', prefix: 'rge_dev_', full: 'rge_dev_x9y8z7w6v5u4t3s2', status: 'active', created: 'Feb 3, 2026', lastUsed: '1 hour ago' },
-    ];
-
     return (
         <div className="min-h-screen bg-background p-4 md:p-8 pt-4">
             <div className="mx-auto max-w-4xl space-y-6">
@@ -291,67 +278,46 @@ export default function SettingsPage() {
                                     <Key className="h-4 w-4 text-[var(--re-brand)]" />
                                     API Keys
                                 </CardTitle>
-                                <CardDescription>Manage API access credentials. Keys are scoped per-tenant with role-based access control.</CardDescription>
+                                <CardDescription>Credentials appear here only after API access is enabled for this workspace.</CardDescription>
                             </CardHeader>
                             <CardContent className="space-y-3">
-                                {API_KEYS.map((key) => (
-                                    <div key={key.id} className="p-3 sm:p-4 rounded-xl border border-[var(--re-border-default)] space-y-2">
-                                        <div className="flex items-start sm:items-center justify-between gap-2">
-                                            <div className="min-w-0">
-                                                <div className="text-xs sm:text-sm font-medium flex items-center gap-2">
-                                                    {key.name}
-                                                    <Badge className="text-[9px] bg-re-brand-muted text-re-brand">{key.status}</Badge>
-                                                </div>
-                                                <div className="font-mono text-[11px] sm:text-xs text-muted-foreground flex items-center gap-2 mt-1">
-                                                    <span className="truncate">{showKey ? key.full : `${key.prefix}${'*'.repeat(16)}`}</span>
-                                                    <button onClick={() => setShowKey(!showKey)} className="min-w-[24px] min-h-[24px] flex items-center justify-center hover:text-[var(--re-brand)] transition-colors">
-                                                        {showKey ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
-                                                    </button>
-                                                    <button onClick={() => handleCopy(key.full, key.id)} className="min-w-[24px] min-h-[24px] flex items-center justify-center hover:text-[var(--re-brand)] transition-colors">
-                                                        {copiedKey === key.id ? <CheckCircle2 className="h-3.5 w-3.5 text-[var(--re-brand)]" /> : <Copy className="h-3.5 w-3.5" />}
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        </div>                                        <div className="flex items-center gap-4 text-[10px] sm:text-xs text-muted-foreground">
-                                            <span className="flex items-center gap-1"><Clock className="h-3 w-3" /> Created {key.created}</span>
-                                            <span className="flex items-center gap-1"><RefreshCw className="h-3 w-3" /> Last used {key.lastUsed}</span>
+                                <div className="rounded-xl border border-[var(--re-border-default)] bg-[var(--re-surface-elevated)] p-4">
+                                    <div className="flex items-start gap-3">
+                                        <Key className="h-4 w-4 text-[var(--re-brand)] mt-0.5 shrink-0" />
+                                        <div>
+                                            <h4 className="text-sm font-semibold">No API credentials shown</h4>
+                                            <p className="mt-1 text-xs text-muted-foreground leading-relaxed">
+                                                RegEngine provisions API keys during developer preview or implementation onboarding. This workspace does not have tenant-visible credentials enabled yet.
+                                            </p>
                                         </div>
                                     </div>
-                                ))}
+                                </div>
                                 <div className="flex gap-2">
-                                    <Button variant="outline" className="flex-1 rounded-xl min-h-[48px]">
-                                        <Key className="h-4 w-4 mr-1" /> Generate New Key
-                                    </Button>
                                     <Link href="/developers" className="flex-1">
                                         <Button variant="outline" className="w-full rounded-xl min-h-[48px]">
-                                            <ExternalLink className="h-4 w-4 mr-1" /> API Docs
+                                            <ExternalLink className="h-4 w-4 mr-1" /> Developer Preview
+                                        </Button>
+                                    </Link>
+                                    <Link href="/contact" className="flex-1">
+                                        <Button variant="outline" className="w-full rounded-xl min-h-[48px]">
+                                            <ArrowRight className="h-4 w-4 mr-1" /> Request API Setup
                                         </Button>
                                     </Link>
                                 </div>
                             </CardContent>
                         </Card>
 
-                        {/* Usage summary */}
                         <Card className="border-[var(--re-border-default)]">
                             <CardHeader>
                                 <CardTitle className="text-base flex items-center gap-2">
-                                    <BarChart3 className="h-4 w-4 text-[var(--re-brand)]" />
-                                    API Usage This Month
+                                    <Clock className="h-4 w-4 text-[var(--re-brand)]" />
+                                    API Usage Visibility
                                 </CardTitle>
                             </CardHeader>
                             <CardContent>
-                                <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-3">
-                                    {[
-                                        { label: 'Total Requests', value: '12,847' },
-                                        { label: 'Avg Latency', value: '142ms' },                                        { label: 'Error Rate', value: '0.02%' },
-                                        { label: 'Uptime', value: '99.98%' },
-                                    ].map((s) => (
-                                        <div key={s.label} className="p-3 rounded-xl bg-[var(--re-surface-elevated)] border border-[var(--re-border-default)] text-center">
-                                            <div className="text-lg sm:text-xl font-bold">{s.value}</div>
-                                            <div className="text-[10px] sm:text-xs text-muted-foreground mt-1">{s.label}</div>
-                                        </div>
-                                    ))}
-                                </div>
+                                <p className="text-sm text-muted-foreground leading-relaxed">
+                                    Request volume, latency, and delivery health only appear once telemetry is enabled for an active API integration. Until then, usage review is handled through onboarding and implementation support.
+                                </p>
                             </CardContent>
                         </Card>
                     </motion.div>
@@ -366,14 +332,14 @@ export default function SettingsPage() {
                                     <Database className="h-4 w-4 text-[var(--re-brand)]" />
                                     Data Retention
                                 </CardTitle>
-                                <CardDescription>FSMA 204 requires minimum 2-year event record retention. RegEngine exceeds all requirements.</CardDescription>
+                                <CardDescription>Retention and audit history depend on the active workspace agreement, storage path, and enabled services.</CardDescription>
                             </CardHeader>
                             <CardContent className="space-y-3">
                                 {[
-                                    { label: 'Event Records', value: '3 years (1,095 days)', note: 'FSMA requires \u2265 2 years', icon: Shield, status: 'compliant' },
-                                    { label: 'Audit Log', value: '7 years (2,555 days)', note: 'Industry best practice', icon: Lock, status: 'compliant' },
-                                    { label: 'Chain Hashes', value: 'Indefinite', note: 'SHA-256 integrity proofs kept permanently', icon: Shield, status: 'compliant' },
-                                    { label: 'Export History', value: '1 year (365 days)', note: 'Download history and FDA packages', icon: Clock, status: 'compliant' },
+                                    { label: 'Event Records', value: 'Agreement-defined', note: 'Must satisfy the customer and regulatory posture configured for this workspace', icon: Shield },
+                                    { label: 'Audit Log', value: 'Workflow-defined', note: 'Visibility depends on which audit surfaces and storage paths are enabled', icon: Lock },
+                                    { label: 'Chain Hashes', value: 'Implementation-defined', note: 'Integrity evidence depends on the active persistence and export workflow', icon: Shield },
+                                    { label: 'Export History', value: 'Workspace-defined', note: 'History availability depends on enabled export and storage services', icon: Clock },
                                 ].map((item) => (                                    <div key={item.label} className="flex items-start sm:items-center justify-between p-3 rounded-xl border border-[var(--re-border-default)] min-h-[48px] gap-2">
                                         <div className="min-w-0 flex items-start gap-3">
                                             <item.icon className="h-4 w-4 text-[var(--re-brand)] mt-0.5 flex-shrink-0" />
@@ -384,7 +350,6 @@ export default function SettingsPage() {
                                         </div>
                                         <div className="flex items-center gap-2 flex-shrink-0">
                                             <span className="text-xs sm:text-sm font-medium text-[var(--re-brand)]">{item.value}</span>
-                                            <CheckCircle2 className="h-3.5 w-3.5 text-re-brand" />
                                         </div>
                                     </div>
                                 ))}
@@ -399,7 +364,7 @@ export default function SettingsPage() {
                                     <div>
                                         <h4 className="text-sm font-semibold mb-1">What This Means for Your Business</h4>
                                         <p className="text-xs text-muted-foreground leading-relaxed">
-                                            Your event records are retained 50% longer than the FSMA 204 minimum, and audit logs are kept for 7 years to cover any FDA investigation window. Chain integrity hashes are stored indefinitely, meaning you can prove data authenticity for any historical record at any time.
+                                            This page reflects the current posture of your workspace, not a universal default for every customer. If you need fixed retention or evidence commitments for diligence, confirm them in your implementation scope or commercial terms.
                                         </p>
                                     </div>
                                 </div>
@@ -430,7 +395,7 @@ export default function SettingsPage() {
                                     <Plug className="h-4 w-4 text-[var(--re-brand)]" />
                                     Integrations
                                 </CardTitle>
-                                <CardDescription>Connect third-party systems for automated event ingestion and data sync</CardDescription>
+                                <CardDescription>Available delivery modes and onboarding paths for this workspace.</CardDescription>
                             </CardHeader>
                             <CardContent className="space-y-2">
                                 {integrations.map((int) => {
@@ -448,16 +413,6 @@ export default function SettingsPage() {
                                                     <div className="w-2 h-2 rounded-full" style={{ background: cfg.color }} />
                                                     {cfg.label}
                                                 </div>
-                                                {int.status === 'disconnected' && (
-                                                    <Button variant="outline" size="sm" className="rounded-xl text-xs min-h-[36px]">
-                                                        Connect <ChevronRight className="h-3 w-3 ml-0.5" />
-                                                    </Button>
-                                                )}
-                                                {int.status === 'connected' && (
-                                                    <Button variant="ghost" size="sm" className="rounded-xl text-xs min-h-[36px] text-muted-foreground">
-                                                        Configure
-                                                    </Button>
-                                                )}
                                                 {int.status === 'pending' && (
                                                     <Badge className="text-[9px] bg-re-warning-muted0/10 text-re-warning">Setup in progress</Badge>
                                                 )}
@@ -478,7 +433,7 @@ export default function SettingsPage() {
                                     <div>
                                         <h4 className="text-sm font-semibold mb-1">What This Means for Your Business</h4>
                                         <p className="text-xs text-muted-foreground leading-relaxed">
-                                            Connected integrations automatically ingest traceability events from your existing systems — no manual data entry. Each connected source feeds into your compliance score in real-time. The EPCIS 2.0 Gateway ensures interoperability with any industry-standard trading partner.
+                                            This catalog shows which delivery modes RegEngine can support, not a guarantee that every source is already live for this tenant. Connection status, automated ingest, and downstream scoring appear only after the relevant workflow is provisioned.
                                         </p>
                                     </div>
                                 </div>

@@ -50,7 +50,7 @@ export default function ContactPage() {
             — 30 minutes with our founder to assess your FSMA 204 readiness.
           </span>
           <a
-            href="https://cal.com/regengine/gap-analysis"
+            href="https://calendly.com/regengine/fsma-strategy-session"
             target="_blank"
             rel="noopener noreferrer"
             className="shrink-0 rounded-lg bg-[var(--re-brand)] px-4 py-2 text-sm font-semibold text-white hover:bg-[var(--re-brand-dark)] transition-colors"
@@ -63,7 +63,7 @@ export default function ContactPage() {
           {/* ── Contact Form Card ── */}
           <div className="md:col-span-2 p-5 rounded-xl border border-[var(--re-surface-border)] bg-[var(--re-surface-card)]">
             <Mail className="h-5 w-5 text-[var(--re-brand)] mb-2" />
-            <p className="text-sm font-semibold text-[var(--re-text-primary)]">Send us a message</p>
+            <p className="text-sm font-semibold text-[var(--re-text-primary)]">Contact options</p>
 
             {status === 'success' ? (
               <div className="mt-4 flex items-start gap-3 rounded-lg border border-re-brand/20 bg-re-brand/5 p-4">

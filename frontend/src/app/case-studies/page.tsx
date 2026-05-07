@@ -605,7 +605,7 @@ export default function CaseStudy() {
                             href="/signup"
                             className="inline-flex items-center justify-center px-8 py-4 bg-primary hover:bg-[var(--re-text-secondary)] text-primary-foreground font-semibold rounded-lg transition-colors border border-primary text-lg"
                         >
-                            Start Free Trial <ArrowRight className="w-5 h-5 ml-2" />
+                            Start Setup <ArrowRight className="w-5 h-5 ml-2" />
                         </Link>
                         <Link
                             href="/pricing"

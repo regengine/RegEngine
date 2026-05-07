@@ -117,7 +117,7 @@ export function PricingPageClient({
                                             {' '}General Availability (GA) price · billed annually
                                         </p>
                                         <p className="text-[11px] text-[var(--re-text-disabled)] mt-0.5">
-                                            ${tier.partnerMonthly}/mo if billed monthly · 14-day free trial
+                                            ${tier.partnerMonthly}/mo if billed monthly
                                         </p>
                                     </div>
 
@@ -156,13 +156,13 @@ export function PricingPageClient({
                         Founding Design Partner Program
                     </p>
                     <p className="text-sm text-[var(--re-text-muted)] leading-[1.7] max-w-[520px] mx-auto mb-2">
-                        50% off General Availability (GA) pricing for the life of your account. White-glove onboarding, custom integration scoping, direct founder support, and a dedicated Slack channel.
+                        50% off General Availability (GA) pricing for the life of your account. White-glove onboarding, custom integration scoping, and direct founder support.
                     </p>
                     <p className="text-[13px] text-[var(--re-text-disabled)] leading-relaxed max-w-[480px] mx-auto mb-3">
                         We are onboarding a limited number of partners ahead of the July 2028 FSMA 204 deadline. Your Founding Design Partner rate is locked in permanently — no surprise increases, ever.
                     </p>
                     <p className="text-[13px] text-[var(--re-text-disabled)] leading-relaxed max-w-[480px] mx-auto mb-5">
-                        Includes a 14-day free trial — no charge until day 15. Cancel anytime during the trial at no cost. We accept Visa, Mastercard, American Express, ACH bank transfer, and wire.
+                        Larger deployments are scoped with the team so onboarding, billing, and integration support match your operating model.
                     </p>
                     <Link href="/signup">
                         <Button className="bg-[var(--re-text-primary)] text-[var(--re-surface-base)] font-semibold rounded-sm px-7 py-3 shadow-none">

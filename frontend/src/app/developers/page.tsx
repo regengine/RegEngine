@@ -57,19 +57,24 @@ const capabilities = [
 /* ── SDKs (planned, not yet released) ── */
 
 /* ── Quick-start curl snippet ── */
-const curlSnippet = `curl -X POST https://api.regengine.co/v1/webhooks/ingest \\
-  -H "X-RegEngine-API-Key: rge_live_YOUR_KEY" \\
+const curlSnippet = `curl -X POST https://your-preview-host/api/v1/webhooks/ingest \\
+  -H "X-RegEngine-API-Key: rge_preview_YOUR_KEY" \\
+  -H "X-Tenant-ID: your-tenant-id" \\
   -H "Content-Type: application/json" \\
   -d '{
-    "event_type": "receiving",
-    "tlc": "urn:epc:id:sgln:0614141.00001.0",
-    "event_time": "2026-03-26T14:30:00Z",
-    "kde": {
-      "product": "Atlantic Salmon Fillet",
-      "lot": "LOT-2026-0326",
+    "source": "erp",
+    "events": [{
+      "cte_type": "receiving",
+      "traceability_lot_code": "00012345678901-LOT-2026-001",
+      "product_description": "Atlantic Salmon Fillet",
       "quantity": 500,
-      "unit": "KG"
-    }
+      "unit_of_measure": "kg",
+      "location_name": "Cold Storage DC",
+      "timestamp": "2026-03-26T14:30:00Z",
+      "kdes": {
+        "supplier_lot": "LOT-2026-0326"
+      }
+    }]
   }'`;
 
 export default function DevelopersPage() {
@@ -86,14 +91,14 @@ export default function DevelopersPage() {
                         Build on RegEngine
                     </h1>
                     <p className="re-hero-copy mt-5">
-                        The FSMA 204 compliance API. Record critical tracking events,
-                        validate against 25+ rules, resolve identities, and export
-                        FDA-ready packages through a single REST interface.
+                        Developer preview for FSMA 204 traceability teams. Scope your
+                        ingestion path, validate event payloads, and plan FDA-ready
+                        export workflows with the RegEngine team.
                     </p>
                     <div className="mt-8 flex flex-wrap gap-3">
                         <Link href="/alpha">
                             <Button className="bg-[var(--re-brand)] hover:bg-[var(--re-brand-dark)] text-white font-semibold px-6 shadow-[0_4px_16px_var(--re-brand-muted)] hover:-translate-y-0.5 transition-all">
-                                Get API Access
+                                Request Developer Access
                                 <ArrowRight className="ml-2 w-4 h-4" />
                             </Button>
                         </Link>
@@ -213,13 +218,12 @@ export default function DevelopersPage() {
                     </Badge>
                     <h2 className="font-display text-xl font-bold text-re-text-primary mb-2">Start building on RegEngine</h2>
                     <p className="text-sm text-re-text-muted max-w-md mx-auto mb-6">
-                        Get your API key and record your first critical tracking event in under 5 minutes.
-                        Full REST API with EPCIS 2.0 support.
+                        Request preview access and we&apos;ll scope your first integration path, credentials, and payload contract with you.
                     </p>
                     <div className="flex gap-3 justify-center flex-wrap">
                         <Link href="/alpha">
                             <Button className="bg-[var(--re-brand)] hover:bg-[var(--re-brand-dark)] text-white font-semibold px-6 shadow-[0_4px_16px_var(--re-brand-muted)] hover:-translate-y-0.5 transition-all">
-                                Get API Access
+                                Request Developer Access
                                 <ArrowRight className="ml-2 w-4 h-4" />
                             </Button>
                         </Link>

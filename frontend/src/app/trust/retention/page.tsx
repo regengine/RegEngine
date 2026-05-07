@@ -36,18 +36,18 @@ const RETENTION_TIMELINE = [
         duration: 'Ongoing',
         icon: ShieldCheck,
         color: 'bg-re-brand/15 text-re-brand',
-        detail: 'Full access to all CTE events, KDE records, compliance scores, audit logs, and export functions. Data is continuously backed up with point-in-time recovery.',
+        detail: 'Access to the active workspace and configured export functions during the subscription term. Backup and recovery posture depend on the active hosting configuration.',
     },
     {
         phase: 'Post-cancellation window',
-        duration: '90 days',
+        duration: 'Contract-defined window',
         icon: Clock,
         color: 'bg-re-warning-muted0/15 text-re-warning',
-        detail: 'Read-only access to your workspace. All export functions remain available. This is your window to extract everything you need before deletion.',
+        detail: 'The post-cancellation export window is set by the active commercial agreement and operating workflow for the workspace.',
     },
     {
         phase: 'Deletion',
-        duration: 'After 90 days',
+        duration: 'After the contract-defined window',
         icon: Trash2,
         color: 'bg-re-danger-muted0/15 text-re-danger',
         detail: 'All tenant data is permanently deleted from production databases and backups. Deletion is irreversible. RegEngine cannot recover data after this point.',
@@ -107,7 +107,7 @@ export default function RetentionPage() {
             <section className={`relative z-[2] ${sectionAlt}`}>
                 <div className="max-w-[980px] mx-auto py-10 sm:py-14 px-4 sm:px-6">                    <h2 className="font-display text-2xl font-bold text-[var(--re-text-primary)] mb-2">Retention timeline</h2>
                     <p className="text-sm text-[var(--re-text-muted)] mb-6 max-w-[720px]">
-                        RegEngine retains your data for the duration of your subscription plus a 90-day post-cancellation window. After that, data is permanently deleted.
+                        RegEngine currently targets retention for the duration of your subscription plus a 90-day post-cancellation window. Contract terms and deployment posture may modify that default.
                     </p>
                     <div className="space-y-3">
                         {RETENTION_TIMELINE.map((phase) => {
@@ -138,7 +138,7 @@ export default function RetentionPage() {
                         <h3 className="text-sm font-semibold text-[var(--re-text-primary)] mb-2">FSMA 204 requires 2-year retention</h3>
                         <p className="text-sm text-[var(--re-text-muted)] leading-relaxed">
                             Under 21 CFR 1.1455, food companies must maintain traceability records for at least two years from the date they were created.
-                            RegEngine is a compliance evidence layer, not a long-term archive. Your subscription may not span two years from initial data ingestion.
+                            RegEngine is a compliance evidence layer, not a long-term archive. Your subscription may not span two years from initial data ingestion, so off-platform retention remains your responsibility.
                         </p>
                     </div>
                     <div className={`${card} p-5`}>
@@ -151,15 +151,13 @@ export default function RetentionPage() {
                     <div className={`${card} p-5`}>
                         <h3 className="text-sm font-semibold text-[var(--re-text-primary)] mb-2">Export integrity verification</h3>
                         <p className="text-sm text-[var(--re-text-muted)] leading-relaxed">
-                            Every export bundle includes a SHA-256 manifest hash. You can verify that exported records were not modified after export — without contacting RegEngine
-                            or requiring any vendor access. Records are self-describing and re-importable.
+                            Export bundles are designed to include a SHA-256 manifest hash so records can be verified outside the product UI. Final artifact details depend on the export workflow configured for your deployment.
                         </p>
                     </div>
                     <div className={`${card} p-5`}>
                         <h3 className="text-sm font-semibold text-[var(--re-text-primary)] mb-2">No vendor lock-in</h3>
                         <p className="text-sm text-[var(--re-text-muted)] leading-relaxed">
-                            Exports use industry-standard formats (EPCIS 2.0, FDA spreadsheet, CSV). Your data is portable to any other system without
-                            proprietary conversion. Schema documentation is included in every export bundle.
+                            Exports are intended to use industry-standard formats such as EPCIS 2.0, FDA spreadsheet layouts, and CSV. Exact format coverage depends on the workflow enabled for your account.
                         </p>
                     </div>
                 </div>
@@ -169,7 +167,7 @@ export default function RetentionPage() {
                 <div className="max-w-[980px] mx-auto py-10 sm:py-14 px-4 sm:px-6">
                     <h2 className="font-display text-2xl font-bold text-[var(--re-text-primary)] mb-2">Export formats</h2>
                     <p className="text-sm text-[var(--re-text-muted)] mb-6 max-w-[720px]">
-                        All formats include complete CTE/KDE records and can reconstitute compliance evidence without vendor assistance.
+                        These are the target export formats in the current product posture. Exact availability depends on plan, workflow, and deployment configuration.
                     </p>
                     <div className="grid gap-4 md:grid-cols-2">
                         {EXPORT_FORMATS.map((fmt) => {
@@ -191,15 +189,15 @@ export default function RetentionPage() {
 
             {/* Export scheduling */}
             <section className="relative z-[2] max-w-[980px] mx-auto py-10 sm:py-14 px-4 sm:px-6">
-                <h2 className="font-display text-2xl font-bold text-[var(--re-text-primary)] mb-4">Automated export scheduling</h2>                <div className="grid gap-3 md:grid-cols-3">
-                    {[
-                        { Icon: Calendar, label: 'Cadence options', value: 'Daily / Weekly / Monthly', detail: 'Set your export frequency per format and destination' },
-                        { Icon: FolderArchive, label: 'Destinations', value: 'Download or object storage', detail: 'Archive to S3, GCS, or download bundles on demand' },
-                        { Icon: Hash, label: 'Integrity', value: 'SHA-256 manifest', detail: 'Every export run includes a tamper-evident manifest hash' },
-                        { Icon: RefreshCw, label: 'Retry', value: 'Automatic', detail: 'Failed exports are flagged and retried on next cycle' },
-                        { Icon: Timer, label: 'History', value: 'Full log', detail: 'Export history with timestamps, sizes, and verification status' },
-                        { Icon: Download, label: 'On-demand', value: 'Any time', detail: 'Manual export available regardless of schedule' },
-                    ].map((item) => {
+                    <h2 className="font-display text-2xl font-bold text-[var(--re-text-primary)] mb-4">Export scheduling posture</h2>                <div className="grid gap-3 md:grid-cols-3">
+                        {[
+                            { Icon: Calendar, label: 'Cadence options', value: 'Scoped per deployment', detail: 'Export frequency depends on the workflow configured for your account' },
+                            { Icon: FolderArchive, label: 'Destinations', value: 'Varies by workflow', detail: 'Archive delivery may use object storage or downloadable bundles' },
+                            { Icon: Hash, label: 'Integrity', value: 'Manifest hashing', detail: 'Integrity metadata is part of the target export design' },
+                            { Icon: RefreshCw, label: 'Retry', value: 'Workflow dependent', detail: 'Retry behavior depends on the delivery path in use' },
+                            { Icon: Timer, label: 'History', value: 'Tracked where enabled', detail: 'Export history visibility depends on the configured workflow' },
+                            { Icon: Download, label: 'On-demand', value: 'Available in supported flows', detail: 'Manual export availability depends on the surfaces enabled for your plan' },
+                        ].map((item) => {
                         const Icon = item.Icon;
                         return (
                             <div key={item.label} className={`${card} p-4`}>

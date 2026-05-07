@@ -28,7 +28,7 @@ We may also suspend or restrict access to the Service if required to do so by la
 
 We store and process your data solely to provide RegEngine services. We do not claim any intellectual property rights over your compliance data, traceability records, or exported reports.
 
-You can export all of your data at any time via the API or dashboard. If you cancel your subscription or if RegEngine Inc. terminates your account, you have 90 days to export your data before it is permanently deleted. This 90-day export window applies regardless of the reason for termination.
+You can export all of your data at any time via the API or dashboard. If you cancel your subscription or if RegEngine Inc. terminates your account, your export and deletion window follows the active customer agreement and workspace operating posture.
 
 If you have statutory or contractual retention obligations, you are responsible for maintaining an off-platform archive or recurring export process that satisfies those obligations.
 
@@ -42,7 +42,7 @@ You grant us a limited license to store, process, and display your data as neces
 
 Free tools are provided without warranties of any kind, including merchantability, fitness for a particular purpose, or non-infringement, and RegEngine Inc. shall have no liability arising from reliance on free tools.
 
-Free tools do not require an account. We do not store your selections or results unless you explicitly submit your email for a gap analysis, in which case we store your email for that purpose only.
+Free tools do not require an account. We do not store your selections or results unless you explicitly submit your email for follow-up, in which case we use that contact information for that request.
 
 Free tools may be modified, updated, or discontinued at any time.`,
     },    {
@@ -109,7 +109,7 @@ In the event of a force majeure lasting more than 30 days, either party may term
         title: '12. Termination',
         content: `You can close your account at any time. We can terminate your account for material breach of these terms with 30 days' notice (or immediately for security-related violations).
 
-Upon termination: you have 90 days to export your data, after which it is permanently deleted. Any prepaid annual fees will be prorated and refunded for unused months.`,
+Upon termination: your export and deletion window follows the active customer agreement and workspace operating posture. Any prepaid annual fees will be prorated and refunded for unused months.`,
     },
     {
         id: 'changes',

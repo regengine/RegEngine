@@ -33,14 +33,14 @@ export const INTEGRATION_TYPE_LABELS: Record<IntegrationType, string> = {
 
 export const INTEGRATION_TYPE_DESCRIPTIONS: Record<IntegrationType, string> = {
     native_bidirectional: 'Real-time, two-way sync with source system. Write-back supported where applicable.',
-    api_based_custom: 'Customer-managed integration via RegEngine REST API. SDK documented, customer builds and maintains.',
+    api_based_custom: 'Customer-managed integration via RegEngine API and implementation guidance. The customer builds and maintains the workflow unless otherwise scoped.',
     file_based_import: 'Scheduled or manual CSV/XLSX ingestion with field mapping and exception handling.',
     one_way_export: 'RegEngine prepares outbound packages. No write-back to source system.',
 };
 
 export const INTEGRATION_TYPE_VERIFY: Record<IntegrationType, string> = {
     native_bidirectional: 'Is write-back supported? What is the sync frequency? What triggers reconciliation?',
-    api_based_custom: 'Who builds and maintains this? Is the SDK documented? What is the versioning policy?',
+    api_based_custom: 'Who builds and maintains this? What documentation is available? What is the versioning policy?',
     file_based_import: 'How often? Manual trigger or automated? What is the error handling and rejection flow?',
     one_way_export: 'What is the latency? Is this real-time or batch? What format is produced?',
 };
