@@ -6,6 +6,11 @@ import {
     getServerApiKey,
     validateUuid,
 } from '@/lib/api-proxy';
+import {
+    allowDevComplianceSnapshotFallback,
+    createDevComplianceSnapshot,
+    listDevComplianceSnapshots,
+} from '@/lib/dev-compliance-snapshots';
 
 function getComplianceUrl(): string {
     const url = process.env.COMPLIANCE_SERVICE_URL || getServerServiceURL('compliance');
@@ -54,6 +59,7 @@ export async function GET(
     if (apiKey) {
         headers['X-RegEngine-API-Key'] = apiKey;
     }
+    const allowFallback = allowDevComplianceSnapshotFallback();
 
     try {
         const response = await fetch(`${COMPLIANCE_URL}/v1/compliance/snapshots/${tenantId}`, {
@@ -62,6 +68,9 @@ export async function GET(
         const data = await response.json().catch(() => ({}));
 
         if (!response.ok) {
+            if (allowFallback && (response.status === 404 || response.status === 503)) {
+                return NextResponse.json({ items: listDevComplianceSnapshots(tenantId) });
+            }
             return NextResponse.json(
                 { error: data.detail || 'Compliance snapshot request failed', items: [] },
                 { status: response.status }
@@ -71,6 +80,9 @@ export async function GET(
         return NextResponse.json(data);
     } catch (error) {
         console.error('[proxy/snapshots] Backend unreachable:', error);
+        if (allowFallback) {
+            return NextResponse.json({ items: listDevComplianceSnapshots(tenantId) });
+        }
         return NextResponse.json(
             { error: 'Compliance snapshot service unavailable', items: [] },
             { status: 503 }
@@ -101,6 +113,7 @@ export async function POST(
         );
     }
     const body = await request.json().catch(() => ({}));
+    const parsedBody = typeof body === 'object' && body !== null ? body as Record<string, unknown> : {};
 
     const COMPLIANCE_URL = getComplianceUrl();
     const headers: Record<string, string> = {
@@ -110,6 +123,7 @@ export async function POST(
     if (apiKey) {
         headers['X-RegEngine-API-Key'] = apiKey;
     }
+    const allowFallback = allowDevComplianceSnapshotFallback();
 
     try {
         const response = await fetch(`${COMPLIANCE_URL}/v1/compliance/snapshots/${tenantId}`, {
@@ -120,6 +134,15 @@ export async function POST(
         const data = await response.json().catch(() => ({}));
 
         if (!response.ok) {
+            if (allowFallback && (response.status === 404 || response.status === 503)) {
+                const snapshot = createDevComplianceSnapshot({
+                    tenantId,
+                    snapshotName: String(parsedBody.snapshot_name || 'Manual Snapshot'),
+                    snapshotReason: typeof parsedBody.snapshot_reason === 'string' ? parsedBody.snapshot_reason : undefined,
+                    createdBy: String(parsedBody.created_by || 'playwright@regengine.local'),
+                });
+                return NextResponse.json(snapshot);
+            }
             return NextResponse.json(
                 { error: data.detail || 'Snapshot creation failed' },
                 { status: response.status }
@@ -129,6 +152,15 @@ export async function POST(
         return NextResponse.json(data);
     } catch (error) {
         console.error('[proxy/snapshots] Backend unreachable:', error);
+        if (allowFallback) {
+            const snapshot = createDevComplianceSnapshot({
+                tenantId,
+                snapshotName: String(parsedBody.snapshot_name || 'Manual Snapshot'),
+                snapshotReason: typeof parsedBody.snapshot_reason === 'string' ? parsedBody.snapshot_reason : undefined,
+                createdBy: String(parsedBody.created_by || 'playwright@regengine.local'),
+            });
+            return NextResponse.json(snapshot);
+        }
         return NextResponse.json(
             { error: 'Compliance snapshot service unavailable' },
             { status: 503 }

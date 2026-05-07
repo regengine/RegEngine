@@ -150,7 +150,7 @@ class TestGetClientLazyInit:
         assert s._client is None
 
         fake_client = AsyncMock()
-        with patch("redis.asyncio.from_url", new=AsyncMock(return_value=fake_client)) as mock_from_url:
+        with patch("redis.asyncio.from_url", new=MagicMock(return_value=fake_client)) as mock_from_url:
             client = await s._get_client()
 
         assert client is fake_client

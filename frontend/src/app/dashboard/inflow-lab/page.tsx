@@ -1,12 +1,12 @@
 import { Metadata } from "next";
-import { InflowLabClient } from "@/app/tools/inflow-lab/components/InflowLabClient";
+import { DashboardInflowLab } from "@/app/tools/inflow-lab/components/DashboardInflowLab";
 
 export const metadata: Metadata = {
     title: "Inflow Lab | RegEngine Dashboard",
     description:
-        "Separate sandbox diagnosis, mock feed validation, authenticated feed monitoring, and production evidence from the RegEngine command center.",
+        "Test supplier traceability data before it flows into production exports — sandbox-only diagnostics, grouped exceptions, and a sticky lot lifecycle.",
 };
 
 export default function DashboardInflowLabPage() {
-    return <InflowLabClient mode="dashboard" />;
+    return <DashboardInflowLab />;
 }
