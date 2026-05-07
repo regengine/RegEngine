@@ -6,6 +6,7 @@ import {
   CheckCircle2, XCircle, Clock, Truck, Leaf, Package, Anchor,
   Building2, ArrowRight, BarChart3, Users, FileText, Zap,
 } from 'lucide-react';
+import { DemoBanner } from '@/components/control-plane/demo-banner';
 
 // ---------------------------------------------------------------------------
 // Synthetic demo data — what a mid-market produce distributor would see
@@ -62,11 +63,14 @@ const CTE_BREAKDOWN = [
 export default function DemoPage() {
   return (
     <div className="max-w-7xl mx-auto px-4 py-8 text-white">
+      <div className="mb-6">
+        <DemoBanner visible={true} />
+      </div>
       {/* Page header */}
       <div className="mb-8">
         <h1 className="text-2xl font-bold mb-2">Compliance Dashboard</h1>
         <p className="text-[var(--re-text-muted)] text-sm">
-          FreshCo Distribution &mdash; 3 facilities, 23 suppliers, 12,847 CTE events
+          DEMO WORKSPACE &mdash; FreshCo Distribution is a fictional distributor. Numbers are illustrative.
         </p>
       </div>
 

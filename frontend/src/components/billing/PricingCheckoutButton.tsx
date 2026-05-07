@@ -61,6 +61,7 @@ export function PricingCheckoutButton({
             const data = await response.json();
 
             if (!response.ok) {
+                setError('Stripe checkout was unavailable — continue with your account, we will bill from inside the app.');
                 router.push(signupHref);
                 return;
             }
@@ -69,11 +70,11 @@ export function PricingCheckoutButton({
             if (data.checkout_url) {
                 window.location.href = data.checkout_url;
             } else {
-                // Fallback: go to signup with plan context
+                setError('Stripe checkout was unavailable — continue with your account, we will bill from inside the app.');
                 router.push(signupHref);
             }
         } catch {
-            // Network error or Stripe not configured — fall through to signup
+            setError('Stripe checkout was unavailable — continue with your account, we will bill from inside the app.');
             router.push(signupHref);
         } finally {
             setIsLoading(false);
