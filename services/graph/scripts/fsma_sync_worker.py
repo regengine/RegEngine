@@ -215,6 +215,14 @@ class FSMASyncWorker:
         does not line up. Instead we peek at ``schema_version`` and
         refuse unknown versions, so a future envelope bump (v2+) with
         breaking changes will DLQ rather than silently corrupt nodes.
+
+        EPIC-A note: this is an internal canonical-event flow (compliance
+        canonical_persistence -> graph sync). The publisher, the queue,
+        and this consumer are all server-side trusted code; the event
+        body is not attacker-controllable. The tenant_id reads below
+        are routing decisions from the canonical schema, NOT request-body
+        trust. The resolved value is regex-validated for db-name safety
+        before any Neo4j operation, regardless.
         """
         event_id = event.get("event_id")
         if not event_id:
@@ -237,7 +245,7 @@ class FSMASyncWorker:
                 "fsma_sync_schema_version_uncoerceable",
                 event_id=event_id,
                 raw_version=raw_version,
-                tenant_id=event.get("tenant_id", ""),
+                tenant_id=event.get("tenant_id", ""),  # nosemgrep: tenant-id-from-request-body
             )
             return
         if peeked_version not in KNOWN_VERSIONS:
@@ -246,11 +254,11 @@ class FSMASyncWorker:
                 event_id=event_id,
                 peeked_version=peeked_version,
                 known_versions=sorted(KNOWN_VERSIONS),
-                tenant_id=event.get("tenant_id", ""),
+                tenant_id=event.get("tenant_id", ""),  # nosemgrep: tenant-id-from-request-body
             )
             return
 
-        tenant_id = event.get("tenant_id", "")
+        tenant_id = event.get("tenant_id", "")  # nosemgrep: tenant-id-from-request-body
         db_name = f"reg_tenant_{tenant_id.replace('-', '')}" if tenant_id else None
         # Validate database name to prevent injection via crafted tenant_id
         if db_name:
