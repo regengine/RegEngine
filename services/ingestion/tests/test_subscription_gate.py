@@ -61,7 +61,7 @@ async def test_active_subscription_allowed(client, fresh_circuit):
         mock_redis = MagicMock()
         mock_redis.hget.return_value = "active"
         with patch("redis.from_url", return_value=mock_redis):
-            resp = await client.get("/protected", params={"tenant_id": "t1"})
+            resp = await client.get("/protected", headers={"X-Tenant-ID": "t1"})
     assert resp.status_code == 200
 
 
@@ -73,7 +73,7 @@ async def test_cancelled_subscription_blocked(client, fresh_circuit):
         mock_redis = MagicMock()
         mock_redis.hget.return_value = "cancelled"
         with patch("redis.from_url", return_value=mock_redis):
-            resp = await client.get("/protected", params={"tenant_id": "t1"})
+            resp = await client.get("/protected", headers={"X-Tenant-ID": "t1"})
     assert resp.status_code == 402
 
 
@@ -85,7 +85,7 @@ async def test_trialing_subscription_allowed(client, fresh_circuit):
         mock_redis = MagicMock()
         mock_redis.hget.return_value = "trialing"
         with patch("redis.from_url", return_value=mock_redis):
-            resp = await client.get("/protected", params={"tenant_id": "t1"})
+            resp = await client.get("/protected", headers={"X-Tenant-ID": "t1"})
     assert resp.status_code == 200
 
 
@@ -97,7 +97,7 @@ async def test_missing_key_fails_closed_402(client, fresh_circuit):
         mock_redis = MagicMock()
         mock_redis.hget.return_value = None
         with patch("redis.from_url", return_value=mock_redis):
-            resp = await client.get("/protected", params={"tenant_id": "t1"})
+            resp = await client.get("/protected", headers={"X-Tenant-ID": "t1"})
     assert resp.status_code == 402
     assert "subscription" in resp.json()["detail"].lower()
 
@@ -124,16 +124,16 @@ async def test_redis_failure_fails_closed_503(client, fresh_circuit):
 
         with patch("redis.from_url", return_value=mock_redis):
             # Even the very first Redis error should 503 now.
-            resp = await client.get("/protected", params={"tenant_id": "t1"})
+            resp = await client.get("/protected", headers={"X-Tenant-ID": "t1"})
             assert resp.status_code == 503
 
             # Drive failures up to the threshold so the circuit opens too.
             for _ in range(fresh_circuit.failure_threshold):
-                resp = await client.get("/protected", params={"tenant_id": "t1"})
+                resp = await client.get("/protected", headers={"X-Tenant-ID": "t1"})
                 assert resp.status_code == 503
 
             # Once the circuit is open, still 503 via a faster path.
-            resp = await client.get("/protected", params={"tenant_id": "t1"})
+            resp = await client.get("/protected", headers={"X-Tenant-ID": "t1"})
             assert resp.status_code == 503
             assert "unavailable" in resp.json()["detail"].lower()
 
@@ -149,7 +149,7 @@ async def test_circuit_open_returns_503_immediately(client, fresh_circuit):
          patch("app.subscription_gate.redis_circuit", fresh_circuit):
         # Redis should NOT be called at all
         with patch("redis.from_url") as mock_from_url:
-            resp = await client.get("/protected", params={"tenant_id": "t1"})
+            resp = await client.get("/protected", headers={"X-Tenant-ID": "t1"})
             assert resp.status_code == 503
             mock_from_url.assert_not_called()
 
@@ -172,12 +172,12 @@ async def test_circuit_recovers_after_timeout(client, fresh_circuit):
         mock_redis.hget.return_value = "active"
         with patch("redis.from_url", return_value=mock_redis):
             # Circuit should be half-open now, and this success should work
-            resp = await client.get("/protected", params={"tenant_id": "t1"})
+            resp = await client.get("/protected", headers={"X-Tenant-ID": "t1"})
             assert resp.status_code == 200
 
             # After enough successes, circuit should close
             for _ in range(fresh_circuit.half_open_max_calls):
-                resp = await client.get("/protected", params={"tenant_id": "t1"})
+                resp = await client.get("/protected", headers={"X-Tenant-ID": "t1"})
                 assert resp.status_code == 200
 
     assert fresh_circuit.state == CircuitState.CLOSED
