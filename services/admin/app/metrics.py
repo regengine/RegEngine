@@ -279,7 +279,7 @@ class HallucinationTracker:
                     set_tenant_guc(session, str(tenant_id))
             yield session
             session.commit()
-        except SQLAlchemyError:
+        except Exception:
             session.rollback()
             raise
         finally:
