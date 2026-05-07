@@ -279,6 +279,8 @@ async def health():
     if admin_db_url:
         async def check_postgres():
             try:
+                if admin_db_url.startswith("sqlite"):
+                    return {"status": "healthy"}
                 # Basic connection check
                 import psycopg
                 # Robustly strip SQLAlchemy-style dialect prefixes for direct psycopg connection
@@ -530,4 +532,3 @@ async def get_funnel_metrics(
     """Return aggregate tenant funnel counts and stage conversion rates."""
     stages = get_funnel_stage_metrics(db_session=db)
     return FunnelResponse(stages=[FunnelStageResponse(**stage) for stage in stages])
-

@@ -87,6 +87,7 @@ jobs:
           - ingestion
           - nlp
           - scheduler
+          - shared
 
     services:
       postgres:
@@ -205,6 +206,11 @@ jobs:
           # nlp:        actual 68% → floor 65%
           # ingestion:  actual ~50% on CI (collect errors block local run) → floor 48%
           THRESHOLD=60
+          # services/shared has no `app/` subdir — its source IS the
+          # top-level *.py and subpackages of services/shared/. After
+          # `cd services/shared` we cover ``.`` (current directory); for
+          # everything else we cover the conventional ``app`` package.
+          COV_TARGET=app
           case "${{ matrix.service }}" in
             compliance) THRESHOLD=80 ;;  # was 30; actual 85%
             scheduler)  THRESHOLD=65 ;;  # was 35; actual 69%
@@ -212,13 +218,14 @@ jobs:
             graph)      THRESHOLD=60 ;;  # was 50; actual 64%
             ingestion)  THRESHOLD=48 ;;  # was 42; actual ~50% on CI
             nlp)        THRESHOLD=65 ;;  # was 50; actual 68%
+            shared)     THRESHOLD=35; COV_TARGET=. ;;  # measured ~44% locally; floor 35 absorbs CI-vs-local variance, ratchet to 40 after a stable run.
           esac
           # NOTE: --ignore=tests/integration/ is intentionally removed so that
           # integration tests contribute to the coverage report when they run.
           # Tests that require live external services should be marked with
           # @pytest.mark.integration and can be skipped via -m "not integration"
           # in environments without those services.
-          pytest tests/ -v --cov=app --cov-report=term \
+          pytest tests/ -v --cov=$COV_TARGET --cov-report=term \
             --cov-report=xml:coverage.xml \
             --cov-fail-under=$THRESHOLD \
             -o "testpaths=tests"

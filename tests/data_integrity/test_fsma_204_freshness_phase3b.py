@@ -35,6 +35,14 @@ CONTENT_V2 = """
 
 ADMIN_MASTER_KEY = "admin-master-key-dev"
 
+
+def _service_available(base_url: str) -> bool:
+    try:
+        response = requests.get(f"{base_url}/health", timeout=2)
+        return response.status_code < 500
+    except requests.RequestException:
+        return False
+
 @pytest.fixture
 def auth_headers():
     return {
@@ -47,6 +55,11 @@ def auth_headers():
 class TestFSMA204FreshnessPhase3b:
     
     def test_freshness_and_versioning(self, auth_headers):
+        if not _service_available("http://localhost:8002"):
+            pytest.skip("ingestion service not running")
+        if not _service_available(ADMIN_API_URL):
+            pytest.skip("admin service not running")
+
         print("\n[Phase 3b] Starting Freshness & Versioning Test...")
 
         # 1. Ingest V1

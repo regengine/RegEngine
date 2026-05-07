@@ -1,8 +1,8 @@
-"""Tests for session scope tenant isolation with SET LOCAL statement.
+"""Tests for session scope tenant isolation with transaction-scoped set_config.
 
-These tests verify the psycopg3-compatible SQL syntax fix for tenant isolation.
-The _session_scope method was modified to use string formatting for SET LOCAL
-statements since psycopg3 doesn't support parameterized SET statements.
+These tests verify the psycopg3/asyncpg-compatible tenant GUC helper.
+The session scope now relies on ``SELECT set_config('app.tenant_id', :tid, true)``
+so the tenant binding remains parameterized and transaction-scoped.
 """
 
 from __future__ import annotations
@@ -16,16 +16,15 @@ class TestSessionScopeTenantIsolation:
     """Tests for _session_scope tenant isolation behavior."""
 
     def test_session_scope_sets_tenant_context_with_valid_uuid(self):
-        """Verify SET LOCAL is executed with valid UUID format."""
+        """Verify the tenant GUC is set with a parameterized UUID binding."""
         from services.admin.app.metrics import HallucinationTracker
 
         # Create a mock session that captures executed SQL
-        executed_statements = []
+        executed_calls = []
 
         class MockSession:
-            def execute(self, stmt):
-                # stmt is a TextClause object, convert to string
-                executed_statements.append(str(stmt))
+            def execute(self, stmt, params=None):
+                executed_calls.append((str(stmt), params))
 
             def commit(self):
                 pass
@@ -46,20 +45,23 @@ class TestSessionScopeTenantIsolation:
         with tracker._session_scope(tenant_id=tenant_id) as session:
             pass
 
-        # Verify SET LOCAL was called with the tenant_id
-        assert len(executed_statements) == 1
-        assert "SET LOCAL app.tenant_id" in executed_statements[0]
-        assert tenant_id in executed_statements[0]
+        # Verify set_config was called with the tenant_id binding
+        assert len(executed_calls) == 1
+        sql, params = executed_calls[0]
+        assert "set_config" in sql
+        assert "'app.tenant_id'" in sql
+        assert "true" in sql.lower()
+        assert params == {"tid": tenant_id}
 
     def test_session_scope_no_set_without_tenant_id(self):
-        """Verify SET LOCAL is not executed when tenant_id is None."""
+        """Verify the tenant GUC is not set when tenant_id is None."""
         from services.admin.app.metrics import HallucinationTracker
 
         executed_statements = []
 
         class MockSession:
-            def execute(self, stmt):
-                executed_statements.append(str(stmt))
+            def execute(self, stmt, params=None):
+                executed_statements.append((str(stmt), params))
 
             def commit(self):
                 pass
@@ -154,15 +156,15 @@ class TestTenantIdValidation:
     """Tests for tenant_id format validation in session scope."""
 
     def test_tenant_id_uuid_format_preserved(self):
-        """Verify UUID format is preserved in SET LOCAL statement."""
+        """Verify UUID format is preserved in the tenant binding."""
         from services.admin.app.metrics import HallucinationTracker
 
-        captured_stmt = None
+        captured_call = None
 
         class MockSession:
-            def execute(self, stmt):
-                nonlocal captured_stmt
-                captured_stmt = str(stmt)
+            def execute(self, stmt, params=None):
+                nonlocal captured_call
+                captured_call = (str(stmt), params)
 
             def commit(self):
                 pass
@@ -184,25 +186,28 @@ class TestTenantIdValidation:
         with tracker._session_scope(tenant_id=tenant_id) as session:
             pass
 
-        # Verify the UUID is properly quoted in the SQL
-        assert f"'{tenant_id}'" in captured_stmt
+        # Verify the UUID is preserved in the parameterized binding
+        assert captured_call is not None
+        sql, params = captured_call
+        assert "set_config" in sql
+        assert params == {"tid": tenant_id}
 
     def test_session_scope_sql_injection_protection(self):
         """
         Verify that tenant_id is safely handled.
         
         Note: In production, tenant_id should be validated as a UUID before
-        reaching this point. The SET LOCAL uses string formatting which is
-        acceptable for UUIDs but relies on upstream validation.
+        reaching this point. The helper now uses a parameterized binding
+        rather than interpolating the value into SQL text.
         """
         from services.admin.app.metrics import HallucinationTracker
 
-        captured_stmt = None
+        captured_call = None
 
         class MockSession:
-            def execute(self, stmt):
-                nonlocal captured_stmt
-                captured_stmt = str(stmt)
+            def execute(self, stmt, params=None):
+                nonlocal captured_call
+                captured_call = (str(stmt), params)
 
             def commit(self):
                 pass
@@ -224,6 +229,8 @@ class TestTenantIdValidation:
         with tracker._session_scope(tenant_id=tenant_id) as session:
             pass
 
-        # Verify statement format
-        assert "SET LOCAL app.tenant_id" in captured_stmt
-        assert tenant_id in captured_stmt
+        # Verify statement format and parameterized binding
+        assert captured_call is not None
+        sql, params = captured_call
+        assert "set_config" in sql
+        assert params == {"tid": tenant_id}

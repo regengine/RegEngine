@@ -232,6 +232,7 @@ _ATTR_TO_SUBMODULE = {
     "_handle_stripe_event": _webhooks_mod,
     "_process_stripe_webhook": _webhooks_mod,
 }
+_STRIPE_SUBMODULES = (_helpers_mod, _customers_mod, _routes_mod, _webhooks_mod)
 
 
 class _PatchableModule(_types.ModuleType):
@@ -242,6 +243,9 @@ class _PatchableModule(_types.ModuleType):
         submod = _ATTR_TO_SUBMODULE.get(name)
         if submod is not None:
             setattr(submod, name, value)
+        if name == "stripe":
+            for submod in _STRIPE_SUBMODULES:
+                setattr(submod, name, value)
         # emit_funnel_event lives in shared.funnel_events; routes.py and
         # webhooks.py call it through that module, so patch it there too.
         if name == "emit_funnel_event":

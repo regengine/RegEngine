@@ -29,6 +29,7 @@ from .compliance_service_sync import ComplianceServiceSync
 from .database import get_session
 from .dependencies import (
     get_current_user,
+    get_tenant_scoped_session,
     PermissionChecker,
     verify_path_tenant_matches,
 )
