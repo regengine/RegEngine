@@ -76,8 +76,8 @@ export default function FSMADashboardPage() {
   const supplierHealth = useSupplierHealth();
 
   // Trace query (only when activeTlc is set)
-  const traceResult = useForwardTrace(activeTlc || '', undefined, !!activeTlc && isAuthenticated);
-  const massBalance = useMassBalance(activeTlc || '', undefined, !!activeTlc && isAuthenticated);
+  const traceResult = useForwardTrace(activeTlc || '', !!activeTlc && isAuthenticated);
+  const massBalance = useMassBalance(activeTlc || '', !!activeTlc && isAuthenticated);
 
   const handleTrace = () => {
     if (tlcQuery.trim()) {

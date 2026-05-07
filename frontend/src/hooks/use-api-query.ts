@@ -109,11 +109,10 @@ export function useApiMutate<TData = unknown, TInput = unknown>(
  * Hook that returns the current tenant ID and auth state for manual fetching.
  */
 export function useApiContext() {
-    const { apiKey, isAuthenticated } = useAuth();
+    const { isAuthenticated } = useAuth();
     const { tenantId } = useTenant();
 
     return {
-        apiKey: apiKey ?? '',
         tenantId,
         isAuthenticated,
         /** Convenience: authenticated fetch for one-off calls */
