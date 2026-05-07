@@ -12,6 +12,7 @@ import { Breadcrumbs } from '@/components/layout/breadcrumbs';
 import { useAuth } from '@/lib/auth-context';
 import { useTenant } from '@/lib/tenant-context';
 import { fetchRecallReport } from '@/lib/api-hooks';
+import { fetchWithCsrf } from '@/lib/fetch-with-csrf';
 import {
     Download,
     Timer,
@@ -123,7 +124,7 @@ function riskBadge(risk: string) {
 /* ── Page Component ── */
 
 export default function RecallReportPage() {
-    const { apiKey } = useAuth();
+    const { isAuthenticated } = useAuth();
     const { tenantId } = useTenant();
     const [expanded, setExpanded] = useState<string | null>(null);
     const [exporting, setExporting] = useState(false);
@@ -131,8 +132,8 @@ export default function RecallReportPage() {
 
     const { data: report, isLoading, error, refetch } = useQuery<RecallReport>({
         queryKey: ['recall-report', tenantId],
-        queryFn: () => fetchRecallReport(tenantId!, apiKey!) as Promise<RecallReport>,
-        enabled: !!tenantId && !!apiKey,
+        queryFn: () => fetchRecallReport(tenantId!) as Promise<RecallReport>,
+        enabled: !!tenantId && isAuthenticated,
         staleTime: 5 * 60 * 1000, // 5 min — report is expensive to compute
     });
 
@@ -192,9 +193,9 @@ export default function RecallReportPage() {
                                 try {
                                     const { getServiceURL } = await import('@/lib/api-config');
                                     const base = getServiceURL('ingestion');
-                                    const res = await fetch(
+                                    const res = await fetchWithCsrf(
                                         `${base}/api/v1/fda/export/all?tenant_id=${tenantId}&format=csv`,
-                                        { headers: { 'X-RegEngine-API-Key': apiKey || '' } }
+                                        { credentials: 'include' }
                                     );
                                     if (!res.ok) throw new Error(`Export failed: ${res.status}`);
                                     const blob = await res.blob();

@@ -9,6 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useAuth } from '@/lib/auth-context';
+import { useTenant } from '@/lib/tenant-context';
 
 type RecallDrillsResponse = {
     items?: RecallDrillRun[];
@@ -17,7 +18,8 @@ type RecallDrillsResponse = {
 };
 
 export default function RecallDrillsPage() {
-    const { apiKey, tenantId } = useAuth();
+    const { isAuthenticated } = useAuth();
+    const { tenantId } = useTenant();
     const [scenario, setScenario] = useState('Weekend retailer trace-back');
     const [lots, setLots] = useState('');
     const [dateRange, setDateRange] = useState('');
@@ -28,15 +30,13 @@ export default function RecallDrillsPage() {
         queryKey: drillsQueryKey,
         queryFn: async () => {
             const response = await fetchWithCsrf('/api/fsma/customer-readiness/recall-drills', {
+                credentials: 'include',
                 signal: AbortSignal.timeout(8000),
-                headers: {
-                    'X-RegEngine-API-Key': apiKey || '',
-                    ...(tenantId ? { 'X-Tenant-ID': tenantId } : {}),
-                },
             });
             if (!response.ok) return { items: [], meta: { status: 'error' } };
             return response.json() as Promise<RecallDrillsResponse>;
         },
+        enabled: isAuthenticated,
         retry: false,
     });
 
@@ -47,11 +47,10 @@ export default function RecallDrillsPage() {
         mutationFn: async () => {
             const response = await fetchWithCsrf('/api/fsma/customer-readiness/recall-drills', {
                 method: 'POST',
+                credentials: 'include',
                 signal: AbortSignal.timeout(12000),
                 headers: {
                     'Content-Type': 'application/json',
-                    'X-RegEngine-API-Key': apiKey || '',
-                    ...(tenantId ? { 'X-Tenant-ID': tenantId } : {}),
                 },
                 body: JSON.stringify({
                     scenario,

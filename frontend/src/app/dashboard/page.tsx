@@ -24,6 +24,7 @@ import { SystemHealthWidget } from "@/components/dashboard/system-health-widget"
 import { MetricsOverviewWidget } from "@/components/dashboard/metrics-overview-widget";
 import { ScanHistoryWidget } from "@/components/dashboard/scan-history-widget";
 import { fetchWorkbenchReadinessSummary } from "@/lib/api-hooks";
+import { fetchWithCsrf } from "@/lib/fetch-with-csrf";
 import {
   Shield,
   Upload,
@@ -179,7 +180,7 @@ const getQuickActions = (tenantType: "retailer" | "supplier" | "system") => {
 };
 
 export default function DashboardPage() {
-  const { user, isHydrated, apiKey } = useAuth();
+  const { user, isHydrated, isAuthenticated } = useAuth();
   const { tenantId } = useTenant();
   const router = useRouter();
 
@@ -239,29 +240,28 @@ export default function DashboardPage() {
   const { data: pendingReviewsData } = useQuery({
     queryKey: ["pending-reviews", effectiveTenantId],
     queryFn: async () => {
-      const res = await fetch(
+      const res = await fetchWithCsrf(
         `/api/ingestion/api/v1/compliance/pending-reviews/${effectiveTenantId}`,
         {
+          credentials: "include",
           signal: AbortSignal.timeout(8000),
           headers: {
             "Content-Type": "application/json",
-            "X-RegEngine-API-Key": apiKey!,
           },
         },
       );
       if (!res.ok) return null;
       return res.json();
     },
-    enabled: !!effectiveTenantId && !!apiKey,
+    enabled: !!effectiveTenantId && isAuthenticated,
     retry: false,
   });
   const pendingReviews = pendingReviewsData?.pending_reviews ?? 0;
 
   const { data: workbenchReadiness } = useQuery({
     queryKey: ["dashboard-workbench-readiness", effectiveTenantId],
-    queryFn: () =>
-      fetchWorkbenchReadinessSummary(effectiveTenantId || "", apiKey || ""),
-    enabled: !!effectiveTenantId && !!apiKey,
+    queryFn: () => fetchWorkbenchReadinessSummary(effectiveTenantId || ""),
+    enabled: !!effectiveTenantId && isAuthenticated,
     staleTime: 60_000,
     retry: false,
   });

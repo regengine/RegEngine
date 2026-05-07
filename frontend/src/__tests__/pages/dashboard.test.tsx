@@ -91,6 +91,8 @@ describe('DashboardPage', () => {
             (useAuth as any).mockReturnValue({
                 user: null,
                 isHydrated: false,
+                isAuthenticated: false,
+                apiKey: null,
             });
             (useTenant as any).mockReturnValue({
                 tenantId: null,
@@ -106,6 +108,8 @@ describe('DashboardPage', () => {
             (useAuth as any).mockReturnValue({
                 user: null,
                 isHydrated: true,
+                isAuthenticated: false,
+                apiKey: null,
             });
             (useTenant as any).mockReturnValue({
                 tenantId: null,
@@ -126,6 +130,8 @@ describe('DashboardPage', () => {
                     name: 'Test User',
                 },
                 isHydrated: true,
+                isAuthenticated: true,
+                apiKey: null,
             });
             (useTenant as any).mockReturnValue({
                 tenantId: 'tenant-123',
@@ -147,6 +153,8 @@ describe('DashboardPage', () => {
                     name: 'Test User',
                 },
                 isHydrated: true,
+                isAuthenticated: true,
+                apiKey: null,
             });
             (useTenant as any).mockReturnValue({
                 tenantId: 'tenant-123',
@@ -210,10 +218,57 @@ describe('DashboardPage', () => {
             (useAuth as any).mockReturnValue({
                 user: { id: '123', email: 'test@example.com' },
                 isHydrated: true,
+                isAuthenticated: true,
+                apiKey: null,
             });
             (useTenant as any).mockReturnValue({
                 tenantId: 'tenant-123',
             });
+        });
+
+        it('loads internal dashboard data without a placeholder apiKey', async () => {
+            mockFetch.mockImplementation((url: string) => {
+                if (url.includes('/pending-reviews/tenant-123')) {
+                    return Promise.resolve({
+                        ok: true,
+                        json: async () => ({ pending_reviews: 4 }),
+                    });
+                }
+
+                if (url.includes('/inflow-workbench/readiness/summary')) {
+                    return Promise.resolve({
+                        ok: true,
+                        json: async () => ({
+                            tenant_id: 'tenant-123',
+                            score: null,
+                            label: null,
+                            run_id: null,
+                            saved_at: null,
+                            unresolved_fix_count: 0,
+                            export_eligible: false,
+                            source: 'live',
+                        }),
+                    });
+                }
+
+                return Promise.resolve({ ok: true, json: async () => ({ status: 'ok' }) });
+            });
+
+            render(<DashboardPage />, { wrapper: createWrapper() });
+
+            await waitFor(() => {
+                expect(mockFetch).toHaveBeenCalled();
+            });
+
+            const calls = mockFetch.mock.calls as [string, RequestInit | undefined][];
+            const pendingReviewsCall = calls.find(([url]) =>
+                url.includes('/api/ingestion/api/v1/compliance/pending-reviews/tenant-123')
+            );
+
+            expect(pendingReviewsCall).toBeDefined();
+            const [, init] = pendingReviewsCall as [string, RequestInit];
+            expect(init.credentials).toBe('include');
+            expect(new Headers(init.headers).get('X-RegEngine-API-Key')).toBeNull();
         });
 
         it.skip('handles loading state for dashboard data', async () => {
@@ -264,6 +319,8 @@ describe('DashboardPage', () => {
             (useAuth as any).mockReturnValue({
                 user: { id: '123', email: 'test@example.com' },
                 isHydrated: true,
+                isAuthenticated: true,
+                apiKey: null,
             });
             (useTenant as any).mockReturnValue({
                 tenantId: 'tenant-123',
@@ -292,6 +349,8 @@ describe('DashboardPage', () => {
             (useAuth as any).mockReturnValue({
                 user: { id: '123', email: 'test@example.com' },
                 isHydrated: true,
+                isAuthenticated: true,
+                apiKey: null,
             });
             (useTenant as any).mockReturnValue({
                 tenantId: 'tenant-123',

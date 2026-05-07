@@ -36,6 +36,11 @@ vi.mock('@/lib/auth-context', () => ({
     useAuth: () => mockUseAuth(),
 }));
 
+const mockUseTenant = vi.fn();
+vi.mock('@/lib/tenant-context', () => ({
+    useTenant: () => mockUseTenant(),
+}));
+
 vi.mock('lucide-react', () => {
     const stub = (props: any) => <svg {...props} />;
     return {
@@ -83,10 +88,10 @@ describe('RecallDrillsPage', () => {
     beforeEach(() => {
         vi.clearAllMocks();
         mockUseAuth.mockReturnValue({
-            apiKey: 'test-api-key',
+            apiKey: null,
             isAuthenticated: true,
-            tenantId: 'tenant-123',
         });
+        mockUseTenant.mockReturnValue({ tenantId: 'tenant-123', isSystemTenant: false });
     });
 
     it('renders loading state initially', () => {
@@ -121,6 +126,39 @@ describe('RecallDrillsPage', () => {
         render(<RecallDrillsPage />, { wrapper: createWrapper() });
 
         expect(screen.getByText('Recall Drill Workspace')).toBeInTheDocument();
+    });
+
+    it('uses cookie-backed customer-readiness routes without browser auth headers', async () => {
+        global.fetch = vi.fn()
+            .mockResolvedValueOnce({ ok: true, json: async () => ({ drills: [] }) })
+            .mockResolvedValueOnce({ ok: false, status: 500 });
+
+        const user = userEvent.setup();
+        render(<RecallDrillsPage />, { wrapper: createWrapper() });
+
+        await waitFor(() => {
+            expect(global.fetch).toHaveBeenCalledTimes(1);
+        });
+
+        const calls = (global.fetch as ReturnType<typeof vi.fn>).mock.calls as [string, RequestInit | undefined][];
+        const [getUrl, getInit] = calls[0]!;
+        expect(getUrl).toBe('/api/fsma/customer-readiness/recall-drills');
+        expect(getInit?.credentials).toBe('include');
+        expect(new Headers(getInit?.headers).get('X-RegEngine-API-Key')).toBeNull();
+        expect(new Headers(getInit?.headers).get('X-Tenant-ID')).toBeNull();
+
+        const startButton = await screen.findByRole('button', { name: /start drill/i });
+        await user.click(startButton);
+
+        await waitFor(() => {
+            expect(global.fetch).toHaveBeenCalledTimes(2);
+        });
+
+        const [, postInit] = calls[1]!;
+        expect(postInit?.credentials).toBe('include');
+        expect(new Headers(postInit?.headers).get('Content-Type')).toBe('application/json');
+        expect(new Headers(postInit?.headers).get('X-RegEngine-API-Key')).toBeNull();
+        expect(new Headers(postInit?.headers).get('X-Tenant-ID')).toBeNull();
     });
 
     it('renders warnings for drills that have them', async () => {

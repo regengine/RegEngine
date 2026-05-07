@@ -13,7 +13,7 @@ import { useAuth } from '@/lib/auth-context';
 import { useTenant } from '@/lib/tenant-context';
 
 export default function ExportJobsPage() {
-    const { apiKey } = useAuth();
+    const { isAuthenticated } = useAuth();
     const { tenantId } = useTenant();
     const [name, setName] = useState('Weekly FSMA archive');
     const [cadence, setCadence] = useState<ArchiveExportJob['cadence']>('Weekly');
@@ -25,8 +25,8 @@ export default function ExportJobsPage() {
         queryKey: ['export-jobs'],
         queryFn: async () => {
             const response = await fetchWithCsrf('/api/fsma/customer-readiness/export-jobs', {
+                credentials: 'include',
                 signal: AbortSignal.timeout(8000),
-                headers: { 'X-RegEngine-API-Key': apiKey || '' },
             });
             if (!response.ok) return { jobs: [], meta: { status: 'error' } };
             return response.json() as Promise<{
@@ -34,6 +34,7 @@ export default function ExportJobsPage() {
                 meta?: { status?: string; message?: string };
             }>;
         },
+        enabled: isAuthenticated,
         retry: false,
     });
 
@@ -49,8 +50,9 @@ export default function ExportJobsPage() {
         mutationFn: async () => {
             const response = await fetchWithCsrf('/api/fsma/customer-readiness/export-jobs', {
                 method: 'POST',
+                credentials: 'include',
                 signal: AbortSignal.timeout(12000),
-                headers: { 'Content-Type': 'application/json', 'X-RegEngine-API-Key': apiKey || '' },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     name,
                     cadence,
