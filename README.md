@@ -214,7 +214,7 @@ Frontend CI is separate in [.github/workflows/frontend-ci.yml](.github/workflows
 Verified deployment files:
 
 - [Dockerfile](Dockerfile) builds the backend image, installs root `requirements.lock`, runs Alembic migrations through [scripts/run-migrations.sh](scripts/run-migrations.sh), and starts `server.main:app`.
-- [railway.toml](railway.toml) points Railway at the root Dockerfile and uses `/health` as the healthcheck.
+- [railway.toml](railway.toml) points Railway at the root Dockerfile and uses `/readiness` as the healthcheck.
 - [frontend/](frontend/) is a Next.js application with its own package lock and scripts.
 
 ## Important Limitations

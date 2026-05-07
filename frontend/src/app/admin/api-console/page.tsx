@@ -163,7 +163,7 @@ export default function AdminAPIConsolePage() {
                             Admin API Console
                         </h1>
                         <p className="text-xl text-re-text-secondary max-w-3xl mx-auto">
-                            Explore, test, and integrate with RegEngine&apos;s powerful regulatory intelligence platform
+                            Explore, test, and integrate with RegEngine&apos;s tenant, traceability, and compliance APIs
                         </p>
 
                         {/* Quick Stats */}

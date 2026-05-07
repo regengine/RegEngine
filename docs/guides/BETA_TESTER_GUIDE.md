@@ -1,184 +1,144 @@
 # RegEngine Beta Tester Guide
 
-Welcome to the RegEngine beta program! This guide explains the platform architecture and how to get started.
+> Status: verified 2026-05-06. This guide reflects the current FSMA 204 traceability product path and the consolidated deploy shape.
 
----
+## What RegEngine Is
 
-## 🎯 What is RegEngine?
+RegEngine is a mature pre-production FSMA 204 traceability platform. It helps food operators and suppliers turn messy supplier, ERP, CSV, EPCIS, and related traceability inputs into validated, tenant-scoped evidence for readiness reviews, recall drills, and FDA response preparation.
 
-RegEngine is a **regulatory intelligence platform** that helps organizations stay compliant with complex regulations (starting with FSMA 204 food traceability). It automatically:
+For beta testing, the most important workflow is:
 
-1. **Ingests** regulatory documents from official sources
-2. **Extracts** requirements, obligations, and thresholds using AI
-3. **Maps** relationships in a knowledge graph
-4. **Monitors** your compliance posture in real-time
-5. **Alerts** you when action is needed
-
----
-
-## 🏗️ System Architecture
-
-```
-┌─────────────────────────────────────────────────────────────────────────┐
-│                         YOUR BROWSER / APP                              │
-│                    http://localhost:3000                                │
-└─────────────────────────────────────────────────────────────────────────┘
-                                    │
-                                    ▼
-┌─────────────────────────────────────────────────────────────────────────┐
-│                           NEXT.JS FRONTEND                              │
-│  Dashboard │ Compliance Status │ Alerts │ Review Queue │ Settings      │
-└─────────────────────────────────────────────────────────────────────────┘
-                                    │
-                    ┌───────────────┼───────────────┐
-                    ▼               ▼               ▼
-            ┌───────────┐   ┌───────────┐   ┌───────────┐
-            │ Admin API │   │Compliance │   │  Graph    │
-            │  :8400    │   │   API     │   │   API     │
-            │           │   │  :8500    │   │  :8200    │
-            └───────────┘   └───────────┘   └───────────┘
-                    │               │               │
-                    └───────────────┴───────────────┘
-                                    │
-                ┌───────────────────┼───────────────────┐
-                ▼                   ▼                   ▼
-        ┌──────────────┐   ┌──────────────┐   ┌──────────────┐
-        │  PostgreSQL  │   │    Neo4j     │   │   Redpanda   │
-        │  (Tenants,   │   │ (Knowledge   │   │   (Events)   │
-        │   Snapshots) │   │   Graph)     │   │              │
-        └──────────────┘   └──────────────┘   └──────────────┘
+```text
+ingest -> preflight -> fix queue -> readiness -> export/response prep
 ```
 
----
+## What Beta Testers Should Focus On
 
-## 🔑 Key Concepts
+- Signing in and selecting the correct tenant
+- Uploading or pasting traceability data
+- Reviewing readiness and fix-queue feedback
+- Verifying export and response-prep workflows
+- Reporting where the product is confusing, blocking, or over-promising
 
-### Multi-Tenancy
-Each organization is a **tenant** with isolated data. You'll receive:
-- A **Tenant ID** (UUID)
-- An **API Key** (starts with `rge_`)
+## Current Runtime Shape
 
-### Compliance Snapshots
-Point-in-time captures of your compliance status, cryptographically hashed for audit defense.
+RegEngine is deployed as one consolidated FastAPI app behind a Next.js frontend.
 
-### Human-in-the-Loop Review
-AI extractions below 85% confidence are flagged for human review before affecting your compliance score.
-
----
-
-## 🚀 Quick Start
-
-### 1. Access the Dashboard
+```text
+browser
+  -> Next.js app
+  -> same-origin proxy routes and authenticated app flows
+  -> consolidated FastAPI app (server/main.py)
+  -> PostgreSQL-backed traceability, audit, and export paths
 ```
+
+Legacy service directories still exist in the repository, but the checked-in production path is the consolidated app, not six separate live deploys.
+
+## Key Concepts
+
+### Tenant
+
+Each organization operates inside a tenant-scoped workspace. Readiness views, evidence, exports, and admin actions should stay isolated to that tenant.
+
+### Inflow Workbench
+
+The Inflow Workbench is the main preflight surface for evaluating traceability records before they are treated as production evidence.
+
+### Fix Queue
+
+The fix queue surfaces missing or invalid data that must be resolved before a record set is ready for downstream audit or export workflows.
+
+### Readiness
+
+Readiness summarizes whether the supplied data is complete enough for traceability workflows, not whether every imaginable compliance concern has been solved automatically.
+
+### Export Package
+
+Export and response-prep flows package validated records into FDA-facing or operator-facing outputs.
+
+## Quick Start
+
+### 1. Open the app
+
+Local default:
+
+```text
 http://localhost:3000
 ```
 
-### 2. Select Your Tenant
-Use the tenant switcher in the top-right corner.
+### 2. Sign in and confirm tenant context
 
-### 3. Check Compliance Status
-Navigate to **Compliance** to see your current posture.
+If the wrong tenant is selected, stop there and report it. Tenant mix-ups are high-severity issues.
 
-### 4. Review Flagged Items
-Go to **Review Queue** to approve/reject AI extractions.
+### 3. Run a traceability input through preflight
 
----
+Recommended starting points:
 
-## 🔌 API Access
+- `/dashboard/inflow-lab`
+- `/dashboard/receiving`
+- `/tools/inflow-lab`
 
-### Base URLs
+### 4. Review the result
 
-| Service | URL | Purpose |
-|---------|-----|---------|
-| Admin API | `http://localhost:8400` | Keys, tenants, review |
-| Compliance API | `http://localhost:8500` | Checklists, validation |
-| Graph API | `http://localhost:8200` | FSMA labels, tracing |
-| Ingestion API | `http://localhost:8002` | Document processing |
+Look for:
 
-### Authentication
+- readiness score and label
+- specific data-quality failures
+- fix-queue items
+- commit-gate messaging
 
-Include your API key in requests:
-```bash
-curl -H "X-RegEngine-API-Key: rge_your_key" \
-     http://localhost:8400/v1/admin/keys
-```
+### 5. Verify downstream flows
 
-### Example: Check Health
-```bash
-curl http://localhost:8400/health
-# {"status": "healthy", "version": "1.0.0"}
-```
+Check whether the same dataset can move cleanly into:
 
-### Example: List Review Items
-```bash
-curl -H "X-RegEngine-API-Key: YOUR_KEY" \
-     "http://localhost:8400/v1/admin/review/flagged-extractions?status=PENDING"
-```
+- compliance/readiness views
+- recall drill preparation
+- export or response-prep workflows
 
----
+## API Access Notes
 
-## 📊 Data Flow
+- External API-key-driven examples belong in the developer docs and developer portal.
+- Internal authenticated app flows should generally work through the Next.js app and its same-origin proxy routes.
+- If you are testing raw endpoints directly, verify the exact route shape against the live docs instead of assuming legacy service ports are authoritative.
 
-```
-1. Document URL submitted
-         │
-         ▼
-2. Ingestion Service fetches & normalizes
-         │
-         ▼
-3. NLP Service extracts entities + obligations
-         │
-         ▼
-4. Confidence Check
-         │
-    ┌────┴────┐
-    ▼         ▼
-≥ 85%       < 85%
-    │         │
-    ▼         ▼
-5a. Auto    5b. Review
-    Approved     Queue
-    │         │
-    └────┬────┘
-         ▼
-6. Graph Service updates knowledge graph
-         │
-         ▼
-7. Compliance status recalculated
-         │
-         ▼
-8. Alerts triggered if thresholds crossed
-```
+Useful entry points:
 
----
+- App docs: `http://localhost:3000/docs`
+- Developers page: `http://localhost:3000/developers`
+- API docs in non-production environments: `/docs` and `/openapi.json` on the consolidated backend
 
-## 🛡️ Security Model
+## Expected Beta Behaviors
 
-| Feature | Implementation |
-|---------|----------------|
-| Tenant Isolation | PostgreSQL Row-Level Security |
-| API Authentication | API Keys (tenant-scoped) |
-| Data Integrity | SHA-256 content hashing |
-| Audit Trail | Structured logging with event types |
+Beta testers should expect:
 
----
+- occasional rough edges in workflow polish
+- hardening work around auth, tenant scoping, and export flows
+- strong emphasis on auditability and deterministic validation over flashy automation claims
 
-## 🐛 Reporting Issues
+Beta testers should not expect:
 
-Found a bug? Please include:
-1. **Steps to reproduce**
-2. **Expected vs actual behavior**
-3. **API response** (if applicable)
-4. **Browser console errors** (for UI issues)
+- a GA-finished product surface
+- zero-touch "complete compliance"
+- universal regulatory intelligence outside the current FSMA 204 product wedge
 
----
+## Reporting Issues
 
-## 📚 Additional Resources
+When filing a beta issue, include:
 
-- **API Reference**: [http://localhost:3000/docs/api](http://localhost:3000/docs/api)
-- **OpenAPI Specs**: `docs/openapi/` directory
-- **Developer Portal**: [http://localhost:3000/docs](http://localhost:3000/docs)
+1. tenant and environment used
+2. exact page or endpoint
+3. sample input or reproduction steps
+4. expected behavior
+5. actual behavior
+6. whether the issue affected readiness, fix queue, export, or tenant isolation
 
----
+## Source of Truth
 
-*Thank you for being a beta tester! Your feedback shapes the product.* 🙏
+When documentation conflicts, trust these first:
+
+- `README.md`
+- `REPO_PURPOSE.md`
+- `ARCHITECTURE.md`
+- `docs/verticals/README.md`
+
+If the product story in another current doc conflicts with those files, treat it as stale and update it.

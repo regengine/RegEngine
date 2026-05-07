@@ -1,200 +1,143 @@
 # RegEngine: Product Positioning & Messaging
 
-> Status: FSMA-first positioning update, April 30, 2026. Older regulatory-intelligence language below is retained for historical context, but the current commercial wedge is food traceability under FSMA 204.
+> Status: current positioning verified on 2026-05-06. RegEngine is an FSMA 204 traceability platform in a mature pre-production phase. Positioning should reflect current product behavior, pilot scope, and documented architecture.
 
 ## Positioning Statement
 
-**For** food safety, supplier onboarding, and compliance operations teams at food manufacturers, distributors, retailers, and logistics partners **who need** to meet FSMA 204 traceability requirements without relying on spreadsheets and email,
+**For** food safety, supplier onboarding, and compliance operations teams at food manufacturers, distributors, retailers, and logistics partners **who need** to satisfy FSMA 204 traceability requirements without running the workflow through spreadsheets, inboxes, and ad hoc CSV cleanup,
 
-**RegEngine** is a traceability data operating system **that** preflights messy supplier data, scores readiness, routes fixes, and gates only validated records into tenant-scoped FSMA evidence.
+**RegEngine** is a traceability evidence platform **that** ingests supplier and ERP data, preflights CTE/KDE quality, routes fixes, and turns validated records into tenant-scoped audit and export evidence.
 
-**Unlike** legacy food safety platforms that are UI-first, services-heavy, and slow to deploy,
+**Unlike** generic food software, services-heavy legacy stacks, or manual audit-prep workflows,
 
-**RegEngine** combines an API-first ingestion hub with deterministic FSMA rules, commit gates, tenant isolation, and audit-ready export paths.
+**RegEngine** combines API-first ingestion, deterministic FSMA rules, readiness scoring, tenant isolation, commit gates, and FDA-ready export packaging in one consolidated product path.
 
-Current proof point: the Inflow Workbench loop now supports Preflight Mode, Commit Gate, Fix Queue, Scenario Library, and dashboard Readiness Score surfacing for design-partner demos and pilot validation.
+## Commercial Stage
 
----
+- Mature pre-production, not GA
+- Active hardening and remediation against a consolidated deploy path
+- Best fit today: design-partner pilots, onboarding workflows, supplier data cleanup, recall drill prep, and FDA response readiness
+- Messaging should not imply universal, zero-touch compliance automation
+
+## Ideal Customer Profile
+
+### Primary users
+
+- Food safety and traceability leads
+- Supplier onboarding and quality teams
+- Compliance operations managers
+- Internal platform or integration teams supporting food traceability workflows
+
+### Best-fit organizations
+
+- Food manufacturers
+- Distributors and importers
+- Retail suppliers preparing FDA or retailer traceability submissions
+- Logistics or trading-partner operations teams responsible for CTE/KDE completeness
 
 ## Core Value Propositions
 
-### 1. **Automate Regulatory Monitoring**
-**Problem**: Compliance teams spend 40+ hours/week manually tracking regulatory updates across multiple jurisdictions.
+### 1. Supplier data preflight before evidence commit
 
-**Solution**: RegEngine automatically ingests regulations from global sources, detects changes, and alerts you to new obligations.
+**Problem**: supplier and ERP data arrives incomplete, inconsistently labeled, or mixed across spreadsheets, portals, CSVs, EPCIS files, and manual uploads.
 
-**Value**: Reduce compliance monitoring headcount by 60%. Ensure zero missed regulatory updates.
+**What RegEngine does**: validate inbound records against FSMA 204 expectations, score readiness, and route fixes before those records are treated as production evidence.
 
----
+**Why it matters**: teams spend less time reconciling bad inputs during an audit or recall response window.
 
-### 2. **Machine-Readable Regulation**
-**Problem**: Regulations are published as PDFs and HTML—unusable for automated systems.
+### 2. Deterministic FSMA validation, not vague workflow tracking
 
-**Solution**: RegEngine converts any regulatory document into structured, queryable data with extracted obligations, thresholds, and metadata.
+**Problem**: many systems can store records, but they do not make it clear whether the records are complete enough for FSMA response workflows.
 
-**Value**: Build compliance automation on top of standardized regulatory data. Integrate directly into your risk management systems.
+**What RegEngine does**: run deterministic rule checks on CTE/KDE data, surface failures explicitly, and preserve the decision path that allowed or blocked evidence progression.
 
----
+**Why it matters**: operators get a defensible answer about what is missing and what can ship.
 
-### 3. **Cross-Jurisdictional Intelligence**
-**Problem**: Global firms waste resources complying with duplicative requirements or miss arbitrage opportunities.
+### 3. Audit-ready export and response preparation
 
-**Solution**: RegEngine's graph database maps relationships across jurisdictions, identifying threshold differences, gaps, and overlaps.
+**Problem**: the painful moment is not just data capture; it is producing an FDA-ready response package quickly from messy operational inputs.
 
-**Value**: Optimize licensing strategy. Identify competitive advantages. Avoid over-compliance.
+**What RegEngine does**: assemble validated evidence into sortable spreadsheet and export workflows aligned to FSMA 204 response expectations.
 
----
+**Why it matters**: the product reduces scramble during recall drills, supplier readiness reviews, and actual response preparation.
 
-### 4. **Audit-Ready Lineage**
-**Problem**: Auditors and regulators demand proof that policies map to specific regulatory requirements.
+### 4. Tenant-scoped evidence and operator controls
 
-**Solution**: Every extracted obligation includes provenance: source URL, document offset, page number, and SHA-256 hash.
+**Problem**: traceability workflows break down when internal tooling, partner onboarding, and audit evidence are not isolated cleanly by tenant.
 
-**Value**: Pass audits faster. Demonstrate compliance with traceable evidence. Reduce audit prep by 50%.
+**What RegEngine does**: enforce tenant-scoped routing, audit logging, and evidence persistence through the main ingestion and export path.
 
----
+**Why it matters**: food companies can operationalize the workflow without giving up control over who can see, submit, or export what.
 
-## Target Personas
+## Current Proof Points
 
-### Primary: Chief Compliance Officer (Financial Services)
-- **Pain**: Overwhelmed by regulatory change velocity
-- **Goal**: Automate monitoring, reduce manual processes
-- **Budget**: $50k–$250k/year for RegTech tools
-- **Decision Criteria**: Accuracy, provenance, coverage
+- FSMA 204 CTE/KDE ingestion paths across webhook, CSV, EPCIS, and related import workflows
+- Deterministic validation and readiness scoring in the main traceability path
+- Tenant-scoped evidence persistence and audit controls
+- FDA-ready export generation and response workflow support
+- Inflow Workbench capabilities for preflight, fix queue, commit gating, and design-partner demo flows
 
-### Secondary: RegTech Product Manager
-- **Pain**: Building regulatory data infrastructure from scratch
-- **Goal**: Embed regulatory intelligence in their product
-- **Budget**: $100k–$500k/year for data/API licensing
-- **Decision Criteria**: API quality, documentation, scalability
+## Business Promises We Can Make Now
 
-### Tertiary: Risk Officer (Multi-National Corporation)
-- **Pain**: Inconsistent compliance across jurisdictions
-- **Goal**: Centralized regulatory view
-- **Budget**: $75k–$300k/year
-- **Decision Criteria**: Coverage, cross-jurisdiction analysis
+- RegEngine helps teams preflight and validate FSMA 204 traceability data before evidence commit.
+- RegEngine can surface data-quality gaps, readiness signals, and fix queues across supplier onboarding workflows.
+- RegEngine can generate audit and export artifacts from validated traceability records.
+- RegEngine is designed for tenant-scoped traceability operations with operator/admin controls and audit evidence.
 
----
+## Promises We Should Not Make
 
-## Competitive Differentiation
-
-| Feature | RegEngine | Compliance.ai | Thomson Reuters | Internal Tools |
-|---------|-----------|---------------|-----------------|----------------|
-| **Graph-based lineage** | ✅ | ❌ | ❌ | ❌ |
-| **API-first** | ✅ | ❌ | ⚠️ (limited) | ❌ |
-| **Cross-jurisdiction arbitrage** | ✅ | ❌ | ❌ | ❌ |
-| **Self-hostable** | ✅ | ❌ | ❌ | ✅ |
-| **Provenance tracking** | ✅ (SHA-256) | ⚠️ (basic) | ⚠️ (basic) | ❌ |
-| **Pricing** | Usage-based | Enterprise-only | $$$$ | Dev cost |
-
----
+- "Complete FSMA 204 compliance out of the box"
+- "Fully autonomous compliance with no operator review"
+- "General-purpose regulatory intelligence across all industries"
+- "Instant replacement for every legacy food safety platform"
+- Any GA-style uptime, scale, or product-surface promise that exceeds the documented pre-production stage
 
 ## Messaging Framework
 
-### Elevator Pitch (30 seconds)
-"RegEngine is an API platform that turns regulatory PDFs into machine-readable data. We automatically extract obligations, thresholds, and requirements from global regulations, map them in a graph database, and provide APIs for compliance automation, gap analysis, and regulatory arbitrage detection."
+### Homepage or deck headline
 
-### Two-Sentence Pitch (Email/LinkedIn)
-"RegEngine converts regulatory documents into machine-readable data with queryable obligation extraction and cross-jurisdictional analysis. We provide the regulatory intelligence layer that powers automated compliance."
+"Preflight FSMA 204 traceability data before it becomes audit evidence."
 
-### Problem-Agitate-Solve (Sales Call Opener)
-**Problem**: "You're tracking regulations across 12 jurisdictions manually, using spreadsheets and PDFs, right?"
+### Elevator pitch
 
-**Agitate**: "And when a regulation changes, you have 30 days to update internal policies, train staff, and notify the board—while also monitoring 50 other regulatory bodies."
+"RegEngine is an FSMA 204 traceability evidence platform for food operators and suppliers. We ingest messy CTE/KDE data, validate it against deterministic rules, surface readiness and fixes, and package validated records for FDA response workflows."
 
-**Solve**: "RegEngine automates this. We ingest regulations from any source, extract every obligation automatically, and alert you to changes within 24 hours. Plus, our graph database shows you exactly how your requirements differ across jurisdictions."
+### Two-sentence outreach pitch
 
----
+"RegEngine helps food teams turn supplier and ERP traceability data into validated FSMA 204 evidence. Instead of discovering gaps during a recall drill or export request, teams can preflight records, fix failures, and ship FDA-ready outputs from one system."
 
-## Key Messages by Audience
+## Competitive Framing
 
-### For Compliance Teams
-- **Headline**: "Automate Regulatory Monitoring. Never Miss an Update."
-- **Key Points**:
-  - Reduce manual tracking by 60%
-  - Automated obligation extraction
-  - Real-time change detection
-  - Audit-ready provenance
+- Against spreadsheets and email: RegEngine adds deterministic validation, tenant isolation, and repeatable export packaging.
+- Against generic workflow tools: RegEngine is opinionated about FSMA 204 data quality, not just task tracking.
+- Against large legacy suites: RegEngine is lighter-weight, API-first, and easier to pilot in a hardening-stage product environment.
 
-### For RegTech Vendors
-- **Headline**: "Embed Regulatory Intelligence in Your Product"
-- **Key Points**:
-  - REST API with health monitoring
-  - Machine-readable regulation
-  - OEM licensing available
-  - No infrastructure build required
+## Voice and Tone
 
-### For Risk Officers
-- **Headline**: "Optimize Compliance Across Jurisdictions"
-- **Key Points**:
-  - Identify regulatory arbitrage opportunities
-  - Detect policy gaps automatically
-  - Centralized regulatory view
-  - Cross-jurisdiction threshold comparison
+- Specific, not grandiose
+- Evidence-based, not hand-wavy
+- Clear about pre-production status
+- Helpful to operators, not aimed at abstract "digital transformation"
 
----
+### Say this
 
-## Verified Capabilities
+- "FSMA 204 traceability readiness"
+- "Preflight supplier data before evidence commit"
+- "Validated records and FDA-ready exports"
+- "Tenant-scoped audit evidence"
 
-### Quantified Value
-- **Automated** regulatory change detection and obligation extraction
-- **SHA-256** cryptographic audit trail — independently verifiable
-- **21 FTL categories** with CTE/KDE mapping per 21 CFR Part 1 Subpart S
-- **GS1 EPCIS 2.0** export for Walmart/Kroger supplier compliance
+### Do not say this
 
-### Technical Credibility
-- Graph database with bitemporal tracking
-- SHA-256 content-addressed storage
-- API-first architecture (OpenAPI 3.0)
-- Open-source verification script (`verify_chain.py`)
-- Row-Level Security (RLS) multi-tenant isolation
+- "Omni-vertical regulatory intelligence"
+- "Autonomous compliance engine"
+- "Complete compliance with no process change"
+- "Cross-jurisdiction arbitrage platform"
 
-### Use Cases
-1. **FSMA 204 compliance**: Automated CTE/KDE tracking for food supply chains
-2. **Retailer readiness**: GS1 EPCIS 2.0 exports for Walmart/Kroger suppliers
-3. **FDA audit response**: 24-hour electronic sortable spreadsheet generation
-4. **Supply chain verification**: Cryptographic proof of traceability data integrity
+## Source-of-Truth Notes
 
----
+- Canonical product focus: `README.md`
+- Repository scope: `REPO_PURPOSE.md`
+- Current deployment model: `ARCHITECTURE.md`
+- FSMA documentation index: `docs/verticals/README.md`
 
-## Objection Handling
-
-### "We already use [Competitor]"
-**Response**: "Great! Many of our customers use [Competitor] for policy management and use RegEngine for the upstream regulatory intelligence layer. We provide the machine-readable regulation; they handle the downstream workflow. Would you like to see how they integrate?"
-
-### "We can build this internally"
-**Response**: "Absolutely, and some of our customers did exactly that. They discovered it took 18 months and 3 engineers just to get basic ingestion working—before tackling NLP, graph databases, and multi-jurisdiction normalization. We've already solved those problems. How quickly do you need this capability?"
-
-### "Regulatory data is free/public"
-**Response**: "True—the PDFs are free. But making them machine-readable, extractable, queryable, and provenance-tracked? That's the engineering challenge. You're not paying for the data; you're paying for the infrastructure that makes it usable."
-
-### "This seems expensive"
-**Response**: "Let's do the math: If your team spends 40 hours/week on manual regulatory tracking, that's $120k/year in labor cost alone. RegEngine costs [pricing], automating 60% of that work. You're ROI-positive in [X] months."
-
-### "How do we know the extractions are accurate?"
-**Response**: "Great question. Every extraction includes provenance—the exact document offset, page number, and source URL. You can verify any obligation in seconds. Plus, we're currently at [X]% precision on obligation extraction, and we continuously improve with customer feedback."
-
----
-
-## Brand Voice & Tone
-
-- **Professional, not stuffy**: We talk like engineers, not lawyers
-- **Transparent**: We're upfront about what works and what's on the roadmap
-- **Evidence-based**: We lead with data, not hyperbole
-- **Helpful**: We're here to solve problems, not sell enterprise licenses
-
-**Examples**:
-- ✅ "Automate regulatory monitoring"
-- ❌ "Revolutionary AI-powered compliance transformation"
-- ✅ "SHA-256 cryptographic audit trail"
-- ❌ "Enterprise-grade world-class platform"
-
----
-
-## Next Steps for GTM
-
-1. **Website**: Use messaging framework to draft homepage, product pages
-2. **Sales deck**: Build pitch deck using positioning + verified capabilities
-3. **Outbound**: Create LinkedIn/email templates for each persona
-4. **Content**: Blog posts demonstrating arbitrage detection, gap analysis
-5. **Pricing page**: Transparent, usage-based pricing (see PRICING.md)
+If a page, sales note, or product doc conflicts with those files, update the stale material instead of broadening the story.

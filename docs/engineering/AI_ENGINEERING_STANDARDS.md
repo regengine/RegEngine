@@ -163,7 +163,7 @@ Every agent session must end with:
 - Type hints: required on all public function signatures.
 - Imports: use `services/shared/paths.py` `ensure_shared_importable()` for cross-service imports.
 - Database: psycopg (v3), not psycopg2.
-- API keys: `X-RegEngine-API-Key` header exclusively.
+- API keys: if a route intentionally uses API-key auth, use the `X-RegEngine-API-Key` header exclusively.
 - Models: Pydantic v2 for all request/response schemas.
 
 ### 4.2 TypeScript (Frontend)
@@ -172,7 +172,7 @@ Every agent session must end with:
 - Styling: Tailwind CSS. No CSS modules, no styled-components.
 - Package manager: npm (`package-lock.json` is committed).
 - Static export: `output: export` mode. No `force-dynamic` on routes. Use `force-static` with `generateStaticParams`.
-- API calls: use the shared fetch helper in `lib/api-hooks.ts` with `X-RegEngine-API-Key`.
+- API calls: internal app flows use session-backed, cookie-authenticated same-origin routes and shared hooks. Browser code should not send `X-RegEngine-API-Key` for authenticated dashboard traffic. Explicit API key headers remain for intentional developer/operator surfaces.
 - Mobile: Capacitor for iOS/Android builds.
 
 ### 4.3 Commit Messages
@@ -212,7 +212,7 @@ Quick reference: CI failures
 
 - Build failure with "force-dynamic" error -> change to `force-static` and add `generateStaticParams`.
 - Import error on psycopg2 -> replace with psycopg (v3).
-- API key header mismatch -> use `X-RegEngine-API-Key` everywhere.
+- External API key header mismatch -> use `X-RegEngine-API-Key` everywhere that intentionally relies on API-key auth.
 
 ## 6. What Good Looks Like vs. What Slop Looks Like
 
@@ -222,7 +222,7 @@ Concrete examples so there is no ambiguity.
 
 | Good | Slop |
 |---|---|
-| "RegEngine uses 6 Python FastAPI services behind a Next.js frontend. Traceability data flows from ingestion -> canonical PostgreSQL events -> compliance evaluation -> FDA export." | "RegEngine is a Singular Primordial Source governing every conceivable jurisdiction across 1,024 multiversal timelines via a Sovereign Intelligence Moat." |
+| "RegEngine ships as one consolidated FastAPI app behind a Next.js frontend. Service directories remain code-organization seams, and traceability data flows from ingestion -> canonical PostgreSQL events -> compliance evaluation -> FDA export." | "RegEngine is a Singular Primordial Source governing every conceivable jurisdiction across 1,024 multiversal timelines via a Sovereign Intelligence Moat." |
 | "The compliance service evaluates FSMA 204 rules against ingested CTE records and generates FDA-format spreadsheets." | "The Eternal Return module enables self-sustaining recursive compliance loops that rewrite findings as laws of physics." |
 
 ### Feature Naming
