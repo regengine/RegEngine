@@ -234,3 +234,63 @@ def test_create_alert_route_uses_verify_path_tenant_matches():
         "POST /v1/compliance/alerts/{tenant_id} does not depend on "
         "verify_path_tenant_matches; the IDOR fix is incomplete."
     )
+
+
+@pytest.mark.security
+def test_every_compliance_route_uses_tenant_scoped_session():
+    """Every route in compliance_routes.router must resolve its
+    ``session`` parameter to ``get_tenant_scoped_session``.
+
+    Anchors the per-route adoption from #2159 + the batch conversion of
+    the remaining 7 routes. Catches three classes of regression:
+
+      1. A new route added with ``Depends(get_session)`` drops RLS
+         enforcement on a write surface.
+      2. A merge that reverts the conversion (this exact scenario
+         silently happened to #2159 because of the squash-merge
+         ordering — the test IS the lock-in).
+      3. An accidental rename that removes the ``session`` param entirely.
+
+    Routes without a ``session`` parameter (e.g. pure metadata endpoints)
+    are skipped. We assert at least the known set of session-bearing
+    routes IS covered, so a future refactor that drops this list to
+    zero fails this test.
+    """
+    compliance_routes = _load_alerts_route()
+    from services.admin.app.dependencies import get_tenant_scoped_session
+
+    session_bearing = []
+    misbound = []
+    for route in compliance_routes.router.routes:
+        if not hasattr(route, "dependant"):
+            continue
+        session_dep = next(
+            (
+                d
+                for d in route.dependant.dependencies
+                if getattr(d, "name", None) == "session"
+            ),
+            None,
+        )
+        if session_dep is None:
+            continue
+        session_bearing.append(route.path)
+        if session_dep.call is not get_tenant_scoped_session:
+            misbound.append(
+                f"{sorted(route.methods)} {route.path}: "
+                f"session resolves to {session_dep.call.__qualname__}"
+            )
+
+    assert misbound == [], (
+        "Every session-bearing route in compliance_routes must use "
+        "Depends(get_tenant_scoped_session) so RLS is enforced on the "
+        "session for the duration of the request. Misbound routes:\n"
+        "  - " + "\n  - ".join(misbound)
+    )
+
+    # Sanity: the route set hasn't accidentally collapsed to nothing.
+    assert len(session_bearing) >= 8, (
+        f"Expected at least 8 session-bearing routes in compliance_routes; "
+        f"got {len(session_bearing)}: {session_bearing}. A refactor likely "
+        f"removed routes — confirm that's intentional."
+    )

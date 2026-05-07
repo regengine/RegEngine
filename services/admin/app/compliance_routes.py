@@ -26,7 +26,6 @@ from sqlalchemy.orm import Session
 
 from .compliance_models import AlertSeverity, AlertSourceType
 from .compliance_service_sync import ComplianceServiceSync
-from .database import get_session
 from .dependencies import (
     get_current_user,
     get_tenant_scoped_session,
@@ -147,7 +146,7 @@ class ProductProfileRequest(BaseModel):
 )
 def get_compliance_status(
     tenant_id: str,
-    session=Depends(get_session),
+    session: Session = Depends(get_tenant_scoped_session),
 ) -> ComplianceStatusResponse:
     """Get current compliance status for a tenant.
 
@@ -179,7 +178,7 @@ def list_alerts(
     status: Optional[str] = Query(None, description="Filter by status: ACTIVE, ACKNOWLEDGED, RESOLVED"),
     limit: int = Query(default=100, ge=1, le=1000, description="Maximum number of alerts to return"),
     offset: int = Query(default=0, ge=0, description="Number of alerts to skip"),
-    session=Depends(get_session),
+    session: Session = Depends(get_tenant_scoped_session),
 ) -> List[AlertResponse]:
     """List alerts for a tenant with pagination."""
     try:
@@ -207,7 +206,7 @@ def list_alerts(
 def get_alert(
     tenant_id: str,
     alert_id: str,
-    session=Depends(get_session),
+    session: Session = Depends(get_tenant_scoped_session),
 ) -> AlertResponse:
     """Get a single alert by ID."""
     try:
@@ -238,7 +237,7 @@ def acknowledge_alert(
     alert_id: str,
     request: AlertActionRequest,
     current_user: UserModel = Depends(get_current_user),
-    session=Depends(get_session),
+    session: Session = Depends(get_tenant_scoped_session),
 ) -> AlertResponse:
     """Mark an alert as acknowledged.
 
@@ -274,7 +273,7 @@ def resolve_alert(
     alert_id: str,
     request: AlertActionRequest,
     current_user: UserModel = Depends(get_current_user),
-    session=Depends(get_session),
+    session: Session = Depends(get_tenant_scoped_session),
 ) -> AlertResponse:
     """Resolve an alert.
 
@@ -309,7 +308,7 @@ def resolve_alert(
 def create_alert(
     request: CreateAlertRequest,
     tenant_id: UUID = Depends(verify_path_tenant_matches),
-    session=Depends(get_session),
+    session: Session = Depends(get_tenant_scoped_session),
 ) -> AlertResponse:
     """Manually create a compliance alert.
 
@@ -353,7 +352,7 @@ def create_alert(
 )
 def get_product_profile(
     tenant_id: str,
-    session=Depends(get_session),
+    session: Session = Depends(get_tenant_scoped_session),
 ) -> Dict[str, Any]:
     """Get tenant's product profile for alert matching."""
     try:
@@ -385,7 +384,7 @@ def get_product_profile(
 def update_product_profile(
     tenant_id: str,
     request: ProductProfileRequest,
-    session=Depends(get_session),
+    session: Session = Depends(get_tenant_scoped_session),
 ) -> Dict[str, Any]:
     """Update tenant's product profile."""
     try:
