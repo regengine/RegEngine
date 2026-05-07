@@ -1,10 +1,11 @@
 "use client";
 
 import { fetchWithCsrf } from '@/lib/fetch-with-csrf';
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { motion } from "framer-motion";
 
 import { PageContainer } from "@/components/layout/page-container";
+import { getServiceURL } from "@/lib/api-config";
 import { useTenant } from "@/lib/tenant-context";
 import { useAuth } from "@/lib/auth-context";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -53,7 +54,7 @@ const MAJOR_RETAILERS = [
 
 export default function ProductProfilePage() {
     const { tenantId } = useTenant();
-    const { apiKey } = useAuth();
+    const { isAuthenticated } = useAuth();
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [saveMessage, setSaveMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
@@ -66,17 +67,15 @@ export default function ProductProfilePage() {
         retailer_relationships: [],
     });
     const [supplierInput, setSupplierInput] = useState("");
+    const profileEndpoint = `${getServiceURL('admin')}/v1/compliance/profile/${tenantId}`;
 
-    useEffect(() => {
-        fetchProfile();
-    }, [tenantId]);
-
-    const fetchProfile = async () => {
+    const fetchProfile = useCallback(async () => {
+        if (!tenantId) return;
         try {
-            const response = await fetchWithCsrf(`/api/v1/compliance/profile/${tenantId}`, {
+            const response = await fetchWithCsrf(profileEndpoint, {
+                credentials: 'include',
                 headers: {
-                    'X-RegEngine-API-Key': apiKey || '',
-                    'X-Tenant-ID': tenantId,
+                    'Content-Type': 'application/json',
                 },
             });
             if (response.ok) {
@@ -91,17 +90,25 @@ export default function ProductProfilePage() {
         } finally {
             setLoading(false);
         }
-    };
+    }, [profileEndpoint, tenantId]);
+
+    useEffect(() => {
+        if (!tenantId || !isAuthenticated) {
+            setLoading(false);
+            return;
+        }
+        fetchProfile();
+    }, [fetchProfile, isAuthenticated, tenantId]);
 
     const saveProfile = async () => {
+        if (!tenantId) return;
         setSaving(true);
         try {
-            const response = await fetchWithCsrf(`/api/v1/compliance/profile/${tenantId}`, {
+            const response = await fetchWithCsrf(profileEndpoint, {
                 method: "PUT",
+                credentials: 'include',
                 headers: {
                     "Content-Type": "application/json",
-                    'X-RegEngine-API-Key': apiKey || '',
-                    'X-Tenant-ID': tenantId,
                 },
                 body: JSON.stringify(profile),
             });

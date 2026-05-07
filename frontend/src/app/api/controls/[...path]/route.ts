@@ -17,9 +17,8 @@ const ADMIN_URL = (() => {
 
 export const dynamic = 'force-dynamic';
 
-const { GET, POST } = createJsonProxy({
+const { GET, POST, PUT, PATCH, DELETE } = createJsonProxy({
     serviceName: 'controls',
-    methods: ['GET', 'POST'],
     buildTargetUrl: (path, queryString) => `${ADMIN_URL}/v1/admin/${path}${queryString}`,
     buildHeaders: (request: NextRequest) => {
         const headers = new Headers({ 'Content-Type': 'application/json' });
@@ -34,4 +33,4 @@ const { GET, POST } = createJsonProxy({
     },
 });
 
-export { GET, POST };
+export { GET, POST, PUT, PATCH, DELETE };
