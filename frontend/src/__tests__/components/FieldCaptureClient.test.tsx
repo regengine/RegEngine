@@ -3,8 +3,6 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { FieldCaptureClient } from '@/components/mobile/FieldCaptureClient';
 
-const TEST_API_KEY = 'rge_test_key'; // pragma: allowlist secret
-
 const mocks = vi.hoisted(() => ({
     fetchWithCsrf: vi.fn(),
     parseGS1: vi.fn(),
@@ -35,7 +33,11 @@ vi.mock('next/dynamic', () => ({
 }));
 
 vi.mock('@/components/mobile/ImageCapture', () => ({
-    ImageCapture: () => <div>Mock image capture</div>,
+    ImageCapture: ({ onCapture }: { onCapture: (data: string) => void }) => (
+        <button type="button" onClick={() => onCapture('data:image/jpeg;base64,ZmFrZQ==')}>
+            Trigger mock capture
+        </button>
+    ),
 }));
 
 vi.mock('@/components/ui/use-toast', () => ({
@@ -90,7 +92,8 @@ describe('FieldCaptureClient tenant hinting', () => {
     beforeEach(() => {
         vi.clearAllMocks();
         mocks.useAuth.mockReturnValue({
-            apiKey: TEST_API_KEY,
+            apiKey: null,
+            isAuthenticated: true,
             tenantId: null,
         });
         mocks.parseGS1.mockReturnValue({
@@ -113,36 +116,29 @@ describe('FieldCaptureClient tenant hinting', () => {
         render(<FieldCaptureClient />);
 
         await waitFor(() => {
-            expect(mocks.fetchWithCsrf).toHaveBeenNthCalledWith(
-                1,
-                'https://ingestion.test/api/v1/products/hinted-tenant',
-                expect.objectContaining({
-                    headers: expect.objectContaining({
-                        'Content-Type': 'application/json',
-                        'X-RegEngine-API-Key': TEST_API_KEY,
-                    }),
-                }),
-            );
+            expect(mocks.fetchWithCsrf).toHaveBeenCalled();
         });
+        const [catalogUrl, catalogInit] = mocks.fetchWithCsrf.mock.calls[0] as [string, RequestInit];
+        const catalogHeaders = new Headers(catalogInit?.headers);
+        expect(catalogUrl).toBe('https://ingestion.test/api/v1/products/hinted-tenant');
+        expect(catalogInit?.credentials).toBe('include');
+        expect(catalogHeaders.get('Content-Type')).toBe('application/json');
+        expect(catalogHeaders.get('X-RegEngine-API-Key')).toBeNull();
+        expect(catalogHeaders.get('X-Tenant-ID')).toBeNull();
 
         await user.click(screen.getByRole('button', { name: 'Trigger mock scan' }));
 
         await waitFor(() => {
-            expect(mocks.fetchWithCsrf).toHaveBeenNthCalledWith(
-                2,
-                'https://ingestion.test/api/v1/webhooks/ingest',
-                expect.objectContaining({
-                    method: 'POST',
-                    headers: expect.objectContaining({
-                        'Content-Type': 'application/json',
-                        'X-RegEngine-API-Key': TEST_API_KEY,
-                        'X-Tenant-ID': 'hinted-tenant',
-                    }),
-                }),
-            );
+            expect(mocks.fetchWithCsrf).toHaveBeenCalledTimes(2);
         });
 
         const ingestInit = mocks.fetchWithCsrf.mock.calls[1]?.[1] as RequestInit;
+        const ingestHeaders = new Headers(ingestInit.headers);
+        expect(mocks.fetchWithCsrf.mock.calls[1]?.[0]).toBe('https://ingestion.test/api/v1/webhooks/ingest');
+        expect(ingestInit.credentials).toBe('include');
+        expect(ingestHeaders.get('Content-Type')).toBe('application/json');
+        expect(ingestHeaders.get('X-RegEngine-API-Key')).toBeNull();
+        expect(ingestHeaders.get('X-Tenant-ID')).toBeNull();
         expect(JSON.parse(String(ingestInit.body))).toMatchObject({
             tenant_id: 'hinted-tenant',
             events: [
@@ -157,7 +153,8 @@ describe('FieldCaptureClient tenant hinting', () => {
     it('prefers the authenticated tenant over the URL hint once auth is established', async () => {
         setCaptureUrl('?tenant_id=hinted-tenant');
         mocks.useAuth.mockReturnValue({
-            apiKey: TEST_API_KEY,
+            apiKey: null,
+            isAuthenticated: true,
             tenantId: 'auth-tenant',
         });
         mocks.fetchWithCsrf
@@ -178,20 +175,48 @@ describe('FieldCaptureClient tenant hinting', () => {
         await user.click(screen.getByRole('button', { name: 'Trigger mock scan' }));
 
         await waitFor(() => {
-            expect(mocks.fetchWithCsrf).toHaveBeenNthCalledWith(
-                2,
-                'https://ingestion.test/api/v1/webhooks/ingest',
-                expect.objectContaining({
-                    headers: expect.objectContaining({
-                        'X-Tenant-ID': 'auth-tenant',
-                    }),
-                }),
-            );
+            expect(mocks.fetchWithCsrf).toHaveBeenCalledTimes(2);
         });
 
         const ingestInit = mocks.fetchWithCsrf.mock.calls[1]?.[1] as RequestInit;
+        const ingestHeaders = new Headers(ingestInit.headers);
+        expect(ingestInit.credentials).toBe('include');
+        expect(ingestHeaders.get('X-RegEngine-API-Key')).toBeNull();
+        expect(ingestHeaders.get('X-Tenant-ID')).toBeNull();
         expect(JSON.parse(String(ingestInit.body))).toMatchObject({
             tenant_id: 'auth-tenant',
         });
+    });
+
+    it('falls back to cookie-backed file upload when label vision is unavailable', async () => {
+        setCaptureUrl('?tenant_id=hinted-tenant');
+        mocks.fetchWithCsrf
+            .mockResolvedValueOnce(jsonResponse({ products: [] }))
+            .mockResolvedValueOnce(new Response(new Blob(['fake-image'], { type: 'image/jpeg' })))
+            .mockResolvedValueOnce(new Response('vision unavailable', { status: 503 }));
+        mocks.ingestFileMutation.mutateAsync.mockResolvedValue({ job_id: 'job-123' });
+
+        const user = userEvent.setup();
+        render(<FieldCaptureClient />);
+
+        await waitFor(() => {
+            expect(mocks.fetchWithCsrf).toHaveBeenCalledTimes(1);
+        });
+
+        await user.click(screen.getByRole('tab', { name: /photo/i }));
+        await user.click(screen.getByRole('button', { name: 'Trigger mock capture' }));
+
+        await waitFor(() => {
+            expect(mocks.ingestFileMutation.mutateAsync).toHaveBeenCalledTimes(1);
+        });
+
+        const uploadArgs = mocks.ingestFileMutation.mutateAsync.mock.calls[0]?.[0] as {
+            apiKey?: string | null;
+            file: File;
+            sourceSystem: string;
+        };
+        expect(uploadArgs.sourceSystem).toBe('mobile_capture_pwa');
+        expect(uploadArgs.file).toBeInstanceOf(File);
+        expect('apiKey' in uploadArgs).toBe(false);
     });
 });

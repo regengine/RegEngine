@@ -18,7 +18,7 @@ export function useSync() {
     const [isOnline, setIsOnline] = useState(true);
     const [isSyncing, setIsSyncing] = useState(false);
     const isSyncingRef = useRef(false);
-    const { apiKey, tenantId } = useAuth();
+    const { isAuthenticated, tenantId } = useAuth();
     const { toast } = useToast();
 
     const { mutateAsync: ingestFile } = useIngestFile();
@@ -29,15 +29,14 @@ export function useSync() {
             credentials: 'include', // Send HTTP-only cookies
             headers: {
                 'Content-Type': 'application/json',
-                ...(tenantId ? { 'X-Tenant-ID': tenantId } : {}),
             },
             body: payload,
         });
         if (!response.ok) throw new Error(`Ingest failed: ${response.status}`);
-    }, [tenantId]);
+    }, []);
 
     const sync = useCallback(async () => {
-        if (!apiKey || isSyncingRef.current || !navigator.onLine) return;
+        if (!isAuthenticated || isSyncingRef.current || !navigator.onLine) return;
 
         isSyncingRef.current = true;
         setIsSyncing(true);
@@ -110,7 +109,6 @@ export function useSync() {
                 try {
                     const file = new File([photo.blob], `offline_capture_${photo.timestamp}.jpg`, { type: 'image/jpeg' });
                     await ingestFile({
-                        apiKey,
                         file,
                         sourceSystem: "mobile_capture_pwa_offline"
                     });
@@ -159,7 +157,7 @@ export function useSync() {
             isSyncingRef.current = false;
             setIsSyncing(false);
         }
-    }, [apiKey, ingestFile, syncEndpoint, tenantId, toast]);
+    }, [isAuthenticated, ingestFile, syncEndpoint, tenantId, toast]);
 
     useEffect(() => {
         // Initial check

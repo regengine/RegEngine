@@ -88,7 +88,7 @@ export function FieldCaptureClient() {
     const [manualGtin, setManualGtin] = useState('');
     const [manualLot, setManualLot] = useState('');
 
-    const { apiKey, tenantId } = useAuth();
+    const { tenantId } = useAuth();
     const [hintedTenantId, setHintedTenantId] = useState<string | null>(null);
     const { toast } = useToast();
     const { isOnline, isSyncing } = useSync();
@@ -102,12 +102,12 @@ export function FieldCaptureClient() {
 
     useEffect(() => {
         const loadCatalog = async () => {
-            if (!apiKey || !effectiveTenantId) return;
+            if (!effectiveTenantId) return;
             try {
                 const response = await fetchWithCsrf(`${getServiceURL('ingestion')}/api/v1/products/${effectiveTenantId}`, {
+                    credentials: 'include',
                     headers: {
                         'Content-Type': 'application/json',
-                        'X-RegEngine-API-Key': apiKey,
                     },
                 });
                 if (!response.ok) return;
@@ -125,7 +125,7 @@ export function FieldCaptureClient() {
         };
 
         void loadCatalog();
-    }, [apiKey, effectiveTenantId]);
+    }, [effectiveTenantId]);
 
     const cteLabel = useMemo(
         () => CTE_OPTIONS.find((option) => option.value === selectedCTEType)?.label || selectedCTEType,
@@ -134,8 +134,6 @@ export function FieldCaptureClient() {
 
     const ingestScannedEvent = useCallback(
         async (scanState: ParsedScanState) => {
-            if (!apiKey) throw new Error('Missing API key');
-
             const traceabilityLotCode =
                 scanState.traceabilityLotCode ||
                 scanState.serial ||
@@ -167,10 +165,9 @@ export function FieldCaptureClient() {
 
             const response = await fetchWithCsrf(`${getServiceURL('ingestion')}/api/v1/webhooks/ingest`, {
                 method: 'POST',
+                credentials: 'include',
                 headers: {
                     'Content-Type': 'application/json',
-                    'X-RegEngine-API-Key': apiKey,
-                    ...(effectiveTenantId ? { 'X-Tenant-ID': effectiveTenantId } : {}),
                 },
                 body: JSON.stringify(eventPayload),
             });
@@ -180,7 +177,7 @@ export function FieldCaptureClient() {
                 throw new Error(detail || `Ingest failed with status ${response.status}`);
             }
         },
-        [apiKey, effectiveTenantId],
+        [effectiveTenantId],
     );
 
     const handleScan = async (rawScan: string) => {
@@ -242,16 +239,6 @@ export function FieldCaptureClient() {
             return;
         }
 
-        if (!apiKey) {
-            await saveScan(rawScan, offlinePayload, parsedState.cteType);
-            toast({
-                title: 'API Key Missing',
-                description: 'Scan saved locally. Set your API key to sync.',
-                variant: 'destructive',
-            });
-            return;
-        }
-
         try {
             await ingestScannedEvent(parsedState);
             toast({
@@ -295,6 +282,7 @@ export function FieldCaptureClient() {
 
             const visionRes = await fetchWithCsrf(`${getServiceURL('ingestion')}/api/v1/vision/analyze-label`, {
                 method: 'POST',
+                credentials: 'include',
                 body: formData,
             });
 
@@ -303,42 +291,38 @@ export function FieldCaptureClient() {
                 const productName = visionData.product_name || 'Photo capture';
                 const lotCode = visionData.lot_code || visionData.gtin || `PHOTO-${Date.now()}`;
 
-                // Auto-ingest the extracted data if authenticated
-                if (apiKey) {
-                    const payload = {
-                        source: 'mobile_capture_pwa_vision',
-                        tenant_id: effectiveTenantId,
-                        events: [{
-                            cte_type: selectedCTEType,
-                            traceability_lot_code: lotCode,
-                            product_description: productName,
-                            quantity: 1,
-                            unit_of_measure: 'cases',
-                            timestamp: new Date().toISOString(),
-                            location_name: 'Field Capture Mobile (Photo)',
-                            kdes: {
-                                gtin: visionData.gtin || undefined,
-                                lot_code: visionData.lot_code || undefined,
-                                expiry_date: visionData.expiry_date || undefined,
-                                pack_date: visionData.pack_date || undefined,
-                                brand: visionData.brand || undefined,
-                                facility_name: visionData.facility_name || undefined,
-                            },
-                        }],
-                    };
-                    const ingestRes = await fetchWithCsrf(`${getServiceURL('ingestion')}/api/v1/webhooks/ingest`, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'X-RegEngine-API-Key': apiKey,
-                            ...(effectiveTenantId ? { 'X-Tenant-ID': effectiveTenantId } : {}),
+                const payload = {
+                    source: 'mobile_capture_pwa_vision',
+                    tenant_id: effectiveTenantId,
+                    events: [{
+                        cte_type: selectedCTEType,
+                        traceability_lot_code: lotCode,
+                        product_description: productName,
+                        quantity: 1,
+                        unit_of_measure: 'cases',
+                        timestamp: new Date().toISOString(),
+                        location_name: 'Field Capture Mobile (Photo)',
+                        kdes: {
+                            gtin: visionData.gtin || undefined,
+                            lot_code: visionData.lot_code || undefined,
+                            expiry_date: visionData.expiry_date || undefined,
+                            pack_date: visionData.pack_date || undefined,
+                            brand: visionData.brand || undefined,
+                            facility_name: visionData.facility_name || undefined,
                         },
-                        body: JSON.stringify(payload),
-                    });
-                    if (!ingestRes.ok) {
-                        const detail = await ingestRes.text().catch(() => '');
-                        throw new Error(detail || `Event persistence failed with status ${ingestRes.status}`);
-                    }
+                    }],
+                };
+                const ingestRes = await fetchWithCsrf(`${getServiceURL('ingestion')}/api/v1/webhooks/ingest`, {
+                    method: 'POST',
+                    credentials: 'include',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(payload),
+                });
+                if (!ingestRes.ok) {
+                    const detail = await ingestRes.text().catch(() => '');
+                    throw new Error(detail || `Event persistence failed with status ${ingestRes.status}`);
                 }
 
                 toast({
@@ -347,9 +331,7 @@ export function FieldCaptureClient() {
                 });
             } else {
                 // Vision failed — fall back to raw file upload
-                if (apiKey) {
-                    await ingestFileMutation.mutateAsync({ apiKey, file, sourceSystem: 'mobile_capture_pwa' });
-                }
+                await ingestFileMutation.mutateAsync({ file, sourceSystem: 'mobile_capture_pwa' });
                 toast({ title: 'Photo Uploaded', description: 'Vision analysis unavailable — raw image stored.' });
             }
         } catch {
