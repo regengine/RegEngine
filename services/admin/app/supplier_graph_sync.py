@@ -25,12 +25,17 @@ from __future__ import annotations
 
 import os
 from datetime import datetime, timezone
-from typing import Any, Optional
+from typing import Any, Optional, TYPE_CHECKING
 
 import structlog
 
 from shared.circuit_breaker import CircuitOpenError, neo4j_circuit
 from shared.secrets_manager import get_secrets_manager
+
+from .graph_outbox import enqueue_graph_write
+
+if TYPE_CHECKING:  # pragma: no cover
+    from sqlalchemy.orm import Session as SQLASession
 
 try:
     from neo4j import GraphDatabase
@@ -442,6 +447,7 @@ class SupplierGraphSync:
         fda_registration_number: Optional[str],
         roles: list[str],
         categories: list[dict[str, Any]],
+        db: Optional["SQLASession"] = None,
     ) -> None:
         normalized_categories = [
             {
@@ -452,24 +458,40 @@ class SupplierGraphSync:
             for category in categories
         ]
 
-        self._run(
-            FACILITY_FTL_SCOPING_QUERY,
-            {
-                "operation": "facility_ftl_scoping",
-                "tenant_id": tenant_id,
-                "facility_id": facility_id,
-                "facility_name": facility_name,
-                "supplier_user_id": supplier_user_id,
-                "supplier_email": supplier_email,
-                "street": street,
-                "city": city,
-                "state": state,
-                "postal_code": postal_code,
-                "fda_registration_number": fda_registration_number,
-                "roles": roles,
-                "categories": normalized_categories,
-            },
-        )
+        cypher_params = {
+            "operation": "facility_ftl_scoping",
+            "tenant_id": tenant_id,
+            "facility_id": facility_id,
+            "facility_name": facility_name,
+            "supplier_user_id": supplier_user_id,
+            "supplier_email": supplier_email,
+            "street": street,
+            "city": city,
+            "state": state,
+            "postal_code": postal_code,
+            "fda_registration_number": fda_registration_number,
+            "roles": roles,
+            "categories": normalized_categories,
+        }
+
+        # Durable path: when caller passes a Postgres session, enqueue an
+        # outbox row inside that session's transaction so the Neo4j write
+        # survives Neo4j unreachability. Drainer replays with backoff.
+        # Cypher MERGE is idempotent, so a successful immediate _run
+        # followed by a redundant drainer replay is harmless. Pre-fix:
+        # _run was the ONLY path; if Neo4j was down at request time the
+        # write silently no-op'd and was logged as a sync_warning.
+        if db is not None:
+            enqueue_graph_write(
+                db,
+                tenant_id=tenant_id,
+                operation="facility_ftl_scoping",
+                cypher=FACILITY_FTL_SCOPING_QUERY,
+                params=cypher_params,
+                dedupe_key=f"facility_ftl_scoping:{facility_id}",
+            )
+
+        self._run(FACILITY_FTL_SCOPING_QUERY, cypher_params)
 
     def current_driver(self) -> Optional[Any]:
         """Public accessor for the hot-reloaded driver.
@@ -511,28 +533,42 @@ class SupplierGraphSync:
         merkle_hash: str,
         sequence_number: int,
         obligation_ids: list[str],
+        db: Optional["SQLASession"] = None,
     ) -> None:
-        self._run(
-            CTE_EVENT_QUERY,
-            {
-                "operation": "cte_event_recorded",
-                "tenant_id": tenant_id,
-                "facility_id": facility_id,
-                "facility_name": facility_name,
-                "cte_event_id": cte_event_id,
-                "cte_type": cte_type,
-                "event_time": event_time,
-                "tlc_code": tlc_code,
-                "product_description": product_description,
-                "lot_status": lot_status,
-                "kde_data": kde_data,
-                "payload_sha256": payload_sha256,
-                "merkle_prev_hash": merkle_prev_hash,
-                "merkle_hash": merkle_hash,
-                "sequence_number": sequence_number,
-                "obligation_ids": obligation_ids,
-            },
-        )
+        cypher_params = {
+            "operation": "cte_event_recorded",
+            "tenant_id": tenant_id,
+            "facility_id": facility_id,
+            "facility_name": facility_name,
+            "cte_event_id": cte_event_id,
+            "cte_type": cte_type,
+            "event_time": event_time,
+            "tlc_code": tlc_code,
+            "product_description": product_description,
+            "lot_status": lot_status,
+            "kde_data": kde_data,
+            "payload_sha256": payload_sha256,
+            "merkle_prev_hash": merkle_prev_hash,
+            "merkle_hash": merkle_hash,
+            "sequence_number": sequence_number,
+            "obligation_ids": obligation_ids,
+        }
+
+        # See record_facility_ftl_scoping for the hybrid rationale.
+        # cte_event_id is unique per event so it's the natural dedupe_key —
+        # a retried request enqueues against the same key and the
+        # graph_outbox unique constraint coalesces to one row.
+        if db is not None:
+            enqueue_graph_write(
+                db,
+                tenant_id=tenant_id,
+                operation="cte_event_recorded",
+                cypher=CTE_EVENT_QUERY,
+                params=cypher_params,
+                dedupe_key=f"cte_event_recorded:{cte_event_id}",
+            )
+
+        self._run(CTE_EVENT_QUERY, cypher_params)
 
 
 supplier_graph_sync = SupplierGraphSync.from_env()

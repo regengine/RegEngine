@@ -215,19 +215,30 @@ def _outbox_rows(session: Session) -> list[dict[str, Any]]:
 # ---------------------------------------------------------------------------
 
 
-def test_small_import_all_sync_no_outbox_enqueue(
+def test_small_import_all_sync_and_durable_outbox(
     db_session: Session,
     monkeypatch: pytest.MonkeyPatch,
 ):
-    """50 events → all sync via record_cte_event, outbox stays empty.
+    """50 events → all sync via record_cte_event AND all 50 enqueued in
+    graph_outbox for durability. No silent loss on Neo4j outage even for
+    small imports.
 
-    The fast path is preserved for imports that fit under the
-    ``MAX_SYNC_EVENTS`` cap. We assert:
-      * every event hit the live Neo4j driver,
-      * no rows landed in ``graph_outbox``,
-      * no ``graph_sync_deferred`` warning (there's nothing deferred).
+    Pre-fix contract (this test's previous behavior): small imports
+    bypassed the outbox entirely — the first MAX_SYNC_EVENTS were sync-only
+    with NO durability backup. If Neo4j was down at request time the
+    Cypher MERGE silently no-op'd while Postgres committed the canonical
+    rows. That asymmetry between small and large imports is the audit-flagged
+    "raw boundary violation" surface for ≤100-event uploads.
+
+    Post-fix contract (this test): every event is enqueued into graph_outbox
+    pre-commit AND every event additionally hits the post-commit sync path
+    for low-latency UX. The Cypher MERGE is idempotent so a successful
+    immediate write followed by a redundant drainer replay is harmless;
+    a failed immediate write is recovered by the drainer. Durability is
+    now symmetric across import sizes.
     """
     import app.bulk_upload.transaction_manager as tx_manager
+    from app.supplier_graph_sync import CTE_EVENT_QUERY
 
     sync_calls: list[dict[str, Any]] = []
 
@@ -254,32 +265,45 @@ def test_small_import_all_sync_no_outbox_enqueue(
         normalized_payload=payload,
     )
 
-    # All 50 events chained.
+    # All 50 events chained in Postgres.
     assert summary["events_chained"] == 50
 
-    # All 50 sent through the sync path.
+    # All 50 sent through the sync path (UX overlay).
     assert len(sync_calls) == 50
 
-    # No outbox rows.
-    assert _outbox_rows(db_session) == []
-
-    # No graph_sync_deferred warning — nothing was deferred.
-    for warning in summary.get("sync_warnings", []):
-        assert not warning.startswith("graph_sync_deferred:"), (
-            f"Unexpected deferred-sync warning on small import: {warning}"
-        )
+    # All 50 also durable in the outbox — the post-fix invariant.
+    cte_rows = [
+        r for r in _outbox_rows(db_session) if r["operation"] == "cte_event_recorded"
+    ]
+    assert len(cte_rows) == 50, (
+        f"Expected 50 graph_outbox rows for the 50 events (durability "
+        f"backup); got {len(cte_rows)}. The pre-fix asymmetry between "
+        f"small (≤100) and large (>100) imports has reappeared — small "
+        f"imports are silently losing Neo4j data on outage."
+    )
+    for row in cte_rows:
+        assert row["cypher"] == CTE_EVENT_QUERY
+        assert row["operation"] == "cte_event_recorded"
+        assert row["status"] == "pending"
+        assert row["tenant_id"] == str(TEST_TENANT_ID)
+        assert row["dedupe_key"] is not None
+        assert row["dedupe_key"].startswith("bulk_upload:")
 
 
 def test_large_import_first_100_sync_remainder_enqueued(
     db_session: Session,
     monkeypatch: pytest.MonkeyPatch,
 ):
-    """500 events → 100 sync, 400 in graph_outbox with correct payload.
+    """500 events → 100 sync AND all 500 in graph_outbox with correct payload.
 
-    This is the exact scenario #1411 describes: pre-fix, a 500-event
-    import silently dropped 400 Neo4j nodes. Post-fix:
-      * first 100 hit the sync path,
-      * remaining 400 are durable graph_outbox rows,
+    The original #1411 fix established the outbox path for events beyond
+    ``MAX_SYNC_EVENTS`` to stop silent loss of the overflow. This test's
+    follow-up extends durability to ALL events (small + large imports
+    alike) so the asymmetry is gone:
+      * first 100 hit the sync path for low-latency UX,
+      * all 500 are durable graph_outbox rows (drainer eventually
+        replays; idempotent Cypher MERGE means a successful immediate
+        write followed by a redundant replay is harmless),
       * each row carries the exact Cypher (``CTE_EVENT_QUERY``) and a
         parameter dict the drainer can replay,
       * each row has a stable ``bulk_upload:<event_id>`` dedupe_key so
@@ -320,12 +344,18 @@ def test_large_import_first_100_sync_remainder_enqueued(
     # Fast path: exactly MAX_SYNC_EVENTS (100) hit Neo4j synchronously.
     assert len(sync_calls) == 100
 
-    # Durable path: 400 rows in graph_outbox.
-    rows = _outbox_rows(db_session)
-    assert len(rows) == 400, (
-        f"expected 400 outbox rows for the overflow beyond MAX_SYNC_EVENTS=100; "
-        f"got {len(rows)}"
+    # Durable path: ALL 500 rows in graph_outbox (post-fix invariant —
+    # see the test docstring; the previous "400 rows" assertion encoded
+    # the asymmetry that left the first 100 events without durability
+    # backup).
+    cte_rows = [
+        r for r in _outbox_rows(db_session) if r["operation"] == "cte_event_recorded"
+    ]
+    assert len(cte_rows) == 500, (
+        f"expected 500 outbox rows for the full event set (durability "
+        f"symmetry across MAX_SYNC_EVENTS boundary); got {len(cte_rows)}"
     )
+    rows = cte_rows
 
     # Every row carries the exact Cypher the production Neo4j writer
     # uses. Drift between the sync path's Cypher and the outbox Cypher
@@ -376,6 +406,13 @@ def test_large_import_first_100_sync_remainder_enqueued(
         if w.startswith("graph_sync_deferred:")
     ]
     assert len(deferred_warnings) == 1
+    # ``graph_sync_deferred`` deliberately preserves its pre-fix semantics:
+    # count reflects overflow events that are reachable ONLY via the
+    # drainer (i.e., events beyond MAX_SYNC_EVENTS that didn't hit the
+    # immediate sync overlay). 500 - 100 = 400 here. The total enqueue
+    # count is asserted separately above (cte_rows == 500); operators
+    # don't need a deferred-warning for events that ALSO got immediate
+    # sync, only for overflow that will lag.
     assert "400" in deferred_warnings[0]
     assert "graph_outbox" in deferred_warnings[0], (
         "warning text must reflect the real async-replay mechanism "
