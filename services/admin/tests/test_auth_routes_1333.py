@@ -1133,6 +1133,104 @@ class TestConfirmPassword:
             )
         assert exc.value.status_code == 401
 
+    @pytest.mark.asyncio
+    async def test_confirm_no_active_tenant_raises_403(self, monkeypatch):
+        """#1380 hardening: an authenticated user with no RLS tenant context
+        AND no active membership must NOT receive an elevation token. A
+        regression that defaulted ``acting_tenant_id`` to e.g. an inactive
+        membership tenant would silently issue elevation for a tenant the
+        user no longer belongs to.
+        """
+        user = _make_user(email="orphan@x.com", password="correct")
+
+        # Patch TenantContext.get_tenant_context at the source so the
+        # local import inside confirm_password resolves to our stub.
+        from services.admin.app import models as _models_mod
+
+        monkeypatch.setattr(
+            _models_mod.TenantContext,
+            "get_tenant_context",
+            staticmethod(lambda _db: None),
+        )
+
+        # No active membership row available either.
+        db = MagicMock()
+        db.execute.return_value.scalars.return_value.first.return_value = None
+        session_store = _make_session_store()
+
+        with pytest.raises(HTTPException) as exc:
+            await ar.confirm_password.__wrapped__(
+                payload=ConfirmPasswordRequest(password="correct"),
+                request=_make_request(),
+                current_user=user,
+                db=db,
+                session_store=session_store,
+            )
+        assert exc.value.status_code == 403
+        assert "tenant" in exc.value.detail.lower()
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# 8b. /confirm — require_reauth dependency (positive accept path)
+# ──────────────────────────────────────────────────────────────────────────────
+
+
+class TestRequireReauthAccept:
+    """Existing coverage of ``require_reauth`` only asserts rejection paths
+    (#1380 missing-token, mismatched-tenant, revoked-jti, stale-tv). Add a
+    positive test so a regression that flipped, e.g., ``if stored is not
+    None: raise`` would actually fail a test instead of silently allowing
+    every elevated call to be rejected.
+    """
+
+    @pytest.mark.asyncio
+    async def test_require_reauth_accepts_valid_elevation(self):
+        from services.admin.app.auth.confirm_router import require_reauth
+
+        user_id = uuid_mod.uuid4()
+        tenant_id = uuid_mod.uuid4()
+        jti = "good-jti-positive-2151"
+
+        elevation = create_access_token(
+            {
+                "sub": str(user_id),
+                "elevated": True,
+                "tenant_id": str(tenant_id),
+                "jti": jti,
+                "tv": 0,
+            },
+            expires_delta=timedelta(minutes=5),
+        )
+        access = create_access_token(
+            {"sub": str(user_id), "tenant_id": str(tenant_id), "tv": 0}
+        )
+
+        request = MagicMock()
+        request.headers = {
+            "X-Elevation-Token": elevation,
+            "Authorization": f"Bearer {access}",
+        }
+        current_user = SimpleNamespace(id=user_id, token_version=0)
+
+        # Redis returns a non-None value for the jti key — i.e. /confirm
+        # registered it and a password change has not bulk-revoked it yet.
+        client = MagicMock()
+        client.get = AsyncMock(return_value=str(user_id))
+        session_store = MagicMock()
+        session_store._get_client = AsyncMock(return_value=client)
+
+        # Must NOT raise; FastAPI dependencies that pass simply return None.
+        result = await require_reauth(
+            request=request,
+            current_user=current_user,
+            session_store=session_store,
+        )
+        assert result is None
+
+        # Sanity: the jti lookup actually fired against the expected key.
+        client.get.assert_awaited_once()
+        assert jti in client.get.await_args.args[0]
+
 
 # ──────────────────────────────────────────────────────────────────────────────
 # 9. /register bootstrap endpoint
