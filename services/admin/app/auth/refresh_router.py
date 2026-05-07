@@ -28,7 +28,7 @@ from ..auth_utils import (
 from ..database import get_session
 from ..dependencies import get_session_store
 from ..session_store import RedisSessionStore
-from ..sqlalchemy_models import MembershipModel, TenantModel, UserModel
+from ..sqlalchemy_models import MembershipModel, RoleModel, TenantModel, UserModel
 from .lockout import _maybe_await
 from .schemas import TokenResponse
 from shared.rate_limit import limiter
@@ -242,6 +242,12 @@ async def refresh_session(
         logger.warning("refresh_no_active_tenant", user_id=str(user.id))
         raise HTTPException(status_code=403, detail="No active tenant available")
 
+    active_membership = next(
+        (membership for membership in memberships if membership.tenant_id == active_tenant_id),
+        None,
+    )
+    active_role = db.get(RoleModel, active_membership.role_id) if active_membership else None
+
     # #1401 — Re-query the real tenant status instead of hardcoding "active".
     # The query above already filters for active memberships/tenants, but the
     # status we embed in the token should reflect the DB truth at refresh time.
@@ -274,6 +280,14 @@ async def refresh_session(
         access_token=access_token,
         refresh_token=new_raw_refresh_token,
         tenant_id=active_tenant_id,
-        user={"id": str(user.id), "email": user.email, "is_sysadmin": user.is_sysadmin},
+        user={
+            "id": str(user.id),
+            "email": user.email,
+            "is_sysadmin": user.is_sysadmin,
+            "status": user.status,
+            "role_id": str(active_role.id) if active_role else None,
+            "role_name": active_role.name if active_role else None,
+            "permissions": list(active_role.permissions or []) if active_role and isinstance(active_role.permissions, list) else [],
+        },
         available_tenants=[]  # Don't need full list on refresh
     )

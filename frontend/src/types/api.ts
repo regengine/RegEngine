@@ -146,6 +146,7 @@ export interface User {
     status: string;
     role_id?: string;
     role_name?: string;
+    permissions?: string[];
     created_at?: string;
 }
 

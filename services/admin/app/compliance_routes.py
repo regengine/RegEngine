@@ -1,11 +1,16 @@
 """Compliance API routes for the 2am Alert feature.
 
 Provides endpoints for:
-- GET /v1/compliance/status - The "big status widget"
-- GET /v1/compliance/alerts - List all alerts
-- POST /v1/compliance/alerts/{id}/acknowledge - Mark as seen
-- POST /v1/compliance/alerts/{id}/resolve - Complete action
-- GET/PUT /v1/compliance/profile - Product profile for matching
+- GET  /v1/compliance/status/{tenant_id} - The "big status widget"
+- GET  /v1/compliance/alerts/{tenant_id} - List all alerts for a tenant
+- POST /v1/compliance/alerts/{tenant_id} - Manually create an alert
+- POST /v1/compliance/alerts/{tenant_id}/{alert_id}/acknowledge - Mark as seen
+- POST /v1/compliance/alerts/{tenant_id}/{alert_id}/resolve - Complete action
+- GET/PUT /v1/compliance/profile/{tenant_id} - Product profile for matching
+
+All write routes bind tenant_id via the URL path and verify it against
+the caller's authenticated tenant context with
+``verify_path_tenant_matches`` (see #1328).
 """
 
 from __future__ import annotations
@@ -99,9 +104,14 @@ class AlertActionRequest(BaseModel):
 
 
 class CreateAlertRequest(BaseModel):
-    """Request to manually create an alert."""
+    """Request to manually create an alert.
 
-    tenant_id: str
+    The owning tenant is bound by the URL path and authenticated against
+    the caller's tenant context via ``verify_path_tenant_matches``; it is
+    intentionally NOT a body field, so a caller in tenant A cannot POST
+    a body claiming tenant B and have the alert created there.
+    """
+
     source_type: str = "MANUAL"
     source_id: Optional[str] = None
     title: str
@@ -289,19 +299,33 @@ def resolve_alert(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.post("/alerts", response_model=AlertResponse, status_code=201, dependencies=[Depends(PermissionChecker("analysis.create"))])
+@router.post(
+    "/alerts/{tenant_id}",
+    response_model=AlertResponse,
+    status_code=201,
+    dependencies=[Depends(PermissionChecker("analysis.create"))],
+)
 def create_alert(
     request: CreateAlertRequest,
+    tenant_id: UUID = Depends(verify_path_tenant_matches),
     session=Depends(get_session),
 ) -> AlertResponse:
-    """Manually create a compliance alert."""
+    """Manually create a compliance alert.
+
+    Tenant is bound by the URL path and verified against the caller's
+    authenticated tenant context. See ``verify_path_tenant_matches`` and
+    sibling routes such as ``/profile/{tenant_id}`` for the same pattern.
+    Pre-fix this route accepted ``tenant_id`` from the request body, which
+    let any caller with the ``analysis.create`` scope create alerts in an
+    arbitrary tenant.
+    """
     try:
         source_type = AlertSourceType[request.source_type]
         severity = AlertSeverity[request.severity]
 
         service = ComplianceServiceSync(session)
         alert = service.create_alert(
-            tenant_id=UUID(request.tenant_id),
+            tenant_id=tenant_id,
             source_type=source_type,
             source_id=request.source_id or f"manual-{datetime.now(timezone.utc).isoformat()}",
             title=request.title,

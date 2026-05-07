@@ -297,7 +297,15 @@ async def signup(
         access_token=access_token,
         refresh_token=raw_refresh_token,
         tenant_id=new_tenant.id,
-        user={"id": str(new_user.id), "email": new_user.email, "is_sysadmin": new_user.is_sysadmin},
+        user={
+            "id": str(new_user.id),
+            "email": new_user.email,
+            "is_sysadmin": new_user.is_sysadmin,
+            "status": new_user.status,
+            "role_id": str(owner_role.id),
+            "role_name": owner_role.name,
+            "permissions": list(owner_role.permissions or []) if isinstance(owner_role.permissions, list) else [],
+        },
         available_tenants=[{"id": new_tenant.id, "name": new_tenant.name, "slug": new_tenant.slug}],
     )
 

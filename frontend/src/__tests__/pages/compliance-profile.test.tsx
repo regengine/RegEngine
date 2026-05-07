@@ -123,7 +123,8 @@ describe('ComplianceProfilePage', () => {
             expect(fetchWithCsrfMock).toHaveBeenCalledTimes(1);
         });
 
-        await user.click(screen.getByRole('button', { name: 'Save Profile' }));
+        const saveButton = await screen.findByRole('button', { name: 'Save Profile' });
+        await user.click(saveButton);
 
         await waitFor(() => {
             expect(fetchWithCsrfMock).toHaveBeenCalledTimes(2);

@@ -4,6 +4,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import { User } from '@/types/api';
 import { apiClient } from './api-client';
 import { fetchWithCsrf } from './fetch-with-csrf';
+import { sanitizePermissions } from './permissions';
 import { createSupabaseBrowserClient, isSupabaseConfigured } from '@/lib/supabase/client';
 
 interface AuthContextType {
@@ -138,6 +139,44 @@ async function getSessionInfo(): Promise<{
   }
 }
 
+function getStoredPermissionFallback(): string[] | undefined {
+  if (typeof window === 'undefined') return undefined;
+
+  try {
+    const storedUser = localStorage.getItem(STORAGE_KEYS.USER);
+    if (!storedUser) return undefined;
+    const parsedUser = JSON.parse(storedUser) as { permissions?: unknown };
+    return sanitizePermissions(parsedUser.permissions);
+  } catch {
+    return undefined;
+  }
+}
+
+function buildSupabaseAppUser(
+  sourceUser: {
+    id: string;
+    email?: string | null;
+    user_metadata?: Record<string, unknown>;
+  },
+  fallbackPermissions?: string[],
+): User {
+  const explicitPermissions = sanitizePermissions(sourceUser.user_metadata?.permissions);
+  const appUser: User = {
+    id: sourceUser.id,
+    email: sourceUser.email || '',
+    is_sysadmin: Boolean(sourceUser.user_metadata?.is_sysadmin),
+    status: 'active',
+    role_name: typeof sourceUser.user_metadata?.role === 'string' ? sourceUser.user_metadata.role : 'member',
+  };
+
+  const permissions = explicitPermissions ?? fallbackPermissions;
+  if (permissions) {
+    appUser.permissions = permissions;
+  }
+
+  return appUser;
+}
+
 // ---------------------------------------------------------------------------
 // Migration: move localStorage secrets to HTTP-only cookies, then delete them
 // ---------------------------------------------------------------------------
@@ -152,6 +191,7 @@ async function migrateLocalStorageToCookies(): Promise<void> {
   if (!legacyApiKey && !legacyAdminKey && !legacyAccessToken) return;
 
   if (process.env.NODE_ENV !== 'production') {
+    // eslint-disable-next-line no-console
     console.info('[auth] Migrating credentials from localStorage to HTTP-only cookies...');
   }
 
@@ -176,6 +216,7 @@ async function migrateLocalStorageToCookies(): Promise<void> {
   localStorage.removeItem(STORAGE_KEYS._LEGACY_ACCESS_TOKEN);
 
   if (process.env.NODE_ENV !== 'production') {
+    // eslint-disable-next-line no-console
     console.info('[auth] Migration complete — localStorage secrets removed.');
   }
 }
@@ -296,13 +337,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       supabase.auth.getUser().then(async ({ data: { user: validatedUser } }) => {
         if (isAuthErrorRedirect || logoutInProgressRef.current) return;
         if (validatedUser && !accessToken) {
-          const appUser: User = {
-            id: validatedUser.id,
-            email: validatedUser.email || '',
-            is_sysadmin: validatedUser.user_metadata?.is_sysadmin || false,
-            status: 'active',
-            role_name: validatedUser.user_metadata?.role || 'member',
-          };
+          const appUser = buildSupabaseAppUser(
+            validatedUser,
+            user?.permissions ?? getStoredPermissionFallback(),
+          );
           // Do not write a Supabase token or placeholder into re_access_token.
           // Middleware verifies that cookie as a RegEngine JWT; writing any
           // other value causes the next protected navigation to bounce to
@@ -356,13 +394,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           // where Supabase cookie persists but re_access_token expired).
           if (accessToken) return;
 
-          const appUser: User = {
-            id: session.user.id,
-            email: session.user.email || '',
-            is_sysadmin: session.user.user_metadata?.is_sysadmin || false,
-            status: 'active',
-            role_name: session.user.user_metadata?.role || 'member',
-          };
+          const appUser = buildSupabaseAppUser(
+            session.user,
+            user?.permissions ?? getStoredPermissionFallback(),
+          );
           // Never write session.access_token to re_access_token. That cookie is
           // reserved for the custom RegEngine JWT minted by the backend login
           // endpoint; middleware rejects Supabase JWTs in that slot.
@@ -400,7 +435,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Supabase not configured — skip
     }
     return () => subscription?.unsubscribe();
-  }, [accessToken]);
+  }, [accessToken, user?.permissions]);
 
   // ---- Proactive token refresh timer ----
   // Supabase sessions persist longer than the custom RegEngine JWT. This timer
@@ -436,17 +471,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           // re_access_token. A future backend endpoint can mint a fresh
           // RegEngine JWT; until then, preserving the existing custom JWT is
           // safer than replacing it with an unverifiable Supabase JWT.
+          const appUser = buildSupabaseAppUser(
+            session.user,
+            user?.permissions ?? getStoredPermissionFallback(),
+          );
           await setSessionCookies({
             tenantId: session.user.user_metadata?.tenant_id || null,
-            user: {
-              id: session.user.id,
-              email: session.user.email || '',
-              is_sysadmin: session.user.user_metadata?.is_sysadmin || false,
-              status: 'active',
-              role_name: session.user.user_metadata?.role || 'member',
-            },
+            user: appUser,
           });
           if (process.env.NODE_ENV !== 'production') {
+            // eslint-disable-next-line no-console
             console.info('[auth] Proactive token refresh succeeded');
           }
         }
@@ -468,7 +502,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         refreshTimerRef.current = null;
       }
     };
-  }, [accessToken, isHydrated]);
+  }, [accessToken, isHydrated, user?.permissions]);
 
   const setApiKey = useCallback(async (key: string | null) => {
     if (key) {
