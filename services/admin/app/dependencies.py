@@ -3,12 +3,12 @@ from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 from sqlalchemy import select, text
 from uuid import UUID
-from typing import Optional
+from typing import Iterator, Optional
 import structlog
 from jwt.exceptions import PyJWTError as JWTError
 import os
 
-from .database import get_session
+from .database import get_session, get_tenant_session
 from .sqlalchemy_models import UserModel, MembershipModel, RoleModel
 from .models import TenantContext
 from .auth_utils import check_revoked_async, decode_access_token
@@ -382,6 +382,38 @@ def verify_path_tenant_matches(
         raise HTTPException(status_code=403, detail="Tenant mismatch")
 
     return path_tenant
+
+
+def get_tenant_scoped_session(
+    tenant_id: UUID = Depends(verify_path_tenant_matches),
+) -> Iterator[Session]:
+    """Yield a SQLAlchemy session with ``app.tenant_id`` GUC bound for RLS.
+
+    Usage in routes shaped as ``/v1/foo/{tenant_id}/...``::
+
+        @router.get("/items/{tenant_id}")
+        def list_items(
+            session: Session = Depends(get_tenant_scoped_session),
+        ):
+            return session.execute(select(Item)).scalars().all()
+
+    The dependency runs ``verify_path_tenant_matches`` first (rejects path
+    vs auth-context mismatch with 403, malformed UUID with 400) and then
+    yields a session with ``app.tenant_id`` set at transaction scope via
+    the canonical ``set_tenant_guc`` primitive. Any RLS policy on tables
+    referenced inside the request will be enforced by Postgres — even if
+    a query in the handler forgets its ``WHERE tenant_id = ...`` clause.
+
+    Sysadmin callers who pass ``verify_path_tenant_matches`` get the
+    requested tenant's GUC; routes that need a literal sysadmin-bypass
+    (cross-tenant scans) should not use this dependency and must instead
+    explicitly opt out of RLS via the appropriate sysadmin context.
+
+    Defense-in-depth, not a substitute for tenant scoping in service code.
+    Routes still verify tenant on writes; this just guarantees that an
+    accidentally-omitted predicate fails closed instead of leaking.
+    """
+    yield from get_tenant_session(str(tenant_id))
 
 
 # --- API Key Auth (Remediation Phase 1) ---

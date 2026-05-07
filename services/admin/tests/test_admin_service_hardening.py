@@ -413,3 +413,72 @@ def test_admin_routes_module_uses_shared_bruteforce_limiter():
     # verify the ACTIVE limiter is the shared one by checking its
     # usage in verify_admin_key.
     assert "_admin_brute_force" in source
+
+
+# =========================================================================
+# get_tenant_scoped_session — Depends-friendly wrapper that combines
+# verify_path_tenant_matches with the tenant-bound session yield, so any
+# RLS policy on tables touched by the handler is enforced even if a
+# query forgets its WHERE tenant_id = ... predicate. Defense-in-depth.
+# =========================================================================
+
+
+def test_get_tenant_scoped_session_delegates_with_verified_tenant_id():
+    """The dep yields the same session ``get_tenant_session(str(tenant_id))``
+    yields, after ``verify_path_tenant_matches`` has accepted the tenant_id.
+    The body intentionally does ``yield from get_tenant_session`` so the
+    canonical ``set_tenant_guc`` runs on the underlying session and the
+    cleanup ``rollback`` + ``close`` also run on shutdown.
+    """
+    from services.admin.app import dependencies as deps_mod
+
+    tenant_uuid = uuid.UUID("11111111-1111-1111-1111-111111111111")
+    fake_session = MagicMock(name="bound_session")
+
+    def fake_get_tenant_session(tenant_id):
+        # Mirror the real generator's shape: yield once, run cleanup on close.
+        assert tenant_id == str(tenant_uuid), (
+            "wrapper must pass the verified UUID through as a string — that's "
+            "what set_tenant_guc / set_config('app.tenant_id', :tid, true) expects"
+        )
+        try:
+            yield fake_session
+        finally:
+            fake_session.cleaned_up = True
+
+    with patch.object(deps_mod, "get_tenant_session", fake_get_tenant_session):
+        gen = deps_mod.get_tenant_scoped_session(tenant_id=tenant_uuid)
+        yielded = next(gen)
+        assert yielded is fake_session
+        # Drive the generator to completion so the underlying cleanup runs.
+        with pytest.raises(StopIteration):
+            next(gen)
+        assert fake_session.cleaned_up is True
+
+
+def test_get_tenant_scoped_session_default_uses_verify_path_tenant_matches():
+    """The dep's default for ``tenant_id`` must be the verify_path_tenant_matches
+    Depends — otherwise routes that opt in to this dep skip the path/auth
+    cross-check and the IDOR class of bug remains open even with RLS.
+    """
+    import inspect
+
+    from fastapi import Depends
+
+    from services.admin.app.dependencies import (
+        get_tenant_scoped_session,
+        verify_path_tenant_matches,
+    )
+
+    sig = inspect.signature(get_tenant_scoped_session)
+    tenant_param = sig.parameters["tenant_id"]
+    default = tenant_param.default
+    # FastAPI Depends instances expose the wrapped callable as `.dependency`.
+    assert isinstance(default, type(Depends(verify_path_tenant_matches))), (
+        "tenant_id default must be a Depends(...) so FastAPI runs the "
+        "path/auth cross-check before binding the GUC"
+    )
+    assert default.dependency is verify_path_tenant_matches, (
+        f"tenant_id default must wrap verify_path_tenant_matches; got "
+        f"{getattr(default, 'dependency', None)}"
+    )
