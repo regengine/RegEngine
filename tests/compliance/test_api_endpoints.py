@@ -63,16 +63,17 @@ class TestHealthEndpoint:
         assert "status" in data
         assert data["status"] == "healthy"
 
-    def test_health_includes_checklists_count(self, compliance_client):
-        """Verify health endpoint shows loaded checklists count."""
+    def test_health_includes_shared_observability_fields(self, compliance_client):
+        """Verify health endpoint exposes the standardized health payload."""
         client, _ = compliance_client
         
         resp = client.get("/health")
         data = resp.json()
         
-        assert "checklists_loaded" in data
-        assert isinstance(data["checklists_loaded"], int)
-        assert data["checklists_loaded"] >= 0
+        assert data["service"] == "compliance-service"
+        assert "hostname" in data
+        assert "uptime" in data
+        assert "dependencies" in data
 
 
 class TestChecklistsEndpoints:
@@ -132,33 +133,36 @@ class TestValidationEndpoint:
         resp = client.post(
             "/validate",
             json={
-                "checklist_id": "test",
-                "customer_config": {},
+                "ftl_commodity": "Cheese",
             },
         )
         assert resp.status_code in (401, 403)
 
-    def test_validate_requires_checklist_id(self, compliance_client):
-        """Verify checklist_id is required."""
+    def test_validate_requires_ftl_commodity(self, compliance_client):
+        """Verify the FTL commodity scope is required."""
         client, api_key = compliance_client
         
         resp = client.post(
             "/validate",
             headers={"X-RegEngine-API-Key": api_key},
-            json={"customer_config": {}},
+            json={"config": {}},
         )
         assert resp.status_code == 422
 
-    def test_validate_requires_customer_config(self, compliance_client):
-        """Verify customer_config is required."""
+    def test_validate_allows_missing_config(self, compliance_client):
+        """Verify config is optional once a commodity is declared."""
         client, api_key = compliance_client
         
         resp = client.post(
             "/validate",
             headers={"X-RegEngine-API-Key": api_key},
-            json={"checklist_id": "test"},
+            json={"ftl_commodity": "Soft Cheeses"},
         )
-        assert resp.status_code == 422
+        assert resp.status_code == 200
+        payload = resp.json()
+        assert payload["valid"] is True
+        assert payload["errors"] == []
+        assert payload["warnings"] == []
 
     def test_validate_returns_error_for_unknown_checklist(self, compliance_client):
         """Verify validation fails for unknown checklist."""
@@ -168,34 +172,34 @@ class TestValidationEndpoint:
             "/validate",
             headers={"X-RegEngine-API-Key": api_key},
             json={
+                "ftl_commodity": "Soft Cheeses",
                 "checklist_id": "definitely_not_a_real_checklist",
-                "customer_config": {"req1": True},
+                "config": {"cte_type": "HARVESTING"},
             },
         )
-        assert resp.status_code in (400, 404)
+        assert resp.status_code == 404
 
 
-class TestFSMAAssessmentEndpoint:
-    """Tests for the FSMA 204 assessment endpoint."""
+class TestAuditSpreadsheetEndpoint:
+    """Tests for the FDA audit spreadsheet export endpoint."""
 
-    def test_fsma_assessment_requires_auth(self, compliance_client):
-        """Verify FSMA assessment requires API key."""
+    def test_audit_spreadsheet_requires_auth(self, compliance_client):
+        """Verify the spreadsheet export requires API key auth."""
         client, _ = compliance_client
         
-        resp = client.post(
-            "/fsma/assess",
-            json={"facility_name": "Test Facility"},
+        resp = client.get(
+            "/v1/fsma/audit/spreadsheet",
+            params={"start_date": "2026-01-01", "end_date": "2026-01-02"},
         )
         assert resp.status_code in (401, 403)
 
-    def test_fsma_assessment_requires_facility_name(self, compliance_client):
-        """Verify facility_name is required."""
+    def test_audit_spreadsheet_requires_date_params(self, compliance_client):
+        """Verify required export window query params are enforced."""
         client, api_key = compliance_client
         
-        resp = client.post(
-            "/fsma/assess",
+        resp = client.get(
+            "/v1/fsma/audit/spreadsheet",
             headers={"X-RegEngine-API-Key": api_key},
-            json={},
         )
         assert resp.status_code == 422
 
@@ -206,30 +210,24 @@ class TestValidationResultStructure:
     def test_expected_result_fields(self):
         """Document expected validation result structure."""
         expected_fields = [
-            "checklist_id",
-            "checklist_name",
-            "industry",
-            "jurisdiction",
-            "overall_status",
-            "pass_rate",
-            "items",
-            "next_steps",
+            "valid",
+            "ftl_commodity",
+            "errors",
+            "warnings",
         ]
         
-        assert len(expected_fields) == 8
+        assert len(expected_fields) == 4
 
     def test_expected_item_fields(self):
-        """Document expected validation item structure."""
+        """Document expected validation issue structure."""
         expected_fields = [
-            "requirement_id",
-            "requirement",
-            "regulation",
-            "status",
-            "evidence",
-            "remediation",
+            "path",
+            "code",
+            "message",
+            "suggestion",
         ]
         
-        assert len(expected_fields) == 6
+        assert len(expected_fields) == 4
 
 
 class TestChecklistMetadata:
@@ -241,7 +239,11 @@ class TestChecklistMetadata:
             "id",
             "name",
             "industry",
-            "jurisdiction",
+            "description",
+            "framework",
+            "version",
+            "requirements",
+            "items",
         ]
         
-        assert len(expected_fields) == 4
+        assert len(expected_fields) == 8
