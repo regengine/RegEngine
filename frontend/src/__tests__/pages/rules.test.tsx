@@ -25,14 +25,6 @@ function createWrapper() {
     );
 }
 
-// Mock auth context
-vi.mock('@/lib/auth-context', () => ({
-  useAuth: vi.fn().mockReturnValue({
-    apiKey: 'test-api-key',
-    tenantId: 'tenant-123',
-  }),
-}));
-
 // Mock control-plane hooks
 const mockMutate = vi.fn();
 const mockUseRules = vi.fn();

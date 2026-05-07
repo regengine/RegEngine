@@ -66,7 +66,7 @@ const STAGE_LABELS: Record<string, string> = {
 export default function RequestCaseDetailPage() {
   const params = useParams();
   const requestCaseId = params.id as string;
-  const { apiKey, tenantId } = useAuth();
+  const { tenantId } = useAuth();
   const tid = tenantId || '';
 
   const requests = useRequestCases(tid);

@@ -49,7 +49,7 @@ const STATUS_BADGE: Record<string, { className: string; label: string }> = {
 };
 
 export default function ExceptionQueuePage() {
-  const { apiKey, tenantId } = useAuth();
+  const { tenantId } = useAuth();
   const tid = tenantId || '';
 
   const [severityFilter, setSeverityFilter] = useState<string | undefined>();

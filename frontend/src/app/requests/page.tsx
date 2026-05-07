@@ -45,7 +45,7 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; progress: nu
 };
 
 export default function RequestWorkflowPage() {
-  const { apiKey, tenantId } = useAuth();
+  const { tenantId } = useAuth();
   const tid = tenantId || '';
 
   const [showCreate, setShowCreate] = useState(false);
