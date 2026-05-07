@@ -295,10 +295,12 @@ describe('Dashboard Inflow Lab', () => {
     it('keeps the selected lot detail in a sticky right rail with Lifecycle and KDE tiles', async () => {
         renderDashboardInflowLabPage();
 
-        await waitFor(() => {
-            expect(screen.getByText('Selected lot')).toBeInTheDocument();
-        });
-        expect(screen.getByText('Lifecycle')).toBeInTheDocument();
+        // ``Selected lot`` is the section heading that renders even when no
+        // lot is loaded yet. Wait for ``Lifecycle`` instead — it only appears
+        // once selectedLotData is non-null (i.e. a lot has been picked from
+        // the fetched events). Use findByText for built-in timeout.
+        expect(await screen.findByText('Lifecycle')).toBeInTheDocument();
+        expect(screen.getByText('Selected lot')).toBeInTheDocument();
         expect(screen.getByText('Lot KDE summary')).toBeInTheDocument();
         expect(screen.getByRole('button', { name: 'Fix this lot' })).toBeInTheDocument();
     });
