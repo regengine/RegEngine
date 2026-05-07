@@ -26,7 +26,7 @@ _REPO_ROOT = Path(__file__).resolve().parent
 _SERVICES_DIR = _REPO_ROOT / "services"
 
 # Known services that expose their own top-level ``app/`` package.
-_APP_BEARING_SERVICES = ("admin", "graph", "ingestion", "nlp", "scheduler")
+_APP_BEARING_SERVICES = ("admin", "compliance", "graph", "ingestion", "nlp", "scheduler")
 
 # Tests under top-level ``tests/`` that reach into a specific service via
 # bare ``from app.X`` imports. The conftest flips sys.path to the named
@@ -48,6 +48,19 @@ _KNOWN_SERVICE_MODULES: dict[str, dict[str, ModuleType]] = {
     service: {} for service in _APP_BEARING_SERVICES
 }
 _KNOWN_SHARED_MODULES: dict[str, ModuleType] = {}
+
+
+def _service_from_module_file(module: ModuleType | None) -> Optional[str]:
+    """Infer which service owns an imported ``app`` module."""
+    mod_file = str(getattr(module, "__file__", "") or "")
+    if not mod_file:
+        return None
+
+    for service in _APP_BEARING_SERVICES:
+        service_root = str(_SERVICES_DIR / service)
+        if service_root and service_root in mod_file:
+            return service
+    return None
 
 
 def _evict_module(name: str) -> None:
@@ -163,8 +176,17 @@ def _switch_to_service(service: str) -> None:
     )
     for name in stale:
         mod = sys.modules.get(name)
-        if _remember_real_module(service_cache, name, mod, str(service_dir)):
-            continue
+        owner_service = _service_from_module_file(mod)
+        owner_cache = _KNOWN_SERVICE_MODULES.setdefault(owner_service, {}) if owner_service else None
+        if owner_cache is not None:
+            remembered = _remember_real_module(
+                owner_cache,
+                name,
+                mod,
+                str(_SERVICES_DIR / owner_service),
+            )
+            if remembered and owner_service == service:
+                continue
 
         cached = service_cache.get(name)
         if cached is not None:
@@ -198,6 +220,16 @@ def _switch_to_service(service: str) -> None:
         _bind_module("app", cached_app)
     if "shared" not in sys.modules and (cached_shared := _KNOWN_SHARED_MODULES.get("shared")) is not None:
         _bind_module("shared", cached_shared)
+
+    # Restore the full cached module tree for the active service, not just
+    # names that happened to overlap with the previously active service.
+    # Without this, switching from e.g. scheduler -> admin restores ``app``
+    # but not deeper admin-only modules like ``app.partner_gateway.auth``;
+    # a later import rebuilds those as fresh module objects, so test-time
+    # patches hit a different module identity than the already-collected
+    # router/handler objects.
+    for name, cached in sorted(service_cache.items(), key=lambda item: item[0].count(".")):
+        _bind_module(name, cached)
 
     for prefix in ("app", "shared"):
         _repair_package_links(prefix)
@@ -240,3 +272,18 @@ def pytest_pycollect_makemodule(module_path, path, parent):  # type: ignore[no-u
     """Switch service import context immediately before module import."""
     _activate_service_for_path(Path(str(module_path)))
     return None
+
+
+def pytest_runtest_setup(item):  # type: ignore[no-untyped-def]
+    """Switch service import context again before each test executes.
+
+    Collection-time switching is not sufficient because many tests perform
+    ``from app.X import ...`` imports inside the test body or fixture setup.
+    Without a runtime refresh, the final collected service can leave a stale
+    ``app`` package active in ``sys.modules``/``sys.path`` and poison later
+    tests that pass in isolation.
+    """
+    item_path = getattr(item, "path", None) or getattr(item, "fspath", None)
+    if item_path is None:
+        return
+    _activate_service_for_path(Path(str(item_path)))

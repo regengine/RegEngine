@@ -38,7 +38,7 @@ from shared.tenant_rate_limiting import TenantRateLimitMiddleware
 # Initialize structured JSON logging before app/middleware creation
 configure_logging(service_name="compliance-service")
 
-from app.routes import router as fsma_router
+from services.compliance.app.routes import router as fsma_router
 
 from shared.env import is_production
 _is_prod = is_production()
