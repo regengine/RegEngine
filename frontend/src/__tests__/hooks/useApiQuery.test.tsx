@@ -41,7 +41,6 @@ describe('use-api-query hooks', () => {
     beforeEach(() => {
         vi.clearAllMocks();
         mockUseAuth.mockReturnValue({
-            apiKey: null,
             isAuthenticated: true,
         });
         mockUseTenant.mockReturnValue({
@@ -74,7 +73,6 @@ describe('use-api-query hooks', () => {
 
     it('stays disabled when the user is not authenticated', () => {
         mockUseAuth.mockReturnValue({
-            apiKey: null,
             isAuthenticated: false,
         });
 
@@ -91,7 +89,7 @@ describe('use-api-query hooks', () => {
     it('returns auth state and tenant context without inventing a placeholder apiKey', () => {
         const { result } = renderHook(() => useApiContext());
 
-        expect(result.current.apiKey).toBe('');
+        expect(result.current).not.toHaveProperty('apiKey');
         expect(result.current.isAuthenticated).toBe(true);
         expect(result.current.tenantId).toBe('tenant-123');
     });

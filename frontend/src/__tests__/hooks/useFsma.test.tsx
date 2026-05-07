@@ -39,7 +39,6 @@ describe('use-fsma hooks', () => {
     beforeEach(() => {
         vi.clearAllMocks();
         mockUseAuth.mockReturnValue({
-            apiKey: null,
             isAuthenticated: true,
         });
     });
@@ -49,7 +48,7 @@ describe('use-fsma hooks', () => {
         vi.unstubAllGlobals();
     });
 
-    it('fetches the dashboard through the same-origin proxy when authenticated with apiKey null', async () => {
+    it('fetches the dashboard through the same-origin proxy when authenticated without placeholder credentials', async () => {
         fetchWithCsrfMock.mockResolvedValue({
             ok: true,
             json: async () => ({
@@ -86,7 +85,7 @@ describe('use-fsma hooks', () => {
         });
 
         const wrapper = createWrapper();
-        const { result } = renderHook(() => useForwardTrace('LOT-123', null, true), { wrapper });
+        const { result } = renderHook(() => useForwardTrace('LOT-123', true), { wrapper });
 
         await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
@@ -101,12 +100,11 @@ describe('use-fsma hooks', () => {
 
     it('does not run protected FSMA queries when the user is not authenticated', () => {
         mockUseAuth.mockReturnValue({
-            apiKey: null,
             isAuthenticated: false,
         });
 
         const wrapper = createWrapper();
-        const { result } = renderHook(() => useDriftAlerts(undefined, 20), { wrapper });
+        const { result } = renderHook(() => useDriftAlerts(20), { wrapper });
 
         expect(result.current.fetchStatus).toBe('idle');
         expect(fetchWithCsrfMock).not.toHaveBeenCalled();
@@ -158,7 +156,7 @@ describe('use-fsma hooks', () => {
         expect(revokeObjectURL).toHaveBeenCalled();
     });
 
-    it('uses auth state instead of apiKey in the compliance score hook key and enablement', async () => {
+    it('uses auth state instead of placeholder apiKey values in the compliance score hook enablement', async () => {
         fetchWithCsrfMock.mockResolvedValue({
             ok: true,
             json: async () => ({
@@ -176,7 +174,7 @@ describe('use-fsma hooks', () => {
         });
 
         const wrapper = createWrapper();
-        const { result } = renderHook(() => useComplianceScore(null), { wrapper });
+        const { result } = renderHook(() => useComplianceScore(), { wrapper });
 
         await waitFor(() => expect(result.current.isSuccess).toBe(true));
         expect(fetchWithCsrfMock).toHaveBeenCalledWith(
