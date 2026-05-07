@@ -12,14 +12,11 @@ import { renderHook, waitFor, act } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 
-// Mock useAuth to provide apiKey (cookie-managed placeholder satisfies !!apiKey checks)
+const mockUseAuth = vi.hoisted(() => vi.fn());
+
+// Mock useAuth to emulate cookie-backed auth without a placeholder apiKey
 vi.mock('@/lib/auth-context', () => ({
-    useAuth: vi.fn(() => ({
-        apiKey: 'cookie-managed',
-        user: { id: '1', email: 'test@example.com' },
-        accessToken: 'cookie-managed',
-        isAuthenticated: true,
-    })),
+    useAuth: () => mockUseAuth(),
 }));
 
 // Mock polling config to avoid env var issues in tests
@@ -68,6 +65,12 @@ describe('use-control-plane hooks', () => {
 
     beforeEach(() => {
         vi.clearAllMocks();
+        mockUseAuth.mockReturnValue({
+            apiKey: null,
+            user: { id: '1', email: 'test@example.com' },
+            accessToken: 'cookie-managed',
+            isAuthenticated: true,
+        });
     });
 
     afterEach(() => {
@@ -154,6 +157,25 @@ describe('use-control-plane hooks', () => {
             expect(result.current.data?.rules[0].rule_id).toBe('r-1');
         });
 
+        it('fetches rules when authenticated even if apiKey is null', async () => {
+            const liveRules = {
+                rules: [{ rule_id: 'r-cookie', title: 'Cookie Auth Rule', severity: 'warning', category: 'lot_linkage' }],
+                total: 1,
+            };
+            global.fetch = vi.fn().mockResolvedValue({
+                ok: true,
+                json: () => Promise.resolve(liveRules),
+            });
+
+            const wrapper = createWrapper();
+            const { result } = renderHook(() => useRules(), { wrapper });
+
+            await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+            expect(global.fetch).toHaveBeenCalled();
+            expect(result.current.data?.rules[0].rule_id).toBe('r-cookie');
+        });
+
         it('sets isError when rules API fails', async () => {
             global.fetch = vi.fn().mockRejectedValue(new Error('offline'));
 
@@ -190,6 +212,22 @@ describe('use-control-plane hooks', () => {
 
             const wrapper = createWrapper();
             const { result } = renderHook(() => useExceptions(''), { wrapper });
+
+            expect(result.current.fetchStatus).toBe('idle');
+            expect(global.fetch).not.toHaveBeenCalled();
+        });
+
+        it('is disabled when the user is not authenticated', () => {
+            mockUseAuth.mockReturnValue({
+                apiKey: null,
+                user: null,
+                accessToken: null,
+                isAuthenticated: false,
+            });
+            global.fetch = vi.fn();
+
+            const wrapper = createWrapper();
+            const { result } = renderHook(() => useExceptions(TENANT_ID), { wrapper });
 
             expect(result.current.fetchStatus).toBe('idle');
             expect(global.fetch).not.toHaveBeenCalled();
@@ -259,6 +297,25 @@ describe('use-control-plane hooks', () => {
             expect(url).not.toContain('tenant_id=');
             expect(result.current.data?.__isDemo).toBe(false);
             expect(result.current.data?.cases[0].requesting_party).toBe('Walmart');
+        });
+
+        it('fetches request cases when authenticated and apiKey is null', async () => {
+            const liveCases = {
+                cases: [{ request_case_id: 'req-cookie-1', requesting_party: 'FDA', package_status: 'assembled' }],
+                total: 1,
+            };
+            global.fetch = vi.fn().mockResolvedValue({
+                ok: true,
+                json: () => Promise.resolve(liveCases),
+            });
+
+            const wrapper = createWrapper();
+            const { result } = renderHook(() => useRequestCases(TENANT_ID), { wrapper });
+
+            await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+            expect(global.fetch).toHaveBeenCalled();
+            expect(result.current.data?.cases[0].request_case_id).toBe('req-cookie-1');
         });
 
         it('sets isError when request cases API fails', async () => {
