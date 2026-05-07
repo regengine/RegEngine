@@ -128,6 +128,29 @@ type ReadinessSummary = {
     components: { id: string; label: string; score: number; detail: string }[];
 };
 
+type WorkbenchFixQueueItem = {
+    id: string;
+    status: "open" | "waiting" | "corrected" | "accepted";
+};
+
+type WorkbenchCommitGate = {
+    mode: "simulation" | "preflight" | "staging" | "production_evidence";
+    allowed: boolean;
+    export_eligible: boolean;
+    reasons: string[];
+    next_state: string;
+};
+
+type WorkbenchRun = {
+    run_id: string;
+    tenant_id: string;
+    source: string;
+    readiness: ReadinessSummary;
+    fix_queue: WorkbenchFixQueueItem[];
+    commit_gate: WorkbenchCommitGate;
+    saved_at: string;
+};
+
 const INFLOW_API = "/api/inflow-lab";
 const REQUIRED_CTES = ["harvesting", "cooling", "initial_packing", "shipping", "receiving"];
 const FILTER_CHIPS: { id: "all" | ExceptionPatternId; label: string }[] = [
@@ -300,7 +323,7 @@ function StackedBar({ value, tone }: { value: number; tone: "ok" | "warn" | "bad
 }
 
 export function DashboardInflowLab() {
-    const { isAuthenticated, isHydrated } = useAuth();
+    const { isAuthenticated, isHydrated, user } = useAuth();
     const { tenantId: activeTenantId } = useTenant();
 
     const [tenantId, setTenantId] = useState("mock-tenant");
@@ -315,6 +338,10 @@ export function DashboardInflowLab() {
     const [feederError, setFeederError] = useState<string | null>(null);
     const [isFeederEvaluating, setIsFeederEvaluating] = useState(false);
     const [backendReadiness, setBackendReadiness] = useState<ReadinessSummary | null>(null);
+    const [isSavingRun, setIsSavingRun] = useState(false);
+    const [savedRun, setSavedRun] = useState<WorkbenchRun | null>(null);
+    const [workbenchSaveNote, setWorkbenchSaveNote] = useState<string | null>(null);
+    const [workbenchSaveError, setWorkbenchSaveError] = useState<string | null>(null);
     const [activeFilter, setActiveFilter] = useState<"all" | ExceptionPatternId>("all");
     const [openGroups, setOpenGroups] = useState<Record<ExceptionPatternId, boolean>>({
         handoff: true,
@@ -325,6 +352,8 @@ export function DashboardInflowLab() {
     const [isRunning, setIsRunning] = useState(false);
     const [showCsvDrawer, setShowCsvDrawer] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const normalizedRoleName = user?.role_name?.toLowerCase() ?? null;
+    const userCanLikelySaveWorkbenchRun = normalizedRoleName !== "viewer";
 
     useEffect(() => {
         if (!isHydrated || !isAuthenticated || !activeTenantId) return;
@@ -489,14 +518,26 @@ export function DashboardInflowLab() {
     const passingCount = exportReadyCount;
     const previewReadyCount = feederResult ? feederResult.compliant_events : 0;
 
+    const openFixCount = savedRun
+        ? savedRun.fix_queue.filter((item) => item.status === "open" || item.status === "waiting").length
+        : 0;
+
+    const resetFeederPreview = () => {
+        setFeederResult(null);
+        setBackendReadiness(null);
+        setFeederError(null);
+        setIsSavingRun(false);
+        setSavedRun(null);
+        setWorkbenchSaveNote(null);
+        setWorkbenchSaveError(null);
+    };
+
     const handleFeederFile = (file: File | null) => {
         if (!file) return;
         const reader = new FileReader();
         reader.onload = () => {
             setFeederCsv(String(reader.result || ""));
-            setFeederResult(null);
-            setBackendReadiness(null);
-            setFeederError(null);
+            resetFeederPreview();
             setShowCsvDrawer(true);
         };
         reader.onerror = () => setFeederError("Could not read the selected CSV file.");
@@ -512,6 +553,10 @@ export function DashboardInflowLab() {
         setIsFeederEvaluating(true);
         setIsRunning(true);
         setFeederError(null);
+        setIsSavingRun(false);
+        setSavedRun(null);
+        setWorkbenchSaveNote(null);
+        setWorkbenchSaveError(null);
         try {
             const response = await fetchWithCsrf("/api/ingestion/api/v1/sandbox/evaluate", {
                 method: "POST",
@@ -549,13 +594,58 @@ export function DashboardInflowLab() {
         }
     };
 
+    const saveWorkbenchRun = async () => {
+        if (!feederResult || !feederCsv.trim()) {
+            return;
+        }
+        setIsSavingRun(true);
+        setSavedRun(null);
+        setWorkbenchSaveNote(null);
+        setWorkbenchSaveError(null);
+        try {
+            const workbenchBody = {
+                source: "inflow-lab-data-feeder",
+                csv: feederCsv,
+                result: feederResult,
+                ...(activeTenantId ? { tenant_id: activeTenantId } : {}),
+            };
+            const saveRunResponse = await fetchWithCsrf("/api/ingestion/api/v1/inflow-workbench/runs", {
+                method: "POST",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify(workbenchBody),
+            });
+            if (saveRunResponse.status === 403) {
+                setWorkbenchSaveNote(
+                    "You can evaluate sandbox data here, but only users with write access can save an Inflow Workbench test run.",
+                );
+                return;
+            }
+            if (!saveRunResponse.ok) {
+                const payload = await saveRunResponse.json().catch(() => ({}));
+                const detail =
+                    typeof payload.detail === "string"
+                        ? payload.detail
+                        : `Workbench save failed: ${saveRunResponse.status}`;
+                throw new Error(detail);
+            }
+            const savedPayload = (await saveRunResponse.json()) as WorkbenchRun;
+            setSavedRun(savedPayload);
+            setBackendReadiness(savedPayload.readiness);
+        } catch (error) {
+            setWorkbenchSaveError(
+                error instanceof Error ? error.message : "Could not save workbench run",
+            );
+        } finally {
+            setIsSavingRun(false);
+        }
+    };
+
     const toggleLotSelection = (lotCode: string, checked: boolean) => {
         setSelectedLotIds((current) => ({ ...current, [lotCode]: checked }));
     };
 
-    const lastTestRunLabel = serviceStatus?.stats?.delivery?.last_success_at
-        ? formatServiceTime(serviceStatus.stats.delivery.last_success_at)
-        : "never";
+    const lastTestRunAt = savedRun?.saved_at || serviceStatus?.stats?.delivery?.last_success_at || null;
+    const lastTestRunLabel = lastTestRunAt ? formatServiceTime(lastTestRunAt) : "never";
 
     return (
         <main
@@ -1044,7 +1134,7 @@ export function DashboardInflowLab() {
                             <div>
                                 <p className="text-sm font-semibold text-slate-950">Paste or upload inbound CSV</p>
                                 <p className="mt-1 text-xs text-slate-500">
-                                    Stateless sandbox evaluator. Data is parsed, normalized, and checked against FSMA 204 rules without being stored or promoted to production ingestion.
+                                    Sandbox evaluation is stateless until you explicitly save a test run. Running a check does not promote anything to production ingestion.
                                 </p>
                             </div>
                             <Button
@@ -1059,9 +1149,7 @@ export function DashboardInflowLab() {
                             value={feederCsv}
                             onChange={(event) => {
                                 setFeederCsv(event.target.value);
-                                setFeederResult(null);
-                                setBackendReadiness(null);
-                                setFeederError(null);
+                                resetFeederPreview();
                             }}
                             spellCheck={false}
                             aria-label="Inbound CSV data"
@@ -1077,6 +1165,54 @@ export function DashboardInflowLab() {
                                 Sandbox evaluator processed {feederResult.total_events} event{feederResult.total_events === 1 ? "" : "s"}.
                                 {" "}
                                 {feederResult.compliant_events} compliant. {feederResult.total_kde_errors} KDE error{feederResult.total_kde_errors === 1 ? "" : "s"}.
+                            </div>
+                        )}
+                        {feederResult && isAuthenticated && isHydrated && (
+                            <div className="mt-3 flex flex-wrap items-center gap-2">
+                                <Button
+                                    type="button"
+                                    className="h-8 bg-emerald-700 px-3 text-xs text-white hover:bg-emerald-800"
+                                    disabled={!userCanLikelySaveWorkbenchRun || isSavingRun || savedRun !== null}
+                                    onClick={saveWorkbenchRun}
+                                >
+                                    {isSavingRun ? (
+                                        <>
+                                            <RefreshCcw className="mr-2 h-3.5 w-3.5 animate-spin" />
+                                            Saving
+                                        </>
+                                    ) : !userCanLikelySaveWorkbenchRun ? (
+                                        "Save unavailable"
+                                    ) : savedRun ? (
+                                        "Saved"
+                                    ) : (
+                                        "Save test run"
+                                    )}
+                                </Button>
+                                <span className="text-xs text-slate-500">
+                                    Save only when you want this sandbox result recorded in Inflow Workbench.
+                                </span>
+                            </div>
+                        )}
+                        {!userCanLikelySaveWorkbenchRun && feederResult && isAuthenticated && isHydrated && (
+                            <div className="mt-3 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700">
+                                You can evaluate sandbox data here, but only users with write access can save an Inflow Workbench test run.
+                            </div>
+                        )}
+                        {savedRun && (
+                            <div className="mt-3 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-900">
+                                Saved to Inflow Workbench as <code className="font-mono text-[11px]">{savedRun.run_id}</code>.
+                                {" "}
+                                {openFixCount} open fix{openFixCount === 1 ? "" : "es"} remain for this saved test run.
+                            </div>
+                        )}
+                        {workbenchSaveNote && (
+                            <div className="mt-3 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700">
+                                {workbenchSaveNote}
+                            </div>
+                        )}
+                        {workbenchSaveError && (
+                            <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                                Sandbox evaluation finished, but RegEngine could not save the workbench run. {workbenchSaveError}
                             </div>
                         )}
                     </section>

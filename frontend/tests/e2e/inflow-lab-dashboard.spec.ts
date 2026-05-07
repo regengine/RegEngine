@@ -41,4 +41,58 @@ test.describe('Dashboard Inflow Lab', () => {
         await expect(page.getByRole('region', { name: 'CSV input' })).toBeVisible();
         await expect(page.getByLabel('Inbound CSV data')).toBeVisible();
     });
+
+    test('records a saved workbench run only after the explicit save action', async ({ page }) => {
+        await loginToDashboardInflowLab(page);
+
+        await page.getByRole('button', { name: /Run sandbox test/i }).click();
+        await page.getByRole('textbox', { name: 'Inbound CSV data' }).fill(
+            'cte_type,traceability_lot_code\nshipping,TLC-FEED-001',
+        );
+        await page.getByRole('button', { name: /Run sandbox test/i }).click();
+
+        await expect(page.getByText('Sandbox evaluator processed 1 event.')).toBeVisible();
+        await expect(page.getByRole('button', { name: 'Save test run' })).toBeVisible();
+        await expect(
+            page.getByText(
+                'Sandbox evaluation is stateless until you explicitly save a test run.',
+            ),
+        ).toBeVisible();
+
+        await page.getByRole('button', { name: 'Save test run' }).click();
+
+        await expect(page.getByText('Saved to Inflow Workbench as')).toBeVisible();
+        await expect(page.getByRole('button', { name: 'Saved' })).toBeDisabled();
+        await expect(
+            page.getByText(/open fix(?:es)? remain for this saved test run\./),
+        ).toBeVisible();
+        await expect(page.getByText(/Last test run ·/)).not.toContainText('never');
+    });
+
+    test('shows a write-access note when the workbench save path is denied', async ({ page }) => {
+        await loginToDashboardInflowLab(page);
+        await page.route('**/api/ingestion/api/v1/inflow-workbench/runs', async (route) => {
+            await route.fulfill({
+                status: 403,
+                contentType: 'application/json',
+                body: JSON.stringify({ detail: 'Write access required' }),
+            });
+        });
+
+        await page.getByRole('button', { name: /Run sandbox test/i }).click();
+        await page.getByRole('textbox', { name: 'Inbound CSV data' }).fill(
+            'cte_type,traceability_lot_code\nshipping,TLC-FEED-002',
+        );
+        await page.getByRole('button', { name: /Run sandbox test/i }).click();
+
+        await expect(page.getByText('Sandbox evaluator processed 1 event.')).toBeVisible();
+        await page.getByRole('button', { name: 'Save test run' }).click();
+        await expect(
+            page.getByText(
+                'You can evaluate sandbox data here, but only users with write access can save an Inflow Workbench test run.',
+            ),
+        ).toBeVisible();
+        await expect(page.getByText('Saved to Inflow Workbench as')).toHaveCount(0);
+    });
+
 });
