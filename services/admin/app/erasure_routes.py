@@ -22,6 +22,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from .dependencies import get_current_user
+from .graph_outbox import enqueue_graph_write
 from shared.database import get_db
 
 logger = structlog.get_logger("erasure")
@@ -252,13 +253,41 @@ async def request_erasure(
                     tenant_id=tenant_id,
                 )
 
+            # 3. Durable Neo4j user-graph deletion via the graph outbox.
+            #    Pre-fix: a post-commit best-effort call to
+            #    _delete_neo4j_user_graph_data opened its own AsyncGraphDatabase
+            #    driver. If Neo4j was unreachable at request time, the deletion
+            #    silently no-op'd while the Postgres commit had already
+            #    persisted the soft-delete — a real GDPR liability.
+            #
+            #    Now: enqueue an outbox row inside the same Postgres
+            #    transaction as the soft-delete + audit anonymization. The
+            #    drainer (admin/app/graph_outbox.py:GraphOutboxDrainer)
+            #    replays the Cypher with retry + backoff. Both halves land
+            #    atomically (or neither does); Neo4j unavailability shifts
+            #    from "silent no-op" to "eventually consistent".
+            #
+            #    Parameters are passed as Cypher params, not interpolated.
+            #    User-scoped; tenant-graph offboarding is a different flow.
+            if tenant_id is not None:
+                enqueue_graph_write(
+                    db,
+                    tenant_id=str(tenant_id),
+                    operation="user_erasure",
+                    cypher=_CYPHER_DELETE_USER_GRAPH_DATA,
+                    params={"user_id": str(user_id)},
+                    dedupe_key=f"user_erasure:{user_id}",
+                )
+
             db.commit()
 
-        # 3. Best-effort Neo4j user graph deletion (GDPR data minimisation).
-        #    Runs AFTER the Postgres commit so the primary erasure is always
-        #    durable even if Neo4j is unavailable.  Parameters are never
-        #    string-formatted into Cypher.  This is user-scoped; tenant graph
-        #    deletion belongs to tenant offboarding, not account erasure.
+        # The post-commit Neo4j call below is retained as a low-latency
+        # best-effort attempt — the outbox row above is the durability
+        # guarantee. The Cypher MATCH/DETACH DELETE is idempotent, so a
+        # successful immediate delete followed by a redundant drainer
+        # replay is harmless. If Neo4j is reachable: deletion is fast.
+        # If unreachable: this no-ops (warning logged) and the drainer
+        # eventually applies the same Cypher.
         if tenant_id is not None:
             await _delete_neo4j_user_graph_data(str(tenant_id), str(user_id))
 

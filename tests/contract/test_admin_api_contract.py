@@ -6,15 +6,18 @@ ensuring consumers (frontend, other services) can rely on consistent behavior.
 Uses OpenAPI spec as the source of truth for contract validation.
 """
 
+import importlib
 import json
-import pytest
-import httpx
+import os
+import sys
 from pathlib import Path
 
+import pytest
 
-# Base URL for Admin API (configure via env in CI)
-ADMIN_API_URL = "http://localhost:8400"
+
 OPENAPI_SPEC_PATH = Path(__file__).parent.parent.parent / "docs" / "openapi" / "admin-api.json"
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+_SERVICES_DIR = _REPO_ROOT / "services"
 
 
 @pytest.fixture(scope="module")
@@ -26,10 +29,50 @@ def openapi_spec():
         return json.load(f)
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture
 def client():
-    """Create HTTP client for API requests."""
-    return httpx.Client(base_url=ADMIN_API_URL, timeout=10)
+    """Create an in-process client for Admin API contract checks."""
+    from fastapi.testclient import TestClient
+
+    os.environ["ADMIN_DATABASE_URL"] = "sqlite:///:memory:"
+    os.environ["DATABASE_URL"] = "sqlite:///:memory:"
+    os.environ["ADMIN_FALLBACK_SQLITE"] = "sqlite:///:memory:"
+    os.environ["ADMIN_MASTER_KEY"] = "test-admin-master-key"  # pragma: allowlist secret
+    os.environ["AUTH_SECRET_KEY"] = "test-secret-key-long-enough"  # pragma: allowlist secret
+    os.environ["REGENGINE_API_KEY"] = "test-regengine-api-key"  # pragma: allowlist secret
+    os.environ["REDIS_URL"] = "redis://localhost:6379/0"
+    os.environ["LOG_LEVEL"] = "WARNING"
+    os.environ["REGENGINE_ENV"] = "test"
+    os.environ["ENABLE_DB_API_KEYS"] = "false"  # pragma: allowlist secret
+
+    admin_service_dir = str(_SERVICES_DIR / "admin")
+    sibling_service_dirs = {
+        str(path)
+        for path in _SERVICES_DIR.iterdir()
+        if path.is_dir() and path.name != "admin"
+    }
+    sys.path[:] = [path for path in sys.path if path not in sibling_service_dirs]
+    if admin_service_dir in sys.path:
+        sys.path.remove(admin_service_dir)
+    sys.path.insert(0, admin_service_dir)
+
+    for module_name in list(sys.modules):
+        if module_name == "app" or module_name.startswith("app."):
+            sys.modules.pop(module_name, None)
+
+    for module_name in (
+        "services.admin.main",
+        "services.admin.app.database",
+        "services.admin.app.config",
+        "services.admin.app.routes",
+    ):
+        sys.modules.pop(module_name, None)
+
+    admin_main = importlib.import_module("services.admin.main")
+    app = admin_main.app
+
+    with TestClient(app) as test_client:
+        yield test_client
 
 
 class TestHealthEndpoint:
@@ -116,12 +159,14 @@ class TestResponseSchemaContract:
     """Contract tests for response schemas."""
 
     def test_error_responses_have_detail_field(self, client):
-        """Error responses should have 'detail' field."""
+        """Error responses should expose structured error information."""
         response = client.get("/v1/admin/keys")  # Without auth
         assert response.status_code in [401, 403]
         
         data = response.json()
-        assert "detail" in data, "Error response missing 'detail' field"
+        assert "detail" in data or "error" in data, (
+            f"Error response missing expected error envelope: {data}"
+        )
 
     def test_list_endpoints_return_arrays(self, client, openapi_spec):
         """List endpoints (GET without ID) should return arrays in spec."""

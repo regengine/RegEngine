@@ -27,6 +27,7 @@ def _clear_lru_cache():
 @pytest.fixture
 def _clear_env(monkeypatch):
     """Strip config-relevant env vars so the default values take effect."""
+    monkeypatch.setitem(cfg.Settings.model_config, "env_file", None)
     for var in (
         "RAW_DATA_BUCKET", "PROCESSED_DATA_BUCKET", "KAFKA_BOOTSTRAP_SERVERS",
         "KAFKA_TOPIC_NORMALIZED", "API_KEY", "REGENGINE_API_KEY", "AUTH_TEST_BYPASS_TOKEN",

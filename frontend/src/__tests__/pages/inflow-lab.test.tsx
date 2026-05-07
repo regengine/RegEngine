@@ -115,6 +115,17 @@ const savedWorkbenchRun = {
     commit_decision_id: 'run-123456789abc:staging',
 };
 
+const savedWorkbenchSummary = {
+    tenant_id: 'tenant-123',
+    score: 94,
+    label: 'export ready after authenticated commit',
+    run_id: savedWorkbenchRun.run_id,
+    saved_at: savedWorkbenchRun.saved_at,
+    unresolved_fix_count: 0,
+    export_eligible: false,
+    source: savedWorkbenchRun.source,
+};
+
 function jsonResponse(payload: unknown, init?: ResponseInit) {
     return Promise.resolve(
         new Response(JSON.stringify(payload), {
@@ -178,6 +189,17 @@ describe('Dashboard Inflow Lab', () => {
         });
         mockFetch.mockImplementation((input: RequestInfo | URL) => {
             const url = String(input);
+            if (url.includes('/api/ingestion/api/v1/inflow-workbench/readiness/summary')) {
+                return jsonResponse({
+                    tenant_id: 'tenant-123',
+                    unresolved_fix_count: 0,
+                    export_eligible: false,
+                    source: 'none',
+                });
+            }
+            if (url.includes(`/api/ingestion/api/v1/inflow-workbench/runs/${savedWorkbenchRun.run_id}`)) {
+                return jsonResponse(savedWorkbenchRun);
+            }
             if (url.endsWith('/api/ingestion/api/v1/sandbox/evaluate')) {
                 return jsonResponse(sandboxEvaluation);
             }
@@ -349,6 +371,74 @@ describe('Dashboard Inflow Lab', () => {
         expect(screen.getByText(/Paste CSV text or upload a CSV file before evaluating\./i)).toBeInTheDocument();
     });
 
+    it('loads the latest saved workbench run when the dashboard opens with an authenticated tenant session', async () => {
+        vi.mocked(useAuth).mockReturnValue({
+            isAuthenticated: true,
+            isHydrated: true,
+            tenantId: 'tenant-123',
+            user: {
+                id: 'reader-1',
+                email: 'reader@example.com',
+                is_sysadmin: false,
+                status: 'active',
+                role_name: 'member',
+                permissions: ['inflow.read'],
+            },
+        } as ReturnType<typeof useAuth>);
+        vi.mocked(useTenant).mockReturnValue({ tenantId: 'tenant-123' } as ReturnType<typeof useTenant>);
+        mockFetch.mockImplementation((input: RequestInfo | URL) => {
+            const url = String(input);
+            if (url.includes('/api/ingestion/api/v1/inflow-workbench/readiness/summary')) {
+                return jsonResponse(savedWorkbenchSummary);
+            }
+            if (url.includes(`/api/ingestion/api/v1/inflow-workbench/runs/${savedWorkbenchRun.run_id}`)) {
+                return jsonResponse(savedWorkbenchRun);
+            }
+            if (url.endsWith('/api/healthz')) {
+                return jsonResponse({ ok: true, build: { version: 'test-build' } });
+            }
+            if (url.endsWith('/api/simulate/status')) {
+                return jsonResponse({
+                    running: false,
+                    stats: {
+                        total_records: serviceRecords.length,
+                        unique_lots: 2,
+                        delivery: { posted: serviceRecords.length, failed: 0, generated: 0, attempts: serviceRecords.length },
+                    },
+                });
+            }
+            if (url.includes('/api/events')) {
+                return jsonResponse({ events: serviceRecords });
+            }
+            if (url.includes(`/api/lineage/${encodeURIComponent(completeLot)}`)) {
+                return jsonResponse({ records: completeLotRecords });
+            }
+            if (url.includes(`/api/lineage/${encodeURIComponent(partialLot)}`)) {
+                return jsonResponse({
+                    records: serviceRecords.filter(
+                        (record) => record.event.traceability_lot_code === partialLot,
+                    ),
+                });
+            }
+            return jsonResponse({});
+        });
+
+        renderDashboardInflowLabPage();
+
+        await waitFor(() => {
+            expect(mockFetch).toHaveBeenCalledWith(
+                '/api/ingestion/api/v1/inflow-workbench/readiness/summary?tenant_id=tenant-123',
+                expect.objectContaining({ method: 'GET' }),
+            );
+        });
+        expect(
+            await screen.findByText(/Latest saved workbench run/i),
+        ).toBeInTheDocument();
+        expect(screen.getByText('run-123456789abc')).toBeInTheDocument();
+        expect(screen.getByText(/0 open fixes remain in workbench\./i)).toBeInTheDocument();
+        expect(screen.queryByText(/Last test run · never/i)).not.toBeInTheDocument();
+    });
+
     it('keeps sandbox evaluation non-persistent until Save test run is pressed', async () => {
         const user = userEvent.setup();
         vi.mocked(useAuth).mockReturnValue({
@@ -400,15 +490,15 @@ describe('Dashboard Inflow Lab', () => {
         expect(screen.queryByText(/Last test run · never/i)).not.toBeInTheDocument();
     });
 
-    it('disables saving when the session lacks inflow.write before any workbench save request is sent', async () => {
+    it('disables saving when the session lacks inflow.write even if the role name looks privileged', async () => {
         const user = userEvent.setup();
         vi.mocked(useAuth).mockReturnValue({
             isAuthenticated: true,
             isHydrated: true,
             tenantId: 'tenant-123',
             user: {
-                id: 'viewer-1',
-                email: 'viewer@example.com',
+                id: 'owner-readonly-1',
+                email: 'readonly-owner@example.com',
                 is_sysadmin: false,
                 status: 'active',
                 role_name: 'owner',

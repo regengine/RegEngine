@@ -81,6 +81,12 @@ def _create_engine():
     if database_url:
         sqlalchemy_url = _sqlalchemy_url(database_url)
         logger.info("admin_database_configured", url=database_url.split("@")[-1])
+        if sqlalchemy_url.startswith("sqlite"):
+            return create_engine(
+                sqlalchemy_url,
+                connect_args={"check_same_thread": False},
+                future=True,
+            )
         # prepare_threshold=None disables psycopg3 client-side prepared
         # statements. Required for Supabase's transaction-mode pooler
         # (PgBouncer-style) which hands out a different backend connection
