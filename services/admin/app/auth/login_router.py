@@ -26,7 +26,7 @@ from ..auth_utils import (
 from ..database import get_session
 from ..dependencies import get_session_store
 from ..session_store import RedisSessionStore, SessionData
-from ..sqlalchemy_models import MembershipModel, TenantModel, UserModel
+from ..sqlalchemy_models import MembershipModel, RoleModel, TenantModel, UserModel
 from .lockout import (
     _check_account_lockout,
     _check_email_rate_limit,
@@ -99,8 +99,9 @@ async def login(
 
     # 2. Get Memberships
     stmt_mem = (
-        select(MembershipModel, TenantModel)
+        select(MembershipModel, TenantModel, RoleModel)
         .join(TenantModel, MembershipModel.tenant_id == TenantModel.id)
+        .join(RoleModel, MembershipModel.role_id == RoleModel.id)
         .where(MembershipModel.user_id == user.id)
     )
     results = db.execute(stmt_mem).all()
@@ -108,12 +109,18 @@ async def login(
     available_tenants = []
     active_tenant_id = None
     active_tenant_status = None
+    active_role_id = None
+    active_role_name = None
+    active_permissions: list[str] = []
 
-    for mem, tenant in results:
+    for mem, tenant, role in results:
         available_tenants.append({"id": tenant.id, "name": tenant.name, "slug": tenant.slug})
         if not active_tenant_id:
             active_tenant_id = tenant.id
             active_tenant_status = tenant.status
+            active_role_id = role.id
+            active_role_name = role.name
+            active_permissions = list(role.permissions or []) if isinstance(role.permissions, list) else []
 
     # Clear failed-attempt counters on successful credential verification
     await _clear_email_rate_limit(session_store, normalized_login_email)
@@ -174,7 +181,15 @@ async def login(
         access_token=access_token,
         refresh_token=raw_refresh_token,
         tenant_id=active_tenant_id,
-        user={"id": str(user.id), "email": user.email, "is_sysadmin": user.is_sysadmin},
+        user={
+            "id": str(user.id),
+            "email": user.email,
+            "is_sysadmin": user.is_sysadmin,
+            "status": user.status,
+            "role_id": str(active_role_id) if active_role_id else None,
+            "role_name": active_role_name,
+            "permissions": active_permissions,
+        },
         available_tenants=available_tenants,
     )
 

@@ -318,6 +318,14 @@ describe('Dashboard Inflow Lab', () => {
             isAuthenticated: true,
             isHydrated: true,
             tenantId: 'tenant-123',
+            user: {
+                id: 'writer-1',
+                email: 'writer@example.com',
+                is_sysadmin: false,
+                status: 'active',
+                role_name: 'member',
+                permissions: ['inflow.write'],
+            },
         } as ReturnType<typeof useAuth>);
         vi.mocked(useTenant).mockReturnValue({ tenantId: 'tenant-123' } as ReturnType<typeof useTenant>);
 
@@ -355,7 +363,7 @@ describe('Dashboard Inflow Lab', () => {
         expect(screen.queryByText(/Last test run · never/i)).not.toBeInTheDocument();
     });
 
-    it('disables saving for viewer sessions before any workbench save request is sent', async () => {
+    it('disables saving when the session lacks inflow.write before any workbench save request is sent', async () => {
         const user = userEvent.setup();
         vi.mocked(useAuth).mockReturnValue({
             isAuthenticated: true,
@@ -366,7 +374,8 @@ describe('Dashboard Inflow Lab', () => {
                 email: 'viewer@example.com',
                 is_sysadmin: false,
                 status: 'active',
-                role_name: 'viewer',
+                role_name: 'owner',
+                permissions: ['inflow.read'],
             },
         } as ReturnType<typeof useAuth>);
         vi.mocked(useTenant).mockReturnValue({ tenantId: 'tenant-123' } as ReturnType<typeof useTenant>);

@@ -23,6 +23,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { fetchWithCsrf } from "@/lib/fetch-with-csrf";
 import { useAuth } from "@/lib/auth-context";
+import { hasPermission } from "@/lib/permissions";
 import { useTenant } from "@/lib/tenant-context";
 import { cn } from "@/lib/utils";
 
@@ -352,8 +353,10 @@ export function DashboardInflowLab() {
     const [isRunning, setIsRunning] = useState(false);
     const [showCsvDrawer, setShowCsvDrawer] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
-    const normalizedRoleName = user?.role_name?.toLowerCase() ?? null;
-    const userCanLikelySaveWorkbenchRun = normalizedRoleName !== "viewer";
+    const workbenchWriteCapability = Array.isArray(user?.permissions)
+        ? hasPermission(user.permissions, "inflow.write")
+        : null;
+    const saveWorkbenchRunUnavailable = workbenchWriteCapability === false;
 
     useEffect(() => {
         if (!isHydrated || !isAuthenticated || !activeTenantId) return;
@@ -596,6 +599,12 @@ export function DashboardInflowLab() {
 
     const saveWorkbenchRun = async () => {
         if (!feederResult || !feederCsv.trim()) {
+            return;
+        }
+        if (saveWorkbenchRunUnavailable) {
+            setWorkbenchSaveNote(
+                "You can evaluate sandbox data here, but only users with write access can save an Inflow Workbench test run.",
+            );
             return;
         }
         setIsSavingRun(true);
@@ -1172,7 +1181,7 @@ export function DashboardInflowLab() {
                                 <Button
                                     type="button"
                                     className="h-8 bg-emerald-700 px-3 text-xs text-white hover:bg-emerald-800"
-                                    disabled={!userCanLikelySaveWorkbenchRun || isSavingRun || savedRun !== null}
+                                    disabled={saveWorkbenchRunUnavailable || isSavingRun || savedRun !== null}
                                     onClick={saveWorkbenchRun}
                                 >
                                     {isSavingRun ? (
@@ -1180,7 +1189,7 @@ export function DashboardInflowLab() {
                                             <RefreshCcw className="mr-2 h-3.5 w-3.5 animate-spin" />
                                             Saving
                                         </>
-                                    ) : !userCanLikelySaveWorkbenchRun ? (
+                                    ) : saveWorkbenchRunUnavailable ? (
                                         "Save unavailable"
                                     ) : savedRun ? (
                                         "Saved"
@@ -1193,7 +1202,7 @@ export function DashboardInflowLab() {
                                 </span>
                             </div>
                         )}
-                        {!userCanLikelySaveWorkbenchRun && feederResult && isAuthenticated && isHydrated && (
+                        {saveWorkbenchRunUnavailable && feederResult && isAuthenticated && isHydrated && (
                             <div className="mt-3 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700">
                                 You can evaluate sandbox data here, but only users with write access can save an Inflow Workbench test run.
                             </div>
