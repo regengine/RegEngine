@@ -58,6 +58,35 @@ def tables(engine):
         # (e.g., ARRAY columns not supported in SQLite)
         pass
 
+    # Mirror the Postgres ``graph_outbox`` migration as SQLite TEXT
+    # columns so any test using db_session can exercise the
+    # ``enqueue_graph_write`` SQLite fallback path. graph_outbox is
+    # defined in alembic SQL, not in SQLAlchemy Base metadata, so
+    # ``Base.metadata.create_all`` doesn't cover it. This block matches
+    # the schema in tests/test_bulk_upload_graph_sync_wiring.py and
+    # tests/test_graph_outbox.py.
+    try:
+        with engine.begin() as conn:
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS graph_outbox (
+                    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                    tenant_id       TEXT NULL,
+                    operation       TEXT NOT NULL,
+                    cypher          TEXT NOT NULL,
+                    params          TEXT NOT NULL DEFAULT '{}',
+                    status          TEXT NOT NULL DEFAULT 'pending',
+                    attempts        INTEGER NOT NULL DEFAULT 0,
+                    max_attempts    INTEGER NOT NULL DEFAULT 10,
+                    last_error      TEXT NULL,
+                    enqueued_at     TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    drained_at      TEXT NULL,
+                    next_attempt_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    dedupe_key      TEXT NULL
+                )
+            """))
+    except Exception:
+        pass
+
     yield
 
     try:

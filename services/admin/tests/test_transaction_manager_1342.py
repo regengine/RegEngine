@@ -90,6 +90,31 @@ def db() -> Session:
     for t in tables:
         t.create(bind=engine)
 
+    # graph_outbox is alembic-migration-only (not in SQLAlchemy Base);
+    # create it via raw DDL so the pre-commit enqueue calls in
+    # execute_bulk_commit have the table they need. Schema mirrors
+    # tests/test_bulk_upload_graph_sync_wiring.py and
+    # tests/test_graph_outbox.py — keep all three in sync.
+    from sqlalchemy import text as _text
+    with engine.begin() as _conn:
+        _conn.execute(_text("""
+            CREATE TABLE IF NOT EXISTS graph_outbox (
+                id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                tenant_id       TEXT NULL,
+                operation       TEXT NOT NULL,
+                cypher          TEXT NOT NULL,
+                params          TEXT NOT NULL DEFAULT '{}',
+                status          TEXT NOT NULL DEFAULT 'pending',
+                attempts        INTEGER NOT NULL DEFAULT 0,
+                max_attempts    INTEGER NOT NULL DEFAULT 10,
+                last_error      TEXT NULL,
+                enqueued_at     TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                drained_at      TEXT NULL,
+                next_attempt_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                dedupe_key      TEXT NULL
+            )
+        """))
+
     Session_ = sessionmaker(
         bind=engine, autoflush=False, autocommit=False,
         expire_on_commit=False, future=True,

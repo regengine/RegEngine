@@ -12,7 +12,11 @@ from sqlalchemy.orm import Session
 
 from ..graph_outbox import enqueue_graph_write
 from ..supplier_cte_service import _persist_supplier_cte_event
-from ..supplier_graph_sync import CTE_EVENT_QUERY, supplier_graph_sync
+from ..supplier_graph_sync import (
+    CTE_EVENT_QUERY,
+    FACILITY_FTL_SCOPING_QUERY,
+    supplier_graph_sync,
+)
 from ..supplier_onboarding_routes import FTL_CATEGORY_LOOKUP
 from ..sqlalchemy_models import (
     SupplierCTEEventModel,
@@ -360,19 +364,30 @@ def execute_bulk_commit(
             # Flush batch to DB (writes to Postgres, keeps transaction open)
             db.flush()
 
-        # Enqueue overflow events into the transactional outbox BEFORE commit.
+        # Enqueue ALL events into the transactional outbox BEFORE commit.
         # Per ``graph_outbox.py`` docstring (lines 14-19), the outbox guarantee
         # is "either both land or neither lands" — so the enqueue must share
         # the transaction with the canonical Postgres write. Post-commit
         # enqueue is what the outbox was designed to eliminate (#1695).
         #
-        # An enqueue failure therefore propagates out of this try block and
-        # rolls back the whole bulk import. Caller retries with the same
-        # payload; the ``bulk_upload:<event_id>`` dedupe_key keeps retries
-        # idempotent.
+        # Pre-fix: only events beyond ``MAX_SYNC_EVENTS`` (the overflow) were
+        # enqueued; the first 100 went through a post-commit fast-path
+        # ``record_cte_event`` that opened its own Neo4j driver and silently
+        # no-op'd if Neo4j was down — that was the audit-flagged "raw boundary
+        # violation" / silent-data-loss surface for the first 100 events of
+        # every bulk upload.
+        #
+        # Now: every event is enqueued pre-commit so the durability story is
+        # symmetric across the batch. The post-commit fast-path
+        # ``record_cte_event`` loop below is retained for low-latency UX —
+        # the Cypher MERGE is idempotent so a successful immediate write
+        # followed by a redundant drainer replay is harmless.
+        #
+        # An enqueue failure propagates out of this try block and rolls
+        # back the whole bulk import. Caller retries; the
+        # ``bulk_upload:<event_id>`` dedupe_key keeps retries idempotent.
         MAX_SYNC_EVENTS = 100
-        events_to_enqueue = emitted_event_rows[MAX_SYNC_EVENTS:]
-        for event, lot, facility in events_to_enqueue:
+        for event, lot, facility in emitted_event_rows:
             enqueue_graph_write(
                 db,
                 tenant_id=str(tenant_id),
@@ -399,7 +414,53 @@ def execute_bulk_commit(
                 # Stable dedupe so a bulk-commit retry doesn't double-enqueue.
                 dedupe_key=f"bulk_upload:{event.id}",
             )
-        enqueued_count = len(events_to_enqueue)
+        enqueued_count = len(emitted_event_rows)
+
+        # Enqueue facility FTL-scoping rows pre-commit too. Pre-fix: the
+        # post-commit ``record_facility_ftl_scoping`` loop opened its own
+        # Neo4j driver and silently no-op'd if Neo4j was down — same shape
+        # as the per-event silent-loss above. Now: outbox is the durability
+        # guarantee; the post-commit loop remains as best-effort UX.
+        #
+        # dedupe_key keys on tenant + facility because a bulk-upload retry
+        # for the same tenant should coalesce to one outbox row per facility.
+        for facility_id, categories in categories_by_facility.items():
+            facility = next(
+                (f for f in facilities_by_name.values() if f.id == facility_id),
+                None,
+            )
+            if facility is None:
+                continue
+            normalized_categories = [
+                {
+                    "id": str(category["id"]),
+                    "name": category["name"],
+                    "ctes": category.get("ctes", []),
+                }
+                for category in categories
+            ]
+            enqueue_graph_write(
+                db,
+                tenant_id=str(tenant_id),
+                operation="facility_ftl_scoping",
+                cypher=FACILITY_FTL_SCOPING_QUERY,
+                params={
+                    "operation": "facility_ftl_scoping",
+                    "tenant_id": str(tenant_id),
+                    "facility_id": str(facility.id),
+                    "facility_name": facility.name,
+                    "supplier_user_id": str(current_user.id),
+                    "supplier_email": current_user.email,
+                    "street": facility.street,
+                    "city": facility.city,
+                    "state": facility.state,
+                    "postal_code": facility.postal_code,
+                    "fda_registration_number": facility.fda_registration_number,
+                    "roles": facility.roles or [],
+                    "categories": normalized_categories,
+                },
+                dedupe_key=f"bulk_upload_facility_ftl_scoping:{tenant_id}:{facility.id}",
+            )
 
         db.commit()
 
@@ -407,6 +468,13 @@ def execute_bulk_commit(
         db.rollback()
         raise
 
+    # Post-commit fast-path: low-latency Neo4j writes for snappy UX after
+    # bulk upload. The durable outbox row above is the source of truth —
+    # if Neo4j is down, the drainer eventually replays. The Cypher MERGE
+    # is idempotent so a successful immediate write followed by a
+    # redundant drainer replay is harmless. Pre-fix this loop was the
+    # ONLY path for the first MAX_SYNC_EVENTS, with no outbox backup —
+    # silent data loss on Neo4j outage.
     sync_warnings: list[str] = []
 
     for facility_id, categories in categories_by_facility.items():
@@ -474,9 +542,16 @@ def execute_bulk_commit(
             )
             sync_warnings.append(f"cte_event:{event.id}")
 
-    if enqueued_count > 0:
+    # ``graph_sync_deferred`` operator warning preserves its pre-fix
+    # semantics: the count reflects events that are ONLY reachable via
+    # the drainer (i.e., overflow beyond MAX_SYNC_EVENTS), not the total
+    # enqueue count. Post-fix, every event is enqueued for durability,
+    # but the first MAX_SYNC_EVENTS additionally hit the immediate sync
+    # path; ops only need to know about the overflow that will lag.
+    deferred_count = max(0, len(emitted_event_rows) - MAX_SYNC_EVENTS)
+    if deferred_count > 0:
         sync_warnings.append(
-            f"graph_sync_deferred:{enqueued_count} events enqueued to graph_outbox for async replay"
+            f"graph_sync_deferred:{deferred_count} events enqueued to graph_outbox for async replay"
         )
 
     summary = {
