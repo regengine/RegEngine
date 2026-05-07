@@ -3,6 +3,8 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { FieldCaptureClient } from '@/components/mobile/FieldCaptureClient';
 
+const TEST_API_KEY = 'rge_test_key'; // pragma: allowlist secret
+
 const mocks = vi.hoisted(() => ({
     fetchWithCsrf: vi.fn(),
     parseGS1: vi.fn(),
@@ -88,7 +90,7 @@ describe('FieldCaptureClient tenant hinting', () => {
     beforeEach(() => {
         vi.clearAllMocks();
         mocks.useAuth.mockReturnValue({
-            apiKey: 'rge_test_key',
+            apiKey: TEST_API_KEY,
             tenantId: null,
         });
         mocks.parseGS1.mockReturnValue({
@@ -117,7 +119,7 @@ describe('FieldCaptureClient tenant hinting', () => {
                 expect.objectContaining({
                     headers: expect.objectContaining({
                         'Content-Type': 'application/json',
-                        'X-RegEngine-API-Key': 'rge_test_key',
+                        'X-RegEngine-API-Key': TEST_API_KEY,
                     }),
                 }),
             );
@@ -133,7 +135,7 @@ describe('FieldCaptureClient tenant hinting', () => {
                     method: 'POST',
                     headers: expect.objectContaining({
                         'Content-Type': 'application/json',
-                        'X-RegEngine-API-Key': 'rge_test_key',
+                        'X-RegEngine-API-Key': TEST_API_KEY,
                         'X-Tenant-ID': 'hinted-tenant',
                     }),
                 }),
@@ -155,7 +157,7 @@ describe('FieldCaptureClient tenant hinting', () => {
     it('prefers the authenticated tenant over the URL hint once auth is established', async () => {
         setCaptureUrl('?tenant_id=hinted-tenant');
         mocks.useAuth.mockReturnValue({
-            apiKey: 'rge_test_key',
+            apiKey: TEST_API_KEY,
             tenantId: 'auth-tenant',
         });
         mocks.fetchWithCsrf
