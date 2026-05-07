@@ -177,6 +177,15 @@ function buildSupabaseAppUser(
   return appUser;
 }
 
+function normalizeUserProfile(user: User | null | undefined): User | null {
+  if (!user) return null;
+
+  return {
+    ...user,
+    permissions: sanitizePermissions(user.permissions),
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Migration: move localStorage secrets to HTTP-only cookies, then delete them
 // ---------------------------------------------------------------------------
@@ -194,7 +203,6 @@ async function migrateLocalStorageToCookies(): Promise<void> {
     // eslint-disable-next-line no-console
     console.info('[auth] Migrating credentials from localStorage to HTTP-only cookies...');
   }
-
   const tenantId = localStorage.getItem(STORAGE_KEYS.TENANT_ID);
   const userStr = localStorage.getItem(STORAGE_KEYS.USER);
   let user: User | null = null;
@@ -274,7 +282,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (storedUser) {
         try {
-          const parsedUser = JSON.parse(storedUser);
+          const parsedUser = normalizeUserProfile(JSON.parse(storedUser) as User);
           setUserState(parsedUser);
           apiClient.setUser(parsedUser);
         } catch { /* ignore corrupt data */ }
@@ -286,9 +294,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (session.tenant_id && !storedTenantId) {
           setTenantIdState(session.tenant_id);
         }
-        if (session.user && !storedUser) {
-          setUserState(session.user);
-          apiClient.setUser(session.user);
+        if (session.user) {
+          const normalizedSessionUser = normalizeUserProfile(session.user);
+          setUserState(normalizedSessionUser);
+          apiClient.setUser(normalizedSessionUser);
+          localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(normalizedSessionUser));
         }
         if (session.authenticated) {
           setAccessTokenState(COOKIE_MANAGED_PLACEHOLDER);
@@ -566,14 +576,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const login = useCallback(async (token: string, loginUser: User, loginTenantId?: string) => {
     logoutInProgressRef.current = false;
+    const normalizedLoginUser = normalizeUserProfile(loginUser);
 
     // Non-React state — these don't trigger re-renders or effects.
     apiClient.setAccessToken(COOKIE_MANAGED_PLACEHOLDER);
-    apiClient.setUser(loginUser);
+    apiClient.setUser(normalizedLoginUser);
     if (loginTenantId) apiClient.setCurrentTenant(loginTenantId);
 
     if (typeof window !== 'undefined') {
-      localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(loginUser));
+      localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(normalizedLoginUser));
       if (loginTenantId) localStorage.setItem(STORAGE_KEYS.TENANT_ID, loginTenantId);
     }
 
@@ -597,7 +608,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const cookiesOk = await setSessionCookies({
       accessToken: token,
       tenantId: loginTenantId,
-      user: loginUser,
+      user: normalizedLoginUser,
     });
 
     if (!cookiesOk) {
@@ -607,7 +618,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // React state updates — triggers re-renders and the navigation useEffect.
     // Cookie is guaranteed to be stored in the browser at this point.
     setAccessTokenState(COOKIE_MANAGED_PLACEHOLDER);
-    setUserState(loginUser);
+    setUserState(normalizedLoginUser);
     if (loginTenantId) setTenantIdState(loginTenantId);
   }, []);
 
