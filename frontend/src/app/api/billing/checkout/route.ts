@@ -17,6 +17,7 @@ export async function POST(request: NextRequest) {
     try {
         const body = await request.json();
         const { plan_id, billing_period, customer_email, tenant_id, tenant_name } = body;
+        const cookieTenantId = request.cookies.get('re_tenant_id')?.value || undefined;
 
         if (!plan_id) {
             return NextResponse.json({ error: 'plan_id is required' }, { status: 400 });
@@ -44,6 +45,7 @@ export async function POST(request: NextRequest) {
             headers: {
                 'Content-Type': 'application/json',
                 'X-RegEngine-API-Key': apiKey,
+                ...(cookieTenantId ? { 'X-Tenant-ID': cookieTenantId } : {}),
             },
             body: JSON.stringify(checkoutPayload),
         });

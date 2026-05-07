@@ -34,35 +34,35 @@ async function billingFetch<T>(path: string, options?: RequestInit): Promise<T> 
     return res.json();
 }
 
-// getApiKey removed — callers must pass apiKey from useAuth().apiKey
-
-function getCheckoutContext(): { tenantId?: string; customerEmail?: string } {
+async function getCheckoutContext(): Promise<{ customerEmail?: string }> {
     if (typeof window === 'undefined') {
         return {};
     }
 
-    // tenant_id and user are non-sensitive — safe to read from localStorage
-    const tenantId = localStorage.getItem('regengine_tenant_id') || undefined;
-    const rawUser = localStorage.getItem('regengine_user');
-    if (!rawUser) {
-        return { tenantId };
-    }
-
     try {
-        const parsed = JSON.parse(rawUser) as { email?: string };
-        return { tenantId, customerEmail: parsed.email };
+        const res = await fetchWithCsrf('/api/session', {
+            credentials: 'include',
+        });
+        if (!res.ok) {
+            return {};
+        }
+
+        const session = await res.json() as {
+            user?: { email?: string | null } | null;
+        };
+        const customerEmail = session.user?.email || undefined;
+        return customerEmail ? { customerEmail } : {};
     } catch {
-        return { tenantId };
+        return {};
     }
 }
 
 async function createIngestionCheckout(
     params: { tier_id: string; billing_cycle?: string; credit_code?: string; apiKey?: string },
 ): Promise<CheckoutSessionData> {
-    const { tenantId, customerEmail } = getCheckoutContext();
+    const { customerEmail } = await getCheckoutContext();
     const billingCycle = params.billing_cycle || 'annual';
-    // Credentials are in HTTP-only cookies — proxy injects them
-    const res = await fetchWithCsrf(`${getServiceURL('ingestion')}/api/v1/billing/checkout`, {
+    const res = await fetchWithCsrf('/api/billing/checkout', {
         method: 'POST',
         credentials: 'include',
         headers: {
@@ -71,7 +71,6 @@ async function createIngestionCheckout(
         body: JSON.stringify({
             plan_id: params.tier_id,
             billing_period: billingCycle,
-            tenant_id: tenantId,
             customer_email: customerEmail,
         }),
     });
@@ -181,19 +180,16 @@ export function usePricingTiers() {
 
 async function fetchCurrentSubscription(
     tenantId: string,
-    apiKey?: string | null,
+    _apiKey?: string | null,
 ): Promise<SubscriptionData> {
-    const headers = new Headers({
-        'Content-Type': 'application/json',
-    });
-
-    if (apiKey) {
-        headers.set('X-RegEngine-API-Key', apiKey);
-    }
-
     const res = await fetchWithCsrf(
         `${getServiceURL('ingestion')}/api/v1/billing/subscription/${tenantId}`,
-        { headers },
+        {
+            credentials: 'include',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+        },
     );
 
     if (!res.ok) {

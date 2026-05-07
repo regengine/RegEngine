@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 
 import { useAuth } from '@/lib/auth-context';
+import { fetchWithCsrf } from '@/lib/fetch-with-csrf';
 import { useTenant } from '@/lib/tenant-context';
 
 /* ── Types ── */
@@ -91,7 +92,7 @@ const URGENCY_CONFIG: Record<string, { color: string; bg: string; label: string 
 /* ── Page ── */
 
 export default function IssuesPage() {
-    const { apiKey } = useAuth();
+    const { isAuthenticated } = useAuth();
     const { tenantId } = useTenant();
 
     const { data: issuesData, isLoading: loading, error: issuesError, refetch: loadIssues } = useQuery({
@@ -99,12 +100,12 @@ export default function IssuesPage() {
         queryFn: async () => {
             const { getServiceURL } = await import('@/lib/api-config');
             const base = getServiceURL('ingestion');
-            const headers = { 'Content-Type': 'application/json', 'X-RegEngine-API-Key': apiKey! };
             const signal = AbortSignal.timeout(8000);
+            const requestInit = { credentials: 'include' as const, signal };
 
             const [deadlineRes, pendingRes] = await Promise.allSettled([
-                fetch(`${base}/api/v1/requests/deadlines?tenant_id=${tenantId}`, { headers, signal }),
-                fetch(`${base}/api/v1/compliance/pending-reviews/${tenantId}`, { headers, signal }),
+                fetchWithCsrf(`${base}/api/v1/requests/deadlines`, requestInit),
+                fetchWithCsrf(`${base}/api/v1/compliance/pending-reviews/${tenantId}`, requestInit),
             ]);
 
             let deadlines: DeadlineCase[] = [];
@@ -118,9 +119,9 @@ export default function IssuesPage() {
 
                 for (const c of deadlines.slice(0, 5)) {
                     try {
-                        const bRes = await fetch(
-                            `${base}/api/v1/requests/${c.request_case_id}/blockers?tenant_id=${tenantId}`,
-                            { headers, signal: AbortSignal.timeout(5000) }
+                        const bRes = await fetchWithCsrf(
+                            `${base}/api/v1/requests/${c.request_case_id}/blockers`,
+                            { credentials: 'include', signal: AbortSignal.timeout(5000) }
                         );
                         if (bRes.ok) {
                             const bData: BlockerCheck = await bRes.json();
@@ -138,7 +139,7 @@ export default function IssuesPage() {
 
             return { deadlines, blockers: allBlockers, warnings: allWarnings, pendingReviews };
         },
-        enabled: !!tenantId && !!apiKey,
+        enabled: !!tenantId && isAuthenticated,
         retry: false,
     });
 
