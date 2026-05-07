@@ -44,25 +44,32 @@ def _fail_open_override_enabled() -> bool:
 
 
 def _get_tenant_id_from_request(request: Request) -> Optional[str]:
-    """Extract tenant_id from query params, headers, or RBAC principal.
+    """Extract tenant_id for subscription-status lookup.
 
-    Mirrors the tenant resolution order used elsewhere in the ingestion
-    service (query param > header > principal).
+    Resolution order (PRINCIPAL FIRST per EPIC-A #1651):
+      1. RBAC principal on ``request.state.principal`` (authoritative —
+         set by an upstream auth dependency).
+      2. ``X-Tenant-ID`` header (transition-period fallback for master-key
+         callers; ideally migrate to principal-only).
+
+    Query-string ``tenant_id`` is NO LONGER read (EPIC-A #1651). A request
+    that asserts a tenant_id only via query string cannot bypass the
+    paywall by claiming to be a paying tenant — the gate falls through
+    and lets downstream auth reject the unauthenticated request. The
+    Semgrep rule ``tenant-id-from-query-string`` correctly flags
+    attacker-controllable input as untrustworthy for trust decisions
+    (subscription-status lookup IS a trust decision — it determines
+    whether to accept billing for the request).
     """
-    # 1. Query parameter (most endpoints use this)
-    tenant_id = request.query_params.get("tenant_id")
-    if tenant_id:
-        return tenant_id
-
-    # 2. Header
-    tenant_id = request.headers.get("X-Tenant-ID")
-    if tenant_id:
-        return tenant_id
-
-    # 3. RBAC principal (set by require_permission / get_ingestion_principal)
+    # 1. RBAC principal (set by upstream auth dependency)
     principal = getattr(request.state, "principal", None)
     if principal and getattr(principal, "tenant_id", None):
         return principal.tenant_id
+
+    # 2. X-Tenant-ID header (transition-period fallback)
+    tenant_id = request.headers.get("X-Tenant-ID")
+    if tenant_id:
+        return tenant_id
 
     return None
 

@@ -137,24 +137,38 @@ class TestFailOpenOverride:
 
 class TestTenantIdExtraction:
 
-    def test_query_param_wins_over_header_and_principal(self):
+    def test_principal_wins_over_header_and_query(self):
+        """EPIC-A #1651: principal is now first priority. Query is silently
+        dropped; header is transition fallback."""
         req = _mk_request(
             query={"tenant_id": "q-tenant"},
             headers={"X-Tenant-ID": "h-tenant"},
             principal_tenant="p-tenant",
         )
-        assert _get_tenant_id_from_request(req) == "q-tenant"
+        assert _get_tenant_id_from_request(req) == "p-tenant"
 
-    def test_header_used_when_query_absent(self):
-        """Line 60 — fallthrough from query to X-Tenant-ID header."""
+    def test_query_param_silently_dropped(self):
+        """EPIC-A #1651: query-string tenant_id is no longer read at all.
+        A request that asserts only via query string falls through (no
+        principal, no header → None)."""
+        req = _mk_request(
+            query={"tenant_id": "q-tenant"},
+            principal_tenant=None,
+        )
+        assert _get_tenant_id_from_request(req) is None
+
+    def test_header_used_when_no_principal(self):
+        """X-Tenant-ID header is the second-priority fallback when no
+        principal is set on request.state."""
         req = _mk_request(
             headers={"X-Tenant-ID": "h-tenant"},
-            principal_tenant="p-tenant",
+            principal_tenant=None,
         )
         assert _get_tenant_id_from_request(req) == "h-tenant"
 
-    def test_principal_used_when_neither_query_nor_header_set(self):
-        """Line 65 — final fallthrough to RBAC principal."""
+    def test_principal_used_alone(self):
+        """Principal-only request resolves correctly (most common
+        production path once upstream auth populates request.state)."""
         req = _mk_request(principal_tenant="p-tenant")
         assert _get_tenant_id_from_request(req) == "p-tenant"
 
@@ -167,11 +181,13 @@ class TestTenantIdExtraction:
         req = _mk_request(principal_tenant=None)
         assert _get_tenant_id_from_request(req) is None
 
-    def test_empty_query_param_falls_through(self):
-        """Empty string is falsy — must fall through to header."""
+    def test_query_param_does_not_override_header(self):
+        """Even if query is present, only the header's value is used.
+        Defensive coverage for the EPIC-A drop."""
         req = _mk_request(
-            query={"tenant_id": ""},
+            query={"tenant_id": "q-tenant"},
             headers={"X-Tenant-ID": "h-tenant"},
+            principal_tenant=None,
         )
         assert _get_tenant_id_from_request(req) == "h-tenant"
 
