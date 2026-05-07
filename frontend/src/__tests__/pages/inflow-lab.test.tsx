@@ -31,6 +31,8 @@ vi.mock('@/lib/fetch-with-csrf', () => ({
 import DashboardInflowLabPage from '@/app/dashboard/inflow-lab/page';
 import { AuthProvider } from '@/lib/auth-context';
 import { TenantProvider } from '@/lib/tenant-context';
+import { useAuth } from '@/lib/auth-context';
+import { useTenant } from '@/lib/tenant-context';
 
 const completeLot = '00614141000012-20260426-000001';
 const partialLot = '00614141000012-20260426-000003';
@@ -88,6 +90,31 @@ const sandboxEvaluation = {
     ],
 };
 
+const savedWorkbenchRun = {
+    run_id: 'run-123456789abc',
+    tenant_id: 'tenant-123',
+    source: 'inflow-lab-data-feeder',
+    csv: 'cte_type,traceability_lot_code\nshipping,TLC-FEED-001',
+    result: sandboxEvaluation,
+    readiness: {
+        score: 94,
+        label: 'export ready after authenticated commit',
+        components: [],
+    },
+    fix_queue: [],
+    commit_gate: {
+        mode: 'staging',
+        allowed: true,
+        export_eligible: false,
+        reasons: ['Ready to request authenticated production commit.'],
+        next_state: 'production_evidence',
+    },
+    saved_at: '2026-05-06T18:00:00.000Z',
+    input_hash: 'abc123',
+    result_hash: 'def456',
+    commit_decision_id: 'run-123456789abc:staging',
+};
+
 function jsonResponse(payload: unknown, init?: ResponseInit) {
     return Promise.resolve(
         new Response(JSON.stringify(payload), {
@@ -113,6 +140,12 @@ describe('Dashboard Inflow Lab', () => {
 
     beforeEach(() => {
         vi.clearAllMocks();
+        vi.mocked(useAuth).mockReturnValue({
+            isAuthenticated: false,
+            isHydrated: true,
+            tenantId: null,
+        } as ReturnType<typeof useAuth>);
+        vi.mocked(useTenant).mockReturnValue({ tenantId: null } as ReturnType<typeof useTenant>);
         const localStore: Record<string, string> = {};
         const sessionStore: Record<string, string> = {};
         vi.stubGlobal('localStorage', {
@@ -154,6 +187,9 @@ describe('Dashboard Inflow Lab', () => {
                     label: 'export ready after authenticated commit',
                     components: [],
                 });
+            }
+            if (url.endsWith('/api/ingestion/api/v1/inflow-workbench/runs')) {
+                return jsonResponse(savedWorkbenchRun);
             }
             if (url.endsWith('/api/healthz')) {
                 return jsonResponse({ ok: true, build: { version: 'test-build' } });
@@ -274,6 +310,88 @@ describe('Dashboard Inflow Lab', () => {
 
         await user.click(screen.getByRole('button', { name: /Run sandbox test/i }));
         expect(screen.getByText(/Paste CSV text or upload a CSV file before evaluating\./i)).toBeInTheDocument();
+    });
+
+    it('keeps sandbox evaluation non-persistent until Save test run is pressed', async () => {
+        const user = userEvent.setup();
+        vi.mocked(useAuth).mockReturnValue({
+            isAuthenticated: true,
+            isHydrated: true,
+            tenantId: 'tenant-123',
+        } as ReturnType<typeof useAuth>);
+        vi.mocked(useTenant).mockReturnValue({ tenantId: 'tenant-123' } as ReturnType<typeof useTenant>);
+
+        renderDashboardInflowLabPage();
+
+        await user.click(screen.getByRole('button', { name: /Run sandbox test/i }));
+        const textarea = await screen.findByRole('textbox', { name: 'Inbound CSV data' });
+        await user.type(textarea, 'cte_type,traceability_lot_code\nshipping,TLC-FEED-001');
+        await user.click(screen.getByRole('button', { name: /Run sandbox test/i }));
+
+        await waitFor(() => {
+            expect(screen.getByText(/Sandbox evaluator processed 1 event/i)).toBeInTheDocument();
+        });
+        expect(
+            mockFetch.mock.calls.filter(
+                ([url]) => String(url) === '/api/ingestion/api/v1/inflow-workbench/runs',
+            ),
+        ).toHaveLength(0);
+        expect(screen.getByRole('button', { name: 'Save test run' })).toBeInTheDocument();
+        expect(
+            screen.getByText(/Sandbox evaluation is stateless until you explicitly save a test run\./i),
+        ).toBeInTheDocument();
+
+        await user.click(screen.getByRole('button', { name: 'Save test run' }));
+
+        await waitFor(() => {
+            expect(mockFetch).toHaveBeenCalledWith(
+                '/api/ingestion/api/v1/inflow-workbench/runs',
+                expect.objectContaining({ method: 'POST' }),
+            );
+        });
+        expect(await screen.findByText(/Saved to Inflow Workbench as/i)).toBeInTheDocument();
+        expect(screen.getByText('run-123456789abc')).toBeInTheDocument();
+        expect(screen.getByText(/0 open fixes remain for this saved test run\./i)).toBeInTheDocument();
+        expect(screen.queryByText(/Last test run · never/i)).not.toBeInTheDocument();
+    });
+
+    it('disables saving for viewer sessions before any workbench save request is sent', async () => {
+        const user = userEvent.setup();
+        vi.mocked(useAuth).mockReturnValue({
+            isAuthenticated: true,
+            isHydrated: true,
+            tenantId: 'tenant-123',
+            user: {
+                id: 'viewer-1',
+                email: 'viewer@example.com',
+                is_sysadmin: false,
+                status: 'active',
+                role_name: 'viewer',
+            },
+        } as ReturnType<typeof useAuth>);
+        vi.mocked(useTenant).mockReturnValue({ tenantId: 'tenant-123' } as ReturnType<typeof useTenant>);
+
+        renderDashboardInflowLabPage();
+
+        await user.click(screen.getByRole('button', { name: /Run sandbox test/i }));
+        const textarea = await screen.findByRole('textbox', { name: 'Inbound CSV data' });
+        await user.type(textarea, 'cte_type,traceability_lot_code\nshipping,TLC-FEED-001');
+        await user.click(screen.getByRole('button', { name: /Run sandbox test/i }));
+
+        const saveButton = await screen.findByRole('button', { name: 'Save unavailable' });
+        expect(saveButton).toBeDisabled();
+
+        expect(
+            await screen.findByText(
+                /You can evaluate sandbox data here, but only users with write access can save an Inflow Workbench test run\./i,
+            ),
+        ).toBeInTheDocument();
+        expect(
+            mockFetch.mock.calls.filter(
+                ([url]) => String(url) === '/api/ingestion/api/v1/inflow-workbench/runs',
+            ),
+        ).toHaveLength(0);
+        expect(screen.queryByText(/Saved to Inflow Workbench as/i)).not.toBeInTheDocument();
     });
 
     it('opens fix queue navigation from the section-level button', async () => {
