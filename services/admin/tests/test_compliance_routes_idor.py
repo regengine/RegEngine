@@ -137,3 +137,100 @@ def test_sysadmin_without_context_allowed(monkeypatch):
         tenant_id=str(OTHER_TENANT), user=_user(is_sysadmin=True), db=MagicMock()
     )
     assert result == OTHER_TENANT
+
+
+# ---------------------------------------------------------------------------
+# Regression: POST /v1/compliance/alerts no longer trusts body tenant_id.
+#
+# Pre-fix the route was POST /v1/compliance/alerts and CreateAlertRequest
+# carried tenant_id as a body field. A caller in tenant A could POST a body
+# claiming tenant B and have the alert created there with only the
+# analysis.create scope. The fix:
+#  - moves tenant_id off the body
+#  - moves the route to /alerts/{tenant_id}
+#  - binds tenant_id via verify_path_tenant_matches
+# ---------------------------------------------------------------------------
+
+
+def _load_alerts_route():
+    """Import the compliance_routes module after sys.path setup."""
+    from services.admin.app import compliance_routes
+
+    return compliance_routes
+
+
+@pytest.mark.security
+def test_create_alert_request_has_no_tenant_id_field():
+    """CreateAlertRequest must not accept a body tenant_id.
+
+    A leftover body field would re-open the IDOR even with the path-based
+    dependency in place — the service layer would silently prefer the body.
+    """
+    compliance_routes = _load_alerts_route()
+    fields = compliance_routes.CreateAlertRequest.model_fields
+    assert "tenant_id" not in fields, (
+        "CreateAlertRequest.tenant_id was reintroduced — this re-opens the "
+        "cross-tenant alert IDOR. Keep tenant binding on the URL path "
+        "behind verify_path_tenant_matches."
+    )
+
+
+@pytest.mark.security
+def test_create_alert_route_path_is_tenant_scoped():
+    """POST /alerts must be /alerts/{tenant_id}, not the bare /alerts."""
+    compliance_routes = _load_alerts_route()
+    post_alert_paths = {
+        r.path
+        for r in compliance_routes.router.routes
+        if "POST" in getattr(r, "methods", set())
+        and (r.path.endswith("/alerts") or r.path.endswith("/alerts/{tenant_id}"))
+    }
+    assert "/v1/compliance/alerts/{tenant_id}" in post_alert_paths, (
+        f"Expected POST /v1/compliance/alerts/{{tenant_id}} (path-bound "
+        f"tenant). Found POST alert paths: {post_alert_paths}"
+    )
+    assert "/v1/compliance/alerts" not in post_alert_paths, (
+        "Bare POST /v1/compliance/alerts is the pre-fix shape and must not "
+        "exist alongside the tenant-scoped path."
+    )
+
+
+@pytest.mark.security
+def test_create_alert_route_uses_verify_path_tenant_matches():
+    """The /alerts/{tenant_id} POST route must depend on
+    verify_path_tenant_matches — either as a function-signature default
+    or in the route's dependencies list. Without it the path tenant_id
+    is taken at face value and the IDOR is unfixed.
+    """
+    compliance_routes = _load_alerts_route()
+    verify_path_tenant_matches, _ = _load_dep()
+
+    target = next(
+        (
+            r
+            for r in compliance_routes.router.routes
+            if getattr(r, "path", "") == "/v1/compliance/alerts/{tenant_id}"
+            and "POST" in getattr(r, "methods", set())
+        ),
+        None,
+    )
+    assert target is not None, "POST /v1/compliance/alerts/{tenant_id} not found"
+
+    # Walk the FastAPI dependant graph for any reference to
+    # verify_path_tenant_matches. The dependency may be supplied as a
+    # function-signature default (Depends(...) in the handler params) or
+    # as a route-level dependencies=[...] entry; both end up as nodes in
+    # the dependant tree.
+    found = False
+    if hasattr(target, "dependant"):
+        stack = [target.dependant]
+        while stack:
+            d = stack.pop()
+            if getattr(d, "call", None) is verify_path_tenant_matches:
+                found = True
+                break
+            stack.extend(getattr(d, "dependencies", []))
+    assert found, (
+        "POST /v1/compliance/alerts/{tenant_id} does not depend on "
+        "verify_path_tenant_matches; the IDOR fix is incomplete."
+    )
