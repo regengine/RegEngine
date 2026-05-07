@@ -21,7 +21,6 @@ from app.sqlalchemy_models import (
     TenantModel,
     UserModel,
 )
-from app.supplier_onboarding_routes import router
 
 
 TEST_TENANT_ID = UUID("00000000-0000-0000-0000-000000000001")
@@ -94,15 +93,15 @@ def db_session() -> Session:
 @pytest.fixture
 def client(db_session: Session, monkeypatch: pytest.MonkeyPatch) -> TestClient:
     import app.supplier_onboarding_routes as supplier_routes
-    from app.supplier_facilities_routes import router as facilities_router
-    from app.supplier_compliance_routes import router as compliance_router
-    from app.supplier_funnel_routes import router as funnel_router
+    import app.supplier_facilities_routes as facilities_routes
+    import app.supplier_compliance_routes as compliance_routes
+    import app.supplier_funnel_routes as funnel_routes
 
     test_app = FastAPI()
-    test_app.include_router(router, prefix="/v1")
-    test_app.include_router(facilities_router, prefix="/v1")
-    test_app.include_router(compliance_router, prefix="/v1")
-    test_app.include_router(funnel_router, prefix="/v1")
+    test_app.include_router(supplier_routes.router, prefix="/v1")
+    test_app.include_router(facilities_routes.router, prefix="/v1")
+    test_app.include_router(compliance_routes.router, prefix="/v1")
+    test_app.include_router(funnel_routes.router, prefix="/v1")
 
     current_user = db_session.get(UserModel, TEST_USER_ID)
 

@@ -18,7 +18,6 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from app.supplier_compliance_routes import router
 from app.sqlalchemy_models import (
     SupplierCTEEventModel,
     SupplierFacilityFTLCategoryModel,
@@ -70,7 +69,7 @@ def _build_client(db_session, monkeypatch, *, tenant=TEST_TENANT_ID):
     import app.supplier_compliance_routes as comp_routes
 
     app = FastAPI()
-    app.include_router(router, prefix="/v1")
+    app.include_router(comp_routes.router, prefix="/v1")
 
     current_user = db_session.get(UserModel, TEST_USER_ID)
 

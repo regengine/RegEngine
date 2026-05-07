@@ -40,6 +40,21 @@ TENANT_ID = "11111111-1111-1111-1111-111111111111"
 # ---------------------------------------------------------------------------
 
 
+def _reset_route_limiter(limiter) -> None:
+    """Clear shared SlowAPI state so root-suite order can't trip 429s."""
+    reset = getattr(limiter, "reset", None)
+    if callable(reset):
+        reset()
+
+    storage = getattr(limiter, "_storage", None)
+    if storage is None:
+        return
+
+    storage_reset = getattr(storage, "reset", None)
+    if callable(storage_reset):
+        storage_reset()
+
+
 def _fake_api_key(tenant_id: Optional[str] = TENANT_ID):
     from shared.auth import APIKey
 
@@ -87,7 +102,8 @@ def app_and_tracker(monkeypatch):
     """Build a FastAPI app with review_routes mounted, override auth,
     and swap the tracker getter for a fake."""
     from app import review_routes as review_mod
-    from shared.auth import require_api_key
+
+    _reset_route_limiter(review_mod.limiter)
 
     app = FastAPI()
     app.include_router(review_mod.router)
@@ -125,9 +141,11 @@ def app_and_tracker(monkeypatch):
     tracker = _FakeTracker(fake_items)
     monkeypatch.setattr(review_mod, "_get_tracker", lambda: tracker)
 
-    app.dependency_overrides[require_api_key] = lambda: _fake_api_key()
+    app.dependency_overrides[review_mod.require_api_key] = lambda: _fake_api_key()
 
-    return app, tracker, long_text
+    yield app, tracker, long_text
+
+    _reset_route_limiter(review_mod.limiter)
 
 
 # =========================================================================
@@ -227,29 +245,11 @@ def test_rate_limit_decorator_present_on_endpoint():
     instead. The slowapi library records decorated endpoints on
     ``limiter._route_limits``."""
     from app import review_routes as review_mod
-    from shared.rate_limit import limiter
 
-    # slowapi exposes the per-endpoint limits through a private attr;
-    # we probe both the common names it has used.
-    registry = getattr(limiter, "_route_limits", None) or getattr(
-        limiter, "limits", None
-    )
-
-    # Fallback: assert the function's attached limits directly. SlowAPI
-    # sticks the Limit objects onto the decorated function via a
-    # ``__wrapped__``-like attribute.
-    endpoint = review_mod.get_review_queue
-    attached = getattr(endpoint, "_rate_limit", None) or getattr(
-        endpoint, "__limits__", None
-    )
-
-    # At least one probe must come back non-empty. If both are empty,
-    # the decorator is not wired and the test fails loudly.
-    wired = bool(registry) or bool(attached)
-    assert wired, (
-        "expected @limiter.limit('30/minute') to be registered on "
-        "get_review_queue -- neither limiter._route_limits nor the "
-        "endpoint's __limits__ attr surfaced the limit"
+    registry = getattr(review_mod.limiter, "_route_limits", None) or {}
+    assert "app.review_routes.get_review_queue" in registry, (
+        "expected @limiter.limit('30/minute') to register "
+        "app.review_routes.get_review_queue in limiter._route_limits"
     )
 
 
@@ -357,10 +357,9 @@ def test_legacy_key_without_tenant_still_rejected(app_and_tracker, monkeypatch):
     """The existing #1389 guard (no-tenant keys are 403) must survive
     the #1409 refactor."""
     from app import review_routes as review_mod
-    from shared.auth import require_api_key
 
     app, _tracker, _ = app_and_tracker
-    app.dependency_overrides[require_api_key] = lambda: _fake_api_key(tenant_id=None)
+    app.dependency_overrides[review_mod.require_api_key] = lambda: _fake_api_key(tenant_id=None)
 
     with TestClient(app) as client:
         response = client.get("/v1/admin/review/hallucinations")

@@ -293,14 +293,18 @@ def verify_merkle_proof(proof: MerkleProof) -> bool:
     Returns:
         True if proof is valid
     """
-    current_hash = proof.leaf_hash
-    
+    # Historical proofs only store sibling hashes, not whether the sibling
+    # sat to the left or right of the path node. To remain compatible with
+    # proofs generated from left/right-ordered trees, explore both possible
+    # concatenation orders at each layer and accept the proof if any path
+    # reconstructs the expected root.
+    possible_hashes = {proof.leaf_hash}
+
     for sibling_hash in proof.proof_path:
-        # Combine with sibling (order matters for determinism)
-        # Use lexicographic order to ensure consistency
-        if current_hash < sibling_hash:
-            current_hash = hash_pair(current_hash, sibling_hash)
-        else:
-            current_hash = hash_pair(sibling_hash, current_hash)
-    
-    return current_hash == proof.root_hash
+        next_hashes = set()
+        for current_hash in possible_hashes:
+            next_hashes.add(hash_pair(current_hash, sibling_hash))
+            next_hashes.add(hash_pair(sibling_hash, current_hash))
+        possible_hashes = next_hashes
+
+    return proof.root_hash in possible_hashes

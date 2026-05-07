@@ -7,7 +7,7 @@ Uses EvidenceEnvelopeV3 directly to construct valid and tampered envelopes.
 
 import pytest
 from datetime import datetime
-from kernel.evidence.hashing import compute_payload_hash
+from kernel.evidence.hashing import compute_envelope_hash, compute_payload_hash
 from kernel.evidence.verify import EvidenceVerifier
 from kernel.evidence.envelope import EvidenceEnvelopeV3, EvidenceType
 
@@ -18,6 +18,7 @@ def _make_envelope(
     previous_hash: str = None,
     merkle_proof: list = None,
     merkle_root: str = None,
+    timestamp: datetime | None = None,
 ) -> EvidenceEnvelopeV3:
     """
     Build a self-consistent EvidenceEnvelopeV3 for testing.
@@ -25,23 +26,27 @@ def _make_envelope(
     """
     if payload is None:
         payload = {"decision": "approved", "model": "v1"}
+    if timestamp is None:
+        timestamp = datetime.utcnow()
 
     evidence_payload_hash = compute_payload_hash(payload)
 
     # Build the envelope data dict (excluding current_hash) for computing current_hash
     envelope_data = {
         "envelope_id": envelope_id,
-        "evidence_type": EvidenceType.DECISION,
+        "timestamp": timestamp.isoformat(),
+        "evidence_type": EvidenceType.DECISION.value,
         "evidence_payload_hash": evidence_payload_hash,
         "evidence_payload": payload,
         "previous_hash": previous_hash,
         "merkle_root": merkle_root or evidence_payload_hash,
         "merkle_proof": merkle_proof or [],
     }
-    current_hash = compute_payload_hash(envelope_data)
+    current_hash = compute_envelope_hash(envelope_data)
 
     return EvidenceEnvelopeV3(
         envelope_id=envelope_id,
+        timestamp=timestamp,
         evidence_type=EvidenceType.DECISION,
         evidence_payload_hash=evidence_payload_hash,
         evidence_payload=payload,

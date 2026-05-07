@@ -65,8 +65,6 @@ def test_audience_constants_are_distinct():
 # ─────────────────────────────────────────────────────────────────────
 def test_session_tokens_include_aud_and_iss():
     from app.auth_utils import (
-        ALGORITHM,
-        SECRET_KEY,
         SESSION_AUDIENCE,
         SESSION_ISSUER,
         create_access_token,
@@ -74,12 +72,15 @@ def test_session_tokens_include_aud_and_iss():
 
     tok = create_access_token({"sub": "user-1", "tenant_id": "tenant-1"})
 
-    # Decode bypassing aud/iss verification to inspect raw claims.
+    # Inspect raw claims without assuming whether the active signer is the
+    # legacy SECRET_KEY or a rotated registry key loaded earlier in the suite.
     claims = pyjwt.decode(
         tok,
-        SECRET_KEY,
-        algorithms=[ALGORITHM],
-        options={"verify_aud": False, "verify_iss": False},  # nosemgrep: python.jwt.security.unverified-jwt-decode.unverified-jwt-decode
+        options={  # nosemgrep: python.jwt.security.unverified-jwt-decode.unverified-jwt-decode
+            "verify_signature": False,
+            "verify_aud": False,
+            "verify_iss": False,
+        },
     )
     assert claims["aud"] == SESSION_AUDIENCE
     assert claims["iss"] == SESSION_ISSUER

@@ -36,7 +36,6 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from app.supplier_facilities_routes import router
 from app.sqlalchemy_models import (
     SupplierCTEEventModel,
     SupplierFacilityFTLCategoryModel,
@@ -101,7 +100,7 @@ def client(db_session: Session, monkeypatch: pytest.MonkeyPatch) -> TestClient:
     import app.supplier_facilities_routes as fac_routes
 
     app = FastAPI()
-    app.include_router(router, prefix="/v1")
+    app.include_router(fac_routes.router, prefix="/v1")
 
     current_user = db_session.get(UserModel, TEST_USER_ID)
 
@@ -133,7 +132,7 @@ def client_no_tenant(db_session: Session, monkeypatch: pytest.MonkeyPatch) -> Te
     import app.supplier_facilities_routes as fac_routes
 
     app = FastAPI()
-    app.include_router(router, prefix="/v1")
+    app.include_router(fac_routes.router, prefix="/v1")
 
     current_user = db_session.get(UserModel, TEST_USER_ID)
 

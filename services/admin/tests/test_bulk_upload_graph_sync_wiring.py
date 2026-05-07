@@ -45,7 +45,6 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from app.bulk_upload.transaction_manager import execute_bulk_commit
 from app.sqlalchemy_models import (
     SupplierCTEEventModel,
     SupplierFacilityFTLCategoryModel,
@@ -258,7 +257,7 @@ def test_small_import_all_sync_and_durable_outbox(
     assert current_user is not None
 
     payload = _build_payload(event_count=50)
-    summary = execute_bulk_commit(
+    summary = tx_manager.execute_bulk_commit(
         db_session,
         tenant_id=TEST_TENANT_ID,
         current_user=current_user,
@@ -331,7 +330,7 @@ def test_large_import_first_100_sync_remainder_enqueued(
     assert current_user is not None
 
     payload = _build_payload(event_count=500)
-    summary = execute_bulk_commit(
+    summary = tx_manager.execute_bulk_commit(
         db_session,
         tenant_id=TEST_TENANT_ID,
         current_user=current_user,
@@ -459,7 +458,7 @@ def test_outbox_enqueue_failure_rolls_back_bulk_import(
     payload = _build_payload(event_count=150)  # > MAX_SYNC_EVENTS so enqueue runs
 
     with pytest.raises(RuntimeError, match="simulated outbox insert failure"):
-        execute_bulk_commit(
+        tx_manager.execute_bulk_commit(
             db_session,
             tenant_id=TEST_TENANT_ID,
             current_user=current_user,

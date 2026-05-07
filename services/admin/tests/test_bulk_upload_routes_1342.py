@@ -135,7 +135,7 @@ def _make_client(db_session, monkeypatch, *, tenant=TEST_TENANT_ID,
     import app.bulk_upload.routes as bulk_routes
 
     app = FastAPI()
-    app.include_router(router, prefix="/v1/supplier/bulk-upload")
+    app.include_router(bulk_routes.router, prefix="/v1/supplier/bulk-upload")
 
     current_user = db_session.get(UserModel, TEST_USER_ID)
 
@@ -296,7 +296,7 @@ class TestCommitCASRace:
         loop.close()
 
         app = FastAPI()
-        app.include_router(router, prefix="/v1/supplier/bulk-upload")
+        app.include_router(bulk_routes.router, prefix="/v1/supplier/bulk-upload")
         current_user = db_session.get(UserModel, TEST_USER_ID)
 
         def _get_session():
@@ -364,7 +364,7 @@ class TestCommitCASRace:
         race_store.try_claim_commit = _cas_none
 
         app = FastAPI()
-        app.include_router(router, prefix="/v1/supplier/bulk-upload")
+        app.include_router(bulk_routes.router, prefix="/v1/supplier/bulk-upload")
         current_user = db_session.get(UserModel, TEST_USER_ID)
 
         app.dependency_overrides[bulk_routes.get_session] = lambda: (yield db_session)
@@ -423,7 +423,7 @@ class TestCommitCASRace:
         race_store.try_claim_commit = _cas_none
 
         app = FastAPI()
-        app.include_router(router, prefix="/v1/supplier/bulk-upload")
+        app.include_router(bulk_routes.router, prefix="/v1/supplier/bulk-upload")
         current_user = db_session.get(UserModel, TEST_USER_ID)
 
         def _get_session():
@@ -477,7 +477,7 @@ class TestCommitExceptionHandler:
         loop.close()
 
         app = FastAPI()
-        app.include_router(router, prefix="/v1/supplier/bulk-upload")
+        app.include_router(bulk_routes.router, prefix="/v1/supplier/bulk-upload")
         current_user = db_session.get(UserModel, TEST_USER_ID)
 
         def _get_session():

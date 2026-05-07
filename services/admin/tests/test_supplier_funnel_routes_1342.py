@@ -23,7 +23,6 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from app.supplier_funnel_routes import router
 from app.sqlalchemy_models import (
     SupplierCTEEventModel,
     SupplierFacilityFTLCategoryModel,
@@ -89,7 +88,7 @@ def _build_client(db_session, monkeypatch, *, tenant=TEST_TENANT_ID):
     from app.dependencies import PermissionChecker
 
     app = FastAPI()
-    app.include_router(router, prefix="/v1")
+    app.include_router(funnel_routes.router, prefix="/v1")
 
     current_user = db_session.get(UserModel, TEST_USER_ID)
 

@@ -33,7 +33,6 @@ from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from app.bulk_upload.routes import router
 from app.bulk_upload.session_store import BulkUploadSessionStore
 from app.sqlalchemy_models import (
     SupplierCTEEventModel,
@@ -291,7 +290,7 @@ def test_concurrent_commits_route_level_only_one_succeeds(
     monkeypatch.setattr(bulk_routes, "execute_bulk_commit", _counting_execute)
 
     test_app = FastAPI()
-    test_app.include_router(router, prefix="/v1/supplier/bulk-upload")
+    test_app.include_router(bulk_routes.router, prefix="/v1/supplier/bulk-upload")
 
     current_user = db_session.get(UserModel, TEST_USER_ID)
     assert current_user is not None
@@ -402,7 +401,7 @@ def test_commit_after_completed_is_idempotent_not_409(
     )
 
     test_app = FastAPI()
-    test_app.include_router(router, prefix="/v1/supplier/bulk-upload")
+    test_app.include_router(bulk_routes.router, prefix="/v1/supplier/bulk-upload")
 
     current_user = db_session.get(UserModel, TEST_USER_ID)
     assert current_user is not None
@@ -448,7 +447,7 @@ def test_commit_when_session_is_parsed_returns_400(
     )
 
     test_app = FastAPI()
-    test_app.include_router(router, prefix="/v1/supplier/bulk-upload")
+    test_app.include_router(bulk_routes.router, prefix="/v1/supplier/bulk-upload")
 
     current_user = db_session.get(UserModel, TEST_USER_ID)
     assert current_user is not None
