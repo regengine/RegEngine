@@ -49,9 +49,22 @@ def _client():
     before settings are loaded.
     """
     from fastapi.testclient import TestClient
+    return TestClient(_load_ingestion_app())
+
+
+def _load_ingestion_app():
+    """Import ``main.app`` under the deterministic test auth env.
+
+    Root-suite order can mutate process env after this module is imported, so
+    we restamp the auth/test variables immediately before importing
+    ``services/ingestion/main.py`` and evict any cached ``main`` module.
+    """
+    os.environ["AUTH_TEST_BYPASS_TOKEN"] = "test-bypass-token"
+    os.environ["REGENGINE_ENV"] = "test"
+    sys.modules.pop("main", None)
     from main import app  # type: ignore[import-not-found]
 
-    return TestClient(app)
+    return app
 
 
 def test_correlation_id_middleware_is_registered_in_app():
@@ -60,8 +73,8 @@ def test_correlation_id_middleware_is_registered_in_app():
     Guards against the regression where the import existed but the
     ``app.add_middleware(CorrelationIdMiddleware)`` call was missing.
     """
-    from main import app  # type: ignore[import-not-found]
     from shared.observability.correlation import CorrelationIdMiddleware
+    app = _load_ingestion_app()
 
     middleware_classes = [m.cls for m in app.user_middleware]
     assert CorrelationIdMiddleware in middleware_classes, (
