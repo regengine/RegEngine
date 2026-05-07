@@ -31,6 +31,57 @@ function readAllTsx(dir) {
   return files;
 }
 
+function resolveLocalImport(fromFile, specifier) {
+  let basePath = null;
+
+  if (specifier.startsWith('@/')) {
+    basePath = path.join(SRC, specifier.slice(2));
+  } else if (specifier.startsWith('./') || specifier.startsWith('../')) {
+    basePath = path.resolve(path.dirname(fromFile), specifier);
+  } else {
+    return null;
+  }
+
+  const candidates = [
+    basePath,
+    `${basePath}.ts`,
+    `${basePath}.tsx`,
+    path.join(basePath, 'index.ts'),
+    path.join(basePath, 'index.tsx'),
+  ];
+
+  for (const candidate of candidates) {
+    if (candidate.startsWith(SRC) && fs.existsSync(candidate) && fs.statSync(candidate).isFile()) {
+      return candidate;
+    }
+  }
+
+  return null;
+}
+
+function fileReferencesTenant(file, seen = new Set()) {
+  if (seen.has(file) || !fs.existsSync(file)) {
+    return false;
+  }
+
+  seen.add(file);
+  const content = fs.readFileSync(file, 'utf8');
+  if (content.includes('tenantId') || content.includes('tenant_id')) {
+    return true;
+  }
+
+  const importPattern = /from\s+['"]([^'"]+)['"]/g;
+  let match;
+  while ((match = importPattern.exec(content)) !== null) {
+    const importedFile = resolveLocalImport(file, match[1]);
+    if (importedFile && fileReferencesTenant(importedFile, seen)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 console.log('\n=== Tenant Isolation Checks ===\n');
 
 const allFiles = readAllTsx(SRC);
@@ -90,9 +141,8 @@ if (fs.existsSync(dashboardDir)) {
   const dashPages = readAllTsx(dashboardDir).filter(f => f.endsWith('page.tsx'));
   let tenantMissing = [];
   for (const page of dashPages) {
-    const content = fs.readFileSync(page, 'utf8');
     const rel = path.relative(SRC, page);
-    const hasTenant = content.includes('tenantId') || content.includes('tenant_id');
+    const hasTenant = fileReferencesTenant(page);
     if (hasTenant) { console.log(`  \u2713 ${rel} references tenant`); passed++; }
     else { tenantMissing.push(rel); }
   }

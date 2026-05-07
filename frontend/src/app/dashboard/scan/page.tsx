@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
+import { useTenant } from '@/lib/tenant-context';
 import {
     Copy,
     Check,
@@ -62,9 +63,13 @@ const card = 'rounded-xl border border-[var(--re-surface-border)] bg-[var(--re-s
 
 export default function ScanPage() {
     const isMobile = useIsMobile();
+    const { tenantId } = useTenant();
+    const capturePath = tenantId
+        ? `/mobile/capture?tenant_id=${encodeURIComponent(tenantId)}`
+        : '/mobile/capture';
     const captureURL = typeof window !== 'undefined'
-        ? `${window.location.origin}/mobile/capture`
-        : 'https://regengine.co/mobile/capture';
+        ? `${window.location.origin}${capturePath}`
+        : `https://regengine.co${capturePath}`;
 
     const qrSvg = useQRCodeSVG(captureURL);
     const [copied, setCopied] = useState(false);
@@ -82,6 +87,11 @@ export default function ScanPage() {
                 <p className="text-sm text-[var(--re-text-muted)] mt-1 max-w-[640px]">
                     Scan barcodes and capture photos from the factory floor. Events flow directly into your compliance pipeline with offline support.
                 </p>
+                <p className="text-xs text-[var(--re-text-disabled)] mt-2">
+                    {tenantId
+                        ? `Shared capture links stay scoped to tenant ${tenantId}.`
+                        : 'Shared capture links use the active dashboard tenant once a session is established.'}
+                </p>
             </div>
 
             {isMobile ? (
@@ -98,7 +108,7 @@ export default function ScanPage() {
                             </p>
                         </div>
                         <Link
-                            href="/mobile/capture"
+                            href={capturePath}
                             className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-[var(--re-brand)] text-white font-medium text-sm hover:opacity-90 transition-opacity"
                         >
                             <Camera className="h-4 w-4" />
@@ -185,7 +195,7 @@ export default function ScanPage() {
                         {/* Try it yourself */}
                         <div className="mt-5 pt-4 border-t border-[var(--re-surface-border)]">
                             <Link
-                                href="/mobile/capture"
+                                href={capturePath}
                                 target="_blank"
                                 className="inline-flex items-center gap-1.5 text-sm text-[var(--re-brand)] hover:opacity-80 transition-opacity"
                             >

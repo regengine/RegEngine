@@ -89,15 +89,22 @@ export function FieldCaptureClient() {
     const [manualLot, setManualLot] = useState('');
 
     const { apiKey, tenantId } = useAuth();
+    const [hintedTenantId, setHintedTenantId] = useState<string | null>(null);
     const { toast } = useToast();
     const { isOnline, isSyncing } = useSync();
     const ingestFileMutation = useIngestFile();
+    const effectiveTenantId = tenantId || hintedTenantId || undefined;
+
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        setHintedTenantId(new URLSearchParams(window.location.search).get('tenant_id'));
+    }, []);
 
     useEffect(() => {
         const loadCatalog = async () => {
-            if (!apiKey || !tenantId) return;
+            if (!apiKey || !effectiveTenantId) return;
             try {
-                const response = await fetchWithCsrf(`${getServiceURL('ingestion')}/api/v1/products/${tenantId}`, {
+                const response = await fetchWithCsrf(`${getServiceURL('ingestion')}/api/v1/products/${effectiveTenantId}`, {
                     headers: {
                         'Content-Type': 'application/json',
                         'X-RegEngine-API-Key': apiKey,
@@ -118,7 +125,7 @@ export function FieldCaptureClient() {
         };
 
         void loadCatalog();
-    }, [apiKey, tenantId]);
+    }, [apiKey, effectiveTenantId]);
 
     const cteLabel = useMemo(
         () => CTE_OPTIONS.find((option) => option.value === selectedCTEType)?.label || selectedCTEType,
@@ -137,7 +144,7 @@ export function FieldCaptureClient() {
 
             const eventPayload = {
                 source: 'mobile_scanner_pwa',
-                tenant_id: tenantId || undefined,
+                tenant_id: effectiveTenantId,
                 events: [
                     {
                         cte_type: scanState.cteType,
@@ -163,7 +170,7 @@ export function FieldCaptureClient() {
                 headers: {
                     'Content-Type': 'application/json',
                     'X-RegEngine-API-Key': apiKey,
-                    ...(tenantId ? { 'X-Tenant-ID': tenantId } : {}),
+                    ...(effectiveTenantId ? { 'X-Tenant-ID': effectiveTenantId } : {}),
                 },
                 body: JSON.stringify(eventPayload),
             });
@@ -173,7 +180,7 @@ export function FieldCaptureClient() {
                 throw new Error(detail || `Ingest failed with status ${response.status}`);
             }
         },
-        [apiKey, tenantId],
+        [apiKey, effectiveTenantId],
     );
 
     const handleScan = async (rawScan: string) => {
@@ -205,7 +212,7 @@ export function FieldCaptureClient() {
 
         const offlinePayload = {
             source: 'mobile_scanner_pwa',
-            tenant_id: tenantId || undefined,
+            tenant_id: effectiveTenantId,
             events: [
                 {
                     cte_type: parsedState.cteType,
@@ -300,7 +307,7 @@ export function FieldCaptureClient() {
                 if (apiKey) {
                     const payload = {
                         source: 'mobile_capture_pwa_vision',
-                        tenant_id: tenantId || undefined,
+                        tenant_id: effectiveTenantId,
                         events: [{
                             cte_type: selectedCTEType,
                             traceability_lot_code: lotCode,
@@ -324,7 +331,7 @@ export function FieldCaptureClient() {
                         headers: {
                             'Content-Type': 'application/json',
                             'X-RegEngine-API-Key': apiKey,
-                            ...(tenantId ? { 'X-Tenant-ID': tenantId } : {}),
+                            ...(effectiveTenantId ? { 'X-Tenant-ID': effectiveTenantId } : {}),
                         },
                         body: JSON.stringify(payload),
                     });
