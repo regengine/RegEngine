@@ -115,9 +115,7 @@ const COLLAPSIBLE_SECTIONS: CollapsibleSection[] = [
             { label: 'Settings', href: '/dashboard/settings', icon: Settings },
             { label: 'Team', href: '/dashboard/team', icon: UserCog },
             { label: 'Notifications', href: '/dashboard/notifications', icon: Bell },
-            { label: 'Integrations', href: '/dashboard/integrations', icon: Link2 },
             { label: 'Heartbeat', href: '/dashboard/heartbeat', icon: Activity },
-            { label: 'Audit Log', href: '/dashboard/audit-log', icon: ScrollText },
         ],
     },
 ];
