@@ -54,7 +54,12 @@ async def _handle_checkout_completed(
     if customer_id:
         customer_bound_tenant = client.get(_state_mod._customer_lookup_key(customer_id))
 
-    metadata_tenant = metadata.get("tenant_id")
+    # Pulled from the Stripe-event metadata as the *claimed* tenant only —
+    # never used for routing. Below, we compare it to the server-recorded
+    # tenant binding and refuse the webhook if they disagree (EPIC-A
+    # defense-in-depth). This is the rule's enforcement code, not a
+    # violation of it.
+    metadata_tenant = metadata.get("tenant_id")  # nosemgrep: tenant-id-from-request-body
 
     # Authoritative tenant is whatever the server itself recorded.
     tenant_id = server_side_tenant or customer_bound_tenant
