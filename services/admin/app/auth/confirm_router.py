@@ -175,7 +175,10 @@ async def require_reauth(
         # Authorization header rather than relying on request.state, because
         # FastAPI does not automatically stash tenant_id there and we want this
         # dependency to work with zero extra wiring at every call site.
-        token_tid = payload.get("tenant_id") or payload.get("tid")
+        # ``payload`` is a verified JWT elevation token (decode_access_token
+        # validates signature/expiry), not a request body. The tenant_id claim
+        # is cryptographically signed.
+        token_tid = payload.get("tenant_id") or payload.get("tid")  # nosemgrep: tenant-id-from-request-body
         if not token_tid:
             raise HTTPException(status_code=403, detail="Elevation token missing tenant")
         acting_tid: Optional[str] = None

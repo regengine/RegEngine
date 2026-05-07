@@ -147,8 +147,11 @@ async def get_current_user(
         try:
             payload = decode_access_token(token)
             user_id = payload.get("sub")
-            # Try new tenant_id claim first, fallback to tid for backward compat
-            tenant_id = payload.get("tenant_id") or payload.get("tid")
+            # ``payload`` is a verified JWT (decode_access_token validates
+            # signature + expiry), not a request body. The tenant_id claim is
+            # cryptographically signed by the auth issuer — this is the
+            # canonical EPIC-A path for JWT auth.
+            tenant_id = payload.get("tenant_id") or payload.get("tid")  # nosemgrep: tenant-id-from-request-body
             # #1349 / #1375 — capture the version the token was minted against.
             # The live user row carries the current version; a mismatch means
             # this token was invalidated by a password reset or logout-all.
