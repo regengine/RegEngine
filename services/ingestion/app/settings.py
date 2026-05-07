@@ -97,11 +97,15 @@ _settings_store: dict[str, SettingsResponse] = {}
 
 
 def _db_get_settings(tenant_id: str) -> Optional[SettingsResponse]:
-    """Query settings from database via shared helper."""
-    data = get_jsonb(tenant_id, "tenant_settings", "settings")
-    if data:
-        data["tenant_id"] = tenant_id
-        return SettingsResponse(**data)
+    """Query settings from database via shared helper.
+
+    The stored JSONB blob never persists tenant_id (excluded by
+    ``_db_save_settings``); attach the authoritative tenant_id from the
+    function argument when constructing the response model.
+    """
+    stored = get_jsonb(tenant_id, "tenant_settings", "settings")
+    if stored:
+        return SettingsResponse(**{**stored, "tenant_id": tenant_id})
     return None
 
 

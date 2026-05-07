@@ -648,10 +648,13 @@ async def list_portal_links(
     # Supplement with in-memory links not in DB results
     db_tokens = {link["portal_id"] for link in links}
     if _allow_memory_fallback():
-        for token, data in _portal_links.items():
-            if data.get("tenant_id") != tenant_id or token in db_tokens:
+        for token, entry in _portal_links.items():
+            # Filter the in-memory cache to entries owned by the authoritative
+            # tenant_id argument — we are NOT trusting tenant_id from a request
+            # body, just scoping the in-memory store like a WHERE clause would.
+            if entry.get("tenant_id") != tenant_id or token in db_tokens:
                 continue
-            expires_at_raw = data.get("expires_at")
+            expires_at_raw = entry.get("expires_at")
             status = "active"
             if expires_at_raw:
                 try:
@@ -663,12 +666,12 @@ async def list_portal_links(
             links.append({
                 "portal_id": token,
                 "portal_url": f"https://regengine.co/portal/{token}",
-                "supplier_name": data.get("supplier_name", "Unknown"),
+                "supplier_name": entry.get("supplier_name", "Unknown"),
                 "tenant_id": tenant_id,
                 "status": status,
-                "created_at": data.get("created_at"),
+                "created_at": entry.get("created_at"),
                 "expires_at": expires_at_raw,
-                "integration_profile_id": data.get("integration_profile_id"),
+                "integration_profile_id": entry.get("integration_profile_id"),
             })
 
     total = len(links)

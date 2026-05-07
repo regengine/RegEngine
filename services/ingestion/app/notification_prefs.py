@@ -99,11 +99,15 @@ _prefs_store: dict[str, NotificationPreferences] = {}
 
 
 def _db_get_preferences(tenant_id: str) -> Optional[NotificationPreferences]:
-    """Query notification preferences from database via shared helper."""
-    data = get_jsonb(tenant_id, "tenant_notification_prefs", "prefs")
-    if data:
-        data["tenant_id"] = tenant_id
-        return NotificationPreferences(**data)
+    """Query notification preferences from database via shared helper.
+
+    The stored JSONB blob never persists tenant_id (excluded by
+    ``_db_save_preferences``); attach the authoritative tenant_id from
+    the function argument when constructing the response model.
+    """
+    stored = get_jsonb(tenant_id, "tenant_notification_prefs", "prefs")
+    if stored:
+        return NotificationPreferences(**{**stored, "tenant_id": tenant_id})
     return None
 
 
