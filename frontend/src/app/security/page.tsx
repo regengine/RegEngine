@@ -5,10 +5,10 @@ import { ArrowRight, Database, FileCode2, Hash, KeyRound, Lock, ShieldCheck, Ter
 export const metadata: Metadata = {
   title: "Security | RegEngine",
   description:
-    "RegEngine security is built around tenant isolation, immutable evidence, cryptographic hashes, and independently verifiable exports.",
+    "RegEngine security posture is centered on tenant isolation, evidence integrity, cryptographic verification, and exportability.",
   openGraph: {
     title: "Security | RegEngine",
-    description: "Tenant isolation, immutable evidence, and independent verification for FSMA 204 records.",
+    description: "Tenant isolation, evidence integrity, and verification posture for FSMA 204 records.",
     url: "https://regengine.co/security",
     type: "website",
   },
@@ -17,12 +17,12 @@ export const metadata: Metadata = {
 const verified = [
   { title: "Tenant isolation", body: "PostgreSQL row-level policies and authenticated tenant context prevent cross-tenant reads.", icon: Lock },
   { title: "Immutable evidence", body: "Committed compliance records are append-oriented and corrections preserve lineage.", icon: Database },
-  { title: "Hash verification", body: "SHA-256 verification lets exported evidence be checked outside the product UI.", icon: Hash },
+  { title: "Hash verification", body: "Current export posture is designed so evidence can be checked outside the product UI.", icon: Hash },
   { title: "Operational gates", body: "Secrets, SAST, DAST, dependency, container, and SBOM checks run in CI.", icon: ShieldCheck },
 ];
 
 const controls = [
-  ["Encryption", "AES-256 at rest, TLS in transit"],
+  ["Encryption", "Managed-cloud encryption at rest and encrypted transport in transit"],
   ["Identity", "JWT sessions, API keys, CSRF protection"],
   ["Isolation", "Tenant-scoped database access"],
   ["Audit", "Tamper-evident records and export manifests"],

@@ -50,7 +50,7 @@ export const metadata: Metadata = {
 
 /* ─── Data ─────────────────────────────────────────────────── */
 
-const API_BASE = 'https://regengine.co/api/v1';
+const API_BASE = 'https://your-preview-host/api/v1';
 
 const endpoints = [
   {

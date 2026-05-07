@@ -10,6 +10,7 @@
     "test": "vitest",
     "test:run": "vitest run",
     "test:coverage": "vitest run --coverage",
+    "promise:audit": "node scripts/promise-audit.mjs",
     "verify:ssr": "node scripts/verify-public-ssr.mjs",
     "test:e2e": "env -u NO_COLOR playwright test",
     "test:demo-smoke": "env -u NO_COLOR playwright test --config=playwright.demo-smoke.config.ts"

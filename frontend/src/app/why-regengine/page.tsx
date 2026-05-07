@@ -190,7 +190,7 @@ export default function WhyRegEnginePage() {
                     <div className="flex flex-col sm:flex-row gap-4">
                         <Button asChild size="lg">
                             <Link href="/signup">
-                                Start Free Trial
+                                Start Setup
                                 <ArrowRight className="ml-2 h-4 w-4" />
                             </Link>
                         </Button>
@@ -638,10 +638,10 @@ HTTP 201
                             </p>
                             <ul className="space-y-2">
                                 {[
-                                    'Self-serve signup, free trial included',
+                                    'Self-serve signup with onboarding support when needed',
                                     'No implementation services required',
                                     'Scales from 1 to 10,000 facilities',
-                                    'Email + Slack support for all plans',
+                                    'Direct support channel based on plan and rollout scope',
                                 ].map((item, idx) => (
                                     <li key={idx} className="flex gap-3 text-sm text-re-text-secondary">
                                         <Check className="h-5 w-5 text-re-success flex-shrink-0" />
@@ -752,12 +752,12 @@ HTTP 201
                         Ready to Get Compliant?
                     </h2>
                     <p className="text-re-text-secondary text-lg mb-8 max-w-2xl mx-auto">
-                        Sign up in minutes. Start with a 14-day free trial. No credit card required. No long-term contracts.
+                        Sign up in minutes. Start with the onboarding path that fits your team. No long-term contracts.
                     </p>
                     <div className="flex flex-col sm:flex-row gap-4 justify-center">
                         <Button asChild size="lg" className="bg-re-info hover:bg-re-info text-[var(--re-text-primary)]">
                             <Link href="/signup">
-                                Start Free Trial
+                                Start Setup
                                 <ArrowRight className="ml-2 h-4 w-4" />
                             </Link>
                         </Button>
@@ -777,11 +777,7 @@ HTTP 201
                         <a href="mailto:support@regengine.co" className="text-re-text-tertiary hover:text-[var(--re-text-primary)] underline">
                             support@regengine.co
                         </a>
-                        {' '}or join our{' '}
-                        <a href="https://slack.regengine.co" className="text-re-text-tertiary hover:text-[var(--re-text-primary)] underline" target="_blank" rel="noopener noreferrer">
-                            community Slack
-                        </a>
-                        .
+                        {' '}for rollout or integration questions.
                     </p>
                 </div>
             </section>

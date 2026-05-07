@@ -19,7 +19,7 @@ const OPERATIONS = [
 function generateSnippets(op: typeof OPERATIONS[0], apiKey: string, tenantId: string) {
   const key = apiKey || 'YOUR_API_KEY';
   const tid = tenantId || 'YOUR_TENANT_ID';
-  const base = 'https://regengine.co';
+  const base = 'https://your-preview-host';
 
   const snippets: Record<string, Record<string, string>> = {
     ingest: {

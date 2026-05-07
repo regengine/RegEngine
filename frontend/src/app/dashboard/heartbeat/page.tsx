@@ -516,8 +516,8 @@ export default function HeartbeatPage() {
                                             </div>
                                             <p className="text-base font-medium mb-1">No heartbeat data available</p>
                                             <p className="text-sm text-muted-foreground/60 max-w-md">
-                                                Your organization needs to be set up before compliance data can be displayed.
-                                                Import traceability events or contact support if this is unexpected.
+                                                This workspace does not yet have enough connected evidence to render the heartbeat view.
+                                                Import traceability events or contact support if you expected tenant data to appear here.
                                             </p>
                                             <div className="flex gap-3 mt-5">
                                                 <Link href="/ingest">
@@ -761,8 +761,8 @@ export default function HeartbeatPage() {
                                                 <div className="w-12 h-12 rounded-2xl bg-re-brand-muted flex items-center justify-center mb-3">
                                                     <CheckCircle2 className="h-6 w-6 text-re-brand" />
                                                 </div>
-                                                <p className="text-sm font-medium">All clear</p>
-                                                <p className="text-xs text-muted-foreground/60 mt-0.5">No open alerts right now</p>
+                                                <p className="text-sm font-medium">No alerts in the current view</p>
+                                                <p className="text-xs text-muted-foreground/60 mt-0.5">No open alerts were returned for this workspace at the moment.</p>
                                             </div>
                                         )}
                                     </CardContent>

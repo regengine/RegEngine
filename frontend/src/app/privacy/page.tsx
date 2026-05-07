@@ -74,7 +74,7 @@ const collectItems = [
   {
     Icon: ShieldCheck,
     subtitle: 'FTL Checker (Free Tool)',
-    text: 'The FTL Coverage Checker does not require an account and does not store your selections. If you submit your email for a gap analysis, we store that email solely to send you the analysis.',
+    text: 'The FTL Coverage Checker does not require an account and does not store your selections. If you submit your email for follow-up, we use it to review your request and contact you about coverage questions.',
   },
 ];
 
@@ -328,8 +328,9 @@ export default function PrivacyPage() {
                     Retention
                   </h3>
                   <p className="text-[13px] text-[var(--re-text-muted)] leading-relaxed">
-                    We retain your compliance data for the duration of your subscription plus 90 days.
-                    After cancellation, you can request a full data export. Customers with regulatory
+                    We retain your compliance data for the duration of your subscription and any
+                    post-cancellation period defined by your customer agreement. After cancellation,
+                    you can request a full data export. Customers with regulatory
                     retention obligations should maintain recurring exports or an external archive
                     rather than relying on an active subscription alone. After the retention period,
                     data is permanently deleted.

@@ -359,7 +359,7 @@ export default function ComplianceDashboardPage() {
                             Compliance Dashboard
                         </h1>
                         <p className="mt-1 text-sm text-muted-foreground">
-                            Real-time FSMA 204 readiness score and audit preparedness
+                            Current workspace-derived FSMA 204 readiness summary based on available traceability evidence
                         </p>
                     </div>
                     <div className="flex items-center gap-2">
@@ -403,7 +403,7 @@ export default function ComplianceDashboardPage() {
                                     <div>
                                         <p className="text-sm font-semibold text-foreground">Analyzing your traceability data</p>
                                         <p className="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground">
-                                            We are checking CTE coverage, KDE completeness, supplier identity, and export readiness. If this is your first visit, the setup guide will appear if no records are available.
+                                            We are evaluating the records currently available for this workspace, including CTE coverage, KDE completeness, supplier identity, and export readiness. If there is not enough evidence yet, the setup guide will appear instead of a score.
                                         </p>
                                     </div>
                                 </div>
@@ -450,7 +450,8 @@ export default function ComplianceDashboardPage() {
                             <div className="flex items-center gap-3 text-muted-foreground">
                                 <Info className="h-5 w-5 flex-shrink-0" />
                                 <div>
-                                    <p className="text-sm font-medium text-foreground">Compliance data is being set up. Check back shortly.</p>
+                                    <p className="text-sm font-medium text-foreground">Compliance data is currently unavailable for this workspace.</p>
+                                    <p className="mt-1 text-xs text-muted-foreground">This can mean the scoring service is unavailable or there is not enough connected evidence to calculate a score yet.</p>
                                 </div>
                             </div>
                         </CardContent>
@@ -722,10 +723,10 @@ export default function ComplianceDashboardPage() {
                                     <div className="text-xs text-muted-foreground leading-relaxed">
                                         <span className="font-medium text-foreground">What this score means: </span>
                                         {score.overall_score >= 80
-                                            ? 'Your facility is well-prepared for an FDA inspection under FSMA 204. Continue maintaining your traceability records and running periodic mock drills.'
+                                            ? 'The currently connected records indicate a strong readiness posture for this workspace. Continue maintaining traceability records and running periodic drills.'
                                             : score.overall_score >= 60
-                                            ? 'Your traceability program has a foundation but gaps remain. An FDA inspector could flag missing data fields or incomplete event records. Address the high-priority actions above.'
-                                            : 'Significant compliance gaps exist. If the FDA initiated a 204 records request today, your facility would likely be unable to respond within the required 24 hours. Immediate action is recommended.'}
+                                            ? 'The current evidence shows a workable foundation, but gaps remain. Missing data fields or incomplete event records still need attention before relying on this score in diligence or audit prep.'
+                                            : 'The currently connected evidence shows significant compliance gaps. Treat the high-priority actions above as prerequisites before relying on this workspace for 24-hour response readiness.'}
                                     </div>
                                 </div>
                             </CardContent>

@@ -319,9 +319,9 @@ export default function DashboardIntegrationsPage() {
                         <p className={styles.statCopy}>Customer-visible connectors and export surfaces.</p>
                     </div>
                     <div className={styles.statCard}>
-                        <div className={styles.statLabel}>GA API surfaces</div>
+                        <div className={styles.statLabel}>Registry items marked GA</div>
                         <div className={styles.statValue}>{liveApiCount}</div>
-                        <p className={styles.statCopy}>Current production-ready API and import claims.</p>
+                        <p className={styles.statCopy}>Status-model entries currently marked generally available.</p>
                     </div>
                     <div className={styles.statCard}>
                         <div className={styles.statLabel}>Open review items</div>
@@ -618,12 +618,12 @@ export default function DashboardIntegrationsPage() {
                             <div className={styles.pathPanel}>
                                 <div className={styles.pathHeader}>
                                     <div>
-                                        <h3 className={styles.pathTitle}>Live data path</h3>
-                                        <p className={styles.muted}>The same path is exercised by contract CI.</p>
+                                        <h3 className={styles.pathTitle}>Reference path</h3>
+                                        <p className={styles.muted}>Used for simulator replay and implementation validation workflows.</p>
                                     </div>
                                     <span className={styles.verifiedBadge}>
                                         <CheckCircle2 className={styles.badgeIcon} />
-                                        Verified
+                                        Documented
                                     </span>
                                 </div>
                                 <div className={styles.pathList}>

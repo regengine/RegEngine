@@ -10,7 +10,7 @@ export const metadata: Metadata = {
 
 const FEATURES = [
   { feature: "Time to first compliance export", regengine: "check", competitor: "x", note: "Minutes vs weeks of setup" },
-  { feature: "Self-serve signup (no demo required)", regengine: "check", competitor: "x", note: "14-day free trial vs enterprise onboarding" },
+  { feature: "Self-serve signup", regengine: "check", competitor: "x", note: "Fast account creation vs enterprise onboarding" },
   { feature: "Public API + OpenAPI docs", regengine: "check", competitor: "x", note: "Full REST API vs limited integrations" },
   { feature: "FSMA 204 rule engine (KDE + relational)", regengine: "check", competitor: "x", note: "Deep validation vs document storage" },
   { feature: "Real-time compliance scoring", regengine: "check", competitor: "x", note: "Per-event scoring vs manual review" },

@@ -59,7 +59,7 @@ const ESCALATION_PATH = [
     {
         step: '4',
         title: 'Emergency recall escalation',
-        description: 'Dedicated path for active FDA investigations or live recall events. Direct founder access for coordination on data exports, regulatory response packaging, and timeline management.',
+        description: 'Dedicated path for active FDA investigations or live recall events. Coordination may include direct founder involvement on data exports, response packaging, and timeline management when covered by plan or agreement.',
         icon: Siren,
         color: 'bg-re-danger-muted0/15 text-re-danger',
         availability: 'Extended hours · Premium (contractual)',

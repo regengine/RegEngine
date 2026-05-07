@@ -156,7 +156,7 @@ function SignupForm() {
             <CardDescription className="text-[var(--re-text-muted)]">
               {partnerTier === 'founding'
                 ? 'Join the design partner cohort. No credit card required.'
-                : '14-day free trial. No credit card required.'}
+                : 'Create your account and choose the onboarding path that fits your team.'}
             </CardDescription>
           </CardHeader>
           <CardContent>

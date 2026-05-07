@@ -362,9 +362,9 @@ export default function IssuesPage() {
                         animate={{ opacity: 1 }}
                     >
                         <CheckCircle2 className="h-12 w-12 text-re-brand mb-4" />
-                        <h2 className="text-lg font-semibold">No Issues Found</h2>
+                        <h2 className="text-lg font-semibold">No issues in the current view</h2>
                         <p className="text-sm text-muted-foreground mt-1 max-w-md">
-                            All systems clear. No blocking defects, no overdue deadlines, no pending reviews.
+                            No blocking defects, urgent deadlines, or warnings were returned for this workspace at the moment.
                         </p>
                     </motion.div>
                 )}

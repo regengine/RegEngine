@@ -215,8 +215,7 @@ export function RecallReadinessClient() {
                         <div className="text-center mb-5">
                             <h3 className="text-lg font-bold text-[var(--re-text-primary)]">Get Your Full Compliance Report</h3>
                             <p className="text-sm text-[var(--re-text-tertiary)] mt-1">
-                                Our founder personally reviews every assessment within 24 hours
-                                and sends you a detailed gap analysis with CFR citations.
+                                Share your details if you want a follow-up from the RegEngine team about your readiness results and next steps.
                             </p>
                         </div>
                         <form onSubmit={handleLeadSubmit} className="space-y-3">

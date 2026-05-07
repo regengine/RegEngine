@@ -79,8 +79,8 @@ export default function TrustCenterPage() {
                     </div>
                     <div className={`${card} p-4`}>
                         <div className="text-xs uppercase tracking-widest text-re-text-disabled">Retention Posture</div>
-                        <div className="mt-2 text-2xl font-bold text-re-text-primary">90 days</div>
-                        <div className="text-sm text-re-text-muted mt-1">Post-cancellation window before deletion unless customers export or archive externally</div>
+                        <div className="mt-2 text-2xl font-bold text-re-text-primary">Current default</div>
+                        <div className="text-sm text-re-text-muted mt-1">Post-cancellation retention follows the active customer agreement and workspace operating posture</div>
                     </div>
                     <div className={`${card} p-4`}>
                         <div className="text-xs uppercase tracking-widest text-re-text-disabled">Data Residency</div>
@@ -193,10 +193,10 @@ export default function TrustCenterPage() {
                     </div>                    <div className={`${card} p-4`}>
                         <div className="text-sm font-semibold text-re-text-primary">Automated export scheduling</div>
                         <ul className="mt-2 space-y-1 text-sm text-re-text-muted">
-                            <li>Daily, weekly, or monthly export cadence</li>
-                            <li>Object storage archive or downloadable bundle</li>
-                            <li>Manifest hash included in every export run</li>
-                            <li>Export runs monitored with automatic retry on failure</li>
+                            <li>Export cadence can be scoped per deployment</li>
+                            <li>Archive delivery may use object storage or downloadable bundles</li>
+                            <li>Manifest hashing is part of the intended export posture</li>
+                            <li>Monitoring and retry behavior depend on the configured delivery path</li>
                         </ul>
                     </div>
                     <div className={`${card} p-4`}>

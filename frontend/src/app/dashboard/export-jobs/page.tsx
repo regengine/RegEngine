@@ -128,7 +128,7 @@ export default function ExportJobsPage() {
                             Archive &amp; Export Jobs
                         </h1>
                         <p className="text-xs sm:text-sm text-muted-foreground mt-1">
-                            Configure recurring FDA, EPCIS, and audit bundles against the current customer-readiness API contract so statutory retention does not depend on a live subscription.
+                            Configure export jobs for connected workspaces so off-platform retention does not depend on an active in-app subscription alone.
                         </p>
                     </div>
                     <Button
@@ -155,7 +155,7 @@ export default function ExportJobsPage() {
                     </div>
                 ) : (
                     <div className="rounded-xl border border-[var(--re-brand)]/20 bg-[var(--re-brand)]/[0.04] p-4 text-sm text-muted-foreground">
-                        Schedule automated FDA exports, EPCIS packages, and compliance reports. Configure cadence, format, and delivery destination below.
+                        Create export jobs for the connected data paths available on this workspace. Configure cadence, bundle type, and delivery destination below.
                     </div>
                 )}
 
@@ -177,7 +177,7 @@ export default function ExportJobsPage() {
                         <CardContent className="pt-4 sm:pt-6">
                             <div className="text-[11px] sm:text-xs uppercase tracking-widest text-muted-foreground">Integrity model</div>
                             <div className="text-base sm:text-lg font-semibold mt-1.5 sm:mt-2">Manifest hash per run</div>
-                            <div className="text-xs sm:text-sm text-muted-foreground mt-1">Every bundle exposes tenant context, timestamps, and integrity metadata.</div>
+                            <div className="text-xs sm:text-sm text-muted-foreground mt-1">Each generated bundle can include tenant context, timestamps, and integrity metadata for that run.</div>
                         </CardContent>
                     </Card>
                 </div>
@@ -186,7 +186,7 @@ export default function ExportJobsPage() {
                     <CardHeader>
                         <CardTitle>Create recurring export job</CardTitle>
                         <CardDescription>
-                            Default destinations are downloadable bundle and object-storage archive. This is the current customer-facing contract surface for retention readiness.
+                            Available destinations on this surface are downloadable bundles and object-storage archives for connected workspaces.
                         </CardDescription>
                     </CardHeader>
                     <CardContent className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2">
@@ -278,13 +278,13 @@ export default function ExportJobsPage() {
                         <div className="rounded-xl border border-[var(--re-border-default)] bg-[var(--re-surface-elevated)] p-5">
                             <div className="flex items-start gap-3">
                                 <Clock className="mt-0.5 h-4 w-4 animate-pulse text-[var(--re-brand)]" />
-                                <div>
-                                    <p className="text-sm font-semibold">Loading export jobs</p>
-                                    <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                                        Checking scheduled exports, archive destinations, and the latest manifest state.
-                                    </p>
+                                    <div>
+                                        <p className="text-sm font-semibold">Loading export jobs</p>
+                                        <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                                            Checking configured export jobs, archive destinations, and the latest manifest state returned for this workspace.
+                                        </p>
+                                    </div>
                                 </div>
-                            </div>
                         </div>
                     )}
                     {status !== 'loading' && jobs.length === 0 && (
@@ -296,7 +296,7 @@ export default function ExportJobsPage() {
                                         <div>
                                             <p className="text-sm font-semibold">No export jobs yet</p>
                                             <p className="mt-1 max-w-2xl text-xs leading-5 text-muted-foreground">
-                                                Export jobs package accepted traceability records into FDA, EPCIS, or audit bundles on a cadence. Set one up after your first clean source is connected, then every run will appear here with timing and manifest details.
+                                                Export jobs package accepted traceability records into FDA, EPCIS, or audit bundles on a cadence once this workspace has a connected evidence path. After the first successful job, run timing and manifest details will appear here.
                                             </p>
                                         </div>
                                     </div>
