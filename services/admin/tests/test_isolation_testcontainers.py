@@ -227,3 +227,215 @@ def test_rls_isolation_with_testcontainers(db_engine, apply_migrations):
         print(f"Projects visible to Tenant B: {[r[0] for r in results]}")
 
     assert True # Pilot successfully demonstrated
+
+
+# ===========================================================================
+# get_tenant_scoped_session — end-to-end RLS substrate validation
+#
+# get_tenant_scoped_session is a thin wrapper:
+#   verify_path_tenant_matches → get_tenant_session(str(tenant_id))
+#                                 → SessionLocal() + set_tenant_guc(...)
+#
+# The unit tests in test_admin_service_hardening.py mock the underlying
+# get_tenant_session and verify the wrapper delegates correctly. What
+# those tests CAN'T cover is whether the canonical set_tenant_guc
+# primitive actually produces RLS isolation against a real Postgres
+# with policies installed — i.e. whether a query that "forgets" its
+# WHERE tenant_id predicate genuinely fails closed.
+#
+# This test seeds a minimal RLS-enabled table (with FORCE ROW LEVEL
+# SECURITY so the testcontainer superuser doesn't bypass policy),
+# inserts rows for two tenants, then exercises set_tenant_guc directly
+# and asserts an unfiltered SELECT only returns the bound tenant's
+# rows. It's the substrate proof for everything get_tenant_scoped_session
+# claims to enforce.
+# ===========================================================================
+
+
+@pytest.fixture(scope="function")
+def rls_test_table(db_engine):
+    """Provision a minimal RLS-enabled table + a non-superuser role for
+    substrate testing.
+
+    The default ``postgres`` role in the testcontainer has the BYPASSRLS
+    attribute, which means RLS policies do NOT apply to queries from
+    that role — even with FORCE ROW LEVEL SECURITY on the table. We
+    create ``rls_app_user`` (no BYPASSRLS, no superuser, no role
+    inheritance shortcuts) and grant only the table privileges; tests
+    open sessions via that role so RLS is genuinely enforced.
+
+    Function-scoped — each test starts from a clean table + role.
+    """
+    with db_engine.connect() as conn:
+        # Drop+recreate the role so the fixture is idempotent across reruns.
+        conn.execute(text("DROP OWNED BY rls_app_user CASCADE")) if False else None
+        conn.execute(text("""
+            DO $$
+            BEGIN
+                IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'rls_app_user') THEN
+                    DROP OWNED BY rls_app_user CASCADE;
+                    DROP ROLE rls_app_user;
+                END IF;
+                CREATE ROLE rls_app_user LOGIN PASSWORD 'rls_app_user_pw' NOBYPASSRLS;
+            END
+            $$;
+        """))
+        conn.execute(text("DROP TABLE IF EXISTS rls_substrate_items CASCADE"))
+        conn.execute(text("""
+            CREATE TABLE rls_substrate_items (
+                id UUID PRIMARY KEY,
+                tenant_id UUID NOT NULL,
+                payload TEXT NOT NULL
+            )
+        """))
+        conn.execute(text("ALTER TABLE rls_substrate_items ENABLE ROW LEVEL SECURITY"))
+        conn.execute(text("ALTER TABLE rls_substrate_items FORCE ROW LEVEL SECURITY"))
+        conn.execute(text("""
+            CREATE POLICY rls_substrate_tenant_iso ON rls_substrate_items
+                FOR ALL TO PUBLIC
+                USING (tenant_id::text = current_setting('app.tenant_id', true))
+                WITH CHECK (tenant_id::text = current_setting('app.tenant_id', true))
+        """))
+        conn.execute(text(
+            "GRANT SELECT, INSERT, UPDATE, DELETE ON rls_substrate_items TO rls_app_user"
+        ))
+        conn.commit()
+    yield
+    with db_engine.connect() as conn:
+        conn.execute(text("DROP TABLE IF EXISTS rls_substrate_items CASCADE"))
+        conn.execute(text("""
+            DO $$
+            BEGIN
+                IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'rls_app_user') THEN
+                    DROP OWNED BY rls_app_user CASCADE;
+                    DROP ROLE rls_app_user;
+                END IF;
+            END
+            $$;
+        """))
+        conn.commit()
+
+
+def _app_user_engine(db_engine):
+    """Return an engine connected as the non-superuser rls_app_user role."""
+    url = str(db_engine.url)
+    # Replace the user/password segment with the non-superuser credentials.
+    # postgresql+psycopg://test:test@host:port/test → //rls_app_user:pw@host:port/test
+    import re
+    new_url = re.sub(
+        r"(postgresql\+psycopg://)[^@]+@",
+        r"\1rls_app_user:rls_app_user_pw@",
+        url,
+    )
+    return create_engine(new_url)
+
+
+def test_set_tenant_guc_isolates_reads_under_force_rls(db_engine, rls_test_table):
+    """A query with NO WHERE predicate must only return rows for the
+    tenant whose UUID has been bound via set_tenant_guc — even if the
+    handler forgot to filter. This is the RLS substrate that
+    get_tenant_scoped_session relies on for defense-in-depth.
+
+    The session is opened as the non-superuser ``rls_app_user`` so
+    BYPASSRLS does not apply — RLS is genuinely the only filter.
+    """
+    from shared.tenant_context import set_tenant_guc
+
+    app_engine = _app_user_engine(db_engine)
+    Session = sessionmaker(bind=app_engine)
+    tenant_a = uuid.uuid4()
+    tenant_b = uuid.uuid4()
+
+    # Seed via the superuser engine (BYPASSRLS) so we can insert rows
+    # for both tenants without juggling per-row GUCs.
+    with db_engine.connect() as conn:
+        conn.execute(
+            text(
+                "INSERT INTO rls_substrate_items (id, tenant_id, payload) VALUES "
+                "(:id_a, :tid_a, 'a-row-1'), "
+                "(:id_a2, :tid_a, 'a-row-2'), "
+                "(:id_b, :tid_b, 'b-row-1')"
+            ),
+            {
+                "id_a": uuid.uuid4(),
+                "id_a2": uuid.uuid4(),
+                "id_b": uuid.uuid4(),
+                "tid_a": tenant_a,
+                "tid_b": tenant_b,
+            },
+        )
+        conn.commit()
+
+    # Tenant A bound: must see exactly the 2 rows for A. The query has
+    # NO ``WHERE tenant_id = ...`` — RLS is the only filter.
+    with Session() as session:
+        set_tenant_guc(session, str(tenant_a))
+        rows = session.execute(text("SELECT payload FROM rls_substrate_items")).all()
+        payloads = sorted(r[0] for r in rows)
+        assert payloads == ["a-row-1", "a-row-2"], (
+            f"Tenant A bound, but query returned: {payloads}. RLS not "
+            f"enforcing isolation — get_tenant_scoped_session's safety "
+            f"net is broken."
+        )
+
+    # Tenant B bound: must see exactly the 1 row for B.
+    with Session() as session:
+        set_tenant_guc(session, str(tenant_b))
+        rows = session.execute(text("SELECT payload FROM rls_substrate_items")).all()
+        payloads = sorted(r[0] for r in rows)
+        assert payloads == ["b-row-1"], (
+            f"Tenant B bound, but query returned: {payloads}"
+        )
+
+    # No tenant bound: must see zero rows. Postgres returns NULL for
+    # current_setting('app.tenant_id', true) when unset; the policy
+    # `tenant_id::text = NULL` evaluates UNKNOWN → no rows.
+    with Session() as session:
+        rows = session.execute(text("SELECT payload FROM rls_substrate_items")).all()
+        assert rows == [], (
+            f"No tenant bound, but query returned: {rows}. RLS should "
+            f"fail closed when app.tenant_id is unset — otherwise an "
+            f"unauthenticated path that picks up a pooled connection "
+            f"could read every tenant's data."
+        )
+
+
+def test_set_tenant_guc_isolates_writes_under_force_rls(db_engine, rls_test_table):
+    """An INSERT with a tenant_id that doesn't match the bound GUC must
+    be rejected by the policy's WITH CHECK clause. Catches a regression
+    where set_tenant_guc binds the read context but the write side leaks.
+    """
+    from shared.tenant_context import set_tenant_guc
+
+    app_engine = _app_user_engine(db_engine)
+    Session = sessionmaker(bind=app_engine)
+    tenant_a = uuid.uuid4()
+    tenant_b = uuid.uuid4()
+
+    with Session() as session:
+        set_tenant_guc(session, str(tenant_a))
+        # OK: writing into tenant_a while bound to A.
+        session.execute(
+            text(
+                "INSERT INTO rls_substrate_items (id, tenant_id, payload) "
+                "VALUES (:id, :tid, 'a-write-ok')"
+            ),
+            {"id": uuid.uuid4(), "tid": tenant_a},
+        )
+        # NOT OK: writing into tenant_b while bound to A. WITH CHECK
+        # rejects with row-violation.
+        with pytest.raises(Exception) as exc_info:
+            session.execute(
+                text(
+                    "INSERT INTO rls_substrate_items (id, tenant_id, payload) "
+                    "VALUES (:id, :tid, 'cross-tenant-write')"
+                ),
+                {"id": uuid.uuid4(), "tid": tenant_b},
+            )
+        msg = str(exc_info.value).lower()
+        assert (
+            "row-level security" in msg or "rls" in msg or "violates" in msg
+        ), (
+            f"Cross-tenant write should be rejected by WITH CHECK; got: "
+            f"{exc_info.value!r}"
+        )
