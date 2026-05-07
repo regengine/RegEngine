@@ -83,6 +83,56 @@ def test_query_api_events_search_contract():
     assert body["filters"]["limit"] == 25
 
 
+def test_query_api_rejects_query_string_tenant_id_override():
+    """EPIC-A #1651: query-string ?tenant_id=other must not override the
+    authenticated principal's tenant. resolve_tenant_context raises 409
+    E_TENANT_MISMATCH when the request claims a different tenant.
+    """
+    app = _build_app(scopes=["graph.query"])
+    client = TestClient(app)
+
+    other_tenant = "22222222-2222-2222-2222-222222222222"
+
+    with patch("services.nlp.app.routes._graph_get", new_callable=AsyncMock):
+        response = client.post(
+            "/api/v1/query/traceability",
+            params={"tenant_id": other_tenant},
+            json={"query": "show me all lettuce from Supplier X in the last 30 days"},
+            headers={"X-RegEngine-API-Key": "rge_test.secret"},
+        )
+
+    assert response.status_code == 409
+    body = response.json()
+    detail = body.get("detail")
+    assert isinstance(detail, dict) and detail.get("code") == "E_TENANT_MISMATCH"
+
+
+def test_query_api_uses_authenticated_principal_tenant_id():
+    """EPIC-A #1651: tenant_id must come from the authenticated principal,
+    never from a request-supplied header or query string.
+    """
+    app = _build_app(scopes=["graph.query"])
+    client = TestClient(app)
+
+    graph_payload = {"count": 0, "events": [], "next_cursor": None}
+
+    with patch("services.nlp.app.routes._graph_get", new_callable=AsyncMock) as mock_graph:
+        with patch("services.nlp.app.routes.emit_funnel_event") as mock_emit:
+            mock_graph.return_value = graph_payload
+
+            # Header overrides are silently ignored — the route now reads
+            # x-tenant-id-override (per resolve_tenant_context), not X-Tenant-ID.
+            response = client.post(
+                "/api/v1/query/traceability",
+                json={"query": "show me all lettuce from Supplier X in the last 30 days"},
+                headers={"X-RegEngine-API-Key": "rge_test.secret"},
+            )
+
+    assert response.status_code == 200
+    # The funnel event must record the principal's tenant, not any client-supplied value.
+    assert mock_emit.call_args.kwargs["tenant_id"] == "11111111-1111-1111-1111-111111111111"
+
+
 def test_query_api_trace_backward_route_selection():
     app = _build_app(scopes=["graph.query"])
     client = TestClient(app)
