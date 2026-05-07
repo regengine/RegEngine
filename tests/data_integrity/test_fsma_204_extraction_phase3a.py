@@ -21,6 +21,14 @@ HEADERS = {
     "Content-Type": "application/json"
 }
 
+
+def _service_available(base_url: str) -> bool:
+    try:
+        response = requests.get(f"{base_url}/health", timeout=2)
+        return response.status_code < 500
+    except requests.RequestException:
+        return False
+
 class TestFSMA204ExtractionPhase3a:
     """
     Phase 3a: Fact Extraction Verification.
@@ -36,6 +44,10 @@ class TestFSMA204ExtractionPhase3a:
         2. Poll for Facts
         3. Assert specific facts exist
         """
+        if not _service_available(INGEST_SERVICE_URL):
+            pytest.skip("ingestion service not running")
+        if not _service_available(API_BASE_URL):
+            pytest.skip("admin service not running")
         
         # 1. Trigger Ingestion (Idempotent: will return existing if handled, or update)
         payload = {

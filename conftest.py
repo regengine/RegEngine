@@ -36,6 +36,8 @@ _APP_BEARING_SERVICES = ("admin", "compliance", "graph", "ingestion", "nlp", "sc
 _TEST_TO_SERVICE_OVERRIDES = {
     "tests/billing/test_stripe_billing.py": "ingestion",
     "tests/billing/test_stripe_webhook_ordering_1196.py": "ingestion",
+    "tests/contract/test_admin_api_contract.py": "admin",
+    "tests/ingestion/test_ingest_url.py": "ingestion",
     "tests/security/test_audit_integrity.py": "admin",
     "tests/security/test_strict_ciam_compliance.py": "admin",
     "tests/test_trace_engine.py": "ingestion",
