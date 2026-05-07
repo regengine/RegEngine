@@ -416,6 +416,61 @@ def get_tenant_scoped_session(
     yield from get_tenant_session(str(tenant_id))
 
 
+# Imports for ``get_auth_scoped_session``. Aliased to avoid colliding
+# with the local ``models.TenantContext`` (a session-context helper)
+# that's already imported above — same name, different class.
+from shared.tenant_context import (  # noqa: E402
+    resolve_tenant_context,
+    TenantContext as AuthTenantContext,
+)
+
+
+async def get_auth_scoped_session(
+    ctx: AuthTenantContext = Depends(resolve_tenant_context),
+):
+    """Yield a session with ``app.tenant_id`` bound from the AUTHENTICATED
+    principal's tenant — companion to ``get_tenant_scoped_session`` for
+    routes WITHOUT a ``{tenant_id}`` path parameter.
+
+    Usage on routes where the operating tenant comes from the auth
+    context (API-key row's tenant_id, JWT claim, preshared master key
+    + X-Tenant-ID header), not from the URL path::
+
+        @router.post("/v1/audit/export")
+        async def export_audit_logs(
+            session: Session = Depends(get_auth_scoped_session),
+        ):
+            # RLS enforced via app.tenant_id even if the handler
+            # forgets to filter on tenant_id explicitly.
+            ...
+
+    Resolution order is the canonical EPIC-A one (see
+    ``shared.tenant_context.resolve_tenant_context`` for the full
+    contract): API-key principal → JWT principal → preshared master
+    key + X-Tenant-ID. Tenant from URL path / query / body /
+    Supabase ``user_metadata`` is rejected with HTTP 409 if it
+    conflicts with the principal's tenant.
+
+    Use ``get_tenant_scoped_session`` instead when the route HAS a
+    ``{tenant_id}`` path segment that must be cross-checked against
+    the caller's auth context — the two deps cover orthogonal route
+    shapes.
+    """
+    # Drive the sync ``get_tenant_session`` generator manually because
+    # ``async def`` can't ``yield from`` a sync generator. Cleanup
+    # (rollback + close inside ``get_tenant_session``) runs when this
+    # async generator is closed by FastAPI on request completion.
+    gen = get_tenant_session(ctx.tenant_id)
+    session = next(gen)
+    try:
+        yield session
+    finally:
+        try:
+            next(gen)
+        except StopIteration:
+            pass
+
+
 # --- API Key Auth (Remediation Phase 1) ---
 from fastapi.security import APIKeyHeader
 from shared.api_key_store import get_db_key_store

@@ -482,3 +482,81 @@ def test_get_tenant_scoped_session_default_uses_verify_path_tenant_matches():
         f"tenant_id default must wrap verify_path_tenant_matches; got "
         f"{getattr(default, 'dependency', None)}"
     )
+
+
+# =========================================================================
+# get_auth_scoped_session — companion to get_tenant_scoped_session for
+# routes WITHOUT a {tenant_id} path parameter. Derives tenant from the
+# authenticated principal via shared.tenant_context.resolve_tenant_context
+# (the EPIC-A authoritative resolver) and binds app.tenant_id GUC for
+# RLS, same way as the path-bound sibling.
+# =========================================================================
+
+
+@pytest.mark.asyncio
+async def test_get_auth_scoped_session_delegates_with_resolved_tenant_id():
+    """The async dep yields the session ``get_tenant_session(ctx.tenant_id)``
+    yields — i.e. it consumes the resolved-from-auth tenant id and drives
+    the canonical sync session generator that runs ``set_tenant_guc``.
+    """
+    from services.admin.app import dependencies as deps_mod
+
+    tenant_id_str = "11111111-1111-1111-1111-111111111111"
+    fake_session = MagicMock(name="bound_session")
+    cleanup_observed = {"hit": False}
+
+    def fake_get_tenant_session(tenant_id):
+        # Mirror the real generator: assert input, yield, observe cleanup.
+        assert tenant_id == tenant_id_str, (
+            "wrapper must pass the resolved tenant_id through unchanged "
+            "so set_tenant_guc binds the right GUC value"
+        )
+        try:
+            yield fake_session
+        finally:
+            cleanup_observed["hit"] = True
+
+    fake_ctx = SimpleNamespace(
+        tenant_id=tenant_id_str,
+        principal_kind="api_key",
+        principal_id="key_id_1",
+        actor_email=None,
+    )
+
+    with patch.object(deps_mod, "get_tenant_session", fake_get_tenant_session):
+        agen = deps_mod.get_auth_scoped_session(ctx=fake_ctx)
+        yielded = await agen.__anext__()
+        assert yielded is fake_session
+        # Drive the async generator to completion so cleanup runs.
+        try:
+            await agen.__anext__()
+        except StopAsyncIteration:
+            pass
+        assert cleanup_observed["hit"] is True
+
+
+def test_get_auth_scoped_session_default_uses_resolve_tenant_context():
+    """The dep's ``ctx`` default must be ``Depends(resolve_tenant_context)``
+    — otherwise the route bypasses the EPIC-A authoritative resolver and
+    can read tenant_id from path/query/body, which is exactly what the
+    EPIC-A docstring forbids (see services/shared/tenant_context.py).
+    """
+    import inspect
+
+    from fastapi import Depends
+
+    from services.admin.app.dependencies import get_auth_scoped_session
+    from shared.tenant_context import resolve_tenant_context
+
+    sig = inspect.signature(get_auth_scoped_session)
+    ctx_param = sig.parameters["ctx"]
+    default = ctx_param.default
+
+    assert isinstance(default, type(Depends(resolve_tenant_context))), (
+        "ctx default must be a Depends(...) so FastAPI runs the "
+        "EPIC-A authoritative resolver before binding the GUC"
+    )
+    assert default.dependency is resolve_tenant_context, (
+        f"ctx default must wrap resolve_tenant_context; got "
+        f"{getattr(default, 'dependency', None)}"
+    )
