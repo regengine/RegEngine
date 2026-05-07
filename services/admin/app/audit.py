@@ -23,6 +23,30 @@ from .sqlalchemy_models import AuditLogModel
 logger = structlog.get_logger("audit")
 
 
+# Counter so the "best-effort" failure mode below is alertable.
+# Without this, audit_logging_failed only emitted a structured log line
+# with no metric, so an outage where the chain stopped writing was
+# invisible to ops until the subsequent audit-export run. Pattern
+# matches the duplicate guard used in review_consumer.py for
+# double-import safety.
+try:
+    from prometheus_client import Counter
+
+    AUDIT_LOG_FAILURES_COUNTER = Counter(
+        "admin_audit_log_failures_total",
+        "Audit log entries that failed to persist (caught at the swallow-and-return-None boundary in AuditLogger.log_event).",
+        ["event_type", "error_class"],
+    )
+except ImportError:  # prometheus_client not installed
+    AUDIT_LOG_FAILURES_COUNTER = None
+except ValueError:  # already registered (double-import / module reload)
+    from prometheus_client import REGISTRY
+
+    AUDIT_LOG_FAILURES_COUNTER = REGISTRY._names_to_collectors.get(
+        "admin_audit_log_failures_total"
+    )
+
+
 # #1415: audit chain integrity hash schema version. v1 hashed only
 # tenant/timestamp/event_type/action/resource_id/metadata, which let a
 # SQL-capable attacker rewrite actor_id/actor_email/severity/endpoint
@@ -207,10 +231,17 @@ class AuditLogger:
             # best-effort; callers that continue using the same Session
             # after a None result must rollback before further writes. The
             # schema issues are root-cause fixed in Alembic v065/v070.
+            if AUDIT_LOG_FAILURES_COUNTER is not None:
+                AUDIT_LOG_FAILURES_COUNTER.labels(
+                    event_type=event_type,
+                    error_class=type(e).__name__,
+                ).inc()
             logger.error(
                 "audit_logging_failed",
                 error=str(e),
+                error_class=type(e).__name__,
                 event_type=event_type,
                 action=action,
+                tenant_id=str(tenant_id),
             )
             return None
