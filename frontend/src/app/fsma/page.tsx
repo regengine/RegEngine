@@ -61,23 +61,23 @@ import {
 const EMPTY_FACILITIES: Facility[] = [];
 
 export default function FSMADashboardPage() {
-  const { apiKey } = useAuth();
+  const { isAuthenticated } = useAuth();
   const [tlcQuery, setTlcQuery] = useState('');
   const [activeTlc, setActiveTlc] = useState<string | null>(null);
   const [selectedFacility, setSelectedFacility] = useState<Facility | null>(null);
 
   // API hooks
-  const dashboard = useFSMADashboard(apiKey || '');
-  const recallDrills = useRecallDrills(apiKey || '');
-  const readiness = useRecallReadiness(apiKey || '');
-  const createDrill = useCreateRecallDrill(apiKey || '');
-  const exportTrace = useExportTrace(apiKey || '');
-  const exportCompliance = useExportComplianceReport(apiKey || '');
-  const supplierHealth = useSupplierHealth(apiKey || '');
+  const dashboard = useFSMADashboard();
+  const recallDrills = useRecallDrills();
+  const readiness = useRecallReadiness();
+  const createDrill = useCreateRecallDrill();
+  const exportTrace = useExportTrace();
+  const exportCompliance = useExportComplianceReport();
+  const supplierHealth = useSupplierHealth();
 
   // Trace query (only when activeTlc is set)
-  const traceResult = useForwardTrace(activeTlc || '', apiKey || '', !!activeTlc && !!apiKey);
-  const massBalance = useMassBalance(activeTlc || '', apiKey || '', !!activeTlc && !!apiKey);
+  const traceResult = useForwardTrace(activeTlc || '', undefined, !!activeTlc && isAuthenticated);
+  const massBalance = useMassBalance(activeTlc || '', undefined, !!activeTlc && isAuthenticated);
 
   const handleTrace = () => {
     if (tlcQuery.trim()) {
@@ -153,23 +153,23 @@ export default function FSMADashboardPage() {
             </div>
           </div>
 
-          {/* No API Key Warning */}
-          {!apiKey && (
+          {/* Auth warning */}
+          {!isAuthenticated && (
             <Card className="border-re-warning dark:border-re-warning bg-re-warning-muted dark:bg-re-warning/20">
               <CardContent className="pt-6">
                 <div className="flex items-start gap-3">
                   <Key className="h-5 w-5 text-re-warning dark:text-re-warning mt-0.5" />
                   <div className="flex-1">
                     <p className="font-medium text-re-warning dark:text-re-warning">
-                      API Key Required for Full Functionality
+                      Sign in to unlock live FSMA data
                     </p>
                     <p className="text-sm text-re-warning dark:text-re-warning mt-1">
-                      Connect to the FSMA backend to access real traceability data and recall drills.
-                      Demo visualization is shown below.
+                      Cookie-backed session auth now powers the live FSMA dashboard. Until you sign in,
+                      demo visualization is shown below.
                     </p>
-                    <Link href="/onboarding">
+                    <Link href="/login?next=/fsma">
                       <Button size="sm" variant="outline" className="mt-3">
-                        Setup API Key
+                        Sign In
                         <ArrowRight className="ml-2 h-4 w-4" />
                       </Button>
                     </Link>

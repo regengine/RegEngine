@@ -2,7 +2,6 @@
 
 import { useState } from 'react';
 import { useDriftAlerts, useAcknowledgeAlert } from '@/hooks/use-fsma';
-import { useAuth } from '@/lib/auth-context';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -20,9 +19,8 @@ import { AlertCard } from './alert-card';
 import { AlertFilters } from './alert-filters';
 
 export default function AdminAlertsPage() {
-    const { apiKey } = useAuth();
-    const { data: alertsData, isLoading } = useDriftAlerts(apiKey || '');
-    const acknowledge = useAcknowledgeAlert(apiKey || '');
+    const { data: alertsData, isLoading } = useDriftAlerts();
+    const acknowledge = useAcknowledgeAlert();
 
     const [filterSeverity, setFilterSeverity] = useState<string>('ALL');
     const [filterType, setFilterType] = useState<string>('ALL');

@@ -2,6 +2,7 @@
 
 import { fetchWithCsrf } from '@/lib/fetch-with-csrf';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useAuth } from '@/lib/auth-context';
 import type {
   TraceResult,
   MassBalanceResult,
@@ -28,7 +29,7 @@ const GRAPH_API_BASE = typeof window !== 'undefined'
 // The `apiKey` parameter is kept for backward compatibility but is ignored.
 async function fsmaFetch<T>(
   endpoint: string,
-  _apiKey: string,
+  _apiKey?: string | null,
   options?: RequestInit
 ): Promise<T> {
   const url = `${GRAPH_API_BASE}${endpoint}`;
@@ -52,34 +53,37 @@ async function fsmaFetch<T>(
 
 // ============== Traceability Hooks ==============
 
-export function useForwardTrace(tlc: string, apiKey: string, enabled = true) {
+export function useForwardTrace(tlc: string, apiKey?: string | null, enabled = true) {
+  const { isAuthenticated } = useAuth();
   return useQuery({
     queryKey: ['fsma', 'trace', 'forward', tlc],
     queryFn: () => fsmaFetch<TraceResult>(`/traceability/trace/forward/${encodeURIComponent(tlc)}`, apiKey),
-    enabled: enabled && !!tlc && !!apiKey,
+    enabled: enabled && !!tlc && isAuthenticated,
     staleTime: 30 * 1000, // 30 seconds
   });
 }
 
-export function useBackwardTrace(tlc: string, apiKey: string, enabled = true) {
+export function useBackwardTrace(tlc: string, apiKey?: string | null, enabled = true) {
+  const { isAuthenticated } = useAuth();
   return useQuery({
     queryKey: ['fsma', 'trace', 'backward', tlc],
     queryFn: () => fsmaFetch<TraceResult>(`/traceability/trace/backward/${encodeURIComponent(tlc)}`, apiKey),
-    enabled: enabled && !!tlc && !!apiKey,
+    enabled: enabled && !!tlc && isAuthenticated,
     staleTime: 30 * 1000,
   });
 }
 
-export function useTimeline(tlc: string, apiKey: string, enabled = true) {
+export function useTimeline(tlc: string, apiKey?: string | null, enabled = true) {
+  const { isAuthenticated } = useAuth();
   return useQuery({
     queryKey: ['fsma', 'timeline', tlc],
     queryFn: () => fsmaFetch<{ events: TraceResult['events'] }>(`/traceability/timeline/${encodeURIComponent(tlc)}`, apiKey),
-    enabled: enabled && !!tlc && !!apiKey,
+    enabled: enabled && !!tlc && isAuthenticated,
     staleTime: 30 * 1000,
   });
 }
 
-export function useExportTrace(apiKey: string) {
+export function useExportTrace(_apiKey?: string | null) {
   return useMutation({
     mutationFn: async ({ tlc, direction }: { tlc: string; direction: 'forward' | 'backward' }) => {
       const response = await fetchWithCsrf(
@@ -103,7 +107,7 @@ export function useExportTrace(apiKey: string) {
 }
 
 
-export function useExportRecallContacts(apiKey: string) {
+export function useExportRecallContacts(_apiKey?: string | null) {
   return useMutation({
     mutationFn: async (tlc: string) => {
       const response = await fetchWithCsrf(
@@ -128,36 +132,39 @@ export function useExportRecallContacts(apiKey: string) {
 
 // ============== Mass Balance Hooks ==============
 
-export function useMassBalance(tlc: string, apiKey: string, enabled = true) {
+export function useMassBalance(tlc: string, apiKey?: string | null, enabled = true) {
+  const { isAuthenticated } = useAuth();
   return useQuery({
     queryKey: ['fsma', 'mass-balance', tlc],
     queryFn: () => fsmaFetch<MassBalanceResult>(`/science/mass-balance/${encodeURIComponent(tlc)}`, apiKey),
-    enabled: enabled && !!tlc && !!apiKey,
+    enabled: enabled && !!tlc && isAuthenticated,
     staleTime: 60 * 1000,
   });
 }
 
 // ============== Recall Drill Hooks ==============
 
-export function useRecallDrills(apiKey: string, limit = 10) {
+export function useRecallDrills(apiKey?: string | null, limit = 10) {
+  const { isAuthenticated } = useAuth();
   return useQuery({
     queryKey: ['fsma', 'recall', 'history', limit],
     queryFn: () => fsmaFetch<{ drills: RecallDrill[] }>(`/recall/history?limit=${limit}`, apiKey),
-    enabled: !!apiKey,
+    enabled: isAuthenticated,
     refetchInterval: 10 * 1000, // Refresh every 10 seconds for active drills
   });
 }
 
-export function useRecallDrill(drillId: string, apiKey: string, enabled = true) {
+export function useRecallDrill(drillId: string, apiKey?: string | null, enabled = true) {
+  const { isAuthenticated } = useAuth();
   return useQuery({
     queryKey: ['fsma', 'recall', 'drill', drillId],
     queryFn: () => fsmaFetch<RecallDrill>(`/recall/drill/${drillId}`, apiKey),
-    enabled: enabled && !!drillId && !!apiKey,
+    enabled: enabled && !!drillId && isAuthenticated,
     refetchInterval: 5 * 1000, // Refresh every 5 seconds for active drills
   });
 }
 
-export function useCreateRecallDrill(apiKey: string) {
+export function useCreateRecallDrill(apiKey?: string | null) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (request: CreateRecallDrillRequest) =>
@@ -171,7 +178,7 @@ export function useCreateRecallDrill(apiKey: string) {
   });
 }
 
-export function useCancelRecallDrill(apiKey: string) {
+export function useCancelRecallDrill(apiKey?: string | null) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (drillId: string) =>
@@ -184,36 +191,39 @@ export function useCancelRecallDrill(apiKey: string) {
   });
 }
 
-export function useRecallReadiness(apiKey: string) {
+export function useRecallReadiness(apiKey?: string | null) {
+  const { isAuthenticated } = useAuth();
   return useQuery({
     queryKey: ['fsma', 'recall', 'readiness'],
     queryFn: () => fsmaFetch<RecallReadiness>('/recall/readiness', apiKey),
-    enabled: !!apiKey,
+    enabled: isAuthenticated,
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
 }
 
-export function useRecallSLA(apiKey: string) {
+export function useRecallSLA(apiKey?: string | null) {
+  const { isAuthenticated } = useAuth();
   return useQuery({
     queryKey: ['fsma', 'recall', 'sla'],
     queryFn: () => fsmaFetch<{ sla_percent: number; avg_response_hours: number }>('/recall/sla', apiKey),
-    enabled: !!apiKey,
+    enabled: isAuthenticated,
     staleTime: 60 * 1000,
   });
 }
 
 // ============== Schedule Hooks ==============
 
-export function useRecallSchedules(apiKey: string) {
+export function useRecallSchedules(apiKey?: string | null) {
+  const { isAuthenticated } = useAuth();
   return useQuery({
     queryKey: ['fsma', 'recall', 'schedules'],
     queryFn: () => fsmaFetch<{ schedules: RecallSchedule[] }>('/recall/schedules', apiKey),
-    enabled: !!apiKey,
+    enabled: isAuthenticated,
     staleTime: 60 * 1000,
   });
 }
 
-export function useCreateRecallSchedule(apiKey: string) {
+export function useCreateRecallSchedule(apiKey?: string | null) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (schedule: Omit<RecallSchedule, 'id' | 'last_run'>) =>
@@ -229,16 +239,18 @@ export function useCreateRecallSchedule(apiKey: string) {
 
 // ============== Data Quality Hooks ==============
 
-export function useDriftAlerts(apiKey: string, limit = 20) {
+export function useDriftAlerts(apiKey?: string | null, limit = 20) {
+  const { isAuthenticated } = useAuth();
   return useQuery({
     queryKey: ['fsma', 'drift', 'alerts', limit],
     queryFn: () => fsmaFetch<{ alerts: DriftAlert[] }>(`/drift/alerts?limit=${limit}`, apiKey),
-    enabled: !!apiKey,
+    enabled: isAuthenticated,
     refetchInterval: 30 * 1000,
   });
 }
 
-export function useDriftHealth(apiKey: string) {
+export function useDriftHealth(apiKey?: string | null) {
+  const { isAuthenticated } = useAuth();
   return useQuery({
     queryKey: ['fsma', 'drift', 'health'],
     queryFn: () => fsmaFetch<{
@@ -257,30 +269,32 @@ export function useDriftHealth(apiKey: string) {
         source: string;
       }>;
     }>('/drift/health', apiKey),
-    enabled: !!apiKey,
+    enabled: isAuthenticated,
     refetchInterval: 30 * 1000,
   });
 }
 
-export function useSupplierHealth(apiKey: string) {
+export function useSupplierHealth(apiKey?: string | null) {
+  const { isAuthenticated } = useAuth();
   return useQuery({
     queryKey: ['fsma', 'drift', 'suppliers'],
     queryFn: () => fsmaFetch<{ suppliers: SupplierHealth[] }>('/drift/suppliers', apiKey),
-    enabled: !!apiKey,
+    enabled: isAuthenticated,
     staleTime: 2 * 60 * 1000,
   });
 }
 
-export function useKDEQuality(apiKey: string) {
+export function useKDEQuality(apiKey?: string | null) {
+  const { isAuthenticated } = useAuth();
   return useQuery({
     queryKey: ['fsma', 'metrics', 'quality'],
     queryFn: () => fsmaFetch<KDEQualityMetrics>('/metrics/quality', apiKey),
-    enabled: !!apiKey,
+    enabled: isAuthenticated,
     staleTime: 60 * 1000,
   });
 }
 
-export function useAcknowledgeAlert(apiKey: string) {
+export function useAcknowledgeAlert(apiKey?: string | null) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (alertId: string) =>
@@ -295,11 +309,12 @@ export function useAcknowledgeAlert(apiKey: string) {
 
 // ============== Dashboard Hooks ==============
 
-export function useFSMADashboard(apiKey: string) {
+export function useFSMADashboard(apiKey?: string | null) {
+  const { isAuthenticated } = useAuth();
   return useQuery({
     queryKey: ['fsma', 'dashboard'],
     queryFn: () => fsmaFetch<FSMADashboard>('/metrics/dashboard', apiKey),
-    enabled: !!apiKey,
+    enabled: isAuthenticated,
     refetchInterval: 30 * 1000,
   });
 }
@@ -318,37 +333,37 @@ export function useFSMAHealth() {
 
 // ============== Gaps & Orphans ==============
 
-export function useTraceGaps(apiKey: string, limit = 50) {
+export function useTraceGaps(apiKey?: string | null, limit = 50) {
+  const { isAuthenticated } = useAuth();
   return useQuery({
     queryKey: ['fsma', 'gaps', limit],
     queryFn: () => fsmaFetch<{ gaps: Array<{ event_id: string; missing_kdes: string[]; facility: string }> }>(
       `/gaps?limit=${limit}`,
       apiKey
     ),
-    enabled: !!apiKey,
+    enabled: isAuthenticated,
     staleTime: 2 * 60 * 1000,
   });
 }
 
-export function useOrphanedLots(apiKey: string) {
+export function useOrphanedLots(apiKey?: string | null) {
+  const { isAuthenticated } = useAuth();
   return useQuery({
     queryKey: ['fsma', 'gaps', 'orphans'],
     queryFn: () => fsmaFetch<{ orphans: Array<{ tlc: string; last_event: string; days_stagnant: number }> }>(
       '/gaps/orphans',
       apiKey
     ),
-    enabled: !!apiKey,
+    enabled: isAuthenticated,
     staleTime: 5 * 60 * 1000,
   });
 }
 
-export function useExportComplianceReport(apiKey: string) {
+export function useExportComplianceReport(_apiKey?: string | null) {
   return useMutation({
     mutationFn: async () => {
       const response = await fetchWithCsrf(`${GRAPH_API_BASE}/export/gaps`, {
-        headers: {
-          'X-RegEngine-API-Key': apiKey,
-        },
+        credentials: 'include',
       });
       if (!response.ok) throw new Error('Export failed');
       const blob = await response.blob();
@@ -450,11 +465,12 @@ export interface ComplianceScoreResult {
  * Fetch the tenant-scoped FSMA compliance score.
  * Returns a demo payload when the graph has no tenant data yet.
  */
-export function useComplianceScore(apiKey: string) {
+export function useComplianceScore(apiKey?: string | null) {
+  const { isAuthenticated } = useAuth();
   return useQuery<ComplianceScoreResult>({
-    queryKey: ['fsma', 'compliance-score', apiKey],
+    queryKey: ['fsma', 'compliance-score'],
     queryFn: () => fsmaFetch<ComplianceScoreResult>('/compliance/score', apiKey),
-    enabled: !!apiKey,
+    enabled: isAuthenticated,
     staleTime: 60_000, // 60s — score is expensive to compute
     retry: 1,
   });
