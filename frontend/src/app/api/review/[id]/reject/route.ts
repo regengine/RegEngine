@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerServiceURL } from '@/lib/api-config';
-import { requireProxyAuth, validateProxySession, getAdminMasterKey } from '@/lib/api-proxy';
+import { getAdminMasterKey, requireAdminCapability, requireProxyAuth, validateProxySession } from '@/lib/api-proxy';
 
 const ADMIN_URL = process.env.ADMIN_SERVICE_URL || getServerServiceURL('admin');
 
@@ -17,6 +17,9 @@ export async function POST(
     // Validate Supabase session tokens (expired/revoked sessions get 401)
     const sessionError = await validateProxySession(request);
     if (sessionError) return sessionError;
+
+    const adminError = requireAdminCapability(request);
+    if (adminError) return adminError;
 
     const adminKey = getAdminMasterKey();
     if (!adminKey) {

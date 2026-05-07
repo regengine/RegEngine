@@ -9,11 +9,13 @@ import { createSupabaseBrowserClient, isSupabaseConfigured } from '@/lib/supabas
 interface AuthContextType {
   user: User | null;
   accessToken: string | null;
-  /** @deprecated API key is no longer exposed to client JS. Use proxy routes instead. */
+  /** @deprecated Use hasTenantSession or hasAdminSession instead. */
   apiKey: string | null;
-  /** @deprecated Admin key is no longer exposed to client JS. Use proxy routes instead. */
+  /** @deprecated Use hasAdminSession instead. */
   adminKey: string | null;
   tenantId: string | null;
+  hasTenantSession: boolean;
+  hasAdminSession: boolean;
   isOnboarded: boolean;
   isHydrated: boolean;
   demoMode: boolean;
@@ -40,9 +42,9 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
  * Non-sensitive data (tenant_id, onboarded, demo_mode, user profile)
  * remains in localStorage for fast hydration.
  *
- * The apiKey/adminKey fields in the context are set to a placeholder value
- * ("cookie-managed") to satisfy existing enabled-checks (!!apiKey) without
- * exposing actual secrets.
+ * The apiKey/adminKey fields in the context are still set to a placeholder
+ * value ("cookie-managed") for transitional compatibility. New code should
+ * gate on hasTenantSession / hasAdminSession instead of placeholder secrets.
  */
 
 /** Placeholder value for apiKey/adminKey — indicates credentials are
@@ -613,12 +615,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [clearCredentials]);
 
+  const isAuthenticated = !!(user && accessToken);
+  const normalizedRoleName = user?.role_name?.toLowerCase() ?? null;
+  const hasTenantSession = isAuthenticated && !!tenantId;
+  const hasAdminSession = Boolean(
+    adminKey ||
+    user?.is_sysadmin ||
+    normalizedRoleName === 'admin' ||
+    normalizedRoleName === 'owner',
+  );
+
   return (
     <AuthContext.Provider
       value={{
         apiKey,
         adminKey,
         tenantId,
+        hasTenantSession,
+        hasAdminSession,
         accessToken,
         user,
         isOnboarded,
@@ -632,7 +646,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         clearCredentials,
         login,
         logout,
-        isAuthenticated: !!(user && accessToken),
+        isAuthenticated,
       }}
     >
       {children}

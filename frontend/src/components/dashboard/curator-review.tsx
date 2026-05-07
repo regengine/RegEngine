@@ -11,10 +11,10 @@ import { useAuth } from '@/lib/auth-context';
 type DecisionAction = 'approve' | 'reject';
 
 export function CuratorReview() {
-  const { apiKey } = useAuth();
+  const { hasAdminSession } = useAuth();
   const [processing, setProcessing] = useState<string | null>(null);
 
-  const { data: items, isLoading, error } = useReviewItems(apiKey || '');
+  const { data: items, isLoading, error } = useReviewItems(hasAdminSession);
   const approveMutation = useApproveReviewItem();
   const rejectMutation = useRejectReviewItem();
 
@@ -22,9 +22,9 @@ export function CuratorReview() {
     setProcessing(id);
     try {
       if (action === 'approve') {
-        await approveMutation.mutateAsync({ adminKey: apiKey || '', itemId: id });
+        await approveMutation.mutateAsync(id);
       } else {
-        await rejectMutation.mutateAsync({ adminKey: apiKey || '', itemId: id });
+        await rejectMutation.mutateAsync(id);
       }
     } finally {
       setProcessing(null);
@@ -39,6 +39,14 @@ export function CuratorReview() {
       }) : [],
     [items]
   );
+
+  if (!hasAdminSession) {
+    return (
+      <div className="p-6 text-sm text-re-warning bg-re-warning-muted border border-re-warning rounded-lg">
+        Workspace admin or sysadmin access is required to load the review queue.
+      </div>
+    );
+  }
 
   if (isLoading) {
     return (
