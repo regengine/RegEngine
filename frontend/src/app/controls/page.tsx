@@ -15,7 +15,7 @@ interface Control {
 }
 
 export default function MyControlsPage() {
-  const { apiKey, isAuthenticated, isHydrated } = useAuth();
+  const { isAuthenticated, isHydrated } = useAuth();
   const [controls, setControls] = useState<Control[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreateForm, setShowCreateForm] = useState(false);
@@ -30,9 +30,10 @@ export default function MyControlsPage() {
   const fetchControls = useCallback(async () => {
     try {
       const response = await fetchWithCsrf('/api/controls/controls', {
+        credentials: 'include',
         headers: {
-          'X-RegEngine-API-Key': apiKey || ''
-        }
+          'Content-Type': 'application/json',
+        },
       });
       const data = await response.json();
       setControls(data.controls || []);
@@ -41,7 +42,7 @@ export default function MyControlsPage() {
     } finally {
       setLoading(false);
     }
-  }, [apiKey]);
+  }, []);
 
   useEffect(() => {
     if (!isHydrated) {
@@ -61,9 +62,9 @@ export default function MyControlsPage() {
     try {
       const response = await fetchWithCsrf('/api/controls/controls', {
         method: 'POST',
+        credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
-          'X-RegEngine-API-Key': apiKey || ''
         },
         body: JSON.stringify(formData)
       });
@@ -84,9 +85,10 @@ export default function MyControlsPage() {
     try {
       await fetchWithCsrf(`/api/controls/controls/${controlId}`, {
         method: 'DELETE',
+        credentials: 'include',
         headers: {
-          'X-RegEngine-API-Key': apiKey || ''
-        }
+          'Content-Type': 'application/json',
+        },
       });
       fetchControls();
     } catch (error) {

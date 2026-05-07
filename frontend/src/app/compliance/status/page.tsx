@@ -5,6 +5,7 @@ import { useState } from "react";
 import { motion } from "framer-motion";
 
 import { PageContainer } from "@/components/layout/page-container";
+import { getServiceURL } from "@/lib/api-config";
 import { ComplianceStatusWidget, type ComplianceAlert } from "@/components/dashboard/compliance-status-widget";
 import { AlertDetailDialog } from "@/components/dashboard/alert-detail-dialog";
 import { useTenantContext } from "@/lib/tenant-context";
@@ -16,7 +17,7 @@ import Link from "next/link";
 
 export default function ComplianceStatusPage() {
     const { selectedTenant } = useTenantContext();
-    const { user, apiKey } = useAuth();
+    const { user } = useAuth();
     const [selectedAlert, setSelectedAlert] = useState<ComplianceAlert | null>(null);
     const [dialogOpen, setDialogOpen] = useState(false);
 
@@ -30,11 +31,13 @@ export default function ComplianceStatusPage() {
     };
 
     const handleAcknowledge = async (alertId: string) => {
+        if (!tenantId) return;
         try {
-            const response = await fetchWithCsrf(`/api/ingestion/api/v1/compliance/alerts/${tenantId}/${alertId}/acknowledge`, {
+            const response = await fetchWithCsrf(`${getServiceURL('admin')}/v1/compliance/alerts/${tenantId}/${alertId}/acknowledge`, {
                 method: "POST",
-                headers: { "Content-Type": "application/json", "X-RegEngine-API-Key": apiKey || "" },
-                body: JSON.stringify({ user_id: userId }),
+                credentials: 'include',
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({}),
             });
             if (!response.ok) throw new Error("Failed to acknowledge");
             window.location.reload();
@@ -44,11 +47,13 @@ export default function ComplianceStatusPage() {
     };
 
     const handleResolve = async (alertId: string, notes: string) => {
+        if (!tenantId) return;
         try {
-            const response = await fetchWithCsrf(`/api/ingestion/api/v1/compliance/alerts/${tenantId}/${alertId}/resolve`, {
+            const response = await fetchWithCsrf(`${getServiceURL('admin')}/v1/compliance/alerts/${tenantId}/${alertId}/resolve`, {
                 method: "POST",
-                headers: { "Content-Type": "application/json", "X-RegEngine-API-Key": apiKey || "" },
-                body: JSON.stringify({ user_id: userId, notes }),
+                credentials: 'include',
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ notes }),
             });
             if (!response.ok) throw new Error("Failed to resolve");
             window.location.reload();
