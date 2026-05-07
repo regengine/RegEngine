@@ -62,13 +62,13 @@ export function useApiQuery<T = unknown>(
         staleTime?: number;
     } & Omit<UseQueryOptions<T, Error>, 'queryKey' | 'queryFn'>,
 ) {
-    const { apiKey, isAuthenticated } = useAuth();
+    const { isAuthenticated } = useAuth();
     const { service = 'ingestion', enabled, ...restOptions } = options ?? {};
 
     return useQuery<T, Error>({
         queryKey,
         queryFn: () => authFetch<T>(service, path),
-        enabled: isAuthenticated && !!apiKey && (enabled ?? true),
+        enabled: isAuthenticated && (enabled ?? true),
         ...restOptions,
     });
 }
@@ -113,7 +113,7 @@ export function useApiContext() {
     const { tenantId } = useTenant();
 
     return {
-        apiKey: apiKey || '',
+        apiKey: apiKey ?? '',
         tenantId,
         isAuthenticated,
         /** Convenience: authenticated fetch for one-off calls */

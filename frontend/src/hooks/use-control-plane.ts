@@ -83,7 +83,7 @@ export function useExceptions(
     source_supplier?: string;
   }
 ) {
-  const { apiKey } = useAuth();
+  const { isAuthenticated } = useAuth();
   const params = new URLSearchParams();
   if (filters?.severity) params.set('severity', filters.severity);
   if (filters?.status) params.set('status', filters.status);
@@ -94,30 +94,30 @@ export function useExceptions(
     queryFn: () => cpFetch<{ cases: ExceptionCase[]; total: number }>(
       withQuery('/api/v1/exceptions', params),
     ).then(unwrapCp),
-    enabled: !!tenantId && !!apiKey,
+    enabled: !!tenantId && isAuthenticated,
     refetchInterval: POLL_CONTROL_PLANE_MS,
   });
 }
 
 export function useException(tenantId: string, caseId: string) {
-  const { apiKey } = useAuth();
+  const { isAuthenticated } = useAuth();
   return useQuery({
     queryKey: ['exceptions', tenantId, caseId],
     queryFn: () => cpFetch<ExceptionCase>(
       `/api/v1/exceptions/${caseId}`
     ).then(unwrapCp),
-    enabled: !!apiKey && !!tenantId && !!caseId,
+    enabled: isAuthenticated && !!tenantId && !!caseId,
   });
 }
 
 export function useBlockingExceptionCount(tenantId: string) {
-  const { apiKey } = useAuth();
+  const { isAuthenticated } = useAuth();
   return useQuery({
     queryKey: ['exceptions', 'blocking', tenantId],
     queryFn: () => cpFetch<{ blocking_count: number }>(
       `/api/v1/exceptions/stats/blocking`,
     ).then(unwrapCp),
-    enabled: !!tenantId && !!apiKey,
+    enabled: !!tenantId && isAuthenticated,
     refetchInterval: POLL_DATA_MS,
   });
 }
@@ -187,13 +187,13 @@ export interface RequestCase {
 }
 
 export function useRequestCases(tenantId: string) {
-  const { apiKey } = useAuth();
+  const { isAuthenticated } = useAuth();
   return useQuery({
     queryKey: ['requests', tenantId],
     queryFn: () => cpFetch<{ cases: RequestCase[]; total: number }>(
       `/api/v1/requests`,
     ).then(unwrapCp),
-    enabled: !!tenantId && !!apiKey,
+    enabled: !!tenantId && isAuthenticated,
     refetchInterval: POLL_METRICS_MS,
   });
 }
@@ -252,13 +252,13 @@ export function useSubmitPackage(tenantId: string) {
 }
 
 export function usePackageHistory(tenantId: string, requestCaseId: string) {
-  const { apiKey } = useAuth();
+  const { isAuthenticated } = useAuth();
   return useQuery({
     queryKey: ['requests', tenantId, requestCaseId, 'packages'],
     queryFn: () => cpFetch<{ packages: Record<string, unknown>[]; total: number }>(
       `/api/v1/requests/${requestCaseId}/packages`
     ).then(unwrapCp),
-    enabled: !!apiKey && !!tenantId && !!requestCaseId,
+    enabled: isAuthenticated && !!tenantId && !!requestCaseId,
   });
 }
 
@@ -286,25 +286,25 @@ export interface RuleEvaluation {
 }
 
 export function useRules() {
-  const { apiKey } = useAuth();
+  const { isAuthenticated } = useAuth();
   return useQuery({
     queryKey: ['rules'],
     queryFn: () => cpFetch<{ rules: RuleDefinition[]; total: number }>(
       `/api/v1/rules`,
     ).then(unwrapCp),
-    enabled: !!apiKey,
+    enabled: isAuthenticated,
     staleTime: 5 * 60_000,
   });
 }
 
 export function useEventEvaluations(tenantId: string, eventId: string) {
-  const { apiKey } = useAuth();
+  const { isAuthenticated } = useAuth();
   return useQuery({
     queryKey: ['evaluations', tenantId, eventId],
     queryFn: () => cpFetch<{ evaluations: RuleEvaluation[]; total: number }>(
       `/api/v1/rules/evaluations/${eventId}`
     ).then(unwrapCp),
-    enabled: !!apiKey && !!tenantId && !!eventId,
+    enabled: isAuthenticated && !!tenantId && !!eventId,
   });
 }
 
@@ -350,7 +350,7 @@ export function useCanonicalEvents(
   tenantId: string,
   filters?: { tlc?: string; event_type?: string; source_system?: string; limit?: number }
 ) {
-  const { apiKey } = useAuth();
+  const { isAuthenticated } = useAuth();
   const params = new URLSearchParams();
   if (filters?.tlc) params.set('tlc', filters.tlc);
   if (filters?.event_type) params.set('event_type', filters.event_type);
@@ -362,19 +362,19 @@ export function useCanonicalEvents(
     queryFn: () => cpFetch<{ events: CanonicalEvent[]; total: number }>(
       withQuery('/api/v1/records', params),
     ).then(unwrapCp),
-    enabled: !!tenantId && !!apiKey,
+    enabled: !!tenantId && isAuthenticated,
     refetchInterval: POLL_DATA_MS,
   });
 }
 
 export function useCanonicalEvent(tenantId: string, eventId: string) {
-  const { apiKey } = useAuth();
+  const { isAuthenticated } = useAuth();
   return useQuery({
     queryKey: ['records', tenantId, eventId],
     queryFn: () => cpFetch<CanonicalEventDetail>(
       `/api/v1/records/${eventId}`
     ).then(unwrapCp),
-    enabled: !!apiKey && !!tenantId && !!eventId,
+    enabled: isAuthenticated && !!tenantId && !!eventId,
   });
 }
 
@@ -383,7 +383,7 @@ export function useCanonicalEvent(tenantId: string, eventId: string) {
 // ---------------------------------------------------------------------------
 
 export function useEntities(tenantId: string, entityType?: string) {
-  const { apiKey } = useAuth();
+  const { isAuthenticated } = useAuth();
   const params = new URLSearchParams();
   if (entityType) params.set('entity_type', entityType);
 
@@ -392,19 +392,19 @@ export function useEntities(tenantId: string, entityType?: string) {
     queryFn: () => cpFetch<{ entities: Record<string, unknown>[]; total: number }>(
       withQuery('/api/v1/identity/entities', params),
     ).then(unwrapCp),
-    enabled: !!tenantId && !!apiKey,
+    enabled: !!tenantId && isAuthenticated,
     staleTime: 60_000,
   });
 }
 
 export function useIdentityReviews(tenantId: string) {
-  const { apiKey } = useAuth();
+  const { isAuthenticated } = useAuth();
   return useQuery({
     queryKey: ['identity', 'reviews', tenantId],
     queryFn: () => cpFetch<{ reviews: Record<string, unknown>[]; total: number }>(
       `/api/v1/identity/reviews`,
     ).then(unwrapCp),
-    enabled: !!tenantId && !!apiKey,
+    enabled: !!tenantId && isAuthenticated,
     refetchInterval: POLL_DATA_MS,
   });
 }
