@@ -85,7 +85,7 @@ vi.mock('lucide-react', () => {
 
 // Mock dynamic import of api-config
 vi.mock('@/lib/api-config', () => ({
-    getServiceURL: () => 'http://localhost:8002',
+    getServiceURL: () => '/api/ingestion',
 }));
 
 // ── Helpers ──
@@ -160,6 +160,28 @@ describe('IssuesPage', () => {
         expect(screen.getByText(/GLN not registered for supplier/)).toBeInTheDocument();
     });
 
+    it('keeps internal ingestion requests cookie-backed and tenant-neutral', async () => {
+        mockDeadlinesAndBlockers();
+        render(<IssuesPage />, { wrapper: createWrapper() });
+
+        await waitFor(() => {
+            expect(global.fetch).toHaveBeenCalled();
+        });
+
+        const calls = (global.fetch as ReturnType<typeof vi.fn>).mock.calls as [string, RequestInit | undefined][];
+        const urls = calls.map(([url]) => url);
+
+        expect(urls).toContain('/api/ingestion/api/v1/requests/deadlines');
+        expect(urls).toContain('/api/ingestion/api/v1/compliance/pending-reviews/tenant-123');
+        expect(urls).toContain('/api/ingestion/api/v1/requests/case-1/blockers');
+        expect(urls.some(url => url.includes('tenant_id='))).toBe(false);
+
+        for (const [, init] of calls) {
+            expect(init?.credentials).toBe('include');
+            expect(new Headers(init?.headers).get('X-RegEngine-API-Key')).toBeNull();
+        }
+    });
+
     it('renders error state when data loading throws', async () => {
         // Override the api-config mock to throw, triggering the catch block
         const apiConfig = await import('@/lib/api-config');
@@ -174,7 +196,7 @@ describe('IssuesPage', () => {
         });
 
         // Restore
-        vi.mocked(apiConfig.getServiceURL).mockReturnValue('http://localhost:8002');
+        vi.mocked(apiConfig.getServiceURL).mockReturnValue('/api/ingestion');
     });
 
     it('renders empty state when no issues found', async () => {

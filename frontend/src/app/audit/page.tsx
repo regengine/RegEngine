@@ -1,7 +1,5 @@
 'use client';
 
-import { useState } from 'react';
-
 import { DemoBanner } from '@/components/control-plane/demo-banner';
 import { PageContainer } from '@/components/layout/page-container';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -10,6 +8,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Progress } from '@/components/ui/progress';
 
 import { useAuth } from '@/lib/auth-context';
+import { fetchWithCsrf } from '@/lib/fetch-with-csrf';
 import { useQuery } from '@tanstack/react-query';
 
 import {
@@ -27,12 +26,9 @@ import {
 
 const INGESTION_API = '/api/ingestion';
 
-async function auditFetch<T>(endpoint: string, apiKey: string): Promise<T> {
-  const response = await fetch(`${INGESTION_API}${endpoint}`, {
-    headers: {
-      'Content-Type': 'application/json',
-      'X-RegEngine-API-Key': apiKey,
-    },
+async function auditFetch<T>(endpoint: string): Promise<T> {
+  const response = await fetchWithCsrf(`${INGESTION_API}${endpoint}`, {
+    credentials: 'include',
   });
   if (!response.ok) {
     const error = await response.json().catch(() => ({ detail: 'Request failed' }));
@@ -62,24 +58,20 @@ interface AuditSummary {
 }
 
 export default function AuditReviewPage() {
-  const { apiKey, tenantId } = useAuth();
+  const { isAuthenticated, tenantId } = useAuth();
   const tid = tenantId || '';
 
   const summary = useQuery({
     queryKey: ['audit', 'summary', tid],
-    queryFn: () => auditFetch<AuditSummary>(
-      `/api/v1/audit/summary?tenant_id=${tid}`, apiKey || ''
-    ),
-    enabled: !!apiKey && !!tid,
+    queryFn: () => auditFetch<AuditSummary>('/api/v1/audit/summary'),
+    enabled: isAuthenticated && !!tid,
     staleTime: 60_000,
   });
 
   const rules = useQuery({
     queryKey: ['audit', 'rules', tid],
-    queryFn: () => auditFetch<{ rules: AuditRule[] }>(
-      `/api/v1/audit/rules?tenant_id=${tid}`, apiKey || ''
-    ),
-    enabled: !!apiKey && !!tid,
+    queryFn: () => auditFetch<{ rules: AuditRule[] }>('/api/v1/audit/rules'),
+    enabled: isAuthenticated && !!tid,
     staleTime: 60_000,
   });
 

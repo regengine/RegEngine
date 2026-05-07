@@ -100,9 +100,8 @@ export interface WorkbenchReadinessSnapshot {
     source: string;
 }
 
-export async function fetchWorkbenchReadinessSummary(tenantId: string, apiKey: string) {
-    const qs = new URLSearchParams({ tenant_id: tenantId }).toString();
-    return apiFetch<WorkbenchReadinessSnapshot>(`/api/v1/inflow-workbench/readiness/summary?${qs}`, apiKey);
+export async function fetchWorkbenchReadinessSummary(_tenantId: string, apiKey: string) {
+    return apiFetch<WorkbenchReadinessSnapshot>('/api/v1/inflow-workbench/readiness/summary', apiKey);
 }
 
 // ── SOP Generator ──
@@ -152,15 +151,25 @@ export async function fetchPlans(apiKey: string) {
     return apiFetch('/api/v1/billing/plans', apiKey);
 }
 
-export async function createCheckout(apiKey: string, planId: string, tenantId: string, billingPeriod: string) {
-    return apiFetch('/api/v1/billing/checkout', apiKey, {
+export async function createCheckout(_apiKey: string, planId: string, _tenantId: string, billingPeriod: string) {
+    const res = await fetchWithCsrf('/api/billing/checkout', {
         method: 'POST',
+        credentials: 'include',
+        headers: {
+            'Content-Type': 'application/json',
+        },
         body: JSON.stringify({
             plan_id: planId,
-            tenant_id: tenantId,
             billing_period: billingPeriod,
         }),
     });
+
+    if (!res.ok) {
+        const error = await res.json().catch(() => ({ detail: 'Request failed' }));
+        throw new Error(error.detail || `API error: ${res.status} ${res.statusText}`);
+    }
+
+    return res.json();
 }
 
 export async function fetchSubscription(tenantId: string, apiKey: string) {
