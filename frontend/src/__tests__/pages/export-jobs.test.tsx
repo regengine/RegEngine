@@ -102,7 +102,7 @@ function mockFetchFailure() {
 describe('ExportJobsPage', () => {
     beforeEach(() => {
         vi.clearAllMocks();
-        mockUseAuth.mockReturnValue({ apiKey: 'test-api-key', isAuthenticated: true });
+        mockUseAuth.mockReturnValue({ apiKey: null, isAuthenticated: true });
         mockUseTenant.mockReturnValue({ tenantId: 'tenant-123', isSystemTenant: false });
     });
 
@@ -139,6 +139,22 @@ describe('ExportJobsPage', () => {
         render(<ExportJobsPage />, { wrapper: createWrapper() });
 
         expect(screen.getByText('Archive & Export Jobs')).toBeInTheDocument();
+    });
+
+    it('loads export jobs without a placeholder apiKey or browser auth header', async () => {
+        mockFetchSuccess([]);
+        render(<ExportJobsPage />, { wrapper: createWrapper() });
+
+        await waitFor(() => {
+            expect(global.fetch).toHaveBeenCalled();
+        });
+
+        const calls = (global.fetch as ReturnType<typeof vi.fn>).mock.calls as [string, RequestInit | undefined][];
+        const [url, init] = calls[0]!;
+
+        expect(url).toBe('/api/fsma/customer-readiness/export-jobs');
+        expect(init?.credentials).toBe('include');
+        expect(new Headers(init?.headers).get('X-RegEngine-API-Key')).toBeNull();
     });
 
     it('renders error state when save job fails', async () => {

@@ -7,8 +7,9 @@
  * - Falls back to demo data when API is unavailable
  * - Auth guard (skips fetch without credentials)
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import RecallReportPage from '@/app/dashboard/recall-report/page';
 
@@ -126,21 +127,34 @@ vi.mock('lucide-react', () => {
 
 // Mock api-config for dynamic import
 vi.mock('@/lib/api-config', () => ({
-  getServiceURL: () => 'http://localhost:8002',
+  getServiceURL: () => '/api/ingestion',
 }));
 
 describe('RecallReportPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockUseAuth.mockReturnValue({ apiKey: 'test-api-key', isAuthenticated: true });
+    mockUseAuth.mockReturnValue({ apiKey: null, isAuthenticated: true });
     mockUseTenant.mockReturnValue({ tenantId: 'tenant-123', isSystemTenant: false });
     // Default: API returns demo report with dimensions
     mockFetchRecallReport.mockResolvedValue(MOCK_DEMO_REPORT);
   });
 
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
+
   it('renders page heading', async () => {
     render(<RecallReportPage />, { wrapper: createWrapper() });
     expect(screen.getByText('Recall Investigation')).toBeInTheDocument();
+  });
+
+  it('fetches the recall report without a placeholder apiKey', async () => {
+    render(<RecallReportPage />, { wrapper: createWrapper() });
+
+    await waitFor(() => {
+      expect(mockFetchRecallReport).toHaveBeenCalledWith('tenant-123');
+    });
   });
 
   it('renders demo investigation scenario data', async () => {
@@ -190,5 +204,51 @@ describe('RecallReportPage', () => {
     mockUseTenant.mockReturnValue({ tenantId: null, isSystemTenant: true });
     render(<RecallReportPage />, { wrapper: createWrapper() });
     expect(mockFetchRecallReport).not.toHaveBeenCalled();
+  });
+
+  it('exports the FDA response through the cookie-backed ingestion proxy without browser auth headers', async () => {
+    const fetchSpy = vi.fn().mockResolvedValue({
+      ok: true,
+      blob: async () => new Blob(['csv']),
+    });
+    vi.stubGlobal('fetch', fetchSpy);
+
+    const createObjectURL = vi.fn(() => 'blob:recall-export');
+    const revokeObjectURL = vi.fn();
+    const originalCreateElement = document.createElement.bind(document);
+    const anchor = originalCreateElement('a');
+    const click = vi.fn();
+    anchor.click = click;
+    vi.spyOn(document, 'createElement').mockImplementation(((tagName: string, options?: ElementCreationOptions) => {
+      if (tagName.toLowerCase() === 'a') {
+        return anchor;
+      }
+      return originalCreateElement(tagName, options);
+    }) as typeof document.createElement);
+    vi.spyOn(document.body, 'appendChild');
+    vi.stubGlobal('URL', {
+      ...window.URL,
+      createObjectURL,
+      revokeObjectURL,
+    });
+
+    const user = userEvent.setup();
+    render(<RecallReportPage />, { wrapper: createWrapper() });
+
+    const exportButton = await screen.findByRole('button', { name: /generate fda 24-hour response/i });
+    await user.click(exportButton);
+
+    await waitFor(() => {
+      expect(fetchSpy).toHaveBeenCalledWith(
+        '/api/ingestion/api/v1/fda/export/all?tenant_id=tenant-123&format=csv',
+        expect.objectContaining({ credentials: 'include' }),
+      );
+    });
+
+    const [, init] = fetchSpy.mock.calls[0] as [string, RequestInit];
+    expect(new Headers(init.headers).get('X-RegEngine-API-Key')).toBeNull();
+    expect(click).toHaveBeenCalled();
+    expect(createObjectURL).toHaveBeenCalled();
+    expect(revokeObjectURL).toHaveBeenCalled();
   });
 });

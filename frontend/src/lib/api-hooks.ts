@@ -198,7 +198,7 @@ export async function fetchSupplierHealth(tenantId: string, apiKey: string) {
 
 // ── Recall Readiness ──
 
-export async function fetchRecallReport(tenantId: string, apiKey: string) {
+export async function fetchRecallReport(tenantId: string, apiKey?: string | null) {
     return apiFetch(`/api/v1/recall/${tenantId}/report`, apiKey);
 }
 
