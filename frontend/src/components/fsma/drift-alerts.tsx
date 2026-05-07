@@ -4,13 +4,11 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { useDriftHealth } from '@/hooks/use-fsma';
-import { useAuth } from '@/lib/auth-context';
 import { AlertTriangle, CheckCircle, Clock, Activity, XCircle } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 export function DriftAlertsWidget() {
-    const { apiKey } = useAuth();
-    const { data: health, isLoading } = useDriftHealth(apiKey || '');
+    const { data: health, isLoading } = useDriftHealth();
 
     if (isLoading || !health) {
         return (
