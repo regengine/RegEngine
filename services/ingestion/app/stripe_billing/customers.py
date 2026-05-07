@@ -34,8 +34,13 @@ async def _create_tenant_via_admin(tenant_name: str) -> str:
         )
         response.raise_for_status()
 
+    # ``payload`` is the response body from the admin service, called over
+    # mTLS-equivalent X-Admin-Key auth and just instructed to create this
+    # tenant. The returned tenant_id is the canonical row id, not a client
+    # claim — this is the bootstrap path that mints the tenant in the first
+    # place, so there is no pre-existing principal to resolve from.
     payload = response.json()
-    tenant_id = payload.get("tenant_id")
+    tenant_id = payload.get("tenant_id")  # nosemgrep: tenant-id-from-request-body
     if not tenant_id:
         raise RuntimeError("Admin tenant creation response missing tenant_id")
 

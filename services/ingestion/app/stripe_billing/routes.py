@@ -140,7 +140,11 @@ async def create_checkout(
         "billing_period": billing_period,
     }
     if authenticated_tenant_id:
-        metadata["tenant_id"] = authenticated_tenant_id
+        # Outbound assignment: stamp the authenticated principal's tenant_id
+        # onto the Stripe checkout-session metadata for webhook cross-check
+        # later. This is a write into the metadata we'll send to Stripe,
+        # NOT a read of a client-supplied tenant.
+        metadata["tenant_id"] = authenticated_tenant_id  # nosemgrep: tenant-id-from-request-body
     if request.tenant_name:
         metadata["tenant_name"] = request.tenant_name
     if request.customer_email:
