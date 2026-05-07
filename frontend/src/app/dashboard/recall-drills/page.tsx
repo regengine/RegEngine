@@ -10,26 +10,32 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useAuth } from '@/lib/auth-context';
 
+type RecallDrillsResponse = {
+    items?: RecallDrillRun[];
+    drills?: RecallDrillRun[];
+    meta?: { status?: string; message?: string };
+};
+
 export default function RecallDrillsPage() {
-    const { apiKey } = useAuth();
+    const { apiKey, tenantId } = useAuth();
     const [scenario, setScenario] = useState('Weekend retailer trace-back');
     const [lots, setLots] = useState('');
     const [dateRange, setDateRange] = useState('');
     const queryClient = useQueryClient();
+    const drillsQueryKey = ['recall-drills', tenantId] as const;
 
-    const { data: drillsResponse, isLoading: runsLoading } = useQuery({
-        queryKey: ['recall-drills'],
+    const { data: drillsResponse, isLoading: runsLoading } = useQuery<RecallDrillsResponse>({
+        queryKey: drillsQueryKey,
         queryFn: async () => {
             const response = await fetchWithCsrf('/api/fsma/customer-readiness/recall-drills', {
                 signal: AbortSignal.timeout(8000),
-                headers: { 'X-RegEngine-API-Key': apiKey || '' },
+                headers: {
+                    'X-RegEngine-API-Key': apiKey || '',
+                    ...(tenantId ? { 'X-Tenant-ID': tenantId } : {}),
+                },
             });
             if (!response.ok) return { items: [], meta: { status: 'error' } };
-            return response.json() as Promise<{
-                items?: RecallDrillRun[];
-                drills?: RecallDrillRun[];
-                meta?: { status?: string; message?: string };
-            }>;
+            return response.json() as Promise<RecallDrillsResponse>;
         },
         retry: false,
     });
@@ -42,7 +48,11 @@ export default function RecallDrillsPage() {
             const response = await fetchWithCsrf('/api/fsma/customer-readiness/recall-drills', {
                 method: 'POST',
                 signal: AbortSignal.timeout(12000),
-                headers: { 'Content-Type': 'application/json', 'X-RegEngine-API-Key': apiKey || '' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-RegEngine-API-Key': apiKey || '',
+                    ...(tenantId ? { 'X-Tenant-ID': tenantId } : {}),
+                },
                 body: JSON.stringify({
                     scenario,
                     lots: lots.split(',').map((lot) => lot.trim()).filter(Boolean),
@@ -56,7 +66,15 @@ export default function RecallDrillsPage() {
             return (await response.json()) as { drill: RecallDrillRun };
         },
         onSuccess: (data) => {
-            queryClient.setQueryData<RecallDrillRun[]>(['recall-drills'], (old) => [data.drill, ...(old ?? [])]);
+            queryClient.setQueryData<RecallDrillsResponse>(drillsQueryKey, (old) => {
+                const existingRuns = old?.items ?? old?.drills ?? [];
+                const nextRuns = [data.drill, ...existingRuns];
+                return {
+                    ...old,
+                    items: nextRuns,
+                    drills: nextRuns,
+                };
+            });
         },
     });
 

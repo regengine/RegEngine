@@ -82,7 +82,11 @@ function mockFetchSuccess(drills = SAMPLE_DRILLS) {
 describe('RecallDrillsPage', () => {
     beforeEach(() => {
         vi.clearAllMocks();
-        mockUseAuth.mockReturnValue({ apiKey: 'test-api-key', isAuthenticated: true });
+        mockUseAuth.mockReturnValue({
+            apiKey: 'test-api-key',
+            isAuthenticated: true,
+            tenantId: 'tenant-123',
+        });
     });
 
     it('renders loading state initially', () => {
