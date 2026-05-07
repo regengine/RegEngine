@@ -594,23 +594,29 @@ async def test_refresh_preserves_original_tenant_id(monkeypatch):
         id=user_id,
         email="u@e.com",
         is_sysadmin=False,
+        status="active",
         token_version=0,
     )
     # memberships: order A then B doesn't matter — we verify that the
     # REFRESH output carries tenant_a specifically, not "first row wins".
-    mem_a = SimpleNamespace(tenant_id=tenant_a)
-    mem_b = SimpleNamespace(tenant_id=tenant_b)
+    role_a = uuid.uuid4()
+    role_b = uuid.uuid4()
+    mem_a = SimpleNamespace(tenant_id=tenant_a, role_id=role_a)
+    mem_b = SimpleNamespace(tenant_id=tenant_b, role_id=role_b)
 
     # #1401 — refresh_session now calls db.get(TenantModel, tenant_id) to
     # re-query the real tenant status. Give each model a distinct return value.
     tenant_row_a = SimpleNamespace(id=tenant_a, status="active")
+    role_row_a = SimpleNamespace(id=role_a, name="qa", permissions=["inflow.write"])
 
     def _db_get(model, id_):
-        from services.admin.app.sqlalchemy_models import UserModel, TenantModel
+        from services.admin.app.sqlalchemy_models import RoleModel, TenantModel, UserModel
         if model is UserModel:
             return user
         if model is TenantModel:
             return tenant_row_a
+        if model is RoleModel and id_ == role_a:
+            return role_row_a
         return user  # fallback
 
     db = MagicMock()
