@@ -97,6 +97,13 @@ app.add_middleware(RequestTimeoutMiddleware, timeout_seconds=120)
 from shared.idempotency import IdempotencyMiddleware
 app.add_middleware(IdempotencyMiddleware)
 
+# EPIC-I (#1316): correlation-id middleware. Registered last so Starlette's
+# reverse-LIFO middleware stack runs it FIRST — every downstream handler,
+# logger, and outbound call sees the X-Correlation-ID header value via
+# request.state.correlation_id. Mirrors the ordering used by admin/nlp/graph
+# main.py. The CorrelationIdMiddleware import at line 81 was previously dead.
+app.add_middleware(CorrelationIdMiddleware)
+
 # Global exception handlers (Sprint 18)
 from shared.error_handling import install_exception_handlers
 install_exception_handlers(app)
