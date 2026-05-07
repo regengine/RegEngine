@@ -59,31 +59,33 @@ const FTL_CATEGORIES = [
     'Tropical Tree Fruits', 'Fresh Melons',
 ];
 
-async function apiFetchProducts(tenantId: string, apiKey: string): Promise<ProductCatalogResponse> {
+async function apiFetchProducts(tenantId: string): Promise<ProductCatalogResponse> {
     const { getServiceURL } = await import('@/lib/api-config');
     const base = getServiceURL('ingestion');
     const res = await fetchWithCsrf(`${base}/api/v1/products/${tenantId}`, {
+        credentials: 'include',
         signal: AbortSignal.timeout(8000),
-        headers: { 'Content-Type': 'application/json', 'X-RegEngine-API-Key': apiKey },
+        headers: { 'Content-Type': 'application/json' },
     });
     if (!res.ok) throw new Error(`API error: ${res.status} ${res.statusText}`);
     return res.json();
 }
 
-async function apiAddProduct(tenantId: string, apiKey: string, name: string, category: string, sku: string): Promise<void> {
+async function apiAddProduct(tenantId: string, name: string, category: string, sku: string): Promise<void> {
     const { getServiceURL } = await import('@/lib/api-config');
     const base = getServiceURL('ingestion');
     const res = await fetchWithCsrf(`${base}/api/v1/products/${tenantId}`, {
         method: 'POST',
+        credentials: 'include',
         signal: AbortSignal.timeout(12000),
-        headers: { 'Content-Type': 'application/json', 'X-RegEngine-API-Key': apiKey },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, category, sku: sku || undefined }),
     });
     if (!res.ok) throw new Error(`API error: ${res.status} ${res.statusText}`);
 }
 
 export default function ProductCatalogPage() {
-    const { isAuthenticated, apiKey } = useAuth();
+    const { isAuthenticated } = useAuth();
     const { tenantId } = useTenant();
 
     const isLoggedIn = isAuthenticated;
@@ -100,7 +102,7 @@ export default function ProductCatalogPage() {
     const { data: productsData, isLoading: loading, error: productsError, refetch: loadProducts } = useQuery({
         queryKey: ['products', effectiveTenantId],
         queryFn: async () => {
-            const data = await apiFetchProducts(effectiveTenantId!, apiKey || '');
+            const data = await apiFetchProducts(effectiveTenantId!);
             const fetchedProducts = data.products || [];
             if (fetchedProducts.length > 0) {
                 return { products: fetchedProducts, categories: data.categories || [], totalFtl: data.ftl_covered || 0 };
@@ -154,7 +156,7 @@ export default function ProductCatalogPage() {
     useDashboardRefresh(() => { loadProducts(); });
 
     const addProductMutation = useMutation({
-        mutationFn: () => apiAddProduct(effectiveTenantId!, apiKey || '', newName, newCategory, newSku),
+        mutationFn: () => apiAddProduct(effectiveTenantId!, newName, newCategory, newSku),
         onSuccess: () => {
             setNewName(''); setNewSku(''); setShowAdd(false);
             productsQueryClient.invalidateQueries({ queryKey: ['products', effectiveTenantId] });

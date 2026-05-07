@@ -72,22 +72,24 @@ const CHANNEL_ICONS: Record<string, React.ElementType> = {
     sms: Smartphone,
 };
 
-async function apiFetchPrefs(tenantId: string, apiKey: string): Promise<NotificationPreferences> {
+async function apiFetchPrefs(tenantId: string): Promise<NotificationPreferences> {
     const { getServiceURL } = await import('@/lib/api-config');
     const base = getServiceURL('ingestion');
     const res = await fetchWithCsrf(`${base}/api/v1/notifications/${tenantId}/preferences`, {
-        headers: { 'Content-Type': 'application/json', 'X-RegEngine-API-Key': apiKey },
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
     });
     if (!res.ok) throw new Error(`API error: ${res.status} ${res.statusText}`);
     return res.json();
 }
 
-async function apiSavePrefs(tenantId: string, apiKey: string, prefs: Partial<NotificationPreferences>): Promise<void> {
+async function apiSavePrefs(tenantId: string, prefs: Partial<NotificationPreferences>): Promise<void> {
     const { getServiceURL } = await import('@/lib/api-config');
     const base = getServiceURL('ingestion');
     const res = await fetchWithCsrf(`${base}/api/v1/notifications/${tenantId}/preferences`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json', 'X-RegEngine-API-Key': apiKey },
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(prefs),
     });
     if (!res.ok) throw new Error(`API error: ${res.status} ${res.statusText}`);
@@ -110,14 +112,14 @@ function Toggle({ enabled, onToggle }: { enabled: boolean; onToggle: () => void 
 }
 
 export default function NotificationPrefsPage() {
-    const { isAuthenticated, apiKey } = useAuth();
+    const { isAuthenticated } = useAuth();
     const { tenantId } = useTenant();
     const queryClient = useQueryClient();
     const isLoggedIn = isAuthenticated;
 
     const { data: prefs = null, isLoading: loading, error: prefsError } = useQuery({
         queryKey: ['notification-prefs', tenantId],
-        queryFn: () => apiFetchPrefs(tenantId, apiKey || ''),
+        queryFn: () => apiFetchPrefs(tenantId),
         enabled: isLoggedIn && !!tenantId,
         retry: 1,
     });
@@ -146,7 +148,7 @@ export default function NotificationPrefsPage() {
     };
 
     const savePrefsMutation = useMutation({
-        mutationFn: () => apiSavePrefs(tenantId, apiKey || '', effectivePrefs!),
+        mutationFn: () => apiSavePrefs(tenantId, effectivePrefs!),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['notification-prefs', tenantId] });
             setSaved(true);

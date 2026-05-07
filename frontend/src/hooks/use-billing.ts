@@ -178,10 +178,7 @@ export function usePricingTiers() {
     });
 }
 
-async function fetchCurrentSubscription(
-    tenantId: string,
-    _apiKey?: string | null,
-): Promise<SubscriptionData> {
+async function fetchCurrentSubscription(tenantId: string): Promise<SubscriptionData> {
     const res = await fetchWithCsrf(
         `${getServiceURL('ingestion')}/api/v1/billing/subscription/${tenantId}`,
         {
@@ -201,10 +198,10 @@ async function fetchCurrentSubscription(
 }
 
 /** Fetch current subscription for the tenant */
-export function useCurrentSubscription(tenantId?: string, apiKey?: string | null) {
+export function useCurrentSubscription(tenantId?: string) {
     return useQuery<SubscriptionData>({
         queryKey: ['billing', 'subscription', tenantId],
-        queryFn: () => fetchCurrentSubscription(tenantId!, apiKey),
+        queryFn: () => fetchCurrentSubscription(tenantId!),
         enabled: !!tenantId,
         staleTime: 30_000,
     });
