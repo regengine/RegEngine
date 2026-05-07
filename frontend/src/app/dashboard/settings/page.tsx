@@ -49,11 +49,11 @@ const TABS = [
 ];
 
 export default function SettingsPage() {
-    const { user, apiKey } = useAuth();
+    const { user, isAuthenticated } = useAuth();
     const { tenantId } = useTenant();
     const { organizations } = useOrganizations();
     const currentOrg = organizations.find(o => o.id === tenantId);
-    const { data: subscriptionData, isLoading: subLoading, isError: subError } = useCurrentSubscription(tenantId, apiKey);
+    const { data: subscriptionData, isLoading: subLoading, isError: subError } = useCurrentSubscription(tenantId);
 
     const [saved, setSaved] = useState(false);
     const [showKey, setShowKey] = useState(false);
@@ -91,7 +91,8 @@ export default function SettingsPage() {
             const { getServiceURL } = await import('@/lib/api-config');
             const base = getServiceURL('ingestion');
             const res = await fetchWithCsrf(`${base}/api/v1/integrations/${tenantId}`, {
-                headers: { 'Content-Type': 'application/json', 'X-RegEngine-API-Key': apiKey! },
+                credentials: 'include',
+                headers: { 'Content-Type': 'application/json' },
             });
             if (!res.ok) return null;
             const data = await res.json();
@@ -104,7 +105,7 @@ export default function SettingsPage() {
             }
             return null;
         },
-        enabled: !!tenantId && !!apiKey,
+        enabled: !!tenantId && isAuthenticated,
     });
     const integrations = integrationsData ?? INTEGRATIONS;
 
@@ -123,9 +124,9 @@ export default function SettingsPage() {
             const base = getServiceURL('ingestion');
             const res = await fetchWithCsrf(`${base}/api/v1/settings/${tenantId}/profile`, {
                 method: 'PUT',
+                credentials: 'include',
                 headers: {
                     'Content-Type': 'application/json',
-                    'X-RegEngine-API-Key': apiKey || '',
                 },
                 body: JSON.stringify(profile),
             });
@@ -141,9 +142,9 @@ export default function SettingsPage() {
     const saving = saveProfileMutation.isPending;
     const saveError = saveProfileMutation.error?.message ?? null;
     const handleSave = useCallback(() => {
-        if (!tenantId) return;
+        if (!tenantId || !isAuthenticated) return;
         saveProfileMutation.mutate();
-    }, [tenantId, saveProfileMutation]);
+    }, [isAuthenticated, tenantId, saveProfileMutation]);
     const handleCopy = (text: string, id: string) => {
         navigator.clipboard.writeText(text);
         setCopiedKey(id);

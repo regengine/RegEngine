@@ -54,31 +54,33 @@ const ROLE_CONFIG: Record<string, { icon: React.ElementType; color: string; labe
     viewer: { icon: Eye, color: '#6b7280', label: 'Viewer' },
 };
 
-async function apiFetchTeam(tenantId: string, apiKey: string): Promise<TeamResponse> {
+async function apiFetchTeam(tenantId: string): Promise<TeamResponse> {
     const { getServiceURL } = await import('@/lib/api-config');
     const base = getServiceURL('ingestion');
     const res = await fetchWithCsrf(`${base}/api/v1/team/${tenantId}`, {
+        credentials: 'include',
         signal: AbortSignal.timeout(8000),
-        headers: { 'Content-Type': 'application/json', 'X-RegEngine-API-Key': apiKey },
+        headers: { 'Content-Type': 'application/json' },
     });
     if (!res.ok) throw new Error(`API error: ${res.status} ${res.statusText}`);
     return res.json();
 }
 
-async function apiInviteMember(tenantId: string, apiKey: string, name: string, email: string, role: string): Promise<void> {
+async function apiInviteMember(tenantId: string, name: string, email: string, role: string): Promise<void> {
     const { getServiceURL } = await import('@/lib/api-config');
     const base = getServiceURL('ingestion');
     const res = await fetchWithCsrf(`${base}/api/v1/team/${tenantId}/invite`, {
         method: 'POST',
+        credentials: 'include',
         signal: AbortSignal.timeout(12000),
-        headers: { 'Content-Type': 'application/json', 'X-RegEngine-API-Key': apiKey },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, email, role }),
     });
     if (!res.ok) throw new Error(`API error: ${res.status} ${res.statusText}`);
 }
 
 export default function TeamPage() {
-    const { isAuthenticated, apiKey } = useAuth();
+    const { isAuthenticated } = useAuth();
     const { tenantId } = useTenant();
     const isLoggedIn = isAuthenticated;
 
@@ -86,8 +88,8 @@ export default function TeamPage() {
 
     const { data: teamData, isLoading: loading, error: teamError, refetch: loadTeam } = useQuery({
         queryKey: ['team', tenantId],
-        queryFn: () => apiFetchTeam(tenantId, apiKey || ''),
-        enabled: isLoggedIn && !!tenantId && !!apiKey,
+        queryFn: () => apiFetchTeam(tenantId),
+        enabled: isLoggedIn && !!tenantId,
         retry: false,
     });
 
@@ -103,7 +105,7 @@ export default function TeamPage() {
     const [newRole, setNewRole] = useState('viewer');
 
     const inviteMutation = useMutation({
-        mutationFn: () => apiInviteMember(tenantId, apiKey || '', newName, newEmail, newRole),
+        mutationFn: () => apiInviteMember(tenantId, newName, newEmail, newRole),
         onSuccess: () => {
             setNewName(''); setNewEmail(''); setShowInvite(false);
             teamQueryClient.invalidateQueries({ queryKey: ['team', tenantId] });
