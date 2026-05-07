@@ -18,6 +18,11 @@ export interface CpResult<T> {
   isDemo: boolean;
 }
 
+function withQuery(endpoint: string, params: URLSearchParams): string {
+  const query = params.toString();
+  return query ? `${endpoint}?${query}` : endpoint;
+}
+
 async function cpFetch<T>(
   endpoint: string,
   options?: RequestInit,
@@ -79,7 +84,7 @@ export function useExceptions(
   }
 ) {
   const { apiKey } = useAuth();
-  const params = new URLSearchParams({ tenant_id: tenantId });
+  const params = new URLSearchParams();
   if (filters?.severity) params.set('severity', filters.severity);
   if (filters?.status) params.set('status', filters.status);
   if (filters?.source_supplier) params.set('source_supplier', filters.source_supplier);
@@ -87,7 +92,7 @@ export function useExceptions(
   return useQuery({
     queryKey: ['exceptions', tenantId, filters],
     queryFn: () => cpFetch<{ cases: ExceptionCase[]; total: number }>(
-      `/api/v1/exceptions?${params}`,
+      withQuery('/api/v1/exceptions', params),
     ).then(unwrapCp),
     enabled: !!tenantId && !!apiKey,
     refetchInterval: POLL_CONTROL_PLANE_MS,
@@ -99,7 +104,7 @@ export function useException(tenantId: string, caseId: string) {
   return useQuery({
     queryKey: ['exceptions', tenantId, caseId],
     queryFn: () => cpFetch<ExceptionCase>(
-      `/api/v1/exceptions/${caseId}?tenant_id=${tenantId}`
+      `/api/v1/exceptions/${caseId}`
     ).then(unwrapCp),
     enabled: !!apiKey && !!tenantId && !!caseId,
   });
@@ -110,7 +115,7 @@ export function useBlockingExceptionCount(tenantId: string) {
   return useQuery({
     queryKey: ['exceptions', 'blocking', tenantId],
     queryFn: () => cpFetch<{ blocking_count: number }>(
-      `/api/v1/exceptions/stats/blocking?tenant_id=${tenantId}`,
+      `/api/v1/exceptions/stats/blocking`,
     ).then(unwrapCp),
     enabled: !!tenantId && !!apiKey,
     refetchInterval: POLL_DATA_MS,
@@ -120,8 +125,9 @@ export function useBlockingExceptionCount(tenantId: string) {
 export function useAssignException(tenantId: string) {
   const qc = useQueryClient();
   return useMutation({
+    mutationKey: ['exceptions', tenantId, 'assign'],
     mutationFn: ({ caseId, ownerUserId }: { caseId: string; ownerUserId: string }) =>
-      cpFetch(`/api/v1/exceptions/${caseId}/assign?tenant_id=${tenantId}`, {
+      cpFetch(`/api/v1/exceptions/${caseId}/assign`, {
         method: 'PATCH',
         body: JSON.stringify({ owner_user_id: ownerUserId }),
       }).then(r => r.data),
@@ -132,9 +138,10 @@ export function useAssignException(tenantId: string) {
 export function useResolveException(tenantId: string) {
   const qc = useQueryClient();
   return useMutation({
+    mutationKey: ['exceptions', tenantId, 'resolve'],
     mutationFn: ({ caseId, resolutionSummary, resolvedBy }: {
       caseId: string; resolutionSummary: string; resolvedBy: string;
-    }) => cpFetch(`/api/v1/exceptions/${caseId}/resolve?tenant_id=${tenantId}`, {
+    }) => cpFetch(`/api/v1/exceptions/${caseId}/resolve`, {
       method: 'PATCH',
       body: JSON.stringify({ resolution_summary: resolutionSummary, resolved_by: resolvedBy }),
     }).then(r => r.data),
@@ -145,9 +152,10 @@ export function useResolveException(tenantId: string) {
 export function useWaiveException(tenantId: string) {
   const qc = useQueryClient();
   return useMutation({
+    mutationKey: ['exceptions', tenantId, 'waive'],
     mutationFn: ({ caseId, waiverReason, waiverApprovedBy }: {
       caseId: string; waiverReason: string; waiverApprovedBy: string;
-    }) => cpFetch(`/api/v1/exceptions/${caseId}/waive?tenant_id=${tenantId}`, {
+    }) => cpFetch(`/api/v1/exceptions/${caseId}/waive`, {
       method: 'PATCH',
       body: JSON.stringify({ waiver_reason: waiverReason, waiver_approved_by: waiverApprovedBy }),
     }).then(r => r.data),
@@ -183,7 +191,7 @@ export function useRequestCases(tenantId: string) {
   return useQuery({
     queryKey: ['requests', tenantId],
     queryFn: () => cpFetch<{ cases: RequestCase[]; total: number }>(
-      `/api/v1/requests?tenant_id=${tenantId}`,
+      `/api/v1/requests`,
     ).then(unwrapCp),
     enabled: !!tenantId && !!apiKey,
     refetchInterval: POLL_METRICS_MS,
@@ -193,6 +201,7 @@ export function useRequestCases(tenantId: string) {
 export function useCreateRequestCase(tenantId: string) {
   const qc = useQueryClient();
   return useMutation({
+    mutationKey: ['requests', tenantId, 'create'],
     mutationFn: (data: {
       requesting_party: string;
       scope_type: string;
@@ -201,7 +210,7 @@ export function useCreateRequestCase(tenantId: string) {
       affected_products?: string[];
       affected_facilities?: string[];
       response_hours?: number;
-    }) => cpFetch(`/api/v1/requests?tenant_id=${tenantId}`, {
+    }) => cpFetch(`/api/v1/requests`, {
       method: 'POST',
       body: JSON.stringify(data),
     }).then(r => r.data),
@@ -212,10 +221,17 @@ export function useCreateRequestCase(tenantId: string) {
 export function useAssemblePackage(tenantId: string) {
   const qc = useQueryClient();
   return useMutation({
+    mutationKey: ['requests', tenantId, 'assemble'],
     mutationFn: ({ requestCaseId, generatedBy }: { requestCaseId: string; generatedBy: string }) =>
-      cpFetch(`/api/v1/requests/${requestCaseId}/assemble?tenant_id=${tenantId}&generated_by=${generatedBy}`, {
+      cpFetch(
+        withQuery(
+          `/api/v1/requests/${requestCaseId}/assemble`,
+          new URLSearchParams({ generated_by: generatedBy }),
+        ),
+        {
         method: 'POST',
-      }).then(r => r.data),
+        },
+      ).then(r => r.data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['requests'] }),
   });
 }
@@ -223,10 +239,11 @@ export function useAssemblePackage(tenantId: string) {
 export function useSubmitPackage(tenantId: string) {
   const qc = useQueryClient();
   return useMutation({
+    mutationKey: ['requests', tenantId, 'submit'],
     mutationFn: ({ requestCaseId, ...data }: {
       requestCaseId: string; submitted_to?: string; submitted_by: string;
       submission_method?: string; submission_notes?: string;
-    }) => cpFetch(`/api/v1/requests/${requestCaseId}/submit?tenant_id=${tenantId}`, {
+    }) => cpFetch(`/api/v1/requests/${requestCaseId}/submit`, {
       method: 'POST',
       body: JSON.stringify(data),
     }).then(r => r.data),
@@ -239,7 +256,7 @@ export function usePackageHistory(tenantId: string, requestCaseId: string) {
   return useQuery({
     queryKey: ['requests', tenantId, requestCaseId, 'packages'],
     queryFn: () => cpFetch<{ packages: Record<string, unknown>[]; total: number }>(
-      `/api/v1/requests/${requestCaseId}/packages?tenant_id=${tenantId}`
+      `/api/v1/requests/${requestCaseId}/packages`
     ).then(unwrapCp),
     enabled: !!apiKey && !!tenantId && !!requestCaseId,
   });
@@ -285,7 +302,7 @@ export function useEventEvaluations(tenantId: string, eventId: string) {
   return useQuery({
     queryKey: ['evaluations', tenantId, eventId],
     queryFn: () => cpFetch<{ evaluations: RuleEvaluation[]; total: number }>(
-      `/api/v1/rules/evaluations/${eventId}?tenant_id=${tenantId}`
+      `/api/v1/rules/evaluations/${eventId}`
     ).then(unwrapCp),
     enabled: !!apiKey && !!tenantId && !!eventId,
   });
@@ -334,7 +351,7 @@ export function useCanonicalEvents(
   filters?: { tlc?: string; event_type?: string; source_system?: string; limit?: number }
 ) {
   const { apiKey } = useAuth();
-  const params = new URLSearchParams({ tenant_id: tenantId });
+  const params = new URLSearchParams();
   if (filters?.tlc) params.set('tlc', filters.tlc);
   if (filters?.event_type) params.set('event_type', filters.event_type);
   if (filters?.source_system) params.set('source_system', filters.source_system);
@@ -343,7 +360,7 @@ export function useCanonicalEvents(
   return useQuery({
     queryKey: ['records', tenantId, filters],
     queryFn: () => cpFetch<{ events: CanonicalEvent[]; total: number }>(
-      `/api/v1/records?${params}`,
+      withQuery('/api/v1/records', params),
     ).then(unwrapCp),
     enabled: !!tenantId && !!apiKey,
     refetchInterval: POLL_DATA_MS,
@@ -355,7 +372,7 @@ export function useCanonicalEvent(tenantId: string, eventId: string) {
   return useQuery({
     queryKey: ['records', tenantId, eventId],
     queryFn: () => cpFetch<CanonicalEventDetail>(
-      `/api/v1/records/${eventId}?tenant_id=${tenantId}`
+      `/api/v1/records/${eventId}`
     ).then(unwrapCp),
     enabled: !!apiKey && !!tenantId && !!eventId,
   });
@@ -367,13 +384,13 @@ export function useCanonicalEvent(tenantId: string, eventId: string) {
 
 export function useEntities(tenantId: string, entityType?: string) {
   const { apiKey } = useAuth();
-  const params = new URLSearchParams({ tenant_id: tenantId });
+  const params = new URLSearchParams();
   if (entityType) params.set('entity_type', entityType);
 
   return useQuery({
     queryKey: ['identity', tenantId, entityType],
     queryFn: () => cpFetch<{ entities: Record<string, unknown>[]; total: number }>(
-      `/api/v1/identity/entities?${params}`,
+      withQuery('/api/v1/identity/entities', params),
     ).then(unwrapCp),
     enabled: !!tenantId && !!apiKey,
     staleTime: 60_000,
@@ -385,7 +402,7 @@ export function useIdentityReviews(tenantId: string) {
   return useQuery({
     queryKey: ['identity', 'reviews', tenantId],
     queryFn: () => cpFetch<{ reviews: Record<string, unknown>[]; total: number }>(
-      `/api/v1/identity/reviews?tenant_id=${tenantId}`,
+      `/api/v1/identity/reviews`,
     ).then(unwrapCp),
     enabled: !!tenantId && !!apiKey,
     refetchInterval: POLL_DATA_MS,

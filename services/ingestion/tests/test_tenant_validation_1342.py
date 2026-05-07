@@ -95,19 +95,23 @@ class TestValidateTenantId:
 
 
 class TestResolveTenant:
-    """resolve_tenant picks explicit param, falls back to principal, or raises."""
+    """resolve_tenant prefers scoped principals, with explicit fallback for admin paths."""
 
-    def test_explicit_tenant_id_wins(self):
-        principal = SimpleNamespace(tenant_id="from-principal")
-        assert resolve_tenant("explicit", principal) == "explicit"
+    def test_scoped_principal_tenant_wins_over_explicit(self):
+        principal = SimpleNamespace(tenant_id="from-principal", scopes=["records.read"])
+        assert resolve_tenant("explicit", principal) == "from-principal"
 
     def test_falls_back_to_principal_when_explicit_none(self):
-        principal = SimpleNamespace(tenant_id="from-principal")
+        principal = SimpleNamespace(tenant_id="from-principal", scopes=["records.read"])
         assert resolve_tenant(None, principal) == "from-principal"
 
     def test_falls_back_to_principal_when_explicit_empty(self):
-        principal = SimpleNamespace(tenant_id="from-principal")
+        principal = SimpleNamespace(tenant_id="from-principal", scopes=["records.read"])
         assert resolve_tenant("", principal) == "from-principal"
+
+    def test_wildcard_principal_can_target_explicit_tenant(self):
+        principal = SimpleNamespace(tenant_id="from-principal", scopes=["*"])
+        assert resolve_tenant("explicit", principal) == "explicit"
 
     def test_principal_without_tenant_id_attr_raises(self):
         principal = SimpleNamespace()  # no tenant_id
@@ -134,8 +138,8 @@ class TestResolveTenant:
             resolve_tenant(None, None)
         assert exc_info.value.status_code == 400
 
-    def test_explicit_invalid_format_raises_400(self):
-        principal = SimpleNamespace(tenant_id="valid-tenant")
+    def test_explicit_invalid_format_raises_400_for_unscoped_principal(self):
+        principal = SimpleNamespace(tenant_id=None, scopes=["*"])
         with pytest.raises(HTTPException) as exc_info:
             resolve_tenant("bad tenant!", principal)
         assert exc_info.value.status_code == 400
@@ -150,7 +154,12 @@ class TestResolveTenant:
         assert "1-64 alphanumeric" in exc_info.value.detail
 
     def test_returns_validated_tenant_id(self):
-        principal = SimpleNamespace(tenant_id="valid")
+        principal = SimpleNamespace(tenant_id="valid", scopes=["records.read"])
+        result = resolve_tenant("explicit-valid", principal)
+        assert result == "valid"
+
+    def test_returns_validated_explicit_tenant_for_wildcard(self):
+        principal = SimpleNamespace(tenant_id="valid", scopes=["*"])
         result = resolve_tenant("explicit-valid", principal)
         assert result == "explicit-valid"
 

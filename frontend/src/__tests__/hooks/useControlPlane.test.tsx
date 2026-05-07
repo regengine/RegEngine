@@ -165,7 +165,7 @@ describe('use-control-plane hooks', () => {
     });
 
     describe('useExceptions', () => {
-        it('passes severity and status filters as query params', async () => {
+        it('passes filters without propagating tenant_id in the URL', async () => {
             global.fetch = vi.fn().mockResolvedValue({
                 ok: true,
                 json: () => Promise.resolve({ cases: [], total: 0 }),
@@ -182,7 +182,7 @@ describe('use-control-plane hooks', () => {
             const url = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
             expect(url).toContain('severity=critical');
             expect(url).toContain('status=open');
-            expect(url).toContain(`tenant_id=${TENANT_ID}`);
+            expect(url).not.toContain('tenant_id=');
         });
 
         it('is disabled when tenantId is empty', () => {
@@ -235,6 +235,7 @@ describe('use-control-plane hooks', () => {
             expect(url).toContain('tlc=LOT-123');
             expect(url).toContain('event_type=receiving');
             expect(url).toContain('limit=50');
+            expect(url).not.toContain('tenant_id=');
         });
     });
 
@@ -254,6 +255,8 @@ describe('use-control-plane hooks', () => {
 
             await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
+            const url = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
+            expect(url).not.toContain('tenant_id=');
             expect(result.current.data?.__isDemo).toBe(false);
             expect(result.current.data?.cases[0].requesting_party).toBe('Walmart');
         });
@@ -282,6 +285,7 @@ describe('use-control-plane hooks', () => {
 
             const url = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
             expect(url).toContain('entity_type=facility');
+            expect(url).not.toContain('tenant_id=');
         });
 
         it('fetches entities from live API', async () => {
@@ -362,7 +366,7 @@ describe('use-control-plane hooks', () => {
             expect(global.fetch).toHaveBeenCalledTimes(1);
             const [url, options] = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
             expect(url).toContain('/api/ingestion/api/v1/exceptions/exc-1/resolve');
-            expect(url).toContain(`tenant_id=${TENANT_ID}`);
+            expect(url).not.toContain('tenant_id=');
             expect(options.method).toBe('PATCH');
 
             const body = JSON.parse(options.body);
@@ -413,7 +417,7 @@ describe('use-control-plane hooks', () => {
             expect(global.fetch).toHaveBeenCalledTimes(1);
             const [url, options] = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
             expect(url).toContain('/api/ingestion/api/v1/requests');
-            expect(url).toContain(`tenant_id=${TENANT_ID}`);
+            expect(url).not.toContain('tenant_id=');
             expect(options.method).toBe('POST');
 
             const body = JSON.parse(options.body);
