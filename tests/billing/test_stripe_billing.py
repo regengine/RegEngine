@@ -374,9 +374,10 @@ class TestHandleCheckoutCompleted:
     async def test_checkout_completed_stores_mapping(
         self, mock_stripe, mock_redis_client, mock_store
     ):
-        """checkout.session.completed should store subscription mapping in Redis."""
+        """checkout.session.completed should store a server-bound tenant mapping."""
         mock_client = MagicMock()
-        mock_client.get.return_value = None  # No existing tenant from session lookup
+        mock_client.get.side_effect = ["tenant-abc", None]
+        mock_client.getdel.return_value = None
         mock_redis_client.return_value = mock_client
 
         mock_stripe.Subscription.retrieve.return_value = {
@@ -418,6 +419,7 @@ class TestHandleCheckoutCompleted:
         """If no tenant_id in metadata, should create one via admin service."""
         mock_client = MagicMock()
         mock_client.get.return_value = None
+        mock_client.getdel.return_value = None
         mock_redis_client.return_value = mock_client
 
         mock_create_tenant.return_value = "new-tenant-xyz"
