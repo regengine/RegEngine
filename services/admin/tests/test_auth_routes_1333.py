@@ -627,6 +627,7 @@ class TestRefreshToken:
         payload = decode_access_token(result.access_token)
         assert payload["sub"] == str(user.id)
         assert payload["is_sysadmin"] is False
+        assert result.user["status"] == "active"
         assert result.user["role_name"] == "Owner"
         assert result.user["permissions"] == ["*"]
         session_store.update_session.assert_awaited_once()
