@@ -426,9 +426,16 @@ export function DashboardInflowLab() {
         return sourceGroup ? summarizeSourceSuppliers(sourceGroup.lots) : null;
     }, [exceptionGroups]);
 
-    const visibleGroups = exceptionGroups.filter((group) =>
-        activeFilter === "all" ? true : group.id === activeFilter
-    );
+    // Hide empty groups in all cases so the section matches the redesign
+    // mock (only non-empty patterns are listed). When the active filter
+    // selects a group that has zero lots, ``visibleGroups`` is empty and
+    // the section renders the dedicated "no lots match" empty state below
+    // (with a Clear filter affordance) instead of a stub group heading.
+    const visibleGroups = exceptionGroups.filter((group) => {
+        if (group.lots.length === 0) return false;
+        if (activeFilter === "all") return true;
+        return group.id === activeFilter;
+    });
 
     const localDeliveryCounts = useMemo(
         () =>
@@ -887,7 +894,7 @@ export function DashboardInflowLab() {
                                         ))}
                                     </div>
                                     <Button asChild variant="outline" className="h-9 border-slate-300 bg-white">
-                                        <Link href="/dashboard/exceptions">Open fix queue</Link>
+                                        <Link href="/exceptions">Open fix queue</Link>
                                     </Button>
                                 </div>
                             </div>
@@ -1012,6 +1019,22 @@ export function DashboardInflowLab() {
                                 );
                             })}
 
+                            {exceptionLots.length > 0 && visibleGroups.length === 0 && (
+                                <div
+                                    className="border-t border-slate-200 p-6 text-center text-sm text-slate-500"
+                                    data-empty-filter-state
+                                >
+                                    No lots match the <span className="font-mono text-slate-700">{activeFilter}</span> filter.{" "}
+                                    <button
+                                        type="button"
+                                        className="font-medium text-emerald-700 hover:underline"
+                                        onClick={() => setActiveFilter("all")}
+                                    >
+                                        Clear filter
+                                    </button>
+                                </div>
+                            )}
+
                             {exceptionLots.length === 0 && (
                                 <div className="border-t border-slate-200 p-6 text-center text-sm text-slate-500">
                                     No blocking exceptions in the current test data.
@@ -1115,7 +1138,7 @@ export function DashboardInflowLab() {
                                                 Fix this lot
                                             </Button>
                                             <Button asChild variant="outline" className="h-9 border-slate-300 bg-white text-xs">
-                                                <Link href="/dashboard/exceptions">Open in queue</Link>
+                                                <Link href="/exceptions">Open in queue</Link>
                                             </Button>
                                         </div>
                                     </>
