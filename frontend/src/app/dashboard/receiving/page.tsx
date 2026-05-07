@@ -47,7 +47,7 @@ interface ReceivingSession {
 
 /* ─── Component ─── */
 export default function ReceivingDockPage() {
-    const { apiKey, tenantId } = useAuth();
+    const { isAuthenticated, tenantId } = useAuth();
     const { toast } = useToast();
     const [session, setSession] = useState<ReceivingSession | null>(null);
     const [supplier, setSupplier] = useState('');
@@ -174,11 +174,14 @@ export default function ReceivingDockPage() {
 
     /* ─── GTIN auto-fill from catalog ─── */
     const lookupGtin = useCallback(async (gtin: string) => {
-        if (!apiKey || !tenantId || gtin.length < 8) return;
+        if (!isAuthenticated || !tenantId || gtin.length < 8) return;
         try {
             const res = await fetchWithCsrf(
                 `${getServiceURL('ingestion')}/api/v1/products/${tenantId}/lookup?gtin=${gtin}`,
-                { headers: { 'X-RegEngine-API-Key': apiKey } },
+                {
+                    credentials: 'include',
+                    signal: AbortSignal.timeout(8000),
+                },
             );
             if (!res.ok) return;
             const data = await res.json();
@@ -186,11 +189,11 @@ export default function ReceivingDockPage() {
                 setManualProduct(data.product.name || data.product.description || '');
             }
         } catch { /* best-effort */ }
-    }, [apiKey, tenantId]);
+    }, [isAuthenticated, tenantId]);
 
     /* ─── Confirm & Ingest all scanned items ─── */
     const confirmAll = useCallback(async () => {
-        if (!session || !apiKey) return;
+        if (!session || !isAuthenticated || !tenantId) return;
         setIngesting(true);
         try {
             const allItems = [
@@ -222,10 +225,9 @@ export default function ReceivingDockPage() {
 
             const res = await fetchWithCsrf(`${getServiceURL('ingestion')}/api/v1/webhooks/ingest`, {
                 method: 'POST',
+                credentials: 'include',
                 headers: {
                     'Content-Type': 'application/json',
-                    'X-RegEngine-API-Key': apiKey,
-                    ...(tenantId ? { 'X-Tenant-ID': tenantId } : {}),
                 },
                 body: JSON.stringify({
                     source: 'receiving_dock',
@@ -247,7 +249,7 @@ export default function ReceivingDockPage() {
         } finally {
             setIngesting(false);
         }
-    }, [session, apiKey, tenantId, toast]);
+    }, [session, isAuthenticated, tenantId, toast]);
 
     /* ─── Stats ─── */
     const stats = session ? {
