@@ -160,13 +160,39 @@ def _tenant_for_rate_limit(request: Request, principal: IngestionPrincipal) -> s
     header_tenant = request.headers.get("X-Tenant-ID") or request.headers.get("X-RegEngine-Tenant-ID")
     if header_tenant:
         return str(header_tenant)
-    if request.query_params.get("tenant_id"):
-        return str(request.query_params["tenant_id"])
+    # Query-string fallback removed (EPIC-A #1651): attacker-controllable
+    # input must not determine the rate-limit bucket. A request that lands
+    # here with no authenticated principal AND no X-Tenant-ID header gets
+    # the shared "global" bucket, preventing tenant-bucket isolation
+    # attacks. Header fallback retained for master-key callers; long-term,
+    # all paths should resolve via services/shared/tenant_context.py.
     return "global"
 
 
 def _requested_tenant_context(request: Request) -> Optional[str]:
-    """Return query/header tenant context, rejecting conflicts."""
+    """Return query/header tenant context for DEFENSIVE mismatch detection.
+
+    The returned value is NEVER used as a tenant trust signal — the
+    authoritative tenant is always the authenticated principal. This
+    helper exists solely so ``require_permission`` can detect a caller
+    attempting to override the principal's tenant via query string or
+    header and reject the request with 403.
+
+    The Semgrep rule ``tenant-id-from-query-string`` correctly flags
+    untrustworthy READS, but a defensive DETECTION read that never feeds
+    a trust decision is the legitimate exception this helper exists for.
+    Each query/header read below is annotated with ``nosemgrep:`` and
+    only that specific finding is suppressed; new call sites elsewhere
+    in the codebase still trip the gate.
+
+    Long-term: replace this helper with
+    ``services/shared/tenant_context.py:resolve_tenant_context()`` once
+    ``get_ingestion_principal`` populates ``request.state.api_key``
+    (today it returns ``IngestionPrincipal`` directly so the shared
+    resolver raises ``E_NO_PRINCIPAL`` here). When that lands, this
+    helper and its ``nosemgrep:`` annotations can be deleted.
+    """
+    # nosemgrep: tenant-id-from-query-string  defensive-detection-not-trust
     query_tenant = request.query_params.get("tenant_id")
     header_tenant = request.headers.get("X-Tenant-ID") or request.headers.get("X-RegEngine-Tenant-ID")
 

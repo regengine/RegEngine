@@ -407,10 +407,15 @@ class TestTenantForRateLimit:
         req = _fake_request(regengine_tenant_header="regengine-header-t", tenant_query="query-t")
         assert _tenant_for_rate_limit(req, p) == "regengine-header-t"
 
-    def test_query_fallback(self):
+    def test_query_string_ignored_returns_global(self):
+        """EPIC-A #1651: query-string tenant_id is attacker-controllable
+        and must not determine the rate-limit bucket. With no principal
+        tenant and no X-Tenant-ID header, the bucket falls through to
+        "global" — a query-only request cannot isolate itself into a
+        low-traffic per-tenant bucket."""
         p = IngestionPrincipal(key_id="k")
         req = _fake_request(tenant_query="query-t")
-        assert _tenant_for_rate_limit(req, p) == "query-t"
+        assert _tenant_for_rate_limit(req, p) == "global"
 
     def test_global_default(self):
         p = IngestionPrincipal(key_id="k")
@@ -420,6 +425,9 @@ class TestTenantForRateLimit:
 
 class TestRequestedTenantContext:
     def test_query_only(self):
+        """Query tenant_id is read for DEFENSIVE mismatch detection only —
+        the value is never used as a trust signal. See the
+        ``nosemgrep:`` annotation on the read in authz.py."""
         assert _requested_tenant_context(_fake_request(tenant_query="query-t")) == "query-t"
 
     def test_x_tenant_header_only(self):
