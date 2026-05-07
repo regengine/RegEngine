@@ -14,7 +14,14 @@ from typing import Any, Callable, Iterable, Optional
 
 from confluent_kafka import Consumer, KafkaException, Producer
 from confluent_kafka.admin import AdminClient, NewTopic
-from confluent_kafka.error import KafkaError as ConfluentKafkaError
+
+try:
+    from confluent_kafka.error import KafkaError as ConfluentKafkaError
+except (ImportError, ModuleNotFoundError):
+    # Some tests stub ``confluent_kafka`` with a lightweight module/MagicMock
+    # that exposes ``KafkaError`` at the package root but not as a real
+    # ``confluent_kafka.error`` submodule.
+    from confluent_kafka import KafkaError as ConfluentKafkaError
 
 
 class KafkaError(Exception):

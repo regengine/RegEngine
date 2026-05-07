@@ -181,3 +181,54 @@ def test_cypher_constant_uses_user_parameter_not_tenant_wide_delete():
     assert "_delete_neo4j_tenant_subgraph" not in source
     assert "_CYPHER_DELETE_TENANT_SUBGRAPH" not in source
     assert "MATCH (n {tenant_id: $tenant_id}) DETACH DELETE n" not in source
+
+
+# ---------------------------------------------------------------------------
+# Test 5: Durability — erasure enqueues a graph_outbox row before commit so
+# the Neo4j deletion survives Neo4j unreachability.
+# ---------------------------------------------------------------------------
+
+
+def test_erasure_enqueues_graph_outbox_row_before_commit():
+    """The erasure handler must call enqueue_graph_write() with the
+    user-scoped Cypher BEFORE db.commit(), so the outbox row lands
+    atomically with the soft-delete + audit anonymization. Pre-fix:
+    a post-commit best-effort Neo4j driver call silently no-op'd if
+    Neo4j was down — committed Postgres state without graph cleanup.
+    Post-fix: outbox row is durable; the drainer eventually applies
+    the Cypher with retry + backoff.
+    """
+    import inspect
+    import re
+
+    from services.admin.app import erasure_routes
+
+    source = inspect.getsource(erasure_routes.request_erasure)
+
+    enqueue_match = re.search(r"\benqueue_graph_write\s*\(", source)
+    commit_match = re.search(r"\bdb\.commit\s*\(", source)
+
+    assert enqueue_match is not None, (
+        "request_erasure must call enqueue_graph_write() so the Neo4j "
+        "deletion is durable via the graph_outbox drainer."
+    )
+    assert commit_match is not None, (
+        "request_erasure handler shape changed — db.commit() not found"
+    )
+    assert enqueue_match.start() < commit_match.start(), (
+        "enqueue_graph_write() must run BEFORE db.commit() so the outbox "
+        "row lands in the same Postgres transaction as the soft-delete. "
+        "If commit happens first, an outbox-write failure leaves the "
+        "Postgres erasure committed without a durable graph cleanup row."
+    )
+
+    # Operation tag must be stable for outbox dedupe + metric labels.
+    assert (
+        'operation="user_erasure"' in source
+        or "operation='user_erasure'" in source
+    ), "operation tag must be 'user_erasure'"
+
+    # dedupe_key required so a retried request doesn't write a second row.
+    assert "dedupe_key=" in source, (
+        "enqueue_graph_write call must pass a dedupe_key to make retries idempotent"
+    )

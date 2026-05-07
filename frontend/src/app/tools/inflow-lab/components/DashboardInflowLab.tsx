@@ -152,7 +152,10 @@ type WorkbenchRun = {
     saved_at: string;
 };
 
+type WorkbenchRequestError = Error & { status?: number };
+
 const INFLOW_API = "/api/inflow-lab";
+const WORKBENCH_API = "/api/ingestion/api/v1/inflow-workbench";
 const REQUIRED_CTES = ["harvesting", "cooling", "initial_packing", "shipping", "receiving"];
 const FILTER_CHIPS: { id: "all" | ExceptionPatternId; label: string }[] = [
     { id: "all", label: "all" },
@@ -174,6 +177,27 @@ async function inflowJson<T>(path: string, init?: RequestInit): Promise<T> {
     if (!response.ok) {
         const payload = await response.json().catch(() => ({}));
         throw new Error(payload.error || payload.detail || `Inflow Lab request failed: ${response.status}`);
+    }
+    return response.json();
+}
+
+async function workbenchJson<T>(path: string, init?: RequestInit): Promise<T> {
+    const headers = new Headers(init?.headers);
+    if (!headers.has("content-type")) {
+        headers.set("content-type", "application/json");
+    }
+    const response = await fetchWithCsrf(`${WORKBENCH_API}${path}`, {
+        cache: "no-store",
+        ...init,
+        headers,
+    });
+    if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        const error = new Error(
+            payload.error || payload.detail || `Inflow Workbench request failed: ${response.status}`,
+        ) as WorkbenchRequestError;
+        error.status = response.status;
+        throw error;
     }
     return response.json();
 }
@@ -341,6 +365,7 @@ export function DashboardInflowLab() {
     const [backendReadiness, setBackendReadiness] = useState<ReadinessSummary | null>(null);
     const [isSavingRun, setIsSavingRun] = useState(false);
     const [savedRun, setSavedRun] = useState<WorkbenchRun | null>(null);
+    const [loadedRun, setLoadedRun] = useState<WorkbenchRun | null>(null);
     const [workbenchSaveNote, setWorkbenchSaveNote] = useState<string | null>(null);
     const [workbenchSaveError, setWorkbenchSaveError] = useState<string | null>(null);
     const [activeFilter, setActiveFilter] = useState<"all" | ExceptionPatternId>("all");
@@ -353,14 +378,57 @@ export function DashboardInflowLab() {
     const [isRunning, setIsRunning] = useState(false);
     const [showCsvDrawer, setShowCsvDrawer] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const normalizedRoleName = user?.role_name?.toLowerCase() ?? null;
     const workbenchWriteCapability = Array.isArray(user?.permissions)
         ? hasPermission(user.permissions, "inflow.write")
-        : null;
+        : normalizedRoleName === "viewer"
+            ? false
+            : null;
     const saveWorkbenchRunUnavailable = workbenchWriteCapability === false;
 
     useEffect(() => {
         if (!isHydrated || !isAuthenticated || !activeTenantId) return;
         setTenantId((current) => (current === activeTenantId ? current : activeTenantId));
+    }, [activeTenantId, isAuthenticated, isHydrated]);
+
+    useEffect(() => {
+        if (!isHydrated || !isAuthenticated || !activeTenantId) {
+            setLoadedRun(null);
+            return;
+        }
+
+        let cancelled = false;
+
+        const loadLatestWorkbenchRun = async () => {
+            try {
+                const summary = await workbenchJson<{
+                    run_id?: string | null;
+                }>(`/readiness/summary?tenant_id=${encodeURIComponent(activeTenantId)}`, {
+                    method: "GET",
+                });
+                if (!summary.run_id) {
+                    if (!cancelled) setLoadedRun(null);
+                    return;
+                }
+                const latestRun = await workbenchJson<WorkbenchRun>(
+                    `/runs/${encodeURIComponent(summary.run_id)}?tenant_id=${encodeURIComponent(activeTenantId)}`,
+                    { method: "GET" },
+                );
+                if (!cancelled) {
+                    setLoadedRun(latestRun);
+                }
+            } catch {
+                if (!cancelled) {
+                    setLoadedRun(null);
+                }
+            }
+        };
+
+        loadLatestWorkbenchRun().catch(() => undefined);
+
+        return () => {
+            cancelled = true;
+        };
     }, [activeTenantId, isAuthenticated, isHydrated]);
 
     const refreshService = async () => {
@@ -516,8 +584,10 @@ export function DashboardInflowLab() {
         value: number;
         tone: "ok" | "warn" | "bad" | "locked";
     }[];
-    const compositeScore = backendReadiness
-        ? backendReadiness.score
+    const latestSavedRun = savedRun ?? loadedRun;
+    const activeWorkbenchReadiness = backendReadiness ?? latestSavedRun?.readiness ?? null;
+    const compositeScore = activeWorkbenchReadiness
+        ? activeWorkbenchReadiness.score
         : measuredFactors.length
         ? Math.round(measuredFactors.reduce((acc, f) => acc + f.value, 0) / measuredFactors.length)
         : 0;
@@ -530,6 +600,9 @@ export function DashboardInflowLab() {
 
     const openFixCount = savedRun
         ? savedRun.fix_queue.filter((item) => item.status === "open" || item.status === "waiting").length
+        : 0;
+    const latestSavedRunOpenFixCount = latestSavedRun
+        ? latestSavedRun.fix_queue.filter((item) => item.status === "open" || item.status === "waiting").length
         : 0;
 
     const resetFeederPreview = () => {
@@ -625,29 +698,20 @@ export function DashboardInflowLab() {
                 result: feederResult,
                 ...(activeTenantId ? { tenant_id: activeTenantId } : {}),
             };
-            const saveRunResponse = await fetchWithCsrf("/api/ingestion/api/v1/inflow-workbench/runs", {
+            const savedPayload = await workbenchJson<WorkbenchRun>("/runs", {
                 method: "POST",
-                headers: { "content-type": "application/json" },
                 body: JSON.stringify(workbenchBody),
             });
-            if (saveRunResponse.status === 403) {
+            setSavedRun(savedPayload);
+            setLoadedRun(savedPayload);
+            setBackendReadiness(savedPayload.readiness);
+        } catch (error) {
+            if ((error as WorkbenchRequestError | undefined)?.status === 403) {
                 setWorkbenchSaveNote(
                     "You can evaluate sandbox data here, but only users with write access can save an Inflow Workbench test run.",
                 );
                 return;
             }
-            if (!saveRunResponse.ok) {
-                const payload = await saveRunResponse.json().catch(() => ({}));
-                const detail =
-                    typeof payload.detail === "string"
-                        ? payload.detail
-                        : `Workbench save failed: ${saveRunResponse.status}`;
-                throw new Error(detail);
-            }
-            const savedPayload = (await saveRunResponse.json()) as WorkbenchRun;
-            setSavedRun(savedPayload);
-            setBackendReadiness(savedPayload.readiness);
-        } catch (error) {
             setWorkbenchSaveError(
                 error instanceof Error ? error.message : "Could not save workbench run",
             );
@@ -660,8 +724,9 @@ export function DashboardInflowLab() {
         setSelectedLotIds((current) => ({ ...current, [lotCode]: checked }));
     };
 
-    const lastTestRunAt = savedRun?.saved_at || serviceStatus?.stats?.delivery?.last_success_at || null;
+    const lastTestRunAt = latestSavedRun?.saved_at || serviceStatus?.stats?.delivery?.last_success_at || null;
     const lastTestRunLabel = lastTestRunAt ? formatServiceTime(lastTestRunAt) : "never";
+    const showLatestRunBanner = latestSavedRun && !(savedRun && showCsvDrawer);
 
     return (
         <main
@@ -733,6 +798,14 @@ export function DashboardInflowLab() {
                 {serviceError && (
                     <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-800">
                         Inflow Lab service connection: {serviceError}
+                    </div>
+                )}
+
+                {showLatestRunBanner && (
+                    <div className="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-2 text-xs text-emerald-900">
+                        <span className="font-medium">Latest saved workbench run</span>{" "}
+                        <code className="font-mono text-[11px]">{latestSavedRun.run_id}</code>.{" "}
+                        {latestSavedRunOpenFixCount} open fix{latestSavedRunOpenFixCount === 1 ? "" : "es"} remain in workbench.
                     </div>
                 )}
 
