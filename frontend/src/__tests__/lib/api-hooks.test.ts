@@ -31,7 +31,7 @@ describe('internal api hooks', () => {
         });
 
         const { fetchWorkbenchReadinessSummary } = await import('@/lib/api-hooks');
-        await fetchWorkbenchReadinessSummary('tenant-123', 'cookie-managed');
+        await fetchWorkbenchReadinessSummary('tenant-123');
 
         expect(fetchWithCsrfMock).toHaveBeenCalledWith(
             '/api/ingestion/api/v1/inflow-workbench/readiness/summary',
@@ -39,6 +39,41 @@ describe('internal api hooks', () => {
         );
         const [url] = fetchWithCsrfMock.mock.calls[0] as [string, RequestInit];
         expect(url).not.toContain('tenant_id=');
+        const [, init] = fetchWithCsrfMock.mock.calls[0] as [string, RequestInit];
+        expect(new Headers(init.headers).get('X-RegEngine-API-Key')).toBeNull();
+    });
+
+    it('fetches alerts and compliance score without a browser API-key header', async () => {
+        fetchWithCsrfMock
+            .mockResolvedValueOnce({
+                ok: true,
+                json: async () => ({
+                    tenant_id: 'tenant-123',
+                    alerts: [],
+                    total: 0,
+                    unacknowledged: 0,
+                }),
+            })
+            .mockResolvedValueOnce({
+                ok: true,
+                json: async () => ({
+                    tenant_id: 'tenant-123',
+                    overall_score: 94,
+                    grade: 'A',
+                }),
+            });
+
+        const { fetchAlerts, fetchComplianceScore } = await import('@/lib/api-hooks');
+        await fetchAlerts('tenant-123');
+        await fetchComplianceScore('tenant-123');
+
+        const [alertsUrl, alertsInit] = fetchWithCsrfMock.mock.calls[0] as [string, RequestInit];
+        expect(alertsUrl).toBe('/api/ingestion/api/v1/alerts/tenant-123');
+        expect(new Headers(alertsInit.headers).get('X-RegEngine-API-Key')).toBeNull();
+
+        const [scoreUrl, scoreInit] = fetchWithCsrfMock.mock.calls[1] as [string, RequestInit];
+        expect(scoreUrl).toBe('/api/ingestion/api/v1/compliance/score/tenant-123');
+        expect(new Headers(scoreInit.headers).get('X-RegEngine-API-Key')).toBeNull();
     });
 
     it('creates checkout sessions via the billing proxy without client tenant payload', async () => {

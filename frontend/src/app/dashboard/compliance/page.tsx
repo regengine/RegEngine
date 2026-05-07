@@ -284,7 +284,7 @@ function DimensionRow({ dimKey, item }: { dimKey: string; item: ScoreBreakdownIt
 /* ── Page ── */
 
 export default function ComplianceDashboardPage() {
-    const { isAuthenticated, apiKey } = useAuth();
+    const { isAuthenticated } = useAuth();
     const { tenantId } = useTenant();
     const isLoggedIn = isAuthenticated;
 
@@ -293,7 +293,7 @@ export default function ComplianceDashboardPage() {
     const { data: score = null, isLoading: loading, error: scoreError, dataUpdatedAt, refetch: fetchScore } = useQuery({
         queryKey: ['compliance-score', tenantId],
         queryFn: async () => {
-            const data = await fetchComplianceScore(tenantId, apiKey || '');
+            const data = await fetchComplianceScore(tenantId);
             return data as ComplianceScore;
         },
         enabled: isLoggedIn && !!tenantId,
@@ -306,7 +306,7 @@ export default function ComplianceDashboardPage() {
         refetch: fetchWorkbenchSummary,
     } = useQuery({
         queryKey: ['inflow-workbench-readiness', tenantId],
-        queryFn: async () => fetchWorkbenchReadinessSummary(tenantId, apiKey || ''),
+        queryFn: async () => fetchWorkbenchReadinessSummary(tenantId),
         enabled: isLoggedIn && !!tenantId,
         refetchInterval: POLL_MS,
         retry: false,

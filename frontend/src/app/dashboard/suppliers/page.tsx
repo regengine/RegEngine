@@ -102,7 +102,7 @@ const SUPPLIER_SETUP_STEPS = [
 /* ------------------------------------------------------------------ */
 
 export default function SupplierDashboardPage() {
-    const { isAuthenticated, apiKey } = useAuth();
+    const { isAuthenticated } = useAuth();
     const { tenantId } = useTenant();
     const isLoggedIn = isAuthenticated;
 
@@ -156,7 +156,7 @@ export default function SupplierDashboardPage() {
                 .catch(() => setIntegrationProfiles([]));
 
             if (tenantId) {
-                fetchWorkbenchReadinessSummary(tenantId, apiKey || '')
+                fetchWorkbenchReadinessSummary(tenantId)
                     .then(setWorkbenchSummary)
                     .catch(() => setWorkbenchSummary(null));
             }
@@ -215,7 +215,7 @@ export default function SupplierDashboardPage() {
             setError(friendlyError(err, 'Unable to load supplier data. Please try again.'));
             setLoading(false);
         }
-    }, [apiKey, isLoggedIn, tenantId]);
+    }, [isLoggedIn, tenantId]);
 
     useEffect(() => { loadData(); }, [loadData]);
 

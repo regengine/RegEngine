@@ -92,7 +92,7 @@ function formatTimeAgo(iso: string): string {
 }
 
 export default function AlertsDashboardPage() {
-    const { isAuthenticated, apiKey } = useAuth();
+    const { isAuthenticated } = useAuth();
     const { tenantId } = useTenant();
     const isLoggedIn = isAuthenticated;
 
@@ -103,7 +103,7 @@ export default function AlertsDashboardPage() {
     const { data: alertsData, isLoading: loading, error: alertsError, refetch: loadAlerts, isSuccess } = useQuery({
         queryKey: ['alerts', tenantId],
         queryFn: async () => {
-            const data = (await fetchAlerts(tenantId, apiKey || '')) as AlertsResponse;
+            const data = (await fetchAlerts(tenantId)) as AlertsResponse;
             return data.alerts || [];
         },
         enabled: isLoggedIn && !!tenantId,
@@ -117,7 +117,7 @@ export default function AlertsDashboardPage() {
     const [ackError, setAckError] = useState<string | null>(null);
 
     const acknowledgeMutation = useMutation({
-        mutationFn: (alertId: string) => acknowledgeAlert(tenantId, apiKey || '', alertId),
+        mutationFn: (alertId: string) => acknowledgeAlert(tenantId, null, alertId),
         onSuccess: (_data, alertId) => {
             setAckError(null);
             alertsQueryClient.setQueryData<Alert[]>(['alerts', tenantId], (old) =>
