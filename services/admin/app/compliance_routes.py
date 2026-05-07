@@ -309,7 +309,7 @@ def resolve_alert(
 def create_alert(
     request: CreateAlertRequest,
     tenant_id: UUID = Depends(verify_path_tenant_matches),
-    session: Session = Depends(get_tenant_scoped_session),
+    session=Depends(get_session),
 ) -> AlertResponse:
     """Manually create a compliance alert.
 
@@ -319,12 +319,6 @@ def create_alert(
     Pre-fix this route accepted ``tenant_id`` from the request body, which
     let any caller with the ``analysis.create`` scope create alerts in an
     arbitrary tenant.
-
-    The session is bound to ``app.tenant_id`` via ``get_tenant_scoped_session``
-    so any RLS policy on tables touched inside this request is enforced by
-    Postgres — defense-in-depth if a future query forgets its
-    ``WHERE tenant_id = ...`` predicate. FastAPI deduplicates the
-    ``verify_path_tenant_matches`` call shared by both deps, so it runs once.
     """
     try:
         source_type = AlertSourceType[request.source_type]

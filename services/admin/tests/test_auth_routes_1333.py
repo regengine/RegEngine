@@ -214,11 +214,23 @@ def _make_db_with_user(user, tenant=None, membership=None) -> MagicMock:
     and optionally returns memberships."""
     db = MagicMock()
     db.execute.return_value.scalar_one_or_none.return_value = user
-    # For get() calls (e.g. db.get(UserModel, user_id))
-    db.get = MagicMock(return_value=user)
+    role = None
+    if membership is not None:
+        role = SimpleNamespace(id=membership.role_id, name="Owner", permissions=["*"])
+
+    def _get(_model, ident):
+        if user is not None and ident == getattr(user, "id", None):
+            return user
+        if tenant is not None and ident == getattr(tenant, "id", None):
+            return tenant
+        if role is not None and ident == getattr(role, "id", None):
+            return role
+        return None
+
+    db.get = MagicMock(side_effect=_get)
 
     if tenant and membership:
-        db.execute.return_value.all.return_value = [(membership, tenant)]
+        db.execute.return_value.all.return_value = [(membership, tenant, role)]
         db.execute.return_value.scalars.return_value.all.return_value = [membership]
         db.execute.return_value.scalars.return_value.first.return_value = membership
     else:
@@ -382,6 +394,9 @@ class TestLogin:
         assert result.refresh_token
         assert result.tenant_id == tenant.id
         assert result.user["email"] == "u@example.com"
+        assert result.user["status"] == "active"
+        assert result.user["role_name"] == "Owner"
+        assert result.user["permissions"] == ["*"]
 
     @pytest.mark.asyncio
     async def test_login_email_normalized_to_lowercase(self, monkeypatch):
@@ -400,6 +415,8 @@ class TestLogin:
             session_store=session_store,
         )
         assert result.user["email"] == "user@example.com"
+        assert result.user["role_name"] == "Owner"
+        assert result.user["permissions"] == ["*"]
 
     @pytest.mark.asyncio
     async def test_login_audit_failure_does_not_poison_last_login(self, monkeypatch):
@@ -585,7 +602,6 @@ class TestRefreshToken:
         session_store.claim_session_by_token = AsyncMock(return_value=session)
 
         db = _make_db_with_user(user, tenant, membership)
-        db.get = MagicMock(return_value=user)
 
         # Provide old access token in Authorization header so tenant preserved
         old_access = create_access_token({
@@ -611,6 +627,8 @@ class TestRefreshToken:
         payload = decode_access_token(result.access_token)
         assert payload["sub"] == str(user.id)
         assert payload["is_sysadmin"] is False
+        assert result.user["role_name"] == "Owner"
+        assert result.user["permissions"] == ["*"]
         session_store.update_session.assert_awaited_once()
         assert session_store.update_session.await_args.kwargs["new_token_hash"] == hash_token(result.refresh_token)
         assert session_store.update_session.await_args.kwargs["old_token_hash"] == hash_token(raw_token)

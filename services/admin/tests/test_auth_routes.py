@@ -68,6 +68,7 @@ def _make_membership(user_id, tenant_id):
     m = MagicMock()
     m.user_id = user_id
     m.tenant_id = tenant_id
+    m.role_id = uuid.uuid4()
     return m
 
 
@@ -128,11 +129,15 @@ class TestLoginHappyPath:
         user = _make_user()
         tenant = _make_tenant()
         mem = _make_membership(user.id, tenant.id)
+        role = MagicMock()
+        role.id = mem.role_id
+        role.name = "Owner"
+        role.permissions = ["*"]
 
         db_session = MagicMock()
         # First execute → user lookup; second execute → membership join
         db_session.execute.return_value.scalar_one_or_none.return_value = user
-        db_session.execute.return_value.all.return_value = [(mem, tenant)]
+        db_session.execute.return_value.all.return_value = [(mem, tenant, role)]
         db_session.commit.return_value = None
 
         with (
@@ -159,10 +164,10 @@ class TestLoginHappyPath:
                 r = MagicMock()
                 if call_count[0] == 0:
                     r.scalar_one_or_none.return_value = user
-                    r.all.return_value = [(mem, tenant)]
+                    r.all.return_value = [(mem, tenant, role)]
                 else:
                     r.scalar_one_or_none.return_value = user
-                    r.all.return_value = [(mem, tenant)]
+                    r.all.return_value = [(mem, tenant, role)]
                 call_count[0] += 1
                 return r
             db_session.execute.side_effect = side_effect
@@ -173,6 +178,10 @@ class TestLoginHappyPath:
             assert result.access_token
             assert result.refresh_token
             assert result.user["email"] == user.email
+            assert result.user["status"] == user.status
+            assert result.user["role_id"] == str(role.id)
+            assert result.user["role_name"] == "Owner"
+            assert result.user["permissions"] == ["*"]
 
 
 # ---------------------------------------------------------------------------
@@ -347,13 +356,25 @@ class TestTokenRefresh:
         user = _make_user()
         tenant = _make_tenant()
         membership = _make_membership(user.id, tenant.id)
+        role = MagicMock()
+        role.id = membership.role_id
+        role.name = "Owner"
+        role.permissions = ["*"]
         sd = _make_session_data(user.id)
 
         mock_session_store.claim_session_by_token = AsyncMock(return_value=sd)
         mock_session_store.update_session = AsyncMock(return_value=None)
 
         db_session = MagicMock()
-        db_session.get.return_value = user
+        def get_side_effect(_model, ident):
+            if ident == user.id:
+                return user
+            if ident == tenant.id:
+                return tenant
+            if ident == membership.role_id:
+                return role
+            return None
+        db_session.get.side_effect = get_side_effect
         db_session.execute.return_value.scalars.return_value.all.return_value = [membership]
 
         with (
@@ -374,6 +395,10 @@ class TestTokenRefresh:
                 refresh_session.__wrapped__(payload, req, db=db_session, session_store=mock_session_store)
             )
             assert result.access_token == "new-access-token"
+            assert result.user["status"] == user.status
+            assert result.user["role_id"] == str(role.id)
+            assert result.user["role_name"] == "Owner"
+            assert result.user["permissions"] == ["*"]
 
 
 # ---------------------------------------------------------------------------

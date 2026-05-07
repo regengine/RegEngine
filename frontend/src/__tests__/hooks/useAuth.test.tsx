@@ -317,6 +317,102 @@ describe('useAuth Hook', () => {
             expect(sessionPostBodies.some((body) => body.access_token === 'cookie-managed')).toBe(false);
         });
 
+        it('hydrates explicit Supabase metadata permissions into the app session', async () => {
+            const supabaseUser = {
+                id: 'supabase-user',
+                email: 'test@example.com',
+                user_metadata: {
+                    tenant_id: 'tenant-123',
+                    role: 'member',
+                    is_sysadmin: false,
+                    permissions: [' inflow:write ', '', 42, 'admin:*'],
+                },
+            };
+            const supabaseAuth = {
+                getUser: vi.fn().mockResolvedValue({ data: { user: supabaseUser } }),
+                getSession: vi.fn().mockResolvedValue({ data: { session: null } }),
+                onAuthStateChange: vi.fn(() => ({
+                    data: { subscription: { unsubscribe: vi.fn() } },
+                })),
+                signOut: vi.fn(),
+            };
+            (isSupabaseConfigured as any).mockReturnValue(true);
+            (createSupabaseBrowserClient as any).mockReturnValue({ auth: supabaseAuth });
+
+            const { result } = renderHook(() => useAuth(), { wrapper });
+
+            await waitFor(() => {
+                expect(result.current.user?.id).toBe('supabase-user');
+            });
+
+            expect(result.current.user?.permissions).toEqual(['inflow:write', 'admin:*']);
+            expect(result.current.accessToken).toBe('cookie-managed');
+
+            const sessionPostBody = mockFetch.mock.calls
+                .filter(
+                    ([url, opts]) =>
+                        typeof url === 'string' &&
+                        url.includes('/api/session') &&
+                        (opts as RequestInit | undefined)?.method === 'POST',
+                )
+                .map(([, opts]) => JSON.parse((opts as RequestInit).body as string))
+                .find((body) => body.user?.id === 'supabase-user');
+
+            expect(sessionPostBody?.user?.permissions).toEqual(['inflow:write', 'admin:*']);
+        });
+
+        it('preserves existing permissions when Supabase metadata omits them', async () => {
+            const storedUser = {
+                id: 'stored-user',
+                email: 'stored@example.com',
+                is_sysadmin: false,
+                status: 'active',
+                role_name: 'owner',
+                permissions: ['inflow.write', 'reports.read'],
+            };
+            const supabaseUser = {
+                id: 'supabase-user',
+                email: 'stored@example.com',
+                user_metadata: {
+                    tenant_id: 'tenant-123',
+                    role: 'member',
+                    is_sysadmin: false,
+                },
+            };
+            localStorageMock.setItem('regengine_user', JSON.stringify(storedUser));
+
+            const supabaseAuth = {
+                getUser: vi.fn().mockResolvedValue({ data: { user: supabaseUser } }),
+                getSession: vi.fn().mockResolvedValue({ data: { session: null } }),
+                onAuthStateChange: vi.fn(() => ({
+                    data: { subscription: { unsubscribe: vi.fn() } },
+                })),
+                signOut: vi.fn(),
+            };
+            (isSupabaseConfigured as any).mockReturnValue(true);
+            (createSupabaseBrowserClient as any).mockReturnValue({ auth: supabaseAuth });
+
+            const { result } = renderHook(() => useAuth(), { wrapper });
+
+            await waitFor(() => {
+                expect(result.current.user?.id).toBe('supabase-user');
+            });
+
+            expect(result.current.user?.permissions).toEqual(['inflow.write', 'reports.read']);
+
+            const sessionPostBody = mockFetch.mock.calls
+                .filter(
+                    ([url, opts]) =>
+                        typeof url === 'string' &&
+                        url.includes('/api/session') &&
+                        (opts as RequestInit | undefined)?.method === 'POST',
+                )
+                .map(([, opts]) => JSON.parse((opts as RequestInit).body as string))
+                .find((body) => body.user?.id === 'supabase-user');
+
+            expect(sessionPostBody?.user?.permissions).toEqual(['inflow.write', 'reports.read']);
+        });
+
         it('calls apiClient.setAccessToken on login', async () => {
             const mockUser = {
                 id: '123',

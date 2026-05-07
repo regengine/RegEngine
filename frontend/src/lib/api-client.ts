@@ -1,6 +1,7 @@
 import axios, { AxiosInstance } from 'axios';
 import { getServiceURL } from './api-config';
 import { getCsrfHeaders, CSRF_PROTECTED_METHODS } from './csrf';
+import { sanitizePermissions } from './permissions';
 import type {
   HealthCheckResponse,
   APIKeyResponse,
@@ -50,6 +51,31 @@ import type {
 import type { ReviewItem } from '@/types/review';
 
 const COOKIE_MANAGED_PLACEHOLDER = 'cookie-managed';
+
+function buildSupabaseSessionUser(
+  sessionUser: {
+    id: string;
+    email?: string | null;
+    user_metadata?: Record<string, unknown>;
+  },
+  fallbackPermissions?: string[],
+): User {
+  const explicitPermissions = sanitizePermissions(sessionUser.user_metadata?.permissions);
+  const user: User = {
+    id: sessionUser.id,
+    email: sessionUser.email || '',
+    is_sysadmin: Boolean(sessionUser.user_metadata?.is_sysadmin),
+    status: 'active',
+    role_name: typeof sessionUser.user_metadata?.role === 'string' ? sessionUser.user_metadata.role : 'member',
+  };
+
+  const permissions = explicitPermissions ?? fallbackPermissions;
+  if (permissions) {
+    user.permissions = permissions;
+  }
+
+  return user;
+}
 
 type ReviewQueueResponse = ReviewItemRaw[] | {
   items?: ReviewItemRaw[];
@@ -246,19 +272,16 @@ class APIClient {
             const supabase = createSupabaseBrowserClient();
             const { data: { session } } = await supabase.auth.getSession();
             if (session?.access_token) {
+              const sessionUser = session.user
+                ? buildSupabaseSessionUser(session.user, this.user?.permissions)
+                : undefined;
               // Refresh the HTTP-only cookie with the current Supabase token
               await fetch('/api/session', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                   access_token: session.access_token,
-                  user: session.user ? {
-                    id: session.user.id,
-                    email: session.user.email || '',
-                    is_sysadmin: session.user.user_metadata?.is_sysadmin || false,
-                    status: 'active',
-                    role_name: session.user.user_metadata?.role || 'member',
-                  } : undefined,
+                  user: sessionUser,
                 }),
               });
               // Retry the original request — cookie is now refreshed
