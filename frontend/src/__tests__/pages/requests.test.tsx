@@ -26,7 +26,6 @@ function createWrapper() {
 // Mock auth context
 vi.mock('@/lib/auth-context', () => ({
   useAuth: vi.fn().mockReturnValue({
-    apiKey: 'test-api-key',
     tenantId: 'tenant-123',
   }),
 }));

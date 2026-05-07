@@ -9,7 +9,6 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Progress } from '@/components/ui/progress';
 
-import { useAuth } from '@/lib/auth-context';
 import { useRules, useSeedRules, type RuleDefinition } from '@/hooks/use-control-plane';
 import { DemoBanner } from '@/components/control-plane/demo-banner';
 
@@ -40,8 +39,6 @@ const CATEGORY_CONFIG: Record<string, { label: string; color: string; icon: Luci
 const SEVERITY_ORDER = { critical: 0, warning: 1, info: 2 };
 
 export default function RulesDashboardPage() {
-  const { apiKey } = useAuth();
-
   const [categoryFilter, setCategoryFilter] = useState<string | undefined>();
   const [severityFilter, setSeverityFilter] = useState<string | undefined>();
 
