@@ -20,7 +20,7 @@ export const metadata: Metadata = {
     "Use Inflow Lab to distinguish sandbox diagnosis, mock feed validation, authenticated ingest, and production evidence boundaries.",
 };
 
-const ingestExample = `curl -X POST https://api.regengine.co/api/v1/webhooks/ingest \\
+const ingestExample = `curl -X POST https://regengine.co/api/v1/webhooks/ingest \\
   -H "Content-Type: application/json" \\
   -H "X-RegEngine-API-Key: re_live_..." \\
   -H "X-Tenant-ID: 00000000-0000-0000-0000-000000000000" \\

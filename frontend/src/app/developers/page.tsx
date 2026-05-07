@@ -57,7 +57,7 @@ const capabilities = [
 /* ── SDKs (planned, not yet released) ── */
 
 /* ── Quick-start curl snippet ── */
-const curlSnippet = `curl -X POST https://api.regengine.co/v1/webhooks/ingest \\
+const curlSnippet = `curl -X POST https://regengine.co/api/v1/webhooks/ingest \\
   -H "X-RegEngine-API-Key: rge_live_YOUR_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{
