@@ -175,6 +175,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+        with:
+          # Full history required for `semgrep --baseline-commit` (see EPIC-A
+          # tenant-trust delta gate below). Default depth=1 makes baseline
+          # comparison impossible.
+          fetch-depth: 0
 
       - name: Setup Python
         uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
@@ -216,45 +221,55 @@ jobs:
         env:
           SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN }}
 
-      - name: Semgrep EPIC-A scan (tenant_id trust — #1651, advisory until rollout)
+      - name: Semgrep EPIC-A delta gate (tenant_id trust — #1651, BLOCKING for new findings)
         run: |
-          # Advisory-only while EPIC-A rollout is in flight. Emits findings
-          # to the log but does not fail the build. Each finding corresponds
-          # to a call site that an EPIC-A child issue is migrating to
-          # resolve_tenant_context(). See services/shared/tenant_context.py.
-          #
-          # PROMOTION STATUS (2026-05-06): the `epic-a-tenant-trust` label is
-          # at zero open issues, BUT the scan still finds 22 violations (13
-          # `tenant-id-from-request-body`, 9 `tenant-id-from-query-string`)
-          # across 14 service files. Label-zero ≠ scan-zero. The violations
-          # below need migration to resolve_tenant_context() before this
-          # step can be promoted to --error:
-          #   services/ingestion/app/authz.py (×5)
-          #   services/graph/scripts/fsma_sync_worker.py (×3)
-          #   services/ingestion/app/subscription_gate.py (×2)
-          #   services/nlp/app/routes.py (×2)
-          #   services/admin/app/{auth/confirm_router,dependencies,review_consumer}.py (×3)
-          #   services/graph/app/consumers/fsma_consumer.py
-          #   services/ingestion/app/{notification_prefs,settings,supplier_portal}.py
-          #   services/ingestion/app/stripe_billing/{customers,routes,webhooks}.py
-          # Promote to --error (drop the trailing `|| true`) once the scan
-          # returns 0 results.
+          # Tenant-trust delta gate. FAILS CI if a PR introduces a NEW
+          # finding from .semgrep/tenant-trust.yaml relative to the base
+          # ref. Existing findings (22 as of 2026-05-06 across 14 service
+          # files; see PR #2119 for the full punch list) are grandfathered.
+          # When the punch list reaches zero, simplify by removing the
+          # baseline-commit logic and replacing with a plain --error run.
+          # See services/shared/tenant_context.py for the helper that all
+          # call sites should migrate to.
+          BASELINE="${{ github.event.pull_request.base.sha }}"
+          if [ -z "$BASELINE" ]; then
+            # push to main / workflow_dispatch / schedule: compare to parent.
+            BASELINE="HEAD~1"
+          fi
+          if ! git rev-parse "$BASELINE" >/dev/null 2>&1; then
+            echo "Baseline $BASELINE not available; running advisory scan only."
+            semgrep --config=.semgrep/tenant-trust.yaml . \
+              --json --output semgrep-tenant-trust.json
+            exit 0
+          fi
+          echo "Comparing tenant-trust findings against baseline: $BASELINE"
           semgrep --config=.semgrep/tenant-trust.yaml . \
-            --json --output semgrep-tenant-trust.json || true
-          # Summary line for reviewers (count by rule).
+            --baseline-commit "$BASELINE" \
+            --json --output semgrep-tenant-trust.json
+          NEW_COUNT=$(python3 -c "import json; print(len(json.load(open('semgrep-tenant-trust.json')).get('results', [])))")
+          if [ "$NEW_COUNT" = "0" ]; then
+            echo "EPIC-A delta gate: 0 new tenant-trust violations vs $BASELINE."
+            exit 0
+          fi
+          # New findings — list them and fail.
           python3 -c "
           import json
-          data = json.load(open('semgrep-tenant-trust.json'))
-          results = data.get('results', [])
-          if not results:
-              print('EPIC-A: clean — promote this step to --error.')
-          else:
-              from collections import Counter
-              by_rule = Counter(r['check_id'].split('.')[-1] for r in results)
-              print(f'EPIC-A: {len(results)} findings (advisory):')
-              for k, v in by_rule.most_common():
-                  print(f'  {v:3d}  {k}')
+          from collections import Counter
+          results = json.load(open('semgrep-tenant-trust.json'))['results']
+          print(f'FAIL: {len(results)} NEW tenant-trust violations vs baseline:')
+          by_rule = Counter(r['check_id'].split('.')[-1] for r in results)
+          for k, v in by_rule.most_common():
+              print(f'  {v:3d}  {k}')
+          print()
+          print('Files:')
+          for r in results:
+              print(f'  {r[\"path\"]}:{r[\"start\"][\"line\"]}  {r[\"check_id\"].split(\".\")[-1]}')
+          print()
+          print('Use services/shared/tenant_context.py:resolve_tenant_context(request)')
+          print('to derive tenant_id from the authenticated principal, not from')
+          print('attacker-controllable request body or query string.')
           "
+          exit 1
         env:
           SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN }}
 
