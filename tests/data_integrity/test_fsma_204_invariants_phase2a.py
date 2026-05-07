@@ -10,14 +10,20 @@ DB_URL = os.environ.get(
     "postgresql://regengine:regengine@localhost:5433/regengine_admin"
 )
 
+
+def _psycopg_conninfo(url: str) -> str:
+    if url.startswith("postgresql+psycopg://"):
+        return url.replace("postgresql+psycopg://", "postgresql://", 1)
+    return url
+
 @pytest.fixture(scope="module")
 def db_connection():
     """Create a raw DB connection for integrity testing."""
     try:
-        conn = psycopg.connect(DB_URL)
+        conn = psycopg.connect(_psycopg_conninfo(DB_URL))
         yield conn
         conn.close()
-    except psycopg.OperationalError as e:
+    except (psycopg.OperationalError, psycopg.ProgrammingError) as e:
         pytest.skip(f"Database unavailable: {e}")
 
 class TestFSMA204Invariants:
