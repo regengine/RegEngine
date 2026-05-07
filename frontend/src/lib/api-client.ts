@@ -364,7 +364,7 @@ class APIClient {
   }
 
 
-  async ingestFile(apiKey: string, file: File, sourceSystem: string = 'generic', cteType?: string): Promise<IngestURLResponse> {
+  async ingestFile(apiKey: string | null | undefined, file: File, sourceSystem: string = 'generic', cteType?: string): Promise<IngestURLResponse> {
     const formData = new FormData();
     formData.append('file', file);
     formData.append('source', sourceSystem);

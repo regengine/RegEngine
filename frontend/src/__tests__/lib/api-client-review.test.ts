@@ -103,6 +103,24 @@ describe('apiClient review queue contract', () => {
         );
     });
 
+    it('omits X-RegEngine-API-Key for cookie-backed file ingest calls when no apiKey is provided', async () => {
+        const { apiClient } = await import('@/lib/api-client');
+        const ingestionClient = axiosMock.clients[1];
+        ingestionClient.post.mockResolvedValue({ data: { job_id: 'job-1' } });
+
+        const file = new File(['csv,data'], 'upload.csv', { type: 'text/csv' });
+        await apiClient.ingestFile(null, file, 'mobile_capture_pwa_offline');
+
+        expect(ingestionClient.post).toHaveBeenCalledWith(
+            '/api/v1/ingest/csv',
+            expect.any(FormData),
+            expect.objectContaining({
+                headers: {},
+                timeout: 300000,
+            }),
+        );
+    });
+
     it('unwraps paginated admin user-management responses', async () => {
         const { apiClient } = await import('@/lib/api-client');
         const adminClient = axiosMock.clients[0];
