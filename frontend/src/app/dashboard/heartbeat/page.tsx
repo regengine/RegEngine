@@ -338,7 +338,7 @@ function HeartbeatSkeleton() {
 // ── Page ──
 
 export default function HeartbeatPage() {
-    const { user, isHydrated, apiKey } = useAuth();
+    const { user, isHydrated, isAuthenticated } = useAuth();
     const { tenantId } = useTenant();
     const router = useRouter();
 
@@ -357,8 +357,8 @@ export default function HeartbeatPage() {
         queryKey: ['heartbeat', effectiveTenantId],
         queryFn: async () => {
             const [scoreData, alertsData] = await Promise.allSettled([
-                fetchComplianceScore(effectiveTenantId!, apiKey || ''),
-                fetchAlerts(effectiveTenantId!, apiKey || '', { acknowledged: false }),
+                fetchComplianceScore(effectiveTenantId!),
+                fetchAlerts(effectiveTenantId!, undefined, { acknowledged: false }),
             ]);
 
             let compliance: ComplianceData | null = null;
@@ -384,7 +384,7 @@ export default function HeartbeatPage() {
 
             return { compliance, alerts, partialError: errors.length > 0 ? errors.join('; ') : null };
         },
-        enabled: !!effectiveTenantId,
+        enabled: isAuthenticated && !!effectiveTenantId,
         refetchInterval: POLL_MS,
         retry: false,
     });

@@ -4,8 +4,7 @@
  * reads credentials from HTTP-only cookies — no client-side API key needed.
  *
  * The `apiKey` parameter is kept for backward compatibility but is ignored.
- * Callers still pass `useAuth().apiKey` (which is now a placeholder string)
- * so that existing call sites don't break.
+ * Internal callers can omit it entirely and rely on cookie-backed auth.
  */
 
 import { getServiceURL } from './api-config';
@@ -19,7 +18,7 @@ function isAbortError(err: unknown): boolean {
 }
 
 /** Shared fetch helper with retry logic. Credentials are in HTTP-only cookies. */
-async function apiFetch<T>(path: string, _apiKey: string, options: RequestInit = {}): Promise<T> {
+async function apiFetch<T>(path: string, _apiKey?: string | null, options: RequestInit = {}): Promise<T> {
     const MAX_RETRIES = 2;
     const RETRY_DELAYS = [500, 1500];
     let lastError: Error | null = null;
@@ -64,7 +63,7 @@ async function apiFetch<T>(path: string, _apiKey: string, options: RequestInit =
 
 // ── Alerts ──
 
-export async function fetchAlerts(tenantId: string, apiKey: string, params?: {
+export async function fetchAlerts(tenantId: string, apiKey?: string | null, params?: {
     severity?: string; category?: string; acknowledged?: boolean;
 }) {
     const search = new URLSearchParams();
@@ -75,17 +74,17 @@ export async function fetchAlerts(tenantId: string, apiKey: string, params?: {
     return apiFetch(`/api/v1/alerts/${tenantId}${qs}`, apiKey);
 }
 
-export async function acknowledgeAlert(tenantId: string, apiKey: string, alertId: string) {
+export async function acknowledgeAlert(tenantId: string, apiKey: string | null | undefined, alertId: string) {
     return apiFetch(`/api/v1/alerts/${tenantId}/${alertId}/acknowledge`, apiKey, { method: 'POST' });
 }
 
-export async function fetchAlertSummary(tenantId: string, apiKey: string) {
+export async function fetchAlertSummary(tenantId: string, apiKey?: string | null) {
     return apiFetch(`/api/v1/alerts/${tenantId}/summary`, apiKey);
 }
 
 // ── Compliance ──
 
-export async function fetchComplianceScore(tenantId: string, apiKey: string) {
+export async function fetchComplianceScore(tenantId: string, apiKey?: string | null) {
     return apiFetch(`/api/v1/compliance/score/${tenantId}`, apiKey);
 }
 
@@ -100,7 +99,7 @@ export interface WorkbenchReadinessSnapshot {
     source: string;
 }
 
-export async function fetchWorkbenchReadinessSummary(_tenantId: string, apiKey: string) {
+export async function fetchWorkbenchReadinessSummary(_tenantId: string, apiKey?: string | null) {
     return apiFetch<WorkbenchReadinessSnapshot>('/api/v1/inflow-workbench/readiness/summary', apiKey);
 }
 
