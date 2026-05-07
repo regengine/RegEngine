@@ -14,7 +14,7 @@
 
 import { afterEach, describe, it, expect } from 'vitest';
 import { createHmac } from 'node:crypto';
-import { requireProxyAuth, sanitizePath, validateProxySession, validateUuid, safeSegment } from '@/lib/api-proxy';
+import { requireAdminCapability, requireProxyAuth, sanitizePath, validateProxySession, validateUuid, safeSegment } from '@/lib/api-proxy';
 import { applyCookieCredentials, passthroughRequestHeaders } from '@/lib/proxy-factory';
 import { _resetForTesting as resetJwtKeysForTesting } from '@/lib/jwt-keys';
 import type { NextRequest } from 'next/server';
@@ -98,6 +98,54 @@ describe('requireProxyAuth', () => {
         expect(requireProxyAuth(makeProxyRequest({}, { re_access_token: 'real-token' }))).toBeNull();
         expect(requireProxyAuth(makeProxyRequest({ authorization: 'Bearer real-token' }))).toBeNull();
         expect(requireProxyAuth(makeProxyRequest({ 'x-regengine-api-key': 'real-api-key' }))).toBeNull();
+    });
+});
+
+describe('requireAdminCapability', () => {
+    it('rejects authenticated callers without admin capability', () => {
+        const response = requireAdminCapability(
+            makeProxyRequest(
+                {},
+                {
+                    re_access_token: 'real-token',
+                    re_user: JSON.stringify({
+                        id: 'user-1',
+                        email: 'member@example.com',
+                        is_sysadmin: false,
+                        role_name: 'member',
+                        status: 'active',
+                    }),
+                },
+            ),
+        );
+
+        expect(response?.status).toBe(403);
+    });
+
+    it('allows sysadmin and owner/admin sessions or explicit admin keys', () => {
+        expect(
+            requireAdminCapability(
+                makeProxyRequest(
+                    {},
+                    {
+                        re_access_token: 'real-token',
+                        re_user: JSON.stringify({
+                            id: 'user-1',
+                            email: 'owner@example.com',
+                            is_sysadmin: false,
+                            role_name: 'owner',
+                            status: 'active',
+                        }),
+                    },
+                ),
+            ),
+        ).toBeNull();
+
+        expect(
+            requireAdminCapability(
+                makeProxyRequest({}, { re_admin_key: 'real-admin-key' }),
+            ),
+        ).toBeNull();
     });
 });
 

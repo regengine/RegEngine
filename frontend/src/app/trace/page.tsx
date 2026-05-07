@@ -46,8 +46,7 @@ interface TraceResult {
 }
 
 export default function TracePage() {
-  const { apiKey } = useAuth();
-  const isLoggedIn = Boolean(apiKey);
+  const { hasTenantSession } = useAuth();
 
   const [tlcInput, setTlcInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -58,7 +57,7 @@ export default function TracePage() {
     const code = tlcInput.trim();
     if (!code) return;
 
-    if (!isLoggedIn) {
+    if (!hasTenantSession) {
       setError('Sign in to run traceability queries.');
       return;
     }
@@ -181,11 +180,11 @@ export default function TracePage() {
                     className="font-mono"
                   />
                 </div>
-                <Button onClick={handleTrace} disabled={!tlcInput.trim() || isLoading || !isLoggedIn}>
+                <Button onClick={handleTrace} disabled={!tlcInput.trim() || isLoading || !hasTenantSession}>
                   {isLoading ? <Spinner size="sm" /> : 'Trace'}
                 </Button>
               </div>
-              {!isLoggedIn && (
+              {!hasTenantSession && (
                 <p className="text-xs text-muted-foreground mt-2">Sign in to run trace queries.</p>
               )}
             </CardContent>

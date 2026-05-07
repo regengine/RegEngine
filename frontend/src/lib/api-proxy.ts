@@ -11,6 +11,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 import { jwtVerify } from 'jose';
 import { getVerificationKeys } from './jwt-keys';
+import type { User } from '@/types/api';
 
 // ---------------------------------------------------------------------------
 // Path sanitisation
@@ -191,6 +192,49 @@ export function hasRealCallerCredential(request: NextRequest): boolean {
   }
 
   return false;
+}
+
+function parseProxyUser(request: NextRequest): User | null {
+  const rawUser = request.cookies.get('re_user')?.value;
+  if (!rawUser) return null;
+
+  try {
+    const parsed = JSON.parse(rawUser);
+    if (!parsed || typeof parsed !== 'object') {
+      return null;
+    }
+    return parsed as User;
+  } catch {
+    return null;
+  }
+}
+
+function hasAdminRole(user: User | null): boolean {
+  const roleName = user?.role_name?.toLowerCase();
+  return Boolean(user?.is_sysadmin || roleName === 'admin' || roleName === 'owner');
+}
+
+export function hasAdminCapability(request: NextRequest): boolean {
+  if (isUsableCallerCredential(request.cookies.get('re_admin_key')?.value)) {
+    return true;
+  }
+
+  if (isUsableCallerCredential(request.headers.get('x-admin-key'))) {
+    return true;
+  }
+
+  return hasAdminRole(parseProxyUser(request));
+}
+
+export function requireAdminCapability(request: NextRequest): NextResponse | null {
+  if (hasAdminCapability(request)) {
+    return null;
+  }
+
+  return NextResponse.json(
+    { error: 'Forbidden — admin capability required' },
+    { status: 403 },
+  );
 }
 
 // ---------------------------------------------------------------------------

@@ -11,11 +11,13 @@ import { WorkflowStepper } from '@/components/layout/workflow-stepper';
 import { HelpTooltip } from '@/components/ui/tooltip';
 import { Tutorial, useTutorial, reviewTutorialSteps } from '@/components/ui/tutorial';
 import { useAuth } from '@/lib/auth-context';
-import { ShieldCheck, ClipboardCheck, Lightbulb, ArrowRight, Key, Upload, HelpCircle } from 'lucide-react';
+import { ShieldCheck, ClipboardCheck, Lightbulb, ArrowRight, Upload, HelpCircle } from 'lucide-react';
 
 export default function ReviewPage() {
-  const { apiKey, isOnboarded } = useAuth();
+  const { hasAdminSession, hasTenantSession, isAuthenticated, isOnboarded } = useAuth();
   const tutorial = useTutorial('regengine-review-tutorial');
+  const setupHref = isAuthenticated ? '/onboarding' : '/login';
+  const setupLabel = isAuthenticated ? 'Finish Setup' : 'Sign In';
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-background to-muted/20">
@@ -26,7 +28,7 @@ export default function ReviewPage() {
           className="max-w-5xl mx-auto space-y-6"
         >
           {/* Workflow Progress */}
-          {apiKey && (
+          {hasTenantSession && (
             <div className="mb-6">
               <WorkflowStepper currentStep="review" completedSteps={isOnboarded ? ['setup', 'ingest'] : ['setup']} />
             </div>
@@ -55,8 +57,8 @@ export default function ReviewPage() {
             </Button>
           </div>
 
-          {/* No API Key Warning */}
-          {!apiKey && (
+          {/* Review Access Warning */}
+          {!hasAdminSession && (
             <motion.div
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
@@ -64,17 +66,19 @@ export default function ReviewPage() {
               <Card className="border-re-warning dark:border-re-warning bg-re-warning-muted dark:bg-re-warning/20">
                 <CardContent className="pt-6">
                   <div className="flex items-start gap-3">
-                    <Key className="h-5 w-5 text-re-warning dark:text-re-warning mt-0.5" />
+                    <ShieldCheck className="h-5 w-5 text-re-warning dark:text-re-warning mt-0.5" />
                     <div className="flex-1">
                       <p className="font-medium text-re-warning dark:text-re-warning">
-                        API Key Required
+                        Review access required
                       </p>
                       <p className="text-sm text-re-warning dark:text-re-warning mt-1">
-                        You need an API key to review and approve items. Complete the setup wizard to get started.
+                        {isAuthenticated
+                          ? 'Use a workspace admin or sysadmin session to review and approve items. Finish setup or switch to an admin-capable account to continue.'
+                          : 'Sign in with a workspace admin or sysadmin account to review and approve items.'}
                       </p>
-                      <Link href="/onboarding">
+                      <Link href={setupHref}>
                         <Button size="sm" variant="outline" className="mt-3">
-                          Go to Setup
+                          {setupLabel}
                           <ArrowRight className="ml-2 h-4 w-4" />
                         </Button>
                       </Link>

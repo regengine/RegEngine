@@ -12,13 +12,15 @@ import { ChecklistCardSkeleton, Skeleton } from '@/components/ui/skeleton';
 import { HelpTooltip } from '@/components/ui/tooltip';
 import { useChecklists, useIndustries } from '@/hooks/use-api';
 import { useAuth } from '@/lib/auth-context';
-import { CheckCircle, Search, Shield, Key, ArrowRight, Upload, Lightbulb } from 'lucide-react';
+import { CheckCircle, Search, Shield, ArrowRight, Upload, Lightbulb } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 
 export default function CompliancePage() {
-  const { apiKey } = useAuth();
+  const { hasTenantSession, isAuthenticated } = useAuth();
   const [selectedIndustry, setSelectedIndustry] = useState<string | undefined>();
   const [searchQuery, setSearchQuery] = useState('');
+  const setupHref = isAuthenticated ? '/onboarding' : '/login';
+  const setupLabel = isAuthenticated ? 'Finish Setup' : 'Sign In';
 
   const { data: industries, isLoading: industriesLoading } = useIndustries();
   const { data: checklists, isLoading: checklistsLoading } = useChecklists(selectedIndustry);
@@ -49,8 +51,8 @@ export default function CompliancePage() {
             </div>
           </div>
 
-          {/* No API Key Info */}
-          {!apiKey && (
+          {/* Workspace Setup Info */}
+          {!hasTenantSession && (
             <motion.div
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
@@ -62,14 +64,16 @@ export default function CompliancePage() {
                     <Lightbulb className="h-5 w-5 text-re-info dark:text-re-info mt-0.5" />
                     <div className="flex-1">
                       <p className="font-medium text-re-info dark:text-blue-100">
-                        Tip: Set up your API key
+                        {isAuthenticated ? 'Finish workspace setup' : 'Sign in to connect a workspace'}
                       </p>
                       <p className="text-sm text-re-info dark:text-blue-300 mt-1">
-                        To validate your configuration against these checklists programmatically, you&apos;ll need an API key.
+                        {isAuthenticated
+                          ? 'Connect a tenant workspace to validate these checklists against your live configuration.'
+                          : 'Sign in to connect a tenant workspace and validate these checklists against your live configuration.'}
                       </p>
-                      <Link href="/onboarding">
+                      <Link href={setupHref}>
                         <Button size="sm" variant="outline" className="mt-3">
-                          Get Started
+                          {setupLabel}
                           <ArrowRight className="ml-2 h-4 w-4" />
                         </Button>
                       </Link>
@@ -217,14 +221,14 @@ export default function CompliancePage() {
                               </div>
                             </div>
 
-                            {!apiKey && (
+                            {!hasTenantSession && (
                               <div className="pt-4 border-t">
                                 <p className="text-sm text-muted-foreground mb-2">
-                                  Haven&apos;t set up yet?
+                                  {isAuthenticated ? 'Need to finish setup?' : 'Need to connect a workspace?'}
                                 </p>
-                                <Link href="/onboarding">
+                                <Link href={setupHref}>
                                   <Button size="sm">
-                                    Start Setup Wizard
+                                    {setupLabel}
                                     <ArrowRight className="ml-2 h-4 w-4" />
                                   </Button>
                                 </Link>

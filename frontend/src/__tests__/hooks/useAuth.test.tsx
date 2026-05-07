@@ -575,12 +575,15 @@ describe('useAuth Hook', () => {
             });
 
             expect(result.current.isAuthenticated).toBe(true);
+            expect(result.current.hasTenantSession).toBe(true);
         });
 
         it('isAuthenticated is false when user is null', () => {
             const { result } = renderHook(() => useAuth(), { wrapper });
 
             expect(result.current.isAuthenticated).toBe(false);
+            expect(result.current.hasTenantSession).toBe(false);
+            expect(result.current.hasAdminSession).toBe(false);
         });
 
         it('detects sysadmin users', async () => {
@@ -604,6 +607,38 @@ describe('useAuth Hook', () => {
             });
 
             expect(result.current.user?.is_sysadmin).toBe(true);
+            expect(result.current.hasAdminSession).toBe(true);
+        });
+
+        it('treats an explicit admin cookie session as admin capability', async () => {
+            mockFetch.mockImplementation((url: string, options?: RequestInit) => {
+                if (typeof url === 'string' && url.includes('/api/session')) {
+                    if (options?.method === 'POST' || options?.method === 'DELETE') {
+                        return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+                    }
+                    return Promise.resolve({
+                        ok: true,
+                        json: () => Promise.resolve({
+                            authenticated: false,
+                            has_api_key: false,
+                            has_admin_key: true,
+                            has_credentials: true,
+                            tenant_id: null,
+                            user: null,
+                        }),
+                    });
+                }
+                return Promise.reject(new Error(`Unmocked fetch: ${url}`));
+            });
+
+            const { result } = renderHook(() => useAuth(), { wrapper });
+
+            await waitFor(() => {
+                expect(result.current.isHydrated).toBe(true);
+            });
+
+            expect(result.current.hasAdminSession).toBe(true);
+            expect(result.current.hasTenantSession).toBe(false);
         });
     });
 
