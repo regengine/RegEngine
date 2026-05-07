@@ -30,6 +30,7 @@ import {
 } from 'lucide-react';
 
 import { useAuth } from '@/lib/auth-context';
+import { fetchWithCsrf } from '@/lib/fetch-with-csrf';
 import { useTenant } from '@/lib/tenant-context';
 import { useDashboardRefresh } from '@/hooks/use-dashboard-refresh';
 
@@ -97,12 +98,13 @@ function formatTimeAgo(iso: string): string {
     }
 }
 
-async function fetchAuditLog(tenantId: string, apiKey: string, page = 1, pageSize = 50): Promise<AuditLogResponse> {
+async function fetchAuditLog(tenantId: string, page = 1, pageSize = 50): Promise<AuditLogResponse> {
     const { getServiceURL } = await import('@/lib/api-config');
     const base = getServiceURL('ingestion');
-    const res = await fetch(`${base}/api/v1/audit-log/${tenantId}?page=${page}&page_size=${pageSize}`, {
+    const res = await fetchWithCsrf(`${base}/api/v1/audit-log/${tenantId}?page=${page}&page_size=${pageSize}`, {
+        credentials: 'include',
         signal: AbortSignal.timeout(8000),
-        headers: { 'Content-Type': 'application/json', 'X-RegEngine-API-Key': apiKey },
+        headers: { 'Content-Type': 'application/json' },
     });
     if (!res.ok) throw new Error(`API error: ${res.status} ${res.statusText}`);
     return res.json();
@@ -111,7 +113,7 @@ async function fetchAuditLog(tenantId: string, apiKey: string, page = 1, pageSiz
 /* ── Page ── */
 
 export default function AuditLogPage() {
-    const { isAuthenticated, apiKey } = useAuth();
+    const { isAuthenticated } = useAuth();
     const { tenantId } = useTenant();
 
     const isLoggedIn = isAuthenticated;
@@ -126,7 +128,7 @@ export default function AuditLogPage() {
     const { data: auditData, isLoading: loading, error: auditError, refetch: loadLog, dataUpdatedAt } = useQuery({
         queryKey: ['audit-log', effectiveTenantId, page, pageSize],
         queryFn: async () => {
-            const data = await fetchAuditLog(effectiveTenantId!, apiKey || '', page, pageSize);
+            const data = await fetchAuditLog(effectiveTenantId!, page, pageSize);
             const fetchedEntries = data.entries || [];
 
             if (fetchedEntries.length > 1 || page > 1) {
