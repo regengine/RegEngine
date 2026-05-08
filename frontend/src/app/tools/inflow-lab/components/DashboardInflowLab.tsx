@@ -994,7 +994,7 @@ export function DashboardInflowLab({ previewMode = false }: { previewMode?: bool
         : "Once corrected, the blocked lot moves into the preview-ready path without touching production exports.";
     const leadLotLabel = leadProofLot ? leadProofLot.lotCode.slice(-6) : "active";
     const leadProductLabel = leadProofLot?.product ?? "Supplier lot";
-    const leadPatternLabel = leadProofGroup?.title ?? "Missing handoff evidence";
+    const leadPatternLabel = leadProofGroup?.label ?? "Missing handoff evidence";
     const readinessLeadNote = leadProofLot
         ? `Proof lead lot ${leadLotLabel} is dragging down ${biggestGap?.label?.toLowerCase() ?? "readiness"} because ${leadMissingEvidence} is still missing.`
         : "The current proof lead is the blocked lot holding readiness below export confidence.";
