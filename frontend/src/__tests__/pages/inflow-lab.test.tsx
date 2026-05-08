@@ -151,6 +151,7 @@ describe('Dashboard Inflow Lab', () => {
 
     beforeEach(() => {
         vi.clearAllMocks();
+        window.HTMLElement.prototype.scrollIntoView = vi.fn();
         vi.mocked(useAuth).mockReturnValue({
             isAuthenticated: false,
             isHydrated: true,
@@ -263,6 +264,47 @@ describe('Dashboard Inflow Lab', () => {
         expect(screen.queryByText('Sandbox diagnosis')).not.toBeInTheDocument();
     });
 
+    it('shows a realistic business explainer without exposing internal scoring details', async () => {
+        renderDashboardInflowLabPage();
+
+        expect(
+            await screen.findByRole('heading', {
+                name: 'Real supplier activity in. Clear failure evidence out.',
+            }),
+        ).toBeInTheDocument();
+        expect(screen.getByText('Trade-secret safe')).toBeInTheDocument();
+        expect(screen.getByText('What goes in')).toBeInTheDocument();
+        expect(screen.getByText('What the machine does')).toBeInTheDocument();
+        expect(screen.getByText('What comes out')).toBeInTheDocument();
+        expect(screen.getByText('A produce handoff a buyer can recognize in seconds')).toBeInTheDocument();
+    });
+
+    it('renders a proof walkthrough with one defect and one fix path', async () => {
+        renderDashboardInflowLabPage();
+
+        expect(
+            await screen.findByRole('heading', {
+                name: 'See the lot, the break, and the fastest path to clear it',
+            }),
+        ).toBeInTheDocument();
+        expect(screen.getByText('1. Incoming business activity')).toBeInTheDocument();
+        expect(screen.getByText('2. Caught defect')).toBeInTheDocument();
+        expect(screen.getByText('3. Recommended fix path')).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Focus this defect' })).toBeInTheDocument();
+    });
+
+    it('uses the proof-lead action to select the blocked lot and open its story in the rail', async () => {
+        const user = userEvent.setup();
+        renderDashboardInflowLabPage();
+
+        await user.click(await screen.findByRole('button', { name: 'Focus this defect' }));
+
+        expect(await screen.findByText(/This proof lead is blocked on/i)).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Show matching queue group' })).toBeInTheDocument();
+        expect(document.querySelector('[data-exception-group="handoff"]')).toHaveClass('bg-rose-100/70');
+        expect(document.querySelector('[data-selected-lot-panel]')).toHaveAttribute('data-proof-lead-highlight', 'true');
+    });
+
     it('renders the 5-step funnel with a single Run sandbox test CTA in the active step', async () => {
         renderDashboardInflowLabPage();
 
@@ -300,13 +342,17 @@ describe('Dashboard Inflow Lab', () => {
         await waitFor(() => {
             expect(screen.getByText('Exceptions')).toBeInTheDocument();
         });
+        const exceptionsSection = screen.getByText('Exceptions').closest('section');
+        expect(exceptionsSection).not.toBeNull();
         // The fixture has one handoff-style partial lot; the handoff group must
         // render. With the empty-group hide behaviour, the source/mixed group
         // headings must NOT render on the default 'all' filter when those
         // groups are empty.
-        expect(screen.getByText('Missing handoff evidence')).toBeInTheDocument();
-        expect(screen.queryByText('Missing source evidence')).not.toBeInTheDocument();
-        expect(screen.queryByText('Mixed / multi-cause')).not.toBeInTheDocument();
+        const handoffNode = (exceptionsSection as HTMLElement).querySelector('[data-exception-group="handoff"]');
+        expect(handoffNode).not.toBeNull();
+        expect(within(handoffNode as HTMLElement).getByText('Missing handoff evidence')).toBeInTheDocument();
+        expect(within(exceptionsSection as HTMLElement).queryByText('Missing source evidence')).not.toBeInTheDocument();
+        expect(within(exceptionsSection as HTMLElement).queryByText('Mixed / multi-cause')).not.toBeInTheDocument();
     });
 
     it('shows an empty-filter state when the active filter selects a group with 0 lots', async () => {
@@ -361,6 +407,7 @@ describe('Dashboard Inflow Lab', () => {
         expect(screen.getByText('Selected lot')).toBeInTheDocument();
         expect(screen.getByText('Lot KDE summary')).toBeInTheDocument();
         expect(screen.getByRole('button', { name: 'Fix this lot' })).toBeInTheDocument();
+        expect(screen.getByText(/Proof lead lot .* is dragging down/i)).toBeInTheDocument();
     });
 
     it('triggers a sandbox evaluation when Run sandbox test is pressed in the funnel', async () => {
@@ -369,6 +416,19 @@ describe('Dashboard Inflow Lab', () => {
 
         await user.click(screen.getByRole('button', { name: /Run sandbox test/i }));
         expect(screen.getByText(/Paste CSV text or upload a CSV file before evaluating\./i)).toBeInTheDocument();
+    });
+
+    it('loads a realistic sample flow into the CSV drawer', async () => {
+        const user = userEvent.setup();
+        renderDashboardInflowLabPage();
+
+        await user.click(screen.getByRole('button', { name: 'Load realistic sample' }));
+
+        const textarea = await screen.findByRole('textbox', { name: 'Inbound CSV data' });
+        const textareaValue = (textarea as HTMLTextAreaElement).value;
+        expect(textareaValue).toContain('Riverbend Organics');
+        expect(textareaValue).toContain('GreenLeaf Shipping Dock');
+        expect(textareaValue).toContain('North Bay DC');
     });
 
     it('loads the latest saved workbench run when the dashboard opens with an authenticated tenant session', async () => {

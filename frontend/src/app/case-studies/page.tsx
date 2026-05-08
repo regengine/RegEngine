@@ -82,6 +82,11 @@ export default function CaseStudy() {
                         1,200 CTE Events.
                         <span className="block text-re-brand">5 Hard Metrics.</span>
                     </h1>
+                    <div className="mb-6">
+                        <span className="inline-block px-3 py-1 text-xs font-semibold bg-re-warning-muted border border-re-warning/40 rounded-full text-re-warning uppercase tracking-wide">
+                            Product validation · synthetic data modeled on industry patterns. Not a named-customer case study.
+                        </span>
+                    </div>
                     <p className="text-xl text-[var(--re-text-secondary)] mb-10 max-w-3xl">
                         We ran a representative leafy greens supply chain through RegEngine — from Salinas Valley
                         harvest to grocery DC receiving — and measured every step. No composites. No projections.

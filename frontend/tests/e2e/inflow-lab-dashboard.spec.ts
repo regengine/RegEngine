@@ -61,7 +61,7 @@ test.describe('Dashboard Inflow Lab', () => {
         await expect(page.getByRole('button', { name: /Run sandbox test/i })).toBeVisible();
         await expect(page.getByRole('link', { name: 'Open fix queue' })).toHaveAttribute(
             'href',
-            '/dashboard/exceptions',
+            '/exceptions',
         );
     });
 
