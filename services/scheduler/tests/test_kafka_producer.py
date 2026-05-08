@@ -17,6 +17,8 @@ from unittest.mock import MagicMock, patch, PropertyMock
 os.environ.setdefault("DATABASE_URL", "sqlite:///:memory:")
 os.environ.setdefault("ENVIRONMENT", "test")
 os.environ.setdefault("LOG_LEVEL", "WARNING")
+# Required so emit_fsma_event can sign — see #2190.
+os.environ.setdefault("KAFKA_EVENT_SIGNING_KEY", "test-signing-key-for-scheduler-fsma-emission")
 
 _SERVICES_DIR = Path(__file__).resolve().parent.parent.parent
 if str(_SERVICES_DIR) not in sys.path:
@@ -184,6 +186,35 @@ class TestEmitFSMAEvent:
         call_args = mock_instance.send.call_args
         key = call_args[1].get("key") or call_args[0][1]
         assert key == "unknown"
+
+    def test_signs_event_with_scheduler_producer_service(self, producer, mock_kafka):
+        """Regression test for #2190 — graph consumer requires HMAC."""
+        mock_instance, _ = mock_kafka
+        fsma = {"event_id": "fsma-signed", "event_type": "FSMA_RECALL_ALERT"}
+        result = producer.emit_fsma_event(fsma)
+        assert result is True
+
+        call_kwargs = mock_instance.send.call_args[1]
+        # Body is enriched with producer-service marker
+        sent_value = call_kwargs["value"]
+        assert sent_value["_producer_service"] == "scheduler-service"
+        assert "_signed_at" in sent_value
+        # Headers carry the signature triple the graph consumer verifies
+        sent_headers = dict(call_kwargs["headers"])
+        assert b"x-evt-sig" in [h for h in sent_headers]
+        assert sent_headers.get("x-producer-service") == b"scheduler-service"
+        assert sent_headers.get("x-evt-sig-v") is not None
+
+    def test_returns_false_when_signing_key_unset(self, mock_kafka, monkeypatch):
+        """Strict-mode posture: fail closed, do not publish unsigned."""
+        monkeypatch.delenv("KAFKA_EVENT_SIGNING_KEY", raising=False)
+        from app.kafka_producer import KafkaEventProducer
+        p = KafkaEventProducer(bootstrap_servers="localhost:9092")
+        mock_instance, _ = mock_kafka
+
+        result = p.emit_fsma_event({"event_id": "fsma-no-key"})
+        assert result is False
+        mock_instance.send.assert_not_called()
 
 
 # ─── emit_fsma_batch ─────────────────────────────────────────────────────

@@ -7,6 +7,7 @@ from functools import lru_cache
 from typing import Optional
 
 import structlog
+from shared.kafka_auth import KafkaAuthError, sign_event
 from shared.kafka_compat import KafkaError, KafkaProducerCompat as KafkaProducerLib
 
 from shared.observability.kafka_propagation import inject_correlation_headers_tuples
@@ -15,6 +16,10 @@ from .config import get_settings
 from .models import AlertEvent, EnforcementItem
 
 logger = structlog.get_logger("kafka_producer")
+
+# Producer identity for HMAC signing. Must match the consumer-side
+# allowlist in services/graph/app/consumers/fsma_consumer.py (#2190).
+PRODUCER_SERVICE = "scheduler-service"
 
 
 class KafkaEventProducer:
@@ -138,18 +143,33 @@ class KafkaEventProducer:
     def emit_fsma_event(self, fsma_event: dict) -> bool:
         """Emit an FSMA trace event for graph ingestion.
 
-        Args:
-            fsma_event: FSMA event dict from FDA-to-FSMA transformer
-
-        Returns:
-            True if sent successfully, False otherwise
+        The graph consumer enforces HMAC verification on this topic
+        (services/graph/app/consumers/fsma_consumer.py); unsigned events
+        are DLQ'd in any environment where ``KAFKA_EVENT_SIGNING_KEY`` is
+        configured (#2190).
         """
         event_id = fsma_event.get("event_id", "unknown")
-        
+        base_headers = inject_correlation_headers_tuples()
+        try:
+            signed_payload, signed_headers = sign_event(
+                fsma_event,
+                producer_service=PRODUCER_SERVICE,
+                existing_headers=base_headers,
+            )
+        except KafkaAuthError as exc:
+            logger.error(
+                "fsma_event_sign_failed",
+                event_id=event_id,
+                reason=exc.reason,
+                topic=self.topic_fsma,
+            )
+            return False
+
         return self._send(
             topic=self.topic_fsma,
             key=event_id,
-            value=fsma_event,
+            value=signed_payload,
+            headers=signed_headers,
         )
 
     def emit_fsma_batch(self, fsma_events: list[dict]) -> tuple[int, int]:
@@ -181,22 +201,26 @@ class KafkaEventProducer:
 
         return success, failures
 
-    def _send(self, topic: str, key: str, value: dict) -> bool:
+    def _send(
+        self,
+        topic: str,
+        key: str,
+        value: dict,
+        headers: Optional[list[tuple[str, bytes]]] = None,
+    ) -> bool:
         """Send a message to Kafka.
 
-        Args:
-            topic: Kafka topic
-            key: Message key (used for partitioning)
-            value: Message value (dict, will be JSON serialized)
-
-        Returns:
-            True if sent successfully
+        ``headers`` may be passed pre-built by callers that already
+        attached signing/correlation headers (e.g. emit_fsma_event). When
+        None, correlation headers are attached by default.
         """
         try:
             producer = self._get_producer()
-            # Attach correlation_id / tenant_id as Kafka headers so consumers
-            # can stitch spans back to the originating request (#1318).
-            headers = inject_correlation_headers_tuples()
+            if headers is None:
+                # Attach correlation_id / tenant_id as Kafka headers so
+                # consumers can stitch spans back to the originating
+                # request (#1318).
+                headers = inject_correlation_headers_tuples()
             future = producer.send(topic, key=key, value=value, headers=headers)
             # Don't block here - let caller flush if needed
             return True
