@@ -7,7 +7,10 @@ import importlib.util
 import sys
 
 ROOT = Path(__file__).parent.parent.parent
-SPEC = importlib.util.spec_from_file_location("validate_env", ROOT / "scripts" / "validate_env.py")
+SPEC = importlib.util.spec_from_file_location(
+    "_tests_validate_env",
+    ROOT / "scripts" / "validate_env.py",
+)
 assert SPEC and SPEC.loader
 validate_env_module = importlib.util.module_from_spec(SPEC)
 sys.modules[SPEC.name] = validate_env_module
@@ -21,6 +24,7 @@ def base_env(**overrides):
         "AUTH_SECRET_KEY": "auth-secret-with-enough-entropy",  # pragma: allowlist secret
         "ADMIN_MASTER_KEY": "admin-master-key-with-enough-entropy",  # pragma: allowlist secret
         "POSTGRES_PASSWORD": "postgres-password-with-enough-entropy",  # pragma: allowlist secret
+        "DATABASE_URL": "postgresql://regengine:password@localhost:5432/regengine",  # pragma: allowlist secret
         "AUTH_TEST_BYPASS_TOKEN": "",
         "SCHEDULER_API_KEY": "scheduler-key-with-enough-entropy",  # pragma: allowlist secret
         "OBJECT_STORAGE_ACCESS_KEY_ID": "prod-access-key",  # pragma: allowlist secret
