@@ -85,6 +85,12 @@ audit-findings-*.md
 .agents/
 .claude/*
 !.claude/settings.json
+# Sentinel infrastructure travels with the repo (auditable, version-controlled).
+!.claude/agents/
+!.claude/agents/sentinel-*.md
+!.claude/commands/
+!.claude/commands/sentinel-*.md
+!.claude/sentinel_anchors.json
 .gemini/
 .swarm_memory/
 
