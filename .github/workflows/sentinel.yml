@@ -1,0 +1,92 @@
+name: Sentinel Audit
+
+on:
+  pull_request:
+    types: [labeled, synchronize, reopened]
+
+# Only run on PRs that carry the `sentinel` label.
+# We re-evaluate on `synchronize` (new commits) and `reopened` so a labeled PR
+# stays audited as it evolves.
+concurrency:
+  group: sentinel-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  audit:
+    if: contains(github.event.pull_request.labels.*.name, 'sentinel')
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+      issues: write          # orchestrator files audit-* issues in strict mode
+      pull-requests: write   # post the report as a PR comment
+
+    steps:
+      - name: Checkout PR (full history for diff vs main)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Fetch base ref
+        run: git fetch origin ${{ github.event.pull_request.base.ref }} --quiet
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Set up Node (for headless Claude Code CLI)
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Claude Code CLI
+        run: npm install -g @anthropic-ai/claude-code
+
+      - name: Verify gh + anchor index
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh --version
+          gh auth status
+          if [ ! -f .claude/sentinel_anchors.json ]; then
+            echo "::warning::No anchor index found at .claude/sentinel_anchors.json — orchestrator will fall through to live gh discovery"
+          else
+            jq '{anchored:._anchored_via_gh, recovered:._recovered_via_backfill, metadata_less:._unrecoverable}' .claude/sentinel_anchors.json
+          fi
+
+      - name: Run /sentinel-check
+        id: sentinel
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BASE_REF: origin/${{ github.event.pull_request.base.ref }}
+        run: |
+          set -o pipefail
+          mkdir -p .sentinel
+          # Headless invocation. The slash command body lives at
+          # .claude/commands/sentinel-check.md and is auto-discovered.
+          claude -p "/sentinel-check --base=$BASE_REF" \
+            --output-format text \
+            2>&1 | tee .sentinel/report.md
+          echo "report_path=.sentinel/report.md" >> "$GITHUB_OUTPUT"
+
+      - name: Post report as PR comment
+        if: always() && hashFiles('.sentinel/report.md') != ''
+        uses: peter-evans/create-or-update-comment@v4
+        with:
+          issue-number: ${{ github.event.pull_request.number }}
+          body-path: .sentinel/report.md
+          edit-mode: replace
+          # Use a stable marker so re-runs replace rather than stack comments.
+          body-includes: '<!-- sentinel-report -->'
+
+      - name: Upload raw report artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sentinel-report-${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.sha }}
+          path: .sentinel/report.md
+          if-no-files-found: warn
+          retention-days: 30
