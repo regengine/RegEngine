@@ -378,49 +378,125 @@ def test_resolve_hallucination_writes_to_audit_chain(tracker_with_audit):
 
 
 # =========================================================================
-# #1388: Kafka consumer HMAC envelope verification
+# #1388 / #2139: Kafka consumer canonical signed-event verification
 # =========================================================================
 
 
-def test_verify_hmac_envelope_rejects_unsigned_when_secret_set(monkeypatch):
-    from services.admin.app.review_consumer import _verify_hmac_envelope
+def _signed_review_event(payload: dict, *, producer_service: str = "nlp-service"):
+    from shared.kafka_auth import sign_event
 
-    monkeypatch.setenv("NLP_REVIEW_HMAC_SECRET", "test-secret-xyz")
-
-    # Unsigned bare event -> reject
-    assert _verify_hmac_envelope({"tenant_id": "abc"}) is False
-    # Missing hmac field -> reject
-    assert _verify_hmac_envelope({"payload": {"tenant_id": "abc"}}) is False
-    # Tampered signature -> reject
-    assert _verify_hmac_envelope(
-        {"payload": {"tenant_id": "abc"}, "hmac": "deadbeef"}
-    ) is False
+    return sign_event(payload, producer_service=producer_service)
 
 
-def test_verify_hmac_envelope_accepts_valid_signature(monkeypatch):
-    import hashlib
-    import hmac
-    import json
+def test_verify_review_event_accepts_signed_payload(monkeypatch):
+    from services.admin.app.review_consumer import _verify_review_event
 
-    from services.admin.app.review_consumer import _verify_hmac_envelope
-
-    secret = "test-secret-xyz"
-    monkeypatch.setenv("NLP_REVIEW_HMAC_SECRET", secret)
+    monkeypatch.setenv("ENVIRONMENT", "production")
+    monkeypatch.setenv("KAFKA_EVENT_SIGNING_KEY", "test-signing-key")
 
     payload = {"tenant_id": "abc", "document_id": "doc-1", "extraction": {}}
-    canonical = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
-    sig = hmac.new(secret.encode(), canonical, hashlib.sha256).hexdigest()
+    signed_body, signed_headers = _signed_review_event(payload)
 
-    assert _verify_hmac_envelope({"payload": payload, "hmac": sig}) is True
+    verified = _verify_review_event(signed_body, signed_headers)
+    assert verified["tenant_id"] == "abc"
+    assert verified["document_id"] == "doc-1"
 
 
-def test_verify_hmac_envelope_legacy_mode_when_secret_unset(monkeypatch):
-    from services.admin.app.review_consumer import _verify_hmac_envelope
+def test_verify_review_event_rejects_unsigned_in_strict_mode(monkeypatch):
+    from services.admin.app import review_consumer as rc_mod
 
-    monkeypatch.delenv("NLP_REVIEW_HMAC_SECRET", raising=False)
-    # Legacy mode: any event accepted (with warning). We don't assert
-    # on the warning itself here; the log entry is visible in ops.
-    assert _verify_hmac_envelope({"tenant_id": "abc"}) is True
+    monkeypatch.setenv("ENVIRONMENT", "production")
+    monkeypatch.setenv("KAFKA_EVENT_SIGNING_KEY", "test-signing-key")
+
+    with pytest.raises(rc_mod.KafkaAuthError) as excinfo:
+        rc_mod._verify_review_event({"tenant_id": "abc"}, headers=[])
+    assert excinfo.value.reason == "missing_sig_version_header"
+
+
+def test_verify_review_event_rejects_tampered_body(monkeypatch):
+    from services.admin.app import review_consumer as rc_mod
+
+    monkeypatch.setenv("ENVIRONMENT", "production")
+    monkeypatch.setenv("KAFKA_EVENT_SIGNING_KEY", "test-signing-key")
+
+    signed_body, signed_headers = _signed_review_event(
+        {"tenant_id": "abc", "document_id": "doc-1", "extraction": {}}
+    )
+    tampered = dict(signed_body)
+    tampered["tenant_id"] = "forged-tenant"
+
+    with pytest.raises(rc_mod.KafkaAuthError) as excinfo:
+        rc_mod._verify_review_event(tampered, signed_headers)
+    assert excinfo.value.reason == "signature_mismatch"
+
+
+def test_verify_review_event_rejects_wrong_producer(monkeypatch):
+    from services.admin.app import review_consumer as rc_mod
+
+    monkeypatch.setenv("ENVIRONMENT", "production")
+    monkeypatch.setenv("KAFKA_EVENT_SIGNING_KEY", "test-signing-key")
+
+    signed_body, signed_headers = _signed_review_event(
+        {"tenant_id": "abc", "document_id": "doc-1", "extraction": {}},
+        producer_service="scheduler-service",
+    )
+
+    with pytest.raises(rc_mod.KafkaAuthError) as excinfo:
+        rc_mod._verify_review_event(signed_body, signed_headers)
+    assert excinfo.value.reason == "producer_not_allowed_for_topic"
+
+
+def test_verify_review_event_dev_bypass_requires_local_env(monkeypatch):
+    from services.admin.app import review_consumer as rc_mod
+
+    monkeypatch.delenv("KAFKA_EVENT_SIGNING_KEY", raising=False)
+    monkeypatch.setenv("ENVIRONMENT", "development")
+
+    verified = rc_mod._verify_review_event({"tenant_id": "abc"}, headers=[])
+    assert verified["tenant_id"] == "abc"
+
+    monkeypatch.setenv("ENVIRONMENT", "production")
+    with pytest.raises(rc_mod.KafkaAuthError) as excinfo:
+        rc_mod._verify_review_event({"tenant_id": "abc"}, headers=[])
+    assert excinfo.value.reason == "signing_key_not_configured"
+
+
+def test_extract_and_record_uses_verified_signed_payload(monkeypatch):
+    from services.admin.app import review_consumer as rc_mod
+
+    monkeypatch.setenv("ENVIRONMENT", "production")
+    monkeypatch.setenv("KAFKA_EVENT_SIGNING_KEY", "test-signing-key")
+
+    payload = {
+        "tenant_id": "abc",
+        "document_id": "doc-1",
+        "doc_hash": "hash-1",
+        "extraction": {
+            "confidence_score": 0.42,
+            "source_text": "<b>unsafe</b>",
+            "attributes": {"extractor": "GENERIC"},
+        },
+    }
+    signed_body, signed_headers = _signed_review_event(payload)
+    captured = {}
+
+    def _fake_record_with_retry(_tracker, **kwargs):
+        captured.update(kwargs)
+        return {"document_id": kwargs["document_id"], "confidence_score": kwargs["confidence_score"]}
+
+    monkeypatch.setattr(rc_mod, "_record_with_retry", _fake_record_with_retry)
+
+    result = rc_mod._extract_and_record(
+        signed_body,
+        tracker=object(),
+        headers=signed_headers,
+    )
+
+    assert result["document_id"] == "doc-1"
+    assert captured["tenant_id"] == "abc"
+    assert captured["doc_hash"] == "hash-1"
+    assert captured["extractor"] == "GENERIC"
+    assert captured["text_raw"] != "<b>unsafe</b>"
 
 
 # =========================================================================
