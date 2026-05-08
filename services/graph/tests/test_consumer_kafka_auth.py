@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -183,3 +184,177 @@ class TestGraphConsumerVerificationSemantics:
         with pytest.raises(KafkaAuthError) as excinfo:
             verify_event(signed_body, stripped, topic="graph.update")
         assert excinfo.value.reason == "missing_signature_header"
+
+
+class _FakeKafkaMessage:
+    def __init__(
+        self,
+        headers: list[tuple[str, bytes]] | None = None,
+        *,
+        topic: str = "fsma.events.extracted",
+        value: bytes = b"raw-avro-payload",
+    ) -> None:
+        self._headers = headers or []
+        self._topic = topic
+        self._value = value
+
+    def headers(self) -> list[tuple[str, bytes]]:
+        return list(self._headers)
+
+    def topic(self) -> str:
+        return self._topic
+
+    def value(self) -> bytes:
+        return self._value
+
+    def offset(self) -> int:
+        return 42
+
+    def partition(self) -> int:
+        return 0
+
+    def error(self):  # pragma: no cover - matches confluent-kafka API shape
+        return None
+
+
+class TestFsmaConsumerAuthImport:
+    def test_consumer_imports_verify_event(self) -> None:
+        from services.graph.app.consumers import fsma_consumer
+
+        assert hasattr(fsma_consumer, "verify_event")
+        assert hasattr(fsma_consumer, "KafkaAuthError")
+        assert hasattr(fsma_consumer, "get_allowed_producers")
+        assert fsma_consumer.FSMA_ALLOWED_PRODUCERS == frozenset(
+            {"nlp-service", "scheduler-service"}
+        )
+
+
+class TestFsmaConsumerVerificationSemantics:
+    def test_allowlist_defaults_to_nlp_and_scheduler(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from services.graph.app.consumers import fsma_consumer
+
+        monkeypatch.delenv("KAFKA_ALLOWED_PRODUCERS_FSMA_EVENTS_EXTRACTED", raising=False)
+        assert fsma_consumer._resolve_allowed_producers("fsma.events.extracted") == {
+            "nlp-service",
+            "scheduler-service",
+        }
+
+    def test_signed_scheduler_message_verifies_for_fsma_topic(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from services.graph.app.consumers import fsma_consumer
+
+        monkeypatch.setenv("KAFKA_EVENT_SIGNING_KEY", "test-signing-key-32-bytes-long--")
+        payload = {
+            "tenant_id": "00000000-0000-0000-0000-000000000099",
+            "document_id": "doc-fsma-1",
+        }
+        signed_body, signed_headers = sign_event(
+            payload,
+            producer_service="scheduler-service",
+            signing_key="test-signing-key-32-bytes-long--",
+        )
+
+        evt, producer_service = fsma_consumer._verify_fsma_event_auth(
+            signed_body,
+            _FakeKafkaMessage(signed_headers),
+        )
+
+        assert producer_service == "scheduler-service"
+        assert evt["tenant_id"] == "00000000-0000-0000-0000-000000000099"
+
+    def test_forged_tenant_id_is_rejected_for_fsma_topic(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from services.graph.app.consumers import fsma_consumer
+
+        monkeypatch.setenv("KAFKA_EVENT_SIGNING_KEY", "test-signing-key-32-bytes-long--")
+        signed_body, signed_headers = sign_event(
+            {"tenant_id": "tenant-A", "document_id": "doc-fsma-2"},
+            producer_service="scheduler-service",
+            signing_key="test-signing-key-32-bytes-long--",
+        )
+        forged = dict(signed_body)
+        forged["tenant_id"] = "tenant-B"
+
+        with pytest.raises(KafkaAuthError) as excinfo:
+            fsma_consumer._verify_fsma_event_auth(
+                forged,
+                _FakeKafkaMessage(signed_headers),
+            )
+
+        assert excinfo.value.reason == "signature_mismatch"
+
+    def test_unauthorized_producer_is_rejected_for_fsma_topic(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from services.graph.app.consumers import fsma_consumer
+
+        monkeypatch.setenv("KAFKA_EVENT_SIGNING_KEY", "test-signing-key-32-bytes-long--")
+        signed_body, signed_headers = sign_event(
+            {"tenant_id": "tenant-A", "document_id": "doc-fsma-3"},
+            producer_service="rogue-service",
+            signing_key="test-signing-key-32-bytes-long--",
+        )
+
+        with pytest.raises(KafkaAuthError) as excinfo:
+            fsma_consumer._verify_fsma_event_auth(
+                signed_body,
+                _FakeKafkaMessage(signed_headers),
+            )
+
+        assert excinfo.value.reason == "producer_not_allowed_for_topic"
+
+    @pytest.mark.asyncio
+    async def test_run_fsma_consumer_rejects_unauthorized_before_ingest(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from services.graph.app.consumers import fsma_consumer
+
+        monkeypatch.setenv("KAFKA_EVENT_SIGNING_KEY", "test-signing-key-32-bytes-long--")
+
+        signed_body, signed_headers = sign_event(
+            {"tenant_id": "tenant-A", "document_id": "doc-fsma-4"},
+            producer_service="rogue-service",
+            signing_key="test-signing-key-32-bytes-long--",
+        )
+        fake_msg = _FakeKafkaMessage(signed_headers)
+
+        consumer = MagicMock()
+        consumer.subscribe = MagicMock()
+        consumer.commit = MagicMock()
+        consumer.close = MagicMock()
+
+        state = {"done": False}
+
+        def poll_once(_timeout: float):
+            if state["done"]:
+                fsma_consumer._shutdown_event.set()
+                return None
+            state["done"] = True
+            return fake_msg
+
+        consumer.poll.side_effect = poll_once
+
+        client = MagicMock()
+        client.close = AsyncMock()
+
+        monkeypatch.setattr(fsma_consumer, "Consumer", MagicMock(return_value=consumer))
+        monkeypatch.setattr(fsma_consumer, "SchemaRegistryClient", MagicMock(return_value=MagicMock()))
+        monkeypatch.setattr(fsma_consumer, "AvroDeserializer", MagicMock(return_value=lambda _b, _ctx: signed_body))
+        monkeypatch.setattr(fsma_consumer, "Neo4jClient", MagicMock(return_value=client))
+        monkeypatch.setattr(fsma_consumer, "_ensure_constraints", AsyncMock())
+        monkeypatch.setattr(fsma_consumer, "send_to_dlq", MagicMock())
+        monkeypatch.setattr(fsma_consumer, "ingest_fsma_event", AsyncMock())
+        monkeypatch.setattr("shared.dlq.DLQProducer", MagicMock(return_value=MagicMock()))
+
+        fsma_consumer._shutdown_event.clear()
+        try:
+            await fsma_consumer.run_fsma_consumer()
+        finally:
+            fsma_consumer._shutdown_event.clear()
+
+        fsma_consumer.ingest_fsma_event.assert_not_awaited()
+        fsma_consumer.send_to_dlq.assert_called_once()
+        assert fsma_consumer.send_to_dlq.call_args.kwargs["reason"] == "kafka_auth_failed"
+        consumer.commit.assert_called_once_with(fake_msg)

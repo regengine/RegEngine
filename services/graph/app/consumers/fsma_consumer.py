@@ -52,6 +52,7 @@ def send_to_dlq(topic: str, original_msg: bytes, reason: str, error: str = "") -
 # Standardized path discovery via shared utility
 from shared.paths import ensure_shared_importable
 ensure_shared_importable()
+from shared.kafka_auth import KafkaAuthError, get_allowed_producers, verify_event
 
 from services.graph.app.config import settings
 from services.graph.app.fsma_audit import log_extraction
@@ -81,6 +82,7 @@ FSMA_INGEST_DURATION = Histogram(
 
 # Topic configuration
 FSMA_TOPIC = "fsma.events.extracted"
+FSMA_ALLOWED_PRODUCERS = frozenset({"nlp-service", "scheduler-service"})
 
 _shutdown_event = threading.Event()
 
@@ -153,6 +155,25 @@ def _load_schema_str() -> str:
         """
 
 
+def _resolve_allowed_producers(topic: str) -> set[str]:
+    configured = get_allowed_producers(topic)
+    if configured is not None:
+        return configured
+    return set(FSMA_ALLOWED_PRODUCERS)
+
+
+def _verify_fsma_event_auth(event: Dict[str, Any], msg: Any) -> tuple[dict[str, Any], str]:
+    """Verify the inbound Kafka envelope before trusting routing fields."""
+    topic_name = msg.topic() if callable(getattr(msg, "topic", None)) else FSMA_TOPIC
+    headers = msg.headers() if callable(getattr(msg, "headers", None)) else None
+    return verify_event(
+        event,
+        headers,
+        topic=topic_name,
+        allowed_producers=_resolve_allowed_producers(topic_name),
+    )
+
+
 async def ingest_fsma_event(client: Neo4jClient, event: Dict[str, Any]) -> None:
     """
     Ingest a single FSMA extraction event into the graph.
@@ -165,7 +186,7 @@ async def ingest_fsma_event(client: Neo4jClient, event: Dict[str, Any]) -> None:
     document_type = event.get("document_type", "UNKNOWN")
     ctes = event.get("ctes", [])
     timestamp = event.get("timestamp")
-    tenant_id = event.get("tenant_id")
+    tenant_id = event.get("tenant_id")  # nosemgrep: tenant-id-from-request-body -- event reached ingest only after _verify_fsma_event_auth verified the signed Kafka envelope
     tenant_source_gln, tenant_source_fda_reg = _extract_tenant_source_identifiers(event)
 
     bind_contextvars(document_id=document_id)
@@ -349,9 +370,31 @@ async def run_fsma_consumer(database: Optional[str] = None) -> None:
             # Phase 2: Processing (business logic errors)
             try:
                 if event:
-                    bind_contextvars(offset=msg.offset(), partition=msg.partition())
-                    await ingest_fsma_event(client, event)
+                    verified_event, verified_producer = _verify_fsma_event_auth(event, msg)
+                    bind_contextvars(
+                        offset=msg.offset(),
+                        partition=msg.partition(),
+                        producer_service=verified_producer,
+                        tenant_id=verified_event.get("tenant_id"),
+                    )
+                    await ingest_fsma_event(client, verified_event)
                     await asyncio.to_thread(consumer.commit, msg)
+            except KafkaAuthError as auth_exc:
+                FSMA_MESSAGES_COUNTER.labels(status="error").inc()
+                send_to_dlq(
+                    msg.topic(),
+                    msg.value(),
+                    reason="kafka_auth_failed",
+                    error=str(auth_exc),
+                )
+                log_fields = dict(auth_exc.fields)
+                log_fields.setdefault("topic", msg.topic())
+                logger.error(
+                    "fsma_kafka_auth_failed",
+                    reason=auth_exc.reason,
+                    **log_fields,
+                )
+                await asyncio.to_thread(consumer.commit, msg)
             except Exception as e:
                 FSMA_MESSAGES_COUNTER.labels(status="error").inc()
                 reason = "processing_exception"
