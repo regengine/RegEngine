@@ -1,5 +1,5 @@
 # ============================================================
-# LEGACY — do NOT add new callers.
+# Deprecated dual-write path — do NOT add new callers.
 #
 # This module writes to the old schema (fsma.cte_events + fsma.cte_kdes)
 # alongside the canonical writer (canonical_persistence.writer, which
@@ -23,7 +23,7 @@
 # the same bug.
 # ============================================================
 """
-FSMA 204 CTE Persistence Layer — LEGACY dual-write path.
+FSMA 204 CTE Persistence Layer — deprecated dual-write path.
 
 Provides database-backed storage for Critical Tracking Events to the
 older ``fsma.cte_events`` + ``fsma.cte_kdes`` schema. New ingestion
@@ -78,7 +78,7 @@ VALIDATION_STATUS_WARNING = "warning"
 VALIDATION_STATUS_REJECTED = "rejected"
 
 #: Validator severity strings that constitute a hard rejection.
-_REJECT_SEVERITIES: frozenset[str] = frozenset({"reject", "REJECT", "error", "ERROR"})
+_REJECT_SEVERITIES: frozenset[str] = frozenset({"reject", "error", "critical"})
 
 # Machine-findable marker: this module and canonical_persistence dual-write
 # the same events with divergent idempotency-key formulas. Reconciliation
@@ -87,6 +87,27 @@ _REJECT_SEVERITIES: frozenset[str] = frozenset({"reject", "REJECT", "error", "ER
 DUAL_WRITE_RECONCILIATION_NEEDED = True
 
 logger = logging.getLogger("cte-persistence")
+
+
+def _is_rejecting_validation_item(item: Dict[str, Any]) -> bool:
+    """Return True when an alert or validator result should reject the event."""
+    severity = str(item.get("severity", "")).strip().lower()
+    if severity in _REJECT_SEVERITIES:
+        return True
+    return item.get("alert_type") == "missing_required_kde"
+
+
+def _derive_validation_status(
+    alerts: List[Dict[str, Any]],
+    validator_results: Optional[List[Dict[str, Any]]] = None,
+) -> str:
+    """Collapse alert and validator outputs into one persisted status."""
+    validator_results = validator_results or []
+    if any(_is_rejecting_validation_item(item) for item in [*alerts, *validator_results]):
+        return VALIDATION_STATUS_REJECTED
+    if alerts or validator_results:
+        return VALIDATION_STATUS_WARNING
+    return VALIDATION_STATUS_VALID
 
 
 # ---------------------------------------------------------------------------
@@ -427,29 +448,18 @@ class CTEPersistence:
             event_entry_timestamp = entry_dt.isoformat()
 
         # --- Determine validation status (fix #1324) ---
-        # If any validator result carries a REJECT-severity outcome, the
-        # event must NOT be written to the hash chain or included in FDA
-        # export / graph sync queries. We still persist the event row
+        # If any validator result or alert carries a rejecting outcome,
+        # the event must NOT be written to the hash chain or included in
+        # FDA export / graph sync queries. We still persist the event row
         # itself (for audit purposes) with validation_status='rejected'
-        # and carry the first rejection reason in the returned StoreResult
-        # errors list so callers can surface it to operators.
-        # REJECT severities: "reject", "REJECT", "error", "ERROR".
-        # Any other severity (e.g. "warning", "info") does not block the
-        # chain write.
+        # and carry the rejection reasons in the returned StoreResult
+        # errors list so callers can surface them to operators.
         _rejection_reasons: List[str] = []
-        for vr in validator_results:
-            sev = vr.get("severity", "")
-            if sev in _REJECT_SEVERITIES:
-                reason = vr.get("reason") or vr.get("message") or str(vr)
+        for item in [*validator_results, *alerts]:
+            if _is_rejecting_validation_item(item):
+                reason = item.get("reason") or item.get("message") or str(item)
                 _rejection_reasons.append(reason)
-        _is_rejected = bool(_rejection_reasons)
-
-        if _is_rejected:
-            _final_status = VALIDATION_STATUS_REJECTED
-        elif alerts:
-            _final_status = VALIDATION_STATUS_WARNING
-        else:
-            _final_status = VALIDATION_STATUS_VALID
+        _final_status = _derive_validation_status(alerts, validator_results)
 
         # --- Serialize chain growth per-tenant (fix #1332) ---
         # Must precede both the idempotency SELECT and the chain-head
@@ -586,7 +596,7 @@ class CTEPersistence:
         # orphan chain rows (the WHERE EXISTS guard below would also
         # block it, but being explicit is clearer and avoids the
         # sequence_num slot being consumed needlessly).
-        if _is_rejected:
+        if _final_status == VALIDATION_STATUS_REJECTED:
             logger.info(
                 "cte_event_rejected",
                 extra={
@@ -854,6 +864,15 @@ class CTEPersistence:
             evt = p["evt"]
             event_id = p["event_id"]
             kdes = p["kdes"]
+            alerts = evt.get("alerts") or []
+            validator_results = evt.get("validator_results") or []
+
+            rejection_reasons: List[str] = []
+            for item in [*validator_results, *alerts]:
+                if _is_rejecting_validation_item(item):
+                    reason = item.get("reason") or item.get("message") or str(item)
+                    rejection_reasons.append(reason)
+            validation_status = _derive_validation_status(alerts, validator_results)
 
             # --- Quantity validation (fix #1306) ---
             # Previous implementation silently clamped ``quantity`` to a
@@ -915,37 +934,44 @@ class CTEPersistence:
                 "epcis_event_type": evt.get("epcis_event_type"),
                 "epcis_action": evt.get("epcis_action"),
                 "epcis_biz_step": evt.get("epcis_biz_step"),
-                "validation_status": "valid",
+                "validation_status": validation_status,
             })
 
-            for kde_key, kde_value in kdes.items():
-                if kde_value is not None:
-                    kde_rows.append({
-                        "tenant_id": tenant_id,
-                        "cte_event_id": event_id,
-                        "kde_key": kde_key,
-                        # fix #1311 — JSON text, cast to jsonb in the batch INSERT
-                        "kde_value": _jsonify_kde(kde_value),
-                        "is_required": False,
-                    })
+            if validation_status != VALIDATION_STATUS_REJECTED:
+                for kde_key, kde_value in kdes.items():
+                    if kde_value is not None:
+                        kde_rows.append({
+                            "tenant_id": tenant_id,
+                            "cte_event_id": event_id,
+                            "kde_key": kde_key,
+                            # fix #1311 — JSON text, cast to jsonb in the batch INSERT
+                            "kde_value": _jsonify_kde(kde_value),
+                            "is_required": False,
+                        })
 
-            chain_rows.append({
-                "tenant_id": tenant_id,
-                "cte_event_id": event_id,
-                "sequence_num": next_sequence,
-                "event_hash": sha256_hash,
-                "previous_chain_hash": previous_chain_hash,
-                "chain_hash": chain_hash,
-            })
+                chain_rows.append({
+                    "tenant_id": tenant_id,
+                    "cte_event_id": event_id,
+                    "sequence_num": next_sequence,
+                    "event_hash": sha256_hash,
+                    "previous_chain_hash": previous_chain_hash,
+                    "chain_hash": chain_hash,
+                })
 
-            results.append(StoreResult(
-                success=True, event_id=event_id, sha256_hash=sha256_hash,
-                chain_hash=chain_hash, idempotent=False, errors=[], kde_completeness=1.0, alerts=[],
-            ))
+                results.append(StoreResult(
+                    success=True, event_id=event_id, sha256_hash=sha256_hash,
+                    chain_hash=chain_hash, idempotent=False, errors=[], kde_completeness=1.0, alerts=alerts,
+                ))
 
-            # Advance chain state for next event
-            previous_chain_hash = chain_hash
-            next_sequence += 1
+                # Advance chain state only for accepted events.
+                previous_chain_hash = chain_hash
+                next_sequence += 1
+            else:
+                results.append(StoreResult(
+                    success=False, event_id=event_id, sha256_hash=sha256_hash,
+                    chain_hash=chain_hash, idempotent=False, errors=rejection_reasons,
+                    kde_completeness=1.0, alerts=alerts,
+                ))
 
         # --- Step 5: Batch INSERT (with lost-race reconciliation — #1248) ---
         # ON CONFLICT DO NOTHING silently discards rows whose idempotency

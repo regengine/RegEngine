@@ -3,13 +3,15 @@
 import os
 import subprocess
 import sys
+from pathlib import Path
 
 import pytest
 
 
+SERVICES_DIR = Path(__file__).resolve().parents[2]
 VALIDATE_SCRIPT = (
     "import os, sys; "
-    "sys.path.insert(0, 'services'); "
+    f"sys.path.insert(0, {str(SERVICES_DIR)!r}); "
     "from shared.auth import validate_auth_config; "
     "validate_auth_config(); "
     "print('STARTED_OK')"
