@@ -12,6 +12,24 @@
 BEGIN;
 
 -- --------------------------------------------------------
+-- Roles
+-- --------------------------------------------------------
+-- The `regengine` role is the grantee for tenant-isolation RLS
+-- policies declared further down. On fresh databases (or any
+-- environment where the role was never provisioned out-of-band)
+-- the CREATE POLICY statements below would fail with
+-- "role \"regengine\" does not exist". Create it idempotently
+-- here so this migration can bootstrap a brand-new database
+-- without manual operator intervention.
+
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'regengine') THEN
+        CREATE ROLE regengine NOLOGIN;
+    END IF;
+END $$;
+
+-- --------------------------------------------------------
 -- Schema
 -- --------------------------------------------------------
 
