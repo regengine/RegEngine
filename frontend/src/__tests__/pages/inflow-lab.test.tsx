@@ -339,8 +339,12 @@ describe('Dashboard Inflow Lab', () => {
     it('renders exceptions as failure-pattern groups, hiding empty groups on the all filter', async () => {
         renderDashboardInflowLabPage();
 
+        // The "Exceptions" header renders immediately, but `visibleGroups`
+        // depends on async lot fetches. Wait for the actual handoff group node
+        // to render before asserting on the structure — otherwise CI races
+        // the lot data load and finds an empty exceptions panel.
         await waitFor(() => {
-            expect(screen.getByText('Exceptions')).toBeInTheDocument();
+            expect(document.querySelector('[data-exception-group="handoff"]')).not.toBeNull();
         });
         const exceptionsSection = screen.getByText('Exceptions').closest('section');
         expect(exceptionsSection).not.toBeNull();
