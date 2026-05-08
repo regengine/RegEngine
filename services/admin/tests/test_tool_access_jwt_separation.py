@@ -74,10 +74,13 @@ def test_session_tokens_include_aud_and_iss():
 
     # Inspect raw claims without assuming whether the active signer is the
     # legacy SECRET_KEY or a rotated registry key loaded earlier in the suite.
+    # Test-only: inspecting raw claims without verifying signature is the
+    # whole point of this assertion — we're checking aud/iss were stamped
+    # correctly without depending on which signing key the test harness used.
     claims = pyjwt.decode(
         tok,
-        options={  # nosemgrep: python.jwt.security.unverified-jwt-decode.unverified-jwt-decode
-            "verify_signature": False,
+        options={
+            "verify_signature": False,  # nosemgrep: python.jwt.security.unverified-jwt-decode.unverified-jwt-decode
             "verify_aud": False,
             "verify_iss": False,
         },
