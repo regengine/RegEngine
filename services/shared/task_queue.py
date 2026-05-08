@@ -466,7 +466,7 @@ class TaskWorker:
         new_attempts = int(task["attempts"]) + 1
         max_attempts = int(task["max_attempts"])
         if new_attempts >= max_attempts:
-            self._mark_dead(int(task["id"]), error)
+            self._mark_dead(int(task["id"]), error, attempts=new_attempts)
             return
 
         backoff = compute_backoff_seconds(new_attempts)
@@ -496,13 +496,14 @@ class TaskWorker:
                 },
             )
 
-    def _mark_dead(self, task_id: int, error: str) -> None:
+    def _mark_dead(self, task_id: int, error: str, *, attempts: int | None = None) -> None:
         with self.engine.begin() as conn:
             conn.execute(
                 text(
                     """
                     UPDATE fsma.task_queue
                     SET status = 'dead',
+                        attempts = COALESCE(:attempts, attempts),
                         completed_at = NOW(),
                         last_error = :error,
                         locked_by = NULL,
@@ -510,5 +511,9 @@ class TaskWorker:
                     WHERE id = :id
                     """
                 ),
-                {"id": task_id, "error": error[:4000] if error else None},
+                {
+                    "id": task_id,
+                    "attempts": attempts,
+                    "error": error[:4000] if error else None,
+                },
             )
