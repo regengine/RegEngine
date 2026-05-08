@@ -216,16 +216,14 @@ class TestValidationStatusRejected_Issue1324:
 
     def test_warning_severity_not_rejected(self):
         """severity='warning' must NOT trigger rejection — event is stored as valid
-        (no alerts supplied, so the status is 'valid', not 'rejected')."""
+        (not rejected, but still tracked as a warning)."""
         session = self._make_session()
         result = self._call_store_event(
             session,
             validator_results=[{"severity": "warning", "reason": "Temperature slightly off"}],
         )
         assert result.success is True, "Warning-severity validator must not cause rejection"
-        # No alerts were supplied, so the event status is 'valid' not 'warning'.
-        # 'warning' status only applies when alerts are present.
-        _assert_insert_status(session, VALIDATION_STATUS_VALID)
+        _assert_insert_status(session, VALIDATION_STATUS_WARNING)
 
     def test_multiple_reject_reasons_all_in_errors(self):
         """All rejection reasons from multiple REJECT validators appear in errors."""
@@ -242,11 +240,17 @@ class TestValidationStatusRejected_Issue1324:
         assert "Reason B" in result.errors
 
     def test_reject_severity_constants(self):
-        """Confirm that the documented severity strings are all in _REJECT_SEVERITIES."""
+        """The severity helper is case-insensitive for hard rejections."""
+        from services.shared.cte_persistence.core import _is_rejecting_validation_item
+
         for sev in ("reject", "REJECT", "error", "ERROR"):
-            assert sev in _REJECT_SEVERITIES, f"{sev!r} should be a reject severity"
+            assert _is_rejecting_validation_item({"severity": sev}), (
+                f"{sev!r} should be treated as a reject severity"
+            )
         for sev in ("warning", "WARNING", "info", "INFO"):
-            assert sev not in _REJECT_SEVERITIES, f"{sev!r} should not be a reject severity"
+            assert not _is_rejecting_validation_item({"severity": sev}), (
+                f"{sev!r} should not be treated as a reject severity"
+            )
 
 
 # ===========================================================================
@@ -442,6 +446,6 @@ class TestBatchValidationStatusRejected_Issue1324:
             if args and "INSERT INTO fsma.cte_events" in str(args[0]):
                 params = args[1] if len(args) > 1 else {}
                 actual = params.get("vs_0")
-                assert actual == VALIDATION_STATUS_VALID, (
-                    f"Warning severity must not set 'rejected'; got {actual!r}"
+                assert actual == VALIDATION_STATUS_WARNING, (
+                    f"Warning severity should set 'warning'; got {actual!r}"
                 )

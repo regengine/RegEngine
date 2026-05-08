@@ -77,11 +77,13 @@ class TestConfidenceRange:
         clamped = max(0.0, min(1.0, raw_score))
         result = RuleEvaluationResult(
             rule_id="rule-fuzz",
-            rule_name="fuzz",
-            passed=clamped >= 0.5,
+            rule_version=1,
+            rule_title="fuzz",
+            severity="warning",
             confidence=clamped,
             result="pass" if clamped >= 0.5 else "fail",
-            details={},
+            evidence_fields_inspected=[],
+            category="kde_presence",
         )
         assert 0.0 <= result.confidence <= 1.0, (
             f"confidence {result.confidence!r} out of [0,1] for raw_score={raw_score!r}"
@@ -107,9 +109,9 @@ class TestEmptyKdeNoCompliantVerdict:
 
         mock_session = MagicMock()
         # Simulate an empty rule set (no rows returned by the DB)
-        mock_session.execute.return_value.mappings.return_value.all.return_value = []
+        mock_session.execute.return_value.fetchall.return_value = []
 
-        engine = RulesEngine(db_session=mock_session)
+        engine = RulesEngine(mock_session)
 
         canonical_event = {
             "event_id": event_id,
@@ -249,9 +251,9 @@ class TestRulesEngineNoUnhandledException:
         from services.shared.rules.engine import RulesEngine
 
         mock_session = MagicMock()
-        mock_session.execute.return_value.mappings.return_value.all.return_value = []
+        mock_session.execute.return_value.fetchall.return_value = []
 
-        engine = RulesEngine(db_session=mock_session)
+        engine = RulesEngine(mock_session)
 
         canonical_event = {
             "event_id": event_id,

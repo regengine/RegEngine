@@ -342,17 +342,18 @@ describe('Dashboard Inflow Lab', () => {
         await waitFor(() => {
             expect(screen.getByText('Exceptions')).toBeInTheDocument();
         });
-        const exceptionsSection = screen.getByText('Exceptions').closest('section');
-        expect(exceptionsSection).not.toBeNull();
         // The fixture has one handoff-style partial lot; the handoff group must
-        // render. With the empty-group hide behaviour, the source/mixed group
-        // headings must NOT render on the default 'all' filter when those
-        // groups are empty.
-        const handoffNode = (exceptionsSection as HTMLElement).querySelector('[data-exception-group="handoff"]');
-        expect(handoffNode).not.toBeNull();
+        // render. Anchor on the rendered group node directly instead of a
+        // parent <section>, because the card structure around the Exceptions
+        // heading is layout-driven and has changed over time.
+        const handoffNode = await waitFor(() => {
+            const node = document.querySelector('[data-exception-group="handoff"]');
+            if (!node) throw new Error('handoff group not rendered');
+            return node as HTMLElement;
+        });
         expect(within(handoffNode as HTMLElement).getByText('Missing handoff evidence')).toBeInTheDocument();
-        expect(within(exceptionsSection as HTMLElement).queryByText('Missing source evidence')).not.toBeInTheDocument();
-        expect(within(exceptionsSection as HTMLElement).queryByText('Mixed / multi-cause')).not.toBeInTheDocument();
+        expect(screen.queryByText('Missing source evidence')).not.toBeInTheDocument();
+        expect(screen.queryByText('Mixed / multi-cause')).not.toBeInTheDocument();
     });
 
     it('shows an empty-filter state when the active filter selects a group with 0 lots', async () => {

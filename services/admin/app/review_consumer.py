@@ -18,8 +18,6 @@ Security hardening:
 
 from __future__ import annotations
 
-import hashlib
-import hmac
 import json
 import os
 import sys
@@ -66,6 +64,7 @@ from shared.observability.kafka_propagation import (
     bind_correlation_context,
     inject_correlation_headers_tuples,
 )
+from shared.kafka_auth import KafkaAuthError, get_allowed_producers, verify_event
 
 tracer = setup_standalone_observability("admin-review-consumer")
 
@@ -322,6 +321,18 @@ def _process_record(record, tracker: "HallucinationTracker", bootstrap: str, kaf
     """Process a single Kafka record."""
     raw_value = record.value
     start_time = time.perf_counter()
+    topic_name = getattr(record, "topic", TOPIC_NEEDS_REVIEW)
+    if callable(topic_name):
+        try:
+            topic_name = topic_name()
+        except Exception:
+            topic_name = TOPIC_NEEDS_REVIEW
+    raw_headers = getattr(record, "headers", None)
+    if callable(raw_headers):
+        try:
+            raw_headers = raw_headers()
+        except Exception:
+            raw_headers = None
     
     # 1. Handle Deserialization (Poison Pill Detection)
     try:
@@ -333,7 +344,12 @@ def _process_record(record, tracker: "HallucinationTracker", bootstrap: str, kaf
         return
 
     try:
-        result = _extract_and_record(evt, tracker)
+        result = _extract_and_record(
+            evt,
+            tracker,
+            headers=raw_headers if isinstance(raw_headers, list) else None,
+            topic=str(topic_name or TOPIC_NEEDS_REVIEW),
+        )
         elapsed = time.perf_counter() - start_time
         REVIEW_LATENCY_HISTOGRAM.labels(outcome="success").observe(elapsed)
         REVIEW_MESSAGES_COUNTER.labels(status="success").inc()
@@ -352,6 +368,7 @@ def _process_record(record, tracker: "HallucinationTracker", bootstrap: str, kaf
         OSError,
         KeyError,
         LookupError,
+        KafkaAuthError,
         # SQLAlchemy errors surface here when _record_with_retry exhausts
         # its retry budget (#1201). Without this clause, a persistent DB
         # outage would crash the consumer loop instead of DLQ'ing the
@@ -366,84 +383,78 @@ def _process_record(record, tracker: "HallucinationTracker", bootstrap: str, kaf
         _send_to_dlq(bootstrap, evt, str(exc), headers=kafka_headers)
 
 
-def _verify_hmac_envelope(evt: Dict[str, Any]) -> bool:
-    """Verify HMAC signature on an NLP->review event envelope.
+def _is_dev_kafka_auth_bypass() -> bool:
+    """Allow unsigned messages only in local/test envs with no signing key.
 
-    Expected envelope shape:
-        {
-          "payload": {... original review event ...},
-          "hmac": "<hex digest>"
-        }
-
-    The signature is HMAC-SHA256 over the canonical JSON of
-    ``payload`` keyed with ``NLP_REVIEW_HMAC_SECRET``. Messages that do
-    not match the expected envelope shape, or where the digest does not
-    verify, return False -- the caller sends them to the DLQ.
-
-    If ``NLP_REVIEW_HMAC_SECRET`` is unset we return True (legacy
-    mode) but log a warning; set this env var in production to enforce
-    signing.
+    This preserves rollout safety for developer machines while failing
+    closed everywhere else. Production/staging should never rely on the
+    shared verifier's permissive mode implicitly.
     """
-    secret = os.getenv("NLP_REVIEW_HMAC_SECRET", "").strip()
-    if not secret:
+    environment = os.getenv("ENVIRONMENT", "").strip().lower()
+    signing_key = os.getenv("KAFKA_EVENT_SIGNING_KEY", "").strip()
+    return environment in {"development", "dev", "local", "test"} and not signing_key
+
+
+def _verify_review_event(
+    evt: Dict[str, Any],
+    headers: list[tuple[str, Any]] | None,
+    *,
+    topic: str = TOPIC_NEEDS_REVIEW,
+) -> Dict[str, Any]:
+    """Verify an inbound review event using the shared Kafka auth contract."""
+    strict = not _is_dev_kafka_auth_bypass()
+    if not strict:
         logger.warning(
-            "review_consumer_hmac_secret_unset",
-            topic=TOPIC_NEEDS_REVIEW,
+            "review_consumer_kafka_auth_dev_bypass",
+            topic=topic,
+            environment=os.getenv("ENVIRONMENT"),
             note=(
-                "NLP_REVIEW_HMAC_SECRET is not configured; "
-                "Kafka message envelopes are not being verified. Unsigned "
-                "events can inject cross-tenant review items (#1388)."
+                "Unsigned review events are accepted only because "
+                "ENVIRONMENT is local/test and KAFKA_EVENT_SIGNING_KEY is unset. "
+                "Do not rely on this bypass outside developer rollout."
             ),
         )
-        return True
 
-    if not isinstance(evt, dict):
-        return False
-    payload = evt.get("payload")
-    sig = evt.get("hmac")
-    if not isinstance(payload, dict) or not isinstance(sig, str):
-        return False
+    allowed_producers = get_allowed_producers(topic)
+    if allowed_producers is None and topic == TOPIC_NEEDS_REVIEW:
+        allowed_producers = {"nlp-service"}
 
-    canonical = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode(
-        "utf-8"
+    verified_evt, _verified_producer = verify_event(
+        evt,
+        headers,
+        topic=topic,
+        allowed_producers=allowed_producers,
+        strict=strict,
     )
-    expected = hmac.new(secret.encode("utf-8"), canonical, hashlib.sha256).hexdigest()
-    return hmac.compare_digest(expected, sig)
+    return verified_evt
 
 
-def _extract_and_record(evt: Dict[str, Any], tracker) -> Dict[str, Any]:
+def _extract_and_record(
+    evt: Dict[str, Any],
+    tracker,
+    *,
+    headers: list[tuple[str, Any]] | None = None,
+    topic: str = TOPIC_NEEDS_REVIEW,
+) -> Dict[str, Any]:
     """Extract fields from event and record via tracker.
 
     Hardening (#1388):
-    - When ``NLP_REVIEW_HMAC_SECRET`` is configured, the event must be
-      a signed envelope ``{payload, hmac}``. Unsigned or tampered
-      messages raise ``ValueError`` so ``_process_record`` routes them
-      to the DLQ.
-    - tenant_id is read from the inner ``payload`` of the verified
-      envelope. If the legacy bare-event path is used (no secret), we
-      still accept the event body directly -- but only after emitting
-      the ``review_consumer_hmac_secret_unset`` warning above.
+    - Inbound messages are verified with ``shared.kafka_auth.verify_event``.
+      Unsigned, tampered, or unauthorized messages raise
+      ``KafkaAuthError`` so ``_process_record`` routes them to the DLQ.
+    - A no-key bypass is retained only for local/test environments to
+      preserve rollout safety while developers are not running a signed
+      Kafka stack. Production/staging must present the canonical signed
+      body + Kafka headers emitted by ``sign_event(...)``.
 
     Hardening (#1390):
     - source_text is escaped via ``sanitize_source_text_for_store``
       before insert. The DB stores the sanitized text so a later
       unsanitized read path cannot leak stored XSS into the admin UI.
     """
-    # --- Envelope verification ------------------------------------------
-    if not _verify_hmac_envelope(evt):
-        raise ValueError(
-            "review envelope failed HMAC verification -- "
-            "message rejected and routed to DLQ"
-        )
+    payload = _verify_review_event(evt, headers, topic=topic)
 
-    # Extract the inner payload if this is a signed envelope; otherwise
-    # fall back to treating the whole event as the payload (legacy).
-    if isinstance(evt, dict) and "payload" in evt and "hmac" in evt:
-        payload = evt["payload"]
-    else:
-        payload = evt
-
-    tenant_id = payload.get("tenant_id")
+    tenant_id = payload.get("tenant_id")  # nosemgrep: tenant-id-from-request-body -- payload was authenticated by _verify_review_event via shared.kafka_auth.verify_event
     document_id = payload.get("document_id")
     extraction = payload.get("extraction") or {}
     doc_hash = (
