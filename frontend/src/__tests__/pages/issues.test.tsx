@@ -208,7 +208,7 @@ describe('IssuesPage', () => {
         render(<IssuesPage />, { wrapper: createWrapper() });
 
         await waitFor(() => {
-            expect(screen.getByText('No Issues Found')).toBeInTheDocument();
+            expect(screen.getByText('No issues in the current view')).toBeInTheDocument();
         });
     });
 
