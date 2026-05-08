@@ -8,7 +8,7 @@ from typing import List, Optional, Dict, Any
 import logging
 
 from .envelope import EvidenceEnvelopeV3, VerificationResult
-from .hashing import compute_payload_hash, verify_hash
+from .hashing import compute_envelope_hash, compute_payload_hash, verify_hash
 from .merkle import verify_merkle_proof, MerkleProof
 
 logger = logging.getLogger(__name__)
@@ -100,10 +100,13 @@ class EvidenceVerifier:
     
     def _verify_current_hash(self, envelope: EvidenceEnvelopeV3) -> bool:
         """Verify that current_hash is correctly computed."""
-        # Current hash should be hash of the envelope data
-        # (excluding current_hash itself to avoid circular dependency)
-        envelope_data = envelope.dict(exclude={'current_hash', 'tamper_detected'})
-        computed_hash = compute_payload_hash(envelope_data)
+        # Current hash should be derived from the JSON-serializable envelope
+        # representation, excluding computed fields to avoid circular hashing.
+        envelope_data = envelope.model_dump(
+            mode="json",
+            exclude={"current_hash", "tamper_detected"},
+        )
+        computed_hash = compute_envelope_hash(envelope_data)
         return computed_hash == envelope.current_hash
     
     def _verify_chain_continuity(self, envelope: EvidenceEnvelopeV3) -> tuple[bool, int]:

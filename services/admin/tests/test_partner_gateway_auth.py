@@ -11,6 +11,7 @@ with a controllable ``validate_key`` so we can exercise success / 401 /
 """
 from __future__ import annotations
 
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -18,12 +19,8 @@ import pytest
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.testclient import TestClient
 
-from app.partner_gateway.auth import (
-    PartnerPrincipal,
-    get_partner_principal,
-    require_partner_scope,
-)
-from app.partner_gateway.router import router as partner_router
+import app.partner_gateway.auth as partner_auth
+import app.partner_gateway.router as partner_router_mod
 
 
 def _build_app() -> FastAPI:
@@ -33,8 +30,23 @@ def _build_app() -> FastAPI:
     the real admin app pulls in dozens of unrelated routers.
     """
     app = FastAPI()
-    app.include_router(partner_router)
+    app.include_router(partner_router_mod.router)
     return app
+
+
+@contextmanager
+def _patched_partner_store(fake_store):
+    """Patch the exact auth module object used by the mounted router."""
+    with patch.object(
+        partner_auth,
+        "get_key_store",
+        return_value=fake_store,
+    ), patch.object(
+        partner_auth,
+        "DatabaseAPIKeyStore",
+        new=type(fake_store),
+    ):
+        yield
 
 
 def _fake_validated_key(
@@ -99,13 +111,7 @@ def test_invalid_partner_key_returns_401():
 
     fake_store = _fake_db_store(None)
 
-    with patch(
-        "app.partner_gateway.auth.get_key_store",
-        return_value=fake_store,
-    ), patch(
-        "app.partner_gateway.auth.DatabaseAPIKeyStore",
-        new=type(fake_store),  # isinstance(...) check picks the async branch
-    ):
+    with _patched_partner_store(fake_store):
         client = TestClient(app)
         resp = client.get(
             "/v1/partner/clients",
@@ -121,13 +127,7 @@ def test_valid_key_with_scope_passes_through_to_handler():
 
     fake_store = _fake_db_store(_fake_validated_key(["partner.clients.read"]))
 
-    with patch(
-        "app.partner_gateway.auth.get_key_store",
-        return_value=fake_store,
-    ), patch(
-        "app.partner_gateway.auth.DatabaseAPIKeyStore",
-        new=type(fake_store),
-    ):
+    with _patched_partner_store(fake_store):
         client = TestClient(app)
         resp = client.get(
             "/v1/partner/clients",
@@ -149,13 +149,7 @@ def test_valid_key_over_rate_limit_returns_429():
         retry_after=37,
     )
 
-    with patch(
-        "app.partner_gateway.auth.get_key_store",
-        return_value=fake_store,
-    ), patch(
-        "app.partner_gateway.auth.DatabaseAPIKeyStore",
-        new=type(fake_store),
-    ):
+    with _patched_partner_store(fake_store):
         client = TestClient(app)
         resp = client.get(
             "/v1/partner/clients",
@@ -173,13 +167,7 @@ def test_valid_key_without_partner_id_returns_403():
         _fake_validated_key(["partner.clients.read"], partner_id=None)
     )
 
-    with patch(
-        "app.partner_gateway.auth.get_key_store",
-        return_value=fake_store,
-    ), patch(
-        "app.partner_gateway.auth.DatabaseAPIKeyStore",
-        new=type(fake_store),
-    ):
+    with _patched_partner_store(fake_store):
         client = TestClient(app)
         resp = client.get(
             "/v1/partner/clients",
@@ -197,13 +185,7 @@ def test_valid_key_with_namespace_wildcard_passes():
 
     fake_store = _fake_db_store(_fake_validated_key(["partner.*"]))
 
-    with patch(
-        "app.partner_gateway.auth.get_key_store",
-        return_value=fake_store,
-    ), patch(
-        "app.partner_gateway.auth.DatabaseAPIKeyStore",
-        new=type(fake_store),
-    ):
+    with _patched_partner_store(fake_store):
         client = TestClient(app)
         resp = client.get(
             "/v1/partner/clients",
@@ -223,13 +205,7 @@ def test_valid_key_with_wrong_scope_returns_403():
 
     fake_store = _fake_db_store(_fake_validated_key(["partner.clients.read"]))
 
-    with patch(
-        "app.partner_gateway.auth.get_key_store",
-        return_value=fake_store,
-    ), patch(
-        "app.partner_gateway.auth.DatabaseAPIKeyStore",
-        new=type(fake_store),
-    ):
+    with _patched_partner_store(fake_store):
         client = TestClient(app)
         resp = client.get(
             "/v1/partner/revenue",
@@ -245,13 +221,7 @@ def test_full_wildcard_scope_passes_every_endpoint():
 
     fake_store = _fake_db_store(_fake_validated_key(["*"]))
 
-    with patch(
-        "app.partner_gateway.auth.get_key_store",
-        return_value=fake_store,
-    ), patch(
-        "app.partner_gateway.auth.DatabaseAPIKeyStore",
-        new=type(fake_store),
-    ):
+    with _patched_partner_store(fake_store):
         client = TestClient(app)
         for path in ("/v1/partner/clients", "/v1/partner/revenue"):
             resp = client.get(path, headers={"X-RegEngine-Partner-Key": "rge_a.b"})
@@ -333,11 +303,7 @@ def test_endpoint_passes_with_exact_scope(method, path, scope, body):
     app = _build_app()
     fake_store = _fake_db_store(_fake_validated_key([scope]))
 
-    with patch(
-        "app.partner_gateway.auth.get_key_store", return_value=fake_store
-    ), patch(
-        "app.partner_gateway.auth.DatabaseAPIKeyStore", new=type(fake_store)
-    ):
+    with _patched_partner_store(fake_store):
         client = TestClient(app)
         resp = _call(
             client, method, path, body, {"X-RegEngine-Partner-Key": "rge_x.y"}
@@ -360,11 +326,7 @@ def test_endpoint_403s_with_unrelated_scope(method, path, scope, body):
     app = _build_app()
     fake_store = _fake_db_store(_fake_validated_key(["partner.unrelated.read"]))
 
-    with patch(
-        "app.partner_gateway.auth.get_key_store", return_value=fake_store
-    ), patch(
-        "app.partner_gateway.auth.DatabaseAPIKeyStore", new=type(fake_store)
-    ):
+    with _patched_partner_store(fake_store):
         client = TestClient(app)
         resp = _call(
             client, method, path, body, {"X-RegEngine-Partner-Key": "rge_x.y"}
@@ -389,8 +351,6 @@ async def test_partner_id_is_not_read_from_extra_data():
     without going through ``change_scopes``. Pin that the dep reads
     only from the real column.
     """
-    from app.partner_gateway.auth import get_partner_principal
-
     # Forge a key whose extra_data CLAIMS to be partner_evil but whose
     # real partner_id column is partner_legit.
     fake_key = MagicMock()
@@ -406,14 +366,8 @@ async def test_partner_id_is_not_read_from_extra_data():
     fake_request = MagicMock()
     fake_request.url.path = "/v1/partner/clients"
 
-    with patch(
-        "app.partner_gateway.auth.get_key_store",
-        return_value=fake_store,
-    ), patch(
-        "app.partner_gateway.auth.DatabaseAPIKeyStore",
-        new=type(fake_store),
-    ):
-        principal = await get_partner_principal(
+    with _patched_partner_store(fake_store):
+        principal = await partner_auth.get_partner_principal(
             request=fake_request, x_regengine_partner_key="rge_x.s"
         )
 
@@ -436,13 +390,7 @@ def test_list_clients_empty_returns_200_not_404():
 
     fake_store = _fake_db_store(_fake_validated_key(["partner.clients.read"]))
 
-    with patch(
-        "app.partner_gateway.auth.get_key_store",
-        return_value=fake_store,
-    ), patch(
-        "app.partner_gateway.auth.DatabaseAPIKeyStore",
-        new=type(fake_store),
-    ):
+    with _patched_partner_store(fake_store):
         client = TestClient(app)
         resp = client.get(
             "/v1/partner/clients",
@@ -461,8 +409,8 @@ def test_list_clients_empty_returns_200_not_404():
 @pytest.mark.asyncio
 async def test_require_partner_scope_returns_principal_on_success():
     """When the scope passes, the dep returns the principal unchanged."""
-    dep = require_partner_scope("partner.clients.read")
-    principal = PartnerPrincipal(
+    dep = partner_auth.require_partner_scope("partner.clients.read")
+    principal = partner_auth.PartnerPrincipal(
         key_id="rge_x",
         scopes=["partner.clients.read"],
         partner_id="p1",
@@ -474,8 +422,8 @@ async def test_require_partner_scope_returns_principal_on_success():
 @pytest.mark.asyncio
 async def test_require_partner_scope_raises_403_when_scope_missing():
     """Missing scope must raise HTTPException(403) with the scope name."""
-    dep = require_partner_scope("partner.revenue.read")
-    principal = PartnerPrincipal(
+    dep = partner_auth.require_partner_scope("partner.revenue.read")
+    principal = partner_auth.PartnerPrincipal(
         key_id="rge_x",
         scopes=["partner.clients.read"],
     )

@@ -31,7 +31,9 @@ import pytest
 
 from app import supplier_graph_sync as sgs_module
 from app.supplier_graph_sync import SupplierGraphSync
-from shared.circuit_breaker import CircuitOpenError, neo4j_circuit
+
+CircuitOpenError = sgs_module.CircuitOpenError
+neo4j_circuit = sgs_module.neo4j_circuit
 
 
 # ---------------------------------------------------------------------------

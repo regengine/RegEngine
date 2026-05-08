@@ -828,6 +828,7 @@ def test_notify_webhook_on_failure_enqueues_to_outbox(monkeypatch):
     """Delivery failure → a webhook_outbox row is written."""
     monkeypatch.delenv("HALLUCINATION_WEBHOOK_URL", raising=False)
     monkeypatch.delenv("HALLUCINATION_WEBHOOK_SECRET", raising=False)
+    import app.metrics as metrics_mod
 
     # Build a real in-memory DB so the enqueue actually persists.
     engine = create_engine(
@@ -862,7 +863,7 @@ def test_notify_webhook_on_failure_enqueues_to_outbox(monkeypatch):
     # hybrid: the tenant lookup side lives on a wrapper that delegates
     # ``session.get(TenantModel, ...)`` to an in-memory dict and all
     # else to the real SQLite session.
-    from app.metrics import TenantModel as _TenantModel  # noqa: F401
+    tenant_model = metrics_mod.TenantModel
 
     tenants = {
         str(tenant_uuid): _FakeTenant({
@@ -876,7 +877,10 @@ def test_notify_webhook_on_failure_enqueues_to_outbox(monkeypatch):
             self._real = SessionLocal()
 
         def get(self, model, key):
-            if model is _TenantModel:
+            if model is tenant_model or (
+                getattr(model, "__name__", None) == "TenantModel"
+                and getattr(model, "__tablename__", None) == "tenants"
+            ):
                 return tenants.get(str(key))
             return self._real.get(model, key)
 
@@ -908,7 +912,7 @@ def test_notify_webhook_on_failure_enqueues_to_outbox(monkeypatch):
     def dispatcher(url, body, headers):
         return 503, "down"
 
-    tracker = HallucinationTracker(
+    tracker = metrics_mod.HallucinationTracker(
         session_factory=_HybridSession,
         redis_client=None,
         webhook_dispatcher=dispatcher,

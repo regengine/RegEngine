@@ -545,8 +545,10 @@ def test_get_auth_scoped_session_default_uses_resolve_tenant_context():
 
     from fastapi import Depends
 
-    from services.admin.app.dependencies import get_auth_scoped_session
-    from shared.tenant_context import resolve_tenant_context
+    from services.admin.app import dependencies as deps_mod
+
+    get_auth_scoped_session = deps_mod.get_auth_scoped_session
+    resolve_tenant_context = deps_mod.resolve_tenant_context
 
     sig = inspect.signature(get_auth_scoped_session)
     ctx_param = sig.parameters["ctx"]
