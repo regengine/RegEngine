@@ -207,6 +207,11 @@ describe('RecallReportPage', () => {
   });
 
   it('exports the FDA response through the cookie-backed ingestion proxy without browser auth headers', async () => {
+    // Override the default demo mock — the export button is disabled and
+    // relabelled "Connect Live Data To Enable FDA Export" while demo_mode is
+    // true, so we need a non-demo report to exercise the export path.
+    mockFetchRecallReport.mockResolvedValue({ ...MOCK_DEMO_REPORT, demo_mode: false });
+
     const fetchSpy = vi.fn().mockResolvedValue({
       ok: true,
       blob: async () => new Blob(['csv']),
