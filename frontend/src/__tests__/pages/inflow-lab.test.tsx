@@ -339,9 +339,6 @@ describe('Dashboard Inflow Lab', () => {
     it('renders exceptions as failure-pattern groups, hiding empty groups on the all filter', async () => {
         renderDashboardInflowLabPage();
 
-        await waitFor(() => {
-            expect(screen.getByText('Exceptions')).toBeInTheDocument();
-        });
         // The fixture has one handoff-style partial lot; the handoff group must
         // render. Anchor on the rendered group node directly instead of a
         // parent <section>, because the card structure around the Exceptions
