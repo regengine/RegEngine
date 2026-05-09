@@ -194,43 +194,13 @@ class TestTimeArrowInTraceForward:
 
 
 class TestCryptoChainIntegrity:
-    """Tests for Merkle hash-chain integrity of SupplierCTEEvent records.
-
-    Uses importlib to load kernel.evidence.merkle from the repo root,
-    avoiding collision with the pip-installed 'kernel' package in CI.
-    """
+    """Tests for Merkle hash-chain integrity of SupplierCTEEvent records."""
 
     @staticmethod
     def _load_merkle():
-        """Import kernel.evidence.merkle from the repo root explicitly."""
-        import importlib.util
-        repo_root = Path(__file__).resolve().parents[3]
-        spec = importlib.util.spec_from_file_location(
-            "kernel.evidence.merkle",
-            repo_root / "kernel" / "evidence" / "merkle.py",
-            submodule_search_locations=[],
-        )
-        # We also need the envelope module loaded first
-        envelope_spec = importlib.util.spec_from_file_location(
-            "kernel.evidence.envelope",
-            repo_root / "kernel" / "evidence" / "envelope.py",
-            submodule_search_locations=[],
-        )
-        envelope_mod = importlib.util.module_from_spec(envelope_spec)
-        sys.modules["kernel.evidence.envelope"] = envelope_mod
-        envelope_spec.loader.exec_module(envelope_mod)
-
-        # Ensure parent packages exist in sys.modules
-        if "kernel" not in sys.modules:
-            import types
-            sys.modules["kernel"] = types.ModuleType("kernel")
-            sys.modules["kernel"].evidence = types.ModuleType("kernel.evidence")
-            sys.modules["kernel.evidence"] = sys.modules["kernel"].evidence
-
-        mod = importlib.util.module_from_spec(spec)
-        sys.modules["kernel.evidence.merkle"] = mod
-        spec.loader.exec_module(mod)
-        return mod
+        """Import the merkle module (kept as helper for test compatibility)."""
+        from services.graph.app.evidence import merkle
+        return merkle
 
     def test_compute_event_hash_deterministic(self):
         """compute_event_hash must produce the same hash for the same input."""

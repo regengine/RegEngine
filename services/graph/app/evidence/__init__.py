@@ -7,7 +7,7 @@ from .envelope import (
     MerkleProof,
     VerificationRequest,
     VerificationResult,
-    ChainStats
+    ChainStats,
 )
 from .hashing import compute_payload_hash, compute_envelope_hash, verify_hash
 from .merkle import (

@@ -5,17 +5,17 @@ Tests for hash chaining, tamper detection, and Merkle proof verification.
 """
 
 import pytest
-from kernel.evidence.hashing import (
+from services.graph.app.evidence.hashing import (
     compute_payload_hash,
     compute_envelope_hash,
     verify_hash,
 )
-from kernel.evidence.merkle import (
+from services.graph.app.evidence.merkle import (
     build_merkle_tree,
     generate_merkle_proof,
     verify_merkle_proof,
 )
-from kernel.evidence.envelope import MerkleNode, MerkleProof
+from services.graph.app.evidence.envelope import MerkleNode, MerkleProof
 
 
 class TestHashChainIntegrity:

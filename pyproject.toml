@@ -153,7 +153,6 @@ testpaths = [
     "tests",
     "kernel/obligation/tests",
     "kernel/monitoring/tests",
-    "kernel/evidence/tests",
     "services/admin/tests",
     "services/graph/tests",
     "services/ingestion/tests",

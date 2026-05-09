@@ -7,9 +7,9 @@ Uses EvidenceEnvelopeV3 directly to construct valid and tampered envelopes.
 
 import pytest
 from datetime import datetime
-from kernel.evidence.hashing import compute_envelope_hash, compute_payload_hash
-from kernel.evidence.verify import EvidenceVerifier
-from kernel.evidence.envelope import EvidenceEnvelopeV3, EvidenceType
+from services.graph.app.evidence.hashing import compute_envelope_hash, compute_payload_hash
+from services.graph.app.evidence.verify import EvidenceVerifier
+from services.graph.app.evidence.envelope import EvidenceEnvelopeV3, EvidenceType
 
 
 def _make_envelope(
