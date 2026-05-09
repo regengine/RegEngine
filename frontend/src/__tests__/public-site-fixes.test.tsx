@@ -69,6 +69,15 @@ describe('public site launch-blocker fixes', () => {
         await userEvent.click(screen.getByRole('link', { name: /start base plan/i }));
 
         expect(fetchWithCsrf).toHaveBeenCalledWith('/api/billing/checkout', expect.any(Object));
+
+        // Per PR #2175/#2211: on 403/non-OK, the component surfaces an honest
+        // error message instead of silently pushing to signup. The user must
+        // explicitly click "Continue to signup" to navigate.
+        const alert = await screen.findByRole('alert');
+        expect(alert).toHaveTextContent(/stripe checkout was unavailable/i);
+        expect(mocks.routerPush).not.toHaveBeenCalled();
+
+        await userEvent.click(screen.getByRole('button', { name: /continue to signup/i }));
         expect(mocks.routerPush).toHaveBeenCalledWith('/signup?plan=base&billing=annual');
     });
 
