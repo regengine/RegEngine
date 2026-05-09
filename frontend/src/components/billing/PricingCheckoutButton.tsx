@@ -61,8 +61,7 @@ export function PricingCheckoutButton({
             const data = await response.json();
 
             if (!response.ok) {
-                setError('Stripe checkout was unavailable — continue with your account, we will bill from inside the app.');
-                router.push(signupHref);
+                setError('Stripe checkout was unavailable. You can continue to signup; billing happens from inside the app.');
                 return;
             }
 
@@ -70,12 +69,10 @@ export function PricingCheckoutButton({
             if (data.checkout_url) {
                 window.location.href = data.checkout_url;
             } else {
-                setError('Stripe checkout was unavailable — continue with your account, we will bill from inside the app.');
-                router.push(signupHref);
+                setError('Stripe checkout was unavailable. You can continue to signup; billing happens from inside the app.');
             }
         } catch {
-            setError('Stripe checkout was unavailable — continue with your account, we will bill from inside the app.');
-            router.push(signupHref);
+            setError('Stripe checkout was unavailable. You can continue to signup; billing happens from inside the app.');
         } finally {
             setIsLoading(false);
         }
@@ -115,9 +112,18 @@ export function PricingCheckoutButton({
                 </Link>
             </Button>
             {error && (
-                <p className="text-red-500 text-xs mt-2 text-center">
-                    {error}
-                </p>
+                <>
+                    <p className="text-red-500 text-xs mt-2 text-center" role="alert">
+                        {error}
+                    </p>
+                    <button
+                        type="button"
+                        onClick={() => router.push(signupHref)}
+                        className="mt-2 w-full text-xs text-center underline text-gray-700 hover:text-gray-900"
+                    >
+                        Continue to signup
+                    </button>
+                </>
             )}
         </div>
     );
