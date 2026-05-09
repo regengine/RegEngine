@@ -488,6 +488,196 @@ class TestRefreshTenantStatus:
         assert captured[-1]["tenant_status"] == "active"
 
 
+# ── RE-SEC-003 — Refresh rejects unsigned/forged prior access token ──────────
+
+
+class TestRefreshUnverifiedJWTFallback:
+    """refresh_session must NOT trust an unverified prior-access-token payload.
+
+    A holder of the victim's refresh token (e.g. via XSS or leaked browser
+    storage) used to be able to forge an unsigned JWT in the Authorization
+    header and pin the new access token to any tenant the victim is a member
+    of, by way of an unverified `jwt.decode(..., verify_signature=False)`
+    fallback. That fallback is now deleted; on signature failure we fall
+    through to the deterministic membership-ordered selection.
+    """
+
+    def _make_refresh_db_multi_tenant(self):
+        """User with TWO active tenant memberships."""
+        db = MagicMock()
+
+        user = MagicMock()
+        user.id = uuid_mod.uuid4()
+        user.email = "victim@example.com"
+        user.is_sysadmin = False
+        user.token_version = 1
+        user.status = "active"
+
+        # Two tenants. Membership-ordered fallback sorts by str(tenant_id),
+        # so we pick concrete UUIDs to make ordering deterministic.
+        tenant_a_id = uuid_mod.UUID("11111111-1111-1111-1111-111111111111")
+        tenant_b_id = uuid_mod.UUID("22222222-2222-2222-2222-222222222222")
+
+        membership_a = MagicMock()
+        membership_a.tenant_id = tenant_a_id
+        membership_a.is_active = True
+        membership_a.role_id = uuid_mod.uuid4()
+
+        membership_b = MagicMock()
+        membership_b.tenant_id = tenant_b_id
+        membership_b.is_active = True
+        membership_b.role_id = uuid_mod.uuid4()
+
+        tenant_a = MagicMock(); tenant_a.id = tenant_a_id; tenant_a.status = "active"
+        tenant_b = MagicMock(); tenant_b.id = tenant_b_id; tenant_b.status = "active"
+
+        def _db_get(model, id_):
+            name = getattr(model, "__name__", str(model))
+            if "User" in name:
+                return user
+            if "Tenant" in name:
+                return tenant_a if id_ == tenant_a_id else tenant_b
+            if "Role" in name:
+                return None
+            return None
+
+        db.get.side_effect = _db_get
+        db.execute.return_value.scalars.return_value.all.return_value = [
+            membership_a,
+            membership_b,
+        ]
+        db.commit.return_value = None
+        return db, user, tenant_a_id, tenant_b_id
+
+    def _make_session(self, user_id, raw_rt):
+        from datetime import datetime, timezone, timedelta
+
+        from services.admin.app.auth_utils import hash_token
+
+        session = MagicMock()
+        session.id = uuid_mod.uuid4()
+        session.user_id = user_id
+        session.is_revoked = False
+        session.expires_at = datetime.now(timezone.utc) + timedelta(days=7)
+        session.refresh_token_hash = hash_token(raw_rt)
+        return session
+
+    @pytest.mark.asyncio
+    async def test_forged_unsigned_jwt_does_not_pin_tenant(self, monkeypatch):
+        """Attacker-supplied unsigned JWT with a chosen `tid` MUST be ignored."""
+        import jwt as _jwt
+
+        from services.admin.app import auth_routes
+        from services.admin.app.auth import refresh_router as _rr
+        from services.admin.app.auth_utils import create_refresh_token
+
+        db, user, tenant_a_id, tenant_b_id = self._make_refresh_db_multi_tenant()
+
+        raw_rt = create_refresh_token()
+        session = self._make_session(user.id, raw_rt)
+
+        ss = MagicMock()
+        ss.claim_session_by_token = AsyncMock(return_value=session)
+        ss.update_session = AsyncMock(return_value=None)
+        ss.mark_token_used = AsyncMock(return_value=None)
+
+        captured: list[dict] = []
+        monkeypatch.setattr(
+            _rr,
+            "create_access_token",
+            lambda data, **kw: (captured.append(dict(data)), "fake.access.token")[1],
+        )
+
+        # Forge a JWT signed with the WRONG key, claiming tenant_b.
+        # decode_access_token() will raise on signature verification; the
+        # fix means we now fall through to the membership-ordered path
+        # rather than the previous unverified-decode shortcut.
+        forged = _jwt.encode(
+            {
+                "sub": str(user.id),
+                "tid": str(tenant_b_id),
+                "tenant_id": str(tenant_b_id),
+                "exp": 9999999999,
+            },
+            "wrong-key-attacker-controlled",
+            algorithm="HS256",
+        )
+
+        await auth_routes.refresh_session.__wrapped__(
+            payload=auth_routes.RefreshRequest(refresh_token=raw_rt),
+            request=_make_request(headers={"authorization": f"Bearer {forged}"}),
+            db=db,
+            session_store=ss,
+        )
+
+        assert captured, "create_access_token was never called"
+        chosen_tid = captured[-1]["tid"]
+        # Membership-ordered fallback sorts by str(tenant_id); tenant_a_id
+        # ("1111…") sorts before tenant_b_id ("2222…").
+        assert chosen_tid == str(tenant_a_id), (
+            f"Forged unsigned JWT pinned tenant to {chosen_tid}; expected the "
+            f"deterministic first membership {tenant_a_id}. RE-SEC-003 regression."
+        )
+        assert chosen_tid != str(tenant_b_id), (
+            "Attacker-chosen tenant_id was honored — unverified-decode "
+            "fallback is back."
+        )
+
+    @pytest.mark.asyncio
+    async def test_legitimate_signed_jwt_preserves_original_tenant(self, monkeypatch):
+        """Regression guard: valid prior-access-token still pins tenant correctly."""
+        from services.admin.app import auth_routes
+        from services.admin.app.auth import refresh_router as _rr
+        from services.admin.app.auth_utils import (
+            create_access_token,
+            create_refresh_token,
+        )
+
+        db, user, tenant_a_id, tenant_b_id = self._make_refresh_db_multi_tenant()
+
+        raw_rt = create_refresh_token()
+        session = self._make_session(user.id, raw_rt)
+
+        ss = MagicMock()
+        ss.claim_session_by_token = AsyncMock(return_value=session)
+        ss.update_session = AsyncMock(return_value=None)
+        ss.mark_token_used = AsyncMock(return_value=None)
+
+        # Real signed access token claiming tenant_b — the user's actual
+        # acting tenant for this session. Membership-ordered fallback would
+        # incorrectly pick tenant_a; the verified-decode path must win.
+        valid_old_access = create_access_token(
+            {
+                "sub": str(user.id),
+                "email": user.email,
+                "tenant_id": str(tenant_b_id),
+                "tid": str(tenant_b_id),
+            }
+        )
+
+        captured: list[dict] = []
+        monkeypatch.setattr(
+            _rr,
+            "create_access_token",
+            lambda data, **kw: (captured.append(dict(data)), "fake.access.token")[1],
+        )
+
+        await auth_routes.refresh_session.__wrapped__(
+            payload=auth_routes.RefreshRequest(refresh_token=raw_rt),
+            request=_make_request(
+                headers={"authorization": f"Bearer {valid_old_access}"}
+            ),
+            db=db,
+            session_store=ss,
+        )
+
+        assert captured, "create_access_token was never called"
+        assert captured[-1]["tid"] == str(tenant_b_id), (
+            f"Verified-decode path must preserve original tenant; got "
+            f"{captured[-1]['tid']!r}, expected {tenant_b_id!r}"
+        )
+
+
 # ── #1088 — Change-password revokes other sessions ────────────────────────────
 
 
