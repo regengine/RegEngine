@@ -236,6 +236,13 @@ def _install_httpx_stub(
                 self.response = response
 
     monkeypatch.setattr(mod, "httpx", _HttpxStub)
+
+    # After RE-SEC-INGEST-003 migration, scraper routes via safe_httpx_get_sync.
+    def _safe_get(url, *, timeout=None, headers=None):
+        calls.append({"url": url, "timeout": timeout})
+        return response
+
+    monkeypatch.setattr(mod, "safe_httpx_get_sync", _safe_get)
     return calls
 
 
@@ -405,6 +412,9 @@ class TestFetchDocumentErrors:
 
         resp.raise_for_status = _raise  # type: ignore[method-assign]
 
+        # Migrated path uses safe_httpx_get_sync; route to same stub response.
+        monkeypatch.setattr(mod, "safe_httpx_get_sync", lambda url, *, timeout=None, headers=None: resp)
+
         s3, kafka = _S3Spy(), _KafkaSpy()
         scraper = StateRegistryScraper(
             s3_bucket="b", s3_client=s3, kafka=kafka
@@ -447,6 +457,8 @@ class TestFetchDocumentErrors:
                 url="https://x.gov/", jurisdiction_code="US"
             )
         )
-        # Exactly two validate_url calls.
-        assert len(calls) == 2
-        assert calls == ["https://x.gov/", "https://x.gov/"]
+        # After RE-SEC-INGEST-003 migration the explicit second validate_url()
+        # call is gone — safe_httpx_get_sync now performs per-hop validation
+        # (and, crucially, IP-pinning) internally. The scraper itself only
+        # validates once before delegating.
+        assert calls == ["https://x.gov/"]

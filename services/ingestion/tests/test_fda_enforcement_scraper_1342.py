@@ -156,7 +156,8 @@ def capture_httpx_get(monkeypatch):
             return responses.pop(0)
         return _FakeResponse(content=b"", headers={"Content-Type": "text/html"})
 
-    monkeypatch.setattr(mod.httpx, "get", _get)
+    # After RE-SEC-INGEST-003 migration, scraper routes via safe_httpx_get_sync.
+    monkeypatch.setattr(mod, "safe_httpx_get_sync", _get)
     return calls, responses
 
 

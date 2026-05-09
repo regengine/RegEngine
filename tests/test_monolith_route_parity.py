@@ -26,7 +26,6 @@ ROUTE_ENV = {
         "postgresql+psycopg://localhost:5432/regengine_admin_test"
     ),
     "AUTH_SECRET_KEY": "test-secret-key-with-enough-length",  # pragma: allowlist secret
-    "ENABLE_PARTNER_GATEWAY_STUBS": "true",
     "ENABLE_EXPERIMENTAL_ROUTERS": "true",
 }
 
