@@ -4,6 +4,8 @@ RegEngine is a pre-production FSMA 204 traceability application. The codebase in
 
 Current product wedge: Inflow prepares, Engine proves. Supplier and ERP data is preflighted, scored, routed into a fix queue, and gated before it becomes tenant-scoped traceability evidence.
 
+Canonical product description: see [docs/PRODUCT_DESCRIPTION.md](docs/PRODUCT_DESCRIPTION.md).
+
 This README describes behavior that is visible in checked-in code, configuration, tests, and runbooks.
 
 ## Current Status
