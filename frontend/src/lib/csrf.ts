@@ -108,11 +108,18 @@ export function getCsrfTokenFromCookie(): string {
 /** HTTP methods that require CSRF validation. */
 export const CSRF_PROTECTED_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
-/** Paths exempt from CSRF checks (auth callbacks, webhooks, session bootstrap, public sandbox, public tools).
+/** Paths exempt from CSRF checks (auth callbacks, webhooks, public sandbox, public tools).
  *
  *  Keep this list narrow. Broad prefixes like /api/tools/ silently exempt
  *  every future handler placed there — list the specific public endpoints
  *  instead so adding a new /api/tools/* route is a deliberate decision.
+ *
+ *  /api/session is intentionally NOT exempt. GET /api/session bootstraps the
+ *  CSRF cookie pair on first load (idempotent), so by the time the client
+ *  POSTs to /api/session (login, credential update) the double-submit cookie
+ *  is already in place and the request carries a valid X-CSRF-Token header
+ *  like every other mutating endpoint. The Origin allowlist on POST
+ *  /api/session (RE-SEC-003) remains as defense-in-depth.
  */
 const CSRF_EXEMPT_PREFIXES = [
     '/api/auth/',
@@ -126,7 +133,6 @@ const CSRF_EXEMPT_PREFIXES = [
     // the Bearer bypass in src/proxy.ts.
     '/api/webhooks/',
     '/api/v1/webhooks/',
-    '/api/session',
     '/api/ingestion/api/v1/sandbox/',
     // Public unauthenticated tool endpoints — add new entries explicitly.
     '/api/inflow-lab/',

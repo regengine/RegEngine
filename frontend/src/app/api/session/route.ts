@@ -182,7 +182,7 @@ export async function GET(request: NextRequest) {
     }
 
     // NEVER return raw tokens/keys — only booleans indicating their presence
-    return NextResponse.json({
+    const response = NextResponse.json({
         authenticated: !!access_token,
         has_api_key: !!api_key,
         has_admin_key: !!admin_key,
@@ -190,6 +190,29 @@ export async function GET(request: NextRequest) {
         tenant_id,
         user,
     });
+
+    // CSRF bootstrap: issue the double-submit cookie pair on the first GET so
+    // the subsequent POST /api/session (and every other mutating request) can
+    // carry a valid X-CSRF-Token header. Before this, /api/session had to be
+    // in CSRF_EXEMPT_PREFIXES because there was no token issued yet at login
+    // time. Setting cookies here closes that bootstrap gap and lets the
+    // exemption come out — the auth provider's hydrate() effect calls GET
+    // /api/session on every page mount, so any client that ever reaches the
+    // login form has these cookies in place before submitting.
+    //
+    // Idempotent: if the cookies already exist, we leave them alone.
+    if (!request.cookies.get(CSRF_COOKIE) || !request.cookies.get(CSRF_SIG_COOKIE)) {
+        const csrfToken = generateCsrfToken();
+        const csrfSig = await signCsrfToken(csrfToken);
+
+        response.cookies.set(CSRF_COOKIE, csrfToken, {
+            ...COOKIE_OPTIONS,
+            httpOnly: false, // JS must read this to send as X-CSRF-Token header
+        });
+        response.cookies.set(CSRF_SIG_COOKIE, csrfSig, COOKIE_OPTIONS);
+    }
+
+    return response;
 }
 
 export async function DELETE() {

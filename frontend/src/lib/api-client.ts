@@ -275,10 +275,16 @@ class APIClient {
               const sessionUser = session.user
                 ? buildSupabaseSessionUser(session.user, this.user?.permissions)
                 : undefined;
-              // Refresh the HTTP-only cookie with the current Supabase token
+              // Refresh the HTTP-only cookie with the current Supabase token.
+              // /api/session no longer bootstraps CSRF cookies — they are
+              // issued by GET /api/session on hydrate — so this POST must
+              // carry the X-CSRF-Token header like every other mutating call.
               await fetch('/api/session', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                  'Content-Type': 'application/json',
+                  ...getCsrfHeaders(),
+                },
                 body: JSON.stringify({
                   access_token: session.access_token,
                   user: sessionUser,

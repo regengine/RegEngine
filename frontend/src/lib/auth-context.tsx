@@ -85,6 +85,18 @@ async function setSessionCookies(params: {
   if (params.user) body.user = params.user;
   if (Object.keys(body).length === 0) return true;
   try {
+    // CSRF bootstrap: /api/session is no longer exempt from the CSRF
+    // double-submit check, so this POST needs a valid X-CSRF-Token header.
+    // GET /api/session is idempotent and sets the cookie pair on first
+    // call. The auth provider runs this on mount, but on cold-start /
+    // SSR'd login pages the hydrate effect may not have fired yet — call
+    // bootstrap defensively here so a freshly-loaded login page can submit
+    // immediately without race-conditioning on the hydrate fetch.
+    if (!document.cookie.includes('re_csrf=')) {
+      try {
+        await fetch('/api/session', { method: 'GET', credentials: 'include' });
+      } catch { /* fall through — POST will surface the error if cookies still missing */ }
+    }
     const res = await fetchWithCsrf('/api/session', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
