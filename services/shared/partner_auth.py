@@ -1,9 +1,10 @@
-"""Auth dependencies for the partner gateway.
+"""Reusable partner-tier auth dependencies.
 
-The partner gateway uses a dedicated ``X-RegEngine-Partner-Key`` header
-rather than the generic ``X-RegEngine-API-Key`` header. Functionally
-both headers validate against the same ``api_keys`` table (and the same
-``DatabaseAPIKeyStore``), but separating headers gives operations three
+These primitives support any future partner-tier feature (white-label,
+reseller, channel partner) that needs a dedicated
+``X-RegEngine-Partner-Key`` header distinct from the generic
+``X-RegEngine-API-Key`` header. Both headers validate against the same
+``api_keys`` table, but separating headers gives operations three
 things:
 
   1. WAF and rate-limit policies can target partner traffic without
@@ -14,8 +15,12 @@ things:
      when a header is present in the wrong service.
 
 Scope enforcement uses :func:`shared.permissions.has_permission`, which
-already supports the ``partner.{resource}.{action}`` namespace pattern
-declared in the OpenAPI spec.
+supports the ``partner.{resource}.{action}`` namespace pattern.
+
+History: harvested from ``services/admin/app/partner_gateway/auth.py``
+when the unimplemented partner gateway stub surface was retired (Path B,
+W8.F scoping doc). The auth scaffolding is generic and forward-compatible;
+the stub router/spec/ingress were deleted.
 """
 from __future__ import annotations
 
@@ -29,7 +34,7 @@ from shared.api_key_store import APIKeyResponse, DatabaseAPIKeyStore
 from shared.auth import APIKey, get_key_store
 from shared.permissions import has_permission
 
-logger = structlog.get_logger("partner_gateway.auth")
+logger = structlog.get_logger("shared.partner_auth")
 _DEFAULT_PARTNER_RATE_LIMIT_PER_MINUTE = 1000
 
 

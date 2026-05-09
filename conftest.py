@@ -226,7 +226,7 @@ def _switch_to_service(service: str) -> None:
     # Restore the full cached module tree for the active service, not just
     # names that happened to overlap with the previously active service.
     # Without this, switching from e.g. scheduler -> admin restores ``app``
-    # but not deeper admin-only modules like ``app.partner_gateway.auth``;
+    # but not deeper admin-only modules like ``app.erasure_routes``;
     # a later import rebuilds those as fresh module objects, so test-time
     # patches hit a different module identity than the already-collected
     # router/handler objects.

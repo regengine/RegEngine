@@ -424,6 +424,73 @@ def test_strict_env_override_false(monkeypatch: pytest.MonkeyPatch) -> None:
     assert producer == "unsigned"
 
 
+def test_bypass_enforces_allowlist_when_provided(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """RE-SEC-005: non-strict bypass must still honor the allowlist.
+
+    Before the fix, the no-key bypass branch returned the body's
+    producer claim without consulting ``allowed_producers``, letting
+    any forged ``_producer_service`` value through on rollout-mode
+    consumers. The allowlist is the layer-3 defense; it must apply
+    even when HMAC is bypassed.
+    """
+    monkeypatch.delenv(ENV_SIGNING_KEY, raising=False)
+    with pytest.raises(KafkaAuthError) as excinfo:
+        verify_event(
+            {
+                "tenant_id": "t1",
+                BODY_FIELD_PRODUCER_SERVICE: "scheduler-service",
+            },
+            headers=[],
+            topic="ingest.normalized",
+            signing_key=None,
+            strict=False,
+            allowed_producers={"ingestion-service"},
+        )
+    assert excinfo.value.reason == "producer_not_allowed_for_topic"
+    assert excinfo.value.fields["producer_service"] == "scheduler-service"
+
+
+def test_bypass_enforces_allowlist_against_unsigned_default(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """When the body has no ``_producer_service`` we synthesize "unsigned";
+    that synthetic value must also be subject to the allowlist."""
+    monkeypatch.delenv(ENV_SIGNING_KEY, raising=False)
+    with pytest.raises(KafkaAuthError) as excinfo:
+        verify_event(
+            {"tenant_id": "t1"},
+            headers=[],
+            topic="ingest.normalized",
+            signing_key=None,
+            strict=False,
+            allowed_producers={"ingestion-service"},
+        )
+    assert excinfo.value.reason == "producer_not_allowed_for_topic"
+    assert excinfo.value.fields["producer_service"] == "unsigned"
+
+
+def test_bypass_allows_producer_in_allowlist(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Bypass + matching producer claim still passes (rollout-friendly)."""
+    monkeypatch.delenv(ENV_SIGNING_KEY, raising=False)
+    evt, producer = verify_event(
+        {
+            "tenant_id": "t1",
+            BODY_FIELD_PRODUCER_SERVICE: "ingestion-service",
+        },
+        headers=[],
+        topic="ingest.normalized",
+        signing_key=None,
+        strict=False,
+        allowed_producers={"ingestion-service"},
+    )
+    assert evt["tenant_id"] == "t1"
+    assert producer == "ingestion-service"
+
+
 def test_signing_key_env_resolution(monkeypatch: pytest.MonkeyPatch) -> None:
     """Producer / consumer read the signing key from the env by default."""
     monkeypatch.setenv(ENV_SIGNING_KEY, "env-key-from-deploy")

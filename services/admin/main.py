@@ -345,20 +345,6 @@ app.include_router(erasure_router)
 from app.data_export_routes import router as data_export_router
 app.include_router(data_export_router)
 
-# Partner Gateway (white-label) — currently stubbed. Keep it available in
-# non-production sandboxes but never mount 2xx stubs in production.
-if not _is_prod and _env_flag("ENABLE_PARTNER_GATEWAY_STUBS", default=True):
-    from app.partner_gateway.router import router as partner_gateway_router
-    app.include_router(partner_gateway_router)
-else:
-    structlog.get_logger("admin").info(
-        "partner_gateway_router_disabled",
-        production=_is_prod,
-        reason="stubbed_partner_gateway",
-    )
-
-
-
 # ---------------------------------------------------------------------------
 # Optional background consumer for nlp.needs_review → HallucinationTracker
 # ---------------------------------------------------------------------------

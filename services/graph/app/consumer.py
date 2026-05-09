@@ -324,10 +324,53 @@ async def run_consumer() -> None:
                 topic_name = record.topic()
             except Exception:
                 topic_name = "graph.update"
+
+            # RE-SEC-006: short-circuit shape errors BEFORE verify_event so
+            # the DLQ reason reflects the actual root cause (non-dict
+            # payload / malformed headers) instead of the downstream
+            # ``missing_producer_service_in_body`` that an empty {} substitute
+            # would produce. On-call needs the real reason to triage.
+            if not isinstance(evt, dict):
+                logger.error(
+                    "graph_update_payload_not_dict",
+                    topic=topic_name,
+                    payload_type=type(evt).__name__,
+                )
+                MESSAGES_COUNTER.labels(status="invalid_schema").inc()
+                _send_to_dlq(
+                    {"raw": str(evt)[:2048]},
+                    f"got {type(evt).__name__}",
+                    reason="payload_not_dict",
+                    doc_id=None,
+                )
+                try:
+                    consumer.commit(message=record, asynchronous=False)
+                except Exception as commit_exc:
+                    logger.error("offset_commit_failed", error=str(commit_exc))
+                continue
+            if raw_headers is not None and not isinstance(raw_headers, list):
+                logger.error(
+                    "graph_update_headers_not_list",
+                    topic=topic_name,
+                    headers_type=type(raw_headers).__name__,
+                )
+                MESSAGES_COUNTER.labels(status="invalid_schema").inc()
+                _send_to_dlq(
+                    evt,
+                    f"got {type(raw_headers).__name__}",
+                    reason="headers_not_list",
+                    doc_id=None,
+                )
+                try:
+                    consumer.commit(message=record, asynchronous=False)
+                except Exception as commit_exc:
+                    logger.error("offset_commit_failed", error=str(commit_exc))
+                continue
+
             try:
                 evt, _verified_producer = verify_event(
-                    evt if isinstance(evt, dict) else {},
-                    raw_headers if isinstance(raw_headers, list) else None,
+                    evt,
+                    raw_headers,
                     topic=topic_name,
                     allowed_producers=get_allowed_producers(topic_name),
                 )
