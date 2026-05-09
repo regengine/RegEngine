@@ -45,19 +45,26 @@ The right fix is **Option A** (deferred): rewrite each file to use
 fixtures + `monkeypatch.setitem(sys.modules, …)` so teardown undoes the
 stub. Tracked in `project_test_suite_isolation_2026_04_19.md`.
 
-### Bucket 2 — pre-existing real failures (3 files)
+### Bucket 2 — pre-existing real failures (0 files)
 
-These fail solo too, mostly because mock targets reference names that
-moved during recent refactors:
+All three files in this bucket were fixed by repointing their mock
+targets to the post–PR #2200 module layout (`app.routes_ingest`):
 
-| File | Reason |
-|------|--------|
-| `test_boundaries.py` | Mocks `app.routes.socket`; `socket` no longer imported into `app.routes` after PR #2200's route split. |
-| `test_routes_regulation_task_queue.py` | Mocks `app.routes.SessionLocal`; moved to `app.routes_ingest`. |
-| `test_smoke_ingestion.py` | Mocks `app.routes.AdminClient`; was only present via the pre-split `kafka_utils` import. |
+- `test_boundaries.py` already imports `app.routes_ingest` via its
+  `routes` fixture — passes solo and in CI.
+- `test_routes_regulation_task_queue.py` — patches updated from
+  `app.routes.{SessionLocal,enqueue_task,redis,uuid,get_staging_path,
+  consume_tenant_rate_limit}` to `app.routes_ingest.*`, and the router
+  import was repointed to `app.routes_ingest.router` (where
+  `/v1/ingest/regulation` actually lives now).
+- `test_smoke_ingestion.py` — the stale `app.routes.AdminClient` patch
+  was removed; `/health` lives in `routes_health_metrics.py` and only
+  hits Kafka when `KAFKA_BOOTSTRAP_SERVERS` is configured to a
+  non-default value, so the test now just unsets that env var.
 
-These should be **fixed**, not held in the allowlist long-term. Update
-the mock targets to follow the new module layout.
+When updating mock targets after a refactor, follow the new module
+layout — don't paper over with allowlist entries unless the underlying
+test is genuinely no longer meaningful.
 
 ## Adding a file back to the gate
 

@@ -16,10 +16,7 @@ pytest.importorskip("opentelemetry")
 from fastapi.testclient import TestClient
 
 
-from unittest.mock import patch
-
-
-def test_health() -> None:
+def test_health(monkeypatch) -> None:
     try:
         from main import app
     except ModuleNotFoundError as exc:
@@ -27,13 +24,18 @@ def test_health() -> None:
             f"ingestion smoke tests require optional dependency '{exc.name}'",
         )
 
-    with patch("app.routes.AdminClient") as mock_admin_client:
-        # Mock list_topics to return successfully
-        mock_admin_client.return_value.list_topics.return_value = {}
+    # The /health endpoint moved to app/routes_health_metrics.py (PR #2200's
+    # routes split, plus the routes_health_metrics extraction noted in
+    # routes.py). It only contacts Kafka via shared.kafka_consumer_base.
+    # kafka_health_check when KAFKA_BOOTSTRAP_SERVERS is set to a non-default
+    # value, so we force it unset to keep the smoke test hermetic. The old
+    # `app.routes.AdminClient` patch target was a leftover from the pre-split
+    # kafka_utils import path and no longer exists in either module.
+    monkeypatch.delenv("KAFKA_BOOTSTRAP_SERVERS", raising=False)
 
-        with TestClient(app) as client:
-            response = client.get("/health")
-            assert response.status_code == 200
-            data = response.json()
-            assert data["status"] == "healthy"
-            assert data["service"] == "regengine"
+    with TestClient(app) as client:
+        response = client.get("/health")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "healthy"
+        assert data["service"] == "regengine"
