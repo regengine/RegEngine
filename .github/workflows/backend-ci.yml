@@ -15,6 +15,8 @@ on:
       - 'requirements.in'
       - 'requirements.lock'
       - 'scripts/**'
+      - 'sample_data/**'
+      - 'demo_exports/**'
       - '.github/workflows/backend-ci.yml'
       - '.github/workflows/deploy.yml'
   pull_request:
@@ -31,6 +33,8 @@ on:
       - 'requirements.in'
       - 'requirements.lock'
       - 'scripts/**'
+      - 'sample_data/**'
+      - 'demo_exports/**'
       - '.github/workflows/backend-ci.yml'
       - '.github/workflows/deploy.yml'
 
@@ -381,6 +385,15 @@ jobs:
       - name: Check for dependency version drift
         run: python scripts/check_dep_versions.py
 
+      # ── kernel.control retirement guard (hard gate) ─────────
+      # ``kernel/control/`` (codegen + RCE surface) was retired by the
+      # ``epic-g-retire-kernel`` epic. Re-introducing an import in
+      # services/ or server/ is forbidden. See PR #2205 for the
+      # broader migration plan (other kernel/ subpackages still have
+      # live consumers and are tracked separately).
+      - name: Guard against kernel.control imports
+        run: python scripts/check_no_kernel_control_imports.py
+
   # ── Ingestion full suite with xdist isolation (hard gate) ─
   # Restores real signal from services/ingestion/tests. The existing
   # ``test`` matrix runs the ingestion suite single-process, where
@@ -535,11 +548,51 @@ jobs:
           python -m pip install pip-audit==2.10.0
           pip-audit -r requirements.lock --desc on
 
+  # ── Public Sample Regenerator (drift gate) ──────────────
+  # Re-runs scripts/regenerate_public_samples.py against the synthetic
+  # CTE inputs in sample_data/ and fails if the regenerated artifacts
+  # in demo_exports/ differ from what's checked in. Prevents drift
+  # between the public Proof Surface and current production behavior
+  # for FDA exports / EPCIS / Merkle audit bundles.
+  regenerate-public-samples:
+    name: Regenerate public samples
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+
+      - name: Setup Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install minimal deps
+        run: |
+          # The regenerator imports a handful of production helpers from
+          # services/ingestion/app and services/shared. It exits 0 with a
+          # warning if imports fail, so we install only the modules needed
+          # for the helpers' transitive imports to resolve.
+          python -m pip install --upgrade pip
+          python -m pip install pydantic fastapi sqlalchemy
+
+      - name: Regenerate public samples
+        run: python scripts/regenerate_public_samples.py
+
+      - name: Fail if regeneration produced drift
+        run: |
+          # If regeneration changed any tracked file, the public Proof
+          # Surface no longer matches current production behavior. The
+          # PR author must commit the regenerated artifacts.
+          if ! git diff --exit-code -- demo_exports/; then
+            echo "::error::demo_exports/ drifted from regenerated output. Re-run scripts/regenerate_public_samples.py and commit the result."
+            exit 1
+          fi
+
   # ── CI Summary ───────────────────────────────────────────
   ci-status:
     name: CI Status Gate
     if: always()
-    needs: [dependency-lock, test, lint, lint-shared, ingestion-full-suite, docker-build, security, rls-fallback-check, alembic-revision-check, dep-version-check, tenant-id-uuid-check]
+    needs: [dependency-lock, test, lint, lint-shared, ingestion-full-suite, docker-build, security, rls-fallback-check, alembic-revision-check, dep-version-check, tenant-id-uuid-check, regenerate-public-samples]
     runs-on: ubuntu-latest
     steps:
       - name: Check results
@@ -555,6 +608,7 @@ jobs:
           echo "Alembic rev IDs:   ${{ needs.alembic-revision-check.result }}"
           echo "Dep drift guard:   ${{ needs.dep-version-check.result }}"
           echo "tenant_id UUID:    ${{ needs.tenant-id-uuid-check.result }}"
+          echo "Public samples:    ${{ needs.regenerate-public-samples.result }}"
           # Lint is now blocking — flake8 F821 (undefined name) would
           # have caught PR #1482's NLP NameError class of bugs if this
           # gate had been enforcing. Promoting lint to a hard gate so
@@ -569,7 +623,8 @@ jobs:
              || "${{ needs.rls-fallback-check.result }}" != "success" \
              || "${{ needs.alembic-revision-check.result }}" != "success" \
              || "${{ needs.dep-version-check.result }}" != "success" \
-             || "${{ needs.tenant-id-uuid-check.result }}" != "success" ]]; then
+             || "${{ needs.tenant-id-uuid-check.result }}" != "success" \
+             || "${{ needs.regenerate-public-samples.result }}" != "success" ]]; then
             echo "::error::One or more required backend checks failed, were cancelled, or were skipped"
             exit 1
           fi

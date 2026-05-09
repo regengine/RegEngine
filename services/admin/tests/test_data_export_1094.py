@@ -254,44 +254,52 @@ class TestExportPersonalData:
         """Exporting data must emit an audit log entry."""
         from app import data_export_routes as m
 
-        current_user = {
-            "user_id": str(_USER_ID),
-            "tenant_id": str(_TENANT_ID),
-            "email": "user@example.com",
-        }
+        # RE-SEC-002: ``current_user`` is a UserModel ORM instance, not a
+        # dict. Tenant_id comes from TenantContext.get_tenant_context(db).
+        current_user = _make_user()
         db = _make_db()
         request = _stub_request()
 
-        with patch.object(m, "_build_user_export", return_value={"account": {"email": "user@example.com"}, "memberships": []}):
-            with patch.object(m.AuditLogger, "log_event") as mock_log:
-                mock_log.return_value = 42
-                await m.export_personal_data(
-                    request=request,
-                    current_user=current_user,
-                    db=db,
-                )
-                mock_log.assert_called_once()
-                call_kwargs = mock_log.call_args
-                # Verify the audit action
-                args, kwargs = call_kwargs
-                assert kwargs.get("action") == "DATA_EXPORT" or "DATA_EXPORT" in str(call_kwargs)
-
-    @pytest.mark.asyncio
-    async def test_unauthenticated_returns_401(self):
-        """When current_user has no user_id or sub, the endpoint raises 401."""
-        from app import data_export_routes as m
-        from fastapi import HTTPException
-
-        current_user = {}  # no user_id, no sub
-        db = _make_db()
-        request = _stub_request()
-
-        with pytest.raises(HTTPException) as exc_info:
+        with patch.object(
+            m.TenantContext, "get_tenant_context", return_value=_TENANT_ID
+        ), patch.object(
+            m, "_build_user_export",
+            return_value={"account": {"email": "user@example.com"}, "memberships": []},
+        ), patch.object(m.AuditLogger, "log_event") as mock_log:
+            mock_log.return_value = 42
             await m.export_personal_data(
                 request=request,
                 current_user=current_user,
                 db=db,
             )
+            mock_log.assert_called_once()
+            call_kwargs = mock_log.call_args
+            # Verify the audit action
+            args, kwargs = call_kwargs
+            assert kwargs.get("action") == "DATA_EXPORT" or "DATA_EXPORT" in str(call_kwargs)
+
+    @pytest.mark.asyncio
+    async def test_unauthenticated_returns_401(self):
+        """When current_user.id is missing (impossible in prod but a defensive
+        guard), the endpoint raises 401.
+
+        RE-SEC-002: was previously written against a dict ``current_user``;
+        now constructs a UserModel-shaped mock with id=None.
+        """
+        from app import data_export_routes as m
+        from fastapi import HTTPException
+
+        current_user = _make_user(id=None)
+        db = _make_db()
+        request = _stub_request()
+
+        with patch.object(m.TenantContext, "get_tenant_context", return_value=None):
+            with pytest.raises(HTTPException) as exc_info:
+                await m.export_personal_data(
+                    request=request,
+                    current_user=current_user,
+                    db=db,
+                )
 
         assert exc_info.value.status_code == 401
 

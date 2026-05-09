@@ -1,0 +1,11 @@
+Traceability Lot Code (TLC),Product Description,Quantity,Unit of Measure,Event Type,Event Date,Event Time,Facility Name,Facility GLN,Facility Address,Confidence Score
+SV-20240115-001,Romaine Lettuce,500,cases,SHIPPING,2024-01-15,14:00:00,Sunny Valley Farms,1234567890128,"123 Farm Road, Salinas CA",0.98
+SV-20240115-001,Romaine Lettuce,500,cases,RECEIVING,2024-01-16,08:00:00,Fresh Cut Co,2345678901234,"456 Processing Lane, Fresno CA",0.97
+FC-20240116-A,Chopped Romaine,250,cases,TRANSFORMATION,2024-01-16,10:00:00,Fresh Cut Co,2345678901234,"456 Processing Lane, Fresno CA",0.95
+FC-20240116-B,Romaine Hearts,250,cases,TRANSFORMATION,2024-01-16,11:00:00,Fresh Cut Co,2345678901234,"456 Processing Lane, Fresno CA",0.95
+FC-20240116-A,Chopped Romaine,100,cases,SHIPPING,2024-01-17,06:00:00,Fresh Cut Co,2345678901234,"456 Processing Lane, Fresno CA",0.96
+FC-20240116-A,Chopped Romaine,100,cases,RECEIVING,2024-01-17,10:00:00,Metro Foods,3456789012340,"789 Distribution Dr, Oakland CA",0.94
+FC-20240116-B,Romaine Hearts,150,cases,SHIPPING,2024-01-17,07:00:00,Fresh Cut Co,2345678901234,"456 Processing Lane, Fresno CA",0.96
+FC-20240116-B,Romaine Hearts,150,cases,RECEIVING,2024-01-17,11:00:00,Valley Wholesale,4567890123456,"321 Wholesale Ave, Stockton CA",0.93
+FC-20240116-A,Chopped Romaine,50,cases,SHIPPING,2024-01-18,05:00:00,Metro Foods,3456789012340,"789 Distribution Dr, Oakland CA",0.95
+FC-20240116-A,Chopped Romaine,50,cases,RECEIVING,2024-01-18,08:00:00,SuperMart #42,5678901234562,"100 Retail St, San Jose CA",0.92

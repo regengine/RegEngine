@@ -185,10 +185,21 @@ _INTEGRATION_SKIP_REASON = (
     "integration tests require Docker + testcontainers[postgres] + psycopg[binary]"
 )
 
-integration_only = pytest.mark.skipif(
-    not (_HAS_TESTCONTAINERS and _HAS_PSYCOPG and _docker_available()),
-    reason=_INTEGRATION_SKIP_REASON,
-)
+def integration_only(func):
+    """Combined marker: ``@pytest.mark.integration`` plus a runtime skip
+    when Docker / testcontainers / psycopg are unavailable.
+
+    The ``integration`` marker lets CI/local runs gate testcontainer
+    suites with ``-m 'not integration'`` (or ``-m integration``); the
+    ``skipif`` ensures that even when those tests *are* selected, they
+    skip cleanly on hosts without the deps installed.
+    """
+    func = pytest.mark.skipif(
+        not (_HAS_TESTCONTAINERS and _HAS_PSYCOPG and _docker_available()),
+        reason=_INTEGRATION_SKIP_REASON,
+    )(func)
+    func = pytest.mark.integration(func)
+    return func
 
 
 _V050_MIGRATION_SQL = """

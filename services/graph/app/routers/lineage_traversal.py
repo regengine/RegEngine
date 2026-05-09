@@ -130,25 +130,31 @@ async def get_fact_lineage(
     """Retrieve all versions of a regulatory fact by its TLC."""
     start_time = time.time()
     db_name = Neo4jClient.get_tenant_database_name(tenant_id)
-    client = Neo4jClient(database=db_name)
 
     try:
-        # Try chain-based traversal first
-        records = await client.execute_read(
-            LINEAGE_QUERY,
-            tlc=tlc,
-            tenant_id=str(tenant_id),
-        )
+        # Inline session pattern matches every other graph router (see
+        # routers/regulations.py, routers/fsma/traceability.py). Previously
+        # this called a non-existent ``client.execute_read`` method which
+        # silently 500'd every request via the broad except below — the
+        # tenant-scoped LINEAGE_QUERY had no regression net. (RE-SEC-005)
+        async with Neo4jClient(database=db_name) as client:
+            async with client.session() as session:
+                # Try chain-based traversal first
+                result = await session.run(
+                    LINEAGE_QUERY,
+                    tlc=tlc,
+                    tenant_id=str(tenant_id),
+                )
+                records = [dict(record) async for record in result]
 
-        # Fall back to TLC-based lookup if chain traversal returns nothing
-        if not records:
-            records = await client.execute_read(
-                LINEAGE_BY_TLC_QUERY,
-                tlc=tlc,
-                tenant_id=str(tenant_id),
-            )
-
-        await client.close()
+                # Fall back to TLC-based lookup if chain traversal returns nothing
+                if not records:
+                    result = await session.run(
+                        LINEAGE_BY_TLC_QUERY,
+                        tlc=tlc,
+                        tenant_id=str(tenant_id),
+                    )
+                    records = [dict(record) async for record in result]
 
         if not records:
             raise HTTPException(

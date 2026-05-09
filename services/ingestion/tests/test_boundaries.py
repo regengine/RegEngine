@@ -66,7 +66,15 @@ from fastapi import HTTPException
 
 @pytest.fixture(scope="module")
 def routes():
-    """Import app.routes lazily after env vars are set."""
+    """Import the ingestion routes module that owns SSRF helpers.
+
+    ``_validate_url``, ``_resolve_and_validate`` and the ``socket`` import
+    live in ``app.routes_ingest`` (split out from ``app.routes`` in a
+    refactor; see the NOTE block at the top of ``app/routes.py``). These
+    boundary tests must patch attributes on the module that actually
+    defines them, otherwise ``patch.object(routes.socket, ...)`` raises
+    ``AttributeError: module 'app.routes' has no attribute 'socket'``.
+    """
     # Patch get_settings to avoid the api_key attribute error
     from app import config as cfg
 
@@ -76,7 +84,7 @@ def routes():
     _cached = _TestSettings()
     with patch.object(cfg, "get_settings", return_value=_cached):
         cfg.get_settings.cache_clear()
-        import app.routes as r
+        import app.routes_ingest as r
         yield r
 
 
