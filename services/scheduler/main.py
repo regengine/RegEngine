@@ -717,6 +717,7 @@ class SchedulerService:
         """
         import httpx
         from app.config import get_settings as _get_settings
+        from shared.safe_http import safe_httpx_post_sync
 
         settings = _get_settings()
         ingestion_url = os.getenv(
@@ -736,7 +737,12 @@ class SchedulerService:
 
         logger.info("fsma_nightly_sync_started", ingestion_url=ingestion_url)
         try:
-            response = httpx.post(
+            # RE-SCH-001: route through safe_http so the destination URL is
+            # SSRF-validated and pinned to a single resolved IP for the life
+            # of the request (defense-in-depth, even though the destination
+            # is an internal service URL — a misconfigured env var must not
+            # let us POST our internal API key to an attacker-controlled host).
+            response = safe_httpx_post_sync(
                 f"{ingestion_url}/v1/ingest/all-regulations",
                 headers={"X-RegEngine-API-Key": api_key},
                 timeout=120.0,
@@ -1164,8 +1170,26 @@ class HealthHandler(BaseHTTPRequestHandler):
         self.wfile.write(content)
 
     def _handle_status(self) -> None:
-        """Return detailed status."""
+        """Return detailed status.
+
+        RE-SCH-003: this endpoint exposes circuit-breaker state and per-source
+        scrape error messages — useful debugging context that should not be
+        public. Gate behind ``X-Metrics-Key`` (same secret used by ``/metrics``
+        and by the sibling FastAPI ``/status`` route at
+        ``services/scheduler/api.py``). The basic ``/health`` endpoint stays
+        unauthenticated so the k8s liveness probe (see
+        ``infra/k8s/base/scheduler/deployment.yaml``) keeps working.
+        """
         import json
+
+        expected = os.environ.get("METRICS_API_KEY", "")
+        provided = self.headers.get("X-Metrics-Key", "")
+        if not expected or provided != expected:
+            self.send_response(403)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(b'{"detail":"Forbidden"}')
+            return
 
         status = {
             "service": "scheduler",

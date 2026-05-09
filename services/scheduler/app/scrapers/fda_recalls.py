@@ -223,10 +223,13 @@ class FDARecallsScraper(BaseScraper):
                 "sort": "report_date:desc",
             }
 
-            response = self.session.get(
+            # RE-SCH-001: route via safe_http (SSRF-validated, IP-pinned).
+            response = fetch_with_retry(
+                self.session,
                 FDA_ENFORCEMENT_API,
                 params=params,
                 timeout=self.timeout,
+                log_scope="fda_recalls_by_class_http",
             )
             response.raise_for_status()
             data = response.json()

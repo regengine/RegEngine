@@ -79,7 +79,10 @@ def fsma_nightly_sync_job() -> None:
 
     logger.info("fsma_nightly_sync_started")
     try:
-        response = httpx.post(
+        # RE-SCH-001: route via safe_http for SSRF defense-in-depth.
+        from shared.safe_http import safe_httpx_post_sync
+
+        response = safe_httpx_post_sync(
             f"{ingestion_url}/v1/ingest/all-regulations",
             headers={"X-RegEngine-API-Key": api_key},
             timeout=120.0,
