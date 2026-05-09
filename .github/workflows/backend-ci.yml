@@ -389,10 +389,18 @@ jobs:
   # each test file runs in its own worker process with a fresh
   # sys.modules, so the cascade can't form.
   #
-  # Hard gate: the previously excluded files now pass under
-  # ``--dist=loadfile`` and the job must block merges if ingestion
-  # regresses. See ``project_test_suite_isolation_2026_04_19.md`` for
-  # the original root-cause table.
+  # The allowlist of excluded files lives in
+  # ``services/ingestion/tests/suite-runs.toml`` and is rendered into
+  # ``--ignore=`` flags by ``scripts/render_ingestion_ignores.py``.
+  # That config splits exclusions into two buckets: 6 module-level
+  # ``sys.modules`` poisoners (still covered by the per-service ``test``
+  # matrix above), and a small set of pre-existing real failures that
+  # fail solo too (broken mock targets after the routes.py split in
+  # PR #2200). Both buckets must shrink — see the README in that dir.
+  #
+  # Hard gate: this job must block merges if ingestion regresses.
+  # See ``project_test_suite_isolation_2026_04_19.md`` for the original
+  # root-cause table.
   ingestion-full-suite:
     name: Ingestion full suite (xdist signal)
     runs-on: ubuntu-latest
@@ -445,6 +453,16 @@ jobs:
         run: |
           pip install --require-hashes -r requirements.lock
 
+      - name: Render allowlist ignores
+        id: ignores
+        run: |
+          # ``render_ingestion_ignores.py`` exits non-zero if any
+          # listed file is missing on disk — the suite-runs.toml stays
+          # honest after deletes/renames.
+          IGNORES=$(python3 scripts/render_ingestion_ignores.py)
+          echo "Allowlist ignores: ${IGNORES}"
+          echo "flags=${IGNORES}" >> "$GITHUB_OUTPUT"
+
       - name: Run ingestion suite with per-file worker isolation
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
@@ -453,15 +471,20 @@ jobs:
           SUPABASE_URL: http://localhost:54321
           SUPABASE_KEY: test-key-for-ci
           PYTHONDONTWRITEBYTECODE: 1
+        # ``continue-on-error: false`` is the GA default; stating it
+        # explicitly so the gate's blocking nature is grep-able.
+        continue-on-error: false
         run: |
           repo_root="$(pwd)"
           export PYTHONPATH="${repo_root}:${PYTHONPATH}"
           # --dist=loadfile pins all tests from one file to one worker
           # process. Each worker has its own sys.modules, so module-level
-          # stubbing can't poison other files.
+          # stubbing can't poison other files. ``--ignore`` flags come
+          # from the allowlist config so the policy lives in one file.
           pytest services/ingestion/tests \
             --dist=loadfile -n auto \
-            -q --no-cov
+            -q --no-cov \
+            ${{ steps.ignores.outputs.flags }}
 
   # ── Docker Build (consolidated monolith) ─────────────────
   # Production deploys a single consolidated monolith built from the
