@@ -38,11 +38,35 @@ Design:
   environment downgrades rejections to warnings during the rollout
   window. Flip the env back to true once all producers have rolled.
 
-* **Key management is out of scope.** The signing key is read from
-  ``KAFKA_EVENT_SIGNING_KEY`` (a shared secret across all services for
-  this topic domain). Per-service keys with a key-id header are a
-  future iteration — captured as a TODO rather than blocking the P1
-  fix.
+* **Per-producer-service signing keys (RE-SEC-004).** Each producer
+  service holds its OWN HMAC key, looked up by the verified
+  ``_producer_service`` body claim — the producer_service IS the kid.
+  Cross-service forgery is bound by per-service key possession: a
+  compromised nlp-service can no longer sign as ingestion-service.
+
+  Env-var convention (one per service)::
+
+      KAFKA_SIGNING_KEY_NLP
+      KAFKA_SIGNING_KEY_INGESTION
+      KAFKA_SIGNING_KEY_GRAPH
+      KAFKA_SIGNING_KEY_ADMIN
+      KAFKA_SIGNING_KEY_SCHEDULER
+
+  Plus a ``..._PREVIOUS`` mirror for zero-downtime rotation (verify
+  accepts current OR previous; sign always uses current).
+
+  ``KAFKA_EVENT_SIGNING_KEY`` (legacy single shared key) is still
+  honored as a fallback during rollout. Three-phase plan:
+
+    Phase 1 (this module): land the per-service resolver. With only
+        ``KAFKA_EVENT_SIGNING_KEY`` set, behavior is unchanged.
+    Phase 2 (deploy step): set ``KAFKA_SIGNING_KEY_<SERVICE>`` in each
+        service's deploy config; keep the legacy var set as a
+        transition fallback.
+    Phase 3 (after-rollout-2026-Q3): remove ``KAFKA_EVENT_SIGNING_KEY``
+        from all envs and delete the legacy fallback below — see the
+        ``TODO(after-rollout-2026-Q3)`` marker on
+        :data:`LEGACY_SHARED_KEY_ENV`.
 
 The broker-level remediation (SASL_SSL + per-topic ACLs) is infra
 work that is out of scope for this PR and tracked separately in the
@@ -87,6 +111,40 @@ BODY_FIELD_SIGNED_AT = "_signed_at"
 ENV_SIGNING_KEY = "KAFKA_EVENT_SIGNING_KEY"
 ENV_STRICT = "KAFKA_SIGNATURE_STRICT"
 ENV_MAX_SIG_AGE = "KAFKA_MAX_SIGNATURE_AGE_SECONDS"
+
+# Per-producer-service signing keys (RE-SEC-004). Each producer holds its
+# own HMAC secret; consumers see all of them and resolve the right one
+# from the verified ``_producer_service`` body claim. Add new entries
+# here when a new producer service comes online.
+_PRODUCER_KEY_ENV_MAP: dict[str, str] = {
+    "nlp-service": "KAFKA_SIGNING_KEY_NLP",
+    "ingestion-service": "KAFKA_SIGNING_KEY_INGESTION",
+    "graph-service": "KAFKA_SIGNING_KEY_GRAPH",
+    "admin-service": "KAFKA_SIGNING_KEY_ADMIN",
+    "scheduler-service": "KAFKA_SIGNING_KEY_SCHEDULER",
+}
+
+# Per-service "previous" keys used during a rotation overlap window.
+# When a service rotates from old-key -> new-key, operators set the
+# current var to new-key and the *_PREVIOUS var to old-key for one
+# deploy cycle so consumers accept envelopes signed with either.
+# After the rotation deploy lands across all consumers, the *_PREVIOUS
+# var is unset.
+_PRODUCER_PREVIOUS_KEY_ENV_MAP: dict[str, str] = {
+    "nlp-service": "KAFKA_SIGNING_KEY_NLP_PREVIOUS",
+    "ingestion-service": "KAFKA_SIGNING_KEY_INGESTION_PREVIOUS",
+    "graph-service": "KAFKA_SIGNING_KEY_GRAPH_PREVIOUS",
+    "admin-service": "KAFKA_SIGNING_KEY_ADMIN_PREVIOUS",
+    "scheduler-service": "KAFKA_SIGNING_KEY_SCHEDULER_PREVIOUS",
+}
+
+# TODO(after-rollout-2026-Q3): once every producer service has rolled
+# to per-service keys (Phase 2 deploy) and we have run for a few weeks
+# with all envelopes verifying via per-service keys, drop this constant
+# AND the legacy branch in :func:`_resolve_verification_keys` /
+# :func:`_resolve_producer_signing_key`. At that point, an envelope
+# whose ``_producer_service`` is not in the map is a hard reject.
+LEGACY_SHARED_KEY_ENV = ENV_SIGNING_KEY
 
 
 # Replay-protection freshness window for `_signed_at` (RE-SEC-003).
@@ -142,27 +200,146 @@ class KafkaAuthError(Exception):
 # -----------------------------------------------------------------------------
 
 
+def _coerce_key(value: bytes | str | None) -> bytes | None:
+    """Normalize a key value to bytes (or None for empty)."""
+    if value in (None, ""):
+        return None
+    if isinstance(value, str):
+        return value.encode("utf-8")
+    return value
+
+
+def _resolve_producer_signing_key(
+    producer_service: str,
+    signing_key: bytes | str | None,
+    *,
+    required: bool,
+) -> bytes | None:
+    """Return the *current* signing key for a producer service.
+
+    Resolution order (first non-empty wins):
+
+    1. Explicit ``signing_key`` argument (used by tests and any caller
+       that wants to override env entirely).
+    2. ``KAFKA_SIGNING_KEY_<SERVICE>`` per-service env var (the
+       Phase-2 mechanism that makes cross-service forgery impossible).
+    3. ``KAFKA_EVENT_SIGNING_KEY`` legacy shared key (Phase-1 fallback,
+       removed after Phase-3 — see :data:`LEGACY_SHARED_KEY_ENV`).
+
+    ``required=True`` raises :class:`KafkaAuthError` when nothing
+    resolves. Producers always require a key (you can't sign without
+    one). Consumers call with ``required=False`` because they may run
+    in rollout mode without strict verification.
+    """
+    explicit = _coerce_key(signing_key)
+    if explicit is not None:
+        return explicit
+
+    env_name = _PRODUCER_KEY_ENV_MAP.get(producer_service)
+    if env_name:
+        per_service = _coerce_key(os.environ.get(env_name))
+        if per_service is not None:
+            return per_service
+
+    legacy = _coerce_key(os.environ.get(LEGACY_SHARED_KEY_ENV))
+    if legacy is not None:
+        return legacy
+
+    if required:
+        raise KafkaAuthError(
+            "signing_key_not_configured",
+            producer_service=producer_service,
+        )
+    return None
+
+
+def _resolve_verification_keys(
+    producer_service: str,
+    signing_key: bytes | str | None,
+) -> list[bytes]:
+    """Return the keys to TRY when verifying an envelope, in order.
+
+    Order:
+
+    1. Explicit ``signing_key`` argument, if passed (single-key mode
+       used by tests).
+    2. ``KAFKA_SIGNING_KEY_<SERVICE>`` (current per-service key).
+    3. ``KAFKA_SIGNING_KEY_<SERVICE>_PREVIOUS`` (rotation overlap).
+    4. ``KAFKA_EVENT_SIGNING_KEY`` (legacy shared, Phase-1 fallback).
+
+    ``verify_event`` HMAC-compares against each in turn and accepts
+    the first match. This means an envelope signed by the previous
+    per-service key, OR by the legacy shared key, still verifies
+    during the rollout window — zero-downtime per-service rotation.
+    """
+    if signing_key is not None and signing_key != "":
+        coerced = _coerce_key(signing_key)
+        if coerced is not None:
+            return [coerced]
+
+    keys: list[bytes] = []
+
+    env_name = _PRODUCER_KEY_ENV_MAP.get(producer_service)
+    if env_name:
+        current = _coerce_key(os.environ.get(env_name))
+        if current is not None:
+            keys.append(current)
+
+    prev_env = _PRODUCER_PREVIOUS_KEY_ENV_MAP.get(producer_service)
+    if prev_env:
+        previous = _coerce_key(os.environ.get(prev_env))
+        if previous is not None:
+            keys.append(previous)
+
+    legacy = _coerce_key(os.environ.get(LEGACY_SHARED_KEY_ENV))
+    if legacy is not None:
+        keys.append(legacy)
+
+    return keys
+
+
+def _any_signing_key_configured() -> bool:
+    """True if the environment has ANY HMAC key configured.
+
+    Used by :func:`verify_event` for its rollout-mode bypass: when no
+    key at all is set, strict-mode raises and non-strict logs a warning
+    and accepts the event. Per-service keys, ``*_PREVIOUS`` rotation
+    keys, and the legacy shared key all count.
+    """
+    for env_name in _PRODUCER_KEY_ENV_MAP.values():
+        if _coerce_key(os.environ.get(env_name)) is not None:
+            return True
+    for env_name in _PRODUCER_PREVIOUS_KEY_ENV_MAP.values():
+        if _coerce_key(os.environ.get(env_name)) is not None:
+            return True
+    if _coerce_key(os.environ.get(LEGACY_SHARED_KEY_ENV)) is not None:
+        return True
+    return False
+
+
 def _resolve_signing_key(
     signing_key: bytes | str | None,
     *,
     required: bool,
 ) -> bytes | None:
-    """Return the signing key as bytes, reading from env if not passed.
+    """Backwards-compatible single-key resolver (legacy call sites).
 
-    ``required=True`` raises :class:`KafkaAuthError` when no key is
-    configured; producers always require a key (you can't sign without
-    one). Consumers call with ``required=False`` because they may run
-    in rollout mode without strict verification.
+    .. deprecated:: RE-SEC-004
+        Producer-aware paths should use
+        :func:`_resolve_producer_signing_key` /
+        :func:`_resolve_verification_keys`. This helper is retained
+        for paths that have no producer claim yet (e.g. the
+        no-key-configured detection branch in :func:`verify_event`).
     """
-    if signing_key is None:
-        signing_key = os.environ.get(ENV_SIGNING_KEY)
-    if signing_key in (None, ""):
-        if required:
-            raise KafkaAuthError("signing_key_not_configured")
-        return None
-    if isinstance(signing_key, str):
-        return signing_key.encode("utf-8")
-    return signing_key
+    explicit = _coerce_key(signing_key)
+    if explicit is not None:
+        return explicit
+    legacy = _coerce_key(os.environ.get(LEGACY_SHARED_KEY_ENV))
+    if legacy is not None:
+        return legacy
+    if required:
+        raise KafkaAuthError("signing_key_not_configured")
+    return None
 
 
 def _resolve_strict(strict: bool | None) -> bool:
@@ -240,7 +417,9 @@ def sign_event(
     if not producer_service:
         raise KafkaAuthError("producer_service_empty")
 
-    key = _resolve_signing_key(signing_key, required=True)
+    key = _resolve_producer_signing_key(
+        producer_service, signing_key, required=True
+    )
     assert key is not None  # for mypy — required=True guarantees this
 
     enriched: dict[str, Any] = dict(payload)
@@ -358,8 +537,16 @@ def verify_event(
     in production.
     """
     strict_mode = _resolve_strict(strict)
-    key = _resolve_signing_key(signing_key, required=False)
     header_map = _header_map(headers)
+
+    # Pre-flight "is ANY key configured at all?" probe. We can't resolve
+    # the per-service key until we've parsed the body and read the
+    # producer claim, but we DO need to honor the rollout-mode bypass
+    # ("no key in env => warn + accept") that callers depend on. An
+    # explicit ``signing_key=`` argument or *any* env var implies a
+    # configured environment.
+    explicit_key = _coerce_key(signing_key)
+    has_any_env_key = explicit_key is not None or _any_signing_key_configured()
 
     # Decode bytes -> dict up front so we always return a dict, even
     # on the rollout / no-key path.
@@ -381,13 +568,16 @@ def verify_event(
         # events, but the JSON parser accepts them. Reject explicitly.
         raise KafkaAuthError("body_not_object")
 
-    if key is None:
+    if not has_any_env_key:
         if strict_mode:
             raise KafkaAuthError("signing_key_not_configured", topic=topic)
         logger.warning(
             "kafka_auth_bypass_no_key",
             topic=topic,
-            advice="set KAFKA_EVENT_SIGNING_KEY to enable HMAC verification",
+            advice=(
+                "set KAFKA_SIGNING_KEY_<SERVICE> (or legacy "
+                "KAFKA_EVENT_SIGNING_KEY) to enable HMAC verification"
+            ),
         )
         producer_claim = evt.get(BODY_FIELD_PRODUCER_SERVICE) or "unsigned"
         # RE-SEC-005: even on the bypass branch, enforce the per-topic
@@ -456,9 +646,26 @@ def verify_event(
                 allowed=sorted(allowed_set),
             )
 
+    # Resolve verification keys bound to the SIGNED producer claim. An
+    # attacker who has the nlp-service key cannot satisfy this check
+    # for a body claiming ``_producer_service=ingestion-service`` —
+    # that's RE-SEC-004's whole point.
+    candidate_keys = _resolve_verification_keys(body_producer, signing_key)
+    if not candidate_keys:
+        raise KafkaAuthError(
+            "signing_key_not_configured",
+            topic=topic,
+            producer_service=body_producer,
+        )
+
     canonical = _canonicalize(evt)
-    expected_sig = hmac.new(key, canonical, hashlib.sha256).hexdigest()
-    if not hmac.compare_digest(expected_sig, header_sig):
+    matched = False
+    for candidate in candidate_keys:
+        expected_sig = hmac.new(candidate, canonical, hashlib.sha256).hexdigest()
+        if hmac.compare_digest(expected_sig, header_sig):
+            matched = True
+            break
+    if not matched:
         raise KafkaAuthError(
             "signature_mismatch",
             topic=topic,
