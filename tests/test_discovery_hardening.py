@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from kernel import discovery as discovery_mod
+from services.ingestion.app import discovery as discovery_mod
 
 
 class FakeRedis:

@@ -11,7 +11,6 @@ import structlog
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 
 from ..authz import IngestionPrincipal, get_ingestion_principal, require_permission
-from ..webhook_compat import _verify_api_key
 from shared import funnel_events as _funnel_mod
 
 from . import customers as _customers_mod
@@ -557,9 +556,37 @@ async def get_invoice_pdf(
 )
 async def create_portal_session_legacy(
     tenant_id: str,
-    _: None = Depends(_verify_api_key),
+    x_tenant_id: Optional[str] = Header(default=None, alias="X-Tenant-ID"),
+    principal: IngestionPrincipal = Depends(get_ingestion_principal),
 ) -> BillingPortalResponse:
-    """Create Stripe customer portal session for self-service billing management."""
+    """Create Stripe customer portal session for self-service billing management.
+
+    RE-SEC-INGEST-001: previously this legacy route accepted ``tenant_id`` from
+    the URL while only verifying that *some* API key was valid (the principal
+    was discarded via ``_: None = Depends(_verify_api_key)``). Any holder of any
+    valid API key could mint a Stripe customer-portal session for any tenant —
+    a cross-tenant IDOR over billing.
+
+    The route now resolves the authenticated principal's tenant via
+    ``_resolve_tenant_context`` (matching the non-legacy ``/portal`` route) and
+    verifies the URL ``tenant_id`` matches. On mismatch we return 404 to avoid
+    a tenant-existence oracle.
+    """
+    safe_principal = principal if isinstance(principal, IngestionPrincipal) else None
+    safe_x_tenant_id = x_tenant_id if isinstance(x_tenant_id, str) else None
+
+    auth_tenant_id = _helpers_mod._resolve_tenant_context(
+        None, safe_x_tenant_id, safe_principal
+    )
+    if tenant_id != auth_tenant_id:
+        logger.warning(
+            "portal_legacy_tenant_mismatch",
+            url_tenant=tenant_id,
+            auth_tenant=auth_tenant_id,
+            key_id=getattr(safe_principal, "key_id", None) if safe_principal else None,
+        )
+        raise HTTPException(status_code=404, detail="Not found")
+
     _helpers_mod._configure_stripe()
 
     # #1186: validate the server-configured return_url. This endpoint

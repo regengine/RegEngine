@@ -32,7 +32,7 @@ These rewrite `sys.modules[...]` at import time with no teardown:
 | `test_routes_health_metrics_1342.py` | `shared.kafka_consumer_base`, `app.config` |
 | `test_task_handlers_scraping_1342.py` | `app.scraper_job`, `app.routes_scraping` |
 | `test_task_handlers_sources_1342.py` | `regengine_ingestion`, `regengine_ingestion.sources`, `app.routes` |
-| `test_task_handlers_discovery_1342.py` | `kernel`, `kernel.discovery` |
+| `test_task_handlers_discovery_1342.py` | `app.discovery` |
 | `test_task_handlers_regulation_1342.py` | `app.regulation_loader` |
 
 They pass solo (verified — and they're still exercised by the matrix

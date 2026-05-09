@@ -1,3 +1,12 @@
+"""MappingEngine: semantic mapping/harmonization of global regulations.
+
+Relocated from ``kernel.graph`` as part of kernel-migration epic (#2223, #2228).
+The engine depends on optional ML packages (``langchain``, ``langchain_groq``)
+which is why the consumer (services/graph/app/routers/regulations.py) keeps the
+import function-local — to avoid pulling those deps at module-load time when
+the harmonize endpoint is not exercised.
+"""
+
 from __future__ import annotations
 
 import os
@@ -15,6 +24,7 @@ except ImportError:
 from neo4j import AsyncGraphDatabase
 
 logger = structlog.get_logger("mapping-engine")
+
 
 class MappingEngine:
     """Engine for semantic mapping and harmonization of global regulations."""
@@ -88,7 +98,7 @@ class MappingEngine:
                 "Return each matching candidate as 'index:confidence' (e.g., '0:0.85,2:0.60'), "
                 "or 'NONE' if no matches. Confidence is 0.0-1.0 where 1.0 is exact match."
             )
-            
+
             cand_text = "\n".join([f"{i}. {c['text']} (from {c['regulation']})" for i, c in enumerate(candidates)])
             response = await self.llm.ainvoke(prompt.format(
                 source_text=source["text"],
@@ -96,7 +106,7 @@ class MappingEngine:
                 candidates_text=cand_text
             ))
             result = response.content.strip().upper()
-            
+
             if result != "NONE":
                 min_confidence = 0.7
                 for pair in result.split(","):
@@ -135,5 +145,5 @@ class MappingEngine:
                         r.justification = map.justification,
                         r.mapped_at = datetime()
                 """, mappings=mappings, tenant_id=tenant_id)
-                
+
         return mappings
