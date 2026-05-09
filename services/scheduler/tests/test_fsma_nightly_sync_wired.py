@@ -89,7 +89,8 @@ class TestNightlyFsmaSyncExecution:
 
         svc = _build_scheduler_service_without_init()
 
-        with patch("httpx.post") as post:
+        # RE-SCH-001: scheduler now routes through safe_httpx_post_sync.
+        with patch("shared.safe_http.safe_httpx_post_sync") as post:
             svc.run_fsma_nightly_sync()
 
         post.assert_not_called()
@@ -110,7 +111,8 @@ class TestNightlyFsmaSyncExecution:
             "failed": 0,
         }
 
-        with patch("httpx.post", return_value=fake_response) as post:
+        # RE-SCH-001: patch safe_httpx_post_sync (was httpx.post before).
+        with patch("shared.safe_http.safe_httpx_post_sync", return_value=fake_response) as post:
             svc.run_fsma_nightly_sync()
 
         post.assert_called_once()
