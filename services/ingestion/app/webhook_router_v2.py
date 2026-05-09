@@ -29,7 +29,8 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 
-from .authz import require_permission, IngestionPrincipal
+from .authz import require_permission, IngestionPrincipal, get_ingestion_principal
+from shared.permissions import has_permission as _has_permission
 from .subscription_gate import require_active_subscription
 from shared.database import get_db_session
 from .config import get_settings
@@ -93,19 +94,26 @@ def _is_production() -> bool:
     return is_production()
 
 
-def _verify_api_key(
+def _verify_api_key_present(
     x_regengine_api_key: Optional[str] = Header(default=None, alias="X-RegEngine-API-Key"),
 ) -> None:
     """Fail-closed defense-in-depth check on the X-RegEngine-API-Key header.
 
-    Does NOT validate the key itself — that happens later in
+    NAMING (F-1, re-audit): this helper only checks header PRESENCE.
+    It does NOT validate the key itself — that happens later in
     ``require_permission`` → ``get_ingestion_principal`` → ``require_api_key``
     which consults the DB-backed key store and the preshared master env var.
     This gate only enforces that (a) a header is present at all and (b) the
     service has at least one credential configured, so a misconfigured
     prod deploy can't silently accept unauthenticated traffic.
 
-    Before this fix, the gate only checked ``API_KEY`` (never set on
+    NEVER use this dependency alone on a route that returns or mutates
+    tenant-scoped data — chain it with ``require_permission(...)`` (which
+    runs principal resolution + tenant cross-check) or call
+    ``get_ingestion_principal`` and bind the URL/query ``tenant_id`` to
+    the principal's tenant explicitly.
+
+    Before the #1888 fix, the gate only checked ``API_KEY`` (never set on
     Railway — ``REGENGINE_API_KEY`` is used instead), so every per-tenant
     API key 401'd here even when valid and later resolved by the
     principal path.
@@ -122,6 +130,14 @@ def _verify_api_key(
         # Neither API_KEY nor REGENGINE_API_KEY set in prod — reject so a
         # misconfigured deploy cannot silently accept traffic.
         raise HTTPException(status_code=401, detail="Invalid or missing API key")
+
+
+# Backwards-compat alias. The descriptive name ``_verify_api_key_present``
+# is preferred at call sites — but ``webhook_compat`` and many tests still
+# reference the legacy name via ``Depends(_verify_api_key)`` /
+# ``app.dependency_overrides[wr._verify_api_key]``. Keeping the alias avoids
+# touching the ``/ingest`` endpoint and the broad test surface in this PR.
+_verify_api_key = _verify_api_key_present
 
 
 # ---------------------------------------------------------------------------
@@ -449,6 +465,52 @@ _WEBHOOK_RATE_LIMIT_WINDOW_SECS = max(
     1,
     int(os.getenv("WEBHOOK_INGEST_RATE_LIMIT_WINDOW_SECONDS", "60")),
 )
+
+# F-4 (re-audit): tighter, separate bucket for read endpoints (/recent,
+# /chain/verify). These are dashboard-facing reads, not partner ingestion,
+# so they should be rate-limited away from the ingest budget and capped
+# lower to make scraping/oracle-style probing visible.
+_WEBHOOK_READ_RATE_LIMIT_RPM = max(1, int(os.getenv("WEBHOOK_READ_RATE_LIMIT_RPM", "30")))
+_WEBHOOK_READ_RATE_LIMIT_WINDOW_SECS = max(
+    1,
+    int(os.getenv("WEBHOOK_READ_RATE_LIMIT_WINDOW_SECONDS", "60")),
+)
+
+
+def _check_read_rate_limit(tenant_id: str, scope: str) -> None:
+    """Tenant-scoped sliding-window limit for webhook READ endpoints.
+
+    Distinct from ``_check_rate_limit`` (ingest): smaller default budget,
+    different bucket key per scope so /recent and /chain/verify do not
+    starve each other.
+    """
+    allowed, remaining = consume_tenant_rate_limit(
+        tenant_id=tenant_id,
+        bucket_suffix=f"webhooks.read.{scope}",
+        limit=_WEBHOOK_READ_RATE_LIMIT_RPM,
+        window=_WEBHOOK_READ_RATE_LIMIT_WINDOW_SECS,
+    )
+    if not allowed:
+        raise HTTPException(
+            status_code=429,
+            detail=(
+                f"Rate limit exceeded for tenant '{tenant_id}' "
+                f"({_WEBHOOK_READ_RATE_LIMIT_RPM}/{_WEBHOOK_READ_RATE_LIMIT_WINDOW_SECS}s)"
+            ),
+            headers={
+                "Retry-After": str(_WEBHOOK_READ_RATE_LIMIT_WINDOW_SECS),
+                "X-RateLimit-Limit": str(_WEBHOOK_READ_RATE_LIMIT_RPM),
+                "X-RateLimit-Remaining": "0",
+                "X-RateLimit-Tenant": tenant_id,
+                "X-RateLimit-Scope": f"webhooks.read.{scope}",
+            },
+        )
+    logger.debug(
+        "webhook_read_rate_limit_allow tenant_id=%s scope=%s remaining=%s",
+        tenant_id,
+        scope,
+        remaining,
+    )
 
 
 def _check_rate_limit(tenant_id: str) -> None:
@@ -1496,6 +1558,55 @@ async def get_recent_events(
             db_session.close()
 
 
+def _enforce_webhooks_read_principal(
+    url_tenant_id: str,
+    principal: IngestionPrincipal,
+    scope: str,
+) -> None:
+    """Bind a webhook READ route's URL ``tenant_id`` to the authenticated principal.
+
+    Closes F-1 (re-audit): the previous gate (``_verify_api_key``) only
+    checked header presence, leaving these reads as cross-tenant IDORs.
+    Mirrors the #2249 stripe-portal fix:
+
+    1. Require the ``webhooks.read`` permission on the principal.
+    2. Compare URL ``tenant_id`` to the principal's tenant.
+    3. On mismatch, return **404 Not Found** (not 403) — avoids the
+       tenant-existence oracle a 403 would create.
+
+    Wildcard (``*``) and ``admin.*`` principals (legacy master-key /
+    operator) bypass the tenant pin but must still hold the permission.
+    """
+    # Permission check first — a key without webhooks.read should never
+    # learn whether a tenant exists.
+    if not _has_permission(principal.scopes, "webhooks.read"):
+        logger.warning(
+            "webhooks_read_permission_denied key_id=%s scope=%s",
+            getattr(principal, "key_id", None),
+            scope,
+        )
+        raise HTTPException(
+            status_code=403,
+            detail="Insufficient permissions: requires 'webhooks.read'",
+        )
+
+    # Wildcard principals (master/admin) keep cross-tenant access.
+    if "*" in principal.scopes or _has_permission(principal.scopes, "admin.*"):
+        return
+
+    principal_tenant = principal.tenant_id
+    if not principal_tenant or principal_tenant != url_tenant_id:
+        logger.warning(
+            "webhooks_read_tenant_mismatch url_tenant=%s principal_tenant=%s key_id=%s scope=%s",
+            url_tenant_id,
+            principal_tenant,
+            getattr(principal, "key_id", None),
+            scope,
+        )
+        # 404 not 403 — same shape as #2249 to avoid existence oracle.
+        raise HTTPException(status_code=404, detail="Not found")
+
+
 @router.get(
     "/recent",
     response_model=RecentEventsResponse,
@@ -1505,8 +1616,18 @@ async def get_recent_events(
 async def recent_events_endpoint(
     tenant_id: str,
     limit: int = 10,
-    _auth: None = Depends(_verify_api_key),
+    principal: IngestionPrincipal = Depends(get_ingestion_principal),
+    _auth: None = Depends(_verify_api_key_present),
 ):
+    """Return the tenant's recent CTE events.
+
+    F-1 (re-audit): bound to the authenticated principal's tenant; URL
+    ``tenant_id`` mismatches return 404 to avoid a tenant-existence oracle.
+    F-4 (re-audit): tighter rate limit applied (``webhooks.read.recent``).
+    """
+    validate_tenant_id(tenant_id)
+    _enforce_webhooks_read_principal(tenant_id, principal, scope="recent")
+    _check_read_rate_limit(tenant_id, scope="recent")
     return await get_recent_events(tenant_id, limit)
 
 
@@ -1521,10 +1642,18 @@ async def recent_events_endpoint(
 )
 async def verify_chain(
     tenant_id: str,
-    _auth: None = Depends(_verify_api_key),
+    principal: IngestionPrincipal = Depends(get_ingestion_principal),
+    _auth: None = Depends(_verify_api_key_present),
 ):
-    """Verify the integrity of the tenant's hash chain."""
+    """Verify the integrity of the tenant's hash chain.
+
+    F-1 (re-audit): bound to the authenticated principal's tenant; URL
+    ``tenant_id`` mismatches return 404. F-4 (re-audit): tighter rate
+    limit applied (``webhooks.read.chain_verify``).
+    """
     validate_tenant_id(tenant_id)
+    _enforce_webhooks_read_principal(tenant_id, principal, scope="chain_verify")
+    _check_read_rate_limit(tenant_id, scope="chain_verify")
     db_session = None
     try:
         from shared.database import SessionLocal

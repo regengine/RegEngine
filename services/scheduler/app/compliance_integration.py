@@ -13,6 +13,7 @@ from uuid import UUID
 
 import structlog
 from sqlalchemy import create_engine, select, text
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import sessionmaker, Session
 
 # Standardized path discovery via shared utility
@@ -79,11 +80,17 @@ class ComplianceIntegration:
                             source_id=item.source_id,
                             severity=item.severity.value,
                         )
-                except Exception as e:
+                except (SQLAlchemyError, ValueError, KeyError, TypeError) as e:
+                    # RE-SCH-002: tightened from bare ``Exception`` so future
+                    # programming errors (NameError, AttributeError, the
+                    # ObjectNotExecutableError that this PR is fixing) are no
+                    # longer silently swallowed — they bubble up and surface
+                    # in Sentry.
                     logger.error(
                         "alert_creation_failed",
                         tenant_id=str(match["tenant_id"]),
                         error=str(e),
+                        error_type=type(e).__name__,
                     )
             
             session.commit()
@@ -130,15 +137,30 @@ class ComplianceIntegration:
                             count=len(tier1_tenants),
                             lot_codes_checked=len(lot_codes),
                         )
-                except Exception as e:
-                    logger.warning("tier1_lot_code_query_failed", error=str(e))
+                except SQLAlchemyError as e:
+                    # RE-SCH-002: tightened from bare ``Exception``.
+                    logger.warning(
+                        "tier1_lot_code_query_failed",
+                        error=str(e),
+                        error_type=type(e).__name__,
+                    )
 
         # ------------------------------------------------------------------
         # Tier 2 / 3: Profile-based matching via tenant_product_profile
         # ------------------------------------------------------------------
-        # Query tenant product profiles
+        # Query tenant product profiles.
+        #
+        # RE-SCH-002: under SQLAlchemy 2.x ``session.execute`` requires an
+        # executable construct (``text(...)``); passing a raw string raises
+        # ``ObjectNotExecutableError`` which the broad outer ``except`` was
+        # silently swallowing — Tier-2/3 supplier-name compliance alerts
+        # never fired in production. The query is static (no interpolation),
+        # so the wrapping is byte-identical for valid inputs.
         result = session.execute(
-            "SELECT tenant_id, product_categories, supply_regions, supplier_identifiers FROM tenant_product_profile LIMIT 1000"
+            text(
+                "SELECT tenant_id, product_categories, supply_regions, supplier_identifiers "
+                "FROM tenant_product_profile LIMIT 1000"
+            )
         )
 
         matching = []
@@ -250,19 +272,21 @@ class ComplianceIntegration:
         
         match_reason = {"matched_by": match_reasons}
         
-        # Insert alert
+        # Insert alert. RE-SCH-002: wrap in text() for SQLAlchemy 2.x.
         session.execute(
-            """
-            INSERT INTO public.compliance_alerts 
-            (id, tenant_id, source_type, source_id, title, summary, severity,
-             countdown_start, countdown_end, countdown_hours, required_actions,
-             status, match_reason, raw_data, created_at, updated_at)
-            VALUES 
-            (:id, :tenant_id, :source_type, :source_id, :title, :summary, :severity,
-             :countdown_start, :countdown_end, :countdown_hours, :required_actions,
-             :status, :match_reason, :raw_data, :created_at, :updated_at)
-            ON CONFLICT (tenant_id, source_type, source_id) DO NOTHING
-            """,
+            text(
+                """
+                INSERT INTO public.compliance_alerts
+                (id, tenant_id, source_type, source_id, title, summary, severity,
+                 countdown_start, countdown_end, countdown_hours, required_actions,
+                 status, match_reason, raw_data, created_at, updated_at)
+                VALUES
+                (:id, :tenant_id, :source_type, :source_id, :title, :summary, :severity,
+                 :countdown_start, :countdown_end, :countdown_hours, :required_actions,
+                 :status, :match_reason, :raw_data, :created_at, :updated_at)
+                ON CONFLICT (tenant_id, source_type, source_id) DO NOTHING
+                """
+            ),
             {
                 "id": alert_id,
                 "tenant_id": str(tenant_id),
@@ -290,16 +314,18 @@ class ComplianceIntegration:
     
     def _update_tenant_status(self, session: Session, tenant_id: UUID) -> None:
         """Recalculate and update tenant compliance status."""
-        # Count active alerts
+        # Count active alerts. RE-SCH-002: wrap in text() for SQLAlchemy 2.x.
         result = session.execute(
-            """
-            SELECT 
-                COUNT(*) FILTER (WHERE severity = 'CRITICAL' AND status = 'ACTIVE') as critical,
-                COUNT(*) FILTER (WHERE severity = 'HIGH' AND status = 'ACTIVE') as high,
-                COUNT(*) FILTER (WHERE status = 'ACTIVE') as total
-            FROM public.compliance_alerts
-            WHERE tenant_id = :tenant_id
-            """,
+            text(
+                """
+                SELECT
+                    COUNT(*) FILTER (WHERE severity = 'CRITICAL' AND status = 'ACTIVE') as critical,
+                    COUNT(*) FILTER (WHERE severity = 'HIGH' AND status = 'ACTIVE') as high,
+                    COUNT(*) FILTER (WHERE status = 'ACTIVE') as total
+                FROM public.compliance_alerts
+                WHERE tenant_id = :tenant_id
+                """
+            ),
             {"tenant_id": str(tenant_id)}
         ).fetchone()
         
@@ -315,15 +341,17 @@ class ComplianceIntegration:
         else:
             new_status = "COMPLIANT"
         
-        # Get next deadline
+        # Get next deadline. RE-SCH-002: wrap in text() for SQLAlchemy 2.x.
         deadline_result = session.execute(
-            """
-            SELECT countdown_end, title
-            FROM public.compliance_alerts
-            WHERE tenant_id = :tenant_id AND status = 'ACTIVE'
-            ORDER BY countdown_end ASC
-            LIMIT 1
-            """,
+            text(
+                """
+                SELECT countdown_end, title
+                FROM public.compliance_alerts
+                WHERE tenant_id = :tenant_id AND status = 'ACTIVE'
+                ORDER BY countdown_end ASC
+                LIMIT 1
+                """
+            ),
             {"tenant_id": str(tenant_id)}
         ).fetchone()
         
@@ -332,28 +360,30 @@ class ComplianceIntegration:
         
         now = datetime.now(timezone.utc)
         
-        # Upsert status
+        # Upsert status. RE-SCH-002: wrap in text() for SQLAlchemy 2.x.
         session.execute(
-            """
-            INSERT INTO tenant_compliance_status 
-            (id, tenant_id, status, last_status_change, active_alert_count, 
-             critical_alert_count, next_deadline, next_deadline_description, created_at, updated_at)
-            VALUES 
-            (gen_random_uuid(), :tenant_id, :status, :now, :active_count, 
-             :critical_count, :next_deadline, :next_description, :now, :now)
-            ON CONFLICT (tenant_id) DO UPDATE SET
-                status = EXCLUDED.status,
-                last_status_change = CASE 
-                    WHEN tenant_compliance_status.status != EXCLUDED.status 
-                    THEN EXCLUDED.last_status_change 
-                    ELSE tenant_compliance_status.last_status_change 
-                END,
-                active_alert_count = EXCLUDED.active_alert_count,
-                critical_alert_count = EXCLUDED.critical_alert_count,
-                next_deadline = EXCLUDED.next_deadline,
-                next_deadline_description = EXCLUDED.next_deadline_description,
-                updated_at = EXCLUDED.updated_at
-            """,
+            text(
+                """
+                INSERT INTO tenant_compliance_status
+                (id, tenant_id, status, last_status_change, active_alert_count,
+                 critical_alert_count, next_deadline, next_deadline_description, created_at, updated_at)
+                VALUES
+                (gen_random_uuid(), :tenant_id, :status, :now, :active_count,
+                 :critical_count, :next_deadline, :next_description, :now, :now)
+                ON CONFLICT (tenant_id) DO UPDATE SET
+                    status = EXCLUDED.status,
+                    last_status_change = CASE
+                        WHEN tenant_compliance_status.status != EXCLUDED.status
+                        THEN EXCLUDED.last_status_change
+                        ELSE tenant_compliance_status.last_status_change
+                    END,
+                    active_alert_count = EXCLUDED.active_alert_count,
+                    critical_alert_count = EXCLUDED.critical_alert_count,
+                    next_deadline = EXCLUDED.next_deadline,
+                    next_deadline_description = EXCLUDED.next_deadline_description,
+                    updated_at = EXCLUDED.updated_at
+                """
+            ),
             {
                 "tenant_id": str(tenant_id),
                 "status": new_status,

@@ -137,6 +137,27 @@ class TestSentinelRejection:
         assert resolved is None
         assert "no_tenant_id" in (reason or "")
 
+    def test_default_sentinel_in_payload_with_header_present_rejects(self):
+        """F-NLP-8: a header tenant must NOT rescue a missing/sentinel body
+        tenant. The body is the only authoritative (signed) source."""
+        resolved, reason = _resolve_tenant_id(
+            header_tenant_id=TENANT_A,
+            payload_tenant_id="default",
+        )
+        assert resolved is None
+        # Explicit reason from the new early-return path.
+        assert "no_tenant_id_in_payload" in (reason or "")
+
+    def test_none_payload_with_header_present_rejects_explicitly(self):
+        """F-NLP-8: explicit early-return replaces implicit fall-through to
+        ``uuid.UUID(None)``."""
+        resolved, reason = _resolve_tenant_id(
+            header_tenant_id=TENANT_A,
+            payload_tenant_id=None,
+        )
+        assert resolved is None
+        assert "no_tenant_id_in_payload" in (reason or "")
+
     def test_none_string_sentinel_rejects(self):
         """JSON serializers sometimes stringify None — guard against it."""
         resolved, reason = _resolve_tenant_id(
@@ -155,12 +176,20 @@ class TestFormatValidation:
     """Only well-formed UUIDs pass — anything else is a reject."""
 
     def test_non_uuid_header_rejects(self):
-        """Arbitrary string in the header is not a tenant_id — reject."""
+        """Arbitrary string in the header is not a tenant_id — reject.
+
+        F-NLP-8: when the body is missing/sentinel and only the (untrusted)
+        header is set, the function now returns the explicit
+        ``no_tenant_id_in_payload`` reason rather than implicitly falling
+        through to ``uuid.UUID(None)`` and emitting
+        ``invalid_tenant_id_format``. Either reason is a rejection — the
+        change just makes the control flow explicit.
+        """
         resolved, reason = _resolve_tenant_id(
             header_tenant_id="tenant-a", payload_tenant_id=None
         )
         assert resolved is None
-        assert "invalid_tenant_id_format" in (reason or "")
+        assert "no_tenant_id_in_payload" in (reason or "")
 
     def test_non_uuid_payload_rejects(self):
         resolved, reason = _resolve_tenant_id(

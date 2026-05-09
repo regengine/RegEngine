@@ -597,6 +597,38 @@ class SchedulerService:
         )
         logger.info("job_scheduled", job_id="fsma_nightly_sync", cron="02:00 UTC")
 
+        # #2257 follow-up — replay the audit_log_buffer to the primary
+        # KDE_READ audit-log backend on a schedule. Cadence is env-tunable
+        # via AUDIT_BUFFER_RECONCILE_INTERVAL_SECONDS (default 300s).
+        try:
+            from services.graph.app.audit_buffer_reconciler import (  # noqa: PLC0415
+                get_interval_seconds,
+                run_reconcile_tick,
+            )
+
+            audit_buffer_interval = get_interval_seconds()
+            self._add_tracked_job(
+                run_reconcile_tick,
+                job_id="audit_buffer_reconcile",
+                trigger=IntervalTrigger(seconds=audit_buffer_interval),
+                name="Audit Log Buffer Reconciliation (#2257 follow-up)",
+                max_instances=1,  # Never run two reconciliation passes concurrently.
+            )
+            logger.info(
+                "job_scheduled",
+                job_id="audit_buffer_reconcile",
+                interval_seconds=audit_buffer_interval,
+            )
+        except ImportError as exc:
+            # Graph package not on path (e.g. minimal scheduler image): log
+            # and continue. The buffer still grows safely; ops will notice
+            # the missing replays via the unreplayed gauge.
+            logger.warning(
+                "audit_buffer_reconcile_unavailable",
+                error=str(exc),
+                hint="services.graph.app.audit_buffer_reconciler not importable",
+            )
+
         # #1150 — drain the persistent webhook outbox periodically. Only
         # register the job when an outbox path is actually configured, so
         # a scheduler with legacy (in-memory-only) delivery doesn't pay
@@ -685,6 +717,7 @@ class SchedulerService:
         """
         import httpx
         from app.config import get_settings as _get_settings
+        from shared.safe_http import safe_httpx_post_sync
 
         settings = _get_settings()
         ingestion_url = os.getenv(
@@ -704,7 +737,12 @@ class SchedulerService:
 
         logger.info("fsma_nightly_sync_started", ingestion_url=ingestion_url)
         try:
-            response = httpx.post(
+            # RE-SCH-001: route through safe_http so the destination URL is
+            # SSRF-validated and pinned to a single resolved IP for the life
+            # of the request (defense-in-depth, even though the destination
+            # is an internal service URL — a misconfigured env var must not
+            # let us POST our internal API key to an attacker-controlled host).
+            response = safe_httpx_post_sync(
                 f"{ingestion_url}/v1/ingest/all-regulations",
                 headers={"X-RegEngine-API-Key": api_key},
                 timeout=120.0,
@@ -1132,8 +1170,26 @@ class HealthHandler(BaseHTTPRequestHandler):
         self.wfile.write(content)
 
     def _handle_status(self) -> None:
-        """Return detailed status."""
+        """Return detailed status.
+
+        RE-SCH-003: this endpoint exposes circuit-breaker state and per-source
+        scrape error messages — useful debugging context that should not be
+        public. Gate behind ``X-Metrics-Key`` (same secret used by ``/metrics``
+        and by the sibling FastAPI ``/status`` route at
+        ``services/scheduler/api.py``). The basic ``/health`` endpoint stays
+        unauthenticated so the k8s liveness probe (see
+        ``infra/k8s/base/scheduler/deployment.yaml``) keeps working.
+        """
         import json
+
+        expected = os.environ.get("METRICS_API_KEY", "")
+        provided = self.headers.get("X-Metrics-Key", "")
+        if not expected or provided != expected:
+            self.send_response(403)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(b'{"detail":"Forbidden"}')
+            return
 
         status = {
             "service": "scheduler",

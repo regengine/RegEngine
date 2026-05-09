@@ -52,12 +52,16 @@ from fastapi import HTTPException
 # ---------------------------------------------------------------------------
 
 
-def _client(scopes: list[str] | None = None) -> TestClient:
+def _client(
+    scopes: list[str] | None = None,
+    tenant_id: str | None = None,
+) -> TestClient:
     app = FastAPI()
     app.include_router(recall_simulations_router)
     app.dependency_overrides[get_ingestion_principal] = lambda: IngestionPrincipal(
         key_id="test-key",
         scopes=scopes or ["*"],
+        tenant_id=tenant_id,
         auth_mode="test",
     )
     return TestClient(app)
@@ -193,12 +197,13 @@ class TestGetSimulationOr404DBFallback:
 
         result = _get_simulation_or_404("sim-fallback", tenant_id="tenant-A")
         assert result is stored
-        # Cache was re-populated.
-        assert _simulation_store["sim-fallback"] is stored
+        # Cache was re-populated under the per-tenant key.
+        assert _simulation_store[("tenant-A", "sim-fallback")] is stored
 
-    def test_falls_back_with_default_tenant_when_none(
+    def test_rejects_lookup_without_tenant_context(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
+        """F-7: no `default` magic-string fallback. Missing tenant must error."""
         captured = {}
 
         def _capture_get(tid, ns, key):
@@ -206,9 +211,11 @@ class TestGetSimulationOr404DBFallback:
             return {"id": key}
 
         monkeypatch.setattr(rs_module, "get_tenant_data", _capture_get)
-        result = _get_simulation_or_404("sim-default", tenant_id=None)
-        assert result == {"id": "sim-default"}
-        assert captured["tid"] == "default"
+        with pytest.raises(HTTPException) as excinfo:
+            _get_simulation_or_404("sim-default", tenant_id=None)
+        assert excinfo.value.status_code == 400
+        # And the DB was never queried with a "default" namespace.
+        assert "tid" not in captured
 
     def test_db_error_does_not_raise(
         self, monkeypatch: pytest.MonkeyPatch
@@ -228,7 +235,7 @@ class TestGetSimulationOr404DBFallback:
     ) -> None:
         monkeypatch.setattr(rs_module, "get_tenant_data", lambda *a, **kw: None)
         with pytest.raises(HTTPException) as excinfo:
-            _get_simulation_or_404("nowhere")
+            _get_simulation_or_404("nowhere", tenant_id="tenant-A")
         assert excinfo.value.status_code == 404
 
 
@@ -450,7 +457,7 @@ class TestGetSimulationEndpoint:
             rs_module, "_query_tenant_recall_metrics", lambda tid: None
         )
         monkeypatch.setattr(rs_module, "set_tenant_data", lambda *a, **kw: None)
-        client = _client()
+        client = _client(tenant_id="tenant-A")
         # Run to seed.
         run = client.post(
             "/api/v1/simulations/run",
@@ -471,6 +478,8 @@ class TestGetSimulationEndpoint:
     ) -> None:
         # DB fallback also returns None so the 404 path fires.
         monkeypatch.setattr(rs_module, "get_tenant_data", lambda *a, **kw: None)
-        resp = _client().get("/api/v1/simulations/does-not-exist")
+        resp = _client(tenant_id="tenant-A").get(
+            "/api/v1/simulations/does-not-exist"
+        )
         assert resp.status_code == 404
         assert "'does-not-exist'" in resp.json()["detail"]
