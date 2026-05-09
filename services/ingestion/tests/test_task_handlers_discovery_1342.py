@@ -5,7 +5,7 @@ replaces the BackgroundTasks-based path in
 ``/v1/ingest/discovery/approve`` and ``.../bulk-approve``.
 
 Critical contracts pinned:
-  - ``_handle_discovery_scrape`` calls ``kernel.discovery.scrape(body, url)``
+  - ``_handle_discovery_scrape`` calls ``app.discovery.scrape(body, url)``
     with positional args in that exact order — the underlying
     ``discovery.scrape`` signature is positional, so any kwarg drift
     here would break in production with a confusing TypeError.
@@ -32,12 +32,12 @@ sys.path.insert(0, str(service_dir))
 
 
 # ---------------------------------------------------------------------------
-# Stub kernel.discovery.discovery — only ``scrape`` is consumed.
+# Stub app.discovery.discovery — only ``scrape`` is consumed.
 #
-# kernel/ is a top-level package with heavy transitive deps (Vertex AI,
-# Neo4j drivers, etc.). Stub the leaf module the handler actually uses,
-# build the package shape, and pin __file__ so the root conftest's
-# eviction sweep (which keys off __file__) leaves us alone.
+# app.discovery now lives under services/ingestion/app/discovery.py (post
+# kernel-migration #2224). Stub the leaf module the handler actually uses
+# so that ``from .discovery import discovery`` resolves to a fake without
+# pulling in httpx/redis/etc. at import time.
 # ---------------------------------------------------------------------------
 
 
@@ -53,41 +53,29 @@ class _FakeDiscovery:
         return None
 
 
-_kernel_pkg = ModuleType("kernel")
-_kernel_pkg.__path__ = []  # type: ignore[attr-defined]
-_kernel_pkg.__file__ = str(service_dir / "kernel_pkg.py")
-
-_discovery_pkg = ModuleType("kernel.discovery")
-_discovery_pkg.__path__ = []  # type: ignore[attr-defined]
-_discovery_pkg.__file__ = str(service_dir / "kernel_discovery_pkg.py")
+_discovery_pkg = ModuleType("app.discovery")
+_discovery_pkg.__file__ = str(service_dir / "app" / "discovery.py")
 _discovery_pkg.discovery = _FakeDiscovery
 
-_kernel_pkg.discovery = _discovery_pkg
-_REAL_KERNEL = sys.modules.get("kernel")
-_REAL_KERNEL_DISCOVERY = sys.modules.get("kernel.discovery")
-sys.modules["kernel"] = _kernel_pkg
-sys.modules["kernel.discovery"] = _discovery_pkg
+_REAL_APP_DISCOVERY = sys.modules.get("app.discovery")
+sys.modules["app.discovery"] = _discovery_pkg
 
 
 @pytest.fixture(scope="module", autouse=True)
 def _restore_modules_on_module_teardown():
-    """Restore real ``kernel`` and ``kernel.discovery`` modules after this
-    file's tests finish.
+    """Restore the real ``app.discovery`` module after this file's tests
+    finish.
 
     The ``from app import task_handlers_discovery`` import below evaluates
-    ``from kernel.discovery import discovery`` at load time, so the stubs
-    must be installed at module level. We restore (or evict) them on module
-    teardown so later test files see the real ``kernel`` package.
+    ``from .discovery import discovery`` at load time, so the stub must be
+    installed at module level. We restore (or evict) it on module teardown
+    so later test files see the real ``app.discovery`` module.
     """
     yield
-    for name, real in (
-        ("kernel.discovery", _REAL_KERNEL_DISCOVERY),
-        ("kernel", _REAL_KERNEL),
-    ):
-        if real is not None:
-            sys.modules[name] = real
-        else:
-            sys.modules.pop(name, None)
+    if _REAL_APP_DISCOVERY is not None:
+        sys.modules["app.discovery"] = _REAL_APP_DISCOVERY
+    else:
+        sys.modules.pop("app.discovery", None)
 
 
 from app import task_handlers_discovery as thd  # noqa: E402
@@ -104,12 +92,11 @@ from app.task_handlers_discovery import (  # noqa: E402
 
 @pytest.fixture(autouse=True)
 def _reset_state(monkeypatch):
-    """Re-install the kernel.discovery stub and clear capture state."""
-    sys.modules["kernel"] = _kernel_pkg
-    sys.modules["kernel.discovery"] = _discovery_pkg
+    """Re-install the app.discovery stub and clear capture state."""
+    sys.modules["app.discovery"] = _discovery_pkg
 
     # The handler imports ``discovery`` at module load:
-    #     from kernel.discovery import discovery
+    #     from .discovery import discovery
     # Re-pin onto the handler module in case a reload swapped it.
     monkeypatch.setattr(thd, "discovery", _FakeDiscovery, raising=False)
 
