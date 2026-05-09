@@ -21,8 +21,7 @@ from pydantic import BaseModel, Field
 
 from shared.auth import require_api_key
 
-# Import the engine from the kernel (portable path resolution)
-from kernel.reporting.fsma_engine import FSMAApplicabilityEngine
+from services.graph.app.fsma_engine import FSMAApplicabilityEngine
 
 router = APIRouter(prefix="/wizard", tags=["FSMA 204 Wizard"])
 logger = structlog.get_logger("fsma-wizard")
