@@ -48,7 +48,7 @@ describe('instrumentation register() — secret separation assertions (RE-SEC-00
 
     it('production + CSRF_SECRET === JWT_SIGNING_KEY → throws', async () => {
         process.env.NODE_ENV = 'production';
-        process.env.CSRF_SECRET = 'same-key';
+        process.env.CSRF_SECRET = 'same-key'; // pragma: allowlist secret
         process.env.JWT_SIGNING_KEY = 'same-key';
         const register = await freshRegister();
         await expect(register()).rejects.toThrow(/distinct \(key separation\)/);
@@ -56,7 +56,7 @@ describe('instrumentation register() — secret separation assertions (RE-SEC-00
 
     it('production + CSRF_SECRET === AUTH_SECRET_KEY → throws', async () => {
         process.env.NODE_ENV = 'production';
-        process.env.CSRF_SECRET = 'legacy-shared';
+        process.env.CSRF_SECRET = 'legacy-shared'; // pragma: allowlist secret
         process.env.JWT_SIGNING_KEY = 'jwt-key';
         process.env.AUTH_SECRET_KEY = 'legacy-shared';
         const register = await freshRegister();
@@ -65,7 +65,7 @@ describe('instrumentation register() — secret separation assertions (RE-SEC-00
 
     it('production + distinct CSRF_SECRET and JWT_SIGNING_KEY → resolves', async () => {
         process.env.NODE_ENV = 'production';
-        process.env.CSRF_SECRET = 'csrf-only-secret';
+        process.env.CSRF_SECRET = 'csrf-only-secret'; // pragma: allowlist secret
         process.env.JWT_SIGNING_KEY = 'jwt-only-secret';
         const register = await freshRegister();
         await expect(register()).resolves.toBeUndefined();

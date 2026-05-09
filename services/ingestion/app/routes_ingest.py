@@ -115,7 +115,7 @@ def get_db_manager() -> Optional[DatabaseManager]:
         return None
 
     try:
-        # Manual parsing of postgresql+psycopg://regengine:regengine@postgres:5432/regengine_admin
+        # Manual parsing of postgresql+psycopg://regengine:regengine@postgres:5432/regengine_admin  # pragma: allowlist secret
         url = db_url.replace("postgresql+psycopg://", "").replace("postgresql://", "")
         if "@" in url:
             auth, rest = url.split("@")

@@ -30,7 +30,7 @@ describe('csrf secret resolution (RE-SEC-005)', () => {
     it('production + no CSRF_SECRET → verifyCsrfToken returns false (fail closed)', async () => {
         process.env.NODE_ENV = 'production';
         // AUTH_SECRET_KEY is set but must NOT be used in production:
-        process.env.AUTH_SECRET_KEY = 'jwt-signing-key-do-not-reuse';
+        process.env.AUTH_SECRET_KEY = 'jwt-signing-key-do-not-reuse'; // pragma: allowlist secret
 
         const result = await verifyCsrfToken('any-token', 'any-signature');
         expect(result).toBe(false);
@@ -38,8 +38,8 @@ describe('csrf secret resolution (RE-SEC-005)', () => {
 
     it('production + CSRF_SECRET set → signature differs from AUTH_SECRET_KEY-derived signature', async () => {
         process.env.NODE_ENV = 'production';
-        process.env.AUTH_SECRET_KEY = 'jwt-signing-key';
-        process.env.CSRF_SECRET = 'dedicated-csrf-secret';
+        process.env.AUTH_SECRET_KEY = 'jwt-signing-key'; // pragma: allowlist secret
+        process.env.CSRF_SECRET = 'dedicated-csrf-secret'; // pragma: allowlist secret
 
         const sigWithCsrf = await signCsrfToken('token-abc');
         expect(sigWithCsrf).not.toBe('');
@@ -53,7 +53,7 @@ describe('csrf secret resolution (RE-SEC-005)', () => {
 
     it('dev + only AUTH_SECRET_KEY set → signCsrfToken returns non-empty (back-compat)', async () => {
         process.env.NODE_ENV = 'development';
-        process.env.AUTH_SECRET_KEY = 'dev-only-secret';
+        process.env.AUTH_SECRET_KEY = 'dev-only-secret'; // pragma: allowlist secret
 
         const sig = await signCsrfToken('token-xyz');
         expect(sig.length).toBeGreaterThan(0);
