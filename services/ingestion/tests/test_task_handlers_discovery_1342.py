@@ -63,8 +63,31 @@ _discovery_pkg.__file__ = str(service_dir / "kernel_discovery_pkg.py")
 _discovery_pkg.discovery = _FakeDiscovery
 
 _kernel_pkg.discovery = _discovery_pkg
+_REAL_KERNEL = sys.modules.get("kernel")
+_REAL_KERNEL_DISCOVERY = sys.modules.get("kernel.discovery")
 sys.modules["kernel"] = _kernel_pkg
 sys.modules["kernel.discovery"] = _discovery_pkg
+
+
+@pytest.fixture(scope="module", autouse=True)
+def _restore_modules_on_module_teardown():
+    """Restore real ``kernel`` and ``kernel.discovery`` modules after this
+    file's tests finish.
+
+    The ``from app import task_handlers_discovery`` import below evaluates
+    ``from kernel.discovery import discovery`` at load time, so the stubs
+    must be installed at module level. We restore (or evict) them on module
+    teardown so later test files see the real ``kernel`` package.
+    """
+    yield
+    for name, real in (
+        ("kernel.discovery", _REAL_KERNEL_DISCOVERY),
+        ("kernel", _REAL_KERNEL),
+    ):
+        if real is not None:
+            sys.modules[name] = real
+        else:
+            sys.modules.pop(name, None)
 
 
 from app import task_handlers_discovery as thd  # noqa: E402
