@@ -199,10 +199,11 @@ class TestEmitFSMAEvent:
         sent_value = call_kwargs["value"]
         assert sent_value["_producer_service"] == "scheduler-service"
         assert "_signed_at" in sent_value
-        # Headers carry the signature triple the graph consumer verifies
+        # Headers carry the signature triple the graph consumer verifies.
+        # Header keys are str (kafka header names); values are bytes.
         sent_headers = dict(call_kwargs["headers"])
-        assert b"x-evt-sig" in [h for h in sent_headers]
-        assert sent_headers.get("x-producer-service") == b"scheduler-service"
+        assert "x-evt-sig" in sent_headers
+        assert sent_headers["x-producer-service"] == b"scheduler-service"
         assert sent_headers.get("x-evt-sig-v") is not None
 
     def test_returns_false_when_signing_key_unset(self, mock_kafka, monkeypatch):
