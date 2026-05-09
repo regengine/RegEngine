@@ -276,12 +276,23 @@ async def ingest_regulation(
     if not file.filename.endswith((".pdf", ".docx")):
         raise HTTPException(status_code=400, detail="Only PDF and DOCX files are supported")
 
-    content = await file.read()
+    # Stream-read the upload to avoid buffering oversize payloads in memory
+    # before the size check (RE-SEC-INGEST-002).
+    REGULATION_MAX_SIZE = 100 * 1024 * 1024  # 100 MB
+    UPLOAD_CHUNK = 1 << 20  # 1 MiB
+    chunks: list[bytes] = []
+    total = 0
+    while True:
+        chunk = await file.read(UPLOAD_CHUNK)
+        if not chunk:
+            break
+        total += len(chunk)
+        if total > REGULATION_MAX_SIZE:
+            raise HTTPException(status_code=413, detail="File too large (max 100MB)")
+        chunks.append(chunk)
+    content = b"".join(chunks)
     if not content:
         raise HTTPException(status_code=400, detail="Empty file uploaded")
-
-    if len(content) > 100 * 1024 * 1024:  # 100MB
-        raise HTTPException(status_code=413, detail="File too large (max 100MB)")
 
     job_id = str(uuid.uuid4())
     settings = get_settings()
@@ -631,7 +642,25 @@ async def ingest_file(
             logger.error("job_db_init_failed", job_id=job_id, error=str(e))
 
     try:
-        content = await file.read()
+        # Stream-read the upload, enforcing MAX_PAYLOAD_BYTES as we go so an
+        # oversize upload cannot be fully buffered in memory before
+        # ``_enforce_size_limit`` runs in ``_process_and_emit``
+        # (RE-SEC-INGEST-002). ``_enforce_size_limit`` still runs below as
+        # defense-in-depth.
+        UPLOAD_CHUNK = 1 << 20  # 1 MiB
+        chunks: list[bytes] = []
+        total = 0
+        while True:
+            chunk = await file.read(UPLOAD_CHUNK)
+            if not chunk:
+                break
+            total += len(chunk)
+            if total > MAX_PAYLOAD_BYTES:
+                raise HTTPException(
+                    status_code=413, detail="Payload exceeds size limits"
+                )
+            chunks.append(chunk)
+        content = b"".join(chunks)
         if not content:
             raise HTTPException(status_code=400, detail="Empty file uploaded")
 
