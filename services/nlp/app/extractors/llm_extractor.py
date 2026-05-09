@@ -179,6 +179,19 @@ class LLMExtraction(BaseModel):
         description="True when the source document exceeded the LLM input cap "
         "and this extraction was made from a truncated prefix (#1370).",
     )
+    needs_review: bool = Field(
+        default=False,
+        description="True when the item must be routed to HITL review rather "
+        "than auto-published. Set by output-side guardrails that detect "
+        "ambiguity (e.g. an injection marker substring that could also "
+        "appear legitimately in regulatory text such as 'HACCP System:'). "
+        "F-NLP-1: prevents silent drop of compliance-meaningful items.",
+    )
+    review_reason: Optional[str] = Field(
+        default=None,
+        description="Reason code explaining why ``needs_review`` was set "
+        "(e.g. 'output_injection_marker'). For audit + UI surfacing.",
+    )
 
     model_config = {"extra": "forbid"}
 
@@ -225,13 +238,18 @@ class OpenAILegacyClient(BaseLLMClient):
     def generate(self, prompt: str, system_prompt: str = "") -> str:
         # OpenAI chat API already separates system and user roles at the
         # transport layer, so the system prompt is never confused with user
-        # content. We still sanitize user content defensively so the
-        # delimiter markers cannot appear verbatim in provider logs.
+        # content. F-NLP-7: still wrap user content in delimiters and
+        # prepend the guardrail to the system prompt for defense-in-depth
+        # parity with VertexAIClient / OllamaClient. The delimiter wrapper
+        # also sanitizes premature close-tag attempts in user content.
         resp = self.client.chat.completions.create(
             model=self.model,
             messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": sanitize_user_content(prompt)},
+                {
+                    "role": "system",
+                    "content": f"{system_prompt}{_DELIMITER_GUARDRAIL}",
+                },
+                {"role": "user", "content": wrap_user_content(prompt)},
             ],
             temperature=0,
             response_format={"type": "json_object"},
@@ -279,7 +297,6 @@ class OllamaClient(BaseLLMClient):
         self.host = host
 
     def generate(self, prompt: str, system_prompt: str = "") -> str:
-        import requests
         # Fix #1226: Ollama /api/generate is a single-prompt API. Use the
         # same delimiter+guardrail defense as VertexAIClient so prompt
         # injection via the regulation text cannot override the system
@@ -287,24 +304,32 @@ class OllamaClient(BaseLLMClient):
         # build) accepts a messages list and would be preferable; we
         # keep /api/generate for compatibility with existing
         # deployments and layer the defense on top.
+        #
+        # F-NLP-3: switched from ``requests`` to ``httpx.Client`` for parity
+        # with the rest of the service (which uses ``shared.resilient_http``
+        # / ``httpx`` everywhere). ``resilient_client`` is async; this call
+        # path is sync, so we use ``httpx.Client`` directly — same transport
+        # foundation, same TLS posture, no ``requests`` dependency in this
+        # module's hot path.
+        import httpx
         wrapped_user = wrap_user_content(prompt)
         full_prompt = (
             f"{system_prompt}{_DELIMITER_GUARDRAIL}\n\n{wrapped_user}"
         )
         try:
-            resp = requests.post(
-                f"{self.host}/api/generate",
-                json={
-                    "model": self.model,
-                    "prompt": full_prompt,
-                    "stream": False,
-                    "format": "json",
-                    "options": {"temperature": 0.0}
-                },
-                timeout=self.timeout
-            )
-            resp.raise_for_status()
-            return resp.json().get("response", "[]")
+            with httpx.Client(timeout=self.timeout) as client:
+                resp = client.post(
+                    f"{self.host}/api/generate",
+                    json={
+                        "model": self.model,
+                        "prompt": full_prompt,
+                        "stream": False,
+                        "format": "json",
+                        "options": {"temperature": 0.0},
+                    },
+                )
+                resp.raise_for_status()
+                return resp.json().get("response", "[]")
         except Exception as e:
             logger.error("ollama_failed", error=str(e))
             raise
@@ -331,8 +356,17 @@ class LLMClientFactory:
 
         # Default fallback
         host = os.getenv("OLLAMA_HOST", "http://localhost:11434")
-        if os.getenv("REGENGINE_ENV") == "production" and "localhost" in host:
-            logger.warning("OLLAMA_HOST points to localhost in production — set to a remote endpoint")
+        # F-NLP-3: refuse-to-start (was warn-only) when production points at
+        # a loopback Ollama. Loopback in prod is almost always a misconfig
+        # that silently no-ops extraction.
+        if os.getenv("REGENGINE_ENV") == "production" and any(
+            tok in host for tok in ("localhost", "127.0.0.1", "::1")
+        ):
+            raise RuntimeError(
+                "OLLAMA_HOST points to a loopback address in production "
+                f"(host={host!r}). Configure a remote Ollama endpoint or "
+                "switch LLM_MODEL to an OpenAI/Vertex provider."
+            )
         return OllamaClient(model, host, timeout)
 
 
@@ -451,9 +485,12 @@ class LLMGenerativeExtractor:
         candidate = str(jurisdiction).strip().upper()
         if candidate in ALLOWED_JURISDICTIONS:
             return candidate
+        # F-NLP-6: strip control chars before logging — otherwise a crafted
+        # jurisdiction value could smuggle ANSI escape sequences or zero-width
+        # chars into operator log streams.
         logger.warning(
             "jurisdiction_outside_allowlist_forced_unknown",
-            supplied=jurisdiction[:40],
+            supplied=_CONTROL_CHARS.sub("", jurisdiction[:40]),
         )
         return "UNKNOWN"
 
@@ -752,12 +789,22 @@ class LLMGenerativeExtractor:
                 snippet=quote[:40],
             )
             return None
+        # F-NLP-1: injection markers in OUTPUT are ambiguous — regulation
+        # text legitimately contains substrings like "HACCP System:" that
+        # match ``_INJECTION_MARKERS``. Silently dropping such items hides
+        # real compliance obligations from operators. Mirror the input-side
+        # behavior at line 622 (warn + continue) and route the item to HITL
+        # review rather than discarding it. The ``needs_review`` flag is
+        # honored by downstream confidence scoring / publication logic.
+        item_needs_review = False
+        item_review_reason: Optional[str] = None
         if scan["injection_marker"]:
             log.warning(
-                "llm_item_rejected_injection_marker",
+                "llm_item_flagged_injection_marker_routed_to_review",
                 snippet=quote[:40],
             )
-            return None
+            item_needs_review = True
+            item_review_reason = "output_injection_marker"
         if len(quote) > 4000:
             raise ValueError("provision_text exceeds 4000 chars")
 
@@ -801,4 +848,6 @@ class LLMGenerativeExtractor:
             source_span_start=source_span_start,
             source_span_end=source_span_end,
             truncated_input=False,
+            needs_review=item_needs_review,
+            review_reason=item_review_reason,
         )

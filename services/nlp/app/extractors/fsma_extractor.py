@@ -16,6 +16,11 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import structlog
 
+# F-NLP-2: redact PII before persisting raw text snippets. ``redact_pii`` is
+# applied ONLY at stored-snippet assignment — never before the regex pass —
+# so it does not mutilate GLNs / lot codes that pattern-match phone numbers.
+from shared.pii import redact_pii
+
 from .fsma_types import (
     CTEType,
     DocumentType,
@@ -394,7 +399,8 @@ class FSMAExtractor:
             document_type=doc_type,
             ctes=ctes,
             extraction_timestamp=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-            raw_text=text[:1000] if text else None,  # Store first 1000 chars
+            # F-NLP-2: redact PII on the stored snippet (post-regex-pass).
+            raw_text=redact_pii(text[:1000]) if text else None,
             warnings=warnings,
             line_items=line_items,
             confidence_level=risk_level,
@@ -803,7 +809,7 @@ class FSMAExtractor:
                     type=cte_type,
                     kdes=kde,
                     confidence=confidence,
-                    source_text=text[:500] if text else None,
+                    source_text=redact_pii(text[:500]) if text else None,  # F-NLP-2
                     bounding_box=item.bounding_box,
                 )
                 ctes.append(cte)
@@ -839,7 +845,7 @@ class FSMAExtractor:
                 type=cte_type,
                 kdes=kdes,
                 confidence=confidence,
-                source_text=text[:500] if text else None,
+                source_text=redact_pii(text[:500]) if text else None,  # F-NLP-2
             )
             ctes.append(cte)
 
