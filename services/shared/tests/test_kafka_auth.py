@@ -17,6 +17,8 @@ from shared.kafka_auth import (
     BODY_FIELD_PRODUCER_SERVICE,
     BODY_FIELD_SIGNED_AT,
     CURRENT_SIG_VERSION,
+    DEFAULT_MAX_SIGNATURE_AGE_SECONDS,
+    ENV_MAX_SIG_AGE,
     ENV_SIGNING_KEY,
     ENV_STRICT,
     HEADER_PRODUCER_SERVICE,
@@ -564,3 +566,183 @@ def test_get_allowed_producers_empty_means_reject_all(monkeypatch: pytest.Monkey
     monkeypatch.setenv("KAFKA_ALLOWED_PRODUCERS_GRAPH_UPDATE", "")
     result = get_allowed_producers("graph.update")
     assert result == set()
+
+
+# ---------------------------------------------------------------------------
+# Freshness check (RE-SEC-003) — replay protection on `_signed_at`.
+# ---------------------------------------------------------------------------
+
+
+T0 = datetime(2026, 5, 9, 12, 0, 0, tzinfo=timezone.utc)
+
+
+def test_verify_rejects_stale_signed_at() -> None:
+    """Envelope older than the freshness window → KafkaAuthError(signed_at_stale)."""
+    signed_body, headers = sign_event(
+        {"tenant_id": "t1"},
+        producer_service="ingestion-service",
+        signing_key=TEST_KEY,
+        now_fn=lambda: T0,
+    )
+    later = T0.replace(minute=16)  # 16 minutes after signing, default window is 15
+    with pytest.raises(KafkaAuthError) as excinfo:
+        verify_event(
+            signed_body,
+            headers,
+            topic="ingest.normalized",
+            signing_key=TEST_KEY,
+            now_fn=lambda: later,
+        )
+    assert excinfo.value.reason == "signed_at_stale"
+    assert excinfo.value.fields["max_age_seconds"] == DEFAULT_MAX_SIGNATURE_AGE_SECONDS
+    assert excinfo.value.fields["age_seconds"] >= 16 * 60
+
+
+def test_verify_accepts_fresh_signed_at() -> None:
+    """Envelope inside the freshness window → success."""
+    signed_body, headers = sign_event(
+        {"tenant_id": "t1"},
+        producer_service="ingestion-service",
+        signing_key=TEST_KEY,
+        now_fn=lambda: T0,
+    )
+    later = T0.replace(minute=5)  # 5 minutes after signing
+    evt, producer = verify_event(
+        signed_body,
+        headers,
+        topic="ingest.normalized",
+        signing_key=TEST_KEY,
+        now_fn=lambda: later,
+    )
+    assert producer == "ingestion-service"
+    assert evt["tenant_id"] == "t1"
+
+
+def test_verify_rejects_future_signed_at() -> None:
+    """Envelope dated > 60s in the future → KafkaAuthError(signed_at_in_future).
+
+    Sign 10 minutes ahead of the verifier's clock — well past the 60s
+    skew tolerance.
+    """
+    future = T0.replace(minute=10)
+    signed_body, headers = sign_event(
+        {"tenant_id": "t1"},
+        producer_service="ingestion-service",
+        signing_key=TEST_KEY,
+        now_fn=lambda: future,
+    )
+    with pytest.raises(KafkaAuthError) as excinfo:
+        verify_event(
+            signed_body,
+            headers,
+            topic="ingest.normalized",
+            signing_key=TEST_KEY,
+            now_fn=lambda: T0,
+        )
+    assert excinfo.value.reason == "signed_at_in_future"
+
+
+def test_verify_tolerates_clock_skew() -> None:
+    """Sign 30s in the future relative to the verifier → still accepted."""
+    skewed = T0.replace(second=30)
+    signed_body, headers = sign_event(
+        {"tenant_id": "t1"},
+        producer_service="ingestion-service",
+        signing_key=TEST_KEY,
+        now_fn=lambda: skewed,
+    )
+    evt, producer = verify_event(
+        signed_body,
+        headers,
+        topic="ingest.normalized",
+        signing_key=TEST_KEY,
+        now_fn=lambda: T0,
+    )
+    assert producer == "ingestion-service"
+
+
+def test_verify_rejects_missing_signed_at() -> None:
+    """A signed envelope with `_signed_at` stripped post-signing → reject.
+
+    We forge by signing a payload that ALREADY has `_signed_at`
+    pre-populated, then in the resulting body we delete it AND re-sign
+    via a custom path. The simplest way: build a body manually and
+    compute the HMAC ourselves with `_signed_at` absent — that proves
+    the verifier rejects even if signature math somehow checks out.
+    """
+    import hashlib as _hashlib
+    import hmac as _hmac
+    import json as _json
+
+    body: dict = {
+        "tenant_id": "t1",
+        BODY_FIELD_PRODUCER_SERVICE: "ingestion-service",
+        # BODY_FIELD_SIGNED_AT deliberately omitted
+    }
+    canonical = _json.dumps(body, sort_keys=True, separators=(",", ":"), default=str).encode("utf-8")
+    sig = _hmac.new(TEST_KEY, canonical, _hashlib.sha256).hexdigest()
+    headers = [
+        (HEADER_SIGNATURE, sig.encode("ascii")),
+        (HEADER_PRODUCER_SERVICE, b"ingestion-service"),
+        (HEADER_SIG_VERSION, CURRENT_SIG_VERSION.encode("ascii")),
+    ]
+
+    with pytest.raises(KafkaAuthError) as excinfo:
+        verify_event(
+            body,
+            headers,
+            topic="ingest.normalized",
+            signing_key=TEST_KEY,
+            now_fn=lambda: T0,
+        )
+    assert excinfo.value.reason == "missing_signed_at_in_body"
+
+
+def test_max_signature_age_env_override(monkeypatch: pytest.MonkeyPatch) -> None:
+    """`KAFKA_MAX_SIGNATURE_AGE_SECONDS=60` shrinks the freshness window."""
+    monkeypatch.setenv(ENV_MAX_SIG_AGE, "60")
+    signed_body, headers = sign_event(
+        {"tenant_id": "t1"},
+        producer_service="ingestion-service",
+        signing_key=TEST_KEY,
+        now_fn=lambda: T0,
+    )
+    later = T0.replace(minute=0, second=0) + (datetime(1, 1, 2, tzinfo=timezone.utc) - datetime(1, 1, 1, tzinfo=timezone.utc)) * 0
+    # 90 seconds after signing — past the 60s window.
+    from datetime import timedelta as _td
+    later = T0 + _td(seconds=90)
+    with pytest.raises(KafkaAuthError) as excinfo:
+        verify_event(
+            signed_body,
+            headers,
+            topic="ingest.normalized",
+            signing_key=TEST_KEY,
+            now_fn=lambda: later,
+        )
+    assert excinfo.value.reason == "signed_at_stale"
+    assert excinfo.value.fields["max_age_seconds"] == 60
+
+
+def test_verify_freshness_non_strict_warns_but_passes(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Non-strict rollout mode downgrades stale to a WARN log."""
+    signed_body, headers = sign_event(
+        {"tenant_id": "t1"},
+        producer_service="ingestion-service",
+        signing_key=TEST_KEY,
+        now_fn=lambda: T0,
+    )
+    from datetime import timedelta as _td
+    later = T0 + _td(minutes=30)  # 30 min — well past default window
+    evt, producer = verify_event(
+        signed_body,
+        headers,
+        topic="ingest.normalized",
+        signing_key=TEST_KEY,
+        strict=False,
+        now_fn=lambda: later,
+    )
+    assert producer == "ingestion-service"
+    assert evt["tenant_id"] == "t1"

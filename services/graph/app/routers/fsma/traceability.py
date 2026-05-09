@@ -17,6 +17,7 @@ from ...fsma_utils import (
     trace_forward,
 )
 from ...neo4j_utils import Neo4jClient
+from ...traceability_linker import TraceabilityLinker
 from neo4j.exceptions import Neo4jError, ServiceUnavailable
 from shared.auth import require_api_key
 from ...models.fsma_nodes import (
@@ -296,9 +297,8 @@ async def get_governing_regulations_endpoint(
     api_key=Depends(require_api_key),
 ):
     """Find all regulations governing a specific Lot."""
-    from kernel.graph_traceability import TraceabilityLinker
     from ...config import settings
-    
+
     linker = TraceabilityLinker(
         uri=settings.neo4j_uri,
         user=settings.neo4j_user,
@@ -321,9 +321,8 @@ async def get_impacted_lots_endpoint(
     api_key=Depends(require_api_key),
 ):
     """Find all lots impacted by a specific regulatory obligation."""
-    from kernel.graph_traceability import TraceabilityLinker
     from ...config import settings
-    
+
     linker = TraceabilityLinker(
         uri=settings.neo4j_uri,
         user=settings.neo4j_user,
@@ -346,9 +345,8 @@ async def link_obligation_endpoint(
     api_key=Depends(require_api_key),
 ):
     """Trigger automated linking of a regulation to supply chain events."""
-    from kernel.graph_traceability import TraceabilityLinker
     from ...config import settings
-    
+
     linker = TraceabilityLinker(
         uri=settings.neo4j_uri,
         user=settings.neo4j_user,
