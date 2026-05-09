@@ -3,6 +3,13 @@ import os
 import pytest
 from neo4j import GraphDatabase
 
+# Mark every test in this module as ``integration`` so the graph-tree
+# conftest auto-skips it locally unless ``--run-integration`` is passed
+# (or ``-m integration`` selects it explicitly). Spinning up a Neo4j
+# testcontainer dominates the graph-tree runtime; gating it keeps
+# `pytest services/graph/tests` snappy for local iteration.
+pytestmark = pytest.mark.integration
+
 # Skip testcontainers tests in CI — CI has its own Neo4j service container on port 7687
 # which conflicts with testcontainers trying to spin up another instance
 _IN_CI = os.getenv("CI") == "true" or os.getenv("GITHUB_ACTIONS") == "true"

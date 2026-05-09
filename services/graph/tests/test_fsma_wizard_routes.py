@@ -28,6 +28,28 @@ _repo_root = Path(__file__).resolve().parents[3]
 # that fsma_engine.py expects. We stub both to satisfy the engine's imports.
 # ---------------------------------------------------------------------------
 
+# Track which sys.modules entries existed before we stubbed them so the
+# autouse teardown fixture below can restore the originals (or evict the
+# stubs entirely) at module finalize time. Without this, the stubs leak into
+# any later test file that imports the real modules — silent today because no
+# current graph test imports the real ``shared.*`` after this file runs, but
+# a guaranteed ship-blocker the moment one does. Same pattern as PR #2203
+# (Option A).
+_STUBBED_NAMES = (
+    "shared.validators",
+    "shared.fsma_rules",
+    "shared.auth",
+    "shared",
+    "structlog",
+    "fsma_engine_module",
+    "kernel",
+    "kernel.reporting",
+    "kernel.reporting.fsma_engine",
+    "fsma_wizard",
+)
+_REAL_MODULES = {name: sys.modules.get(name) for name in _STUBBED_NAMES}
+
+
 def _force_stub(name: str, **attrs):
     """Force-register a stub module (overrides any existing entry)."""
     m = types.ModuleType(name)
@@ -58,11 +80,37 @@ _force_stub(
 if "shared" not in sys.modules:
     _force_stub("shared")
 
-# Stub structlog if not installed
-if "structlog" not in sys.modules:
+# Stub structlog only if it's genuinely not importable. The previous
+# ``"structlog" not in sys.modules`` check was wrong: structlog ships as a
+# package with submodules (e.g. ``structlog.contextvars``), but a lazy
+# ``from structlog import X`` further down the import chain triggers a
+# real package import that fails against our flat ModuleType stub. Probe
+# with a real import attempt instead.
+try:
+    import structlog  # noqa: F401
+except ImportError:
     _sl = types.ModuleType("structlog")
     _sl.get_logger = lambda *a, **kw: MagicMock()
     sys.modules["structlog"] = _sl
+
+
+@pytest.fixture(scope="module", autouse=True)
+def _restore_sys_modules_on_teardown():
+    """Restore the pre-existing ``sys.modules`` entries this file overwrote.
+
+    These stubs MUST be installed at module import time because the engine
+    and wizard modules below are loaded via ``importlib.util.spec_from_file_location``
+    at module level (the ``shared.*``/``kernel.*`` stubs satisfy their imports).
+    On module teardown we put back whatever was there before — or evict the
+    stub if there was no pre-existing entry — so later test files don't pick
+    up our stubs instead of the real modules.
+    """
+    yield
+    for name, real in _REAL_MODULES.items():
+        if real is not None:
+            sys.modules[name] = real
+        else:
+            sys.modules.pop(name, None)
 
 # ---------------------------------------------------------------------------
 # Load fsma_engine directly (bypasses kernel/__init__.py → langchain)
