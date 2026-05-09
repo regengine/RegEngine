@@ -7,6 +7,7 @@ import structlog
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
 
+from ...audit_failure_policy import handle_audit_failure
 from ...fsma_audit import FSMAAuditAction, FSMAAuditActorType, FSMAAuditDiff, get_audit_log
 from ...fsma_metrics import record_trace_query
 from ...fsma_utils import (
@@ -121,9 +122,9 @@ async def trace_forward_endpoint(
             facility_count=len(result.facilities),
         )
 
-        # #1033: best-effort KDE_READ audit (FSMA 204 / NIST AU-2)
+        # #1033 + RE-SEC-006: KDE_READ audit (FSMA 204 / NIST AU-2)
+        _actor = getattr(api_key, "key_id", str(api_key)) if api_key else "API"
         try:
-            _actor = getattr(api_key, "key_id", str(api_key)) if api_key else "API"
             get_audit_log().log(
                 action=FSMAAuditAction.KDE_READ,
                 target_type="KDE",
@@ -134,7 +135,17 @@ async def trace_forward_endpoint(
                 diff=[FSMAAuditDiff("record_ids", None, [tlc] + (result.lots or []))],
             )
         except Exception as _ae:
-            logger.error("kde_read_audit_failed", tlc=tlc, error=str(_ae))
+            handle_audit_failure(
+                tenant_id=str(tenant_id),
+                actor=_actor,
+                event_type="kde_read",
+                payload={
+                    "endpoint": "trace_forward",
+                    "tlc": tlc,
+                    "record_ids": [tlc] + (result.lots or []),
+                },
+                error=_ae,
+            )
 
         return {
             "lot_id": result.lot_id,
@@ -220,9 +231,9 @@ async def trace_backward_endpoint(
             facility_count=len(result.facilities),
         )
 
-        # #1033: best-effort KDE_READ audit (FSMA 204 / NIST AU-2)
+        # #1033 + RE-SEC-006: KDE_READ audit (FSMA 204 / NIST AU-2)
+        _actor = getattr(api_key, "key_id", str(api_key)) if api_key else "API"
         try:
-            _actor = getattr(api_key, "key_id", str(api_key)) if api_key else "API"
             get_audit_log().log(
                 action=FSMAAuditAction.KDE_READ,
                 target_type="KDE",
@@ -233,7 +244,17 @@ async def trace_backward_endpoint(
                 diff=[FSMAAuditDiff("record_ids", None, [tlc] + (result.lots or []))],
             )
         except Exception as _ae:
-            logger.error("kde_read_audit_failed", tlc=tlc, error=str(_ae))
+            handle_audit_failure(
+                tenant_id=str(tenant_id),
+                actor=_actor,
+                event_type="kde_read",
+                payload={
+                    "endpoint": "trace_backward",
+                    "tlc": tlc,
+                    "record_ids": [tlc] + (result.lots or []),
+                },
+                error=_ae,
+            )
 
         return {
             "lot_id": result.lot_id,
@@ -274,16 +295,25 @@ async def lot_timeline_endpoint(
         timeline = await get_lot_timeline(client, tlc, str(tenant_id))
         await client.close()
 
-        # #1033: audit KDE/CTE read access (FSMA 204 / NIST AU-2)
+        # #1033 + RE-SEC-006: KDE_READ audit (FSMA 204 / NIST AU-2)
         _actor = getattr(api_key, "key_id", str(api_key)) if api_key else "API"
-        get_audit_log().log(
-            action=FSMAAuditAction.KDE_READ,
-            target_type="KDE",
-            target_id=tlc,
-            actor=_actor,
-            actor_type=FSMAAuditActorType.API,
-            tenant_id=str(tenant_id),
-        )
+        try:
+            get_audit_log().log(
+                action=FSMAAuditAction.KDE_READ,
+                target_type="KDE",
+                target_id=tlc,
+                actor=_actor,
+                actor_type=FSMAAuditActorType.API,
+                tenant_id=str(tenant_id),
+            )
+        except Exception as _ae:
+            handle_audit_failure(
+                tenant_id=str(tenant_id),
+                actor=_actor,
+                event_type="kde_read",
+                payload={"endpoint": "lot_timeline", "tlc": tlc},
+                error=_ae,
+            )
 
         return {"lot_id": tlc, "events": timeline}
     except (neo4j.exceptions.Neo4jError, ConnectionError) as e:
@@ -429,16 +459,34 @@ async def search_traceability_events(
         page_events = events[:limit]
         next_cursor = page_events[-1]["event_id"] if has_more and page_events else None
 
-        # #1033: audit KDE/CTE read access on search (FSMA 204 / NIST AU-2)
+        # #1033 + RE-SEC-006: KDE_READ audit (FSMA 204 / NIST AU-2)
         _actor = getattr(api_key, "key_id", str(api_key)) if api_key else "API"
-        get_audit_log().log(
-            action=FSMAAuditAction.KDE_READ,
-            target_type="KDE",
-            target_id=f"search:{effective_start}:{effective_end}",
-            actor=_actor,
-            actor_type=FSMAAuditActorType.API,
-            tenant_id=str(tenant_id),
-        )
+        _search_target = f"search:{effective_start}:{effective_end}"
+        try:
+            get_audit_log().log(
+                action=FSMAAuditAction.KDE_READ,
+                target_type="KDE",
+                target_id=_search_target,
+                actor=_actor,
+                actor_type=FSMAAuditActorType.API,
+                tenant_id=str(tenant_id),
+            )
+        except Exception as _ae:
+            handle_audit_failure(
+                tenant_id=str(tenant_id),
+                actor=_actor,
+                event_type="kde_read",
+                payload={
+                    "endpoint": "search_events",
+                    "target_id": _search_target,
+                    "start_date": effective_start,
+                    "end_date": effective_end,
+                    "product_contains": product_contains,
+                    "facility_contains": facility_contains,
+                    "cte_type": normalized_cte,
+                },
+                error=_ae,
+            )
 
         return {
             "count": len(page_events),

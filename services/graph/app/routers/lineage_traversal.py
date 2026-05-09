@@ -19,6 +19,7 @@ from pydantic import BaseModel
 
 from ..neo4j_utils import Neo4jClient
 from shared.auth import require_api_key
+from ..audit_failure_policy import handle_audit_failure
 from ..fsma_audit import FSMAAuditAction, FSMAAuditActorType, FSMAAuditDiff, get_audit_log  # #1033 KDE_READ
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
@@ -215,9 +216,9 @@ async def get_fact_lineage(
 
         duration_ms = (time.time() - start_time) * 1000
 
-        # #1033: best-effort KDE_READ audit (FSMA 204 / NIST AU-2)
+        # #1033 + RE-SEC-006: KDE_READ audit (FSMA 204 / NIST AU-2)
+        _actor = getattr(api_key, "key_id", str(api_key)) if api_key else "API"
         try:
-            _actor = getattr(api_key, "key_id", str(api_key)) if api_key else "API"
             get_audit_log().log(
                 action=FSMAAuditAction.KDE_READ,
                 target_type="KDE",
@@ -228,7 +229,17 @@ async def get_fact_lineage(
                 diff=[FSMAAuditDiff("record_ids", None, [tlc])],
             )
         except Exception as _ae:
-            logger.error("kde_read_audit_failed", tlc=tlc, error=str(_ae))
+            handle_audit_failure(
+                tenant_id=str(tenant_id),
+                actor=_actor,
+                event_type="kde_read",
+                payload={
+                    "endpoint": "fact_lineage",
+                    "tlc": tlc,
+                    "record_ids": [tlc],
+                },
+                error=_ae,
+            )
 
         return FactLineageResponse(
             tlc=tlc,
