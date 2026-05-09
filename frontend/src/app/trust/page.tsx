@@ -61,16 +61,13 @@ export default function TrustCenterPage() {
         <div className="min-h-screen bg-[var(--re-surface-base)] text-[var(--re-text-secondary)]">
             {/* ─── HEADER ─── */}
             <section className="relative z-[2] max-w-[860px] mx-auto pt-14 sm:pt-20 px-4 sm:px-6 pb-10 sm:pb-14">
-                <span className="text-[11px] font-mono font-medium text-re-text-disabled tracking-widest uppercase">
-                    Trust Center
-                </span>
                 <h1 className="font-display text-4xl font-bold text-re-text-primary mt-4 mb-4 leading-tight">
-                    We built this page so you never have to guess what you&apos;re buying
+                    Trust Center
                 </h1>
                 <p className="text-base text-re-text-muted leading-relaxed max-w-[720px]">
-                    Product status, data ownership, retention terms, and diligence materials — all in one place.
-                    RegEngine is a compliance evidence layer, not a system-of-record replacement.
-                    Everything here is kept current so buyers and acquirers can do diligence without scheduling a call.
+                    Product status, data ownership, retention terms, and diligence materials in one place. Specific
+                    commitments — SLAs, retention, security obligations — live in your contract; this page
+                    is a starting point for diligence, not a substitute for it.
                 </p>                <div className="mt-6 grid gap-3 sm:grid-cols-3">
                     <div className={`${card} p-4`}>
                         <div className="text-xs uppercase tracking-widest text-re-text-disabled">Capability Registry</div>
@@ -78,14 +75,14 @@ export default function TrustCenterPage() {
                         <div className="text-sm text-re-text-muted mt-1">Customer-visible entries rendered from one shared status model</div>
                     </div>
                     <div className={`${card} p-4`}>
-                        <div className="text-xs uppercase tracking-widest text-re-text-disabled">Retention Posture</div>
-                        <div className="mt-2 text-2xl font-bold text-re-text-primary">Current default</div>
-                        <div className="text-sm text-re-text-muted mt-1">Post-cancellation retention follows the active customer agreement and workspace operating posture</div>
+                        <div className="text-xs uppercase tracking-widest text-re-text-disabled">Retention</div>
+                        <div className="mt-2 text-2xl font-bold text-re-text-primary">Per contract</div>
+                        <div className="text-sm text-re-text-muted mt-1">Post-cancellation retention is set in your agreement.</div>
                     </div>
                     <div className={`${card} p-4`}>
                         <div className="text-xs uppercase tracking-widest text-re-text-disabled">Data Residency</div>
                         <div className="mt-2 text-2xl font-bold text-re-text-primary">US</div>
-                        <div className="text-sm text-re-text-muted mt-1">Default hosting posture is US-based infrastructure for current deployments</div>
+                        <div className="text-sm text-re-text-muted mt-1">US-based infrastructure.</div>
                     </div>
                 </div>
             </section>
@@ -96,7 +93,7 @@ export default function TrustCenterPage() {
                     <p className="text-sm text-re-text-muted mb-6 max-w-[720px]">
                         RegEngine is a compliance evidence layer, not a system-of-record replacement. This distinction drives retention, audit ownership, and liability boundaries.
                     </p>
-                    <div className="grid gap-3 md:grid-cols-3">
+                    <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
                         <div className={`${card} p-4`}>
                             <div className="text-sm font-semibold text-re-text-primary">Evidence layer (current posture)</div>
                             <p className="text-sm text-re-text-muted mt-2">You own the data and compliance posture. RegEngine documents, normalizes, and exports it. Audit response liability remains with the customer.</p>
@@ -108,6 +105,10 @@ export default function TrustCenterPage() {
                         <div className={`${card} p-4`}>
                             <div className="text-sm font-semibold text-re-text-primary">Full data portability</div>
                             <p className="text-sm text-re-text-muted mt-2">All CTE events, KDE fields, lot records, and supplier relationships are exportable in EPCIS 2.0 JSON-LD, FDA sortable spreadsheet, or CSV.</p>
+                        </div>
+                        <div className={`${card} p-4`}>
+                            <div className="text-sm font-semibold text-re-text-primary">Tenant isolation</div>
+                            <p className="text-sm text-re-text-muted mt-2">PostgreSQL row-level policies and authenticated tenant context prevent cross-tenant reads. Identity-resolution and graph-layer hardening is in progress; details available under NDA.</p>
                         </div>
                     </div>
                 </div>
@@ -127,7 +128,7 @@ export default function TrustCenterPage() {
                             <li>Source-system fields must be mapped into FSMA CTE and KDE structures.</li>
                             <li>Lot codes, GLNs, product IDs, and facility identities have to be normalized.</li>
                             <li>Missing KDEs and conflicting facility matches still require human review.</li>
-                            <li>Cryptographic hashing proves integrity after ingest, not truth of upstream data entry.</li>
+                            <li>Cryptographic hashing provides tamper-evidence after ingest, not proof of upstream data entry.</li>
                         </ul>
                     </div>
                     <div className={`${card} p-5`}>
@@ -179,7 +180,9 @@ export default function TrustCenterPage() {
             <section className="relative z-[2] max-w-[980px] mx-auto py-10 sm:py-14 px-4 sm:px-6">
                 <h2 className="font-display text-2xl font-bold text-re-text-primary mb-4">Data portability and exit rights</h2>
                 <p className="text-sm text-re-text-muted mb-6 max-w-[720px]">
-                    Export your data means more than downloading a CSV. RegEngine provides complete, integrity-verified exports that can reconstitute compliance records without vendor assistance.
+                    Exports use open standards (GS1 EPCIS 2.0, the FDA sortable spreadsheet, CSV) so records
+                    can be read and stored outside RegEngine. Re-import into another system depends on that
+                    system&apos;s ingest support for the chosen format.
                 </p>
                 <div className="grid gap-3 md:grid-cols-2">
                     <div className={`${card} p-4`}>
@@ -194,10 +197,10 @@ export default function TrustCenterPage() {
                     <div className={`${card} p-4`}>
                         <div className="text-sm font-semibold text-re-text-primary">Integrity and chain of custody</div>
                         <ul className="mt-2 space-y-1 text-sm text-re-text-muted">
-                            <li>SHA-256 hash chain verification on all CTE records</li>
-                            <li>Timestamped export manifests for audit trail</li>
-                            <li>Export history log with verification endpoint</li>
-                            <li>Records are self-describing and re-importable</li>
+                            <li>Events are SHA-256 hashed and chain-linked at ingest</li>
+                            <li>Timestamped manifests are generated for export bundles</li>
+                            <li>Public verification endpoint at <Link href="/verify" className="text-re-brand hover:opacity-90">/verify</Link></li>
+                            <li>Downstream message-bus signature verification is rolling out across consumers and is not yet strict-mode by default</li>
                         </ul>
                     </div>                    <div className={`${card} p-4`}>
                         <div className="text-sm font-semibold text-re-text-primary">Automated export scheduling</div>
@@ -206,15 +209,6 @@ export default function TrustCenterPage() {
                             <li>Archive delivery may use object storage or downloadable bundles</li>
                             <li>Manifest hashing is part of the intended export posture</li>
                             <li>Monitoring and retry behavior depend on the configured delivery path</li>
-                        </ul>
-                    </div>
-                    <div className={`${card} p-4`}>
-                        <div className="text-sm font-semibold text-re-text-primary">Retention and deletion</div>
-                        <ul className="mt-2 space-y-1 text-sm text-re-text-muted">
-                            <li>90-day post-cancellation retention window</li>
-                            <li>Customer-controlled archive exports from day one</li>
-                            <li>Deletion policy documented in contract terms</li>
-                            <li>No vendor lock-in on record format or schema</li>
                         </ul>
                     </div>
                 </div>
@@ -232,7 +226,7 @@ export default function TrustCenterPage() {
                             <ul className="mt-2 space-y-1 text-sm text-re-text-muted">
                                 <li>Per-CTE-type required KDE validation (7 CTE types)</li>
                                 <li>GLN format and GS1 check-digit verification</li>
-                                <li>Timestamp bounds checking (90-day historical, 24-hour future)</li>
+                                <li>Rejects events more than 24 hours in the future or more than 90 days old (configurable)</li>
                                 <li>Unit of measure validation against FSMA 204 standard units</li>
                                 <li>Location requirement validation per CTE</li>
                             </ul>
@@ -241,26 +235,24 @@ export default function TrustCenterPage() {
                             <div className="text-sm font-semibold text-re-text-primary">Rejection and flagging</div>
                             <ul className="mt-2 space-y-1 text-sm text-re-text-muted">
                                 <li>Missing required KDEs trigger event rejection with detailed error messages</li>
-                                <li>Compliance alerts generated for obligation gaps</li>
+                                <li>Obligation-gap alerts are surfaced asynchronously; rule enforcement is configurable per deployment and is advisory in production today</li>
                                 <li>Batch deduplication prevents duplicate CTE submissions</li>
                                 <li>Rejected events returned with status and actionable error detail</li>
                             </ul>
                         </div>                        <div className={`${card} p-4`}>
-                            <div className="text-sm font-semibold text-re-text-primary">Supplier data quality scoring</div>
+                            <div className="text-sm font-semibold text-re-text-primary">Supplier data quality</div>
                             <ul className="mt-2 space-y-1 text-sm text-re-text-muted">
-                                <li>Per-supplier KDE completeness rate tracking</li>
-                                <li>Drift detection for format changes and quality degradation</li>
-                                <li>Supplier health dashboard sorted by alert severity</li>
-                                <li>Volume anomaly detection for unusual submission patterns</li>
+                                <li>Per-supplier KDE completeness tracking</li>
+                                <li>Submission history retained for review</li>
+                                <li>Specific scoring and alerting features ship per workspace configuration</li>
                             </ul>
                         </div>
                         <div className={`${card} p-4`}>
                             <div className="text-sm font-semibold text-re-text-primary">Compliance readiness scoring</div>
                             <ul className="mt-2 space-y-1 text-sm text-re-text-muted">
-                                <li>Six-dimensional score: chain integrity, KDE completeness, CTE coverage, obligation coverage, product coverage, export readiness</li>
-                                <li>Letter grade A-F with detailed breakdown</li>
-                                <li>Actionable next steps for score improvement</li>
-                                <li>Current calculation from the tenant data available in the active workspace</li>
+                                <li>Six weighted signals: export readiness (30%), KDE completeness (25%), CTE coverage (15%), chain integrity (10%), obligation coverage (10%), FTL product coverage (10%)</li>
+                                <li>Calculated from data in the active workspace</li>
+                                <li>Internal readiness signal, not an FDA endorsement</li>
                             </ul>
                         </div>
                     </div>
@@ -285,10 +277,10 @@ export default function TrustCenterPage() {
                     <div className={`${card} p-4`}>
                         <div className="text-sm font-semibold text-re-text-primary">Update mechanism</div>
                         <ul className="mt-2 space-y-1 text-sm text-re-text-muted">
-                            <li>Validation rules versioned with FDA guidance reference</li>
-                            <li>Compliance logic updates tracked in release notes</li>
-                            <li>FTL category definitions updated when FDA publishes changes</li>
-                            <li>Customer notification for material compliance logic changes</li>
+                            <li>Validation rules are versioned and reference the underlying FDA guidance</li>
+                            <li>Compliance logic changes are documented in the changelog</li>
+                            <li>FTL category definitions are reviewed against current FDA publications</li>
+                            <li>Customers are responsible for confirming their own regulatory interpretation</li>
                         </ul>
                     </div>
                 </div>
@@ -300,7 +292,7 @@ export default function TrustCenterPage() {
                     <div className={`${card} p-5`}>
                         <h2 className="font-display text-2xl font-bold text-re-text-primary mb-2">Support and escalation</h2>
                         <p className="text-sm text-re-text-muted mb-4">
-                            Support posture depends on plan tier. Customers should not rely on ad hoc vendor intervention to satisfy statutory retention or a live recall response.
+                            Support posture depends on plan tier. Customers should not rely on ad hoc vendor intervention to satisfy statutory retention or a live recall response. Specific availability, latency, RPO, and RTO commitments are negotiated per contract; we do not publish SLA numbers we are not yet measuring against a public status page.
                         </p>
                         <div className="space-y-3">
                             {SUPPORT_CHANNELS.map((channel) => (
@@ -316,21 +308,18 @@ export default function TrustCenterPage() {
                         </div>
                     </div>
                     <div className={`${card} p-5`}>
-                        <h2 className="font-display text-2xl font-bold text-re-text-primary mb-2">Archive posture</h2>
+                        <h2 className="font-display text-2xl font-bold text-re-text-primary mb-2">Scheduled exports</h2>
                         <p className="text-sm text-re-text-muted mb-4">
-                            Export jobs support scheduled bundle configuration with manifest hashing and external archive destinations. Each export run includes a SHA-256 manifest for independent verification.
-                        </p>                        <div className="space-y-3">
+                            Examples of supported export configurations. Each scheduled export produces a
+                            SHA-256 manifest for independent verification. Real run history for your workspace
+                            is available in the dashboard.
+                        </p>
+                        <div className="space-y-3">
                             {ARCHIVE_EXPORT_JOBS.map((job) => (
                                 <div key={job.id} className={cardInner}>
-                                    <div className="flex items-center justify-between gap-3">
-                                        <div className="text-sm font-semibold text-re-text-primary">{job.name}</div>
-                                        <div className="text-[10px] uppercase tracking-widest text-re-text-disabled">{job.status.replaceAll('_', ' ')}</div>
-                                    </div>
+                                    <div className="text-sm font-semibold text-re-text-primary">{job.name}</div>
                                     <p className="text-sm text-re-text-muted mt-2">
                                         {job.format} · {job.cadence} · {job.destination}
-                                    </p>
-                                    <p className="text-xs text-re-text-disabled mt-2">
-                                        Last run: {job.lastRun} · Next run: {job.nextRun}
                                     </p>
                                 </div>
                             ))}
@@ -342,37 +331,14 @@ export default function TrustCenterPage() {
                     </div>
                 </div>
             </section>
-            {/* SLA Commitments */}
-            <section className="relative z-[2] max-w-[980px] mx-auto py-10 sm:py-14 px-4 sm:px-6">
-                <h2 className="font-display text-2xl font-bold text-re-text-primary mb-4">Service level commitments</h2>
-                <p className="text-sm text-re-text-muted mb-6 max-w-[720px]">
-                    Current operational targets. We publish real numbers, not aspirational marketing SLAs.
-                </p>
-                <div className="grid gap-3 md:grid-cols-3">
-                    <div className={`${card} p-4`}>
-                        <div className="text-xs uppercase tracking-widest text-re-text-disabled">API Uptime Target</div>
-                        <div className="mt-2 text-2xl font-bold text-re-text-primary">99.5%</div>
-                        <div className="text-sm text-re-text-muted mt-1">Measured monthly. Current actual: tracking since March 2026 launch. Enterprise SLAs negotiable.</div>
-                    </div>
-                    <div className={`${card} p-4`}>
-                        <div className="text-xs uppercase tracking-widest text-re-text-disabled">P95 API Latency</div>
-                        <div className="mt-2 text-2xl font-bold text-re-text-primary">&lt;500ms</div>
-                        <div className="text-sm text-re-text-muted mt-1">For standard read operations. Write operations including hash computation may exceed this for large batches.</div>
-                    </div>
-                    <div className={`${card} p-4`}>
-                        <div className="text-xs uppercase tracking-widest text-re-text-disabled">RPO / RTO</div>
-                        <div className="mt-2 text-2xl font-bold text-re-text-primary">0 / 4hr</div>
-                        <div className="text-sm text-re-text-muted mt-1">Zero data loss (committed records are durable). Recovery time objective of 4 hours for full service restoration.</div>
-                    </div>
-                </div>
-            </section>
-
             {/* Subprocessors */}
             <section className={`relative z-[2] ${sectionAlt}`}>
                 <div className="max-w-[980px] mx-auto py-10 sm:py-14 px-4 sm:px-6">
                     <h2 className="font-display text-2xl font-bold text-re-text-primary mb-4">Infrastructure and subprocessors</h2>
                     <p className="text-sm text-re-text-muted mb-6 max-w-[720px]">
-                        Complete list of third-party services that process or store customer data. Updated when changes occur.
+                        Third-party services that process or store customer data. The authoritative list for
+                        your contract is in your DPA — request the current subprocessor list if you need it
+                        for diligence.
                     </p>
                     <div className="overflow-x-auto">
                         <table className={`w-full border-collapse ${card}`}>
@@ -399,27 +365,63 @@ export default function TrustCenterPage() {
                                 </tr>
                                 <tr className="border-b border-[var(--re-surface-border)]">
                                     <td className="p-3 font-medium text-re-text-primary">Vercel</td>
-                                    <td className="p-3 text-re-text-muted">Frontend hosting, serverless functions</td>
-                                    <td className="p-3 text-re-text-muted">Session tokens (transit only)</td>
+                                    <td className="p-3 text-re-text-muted">Frontend hosting, API proxy</td>
+                                    <td className="p-3 text-re-text-muted">Authenticated requests in transit</td>
                                     <td className="p-3 text-re-text-muted">US (AWS)</td>
+                                </tr>
+                                <tr className="border-b border-[var(--re-surface-border)]">
+                                    <td className="p-3 font-medium text-re-text-primary">Sentry</td>
+                                    <td className="p-3 text-re-text-muted">Error monitoring and session replay</td>
+                                    <td className="p-3 text-re-text-muted">Backend stack traces; frontend errors; replays of authenticated sessions</td>
+                                    <td className="p-3 text-re-text-muted">US</td>
+                                </tr>
+                                <tr className="border-b border-[var(--re-surface-border)]">
+                                    <td className="p-3 font-medium text-re-text-primary">Resend</td>
+                                    <td className="p-3 text-re-text-muted">Transactional email (invites, verifications)</td>
+                                    <td className="p-3 text-re-text-muted">Recipient email and invite metadata</td>
+                                    <td className="p-3 text-re-text-muted">US</td>
+                                </tr>
+                                <tr className="border-b border-[var(--re-surface-border)]">
+                                    <td className="p-3 font-medium text-re-text-primary">PostHog</td>
+                                    <td className="p-3 text-re-text-muted">Product analytics (post-consent)</td>
+                                    <td className="p-3 text-re-text-muted">Product events after user consent</td>
+                                    <td className="p-3 text-re-text-muted">US</td>
+                                </tr>
+                                <tr className="border-b border-[var(--re-surface-border)]">
+                                    <td className="p-3 font-medium text-re-text-primary">OpenAI</td>
+                                    <td className="p-3 text-re-text-muted">LLM extraction and label-image vision</td>
+                                    <td className="p-3 text-re-text-muted">Document text and uploaded label images</td>
+                                    <td className="p-3 text-re-text-muted">US (multi-region)</td>
+                                </tr>
+                                <tr className="border-b border-[var(--re-surface-border)]">
+                                    <td className="p-3 font-medium text-re-text-primary">Google Cloud / Vertex AI</td>
+                                    <td className="p-3 text-re-text-muted">Gemini-based extraction</td>
+                                    <td className="p-3 text-re-text-muted">Document text submitted for extraction</td>
+                                    <td className="p-3 text-re-text-muted">us-central1</td>
                                 </tr>
                                 <tr className="border-b border-[var(--re-surface-border)]">
                                     <td className="p-3 font-medium text-re-text-primary">Stripe</td>
                                     <td className="p-3 text-re-text-muted">Payment processing</td>
-                                    <td className="p-3 text-re-text-muted">Billing info (no compliance data)</td>
+                                    <td className="p-3 text-re-text-muted">Billing identifiers and contact email</td>
+                                    <td className="p-3 text-re-text-muted">US</td>
+                                </tr>
+                                <tr className="border-b border-[var(--re-surface-border)]">
+                                    <td className="p-3 font-medium text-re-text-primary">Redpanda</td>
+                                    <td className="p-3 text-re-text-muted">Kafka-compatible event streaming</td>
+                                    <td className="p-3 text-re-text-muted">Ingested events in transit</td>
                                     <td className="p-3 text-re-text-muted">US</td>
                                 </tr>
                                 <tr>
-                                    <td className="p-3 font-medium text-re-text-primary">Redpanda</td>
-                                    <td className="p-3 text-re-text-muted">Event streaming (Kafka-compatible)</td>
-                                    <td className="p-3 text-re-text-muted">Ingestion events (transit)</td>
-                                    <td className="p-3 text-re-text-muted">US</td>
+                                    <td className="p-3 font-medium text-re-text-primary">Object storage</td>
+                                    <td className="p-3 text-re-text-muted">Raw document and upload storage</td>
+                                    <td className="p-3 text-re-text-muted">Customer-uploaded documents</td>
+                                    <td className="p-3 text-re-text-muted">Per deployment</td>
                                 </tr>
                             </tbody>
                         </table>
                     </div>
                     <p className="text-xs text-re-text-disabled mt-4">
-                        Last updated: March 2026. Changes to subprocessors are communicated to customers with 30 days&apos; notice.
+                        Last reviewed: May 2026. The authoritative subprocessor list for your contract is in your DPA; the table above is informational and may lag the DPA. Notice periods for subprocessor changes are set in your agreement.
                     </p>
                 </div>
             </section>
