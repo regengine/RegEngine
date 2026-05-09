@@ -8,10 +8,21 @@ Covers:
 """
 
 import os
+import socket
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from unittest.mock import MagicMock, patch
+
+
+def _public_getaddrinfo(ip: str = "93.184.216.34"):
+    """Build a getaddrinfo return value that looks like a public IPv4 host.
+
+    PR #2197 swapped ``socket.gethostbyname`` for ``socket.getaddrinfo`` in
+    ``shared.url_validation._check_resolved_ip`` so both A and AAAA records
+    are inspected. The function reads ``info[4][0]`` as the address.
+    """
+    return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", (ip, 0))]
 
 os.environ.setdefault("DATABASE_URL", "sqlite:///:memory:")
 os.environ.setdefault("ENVIRONMENT", "test")
@@ -82,7 +93,7 @@ class TestSSRFGuard_Issue1084:
     def test_allows_public_url(self):
         notifier = _make_notifier("https://hooks.example.com/webhook")
         mock_response = _make_response(200, b'{"ok": true}')
-        with patch("shared.url_validation.socket.gethostbyname", return_value="93.184.216.34"):
+        with patch("shared.url_validation.socket.getaddrinfo", return_value=_public_getaddrinfo()):
             with patch.object(notifier.session, "post", return_value=mock_response):
                 result = notifier._deliver_with_retry(
                     "https://hooks.example.com/webhook", MagicMock(to_dict=lambda: {})
@@ -117,7 +128,7 @@ class TestSSRFGuardOutbox_Issue1084:
         entry = self._make_entry("https://hooks.example.com/webhook")
         entry.payload = {}
         mock_response = _make_response(200, b"ok")
-        with patch("shared.url_validation.socket.gethostbyname", return_value="93.184.216.34"):
+        with patch("shared.url_validation.socket.getaddrinfo", return_value=_public_getaddrinfo()):
             with patch.object(notifier.session, "post", return_value=mock_response):
                 result = notifier._retry_one_entry(entry)
         assert result is True
@@ -135,7 +146,7 @@ class TestResponseBodyCap_Issue1084:
         # httpx Response.content returns the full bytes; our code slices it
         mock_response = _make_response(500, large_body)
         notifier = _make_notifier("https://hooks.example.com/webhook")
-        with patch("shared.url_validation.socket.gethostbyname", return_value="93.184.216.34"):
+        with patch("shared.url_validation.socket.getaddrinfo", return_value=_public_getaddrinfo()):
             with patch.object(notifier.session, "post", return_value=mock_response):
                 result = notifier._deliver_with_retry(
                     "https://hooks.example.com/webhook",
@@ -154,7 +165,7 @@ class TestResponseBodyCap_Issue1084:
         mock_response = _make_response(503, large_body)
         notifier = WebhookNotifier(urls=[], timeout=5, max_retries=1)
         entry = OutboxEntry(url="https://hooks.example.com/webhook", payload={})
-        with patch("shared.url_validation.socket.gethostbyname", return_value="93.184.216.34"):
+        with patch("shared.url_validation.socket.getaddrinfo", return_value=_public_getaddrinfo()):
             with patch.object(notifier.session, "post", return_value=mock_response):
                 result = notifier._retry_one_entry(entry)
         assert result is False
