@@ -1,7 +1,7 @@
 """Task-queue handler for discovery scrape jobs (ADR-002 PR-D).
 
 Registers one task type:
-  - ``discovery_scrape`` — calls kernel.discovery.scrape(body, url)
+  - ``discovery_scrape`` — calls services.ingestion.app.discovery.scrape(body, url)
 
 Used by /v1/ingest/discovery/approve and /v1/ingest/discovery/bulk-approve
 to replace BackgroundTasks.add_task(discovery.scrape, body, url).
@@ -14,7 +14,7 @@ from typing import Any
 
 from shared.task_queue import register_task_handler
 
-from kernel.discovery import discovery
+from .discovery import discovery
 
 
 def _handle_discovery_scrape(
