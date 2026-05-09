@@ -274,6 +274,10 @@ export default function WalkthroughPage() {
             </button>
           </Link>
         </div>
+        <p className="text-[0.85rem] text-re-text-muted mt-6">
+          See the underlying transformation step by step at{' '}
+          <Link href="/proof/transformation" className="text-[var(--re-brand)] hover:opacity-80 underline">/proof/transformation</Link>.
+        </p>
       </section>
     </div>
   );

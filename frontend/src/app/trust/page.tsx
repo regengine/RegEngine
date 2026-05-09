@@ -141,6 +141,15 @@ export default function TrustCenterPage() {
                     </div>
                 </div>
             </section>
+            {/* ─── PUBLIC PROOF SURFACE CALLOUT ─── */}
+            <section className="relative z-[2] max-w-[980px] mx-auto py-6 sm:py-8 px-4 sm:px-6">
+                <div className={`${card} p-5`}>
+                    <div className="text-sm font-semibold text-re-text-primary">Verify any export yourself</div>
+                    <p className="text-sm text-re-text-muted mt-2">
+                        Drop a bundle into <Link href="/verify" className="text-re-brand hover:opacity-90">/verify</Link> or download a synthetic sample at <Link href="/proof" className="text-re-brand hover:opacity-90">/proof</Link>.
+                    </p>
+                </div>
+            </section>
             {/* ─── ARTIFACTS ─── */}
             <section className={`relative z-[2] ${sectionAlt}`}>
                 <div className="max-w-[980px] mx-auto py-10 sm:py-14 px-4 sm:px-6">

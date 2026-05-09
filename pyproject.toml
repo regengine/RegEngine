@@ -168,3 +168,6 @@ filterwarnings = [
     "ignore::DeprecationWarning",
     "ignore::UserWarning",
 ]
+markers = [
+    "integration: tests requiring docker/testcontainers or other live external services. Auto-skipped in services/graph/tests unless ``--run-integration`` is passed; opt in elsewhere via ``pytest -m integration``.",
+]
