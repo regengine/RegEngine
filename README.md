@@ -6,6 +6,14 @@ Current product wedge: Inflow prepares, Engine proves. Supplier and ERP data is 
 
 Canonical product description: see [docs/PRODUCT_DESCRIPTION.md](docs/PRODUCT_DESCRIPTION.md).
 
+## Public proof surface
+
+You don't have to take our word for any of this — try it yourself:
+
+- [regengine.co/proof](https://regengine.co/proof) — download a synthetic FSMA CSV, EPCIS 2.0 JSON-LD bundle, and audit evidence ZIP.
+- [regengine.co/verify](https://regengine.co/verify) — drop any RegEngine bundle into the public verifier and confirm hash-chain integrity.
+- [regengine.co/proof/recall-drill](https://regengine.co/proof/recall-drill) — run a recall drill against the synthetic bundle and reproduce the case-study metrics.
+
 This README describes behavior that is visible in checked-in code, configuration, tests, and runbooks.
 
 ## Current Status

@@ -1,0 +1,423 @@
+{
+  "@context": [
+    "https://ref.gs1.org/standards/epcis/2.0.0/epcis-context.jsonld",
+    {
+      "regengine": "https://regengine.co/ns/"
+    }
+  ],
+  "creationDate": "2026-01-01T00:00:00+00:00",
+  "epcisBody": {
+    "eventList": [
+      {
+        "action": "OBSERVE",
+        "bizStep": "urn:epcglobal:cbv:bizstep:harvesting",
+        "eventTime": "2026-03-12T06:00:00+00:00",
+        "eventTimeZoneOffset": "+00:00",
+        "extension": {
+          "quantityList": [
+            {
+              "epcClass": "urn:epc:class:lgtin:0000000.000000.LOT-ROM-2026-0312A",
+              "quantity": "5000",
+              "uom": "lbs"
+            }
+          ]
+        },
+        "readPoint": {
+          "id": "urn:epc:id:sgln:0061414100014.0"
+        },
+        "regengine:chainHash": "eb902a891216ca3366461b2a210ff3152c8fd943a4e889786a4ff5c9dabad757",
+        "regengine:sha256": "629c56ed928a0b725256781e0632e8b7fd5f29dd3593392f77c7459517306ed3",
+        "type": "ObjectEvent"
+      },
+      {
+        "action": "OBSERVE",
+        "bizStep": "urn:epcglobal:cbv:bizstep:harvesting",
+        "eventTime": "2026-03-12T06:07:00+00:00",
+        "eventTimeZoneOffset": "+00:00",
+        "extension": {
+          "quantityList": [
+            {
+              "epcClass": "urn:epc:class:lgtin:0000000.000000.LOT-ROM-2026-0312B",
+              "quantity": "3200",
+              "uom": "lbs"
+            }
+          ]
+        },
+        "readPoint": {
+          "id": "urn:epc:id:sgln:0061414100014.0"
+        },
+        "regengine:chainHash": "03cc78725130eb5d4a315f3c0176ab0267f04c31cc456e48be4f0cf7ae9042a2",
+        "regengine:sha256": "1798b1cf2c6defed414600fd969e3dc7457170c03ef05662a0e43ef5ca072ad4",
+        "type": "ObjectEvent"
+      },
+      {
+        "action": "OBSERVE",
+        "bizStep": "urn:epcglobal:cbv:bizstep:harvesting",
+        "eventTime": "2026-03-11T06:14:00+00:00",
+        "eventTimeZoneOffset": "+00:00",
+        "extension": {
+          "quantityList": [
+            {
+              "epcClass": "urn:epc:class:lgtin:0000000.000000.LOT-ROM-2026-0311C",
+              "quantity": "4100",
+              "uom": "lbs"
+            }
+          ]
+        },
+        "readPoint": {
+          "id": "urn:epc:id:sgln:0061414100021.0"
+        },
+        "regengine:chainHash": "6d2b6bdc2931a73a04ee2c2a62472d0159ebf9aad06c6eb20de52f2b5dea9b2c",
+        "regengine:sha256": "8b7acdad9a56f7f0b6900b373149f6dcdba7be4098498e9aa20c800e8b3c8abb",
+        "type": "ObjectEvent"
+      },
+      {
+        "action": "OBSERVE",
+        "bizStep": "urn:epcglobal:cbv:bizstep:storing",
+        "eventTime": "2026-03-12T09:00:00+00:00",
+        "eventTimeZoneOffset": "+00:00",
+        "extension": {
+          "quantityList": [
+            {
+              "epcClass": "urn:epc:class:lgtin:0000000.000000.LOT-ROM-2026-0312A",
+              "quantity": "5000",
+              "uom": "lbs"
+            }
+          ]
+        },
+        "readPoint": {
+          "id": "urn:epc:id:sgln:0061414100014.0"
+        },
+        "regengine:chainHash": "b6c9ab9fc80af068a81ff69a58de1cee5ad1b6b77afc8109dbb71e67d1f74ac5",
+        "regengine:sha256": "fffad000ed0b47f1b375257ed4ce45abc1f99c469762ef86b637b8705e9db8b2",
+        "type": "ObjectEvent"
+      },
+      {
+        "action": "OBSERVE",
+        "bizStep": "urn:epcglobal:cbv:bizstep:storing",
+        "eventTime": "2026-01-01T09:07:00+00:00",
+        "eventTimeZoneOffset": "+00:00",
+        "extension": {
+          "quantityList": [
+            {
+              "epcClass": "urn:epc:class:lgtin:0000000.000000.LOT-ROM-2026-0312B",
+              "quantity": "3200",
+              "uom": "lbs"
+            }
+          ]
+        },
+        "readPoint": {
+          "id": "urn:epc:id:sgln:0061414100014.0"
+        },
+        "regengine:chainHash": "c33b48386e8fe2912f2ef2b4379b88260a4f2723ecc3c7c4aaa221fe9d9411b1",
+        "regengine:sha256": "9d07906dc82c1b83a2d1f9c5b167cfa8da23fd6726e3bffd648f7b73f2ca8b7f",
+        "type": "ObjectEvent"
+      },
+      {
+        "action": "OBSERVE",
+        "bizStep": "urn:epcglobal:cbv:bizstep:storing",
+        "eventTime": "2026-03-11T09:14:00+00:00",
+        "eventTimeZoneOffset": "+00:00",
+        "extension": {
+          "quantityList": [
+            {
+              "epcClass": "urn:epc:class:lgtin:0000000.000000.LOT-ROM-2026-0311C",
+              "quantity": "4100",
+              "uom": "lbs"
+            }
+          ]
+        },
+        "readPoint": {
+          "id": "urn:epc:id:sgln:0061414100021.0"
+        },
+        "regengine:chainHash": "734de4764fbeeb6397f4ebcf0958ed24a3a59c090e054c0d3c5660e9998db6b0",
+        "regengine:sha256": "79b8d6fc893117148e2550a6abf1346d6647efa12f07aecd3a16fb9943505a6a",
+        "type": "ObjectEvent"
+      },
+      {
+        "action": "OBSERVE",
+        "bizStep": "urn:epcglobal:cbv:bizstep:packing",
+        "eventTime": "2026-03-13T12:00:00+00:00",
+        "eventTimeZoneOffset": "+00:00",
+        "extension": {
+          "quantityList": [
+            {
+              "epcClass": "urn:epc:class:lgtin:0000000.000000.LOT-ROM-2026-0312A-PK",
+              "quantity": "1600",
+              "uom": "cases"
+            }
+          ]
+        },
+        "readPoint": {
+          "id": "urn:epc:id:sgln:0061414100038.0"
+        },
+        "regengine:chainHash": "1bc4f7f391e43a79f69ba601f09d69052c722b9018c3b65a92884974cbf558d5",
+        "regengine:sha256": "255d08853a648109346704d4453d484e5438fe5202c9d6a7476ec4870f5c33cb",
+        "type": "ObjectEvent"
+      },
+      {
+        "action": "OBSERVE",
+        "bizStep": "urn:epcglobal:cbv:bizstep:packing",
+        "eventTime": "2026-03-13T12:07:00+00:00",
+        "eventTimeZoneOffset": "+00:00",
+        "extension": {
+          "quantityList": [
+            {
+              "epcClass": "urn:epc:class:lgtin:0000000.000000.LOT-ROM-2026-0312B-PK",
+              "quantity": "2800",
+              "uom": "bags"
+            }
+          ]
+        },
+        "readPoint": {
+          "id": "urn:epc:id:sgln:0061414100038.0"
+        },
+        "regengine:chainHash": "d4728deffd8bcd11a09a42eaebe46385e76a7948fc97e0c3e56ec442d3a87ec5",
+        "regengine:sha256": "b7a0f70218beb8ea277cd09228551acc9ffacb4330fafcec2b7fce5735c8e7d8",
+        "type": "ObjectEvent"
+      },
+      {
+        "action": "OBSERVE",
+        "bizStep": "urn:epcglobal:cbv:bizstep:packing",
+        "eventTime": "2026-03-12T12:14:00+00:00",
+        "eventTimeZoneOffset": "+00:00",
+        "extension": {
+          "quantityList": [
+            {
+              "epcClass": "urn:epc:class:lgtin:0000000.000000.LOT-ROM-2026-0311C-PK",
+              "quantity": "1200",
+              "uom": "cases"
+            }
+          ]
+        },
+        "readPoint": {
+          "id": "urn:epc:id:sgln:0061414100021.0"
+        },
+        "regengine:chainHash": "bbb1752f52e4f7069149e07672147b7c4905a65f1d6839310eb048373fb764d6",
+        "regengine:sha256": "16a2ac375ee47fbed32ee4cad19518041bcc9e4e3951073683790c22969a61b7",
+        "type": "ObjectEvent"
+      },
+      {
+        "action": "OBSERVE",
+        "bizStep": "urn:epcglobal:cbv:bizstep:shipping",
+        "eventTime": "2026-03-14T15:00:00+00:00",
+        "eventTimeZoneOffset": "+00:00",
+        "extension": {
+          "quantityList": [
+            {
+              "epcClass": "urn:epc:class:lgtin:0000000.000000.LOT-ROM-2026-0312A-PK",
+              "quantity": "800",
+              "uom": "cases"
+            }
+          ]
+        },
+        "readPoint": {
+          "id": "urn:epc:id:sgln:0000000000000.0"
+        },
+        "regengine:chainHash": "945764e957af5cbd58f9bcb71488a4c0fb6112e0e3a49df48bd20a8c692ebfe1",
+        "regengine:sha256": "070593238a0acfd14cf79e3ed8d52b8fb407d447336e91383717746f3186ed41",
+        "type": "ObjectEvent"
+      },
+      {
+        "action": "OBSERVE",
+        "bizStep": "urn:epcglobal:cbv:bizstep:shipping",
+        "eventTime": "2026-03-14T15:07:00+00:00",
+        "eventTimeZoneOffset": "+00:00",
+        "extension": {
+          "quantityList": [
+            {
+              "epcClass": "urn:epc:class:lgtin:0000000.000000.LOT-ROM-2026-0312A-PK",
+              "quantity": "800",
+              "uom": "cases"
+            }
+          ]
+        },
+        "readPoint": {
+          "id": "urn:epc:id:sgln:0000000000000.0"
+        },
+        "regengine:chainHash": "aac01f63e00792a65159b642984b5b0011e2442d063e3765ac5865c136f32035",
+        "regengine:sha256": "7210f88d475af9dd8e63ed022f0b343c4ba5962bc71ebdd5c09a6f55270d3275",
+        "type": "ObjectEvent"
+      },
+      {
+        "action": "OBSERVE",
+        "bizStep": "urn:epcglobal:cbv:bizstep:shipping",
+        "eventTime": "2026-03-14T15:14:00+00:00",
+        "eventTimeZoneOffset": "+00:00",
+        "extension": {
+          "quantityList": [
+            {
+              "epcClass": "urn:epc:class:lgtin:0000000.000000.LOT-ROM-2026-0312B-PK",
+              "quantity": "2800",
+              "uom": "bags"
+            }
+          ]
+        },
+        "readPoint": {
+          "id": "urn:epc:id:sgln:0000000000000.0"
+        },
+        "regengine:chainHash": "d088d2c9a89408441975f146d62f75d7e90e2e05621975304e0c953496b74a86",
+        "regengine:sha256": "ebd8ee5ac2ffdb87a4d12bd3b336e5a655a78c579e5b6a27d4ef36827dc7850c",
+        "type": "ObjectEvent"
+      },
+      {
+        "action": "OBSERVE",
+        "bizStep": "urn:epcglobal:cbv:bizstep:shipping",
+        "eventTime": "2026-03-13T15:21:00+00:00",
+        "eventTimeZoneOffset": "+00:00",
+        "extension": {
+          "quantityList": [
+            {
+              "epcClass": "urn:epc:class:lgtin:0000000.000000.LOT-ROM-2026-0311C-PK",
+              "quantity": "1200",
+              "uom": "cases"
+            }
+          ]
+        },
+        "readPoint": {
+          "id": "urn:epc:id:sgln:0000000000000.0"
+        },
+        "regengine:chainHash": "090fc683e1653f7f16a3056a3b26c74819b5877af84b6038c7b515d951dd5beb",
+        "regengine:sha256": "6ee6a04717731894ab546efd20114165ea622957f331754c2fdd4445ca912b44",
+        "type": "ObjectEvent"
+      },
+      {
+        "action": "OBSERVE",
+        "bizStep": "urn:epcglobal:cbv:bizstep:receiving",
+        "eventTime": "2026-03-15T18:00:00+00:00",
+        "eventTimeZoneOffset": "+00:00",
+        "extension": {
+          "quantityList": [
+            {
+              "epcClass": "urn:epc:class:lgtin:0000000.000000.LOT-ROM-2026-0312A-PK",
+              "quantity": "800",
+              "uom": "cases"
+            }
+          ]
+        },
+        "readPoint": {
+          "id": "urn:epc:id:sgln:0000000000000.0"
+        },
+        "regengine:chainHash": "1ae706c0bd1ebee74a6c2297bd415d4d6f89e186db8c014a5a54cc5ded36ab20",
+        "regengine:sha256": "8dd9d30e489fae6565766fe002b0293e3234f04d05e01c9236d3a4ff82404bc3",
+        "type": "ObjectEvent"
+      },
+      {
+        "action": "OBSERVE",
+        "bizStep": "urn:epcglobal:cbv:bizstep:receiving",
+        "eventTime": "2026-03-15T18:07:00+00:00",
+        "eventTimeZoneOffset": "+00:00",
+        "extension": {
+          "quantityList": [
+            {
+              "epcClass": "urn:epc:class:lgtin:0000000.000000.LOT-ROM-2026-0312A-PK",
+              "quantity": "795",
+              "uom": "cases"
+            }
+          ]
+        },
+        "readPoint": {
+          "id": "urn:epc:id:sgln:0000000000000.0"
+        },
+        "regengine:chainHash": "854d216c7f65cc30532de06982cbb2cbe8da99f93de52c4fa1f8e022631b867f",
+        "regengine:sha256": "25fd0c18cf5e67d7cce4d344de2e261646f9b7c49268e6228327fc1bc84bc451",
+        "type": "ObjectEvent"
+      },
+      {
+        "action": "OBSERVE",
+        "bizStep": "urn:epcglobal:cbv:bizstep:receiving",
+        "eventTime": "2026-03-15T18:14:00+00:00",
+        "eventTimeZoneOffset": "+00:00",
+        "extension": {
+          "quantityList": [
+            {
+              "epcClass": "urn:epc:class:lgtin:0000000.000000.LOT-ROM-2026-0312B-PK",
+              "quantity": "2780",
+              "uom": "bags"
+            }
+          ]
+        },
+        "readPoint": {
+          "id": "urn:epc:id:sgln:0000000000000.0"
+        },
+        "regengine:chainHash": "a42a41c9b36c2627565e435d3f79ff20d7dd40744e21d8c7d51947b9784e9bd0",
+        "regengine:sha256": "aabab41dbd376c6a97ea6015bcb96b242a7127a5f21533f8d564a0bbf57b1bf2",
+        "type": "ObjectEvent"
+      },
+      {
+        "action": "OBSERVE",
+        "bizStep": "urn:epcglobal:cbv:bizstep:receiving",
+        "eventTime": "2026-03-14T18:21:00+00:00",
+        "eventTimeZoneOffset": "+00:00",
+        "extension": {
+          "quantityList": [
+            {
+              "epcClass": "urn:epc:class:lgtin:0000000.000000.LOT-ROM-2026-0311C-PK",
+              "quantity": "1190",
+              "uom": "cases"
+            }
+          ]
+        },
+        "readPoint": {
+          "id": "urn:epc:id:sgln:0000000000000.0"
+        },
+        "regengine:chainHash": "7fa38c7ef6ad5c30cfab39cfd61ada44d23db5741a4a1f43f044236552c24005",
+        "regengine:sha256": "4324ff51f9229cdc36ab370b1e4495a9b9ebf4b3a6655fe60a4ba51993ea3dba",
+        "type": "ObjectEvent"
+      },
+      {
+        "action": "OBSERVE",
+        "bizStep": "urn:epcglobal:cbv:bizstep:transforming",
+        "eventTime": "2026-03-16T21:00:00+00:00",
+        "eventTimeZoneOffset": "+00:00",
+        "extension": {
+          "quantityList": [
+            {
+              "epcClass": "urn:epc:class:lgtin:0000000.000000.SALAD-2026-0316-001",
+              "quantity": "3500",
+              "uom": "bags"
+            }
+          ]
+        },
+        "readPoint": {
+          "id": "urn:epc:id:sgln:0061414100069.0"
+        },
+        "regengine:chainHash": "2e6bcf68914c1afafd7c2736f9dffad7eda0968e6f264d4632c259cca56a2a1b",
+        "regengine:sha256": "2287e993d052fd47f18a3c285cf7efc9b2cb48dc8fc3d063b49a1757332a7d7c",
+        "type": "ObjectEvent"
+      },
+      {
+        "action": "OBSERVE",
+        "bizStep": "urn:epcglobal:cbv:bizstep:transforming",
+        "eventTime": "2026-03-16T21:07:00+00:00",
+        "eventTimeZoneOffset": "+00:00",
+        "extension": {
+          "quantityList": [
+            {
+              "epcClass": "urn:epc:class:lgtin:0000000.000000.SALAD-2026-0316-002",
+              "quantity": "1800",
+              "uom": "bags"
+            }
+          ]
+        },
+        "readPoint": {
+          "id": "urn:epc:id:sgln:0061414100069.0"
+        },
+        "regengine:chainHash": "94dbd7b6462353f8b01cc2ed0256836e478ec5dddcc58a5aab61150e3798f399",
+        "regengine:sha256": "400a0a06fbd7499f87b56149e275dcfec71ad98a434e1a64a3577ea35f1ae251",
+        "type": "ObjectEvent"
+      }
+    ]
+  },
+  "id": "urn:uuid:regengine-sample-00000000-0000-4000-8000-0000000000d1",
+  "regengine:exportMetadata": {
+    "dataSource": "synthetic_sample",
+    "eventsCount": 19,
+    "exportFormat": "EPCIS_2.0_JSON-LD",
+    "generatedAt": "2026-01-01T00:00:00+00:00",
+    "syntheticDisclaimer": "This document is generated from synthetic CTE data in sample_data/. See demo_exports/SYNTHETIC.md.",
+    "tenantId": "00000000-0000-4000-8000-0000000000d1"
+  },
+  "schemaVersion": "2.0",
+  "type": "EPCISDocument"
+}

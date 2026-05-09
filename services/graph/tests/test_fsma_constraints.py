@@ -285,17 +285,15 @@ class TestConsumerTLCSourceValidation:
         with pytest.raises(TLCSourceValidationError):
             await ingest_fsma_event(mock_client_instance, event)
 
+    @pytest.mark.asyncio
     @patch("services.graph.app.consumers.fsma_consumer.Neo4jClient")
-    def test_shipping_without_source_allowed(self, mock_client):
+    async def test_shipping_without_source_allowed(self, mock_client):
         """Consumer allows SHIPPING event without TLC source."""
-        mock_session = MagicMock()
+        mock_session = AsyncMock()
         mock_client_instance = MagicMock()
-        mock_client_instance.session.return_value.__enter__ = MagicMock(
-            return_value=mock_session
-        )
-        mock_client_instance.session.return_value.__exit__ = MagicMock(
-            return_value=False
-        )
+        mock_client_instance.session = MagicMock(return_value=mock_session)
+        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_session.__aexit__ = AsyncMock(return_value=False)
 
         event = {
             "document_id": "doc-004",
@@ -312,26 +310,25 @@ class TestConsumerTLCSourceValidation:
             ],
         }
 
-        # Should not raise TLCSourceValidationError
+        # Should not raise TLCSourceValidationError. Other exceptions from
+        # interacting with the mocked Neo4j session are acceptable — the
+        # invariant under test is purely the validation gate.
         try:
-            ingest_fsma_event(mock_client_instance, event)
+            await ingest_fsma_event(mock_client_instance, event)
         except TLCSourceValidationError:
             pytest.fail("SHIPPING should not require TLC source")
         except Exception:
-            # Other exceptions (e.g., Neo4j mock issues) are OK for this test
             pass
 
+    @pytest.mark.asyncio
     @patch("services.graph.app.consumers.fsma_consumer.Neo4jClient")
-    def test_transformation_with_gln_source_allowed(self, mock_client):
+    async def test_transformation_with_gln_source_allowed(self, mock_client):
         """Consumer allows TRANSFORMATION event with tlc_source_gln."""
-        mock_session = MagicMock()
+        mock_session = AsyncMock()
         mock_client_instance = MagicMock()
-        mock_client_instance.session.return_value.__enter__ = MagicMock(
-            return_value=mock_session
-        )
-        mock_client_instance.session.return_value.__exit__ = MagicMock(
-            return_value=False
-        )
+        mock_client_instance.session = MagicMock(return_value=mock_session)
+        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_session.__aexit__ = AsyncMock(return_value=False)
 
         event = {
             "document_id": "doc-005",
@@ -349,25 +346,22 @@ class TestConsumerTLCSourceValidation:
             ],
         }
 
-        # Should not raise TLCSourceValidationError
         try:
-            ingest_fsma_event(mock_client_instance, event)
+            await ingest_fsma_event(mock_client_instance, event)
         except TLCSourceValidationError:
             pytest.fail("TRANSFORMATION with tlc_source_gln should be allowed")
         except Exception:
             pass
 
+    @pytest.mark.asyncio
     @patch("services.graph.app.consumers.fsma_consumer.Neo4jClient")
-    def test_creation_with_fda_source_allowed(self, mock_client):
+    async def test_creation_with_fda_source_allowed(self, mock_client):
         """Consumer allows CREATION event with tlc_source_fda_reg."""
-        mock_session = MagicMock()
+        mock_session = AsyncMock()
         mock_client_instance = MagicMock()
-        mock_client_instance.session.return_value.__enter__ = MagicMock(
-            return_value=mock_session
-        )
-        mock_client_instance.session.return_value.__exit__ = MagicMock(
-            return_value=False
-        )
+        mock_client_instance.session = MagicMock(return_value=mock_session)
+        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_session.__aexit__ = AsyncMock(return_value=False)
 
         event = {
             "document_id": "doc-006",
@@ -385,9 +379,8 @@ class TestConsumerTLCSourceValidation:
             ],
         }
 
-        # Should not raise TLCSourceValidationError
         try:
-            ingest_fsma_event(mock_client_instance, event)
+            await ingest_fsma_event(mock_client_instance, event)
         except TLCSourceValidationError:
             pytest.fail("CREATION with tlc_source_fda_reg should be allowed")
         except Exception:

@@ -62,11 +62,6 @@ poisoners = [
 # These fail solo too. Listed individually with the underlying reason so
 # whoever owns the fix can grep their test file and find the entry.
 pre_existing_failures = [
-    # Mocks ``app.routes.socket``, but ``socket`` no longer imported into
-    # ``app.routes`` after the route split (PR #2200). Mock targets need to
-    # follow the new module layout (likely ``app.routes_ingest.socket``).
-    "test_boundaries.py",
-
     # Mocks ``app.routes.SessionLocal`` ~10 times. ``SessionLocal`` moved
     # to ``app.routes_ingest`` in PR #2200. Same fix shape as above.
     "test_routes_regulation_task_queue.py",
