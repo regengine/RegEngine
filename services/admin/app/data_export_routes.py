@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session
 from .dependencies import get_current_user
 from .database import get_session
 from .audit import AuditLogger
+from .models import TenantContext
 from .sqlalchemy_models import (
     AuditLogModel,
     MembershipModel,
@@ -312,13 +313,18 @@ def _build_user_export(db: Session, user_id: str) -> Dict[str, Any]:
 @limiter.limit("1/day")
 async def export_personal_data(
     request: Request,
-    current_user=Depends(get_current_user),
+    current_user: UserModel = Depends(get_current_user),
     db: Session = Depends(get_session),
 ):
     """Return a structured export of the authenticated user's personal data."""
-    user_id = current_user.get("user_id") or current_user.get("sub")
-    tenant_id = current_user.get("tenant_id")
-    email = current_user.get("email", "unknown")
+    # RE-SEC-002: ``current_user`` is a SQLAlchemy ``UserModel`` instance,
+    # not a dict. The previous ``current_user.get("user_id")`` calls raised
+    # AttributeError on every request, so GDPR Article 15 / 20 export was
+    # silently non-functional. Tenant comes from the RLS context bound by
+    # ``get_current_user`` -- ``UserModel`` does not carry a tenant_id.
+    user_id = current_user.id
+    email = current_user.email or "unknown"
+    tenant_id = TenantContext.get_tenant_context(db)
 
     if not user_id:
         raise HTTPException(status_code=401, detail="Could not identify user")
