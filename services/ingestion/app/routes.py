@@ -255,10 +255,10 @@ async def process_regulation_ingestion(job_id: str, name: str, filename: str, te
         
         if webhook:
             try:
-                async with httpx.AsyncClient() as client:
+                async with httpx.AsyncClient(follow_redirects=False) as client:
                     await client.post(webhook, json={
-                        "job_id": job_id, 
-                        "status": "completed", 
+                        "job_id": job_id,
+                        "status": "completed",
                         "regulation": name,
                         "sections": count
                     })
@@ -271,7 +271,7 @@ async def process_regulation_ingestion(job_id: str, name: str, filename: str, te
         r.setex(f"ingest:status:{job_id}", 7200, f"failed: {str(e)}")
         if webhook:
             try:
-                async with httpx.AsyncClient() as client:
+                async with httpx.AsyncClient(follow_redirects=False) as client:
                     await client.post(webhook, json={"job_id": job_id, "status": "failed", "error": str(e)})
             except (httpx.HTTPError, OSError) as e:
                 logger.warning("webhook_notification_failed", error=str(e))
@@ -935,29 +935,71 @@ async def _fetch(url: str) -> tuple[bytes, str]:
 
     raw_bytes = bytearray()
     content_type = "application/octet-stream"
-    
+
+    # SSRF defense (RE-SEC-001/002): follow redirects manually, re-validating
+    # each hop and pinning the connection to a validated IP via safe_httpx_client.
+    from shared.safe_http import safe_httpx_client
+    from urllib.parse import urljoin
+
+    MAX_REDIRECTS = 5
+    current_url = url
     try:
         import httpx
-        async with httpx.AsyncClient(http2=True, follow_redirects=True, timeout=60.0) as client:
-            async with client.stream("GET", url, headers=headers) as response:
-                if response.status_code >= 400:
-                    logger.warning("ingest_fetch_status", url=url, status=response.status_code)
-                    raise HTTPException(status_code=502, detail="Source system returned error")
-                    
-                content_type = response.headers.get("Content-Type", content_type)
-                
-                # Enforce stream limits to prevent OOM
-                async for chunk in response.aiter_bytes():
-                    raw_bytes.extend(chunk)
-                    if len(raw_bytes) > MAX_FILE_SIZE:
-                        logger.error("payload_too_large", url=url, size=len(raw_bytes))
-                        raise HTTPException(status_code=413, detail="Payload Too Large (Exceeds 50MB)")
+        for hop in range(MAX_REDIRECTS + 1):
+            # Re-run the route's own validator on every hop (handles host
+            # allowlist / port checks consistently with non-redirect paths).
+            _validate_url(current_url)
+            async with safe_httpx_client(
+                url=current_url, timeout=60.0, http2=True, headers=headers
+            ) as client:
+                async with client.stream("GET", current_url) as response:
+                    if response.is_redirect:
+                        location = response.headers.get("location")
+                        if not location:
+                            raise HTTPException(
+                                status_code=502,
+                                detail="Redirect without Location header",
+                            )
+                        current_url = urljoin(current_url, location)
+                        logger.info(
+                            "ingest_fetch_redirect",
+                            from_url=url,
+                            to_url=current_url,
+                            hop=hop,
+                        )
+                        continue
+
+                    if response.status_code >= 400:
+                        logger.warning(
+                            "ingest_fetch_status",
+                            url=current_url,
+                            status=response.status_code,
+                        )
+                        raise HTTPException(
+                            status_code=502, detail="Source system returned error"
+                        )
+
+                    content_type = response.headers.get("Content-Type", content_type)
+
+                    async for chunk in response.aiter_bytes():
+                        raw_bytes.extend(chunk)
+                        if len(raw_bytes) > MAX_FILE_SIZE:
+                            logger.error(
+                                "payload_too_large",
+                                url=current_url,
+                                size=len(raw_bytes),
+                            )
+                            raise HTTPException(
+                                status_code=413,
+                                detail="Payload Too Large (Exceeds 50MB)",
+                            )
+                    return bytes(raw_bytes), content_type
+
+        raise HTTPException(status_code=502, detail="Too many redirects")
 
     except httpx.RequestError as exc:
-        logger.error("ingest_fetch_failed", url=url, error=str(exc))
+        logger.error("ingest_fetch_failed", url=current_url, error=str(exc))
         raise HTTPException(status_code=502, detail="Failed to fetch source URL") from exc
-
-    return bytes(raw_bytes), content_type
 
 
 def _validate_url(url: str) -> None:
