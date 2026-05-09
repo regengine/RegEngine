@@ -146,3 +146,55 @@ class TestTraceabilityEndpointAuditActionIsKDERead:
         assert kde_read_count >= 3, (
             f"Expected at least 3 KDE_READ audit calls, found {kde_read_count}"
         )
+
+
+class TestKDEReadAuditFailurePolicyWiring:
+    """RE-SEC-006: every KDE_READ emission site must route failures through
+    audit_failure_policy.handle_audit_failure rather than the legacy
+    'log error and continue' pattern."""
+
+    def test_traceability_wires_handle_audit_failure(self):
+        router_path = (
+            Path(__file__).parent.parent
+            / "app" / "routers" / "fsma" / "traceability.py"
+        )
+        source = router_path.read_text()
+
+        assert "handle_audit_failure" in source, (
+            "traceability.py must call audit_failure_policy.handle_audit_failure "
+            "on KDE_READ audit-log failure (RE-SEC-006)"
+        )
+        # Best-effort sanity: the legacy bare-log pattern should be gone.
+        assert "kde_read_audit_failed" not in source, (
+            "Legacy best-effort 'kde_read_audit_failed' logger.error path "
+            "should be replaced by handle_audit_failure (RE-SEC-006)"
+        )
+
+    def test_lineage_traversal_wires_handle_audit_failure(self):
+        router_path = (
+            Path(__file__).parent.parent
+            / "app" / "routers" / "lineage_traversal.py"
+        )
+        source = router_path.read_text()
+
+        assert "handle_audit_failure" in source, (
+            "lineage_traversal.py must call handle_audit_failure on KDE_READ "
+            "audit-log failure (RE-SEC-006)"
+        )
+
+    def test_default_policy_does_not_break_caller(self, monkeypatch):
+        """Under default policy (buffered), a primary audit failure must NOT
+        raise to the caller -- it goes to the buffer."""
+        from services.graph.app import audit_failure_policy as afp
+
+        monkeypatch.delenv(afp.POLICY_ENV, raising=False)
+        monkeypatch.setattr(afp, "_persist_audit_buffer", lambda **_kw: None)
+
+        # Should NOT raise.
+        afp.handle_audit_failure(
+            tenant_id="tenant-x",
+            actor="api-key-y",
+            event_type="kde_read",
+            payload={"endpoint": "trace_forward", "tlc": "LOT-1"},
+            error=RuntimeError("primary audit log down"),
+        )
