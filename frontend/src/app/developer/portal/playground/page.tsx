@@ -700,8 +700,8 @@ export default function APIPlayground() {
               </label>
 
               {demoMode && response && !loading && (
-                <Badge variant="outline" className="mb-2 inline-flex items-center gap-1 text-[11px]">
-                  <FlaskConical className="w-3 h-3" />
+                <Badge variant="outline" className="mb-2">
+                  <FlaskConical className="w-3 h-3 mr-1" />
                   Sandbox response — does not call your account
                 </Badge>
               )}
