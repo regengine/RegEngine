@@ -381,6 +381,15 @@ jobs:
       - name: Check for dependency version drift
         run: python scripts/check_dep_versions.py
 
+      # ── kernel.control retirement guard (hard gate) ─────────
+      # ``kernel/control/`` (codegen + RCE surface) was retired by the
+      # ``epic-g-retire-kernel`` epic. Re-introducing an import in
+      # services/ or server/ is forbidden. See PR #2205 for the
+      # broader migration plan (other kernel/ subpackages still have
+      # live consumers and are tracked separately).
+      - name: Guard against kernel.control imports
+        run: python scripts/check_no_kernel_control_imports.py
+
   # ── Ingestion full suite with xdist isolation (hard gate) ─
   # Restores real signal from services/ingestion/tests. The existing
   # ``test`` matrix runs the ingestion suite single-process, where
