@@ -24,8 +24,24 @@ import structlog
 from fastapi import APIRouter, Body, Depends, Header, HTTPException
 from pydantic import BaseModel, Field, validator
 
+from ..exporters import zpl_safe
 from ..models.fsma_nodes import CTEType
 from ..neo4j_utils import Neo4jClient
+
+
+# RE-SEC-004: ZPL command-prefix chars (^, ~) and control bytes must never
+# survive to the printer. We reject them at the request boundary so the
+# caller sees a 400 instead of silently mangled labels, and `zpl_safe()`
+# below remains the belt-and-suspenders defense.
+def _reject_zpl_unsafe(value: str | None, *, field: str) -> str | None:
+    if value is None:
+        return None
+    if any(ch in value for ch in ("^", "~")) or any(ord(ch) < 0x20 or ord(ch) == 0x7F for ch in value):
+        raise ValueError(
+            f"{field} contains characters that are not permitted in label "
+            "input (ZPL command prefix or control byte)"
+        )
+    return value
 
 # ✅ KEEP: Versioning & Logging
 router = APIRouter(tags=["Traceability Labels"])
@@ -60,6 +76,15 @@ class ProductInfo(BaseModel):
         if not v.isdigit() or len(v) != 14:
             raise ValueError("GTIN must be exactly 14 digits")
         return v
+
+    # RE-SEC-004: reject ZPL-injection vectors at the request boundary.
+    @validator("description")
+    def validate_description_zpl_safe(cls, v):
+        return _reject_zpl_unsafe(v, field="description")
+
+    @validator("plu")
+    def validate_plu_zpl_safe(cls, v):
+        return _reject_zpl_unsafe(v, field="plu")
 
 
 class TraceabilityInfo(BaseModel):
@@ -119,10 +144,21 @@ def generate_qr_payload(gtin: str, lot: str, serial: str, domain: Optional[str] 
 def generate_zpl_code(
     desc: str, plu: Optional[str], qr: str, serial: str, gtin: str
 ) -> str:
-    """Reliability Fix: Use ^FDMM for Medium Error Correction."""
-    plu_text = f"^FO50,80^A0N,60,60^FD{plu}^FS" if plu else ""
+    """Build a ZPL command stream for one label.
+
+    RE-SEC-004: `desc` and `plu` are tenant-controlled strings. ``zpl_safe``
+    strips ``^`` and ``~`` (ZPL command prefixes) plus control bytes BEFORE
+    truncating, which closes the previous reliance on a naive ``desc[:30]``
+    slice that an attacker could lead with ``^XZ`` to terminate the format
+    block early or inject persistent printer reprogramming.
+
+    Reliability: ``^FDMM`` keeps the QR encoder at Medium error correction.
+    """
+    safe_desc = zpl_safe(desc, max_len=30)
+    safe_plu = zpl_safe(plu, max_len=30) if plu else ""
+    plu_text = f"^FO50,80^A0N,60,60^FD{safe_plu}^FS" if safe_plu else ""
     return f"""^XA
-^FO10,10^A0N,25,25^FD{desc[:30]}^FS
+^FO10,10^A0N,25,25^FD{safe_desc}^FS
 {plu_text}
 ^FO250,60^BQN,2,4^FDMM,{qr}^FS
 ^FO10,150^A0N,20,20^FDSerial: {serial}^FS
