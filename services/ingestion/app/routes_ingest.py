@@ -74,7 +74,7 @@ from regengine_ingestion.models import (
 from regengine_ingestion.parsers import create_default_registry
 from regengine_ingestion.storage.database import DatabaseManager
 
-from kernel.obligation.regulation_loader import RegulationLoader
+from .regulation_loader import RegulationLoader
 
 PARSER_REGISTRY = create_default_registry()
 

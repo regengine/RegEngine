@@ -1,5 +1,5 @@
 """
-Hardening tests for ``kernel.obligation.regulation_loader`` (#1351).
+Hardening tests for ``services.ingestion.app.regulation_loader`` (#1351).
 
 * Empty NEO4J_PASSWORD is refused unless the caller explicitly opts in.
 * Env vars are read inside ``__init__``, not at class-definition time —
@@ -18,7 +18,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from kernel.obligation.regulation_loader import (
+from services.ingestion.app.regulation_loader import (
     RegulationLoader,
     _obligation_id_from_text,
 )
@@ -37,7 +37,7 @@ class TestEmptyPasswordRejected:
 
     def test_empty_password_with_opt_in_is_allowed(self, monkeypatch):
         monkeypatch.delenv("NEO4J_PASSWORD", raising=False)
-        with patch("kernel.obligation.regulation_loader.GraphDatabase") as gdb:
+        with patch("services.ingestion.app.regulation_loader.GraphDatabase") as gdb:
             gdb.driver.return_value = MagicMock()
             loader = RegulationLoader(
                 uri="bolt://localhost:7687",
@@ -48,7 +48,7 @@ class TestEmptyPasswordRejected:
             assert loader.driver is not None
 
     def test_explicit_password_builds_driver(self):
-        with patch("kernel.obligation.regulation_loader.GraphDatabase") as gdb:
+        with patch("services.ingestion.app.regulation_loader.GraphDatabase") as gdb:
             gdb.driver.return_value = MagicMock()
             loader = RegulationLoader(
                 uri="bolt://localhost:7687",
@@ -69,7 +69,7 @@ class TestEmptyPasswordRejected:
 class TestEnvReadAtCallTime:
     def test_env_change_between_constructions_applies(self, monkeypatch):
         """Env override in one test must not leak into the next call."""
-        with patch("kernel.obligation.regulation_loader.GraphDatabase") as gdb:
+        with patch("services.ingestion.app.regulation_loader.GraphDatabase") as gdb:
             gdb.driver.return_value = MagicMock()
 
             monkeypatch.setenv("NEO4J_URI", "bolt://one:7687")
@@ -90,7 +90,7 @@ class TestEnvReadAtCallTime:
 
 class TestLoadTenantScopedWrite:
     def _build_loader_with_mock_driver(self):
-        with patch("kernel.obligation.regulation_loader.GraphDatabase") as gdb:
+        with patch("services.ingestion.app.regulation_loader.GraphDatabase") as gdb:
             mock_session = MagicMock()
             mock_driver = MagicMock()
             mock_driver.session.return_value.__enter__.return_value = mock_session
@@ -188,7 +188,7 @@ class TestLoadUsesToThread:
     async def test_load_dispatches_to_thread(self):
         """``load()`` must run ``_load_sync`` via ``asyncio.to_thread`` so
         the blocking Neo4j write does not stall the event loop."""
-        with patch("kernel.obligation.regulation_loader.GraphDatabase") as gdb:
+        with patch("services.ingestion.app.regulation_loader.GraphDatabase") as gdb:
             gdb.driver.return_value = MagicMock()
             loader = RegulationLoader(
                 uri="bolt://x", user="neo4j", password="pw"
@@ -209,9 +209,9 @@ class TestLoadUsesToThread:
             }
         ]
         with patch(
-            "kernel.obligation.regulation_loader.RegulationParser"
+            "services.ingestion.app.regulation_loader.RegulationParser"
         ) as mock_parser_cls, patch(
-            "kernel.obligation.regulation_loader.asyncio.to_thread",
+            "services.ingestion.app.regulation_loader.asyncio.to_thread",
             new=AsyncMock(return_value=None),
         ) as mock_to_thread:
             mock_parser = MagicMock()
