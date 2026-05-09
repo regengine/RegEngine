@@ -46,6 +46,7 @@ export const MARKETING_FOOTER_DEVELOPER_LINKS: MarketingNavLink[] = [
     { label: "API Docs", href: "/docs/api" },
     { label: "Quickstart", href: "/docs/quickstart" },
     { label: "SDKs", href: "/docs/sdks" },
+    { label: "Verify (Proof)", href: "/proof" },
     { label: "Changelog", href: "/docs/changelog" },
 ];
 

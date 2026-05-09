@@ -390,6 +390,12 @@ export default function FSMA204BusinessGuidePage() {
               Read the integration guide →
             </Link>
           </p>
+          <p className="text-[0.82rem] text-[var(--re-text-disabled)] mt-3">
+            Try it:{" "}
+            <Link href="/proof" className="text-[var(--re-brand)] hover:underline">/proof</Link>
+            {" "}→{" "}
+            <Link href="/verify" className="text-[var(--re-brand)] hover:underline">/verify</Link>.
+          </p>
         </div>
       </section>
     </div>

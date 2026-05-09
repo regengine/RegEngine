@@ -20,9 +20,12 @@ from typing import Optional
 import structlog
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
+from sqlalchemy.exc import SQLAlchemyError
 
 from .dependencies import get_current_user
 from .graph_outbox import enqueue_graph_write
+from .models import TenantContext
+from .sqlalchemy_models import UserModel
 from shared.database import get_db
 
 logger = structlog.get_logger("erasure")
@@ -143,7 +146,7 @@ class ErasureResponse(BaseModel):
 )
 async def request_erasure(
     body: ErasureRequest,
-    current_user=Depends(get_current_user),
+    current_user: UserModel = Depends(get_current_user),
 ):
     """Process a GDPR right-to-erasure request for the authenticated user."""
     if not body.confirm:
@@ -152,19 +155,17 @@ async def request_erasure(
             detail="You must set confirm=true to proceed with account erasure.",
         )
 
-    user_id = current_user.get("user_id") or current_user.get("sub")
-    tenant_id = current_user.get("tenant_id")
-    email = current_user.get("email", "unknown")
-
+    # RE-SEC-001: ``current_user`` is a SQLAlchemy ``UserModel`` instance, not
+    # a dict. Previously this code called ``.get("user_id")`` etc. which
+    # raised AttributeError on every invocation; the broad ``except Exception``
+    # below swallowed it and returned a misleading "logged and processed
+    # manually" 500. GDPR Article 17 erasure was silently non-functional.
+    # Tenant comes from the RLS context bound by ``get_current_user`` --
+    # ``UserModel`` does not carry a tenant_id column.
+    user_id = current_user.id
+    email = current_user.email or "unknown"
     if not user_id:
         raise HTTPException(status_code=401, detail="Could not identify user")
-
-    logger.info(
-        "erasure_requested",
-        user_id=user_id,
-        tenant_id=tenant_id,
-        reason=body.reason,
-    )
 
     try:
         from shared.data_retention import (
@@ -176,6 +177,18 @@ async def request_erasure(
         from shared.pii import mask_email
 
         with get_db() as db:
+            # Tenant is read from the RLS context bound by ``get_current_user``
+            # on the same connection, not from the user object (UserModel has
+            # no tenant_id) and not from the request body (untrusted).
+            tenant_id = TenantContext.get_tenant_context(db)
+
+            logger.info(
+                "erasure_requested",
+                user_id=str(user_id),
+                tenant_id=str(tenant_id) if tenant_id else None,
+                reason=body.reason,
+            )
+
             manager = DataRetentionManager()
 
             # ``AuditActor`` exposes ``email`` (not ``actor_email``).
@@ -310,9 +323,18 @@ async def request_erasure(
             status_code=503,
             detail="Data retention module not available. Contact support.",
         )
-    except Exception as e:
-        logger.error("erasure_failed", user_id=user_id, error=str(e))
+    except SQLAlchemyError as e:
+        # RE-SEC-001: previously this branch was a broad ``except Exception``
+        # that swallowed AttributeError from the dict-style ``current_user``
+        # access above and returned a misleading "logged and will be processed
+        # manually" 500. The user was assured GDPR Article 17 had been
+        # honored; in reality every request silently failed. We now narrow to
+        # known infrastructure failure modes (DB / cache). Programmer errors
+        # (AttributeError, TypeError, KeyError, etc.) propagate to FastAPI's
+        # default 500 handler so they surface in tests, in Sentry, and in the
+        # /v1/account/erasure response itself rather than being whitewashed.
+        logger.error("erasure_failed_db", user_id=str(user_id), error=str(e))
         raise HTTPException(
             status_code=500,
-            detail="Erasure request failed. Your request has been logged and will be processed manually.",
+            detail="Erasure request failed due to a backend error. Please retry.",
         )
