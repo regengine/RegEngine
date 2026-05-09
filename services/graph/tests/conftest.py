@@ -24,6 +24,37 @@ from __future__ import annotations
 import pytest
 
 
+@pytest.fixture(autouse=True)
+def _stub_audit_persistence(monkeypatch: pytest.MonkeyPatch) -> None:
+    """No-op ``fsma_audit._persist_audit_entry`` for the graph test suite.
+
+    The test conftest sets ``DATABASE_URL=sqlite:///:memory:`` so a SQLAlchemy
+    engine is created, but no test creates the ``fsma.fsma_audit_trail``
+    schema. Each ``log()`` call therefore hits the persist retry loop
+    (1s + 2s = 3s per call) before failing silently. Across the graph tree
+    that adds ~90s to test_fsma_audit.py alone and ~30s elsewhere.
+
+    Persistence is covered by integration tests against a real DB; here we
+    test the in-memory log mechanics, so stubbing persistence is correct.
+    """
+    # Patch every loaded module path that exposes ``_persist_audit_entry``
+    # (fsma_audit can be imported as ``app.fsma_audit`` or
+    # ``services.graph.app.fsma_audit`` depending on test).
+    import sys
+    for mod_name in (
+        "app.fsma_audit",
+        "services.graph.app.fsma_audit",
+    ):
+        if mod_name not in sys.modules:
+            try:
+                __import__(mod_name)
+            except ImportError:
+                continue
+        mod = sys.modules.get(mod_name)
+        if mod is not None and hasattr(mod, "_persist_audit_entry"):
+            monkeypatch.setattr(mod, "_persist_audit_entry", lambda entry: None)
+
+
 def pytest_addoption(parser: pytest.Parser) -> None:
     parser.addoption(
         "--run-integration",
