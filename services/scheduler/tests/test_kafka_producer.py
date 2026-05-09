@@ -93,6 +93,34 @@ class TestEmitEnforcementChange:
         result = producer.emit_enforcement_change(_make_item())
         assert result is False
 
+    def test_emit_enforcement_change_signs(self, producer, mock_kafka):
+        """RE-SEC-002 — producer-side parity with emit_fsma_event."""
+        mock_instance, _ = mock_kafka
+        result = producer.emit_enforcement_change(_make_item())
+        assert result is True
+
+        call_kwargs = mock_instance.send.call_args[1]
+        sent_value = call_kwargs["value"]
+        assert sent_value["_producer_service"] == "scheduler-service"
+        assert "_signed_at" in sent_value
+        sent_headers = dict(call_kwargs["headers"])
+        assert "x-evt-sig" in sent_headers
+        assert sent_headers["x-producer-service"] == b"scheduler-service"
+        assert sent_headers.get("x-evt-sig-v") is not None
+
+    def test_emit_enforcement_change_returns_false_when_signing_key_unset(
+        self, mock_kafka, monkeypatch
+    ):
+        """Strict-mode posture: fail closed, do not publish unsigned."""
+        monkeypatch.delenv("KAFKA_EVENT_SIGNING_KEY", raising=False)
+        from app.kafka_producer import KafkaEventProducer
+        p = KafkaEventProducer(bootstrap_servers="localhost:9092")
+        mock_instance, _ = mock_kafka
+
+        result = p.emit_enforcement_change(_make_item())
+        assert result is False
+        mock_instance.send.assert_not_called()
+
 
 # ─── emit_high_priority_alert ────────────────────────────────────────────
 
@@ -114,6 +142,38 @@ class TestEmitHighPriorityAlert:
         call_args = mock_instance.send.call_args
         value = call_args[1].get("value") or call_args[0][2]
         assert value["event_type"] == "alert.high_priority"
+
+    def test_emit_high_priority_alert_signs(self, producer, mock_kafka):
+        """RE-SEC-002 — producer-side parity with emit_fsma_event."""
+        mock_instance, _ = mock_kafka
+        item = _make_item(severity=EnforcementSeverity.CRITICAL)
+        result = producer.emit_high_priority_alert(item)
+        assert result is True
+
+        call_kwargs = mock_instance.send.call_args[1]
+        sent_value = call_kwargs["value"]
+        assert sent_value["_producer_service"] == "scheduler-service"
+        assert "_signed_at" in sent_value
+        assert sent_value["event_type"] == "alert.high_priority"
+        sent_headers = dict(call_kwargs["headers"])
+        assert "x-evt-sig" in sent_headers
+        assert sent_headers["x-producer-service"] == b"scheduler-service"
+        assert sent_headers.get("x-evt-sig-v") is not None
+
+    def test_emit_high_priority_alert_returns_false_when_signing_key_unset(
+        self, mock_kafka, monkeypatch
+    ):
+        """Strict-mode posture: fail closed, do not publish unsigned."""
+        monkeypatch.delenv("KAFKA_EVENT_SIGNING_KEY", raising=False)
+        from app.kafka_producer import KafkaEventProducer
+        p = KafkaEventProducer(bootstrap_servers="localhost:9092")
+        mock_instance, _ = mock_kafka
+
+        result = p.emit_high_priority_alert(
+            _make_item(severity=EnforcementSeverity.CRITICAL)
+        )
+        assert result is False
+        mock_instance.send.assert_not_called()
 
 
 # ─── emit_batch ──────────────────────────────────────────────────────────
