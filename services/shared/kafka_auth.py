@@ -580,6 +580,19 @@ def verify_event(
             ),
         )
         producer_claim = evt.get(BODY_FIELD_PRODUCER_SERVICE) or "unsigned"
+        # RE-SEC-005: even on the bypass branch, enforce the per-topic
+        # allowlist if the caller provided one. Without this, a
+        # non-strict consumer would accept events from any producer name
+        # the body claims — defeating the layer-3 defense entirely.
+        if allowed_producers is not None:
+            allowed_set = {p for p in allowed_producers}
+            if str(producer_claim) not in allowed_set:
+                raise KafkaAuthError(
+                    "producer_not_allowed_for_topic",
+                    topic=topic,
+                    producer_service=str(producer_claim),
+                    allowed=sorted(allowed_set),
+                )
         return evt, str(producer_claim)
 
     version = header_map.get(HEADER_SIG_VERSION)
