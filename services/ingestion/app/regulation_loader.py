@@ -36,7 +36,7 @@ from typing import Any, Dict, List, Optional
 from neo4j import GraphDatabase
 import structlog
 
-from kernel.parser import RegulationParser
+from services.ingestion.app.regulation_parser import RegulationParser
 
 logger = structlog.get_logger("regulation-loader")
 

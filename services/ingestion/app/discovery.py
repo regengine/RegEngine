@@ -12,7 +12,7 @@ import httpx
 import structlog
 from redis import Redis
 
-from kernel.parser import RegulationParser
+from services.ingestion.app.regulation_parser import RegulationParser
 # RegulationLoader was migrated out of kernel/ to services/ingestion/app/
 # (issue #2226). Import lazily inside ``scrape()`` so this kernel module
 # does not gain a static services/* dependency at import time.
