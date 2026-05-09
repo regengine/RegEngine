@@ -61,9 +61,11 @@ _scraper_job_stub = ModuleType("app.scraper_job")
 _scraper_job_stub.run_state_scrape_job = _stub_run_state_scrape_job
 _scraper_job_stub.run_generic_scrape_job = _stub_run_generic_scrape_job
 _scraper_job_stub.__file__ = str(service_dir / "app" / "scraper_job.py")
+_REAL_APP_SCRAPER_JOB = sys.modules.get("app.scraper_job")
 sys.modules["app.scraper_job"] = _scraper_job_stub
 
 import app as _app_pkg  # noqa: E402
+_REAL_APP_SCRAPER_JOB_ATTR = getattr(_app_pkg, "scraper_job", None)
 _app_pkg.scraper_job = _scraper_job_stub
 
 
@@ -89,8 +91,41 @@ _FAKE_ADAPTORS: dict[str, _RecordedAdaptor] = {
 _routes_scraping_stub = ModuleType("app.routes_scraping")
 _routes_scraping_stub.ADAPTORS = _FAKE_ADAPTORS
 _routes_scraping_stub.__file__ = str(service_dir / "app" / "routes_scraping.py")
+_REAL_APP_ROUTES_SCRAPING = sys.modules.get("app.routes_scraping")
+_REAL_APP_ROUTES_SCRAPING_ATTR = getattr(_app_pkg, "routes_scraping", None)
 sys.modules["app.routes_scraping"] = _routes_scraping_stub
 _app_pkg.routes_scraping = _routes_scraping_stub
+
+
+@pytest.fixture(scope="module", autouse=True)
+def _restore_modules_on_module_teardown():
+    """Restore real ``app.scraper_job`` and ``app.routes_scraping`` modules
+    after this file's tests finish.
+
+    Module-level stubs are required because the ``from app import
+    task_handlers_scraping`` import below resolves them at load time. We can't
+    move that into a fixture without rewriting all tests. So we restore the
+    pre-existing entries (or evict our stubs) on module teardown to prevent
+    cross-file pollution.
+    """
+    yield
+    if _REAL_APP_SCRAPER_JOB is not None:
+        sys.modules["app.scraper_job"] = _REAL_APP_SCRAPER_JOB
+    else:
+        sys.modules.pop("app.scraper_job", None)
+    if _REAL_APP_SCRAPER_JOB_ATTR is not None:
+        _app_pkg.scraper_job = _REAL_APP_SCRAPER_JOB_ATTR
+    elif hasattr(_app_pkg, "scraper_job"):
+        delattr(_app_pkg, "scraper_job")
+
+    if _REAL_APP_ROUTES_SCRAPING is not None:
+        sys.modules["app.routes_scraping"] = _REAL_APP_ROUTES_SCRAPING
+    else:
+        sys.modules.pop("app.routes_scraping", None)
+    if _REAL_APP_ROUTES_SCRAPING_ATTR is not None:
+        _app_pkg.routes_scraping = _REAL_APP_ROUTES_SCRAPING_ATTR
+    elif hasattr(_app_pkg, "routes_scraping"):
+        delattr(_app_pkg, "routes_scraping")
 
 
 from app import task_handlers_scraping as ths  # noqa: E402
