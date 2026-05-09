@@ -70,10 +70,36 @@ class _FakeRegulationLoader:
 _loader_mod = ModuleType("app.regulation_loader")
 _loader_mod.RegulationLoader = _FakeRegulationLoader
 _loader_mod.__file__ = str(service_dir / "app" / "regulation_loader.py")
+_REAL_APP_REGULATION_LOADER = sys.modules.get("app.regulation_loader")
 sys.modules["app.regulation_loader"] = _loader_mod
 
 import app as _app_pkg  # noqa: E402
+_REAL_APP_REGULATION_LOADER_ATTR = getattr(_app_pkg, "regulation_loader", None)
 _app_pkg.regulation_loader = _loader_mod
+
+
+@pytest.fixture(scope="module", autouse=True)
+def _restore_modules_on_module_teardown():
+    """Restore the real ``app.regulation_loader`` module after this file's
+    tests finish.
+
+    The ``from app import task_handlers_regulation`` import below loads the
+    handler, which lazily imports ``RegulationLoader`` inside its function
+    body. We still install at module level because the per-test
+    ``_install_loader_stub`` fixture (below) expects the stub to already be
+    in place when re-installed. On module teardown we restore the original
+    so later test files see the real loader.
+    """
+    yield
+    if _REAL_APP_REGULATION_LOADER is not None:
+        sys.modules["app.regulation_loader"] = _REAL_APP_REGULATION_LOADER
+    else:
+        sys.modules.pop("app.regulation_loader", None)
+    if _REAL_APP_REGULATION_LOADER_ATTR is not None:
+        _app_pkg.regulation_loader = _REAL_APP_REGULATION_LOADER_ATTR
+    elif hasattr(_app_pkg, "regulation_loader"):
+        delattr(_app_pkg, "regulation_loader")
+
 
 from app import task_handlers_regulation as thr  # noqa: E402
 from app.task_handlers_regulation import (  # noqa: E402
