@@ -113,25 +113,54 @@ def validate_url(
 
 
 def _check_resolved_ip(hostname: str) -> None:
-    """Resolve hostname and verify IP is not in blocked ranges."""
+    """Resolve hostname and verify every resolved IP is not in blocked ranges.
+
+    Uses :func:`socket.getaddrinfo` so both A (IPv4) and AAAA (IPv6) records
+    are inspected. ``socket.gethostbyname`` returns A records only, allowing
+    dual-stack hosts to bypass the IPv6 portion of ``BLOCKED_NETWORKS``.
+    """
+    # Try to parse as IP directly first
     try:
-        # Try to parse as IP directly first
-        try:
-            ip = ip_address(hostname)
-        except ValueError:
-            # Not an IP, resolve via DNS
-            resolved = socket.gethostbyname(hostname)
-            ip = ip_address(resolved)
-        
-        # Check against blocked networks
+        ip = ip_address(hostname)
+    except ValueError:
+        ip = None
+
+    if ip is not None:
         for network in BLOCKED_NETWORKS:
             if ip in network:
-                raise SSRFError(f"Resolved IP {ip} is in blocked network {network}")
-                
+                raise SSRFError(
+                    f"Resolved IP {ip} is in blocked network {network}"
+                )
+        return
+
+    # Not an IP literal - resolve via DNS, inspecting every returned address
+    try:
+        infos = socket.getaddrinfo(hostname, None)
     except socket.gaierror as exc:
-        # DNS resolution failed - could be legit or could be attack
         logger.warning("dns_resolution_failed", hostname=hostname, error=str(exc))
         raise SSRFError(f"Could not resolve hostname: {hostname}") from exc
+
+    seen: set[str] = set()
+    for info in infos:
+        sockaddr = info[4]
+        if not sockaddr:
+            continue
+        addr = sockaddr[0]
+        if not addr or addr in seen:
+            continue
+        seen.add(addr)
+        try:
+            resolved_ip = ip_address(addr)
+        except ValueError:
+            continue
+        for network in BLOCKED_NETWORKS:
+            if resolved_ip in network:
+                raise SSRFError(
+                    f"Resolved IP {resolved_ip} is in blocked network {network}"
+                )
+
+    if not seen:
+        raise SSRFError(f"Could not resolve hostname: {hostname}")
 
 
 def validate_s3_key(key: str) -> str:

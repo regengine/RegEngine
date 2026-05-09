@@ -29,6 +29,33 @@ const COOKIE_OPTIONS = {
 
 export async function POST(request: NextRequest) {
     try {
+        // RE-SEC-003: strict same-origin enforcement on POST /api/session.
+        // /api/session is in CSRF_EXEMPT_PREFIXES (it bootstraps the CSRF
+        // cookies on first login), so a cross-origin attacker holding their
+        // own valid RegEngine JWT could otherwise log a victim's browser
+        // into the attacker's tenant via login-CSRF / session fixation.
+        // Origin header is reliable because the browser sets it on every
+        // POST and JS cannot forge it cross-origin.
+        const origin = request.headers.get('origin');
+        const allowedOrigins = (process.env.ALLOWED_ORIGINS ?? '')
+            .split(',')
+            .map((s) => s.trim())
+            .filter(Boolean);
+
+        if (process.env.NODE_ENV === 'production' && allowedOrigins.length === 0) {
+            console.error('[session] ALLOWED_ORIGINS not configured in production');
+            return NextResponse.json({ error: 'Server misconfigured' }, { status: 500 });
+        }
+
+        if (process.env.NODE_ENV === 'production') {
+            if (!origin || !allowedOrigins.includes(origin)) {
+                return NextResponse.json(
+                    { error: 'Cross-origin session POST rejected' },
+                    { status: 403 },
+                );
+            }
+        }
+
         const body = await request.json();
         const { access_token, api_key, admin_key, tenant_id, user } = body;
 
