@@ -111,7 +111,7 @@ These are not lies — they are timing mismatches.
 | 14 | Public `/proof/recall-drill` page | DRAFT | #2215 |
 | 15 | Public `/proof` index w/ downloads | DRAFT | #2216 |
 | 16 | Public verify-export endpoint | DRAFT | #2217 |
-| 17 | `kernel/` migration | PENDING (multi-PR) | tracked via #2205 |
+| 17 | `kernel/` migration | RESOLVED — kernel retired in epic-g final cleanup PR | this PR (closes #2223–#2228) |
 | 18 | Recall-drill **backend** endpoint | PENDING | deferred from W2.6 |
 
 ---
