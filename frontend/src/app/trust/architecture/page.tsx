@@ -251,6 +251,12 @@ export default function ArchitecturePage() {
                             </span>
                         </Link>
                     </div>
+                    <p className="text-sm text-[var(--re-text-muted)] mt-6">
+                        Verify any export yourself: drop a bundle into{' '}
+                        <Link href="/verify" className="text-[var(--re-brand)] hover:opacity-80">/verify</Link>{' '}
+                        or download a synthetic sample at{' '}
+                        <Link href="/proof" className="text-[var(--re-brand)] hover:opacity-80">/proof</Link>.
+                    </p>
                 </div>
             </section>
         </div>

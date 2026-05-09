@@ -127,11 +127,20 @@ RegEngine_UX_Walkthrough.pdf
 stress_and_redteam.py
 test-write
 
-# Development sample data
-sample_data/
+# Development sample data — public synthetic CTE CSVs are tracked
+# (see sample_data/SYNTHETIC.md). Anything else under the dir stays
+# ignored so local scratch CSVs don't leak.
+sample_data/*
+!sample_data/*.csv
+!sample_data/*.md
+!sample_data/README.md
 
-# Non-code artifacts (sales, demo exports, pilot output)
-demo_exports/
+# Non-code artifacts — public synthetic exports are tracked
+# (see demo_exports/SYNTHETIC.md). Local pilot/sales output stays ignored.
+demo_exports/*
+!demo_exports/*.csv
+!demo_exports/*.json
+!demo_exports/*.md
 sales_enablement/
 output/
 

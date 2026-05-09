@@ -34,6 +34,8 @@ Once committed, every record lands in Postgres with row-level security per tenan
 
 RegEngine is infrastructure, not a dashboard. FSMA 204 requires that any actor in a covered food's supply chain produce a sortable spreadsheet of CTEs and KDEs within 24 hours of FDA request. Most operators have the data — scattered across an ERP, supplier emails, and EDI feeds — and no defensible way to assemble it. We are the evidence layer that ingests those records, normalizes them to the regulation's shape, persists them with a hash chain, and exports the artifacts FDA and retailers actually ask for. We are not an ERP, not an AI product, and not multi-vertical. Food traceability, evidence layer, that is the whole product.
 
+Want to see it? regengine.co/verify lets you upload a bundle right now. No login. No email capture. The verifier source is public and the synthetic test bundles are at regengine.co/proof.
+
 ## Maintenance rule
 
 Any product description elsewhere — site, deck, kit, repo doc — must align to this file or link here. If you find a contradiction, file an issue against the document, not against the code.
