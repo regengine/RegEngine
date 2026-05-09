@@ -121,7 +121,7 @@ export const CSRF_PROTECTED_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']
  *  like every other mutating endpoint. The Origin allowlist on POST
  *  /api/session (RE-SEC-003) remains as defense-in-depth.
  */
-const CSRF_EXEMPT_PREFIXES = [
+export const CSRF_EXEMPT_PREFIXES = [
     '/api/auth/',
     '/api/admin/auth/',
     // Public invite acceptance arrives without an authenticated session and is
