@@ -230,17 +230,17 @@ export default function HomePage() {
       <section className="re-container grid min-h-[calc(100vh-56px)] items-start gap-8 py-10 lg:grid-cols-[0.9fr_1.1fr] lg:py-12">
         <div>
           <h1 className="max-w-[720px] text-[clamp(40px,5.2vw,64px)] font-semibold leading-[0.98] text-[var(--re-text-primary)]">
-            Compliance operating system for food traceability.
+            FSMA 204 traceability evidence layer.
           </h1>
           <p className="mt-6 max-w-[620px] text-[18px] leading-8 text-[var(--re-text-muted)]">
-            RegEngine is where messy supplier data enters, gets interrogated, corrected, verified, committed, and exported as defensible FSMA 204 evidence.
+            Ingest supply-chain data through webhooks, CSV, EPCIS, or EDI. Preflight in our Inflow Workbench. Persist with a tamper-evident audit chain. Export FDA- and retailer-ready spreadsheets in seconds.
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
-            <ActionLink href="/tools/inflow-lab" primary>
-              Preflight a supplier file
+            <ActionLink href="/verify" primary>
+              Verify a sample export
               <ArrowRight className="h-4 w-4" aria-hidden="true" />
             </ActionLink>
-            <ActionLink href="/retailer-readiness">Check readiness</ActionLink>
+            <ActionLink href="/contact">Book a 15-min call</ActionLink>
           </div>
           <MetricRail />
         </div>
