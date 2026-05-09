@@ -23,11 +23,21 @@ const CSRF_HEADER = 'x-csrf-token';
 
 export { CSRF_COOKIE, CSRF_SIG_COOKIE, CSRF_HEADER };
 
-/** Get the CSRF signing secret. Falls back to AUTH_SECRET_KEY for zero-config. */
+/** Get the CSRF signing secret.
+ *
+ *  Production REQUIRES a dedicated CSRF_SECRET — reusing AUTH_SECRET_KEY (the
+ *  JWT signing key) for HMAC violates cryptographic key separation
+ *  (NIST SP 800-57 §5.2). The AUTH_SECRET_KEY fallback is preserved only for
+ *  dev/test convenience. RE-SEC-005.
+ */
 function getSecret(): string {
-    const secret = process.env.CSRF_SECRET || process.env.AUTH_SECRET_KEY || '';
+    const secret = process.env.CSRF_SECRET || '';
     if (!secret) {
-        console.warn('[csrf] Neither CSRF_SECRET nor AUTH_SECRET_KEY is set. CSRF protection is disabled.');
+        if (process.env.NODE_ENV === 'production') {
+            console.error('[csrf] CSRF_SECRET not set in production — all mutating requests will be rejected');
+            return '';
+        }
+        return process.env.AUTH_SECRET_KEY || '';
     }
     return secret;
 }
