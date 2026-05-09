@@ -16,6 +16,11 @@ if TYPE_CHECKING:
 
 logger = structlog.get_logger("table-extractor")
 
+# F-NLP-4: callers that pass ``pdf_bytes`` directly to ``extract_tables_from_pdf``
+# bypass the size/page caps in ``text_loader``. Re-import them here so this
+# extractor can enforce the same envelope when invoked outside the loader.
+from ..text_loader import MAX_DOC_BYTES, MAX_PDF_PAGES
+
 # Lazy imports for heavy dependencies
 _TORCH_AVAILABLE = None
 _TRANSFORMERS_AVAILABLE = None
@@ -287,6 +292,14 @@ class TableExtractor:
         Returns:
             List of detected tables with rows and cells
         """
+        # F-NLP-4: enforce the same byte cap that ``text_loader`` enforces on
+        # the HTTP-fetch path. Callers that pass ``pdf_bytes`` directly would
+        # otherwise bypass it and pin memory on a malicious large PDF.
+        if pdf_bytes is not None and len(pdf_bytes) > MAX_DOC_BYTES:
+            raise ValueError(
+                f"PDF exceeds size limit: {len(pdf_bytes)} > {MAX_DOC_BYTES}"
+            )
+
         # Try deep learning approach first
         if _TORCH_AVAILABLE and _TRANSFORMERS_AVAILABLE and _PDF2IMAGE_AVAILABLE:
             tables = self._extract_tables_dl(pdf_bytes, pages)
@@ -316,9 +329,13 @@ class TableExtractor:
         if self._detection_model is None:
             return []
 
-        # Convert PDF to images
+        # Convert PDF to images. F-NLP-4: cap pages to ``MAX_PDF_PAGES`` so
+        # an attacker can't pin GPU/CPU memory by feeding a huge multipage
+        # PDF that fits under the byte cap.
         try:
-            images = convert_from_bytes(pdf_bytes, dpi=200)
+            images = convert_from_bytes(
+                pdf_bytes, dpi=200, last_page=MAX_PDF_PAGES
+            )
         except Exception as e:
             logger.error("pdf_to_image_failed", error=str(e))
             return []
@@ -469,7 +486,15 @@ class TableExtractor:
         all_tables = []
 
         with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
-            for page_idx, page in enumerate(pdf.pages):
+            # F-NLP-4: page cap parity with the DL path.
+            page_list = pdf.pages[:MAX_PDF_PAGES]
+            if len(pdf.pages) > MAX_PDF_PAGES:
+                logger.warning(
+                    "pdfplumber_pages_truncated",
+                    total=len(pdf.pages),
+                    cap=MAX_PDF_PAGES,
+                )
+            for page_idx, page in enumerate(page_list):
                 page_num = page_idx + 1
 
                 if pages and page_num not in pages:

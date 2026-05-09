@@ -451,3 +451,23 @@ class TestCriticalRequirement:
                 assert all(
                     "romaine" not in p.lower() for p in products
                 ), f"LOT-B incorrectly associated with Romaine"
+
+
+class TestTableExtractorSizeCaps:
+    """F-NLP-4: byte/page caps must be enforced when callers pass
+    ``pdf_bytes`` directly, bypassing the ``text_loader`` envelope."""
+
+    def test_oversized_pdf_rejected(self):
+        from services.nlp.app.extractors.table_extractor import (
+            TableExtractor,
+        )
+        from services.nlp.app.text_loader import MAX_DOC_BYTES
+
+        extractor = TableExtractor()
+        oversized = b"x" * (MAX_DOC_BYTES + 1)
+
+        # The size check rejects before any pdf2image / pdfplumber import
+        # is performed — so this works even on minimal CI environments
+        # without pdf2image installed.
+        with pytest.raises(ValueError, match="exceeds size limit"):
+            extractor.extract_tables_from_pdf(oversized)

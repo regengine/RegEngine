@@ -419,6 +419,24 @@ class TestExtractionResult:
         assert result.raw_text is not None
         assert len(result.raw_text) <= 1000
 
+    def test_raw_text_pii_redacted(self, extractor):
+        """F-NLP-2: PII embedded in BOL text must not survive into the
+        stored ``raw_text`` snippet. Redaction runs AFTER the regex pass
+        (so GLNs/lot codes are not mutilated) but BEFORE persistence."""
+        text_with_pii = (
+            SAMPLE_BOL_TEXT
+            + "\nContact dispatcher at john.doe@example.com or 415-555-0123 for questions."
+        )
+        result = extractor.extract(
+            text_with_pii,
+            "test-doc-pii",
+            tenant_id="11111111-1111-1111-1111-111111111111",
+        )
+        assert result.raw_text is not None
+        # The exact email address must not be present verbatim in the
+        # stored snippet — ``redact_pii`` masks it.
+        assert "john.doe@example.com" not in result.raw_text
+
 
 # Sample BOL with GTIN-14 + Lot format for 7 KDE testing
 SAMPLE_BOL_WITH_GTIN14 = """

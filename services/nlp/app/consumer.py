@@ -188,6 +188,15 @@ def _resolve_tenant_id(
     if not header_tid and not payload_tid:
         return None, "no_tenant_id_in_header_or_payload"
 
+    # F-NLP-8: explicit early-return when the body is missing/sentinel.
+    # The body is the ONLY trusted source (see RE-SEC-001); a present
+    # header cannot rescue a missing/sentinel body. Without this guard the
+    # function fell through to ``uuid.UUID(None)``, raising AttributeError
+    # that was caught and remapped — correct behavior, but implicit.
+    # Making the rejection explicit removes a fragile control-flow edge.
+    if payload_tid is None:
+        return None, "no_tenant_id_in_payload"
+
     # Both present but disagree → hostile or broken producer. Reject.
     # Case-insensitive compare because UUIDs are case-insensitive per RFC4122.
     if (
@@ -780,9 +789,12 @@ def _score_regulatory_date(date_value: Optional[str], attrs: dict) -> float:
     if isinstance(ctx_dist, (int, float)) and ctx_dist < 20:
         score += 0.05
 
-    # Signal: trusted provenance tag
-    if attrs.get("provenance") in {"FSMA Rule Text", "FDA Official Publication"}:
-        score += 0.05
+    # F-NLP-5: removed provenance bonus. The producer at
+    # ``extractor.py:_extract_regulatory_dates`` hardcodes
+    # ``provenance="FSMA Rule Text"`` on every match, so the bonus fired
+    # tautologically on every extracted regulatory date. The check was
+    # dead weight bounded by ``_LEGACY_HEURISTIC_CONFIDENCE_CAP`` — not
+    # exploitable, but a future patch could mistake it for a real signal.
 
     # Cap: even "perfect" regex matches never auto-approve regulatory dates.
     return min(score, _LEGACY_HEURISTIC_CONFIDENCE_CAP)
