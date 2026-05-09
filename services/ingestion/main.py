@@ -203,6 +203,11 @@ async def list_enabled_features(api_key: APIKey = Depends(require_api_key)):
 
 app.include_router(ingestion_router, tags=["Document Ingestion"])
 
+# Ingest endpoints (extracted from routes.py — /v1/ingest, /v1/ingest/file,
+# /v1/ingest/url, /v1/ingest/regulation)
+from app.routes_ingest import router as ingest_router
+app.include_router(ingest_router, tags=["Document Ingestion"])
+
 # Health & Metrics (extracted from routes.py, Finding #8)
 from app.routes_health_metrics import router as health_metrics_router
 app.include_router(health_metrics_router, tags=["Health & Metrics"])
