@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowRight, Database, FileCode2, Hash, KeyRound, Lock, ShieldCheck, Terminal } from "lucide-react";
+import { ArrowRight, Database, Download, FileCode2, Hash, KeyRound, Lock, ShieldCheck, Terminal } from "lucide-react";
 
 export const metadata: Metadata = {
   title: "Security | RegEngine",
@@ -32,6 +32,7 @@ const controls = [
 
 const links = [
   { icon: Terminal, label: "Open verifier", href: "/verify" },
+  { icon: Download, label: "Download proof artifacts", href: "/proof" },
   { icon: FileCode2, label: "Security details", href: "/trust/architecture" },
   { icon: KeyRound, label: "Contact security", href: "/contact" },
 ];
@@ -110,7 +111,7 @@ export default function SecurityPage() {
       </section>
 
       <section className="re-section">
-        <div className="re-container grid gap-5 md:grid-cols-3">
+        <div className="re-container grid gap-5 md:grid-cols-4">
           {links.map(({ icon: Icon, label, href }) => (
             <Link key={label} href={href} className="re-panel flex min-h-[120px] flex-col justify-between p-5 no-underline">
               <Icon className="h-5 w-5 text-[var(--re-text-muted)]" />
