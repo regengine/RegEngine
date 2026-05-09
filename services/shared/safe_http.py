@@ -214,6 +214,60 @@ def safe_httpx_get_sync(
     )
 
 
+def safe_httpx_post_sync(
+    url: str,
+    *,
+    headers: Optional[dict] = None,
+    json: Optional[Any] = None,
+    data: Optional[Any] = None,
+    timeout: float = DEFAULT_TIMEOUT,
+    validator: Callable[[str], str] = validate_url,
+) -> httpx.Response:
+    """Sync POST that validates the destination and pins to a validated IP.
+
+    Unlike :func:`safe_httpx_get_sync` this does NOT follow redirects: POST
+    redirects are unusual and unsafe to chase blindly (the body would be
+    re-sent to the redirected host). Callers needing redirect handling for
+    POST should validate explicitly and re-issue.
+    """
+    current_url = validator(url)
+    pinned_ip, host = _validate_and_pin(current_url)
+    ssl_ctx = _build_ssl_context()
+    transport = _IPPinnedSyncTransport(
+        pinned_ip=pinned_ip,
+        original_host=host,
+        verify=ssl_ctx,
+    )
+    with httpx.Client(
+        transport=transport,
+        timeout=timeout,
+        follow_redirects=False,
+        headers=headers or {},
+    ) as client:
+        return client.post(current_url, json=json, data=data)
+
+
+async def safe_httpx_post_async(
+    url: str,
+    *,
+    headers: Optional[dict] = None,
+    json: Optional[Any] = None,
+    data: Optional[Any] = None,
+    timeout: float = DEFAULT_TIMEOUT,
+    http2: bool = False,
+    validator: Callable[[str], str] = validate_url,
+) -> httpx.Response:
+    """Async counterpart to :func:`safe_httpx_post_sync`.
+
+    Does NOT follow redirects (see :func:`safe_httpx_post_sync` rationale).
+    """
+    current_url = validator(url)
+    async with safe_httpx_client(
+        url=current_url, timeout=timeout, http2=http2, headers=headers
+    ) as client:
+        return await client.post(current_url, json=json, data=data)
+
+
 async def follow_redirects_safely(
     url: str,
     *,
@@ -306,6 +360,8 @@ __all__ = [
     "STANDARD_BROWSER_HEADERS",
     "safe_httpx_client",
     "safe_httpx_get_sync",
+    "safe_httpx_post_sync",
+    "safe_httpx_post_async",
     "safe_fetch_content",
     "follow_redirects_safely",
 ]

@@ -13,12 +13,13 @@ from datetime import datetime, timezone
 from typing import Literal
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
-from .authz import require_permission
+from .authz import IngestionPrincipal, require_permission
 from .disclaimers import SIMULATION_DISCLAIMER
+from .shared.tenant_resolution import resolve_principal_tenant_id
 from shared.tenant_settings import get_tenant_data, set_tenant_data, list_tenant_data
 
 logger = logging.getLogger("recall-simulations")
@@ -129,7 +130,9 @@ RECALL_SCENARIOS = [
 ]
 
 
-_simulation_store: dict[str, dict] = {}
+# Tenant-keyed in-memory store: keyed by (tenant_id, simulation_id) to prevent
+# cross-tenant reads via UUID enumeration (security: F-2).
+_simulation_store: dict[tuple[str, str], dict] = {}
 
 
 class RunSimulationRequest(BaseModel):
@@ -259,18 +262,31 @@ def _get_scenario_or_400(scenario_id: str) -> dict:
     raise HTTPException(status_code=400, detail=f"Unknown scenario_id '{scenario_id}'")
 
 
-def _get_simulation_or_404(simulation_id: str, tenant_id: str | None = None) -> dict:
-    simulation = _simulation_store.get(simulation_id)
+def _get_simulation_or_404(simulation_id: str, tenant_id: str) -> dict:
+    """Look up a simulation scoped to the caller's tenant.
+
+    Cross-tenant reads return 404 (matching the existence-oracle hardening
+    pattern from #2249) — we do not leak whether a simulation exists for
+    another tenant.
+    """
+    if not tenant_id:
+        # Defensive — callers should always pass a resolved principal tenant_id.
+        raise HTTPException(status_code=400, detail="Tenant context required")
+
+    simulation = _simulation_store.get((tenant_id, simulation_id))
     if not simulation:
-        # Fall back to DB lookup
-        _lookup_tid = tenant_id or "default"
+        # Fall back to DB lookup, scoped to the same tenant — never coerce to "default".
         try:
-            simulation = get_tenant_data(_lookup_tid, "simulations", simulation_id)
+            simulation = get_tenant_data(tenant_id, "simulations", simulation_id)
         except Exception as exc:
-            logger.warning("simulation_db_read_failed simulation_id=%s error=%s", simulation_id, str(exc))
+            logger.warning(
+                "simulation_db_read_failed simulation_id=%s error=%s",
+                simulation_id,
+                str(exc),
+            )
         if simulation:
-            # Re-populate in-memory cache
-            _simulation_store[simulation_id] = simulation
+            # Re-populate in-memory cache under the same tenant key.
+            _simulation_store[(tenant_id, simulation_id)] = simulation
     if not simulation:
         raise HTTPException(status_code=404, detail=f"Simulation '{simulation_id}' not found")
     return simulation
@@ -398,9 +414,18 @@ async def list_scenarios(_auth=Depends(require_permission("simulations.read")), 
 @router.post("/run", status_code=201, summary="Run recall simulation")
 async def run_recall_simulation(
     request: RunSimulationRequest,
-    tenant_id: str = None,
-    _auth=Depends(require_permission("simulations.write")),
+    tenant_id: str | None = Query(default=None),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    principal: IngestionPrincipal = Depends(require_permission("simulations.write")),
 ):
+    # Bind to the authenticated principal's tenant. If a query/header tenant
+    # is supplied and disagrees with the principal, this raises 403.
+    # If no tenant context is available at all, this raises 400 — we never
+    # fall back to a magic "default" namespace (security: F-7).
+    resolved_tenant_id = resolve_principal_tenant_id(
+        tenant_id, x_tenant_id, principal.tenant_id
+    )
+
     scenario = _get_scenario_or_400(request.scenario_id)
     metrics = _calculate_metrics(scenario)
     simulation_id = str(uuid4())
@@ -410,8 +435,8 @@ async def run_recall_simulation(
     is_illustrative = True
     real_metrics = None
     data_source = "demo"
-    if tenant_id:
-        tenant_data = _query_tenant_recall_metrics(tenant_id)
+    if resolved_tenant_id:
+        tenant_data = _query_tenant_recall_metrics(resolved_tenant_id)
         if tenant_data and tenant_data.get("cte_count", 0) > 0:
             is_illustrative = False
             data_source = "tenant"
@@ -443,12 +468,12 @@ async def run_recall_simulation(
         "tenant_metrics": real_metrics,
         "demo_disclaimer": SIMULATION_DISCLAIMER if is_illustrative else None,
     }
-    _simulation_store[simulation_id] = simulation_record
+    _simulation_store[(resolved_tenant_id, simulation_id)] = simulation_record
 
-    # Write-through to DB for persistence across restarts
-    _persist_tenant_id = tenant_id or "default"
+    # Write-through to DB for persistence across restarts. Always under the
+    # principal's tenant — never the "default" magic-string namespace.
     try:
-        set_tenant_data(_persist_tenant_id, "simulations", simulation_id, simulation_record)
+        set_tenant_data(resolved_tenant_id, "simulations", simulation_id, simulation_record)
     except Exception as exc:
         logger.warning("simulation_db_write_failed simulation_id=%s error=%s", simulation_id, str(exc))
 
@@ -466,17 +491,27 @@ async def run_recall_simulation(
 @router.get("/{simulation_id}", summary="Get simulation result")
 async def get_simulation(
     simulation_id: str,
-    _auth=Depends(require_permission("simulations.read")),
+    tenant_id: str | None = Query(default=None),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    principal: IngestionPrincipal = Depends(require_permission("simulations.read")),
 ):
-    return _get_simulation_or_404(simulation_id)
+    resolved_tenant_id = resolve_principal_tenant_id(
+        tenant_id, x_tenant_id, principal.tenant_id
+    )
+    return _get_simulation_or_404(simulation_id, resolved_tenant_id)
 
 
 @router.get("/{simulation_id}/timeline", summary="Get simulation timeline")
 async def get_simulation_timeline(
     simulation_id: str,
-    _auth=Depends(require_permission("simulations.read")),
+    tenant_id: str | None = Query(default=None),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    principal: IngestionPrincipal = Depends(require_permission("simulations.read")),
 ):
-    simulation = _get_simulation_or_404(simulation_id)
+    resolved_tenant_id = resolve_principal_tenant_id(
+        tenant_id, x_tenant_id, principal.tenant_id
+    )
+    simulation = _get_simulation_or_404(simulation_id, resolved_tenant_id)
     return {
         "simulation_id": simulation_id,
         "timeline": simulation["metrics"]["timeline"],
@@ -486,9 +521,14 @@ async def get_simulation_timeline(
 @router.get("/{simulation_id}/impact-graph", summary="Get simulation impact graph")
 async def get_simulation_impact_graph(
     simulation_id: str,
-    _auth=Depends(require_permission("simulations.read")),
+    tenant_id: str | None = Query(default=None),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    principal: IngestionPrincipal = Depends(require_permission("simulations.read")),
 ):
-    simulation = _get_simulation_or_404(simulation_id)
+    resolved_tenant_id = resolve_principal_tenant_id(
+        tenant_id, x_tenant_id, principal.tenant_id
+    )
+    simulation = _get_simulation_or_404(simulation_id, resolved_tenant_id)
     graph = simulation["metrics"]["supply_chain_graph"]
     return {
         "simulation_id": simulation_id,
@@ -502,9 +542,14 @@ async def export_simulation(
     simulation_id: str,
     format: Literal["json", "csv"] = Query(default="json"),
     view: Literal["summary", "timeline", "impact_graph", "contact_list"] = Query(default="summary"),
-    _auth=Depends(require_permission("simulations.export")),
+    tenant_id: str | None = Query(default=None),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    principal: IngestionPrincipal = Depends(require_permission("simulations.export")),
 ):
-    simulation = _get_simulation_or_404(simulation_id)
+    resolved_tenant_id = resolve_principal_tenant_id(
+        tenant_id, x_tenant_id, principal.tenant_id
+    )
+    simulation = _get_simulation_or_404(simulation_id, resolved_tenant_id)
 
     if format == "csv":
         csv_content = _build_csv_export(simulation, view=view)

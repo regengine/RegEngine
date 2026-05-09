@@ -1,5 +1,15 @@
 # RegEngine — Best-in-Class Upgrade Plan
 
+> **STATUS — May 2026:** Sections referencing `kernel/` paths (BUG-001, BUG-002,
+> the `kernel/models.py` ↔ `kernel/obligation/models.py` consolidation, the
+> `kernel/evidence/` test-coverage gap, etc.) are **OBSOLETE**. The entire
+> `kernel/` tree was retired under epic-g (`epic-g-retire-kernel`). Live code
+> now lives under `services/ingestion/app/` (regulation parser, discovery,
+> regulation_loader), `services/graph/app/` (mapping engine, evidence routes,
+> regulation routes), `services/admin/app/` (drift/monitoring), and
+> `services/scheduler/app/` (reporting). Treat any remaining `kernel/...` code
+> snippet below as historical context only.
+
 **Created:** March 2026  
 **Source:** Full codebase review — 8 issue categories identified  
 **Strategy:** Fix bugs first → security hardening → structural improvements → quality ceiling

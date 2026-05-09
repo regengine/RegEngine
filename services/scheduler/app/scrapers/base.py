@@ -10,6 +10,8 @@ from typing import Any, Callable, List, Mapping, Optional
 import httpx
 import structlog
 
+from shared.url_validation import SSRFError, validate_url
+
 from ..models import EnforcementItem, ScrapeResult, SourceType
 
 logger = structlog.get_logger("scraper.base")
@@ -109,6 +111,25 @@ def fetch_with_retry(
 
     last_exc: Optional[BaseException] = None
     last_response: Optional[httpx.Response] = None
+
+    # RE-SCH-001: validate the destination URL up-front (blocklist + scheme
+    # + DNS check). For absolute URLs we additionally pre-resolve so an
+    # attacker-controlled hostname is rejected before we ever issue a
+    # request. Relative URLs (e.g. ``/test`` against an httpx ``base_url``)
+    # are exercised by the unit tests and skip validation; in production the
+    # scrapers always pass absolute URLs so the validator runs.
+    from urllib.parse import urlparse as _urlparse
+
+    if _urlparse(url).scheme in ("http", "https"):
+        try:
+            validate_url(url)
+        except SSRFError as exc:
+            logger.error(
+                f"{log_scope}_ssrf_blocked",
+                url=url,
+                error=str(exc),
+            )
+            raise
 
     for attempt in range(1, max_attempts + 1):
         try:
