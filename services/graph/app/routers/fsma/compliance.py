@@ -14,10 +14,11 @@ from datetime import datetime, timezone
 from typing import List, Optional
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Path as PathParam, Query, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
+from ...exporters import csv_safe, header_filename, xml_escape
 from ...fsma_utils import find_gaps, find_orphaned_lots, trace_backward, trace_forward
 from ...neo4j_utils import Neo4jClient
 from ...neo4j_utils import Neo4jClient
@@ -84,8 +85,9 @@ async def get_coverage_card(
 @limiter.limit("10/minute")
 async def export_fda_request_sheet(
     request: Request,
-    start_date: str = Query(..., description="Start Date (YYYY-MM-DD or ISO)"),
-    end_date: str = Query(..., description="End Date (YYYY-MM-DD or ISO)"),
+    # RE-SEC-003: constrain shape of strings that flow into Content-Disposition.
+    start_date: str = Query(..., pattern=r"^[0-9T:.\-]{1,32}$", description="Start Date (YYYY-MM-DD or ISO)"),
+    end_date: str = Query(..., pattern=r"^[0-9T:.\-]{1,32}$", description="End Date (YYYY-MM-DD or ISO)"),
     tenant_id: uuid.UUID = Depends(get_current_tenant_id),
     api_key=Depends(require_api_key),
 ):
@@ -128,26 +130,30 @@ async def export_fda_request_sheet(
         ])
         
         for event in events:
+            # RE-SEC-002: every cell goes through csv_safe() to neutralize
+            # Excel formula prefixes from tenant-stored values.
             writer.writerow([
-                event.get("tlc", ""),
+                csv_safe(event.get("tlc", "")),
                 "", # Description of the code itself (optional)
-                event.get("product_description", ""),
-                event.get("quantity", ""),
-                event.get("unit_of_measure", ""),
-                event.get("location_description", ""),
-                event.get("location_gln", ""),
-                event.get("event_date", ""),
-                event.get("event_time", ""),
-                event.get("reference_doc_type", ""),
-                event.get("reference_doc_num", ""),
+                csv_safe(event.get("product_description", "")),
+                csv_safe(event.get("quantity", "")),
+                csv_safe(event.get("unit_of_measure", "")),
+                csv_safe(event.get("location_description", "")),
+                csv_safe(event.get("location_gln", "")),
+                csv_safe(event.get("event_date", "")),
+                csv_safe(event.get("event_time", "")),
+                csv_safe(event.get("reference_doc_type", "")),
+                csv_safe(event.get("reference_doc_num", "")),
             ])
             
         csv_content = csv_buffer.getvalue()
         timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-        filename = f"fda_sortable_spreadsheet_{start_date}_{end_date}_{timestamp}.csv"
-        
+        filename = header_filename(
+            f"fda_sortable_spreadsheet_{start_date}_{end_date}_{timestamp}.csv"
+        )
+
         logger.info("fda_request_export_completed", count=len(events))
-        
+
         return StreamingResponse(
             io.BytesIO(b"\xef\xbb\xbf" + csv_content.encode("utf-8")),
             media_type="text/csv",
@@ -168,8 +174,9 @@ async def export_fda_request_sheet(
 @limiter.limit("10/minute")
 async def export_epcis(
     request: Request,
-    start_date: str = Query(..., description="Start Date (YYYY-MM-DD)"),
-    end_date: str = Query(..., description="End Date (YYYY-MM-DD)"),
+    # RE-SEC-003: constrain shape of strings that flow into Content-Disposition.
+    start_date: str = Query(..., pattern=r"^[0-9T:.\-]{1,32}$", description="Start Date (YYYY-MM-DD)"),
+    end_date: str = Query(..., pattern=r"^[0-9T:.\-]{1,32}$", description="End Date (YYYY-MM-DD)"),
     format: str = Query("json-ld", pattern="^(json-ld|xml)$", description="EPCIS format"),
     tenant_id: uuid.UUID = Depends(get_current_tenant_id),
     api_key=Depends(require_api_key),
@@ -298,10 +305,12 @@ async def export_epcis(
         if format == "xml":
             # Convert to XML format
             xml_content = _epcis_to_xml(epcis_document)
-            filename = f"epcis_export_{start_date}_{end_date}_{timestamp}.xml"
-            
+            filename = header_filename(
+                f"epcis_export_{start_date}_{end_date}_{timestamp}.xml"
+            )
+
             logger.info("epcis_xml_export_completed", count=len(epcis_events))
-            
+
             return StreamingResponse(
                 io.BytesIO(xml_content.encode("utf-8")),
                 media_type="application/xml",
@@ -311,10 +320,12 @@ async def export_epcis(
             # JSON-LD format (default)
             import json
             json_content = json.dumps(epcis_document, indent=2)
-            filename = f"epcis_export_{start_date}_{end_date}_{timestamp}.jsonld"
-            
+            filename = header_filename(
+                f"epcis_export_{start_date}_{end_date}_{timestamp}.jsonld"
+            )
+
             logger.info("epcis_jsonld_export_completed", count=len(epcis_events))
-            
+
             return StreamingResponse(
                 io.BytesIO(json_content.encode("utf-8")),
                 media_type="application/ld+json",
@@ -327,44 +338,54 @@ async def export_epcis(
 
 
 def _epcis_to_xml(epcis_doc: dict) -> str:
-    """Convert EPCIS JSON-LD to XML format."""
-    # Simplified XML conversion
+    """Convert EPCIS JSON-LD to XML format.
+
+    RE-SEC-001: every interpolated value is wrapped in :func:`xml_escape` so
+    tenant-controlled strings (TLC, GLN, free-text fields) cannot break out
+    of element/attribute context and inject sibling elements into the
+    EPCIS document FDA / Walmart / Kroger consume.
+
+    TODO(RE-SEC-001): migrate this builder to ``xml.etree.ElementTree``
+    elements + ``ElementTree.tostring`` so escaping is structural rather
+    than per-call. Tracked as a follow-up; the wrapping below is the
+    minimum viable fix that ships in the same PR as the helper module.
+    """
     events_xml = []
     for event in epcis_doc.get("epcisBody", {}).get("eventList", []):
         event_type = event.get("type", "ObjectEvent")
         if event_type == "ObjectEvent":
             events_xml.append(f"""
     <ObjectEvent>
-      <eventTime>{event.get('eventTime', '')}</eventTime>
-      <eventTimeZoneOffset>{event.get('eventTimeZoneOffset', '-08:00')}</eventTimeZoneOffset>
+      <eventTime>{xml_escape(event.get('eventTime', ''))}</eventTime>
+      <eventTimeZoneOffset>{xml_escape(event.get('eventTimeZoneOffset', '-08:00'))}</eventTimeZoneOffset>
       <epcList>
-        {''.join(f'<epc>{epc}</epc>' for epc in event.get('epcList', []))}
+        {''.join(f'<epc>{xml_escape(epc)}</epc>' for epc in event.get('epcList', []))}
       </epcList>
-      <action>{event.get('action', 'OBSERVE')}</action>
-      <bizStep>{event.get('bizStep', '')}</bizStep>
-      <disposition>{event.get('disposition', '')}</disposition>
-      <readPoint><id>{event.get('readPoint', {}).get('id', '')}</id></readPoint>
+      <action>{xml_escape(event.get('action', 'OBSERVE'))}</action>
+      <bizStep>{xml_escape(event.get('bizStep', ''))}</bizStep>
+      <disposition>{xml_escape(event.get('disposition', ''))}</disposition>
+      <readPoint><id>{xml_escape((event.get('readPoint') or {}).get('id', ''))}</id></readPoint>
     </ObjectEvent>""")
         elif event_type == "TransformationEvent":
             events_xml.append(f"""
     <TransformationEvent>
-      <eventTime>{event.get('eventTime', '')}</eventTime>
-      <eventTimeZoneOffset>{event.get('eventTimeZoneOffset', '-08:00')}</eventTimeZoneOffset>
+      <eventTime>{xml_escape(event.get('eventTime', ''))}</eventTime>
+      <eventTimeZoneOffset>{xml_escape(event.get('eventTimeZoneOffset', '-08:00'))}</eventTimeZoneOffset>
       <inputEPCList>
-        {''.join(f'<epc>{epc}</epc>' for epc in event.get('inputEPCList', []))}
+        {''.join(f'<epc>{xml_escape(epc)}</epc>' for epc in event.get('inputEPCList', []))}
       </inputEPCList>
       <outputEPCList>
-        {''.join(f'<epc>{epc}</epc>' for epc in event.get('outputEPCList', []))}
+        {''.join(f'<epc>{xml_escape(epc)}</epc>' for epc in event.get('outputEPCList', []))}
       </outputEPCList>
-      <bizStep>{event.get('bizStep', '')}</bizStep>
+      <bizStep>{xml_escape(event.get('bizStep', ''))}</bizStep>
     </TransformationEvent>""")
-    
+
     return f"""<?xml version="1.0" encoding="UTF-8"?>
 <epcis:EPCISDocument
   xmlns:epcis="urn:epcglobal:epcis:xsd:2"
   xmlns:cbv="urn:epcglobal:cbv:xsd"
   schemaVersion="2.0"
-  creationDate="{epcis_doc.get('creationDate', '')}">
+  creationDate="{xml_escape(epcis_doc.get('creationDate', ''))}">
   <EPCISBody>
     <EventList>
       {''.join(events_xml)}
@@ -377,7 +398,8 @@ def _epcis_to_xml(epcis_doc: dict) -> str:
 @limiter.limit("10/minute")
 async def export_trace_csv(
     request: Request,
-    tlc: str,
+    # RE-SEC-003: constrain TLC charset to GS1-safe alnum/dot/dash/underscore.
+    tlc: str = PathParam(..., pattern=r"^[A-Za-z0-9._\-]{1,64}$"),
     direction: str = Query("forward", pattern="^(forward|backward)$"),
     max_depth: int = Query(10, ge=1, le=20),
     tenant_id: uuid.UUID = Depends(get_current_tenant_id),
@@ -437,19 +459,20 @@ async def export_trace_csv(
             # Find matching events for this lot
             for event in result.events:
                 facility = next((f for f in result.facilities if f.get("gln")), {})
+                # RE-SEC-002: csv_safe() on every cell.
                 writer.writerow(
                     [
-                        lot.get("tlc", tlc),
-                        lot.get("product_description", ""),
-                        lot.get("quantity", ""),
-                        lot.get("unit_of_measure", ""),
-                        event.get("type", ""),
-                        event.get("event_date", ""),
+                        csv_safe(lot.get("tlc", tlc)),
+                        csv_safe(lot.get("product_description", "")),
+                        csv_safe(lot.get("quantity", "")),
+                        csv_safe(lot.get("unit_of_measure", "")),
+                        csv_safe(event.get("type", "")),
+                        csv_safe(event.get("event_date", "")),
                         "",  # event_time
-                        facility.get("name", ""),
-                        facility.get("gln", ""),
-                        facility.get("address", ""),
-                        event.get("confidence", ""),
+                        csv_safe(facility.get("name", "")),
+                        csv_safe(facility.get("gln", "")),
+                        csv_safe(facility.get("address", "")),
+                        csv_safe(event.get("confidence", "")),
                     ]
                 )
 
@@ -459,25 +482,27 @@ async def export_trace_csv(
                 facility = next((f for f in result.facilities if f.get("gln")), {})
                 writer.writerow(
                     [
-                        tlc,
+                        csv_safe(tlc),
                         "",
                         "",
                         "",
-                        event.get("type", ""),
-                        event.get("event_date", ""),
+                        csv_safe(event.get("type", "")),
+                        csv_safe(event.get("event_date", "")),
                         "",
-                        facility.get("name", ""),
-                        facility.get("gln", ""),
-                        facility.get("address", ""),
-                        event.get("confidence", ""),
+                        csv_safe(facility.get("name", "")),
+                        csv_safe(facility.get("gln", "")),
+                        csv_safe(facility.get("address", "")),
+                        csv_safe(event.get("confidence", "")),
                     ]
                 )
 
         csv_content = csv_buffer.getvalue()
 
-        # Generate filename
+        # Generate filename — RE-SEC-003: encode for Content-Disposition.
         timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-        filename = f"fsma_trace_{direction}_{tlc}_{timestamp}.csv"
+        filename = header_filename(
+            f"fsma_trace_{direction}_{tlc}_{timestamp}.csv"
+        )
 
         logger.info(
             "csv_export_generated",
@@ -501,7 +526,8 @@ async def export_trace_csv(
 @limiter.limit("10/minute")
 async def export_recall_contacts(
     request: Request,
-    tlc: str,
+    # RE-SEC-003: constrain TLC charset.
+    tlc: str = PathParam(..., pattern=r"^[A-Za-z0-9._\-]{1,64}$"),
     tenant_id: uuid.UUID = Depends(get_current_tenant_id),
     api_key=Depends(require_api_key),
 ):
@@ -542,12 +568,13 @@ async def export_recall_contacts(
         )
 
         for facility in result.facilities:
+            # RE-SEC-002: csv_safe() on tenant-stored cells.
             writer.writerow(
                 [
-                    facility.get("name", ""),
-                    facility.get("gln", ""),
-                    facility.get("address", ""),
-                    facility.get("facility_type", ""),
+                    csv_safe(facility.get("name", "")),
+                    csv_safe(facility.get("gln", "")),
+                    csv_safe(facility.get("address", "")),
+                    csv_safe(facility.get("facility_type", "")),
                     "",  # Date received (from event)
                     "",  # Quantity received
                     "PENDING",  # Contact status placeholder
@@ -556,7 +583,7 @@ async def export_recall_contacts(
 
         csv_content = csv_buffer.getvalue()
         timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-        filename = f"recall_contacts_{tlc}_{timestamp}.csv"
+        filename = header_filename(f"recall_contacts_{tlc}_{timestamp}.csv")
 
         logger.info(
             "recall_contacts_export",
@@ -708,20 +735,21 @@ async def export_gaps_csv(
         )
 
         for gap in gaps:
+            # RE-SEC-002: csv_safe() on tenant-stored cells.
             writer.writerow(
                 [
-                    gap.get("event_id", ""),
-                    gap.get("type", ""),
-                    gap.get("event_date", ""),
-                    gap.get("document_id", ""),
-                    ", ".join(gap.get("gaps", [])),
+                    csv_safe(gap.get("event_id", "")),
+                    csv_safe(gap.get("type", "")),
+                    csv_safe(gap.get("event_date", "")),
+                    csv_safe(gap.get("document_id", "")),
+                    csv_safe(", ".join(gap.get("gaps", []))),
                     "OPEN",  # Default status
                 ]
             )
 
         csv_content = csv_buffer.getvalue()
         timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-        filename = f"fsma_compliance_gaps_{timestamp}.csv"
+        filename = header_filename(f"fsma_compliance_gaps_{timestamp}.csv")
 
         return StreamingResponse(
             io.BytesIO(b"\xef\xbb\xbf" + csv_content.encode("utf-8")),
@@ -861,7 +889,12 @@ def generate_traceability_plan(
             io.BytesIO(content.encode("utf-8")),
             media_type="text/markdown",
             headers={
-                "Content-Disposition": f"attachment; filename=traceability_plan_{plan.plan_id[:8]}.md"
+                # RE-SEC-003: plan_id is server-generated (uuid), but route
+                # filename through header_filename anyway — defense in depth.
+                "Content-Disposition": (
+                    "attachment; filename="
+                    + header_filename(f"traceability_plan_{plan.plan_id[:8]}.md")
+                )
             },
         )
     else:
