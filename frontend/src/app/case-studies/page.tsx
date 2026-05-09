@@ -87,6 +87,10 @@ export default function CaseStudy() {
                             Product validation · synthetic data modeled on industry patterns. Not a named-customer case study.
                         </span>
                     </div>
+                    <p className="text-sm text-[var(--re-text-secondary)] mb-6">
+                        These metrics are reproducible — try the same recall drill at{' '}
+                        <Link href="/proof/recall-drill" className="text-re-brand hover:opacity-80 underline">/proof/recall-drill</Link>.
+                    </p>
                     <p className="text-xl text-[var(--re-text-secondary)] mb-10 max-w-3xl">
                         We ran a representative leafy greens supply chain through RegEngine — from Salinas Valley
                         harvest to grocery DC receiving — and measured every step. No composites. No projections.
