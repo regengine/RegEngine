@@ -29,6 +29,8 @@ from sqlalchemy.orm import Session
 
 from app.database import get_session
 from app.dependencies import get_current_user
+from .models import TenantContext
+from .sqlalchemy_models import UserModel
 
 logger = structlog.get_logger("gdpr")
 
@@ -111,7 +113,7 @@ class ExportResponse(BaseModel):
 async def gdpr_export(
     page: int = Query(1, ge=1),
     page_size: int = Query(100, ge=1, le=1000),
-    current_user=Depends(get_current_user),
+    current_user: UserModel = Depends(get_current_user),
     db: Session = Depends(get_session),
 ):
     """Return all personal data held for the requesting user.
@@ -119,9 +121,12 @@ async def gdpr_export(
     Response is a JSON attachment with schema:
     ``{"user": {...}, "audit_events": [...], "compliance_records": [...]}``.
     """
-    user_id = str(current_user.get("user_id") or current_user.get("sub") or "")
-    tenant_id = str(current_user.get("tenant_id") or "")
-    email = current_user.get("email", "")
+    # RE-SEC-001 / RE-SEC-002 sibling: ``current_user`` is a SQLAlchemy
+    # ``UserModel`` instance, not a dict. Tenant comes from the RLS context
+    # bound on ``db`` -- ``UserModel`` does not carry a tenant_id column.
+    user_id = str(current_user.id) if current_user.id else ""
+    email = current_user.email or ""
+    tenant_id = TenantContext.get_tenant_context(db) or ""
 
     if not user_id:
         raise HTTPException(status_code=401, detail="Cannot identify user")
