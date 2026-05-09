@@ -5,9 +5,8 @@ import uuid
 from typing import Optional
 
 import httpx
+from shared.safe_http import safe_httpx_get_sync
 from shared.url_validation import validate_url, SSRFError
-
-from shared.url_validation import validate_url
 
 
 # Stubs for S3 and Kafka integrations; replace with actual clients
@@ -52,10 +51,9 @@ class StateRegistryScraper:
 
         loop = asyncio.get_running_loop()
 
-        validate_url(url)
-
         def _fetch():
-            resp = httpx.get(url, timeout=15)
+            # SSRF defense (RE-SEC-INGEST-003): per-hop validation + IP pinning.
+            resp = safe_httpx_get_sync(url, timeout=15)
             resp.raise_for_status()
             return resp
 

@@ -10,7 +10,8 @@ import httpx
 import feedparser
 from typing import Iterable, Optional
 
-from shared.url_validation import validate_url
+from shared.safe_http import safe_httpx_get_sync
+from shared.url_validation import SSRFError, validate_url
 from .base import FetchedItem, Source, StateRegistryScraper
 
 import structlog
@@ -50,10 +51,12 @@ class GenericRSSScraper(StateRegistryScraper):
             )
 
     def fetch(self, source: Source) -> FetchedItem:
-        """Fetch content from the source URL."""
+        """Fetch content from the source URL.
+
+        SSRF defense (RE-SEC-INGEST-003): per-hop URL validation + IP pinning.
+        """
         try:
-            validate_url(source.url)
-            resp = httpx.get(
+            resp = safe_httpx_get_sync(
                 source.url,
                 timeout=30,
                 headers={"User-Agent": "RegEngine/1.0"},
@@ -109,8 +112,8 @@ class GenericListScraper(StateRegistryScraper):
             from bs4 import BeautifulSoup
             from urllib.parse import urljoin
 
-            validate_url(self.list_url)
-            resp = httpx.get(
+            # SSRF defense (RE-SEC-INGEST-003): per-hop validation + IP pinning.
+            resp = safe_httpx_get_sync(
                 self.list_url,
                 timeout=30,
                 headers={"User-Agent": "RegEngine/1.0"},
@@ -136,10 +139,12 @@ class GenericListScraper(StateRegistryScraper):
             return
 
     def fetch(self, source: Source) -> FetchedItem:
-        """Fetch content from the source URL."""
+        """Fetch content from the source URL.
+
+        SSRF defense (RE-SEC-INGEST-003): per-hop URL validation + IP pinning.
+        """
         try:
-            validate_url(source.url)
-            resp = httpx.get(
+            resp = safe_httpx_get_sync(
                 source.url,
                 timeout=30,
                 headers={"User-Agent": "RegEngine/1.0"},

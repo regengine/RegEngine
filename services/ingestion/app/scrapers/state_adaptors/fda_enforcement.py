@@ -7,6 +7,7 @@ from typing import Iterable, Optional
 from datetime import datetime, timezone
 
 from .base import StateRegistryScraper, Source, FetchedItem
+from shared.safe_http import safe_httpx_get_sync
 from shared.url_validation import validate_url, SSRFError
 
 logger = structlog.get_logger("ingestion.scrapers.fda_enforcement")
@@ -24,7 +25,8 @@ class FDAEnforcementScraper(StateRegistryScraper):
         Fetch RSS feed, parse items, and return Source objects for each Warning Letter.
         """
         try:
-            resp = httpx.get(self.RSS_URL, timeout=30, headers={"User-Agent": "RegEngine/1.0"})
+            # SSRF defense (RE-SEC-INGEST-003): per-hop validation + IP pinning.
+            resp = safe_httpx_get_sync(self.RSS_URL, timeout=30, headers={"User-Agent": "RegEngine/1.0"})
             resp.raise_for_status()
             
             # Parse XML
@@ -84,7 +86,10 @@ class FDAEnforcementScraper(StateRegistryScraper):
                 return FetchedItem(source=source, content_bytes=b"", content_type=None)
 
             # 1. Fetch Landing Page
-            resp = httpx.get(validated_url, timeout=30, headers={"User-Agent": "RegEngine/1.0"})
+            # SSRF defense (RE-SEC-INGEST-003): re-validate every redirect hop
+            # via safe_httpx_get_sync; closes DNS-rebinding TOCTOU between
+            # validate_url() and the actual connect.
+            resp = safe_httpx_get_sync(validated_url, timeout=30, headers={"User-Agent": "RegEngine/1.0"})
             resp.raise_for_status()
 
             content = resp.content
@@ -112,7 +117,7 @@ class FDAEnforcementScraper(StateRegistryScraper):
                     )
 
                 try:
-                    pdf_resp = httpx.get(validated_pdf_url, timeout=45, headers={"User-Agent": "RegEngine/1.0"})
+                    pdf_resp = safe_httpx_get_sync(validated_pdf_url, timeout=45, headers={"User-Agent": "RegEngine/1.0"})
                     pdf_resp.raise_for_status()
                     content = pdf_resp.content
                     content_type = "application/pdf"

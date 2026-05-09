@@ -151,6 +151,21 @@ def capture_httpx_get(monkeypatch):
     responses: list[_FakeResponse] = []
 
     def _get(url, *, params=None, timeout=None, headers=None):
+        # After RE-SEC-INGEST-003 migration the scraper encodes params into the
+        # URL itself (safe_httpx_get_sync does not accept a params kwarg). Parse
+        # the query string back out so legacy assertions on calls[i]["params"]
+        # keep working.
+        if params is None and "?" in url:
+            from urllib.parse import urlparse, parse_qsl
+
+            qs = urlparse(url).query
+            params = dict(parse_qsl(qs))
+            # ints that the original scraper passed (e.g., start) come back as
+            # strings via parse_qsl; coerce numerics to keep parity.
+            for k, v in list(params.items()):
+                if isinstance(v, str) and v.lstrip("-").isdigit():
+                    params[k] = int(v)
+            url = url.split("?", 1)[0]
         calls.append(
             {"url": url, "params": params, "timeout": timeout, "headers": headers}
         )
@@ -158,7 +173,7 @@ def capture_httpx_get(monkeypatch):
             return responses.pop(0)
         return _FakeResponse(json_body={})
 
-    monkeypatch.setattr(mod.httpx, "get", _get)
+    monkeypatch.setattr(mod, "safe_httpx_get_sync", _get)
     return calls, responses
 
 
@@ -459,15 +474,17 @@ class TestFetch:
         )
 
     def test_ssrf_raises_caught_and_returns_empty(
-        self, patch_settings, capture_httpx_get, monkeypatch
+        self, patch_settings, monkeypatch
     ):
+        # After RE-SEC-INGEST-003 migration, validation runs inside
+        # safe_httpx_get_sync. Simulate an SSRF rejection by making the safe
+        # helper raise; the scraper must swallow it and return an empty item.
         patch_settings()
-        calls, _ = capture_httpx_get
-        monkeypatch.setattr(
-            mod, "validate_url",
-            lambda url: (_ for _ in ()).throw(RuntimeError("ssrf")),
-        )
+
+        def _raise(*a, **kw):
+            raise RuntimeError("ssrf")
+
+        monkeypatch.setattr(mod, "safe_httpx_get_sync", _raise)
 
         item = GoogleDiscoveryScraper().fetch(Source(url="http://10.0.0.1"))
         assert item.content_bytes == b""
-        assert calls == []  # never attempted the fetch
