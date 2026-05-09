@@ -5,7 +5,7 @@ Covers: compute_payload_hash, compute_envelope_hash, verify_hash.
 """
 
 import pytest
-from kernel.evidence.hashing import (
+from services.graph.app.evidence.hashing import (
     compute_payload_hash,
     compute_envelope_hash,
     verify_hash,

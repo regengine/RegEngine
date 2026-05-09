@@ -7,7 +7,7 @@ verify_chain_integrity).
 """
 
 import pytest
-from kernel.evidence.merkle import (
+from services.graph.app.evidence.merkle import (
     build_merkle_tree,
     generate_merkle_proof,
     verify_merkle_proof,
@@ -16,7 +16,7 @@ from kernel.evidence.merkle import (
     append_to_chain,
     verify_chain_integrity,
 )
-from kernel.evidence.envelope import MerkleProof
+from services.graph.app.evidence.envelope import MerkleProof
 
 
 # ─── build_merkle_tree ────────────────────────────────────────────────────────
