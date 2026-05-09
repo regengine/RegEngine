@@ -56,6 +56,8 @@ import shared as _shared_pkg  # noqa: E402
 _kafka_mod = ModuleType("shared.kafka_consumer_base")
 _kafka_mod.kafka_health_check = _fake_kafka_health_check
 _kafka_mod.__file__ = str(service_dir / "shared_kafka_consumer_base.py")
+_REAL_KAFKA_CONSUMER_BASE = sys.modules.get("shared.kafka_consumer_base")
+_REAL_SHARED_KAFKA_ATTR = getattr(_shared_pkg, "kafka_consumer_base", None)
 sys.modules["shared.kafka_consumer_base"] = _kafka_mod
 _shared_pkg.kafka_consumer_base = _kafka_mod  # type: ignore[attr-defined]
 
@@ -76,14 +78,47 @@ def _fake_get_settings():
 _config_stub = ModuleType("app.config")
 _config_stub.get_settings = _fake_get_settings
 _config_stub.__file__ = str(service_dir / "app" / "config.py")
+_REAL_APP_CONFIG = sys.modules.get("app.config")
 sys.modules["app.config"] = _config_stub
 
 import app as _app_pkg  # noqa: E402
+_REAL_APP_CONFIG_ATTR = getattr(_app_pkg, "config", None)
 _app_pkg.config = _config_stub
 
 
 from app import routes_health_metrics as rhm  # noqa: E402
 from app.routes_health_metrics import health, router  # noqa: E402
+
+
+@pytest.fixture(scope="module", autouse=True)
+def _restore_modules_on_module_teardown():
+    """Restore real ``shared.kafka_consumer_base`` and ``app.config`` after
+    this file's tests finish.
+
+    Module-level stubs are required because the imports immediately above
+    resolve those names at load time. We can't move those imports into a
+    fixture without rewriting all tests in this file. So we restore the
+    pre-existing entries (or evict the stubs) on module teardown to prevent
+    cross-file pollution.
+    """
+    yield
+    if _REAL_KAFKA_CONSUMER_BASE is not None:
+        sys.modules["shared.kafka_consumer_base"] = _REAL_KAFKA_CONSUMER_BASE
+    else:
+        sys.modules.pop("shared.kafka_consumer_base", None)
+    if _REAL_SHARED_KAFKA_ATTR is not None:
+        _shared_pkg.kafka_consumer_base = _REAL_SHARED_KAFKA_ATTR  # type: ignore[attr-defined]
+    elif hasattr(_shared_pkg, "kafka_consumer_base"):
+        delattr(_shared_pkg, "kafka_consumer_base")
+
+    if _REAL_APP_CONFIG is not None:
+        sys.modules["app.config"] = _REAL_APP_CONFIG
+    else:
+        sys.modules.pop("app.config", None)
+    if _REAL_APP_CONFIG_ATTR is not None:
+        _app_pkg.config = _REAL_APP_CONFIG_ATTR
+    elif hasattr(_app_pkg, "config"):
+        delattr(_app_pkg, "config")
 
 
 # ---------------------------------------------------------------------------
