@@ -332,11 +332,11 @@ Requirement `REM-P0-028`: Make CI catch cross-cutting regressions.
 
 Acceptance criteria:
 
-- Repo-root tests under `tests/shared`, `tests/security`, `tests/integration`, `tests/migrations`, and `kernel/*/tests` execute in CI, not only collect.
+- Repo-root tests under `tests/shared`, `tests/security`, `tests/integration`, `tests/migrations`, and per-service `services/*/tests` suites execute in CI, not only collect. (The former `kernel/*/tests` suites were retired with `kernel/` itself under epic-g; their coverage moved into `services/{ingestion,graph,admin,scheduler}/tests`.)
 - Frontend smoke E2E is blocking in a deterministic local or staging environment.
 - Production-like Playwright setup never creates users against production.
 - Smoke jobs fail when service smoke tests are missing or failing.
-- Coverage gates include frontend, shared services, kernel, and high-risk top-level suites.
+- Coverage gates include frontend, shared services, per-service test suites, and high-risk top-level suites.
 
 Requirement `REM-P2-029`: Reduce supply-chain drift.
 
