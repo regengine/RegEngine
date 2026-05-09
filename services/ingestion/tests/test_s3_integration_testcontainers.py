@@ -20,10 +20,13 @@ def _docker_available() -> bool:
         return False
 
 
-pytestmark = pytest.mark.skipif(
-    not _docker_available(),
-    reason="Docker daemon not reachable — skipping testcontainers S3 integration",
-)
+pytestmark = [
+    pytest.mark.integration,
+    pytest.mark.skipif(
+        not _docker_available(),
+        reason="Docker daemon not reachable — skipping testcontainers S3 integration",
+    ),
+]
 
 
 @pytest.fixture(scope="session")
