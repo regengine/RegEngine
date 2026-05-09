@@ -17,6 +17,8 @@ import hashlib
 import hmac
 import json
 import os
+import time
+import uuid
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
@@ -140,6 +142,20 @@ def _webhook_hmac_secret() -> Optional[str]:
     return secret or None
 
 
+def webhook_hmac_configured() -> bool:
+    """Public helper for /health: is WEBHOOK_HMAC_SECRET set?
+
+    F-5: lets ops dashboards alarm when prod drifts to fail-open."""
+    return _webhook_hmac_secret() is not None
+
+
+# F-5: observability for the silent-skip fail-open path is wired up below
+# (after _get_or_create_counter is defined). See _record_hmac_skip().
+_HMAC_SKIP_WARN_INTERVAL_SECS = 60.0
+_last_hmac_skip_warn_at: float = 0.0
+WEBHOOK_HMAC_SKIPPED = None  # populated after counter helper is defined
+
+
 async def _verify_webhook_signature(
     request: Request,
     x_webhook_signature: Optional[str] = Header(default=None, alias="X-Webhook-Signature"),
@@ -163,6 +179,9 @@ async def _verify_webhook_signature(
     """
     secret = _webhook_hmac_secret()
     if not secret:
+        # F-5: record the fail-open path so ops can alarm on it. Behavior
+        # itself unchanged — verification still skipped per the migration ramp.
+        _record_hmac_skip()
         return
 
     if not x_webhook_signature:
@@ -189,12 +208,18 @@ async def _verify_webhook_signature(
         provided = sig.lower()
 
     if scheme != "sha256":
+        # F-8: full scheme is logged server-side; in prod the response is
+        # opaque so an attacker can't probe accepted schemes by varying input.
         logger.warning("webhook_signature_unsupported_scheme scheme=%s", scheme)
+        if _is_production():
+            raise HTTPException(
+                status_code=401,
+                detail={"error": "invalid_webhook_signature"},
+            )
         raise HTTPException(
             status_code=401,
             detail={
                 "error": "unsupported_signature_scheme",
-                "scheme": scheme,
                 "message": "Only 'sha256' signatures are supported.",
             },
         )
@@ -209,6 +234,13 @@ async def _verify_webhook_signature(
             "webhook_signature_mismatch body_len=%d",
             len(raw_body),
         )
+        # F-8: opaque body in production so attackers can't probe;
+        # verbose hint preserved in dev/test for partner-integration debugging.
+        if _is_production():
+            raise HTTPException(
+                status_code=401,
+                detail={"error": "invalid_webhook_signature"},
+            )
         raise HTTPException(
             status_code=401,
             detail={
@@ -315,11 +347,42 @@ try:  # pragma: no cover - metrics are best-effort; never break ingest on regist
         "Webhook ingest events rejected by the replay-window check (#1245)",
         ["reason", "age_bucket"],
     )
+    # F-5: also register the HMAC-skip counter while the helper is in scope.
+    WEBHOOK_HMAC_SKIPPED = _get_or_create_counter(
+        "webhook_hmac_verification_skipped_total",
+        "Webhook ingest requests where HMAC verification was skipped because "
+        "WEBHOOK_HMAC_SECRET is unset (F-5, fail-open visibility).",
+        ["reason"],
+    )
     _WEBHOOK_METRICS_ENABLED = True
 except Exception as _wh_metrics_exc:  # pragma: no cover
     logger.debug("webhook_replay_metric_init_failed: %s", _wh_metrics_exc)
     WEBHOOK_REPLAY_REJECTED = None
+    WEBHOOK_HMAC_SKIPPED = None
     _WEBHOOK_METRICS_ENABLED = False
+
+
+def _record_hmac_skip() -> None:
+    """F-5: increment HMAC-skip metric + emit rate-limited WARN.
+
+    Rate-limited to one log line per minute to avoid flooding ingest logs in a
+    busy partner integration. The metric counter is incremented on every skip
+    so SREs still get accurate counts.
+    """
+    global _last_hmac_skip_warn_at
+    if WEBHOOK_HMAC_SKIPPED is not None:
+        try:
+            WEBHOOK_HMAC_SKIPPED.labels(reason="secret_unset").inc()
+        except Exception:  # pragma: no cover
+            pass
+    now = time.monotonic()
+    if now - _last_hmac_skip_warn_at >= _HMAC_SKIP_WARN_INTERVAL_SECS:
+        _last_hmac_skip_warn_at = now
+        logger.warning(
+            "webhook_hmac_verification_skipped",
+            reason="WEBHOOK_HMAC_SECRET unset; webhook signatures NOT verified",
+            mitigation="Set WEBHOOK_HMAC_SECRET in environment to enforce signing",
+        )
 
 
 def _classify_replay_rejection(timestamp: str) -> tuple[str, str]:
@@ -1330,12 +1393,22 @@ async def ingest_events(
                         except (ImportError, SQLAlchemyError, ValueError, TypeError, KeyError) as learn_err:
                             logger.warning("catalog_learn_skipped: %s", str(learn_err))
                     except (SQLAlchemyError, ValueError, TypeError, RuntimeError, KeyError) as inner_e:
-                        logger.error("persistence_failed", extra={"error": str(inner_e), "tlc": event.traceability_lot_code})
+                        # F-3: don't leak SQL/bound-params from SQLAlchemyError.__str__
+                        # to the API caller. Full detail goes to server logs with a
+                        # correlation_id; the response carries only the correlation_id.
+                        correlation_id = str(uuid.uuid4())
+                        logger.warning(
+                            "storage_error_per_event_fallback",
+                            correlation_id=correlation_id,
+                            tlc=event.traceability_lot_code,
+                            error=str(inner_e),
+                            error_type=type(inner_e).__name__,
+                        )
                         results.append(EventResult(
                             traceability_lot_code=event.traceability_lot_code,
                             cte_type=event.cte_type.value,
                             status="rejected",
-                            errors=[f"Storage error: {str(inner_e)}"],
+                            errors=[f"Internal storage error (correlation: {correlation_id})"],
                         ))
                         rejected += 1
 

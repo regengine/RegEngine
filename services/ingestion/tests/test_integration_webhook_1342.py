@@ -200,108 +200,66 @@ class TestPydanticModels:
 
 
 class TestReceiveWebhook:
-    def test_happy_path(self, client):
-        r = client.post(
-            "/api/v1/integrations/webhook/prod-pro",
-            json={"events": [_valid_event(), _valid_event(traceability_lot_code="TLC2")]},
-        )
-        assert r.status_code == 200
-        body = r.json()
-        assert body["received"] == 2
-        assert body["mapped"] == 2
-        assert body["errors"] == []
+    """F-6 (Ingestion re-audit): the endpoint is intentionally stubbed
+    with ``NotImplementedError`` because the secured replacement lives in
+    ``app/integration_router.py``. The pure mapping helpers in this module
+    are still exercised above; the endpoint itself is dead by design.
+    """
 
-    def test_missing_cte_type_records_error(self, client):
-        bad = _valid_event()
-        del bad["cte_type"]
-        r = client.post(
-            "/api/v1/integrations/webhook/erp1",
-            json={"events": [bad, _valid_event()]},
-        )
-        body = r.json()
-        assert body["received"] == 2
-        assert body["mapped"] == 1
-        assert len(body["errors"]) == 1
-        assert "missing cte_type" in body["errors"][0]
-        assert "Event 0" in body["errors"][0]
+    def test_endpoint_is_stubbed_not_implemented(self):
+        """Calling the stub endpoint raises NotImplementedError so a future
+        accidental wire-up surfaces immediately rather than silently accepting
+        unauthenticated traffic."""
+        from app.integration_webhook import receive_webhook, FieldMapping
 
-    def test_missing_tlc_records_error(self, client):
-        bad = _valid_event()
-        del bad["traceability_lot_code"]
-        r = client.post(
-            "/api/v1/integrations/webhook/erp1",
-            json={"events": [bad]},
-        )
-        body = r.json()
-        assert body["received"] == 1
-        assert body["mapped"] == 0
-        assert len(body["errors"]) == 1
-        assert "missing traceability_lot_code" in body["errors"][0]
+        async def _run():
+            return await receive_webhook(
+                connector_id="anything",
+                payload=WebhookPayload(events=[_valid_event()]),
+                request=None,  # type: ignore[arg-type]
+            )
 
-    def test_custom_field_mapping_honored(self, client):
-        """Caller supplies a mapping pointing to their internal field names."""
-        event = {
-            "EventType": "receiving",
-            "LotNo": "TLC-X",
-            "SKU": "Carrots",
-        }
-        r = client.post(
-            "/api/v1/integrations/webhook/sap",
-            json={
-                "events": [event],
-                "field_mapping": {
-                    "cte_type": "EventType",
-                    "traceability_lot_code": "LotNo",
-                    "product_description": "SKU",
-                    "quantity": "quantity",
-                    "unit_of_measure": "unit_of_measure",
-                    "location_name": "location_name",
-                    "timestamp": "timestamp",
-                },
-            },
-        )
-        assert r.status_code == 200
-        body = r.json()
-        assert body["mapped"] == 1
-        assert body["errors"] == []
+        import asyncio
 
-    def test_default_mapping_when_field_mapping_omitted(self, client):
-        """Omitting field_mapping uses default canonical names."""
-        r = client.post(
-            "/api/v1/integrations/webhook/default",
-            json={"events": [_valid_event()]},
-        )
-        assert r.status_code == 200
-        assert r.json()["mapped"] == 1
+        with pytest.raises(NotImplementedError) as exc_info:
+            asyncio.run(_run())
+        msg = str(exc_info.value)
+        assert "integration_router" in msg
+        assert "F-6" in msg
 
-    def test_mapping_exception_caught_as_error(self, client, monkeypatch):
-        """An exception inside _apply_mapping is caught and recorded."""
+    def test_endpoint_via_test_client_returns_500_with_runtime_error(self, client):
+        """If a future PR mounts this router, requests fail loudly (500 from
+        the unhandled NotImplementedError) rather than silently accepting
+        events without auth/HMAC/tenant scoping."""
+        # TestClient surfaces NotImplementedError from sync handlers; for
+        # async handlers it propagates as an exception. We assert the
+        # exception is raised rather than absorbed into a 200.
+        with pytest.raises((NotImplementedError, RuntimeError, Exception)):
+            client.post(
+                "/api/v1/integrations/webhook/prod-pro",
+                json={"events": [_valid_event()]},
+            )
 
-        def _raise(event, mapping):
-            raise RuntimeError("explode")
+    def test_module_does_not_auto_mount(self):
+        """Importing app.integration_webhook must not register the router on
+        the production FastAPI app — verified by checking that no top-level
+        wiring exists for it in services/ingestion/main.py.
+        """
+        import importlib
+        # Re-import to ensure no side effects.
+        importlib.import_module("app.integration_webhook")
+        # Best-effort check: load main.py source and verify it does not
+        # include integration_webhook.
+        import pathlib
 
-        monkeypatch.setattr(iw, "_apply_mapping", _raise)
-
-        r = client.post(
-            "/api/v1/integrations/webhook/bad",
-            json={"events": [_valid_event()]},
-        )
-        body = r.json()
-        assert body["received"] == 1
-        assert body["mapped"] == 0
-        assert len(body["errors"]) == 1
-        assert "mapping error" in body["errors"][0]
-        assert "explode" in body["errors"][0]
-
-    def test_empty_events_list(self, client):
-        r = client.post(
-            "/api/v1/integrations/webhook/empty",
-            json={"events": []},
-        )
-        body = r.json()
-        assert body["received"] == 0
-        assert body["mapped"] == 0
-        assert body["errors"] == []
+        main_path = pathlib.Path(__file__).resolve().parents[1] / "main.py"
+        if main_path.exists():
+            src = main_path.read_text()
+            assert "integration_webhook" not in src, (
+                "F-6 regression: integration_webhook is now mounted in main.py "
+                "without restoring auth/HMAC/tenant invariants. Use "
+                "integration_router instead."
+            )
 
 
 # ---------------------------------------------------------------------------

@@ -506,7 +506,12 @@ class TestEventProcessing:
         assert resp.accepted == 0
         assert resp.rejected == 1
         assert resp.events[0].status == "rejected"
-        assert any("Storage error" in e for e in resp.events[0].errors)
+        # F-3: opaque body — correlation id, not raw exception text.
+        assert any(
+            "Internal storage error" in e and "correlation:" in e
+            for e in resp.events[0].errors
+        )
+        assert not any("boom" in e for e in resp.events[0].errors)
         # Primary savepoint rolled back
         assert sess.savepoints[0].rolled_back is True
         # Session still commits at end (one successful rollback path inside loop)

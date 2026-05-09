@@ -111,8 +111,12 @@ async def test_signature_mismatch_rejected(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_signature_unsupported_scheme_rejected(monkeypatch):
-    """Non-sha256 scheme → 401 with scheme echoed back for operator debugging."""
+    """Non-sha256 scheme → 401. F-8 hardening: in dev/test the verbose hint
+    is preserved, but the user-supplied scheme is NEVER echoed back (so an
+    attacker can't probe accepted schemes by varying the input).
+    """
     monkeypatch.setenv("WEBHOOK_HMAC_SECRET", "shh")
+    monkeypatch.setattr(wr, "_is_production", lambda: False)
     req = _FakeRequest(b'{"events":[]}')
 
     with pytest.raises(HTTPException) as exc:
@@ -120,8 +124,11 @@ async def test_signature_unsupported_scheme_rejected(monkeypatch):
             req, x_webhook_signature="md5=deadbeef",
         )
     assert exc.value.status_code == 401
-    assert exc.value.detail["error"] == "unsupported_signature_scheme"
-    assert exc.value.detail["scheme"] == "md5"
+    # In dev, "message" is present for partner debugging…
+    assert "message" in exc.value.detail
+    # …but the scheme is no longer echoed (F-8).
+    assert "scheme" not in exc.value.detail
+    assert "md5" not in str(exc.value.detail)
 
 
 @pytest.mark.asyncio

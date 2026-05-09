@@ -17,6 +17,7 @@ using the same internal helpers and persistence layer.
 from __future__ import annotations
 
 import logging
+import uuid
 from typing import Optional
 
 from fastapi import Header, Request
@@ -229,12 +230,21 @@ async def ingest_events(
                         logger.warning("compat_exception_queue_skipped: %s", str(exc_err))
             except (ValueError, TypeError, RuntimeError) as exc:
                 savepoint.rollback()
-                logger.error("compat_persistence_failed: %s", str(exc))
+                # F-3: SQLAlchemyError-class exceptions stringify with SQL + bound
+                # params. Log the detail server-side under a correlation_id and
+                # return only that opaque token to the caller.
+                correlation_id = str(uuid.uuid4())
+                logger.warning(
+                    "compat_persistence_failed correlation_id=%s error_type=%s error=%s",
+                    correlation_id,
+                    type(exc).__name__,
+                    str(exc),
+                )
                 results.append(EventResult(
                     traceability_lot_code=event.traceability_lot_code,
                     cte_type=event.cte_type.value,
                     status="rejected",
-                    errors=[f"Storage error: {exc}"],
+                    errors=[f"Internal storage error (correlation: {correlation_id})"],
                 ))
                 rejected += 1
 

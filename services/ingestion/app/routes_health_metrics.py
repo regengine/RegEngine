@@ -27,7 +27,7 @@ router = APIRouter(tags=["health-metrics"])
 
 
 @router.get("/health")
-def health() -> dict[str, str]:
+def health() -> dict[str, object]:
     """Health-check endpoint.
 
     Returns ``"healthy"`` when all dependencies are reachable, or
@@ -53,20 +53,29 @@ def health() -> dict[str, str]:
         kafka_status = "not_configured"
         overall_status = "healthy"
 
+    # F-5: surface webhook HMAC config status so ops can alarm if production
+    # drifts to fail-open (WEBHOOK_HMAC_SECRET unset).
+    try:
+        from .webhook_router_v2 import webhook_hmac_configured
+        hmac_configured = webhook_hmac_configured()
+    except Exception:  # pragma: no cover - never break /health on import error
+        hmac_configured = False
+
     return {
         "status": overall_status,
         "service": "regengine",
         "kafka": kafka_status,
+        "webhook_hmac_configured": hmac_configured,
     }
 
 
 @router.get("/healthz", include_in_schema=False)
-def healthz() -> dict[str, str]:
+def healthz() -> dict[str, object]:
     """Compatibility liveness path used by older probes and frontend checks."""
     return health()
 
 
 @router.get("/api/health", include_in_schema=False)
-def api_health() -> dict[str, str]:
+def api_health() -> dict[str, object]:
     """Compatibility liveness path used by frontend service discovery."""
     return health()
