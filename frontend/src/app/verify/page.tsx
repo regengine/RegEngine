@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import {
     ShieldCheck,
@@ -12,6 +12,10 @@ import {
     FileCode,
     Copy,
     Check,
+    Upload,
+    XCircle,
+    Loader2,
+    FileArchive,
 } from 'lucide-react';
 
 /* ─────────────────────────────────────────────────────────────
@@ -119,6 +123,343 @@ const INSTALL_STEPS = [
     },
 ];
 
+/* ─────────────────────────────────────────────────────────────
+   API-base resolver — match other public pages
+   ───────────────────────────────────────────────────────────── */
+function resolveApiBase(): string {
+    const base =
+        process.env.NEXT_PUBLIC_API_BASE_URL ||
+        process.env.NEXT_PUBLIC_INGESTION_URL ||
+        '';
+    return base.replace(/\/+$/, '');
+}
+
+/* ─────────────────────────────────────────────────────────────
+   VerifyWidget — drop-and-verify export bundle
+   ───────────────────────────────────────────────────────────── */
+type VerifyCheck = { name: string; passed: boolean; detail?: string };
+type VerifyResponse = {
+    verified: boolean;
+    checks: VerifyCheck[];
+    merkle_root_recomputed: string;
+    timestamp: string;
+};
+
+type VerifyState =
+    | { kind: 'idle' }
+    | { kind: 'loading' }
+    | { kind: 'success'; data: VerifyResponse }
+    | { kind: 'error'; message: string };
+
+function VerifyWidget() {
+    const [state, setState] = useState<VerifyState>({ kind: 'idle' });
+    const [file, setFile] = useState<File | null>(null);
+    const [dragOver, setDragOver] = useState(false);
+    const inputRef = useRef<HTMLInputElement>(null);
+
+    const handleFile = useCallback((f: File | null) => {
+        if (!f) return;
+        setFile(f);
+        setState({ kind: 'idle' });
+    }, []);
+
+    const onDrop = useCallback(
+        (e: React.DragEvent<HTMLDivElement>) => {
+            e.preventDefault();
+            setDragOver(false);
+            const f = e.dataTransfer.files?.[0] ?? null;
+            handleFile(f);
+        },
+        [handleFile],
+    );
+
+    const onSubmit = useCallback(async () => {
+        if (!file) return;
+        setState({ kind: 'loading' });
+
+        const base = resolveApiBase();
+        if (!base) {
+            setState({
+                kind: 'error',
+                message:
+                    'Verifier endpoint deploying — try again shortly.',
+            });
+            return;
+        }
+
+        const formData = new FormData();
+        formData.append('bundle', file);
+
+        try {
+            const res = await fetch(`${base}/api/v1/proof/verify`, {
+                method: 'POST',
+                body: formData,
+            });
+
+            if (res.status === 429) {
+                setState({
+                    kind: 'error',
+                    message:
+                        'Rate limit reached (10/min). Try again in a minute.',
+                });
+                return;
+            }
+
+            if (!res.ok) {
+                setState({
+                    kind: 'error',
+                    message: `Verification failed (HTTP ${res.status}). The endpoint may still be deploying — try again shortly.`,
+                });
+                return;
+            }
+
+            const data = (await res.json()) as VerifyResponse;
+            setState({ kind: 'success', data });
+        } catch {
+            setState({
+                kind: 'error',
+                message:
+                    'Could not reach the verifier endpoint. Try again shortly, or run verify_chain.py locally.',
+            });
+        }
+    }, [file]);
+
+    const reset = useCallback(() => {
+        setFile(null);
+        setState({ kind: 'idle' });
+        if (inputRef.current) inputRef.current.value = '';
+    }, []);
+
+    return (
+        <div
+            className="rounded-2xl p-6 sm:p-8"
+            style={{ background: T.surface, border: `1px solid ${T.border}` }}
+        >
+            {/* ─── Drop zone ─────────────────────────────────────── */}
+            {state.kind !== 'success' && (
+                <div
+                    onDragOver={(e) => {
+                        e.preventDefault();
+                        setDragOver(true);
+                    }}
+                    onDragLeave={() => setDragOver(false)}
+                    onDrop={onDrop}
+                    onClick={() => inputRef.current?.click()}
+                    className="rounded-xl px-6 py-10 text-center cursor-pointer transition-colors"
+                    style={{
+                        background: dragOver ? T.elevated : 'transparent',
+                        border: `2px dashed ${dragOver ? T.accent : T.border}`,
+                    }}
+                >
+                    <input
+                        ref={inputRef}
+                        type="file"
+                        accept=".zip,.json,application/zip,application/json"
+                        className="hidden"
+                        onChange={(e) =>
+                            handleFile(e.target.files?.[0] ?? null)
+                        }
+                    />
+                    <div className="flex flex-col items-center gap-3">
+                        {file ? (
+                            <FileArchive size={32} style={{ color: T.accent }} />
+                        ) : (
+                            <Upload size={32} style={{ color: T.textDim }} />
+                        )}
+                        <div className="text-[15px] font-semibold">
+                            {file
+                                ? file.name
+                                : 'Drop your export bundle here'}
+                        </div>
+                        <div className="text-[13px]" style={{ color: T.textDim }}>
+                            {file
+                                ? `${(file.size / 1024).toFixed(1)} KB — click to choose a different file`
+                                : 'or click to browse — accepts .zip or .json'}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ─── Action row ────────────────────────────────────── */}
+            {state.kind !== 'success' && (
+                <div className="flex flex-wrap gap-3 mt-5 items-center">
+                    <button
+                        onClick={onSubmit}
+                        disabled={!file || state.kind === 'loading'}
+                        className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg text-[14px] font-semibold text-black disabled:opacity-50 disabled:cursor-not-allowed"
+                        style={{ background: T.accent, border: 'none' }}
+                    >
+                        {state.kind === 'loading' ? (
+                            <>
+                                <Loader2
+                                    size={14}
+                                    className="animate-spin"
+                                />
+                                Verifying…
+                            </>
+                        ) : (
+                            <>
+                                <ShieldCheck size={14} />
+                                Verify bundle
+                            </>
+                        )}
+                    </button>
+                    {file && state.kind !== 'loading' && (
+                        <button
+                            onClick={reset}
+                            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-[14px] font-medium"
+                            style={{
+                                background: 'transparent',
+                                border: `1px solid ${T.border}`,
+                                color: T.textDim,
+                            }}
+                        >
+                            Clear
+                        </button>
+                    )}
+                    {state.kind === 'error' && (
+                        <span
+                            className="text-[13px] ml-1"
+                            style={{ color: 'var(--re-danger)' }}
+                        >
+                            {state.message}
+                        </span>
+                    )}
+                </div>
+            )}
+
+            {/* ─── Results ───────────────────────────────────────── */}
+            {state.kind === 'success' && (
+                <div className="flex flex-col gap-5">
+                    <div className="flex items-center gap-3">
+                        {state.data.verified ? (
+                            <CheckCircle2
+                                size={48}
+                                style={{ color: T.accent }}
+                            />
+                        ) : (
+                            <XCircle
+                                size={48}
+                                style={{ color: 'var(--re-danger)' }}
+                            />
+                        )}
+                        <div>
+                            <div
+                                className="text-2xl font-bold"
+                                style={{
+                                    color: state.data.verified
+                                        ? T.accent
+                                        : 'var(--re-danger)',
+                                }}
+                            >
+                                {state.data.verified ? 'Verified' : 'Failed'}
+                            </div>
+                            <div
+                                className="text-[13px]"
+                                style={{ color: T.textDim }}
+                            >
+                                {state.data.checks.filter((c) => c.passed).length}{' '}
+                                of {state.data.checks.length} checks passed
+                            </div>
+                        </div>
+                    </div>
+
+                    <div
+                        className="rounded-xl overflow-hidden"
+                        style={{ border: `1px solid ${T.border}` }}
+                    >
+                        {state.data.checks.map((c, i) => (
+                            <div
+                                key={i}
+                                className="flex items-start gap-3 px-4 py-3"
+                                style={{
+                                    borderBottom:
+                                        i < state.data.checks.length - 1
+                                            ? `1px solid ${T.border}`
+                                            : 'none',
+                                    background:
+                                        i % 2 === 0 ? 'transparent' : T.surface,
+                                }}
+                            >
+                                <div className="mt-0.5 shrink-0">
+                                    {c.passed ? (
+                                        <CheckCircle2
+                                            size={16}
+                                            style={{ color: T.accent }}
+                                        />
+                                    ) : (
+                                        <XCircle
+                                            size={16}
+                                            style={{ color: 'var(--re-danger)' }}
+                                        />
+                                    )}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    <div className="text-[14px] font-medium">
+                                        {c.name}
+                                    </div>
+                                    {c.detail && (
+                                        <div
+                                            className="text-[12.5px] mt-0.5 break-all"
+                                            style={{
+                                                color: T.textDim,
+                                                fontFamily: T.mono,
+                                            }}
+                                        >
+                                            {c.detail}
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+
+                    <div
+                        className="rounded-lg p-4 text-[12.5px]"
+                        style={{
+                            background: T.bg,
+                            border: `1px solid ${T.border}`,
+                            fontFamily: T.mono,
+                            color: T.textDim,
+                        }}
+                    >
+                        <div className="break-all">
+                            <span style={{ color: T.textMuted }}>
+                                merkle_root_recomputed:{' '}
+                            </span>
+                            <span style={{ color: T.text }}>
+                                {state.data.merkle_root_recomputed}
+                            </span>
+                        </div>
+                        <div className="mt-1">
+                            <span style={{ color: T.textMuted }}>
+                                timestamp:{' '}
+                            </span>
+                            <span style={{ color: T.text }}>
+                                {state.data.timestamp}
+                            </span>
+                        </div>
+                    </div>
+
+                    <div>
+                        <button
+                            onClick={reset}
+                            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-[13px] font-medium"
+                            style={{
+                                background: 'transparent',
+                                border: `1px solid ${T.border}`,
+                                color: T.text,
+                            }}
+                        >
+                            Verify another bundle
+                        </button>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+}
+
 function CopyButton({ text }: { text: string }) {
     const [copied, setCopied] = useState(false);
     return (
@@ -193,6 +534,67 @@ export default function VerifyPage() {
                         </a>
                     </div>
                 </motion.div>
+            </section>
+
+            {/* ─── Upload widget ─────────────────────────────────────── */}
+            <section
+                id="verify-widget"
+                className="max-w-[760px] mx-auto px-4 sm:px-6 pb-10 sm:pb-[60px]"
+            >
+                <div className="mb-6 flex flex-col gap-3">
+                    <h2 className="text-2xl font-semibold">
+                        Verify an export bundle
+                    </h2>
+                    <p
+                        className="text-[14.5px] leading-relaxed m-0"
+                        style={{ color: T.textDim }}
+                    >
+                        Drop in a RegEngine export bundle (the <code style={{ fontFamily: T.mono, color: T.text }}>.zip</code> or{' '}
+                        <code style={{ fontFamily: T.mono, color: T.text }}>.json</code> you downloaded
+                        from the proof page) and we&apos;ll re-run the same integrity checks the export
+                        pipeline runs: hash-chain continuity across every record, Merkle root match
+                        against the manifest, and manifest consistency (counts, ordering, signatures).
+                    </p>
+                    <p
+                        className="text-[14.5px] leading-relaxed m-0"
+                        style={{ color: T.textDim }}
+                    >
+                        Your file is sent to a public verifier endpoint that runs the same algorithm
+                        as the export pipeline — no auth, no email capture. Want to verify entirely
+                        offline?{' '}
+                        <a
+                            href="/sdk/verify_chain.py"
+                            download
+                            className="underline"
+                            style={{ color: T.accent }}
+                        >
+                            Download verify_chain.py
+                        </a>{' '}
+                        and run it locally — same algorithm, zero network.
+                    </p>
+                </div>
+
+                <VerifyWidget />
+
+                <div
+                    className="mt-5 rounded-lg px-4 py-3 text-[13px] flex items-center gap-2 flex-wrap"
+                    style={{
+                        background: T.surface,
+                        border: `1px solid ${T.border}`,
+                        color: T.textDim,
+                    }}
+                >
+                    <span>Don&apos;t have a bundle yet?</span>
+                    <a
+                        href="/proof"
+                        className="inline-flex items-center gap-1 underline"
+                        style={{ color: T.accent }}
+                    >
+                        Grab a sample on the proof page
+                        <ExternalLink size={12} />
+                    </a>
+                    <span>and feed it back in here.</span>
+                </div>
             </section>
 
             {/* ─── Trust Model ───────────────────────────────────────── */}

@@ -178,6 +178,7 @@ _VALID_ROUTER_NAMES = {
     "chain_verification", "audit_export_log", "sla_tracking",
     "export_monitoring", "supplier_validation", "disaster_recovery",
     "admin", "graph", "nlp", "fsma_compliance",
+    "proof_verify",
 }
 
 _EXPERIMENTAL_ROUTERS = {
@@ -275,6 +276,12 @@ if _router_enabled("inflow_workbench"):
 if _router_enabled("fda_export"):
     from services.ingestion.app.fda_export.router import router as fda_export_router
     app.include_router(fda_export_router, tags=["FDA Exports"])
+
+if _router_enabled("proof_verify"):
+    # Public hash-chain verifier. Tenantless, no auth, rate-limited.
+    # Production-surface justification documented in the router docstring.
+    from services.ingestion.app.proof_verify_router import router as proof_verify_router
+    app.include_router(proof_verify_router, tags=["Public Proof"])
 
 if _router_enabled("csv"):
     from services.ingestion.app.csv_templates import router as csv_router
