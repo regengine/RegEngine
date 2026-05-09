@@ -185,7 +185,9 @@ async def harmonize_requirement(
     tenant_id: uuid.UUID = Depends(get_current_tenant_id),
 ):
     """Trigger LLM-based semantic mapping for a specific requirement."""
-    from kernel.graph import MappingEngine
+    # Function-local: avoids importing optional ML deps (langchain, langchain_groq)
+    # at module-load time. The engine is only needed by this endpoint.
+    from ..mapping_engine import MappingEngine
     from ..config import settings
 
     db_name = Neo4jClient.get_tenant_database_name(tenant_id)
