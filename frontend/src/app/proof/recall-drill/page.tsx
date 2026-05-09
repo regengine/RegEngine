@@ -35,13 +35,17 @@ const T = {
 };
 
 const RECALL_CSV_URL = '/samples/sample_recall_drill.csv';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? '';
+const RECALL_API_PATH = '/api/v1/proof/recall-drill';
 
 /**
  * Steps for the simulated drill.
  * Timings are deterministic — every drill produces the same sequence.
- * Backend endpoint POST /api/v1/proof/recall-drill is a TODO; this page
- * runs a client-side scripted simulation against the real demo CSV that
- * was generated from sample_data/ + recall_simulations.py.
+ * The page now POSTs to the real backend endpoint
+ * (POST /api/v1/proof/recall-drill, see services/ingestion/app/proof_recall_router.py).
+ * If that call fails (network error / backend not reachable), the page
+ * falls back to the cached scripted run defined below so the demo still
+ * works for offline / preview environments.
  */
 type DrillStep = {
     label: string;
@@ -49,7 +53,35 @@ type DrillStep = {
     durationMs: number;
 };
 
-const DRILL_STEPS: DrillStep[] = [
+/**
+ * Backend response shape (mirrors RecallDrillResponse in
+ * services/ingestion/app/proof_recall_router.py).
+ */
+type ApiStep = {
+    name: string;
+    duration_ms: number;
+    status: 'ok' | 'warning' | 'error';
+    detail?: string | null;
+};
+
+type ApiResponse = {
+    steps: ApiStep[];
+    time_to_trace_seconds: number;
+    output_csv_url: string;
+    lot_code: string;
+    fda_24h_mandate_seconds: number;
+    timestamp?: string;
+};
+
+function apiStepsToDrillSteps(api: ApiStep[]): DrillStep[] {
+    return api.map((s) => ({
+        label: s.name,
+        detailLines: s.detail ? s.detail.split('\n') : [],
+        durationMs: s.duration_ms,
+    }));
+}
+
+const DRILL_STEPS_FALLBACK: DrillStep[] = [
     {
         label: 'Identifying source lot',
         detailLines: [
@@ -105,16 +137,15 @@ const TRACE_NODES: TraceNode[] = [
     { id: 'r3', facility: 'SuperMart #42', cte: 'RECEIVING', lot: 'FC-20240116-A', qty: '50 cs' },
 ];
 
-const TOTAL_DURATION_S = Math.round(
-    DRILL_STEPS.reduce((acc, s) => acc + s.durationMs, 0) / 1000,
-);
-
 type DrillState = 'idle' | 'running' | 'done';
 
 export default function RecallDrillPage() {
     const [state, setState] = useState<DrillState>('idle');
     const [activeStep, setActiveStep] = useState(-1);
     const [elapsedMs, setElapsedMs] = useState(0);
+    const [drillSteps, setDrillSteps] = useState<DrillStep[]>(DRILL_STEPS_FALLBACK);
+    const [usingFallback, setUsingFallback] = useState(false);
+    const [csvUrl, setCsvUrl] = useState<string>(RECALL_CSV_URL);
     const startedAtRef = useRef<number | null>(null);
     const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const stepTimers = useRef<ReturnType<typeof setTimeout>[]>([]);
@@ -126,13 +157,7 @@ export default function RecallDrillPage() {
         };
     }, []);
 
-    function startDrill() {
-        // reset
-        stepTimers.current.forEach((t) => clearTimeout(t));
-        stepTimers.current = [];
-        if (tickRef.current) clearInterval(tickRef.current);
-
-        setState('running');
+    function animateSteps(steps: DrillStep[]) {
         setActiveStep(0);
         setElapsedMs(0);
         startedAtRef.current = performance.now();
@@ -144,12 +169,12 @@ export default function RecallDrillPage() {
         }, 100);
 
         let cumulative = 0;
-        DRILL_STEPS.forEach((step, idx) => {
+        steps.forEach((step, idx) => {
             cumulative += step.durationMs;
-            const isLast = idx === DRILL_STEPS.length - 1;
+            const isLast = idx === steps.length - 1;
             const t = setTimeout(() => {
                 if (isLast) {
-                    setActiveStep(DRILL_STEPS.length);
+                    setActiveStep(steps.length);
                     setState('done');
                     if (tickRef.current) {
                         clearInterval(tickRef.current);
@@ -163,6 +188,40 @@ export default function RecallDrillPage() {
         });
     }
 
+    async function startDrill() {
+        // reset
+        stepTimers.current.forEach((t) => clearTimeout(t));
+        stepTimers.current = [];
+        if (tickRef.current) clearInterval(tickRef.current);
+
+        setState('running');
+        setUsingFallback(false);
+
+        // Try the real backend first.
+        let stepsToAnimate: DrillStep[] = DRILL_STEPS_FALLBACK;
+        let didFallback = false;
+        try {
+            const res = await fetch(`${API_BASE_URL}${RECALL_API_PATH}`, {
+                method: 'POST',
+                headers: { 'content-type': 'application/json' },
+            });
+            if (!res.ok) throw new Error(`status ${res.status}`);
+            const data = (await res.json()) as ApiResponse;
+            if (Array.isArray(data.steps) && data.steps.length > 0) {
+                stepsToAnimate = apiStepsToDrillSteps(data.steps);
+                if (data.output_csv_url) setCsvUrl(data.output_csv_url);
+            } else {
+                didFallback = true;
+            }
+        } catch {
+            didFallback = true;
+        }
+
+        setUsingFallback(didFallback);
+        setDrillSteps(stepsToAnimate);
+        animateSteps(stepsToAnimate);
+    }
+
     function resetDrill() {
         stepTimers.current.forEach((t) => clearTimeout(t));
         stepTimers.current = [];
@@ -174,10 +233,16 @@ export default function RecallDrillPage() {
         setState('idle');
         setActiveStep(-1);
         setElapsedMs(0);
+        setUsingFallback(false);
+        setDrillSteps(DRILL_STEPS_FALLBACK);
+        setCsvUrl(RECALL_CSV_URL);
     }
 
+    const totalDurationS = Math.max(
+        1,
+        Math.round(drillSteps.reduce((acc, s) => acc + s.durationMs, 0) / 1000),
+    );
     const elapsedS = (elapsedMs / 1000).toFixed(1);
-    const finalSeconds = state === 'done' ? TOTAL_DURATION_S : Number(elapsedS);
 
     return (
         <div className="min-h-screen pb-32" style={{ background: T.bg, color: T.text }}>
@@ -270,12 +335,25 @@ export default function RecallDrillPage() {
                                 style={{ fontFamily: T.mono, color: T.textDim }}
                             >
                                 {state === 'done'
-                                    ? `done · ${TOTAL_DURATION_S}s total`
+                                    ? `done · ${totalDurationS}s total`
                                     : `running · ${elapsedS}s`}
                             </span>
                         </div>
+                        {usingFallback && (
+                            <div
+                                className="px-5 py-2 text-[12px]"
+                                style={{
+                                    background: T.dangerDim,
+                                    color: T.danger,
+                                    borderBottom: `1px solid ${T.border}`,
+                                    fontFamily: T.mono,
+                                }}
+                            >
+                                Backend unavailable — showing cached run
+                            </div>
+                        )}
                         <div className="p-5 flex flex-col gap-3">
-                            {DRILL_STEPS.map((step, idx) => {
+                            {drillSteps.map((step, idx) => {
                                 const isComplete = activeStep > idx || state === 'done';
                                 const isActive = activeStep === idx && state === 'running';
                                 const isPending = activeStep < idx && state === 'running';
@@ -346,7 +424,7 @@ export default function RecallDrillPage() {
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-8">
                             <MetricCard
                                 label="Time to trace"
-                                value={`${TOTAL_DURATION_S}s`}
+                                value={`${totalDurationS}s`}
                                 sub="Synthetic dataset, 11 events, 5 facilities"
                                 tone="success"
                             />
@@ -358,7 +436,7 @@ export default function RecallDrillPage() {
                             />
                             <MetricCard
                                 label="Margin"
-                                value={`${Math.round((86400 / TOTAL_DURATION_S))}× faster`}
+                                value={`${Math.round(86400 / totalDurationS)}× faster`}
                                 sub="Headroom vs. regulatory window"
                                 tone="success"
                             />
@@ -443,7 +521,7 @@ export default function RecallDrillPage() {
                                 </div>
                             </div>
                             <a
-                                href={RECALL_CSV_URL}
+                                href={csvUrl}
                                 download
                                 className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg text-[14px] font-semibold no-underline text-black"
                                 style={{ background: T.accent }}

@@ -178,6 +178,7 @@ _VALID_ROUTER_NAMES = {
     "chain_verification", "audit_export_log", "sla_tracking",
     "export_monitoring", "supplier_validation", "disaster_recovery",
     "admin", "graph", "nlp", "fsma_compliance",
+    "proof_recall",
 }
 
 _EXPERIMENTAL_ROUTERS = {
@@ -348,6 +349,10 @@ if _router_enabled("recall"):
 if _router_enabled("recall_simulations"):
     from services.ingestion.app.recall_simulations import router as recall_simulations_router
     app.include_router(recall_simulations_router, tags=["Recall Simulations"])
+
+if _router_enabled("proof_recall"):
+    from services.ingestion.app.proof_recall_router import router as proof_recall_router
+    app.include_router(proof_recall_router, tags=["Public Proof"])
 
 if _router_enabled("supplier_mgmt"):
     from services.ingestion.app.supplier_mgmt import router as supplier_mgmt_router
