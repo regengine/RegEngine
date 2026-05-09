@@ -2,7 +2,9 @@ import httpx
 import structlog
 from typing import Iterable, Optional
 from datetime import datetime, timezone
+from urllib.parse import urlencode
 
+from shared.safe_http import safe_httpx_get_sync
 from shared.url_validation import validate_url
 from ...config import get_settings
 from .base import StateRegistryScraper, Source, FetchedItem
@@ -45,8 +47,10 @@ class GoogleDiscoveryScraper(StateRegistryScraper):
                     "start": start_index
                 }
                 
-                validate_url(self.base_url)
-                resp = httpx.get(self.base_url, params=params, timeout=10)
+                # SSRF defense (RE-SEC-INGEST-003): per-hop validation + IP pinning.
+                # safe_httpx_get_sync does not accept params directly; encode into URL.
+                full_url = f"{self.base_url}?{urlencode(params)}"
+                resp = safe_httpx_get_sync(full_url, timeout=10)
                 resp.raise_for_status()
                 data = resp.json()
                 
@@ -92,8 +96,8 @@ class GoogleDiscoveryScraper(StateRegistryScraper):
         Fetch the content of the discovered document.
         """
         try:
-            validate_url(source.url)
-            resp = httpx.get(source.url, timeout=30, headers={"User-Agent": "RegEngine/1.0"})
+            # SSRF defense (RE-SEC-INGEST-003): per-hop validation + IP pinning.
+            resp = safe_httpx_get_sync(source.url, timeout=30, headers={"User-Agent": "RegEngine/1.0"})
             resp.raise_for_status()
             
             content_type = resp.headers.get("Content-Type", "application/pdf")
