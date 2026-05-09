@@ -194,18 +194,13 @@ async def refresh_session(
             if old_tid:
                 original_tenant_id = UUID(str(old_tid))
         except Exception as exc:
-            # An expired-but-parseable token is fine here — we still trust the
-            # tenant claim since the session row already authenticated the
-            # user. We only fall back to membership lookup if the header is
-            # missing or entirely malformed.
-            try:
-                import jwt as _jwt
-                unverified = _jwt.decode(auth_header[7:], options={"verify_signature": False})  # nosemgrep: python.jwt.security.unverified-jwt-decode.unverified-jwt-decode
-                old_tid = unverified.get("tenant_id") or unverified.get("tid")
-                if old_tid:
-                    original_tenant_id = UUID(str(old_tid))
-            except Exception:
-                logger.warning("refresh_old_token_unparseable", error=str(exc))
+            # SECURITY (RE-SEC-003): Do not fall back to unverified-payload
+            # extraction. If the prior access token can't be verified, the
+            # membership-ordered selection below is the only safe choice —
+            # otherwise a refresh-token holder could forge an unsigned JWT
+            # with an arbitrary `tid` and pin the new access token to any
+            # tenant the victim is a member of.
+            logger.warning("refresh_old_token_unparseable", error=str(exc))
 
     # Enforce that the user is still a member of the original acting tenant
     # AND that the tenant is still active. If either check fails we refuse
