@@ -110,39 +110,25 @@ async def receive_webhook(
     payload: WebhookPayload,
     request: Request,
 ) -> WebhookResponse:
-    """Receive and map events from an external system."""
-    # Use provided mapping or default
-    mapping = payload.field_mapping or FieldMapping()
+    """Receive and map events from an external system.
 
-    mapped_events: List[Dict[str, Any]] = []
-    errors: List[str] = []
+    F-6 (Ingestion re-audit): this endpoint is intentionally not wired into
+    ``main.py``. The active, secured replacement is
+    ``app/integration_router.py`` which is mounted at the same prefix
+    (``/api/v1/integrations``) with auth + tenant scoping + HMAC + rate-limit
+    + idempotency. This module is retained only because its pure mapping
+    helpers (``_extract_nested``, ``_apply_mapping``) and Pydantic models are
+    locked under ``tests/test_integration_webhook_1342.py``.
 
-    for i, event in enumerate(payload.events):
-        try:
-            canonical = _apply_mapping(event, mapping)
-            if not canonical.get("cte_type"):
-                errors.append(f"Event {i}: missing cte_type after mapping")
-                continue
-            if not canonical.get("traceability_lot_code"):
-                errors.append(f"Event {i}: missing traceability_lot_code after mapping")
-                continue
-            canonical["_source_connector"] = connector_id
-            mapped_events.append(canonical)
-        except Exception as e:
-            errors.append(f"Event {i}: mapping error: {str(e)}")
-
-    # TODO: Route mapped_events through the standard ingestion pipeline
-    # For now, return the count of successfully mapped events
-    logger.info(
-        "webhook_received",
-        connector_id=connector_id,
-        total=len(payload.events),
-        mapped=len(mapped_events),
-        errors=len(errors),
-    )
-
-    return WebhookResponse(
-        received=len(payload.events),
-        mapped=len(mapped_events),
-        errors=errors,
+    To prevent regression — i.e. a future "wire up integrations" PR mounting
+    this router without restoring those security invariants — the endpoint
+    raises ``NotImplementedError``. Any caller that hits this path will get a
+    501 and a clear pointer to ``integration_router`` so they migrate rather
+    than re-introduce an unauthenticated receiver.
+    """
+    raise NotImplementedError(
+        "integration_webhook.receive_webhook is not wired. Use the secured "
+        "integration_router (app/integration_router.py) which provides "
+        "auth + tenant scoping + HMAC + idempotency at the same /api/v1/integrations "
+        "prefix. See F-6 in the ingestion re-audit."
     )

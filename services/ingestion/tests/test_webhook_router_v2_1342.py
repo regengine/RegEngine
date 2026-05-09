@@ -1502,7 +1502,13 @@ class TestIngestEndpoint:
         assert resp.status_code == 200
         body = resp.json()
         assert body["rejected"] == 1
-        assert any("Storage error" in r["errors"][0] for r in body["events"])
+        # F-3: response now carries an opaque correlation id, not raw exc text.
+        assert any(
+            "Internal storage error" in r["errors"][0] and "correlation:" in r["errors"][0]
+            for r in body["events"]
+        )
+        # The raw exception text must NOT leak into the response.
+        assert not any("per-event broke" in r["errors"][0] for r in body["events"])
 
     def test_outer_exception_returns_500_and_rolls_back(self, monkeypatch):
         """An un-caught exception in the per-event path bubbles to the outer
