@@ -86,6 +86,28 @@ BODY_FIELD_SIGNED_AT = "_signed_at"
 # Env var names. Kept module-level so tests can monkeypatch / override.
 ENV_SIGNING_KEY = "KAFKA_EVENT_SIGNING_KEY"
 ENV_STRICT = "KAFKA_SIGNATURE_STRICT"
+ENV_MAX_SIG_AGE = "KAFKA_MAX_SIGNATURE_AGE_SECONDS"
+
+
+# Replay-protection freshness window for `_signed_at` (RE-SEC-003).
+# A signed envelope older than this is rejected post-HMAC even if the
+# signature is otherwise valid; combined with the NLP header-trust fix
+# (RE-SEC-001) this closes the per-tenant replay primitive.
+DEFAULT_MAX_SIGNATURE_AGE_SECONDS = 900  # 15 minutes
+# Tolerated clock-skew window for envelopes timestamped slightly in the
+# future. Anything beyond this is treated as a forgery / clock attack.
+SIGNATURE_FUTURE_SKEW_SECONDS = 60
+
+
+def _max_signature_age() -> int:
+    """Read the freshness window from env, falling back to the default."""
+    raw = os.environ.get(ENV_MAX_SIG_AGE)
+    if raw is None:
+        return DEFAULT_MAX_SIGNATURE_AGE_SECONDS
+    try:
+        return int(raw)
+    except (ValueError, TypeError):
+        return DEFAULT_MAX_SIGNATURE_AGE_SECONDS
 
 
 # -----------------------------------------------------------------------------
@@ -302,6 +324,7 @@ def verify_event(
     signing_key: bytes | str | None = None,
     allowed_producers: Iterable[str] | None = None,
     strict: bool | None = None,
+    now_fn: Callable[[], datetime] | None = None,
 ) -> tuple[dict[str, Any], str]:
     """Verify an inbound Kafka event and return ``(evt_dict, producer_service)``.
 
@@ -319,6 +342,9 @@ def verify_event(
     * unknown signature version
     * producer_service claim missing or not in the topic allowlist
     * body mismatch between header and signed claim
+    * ``_signed_at`` older than ``KAFKA_MAX_SIGNATURE_AGE_SECONDS``
+      (default 900s) — replay protection (RE-SEC-003)
+    * ``_signed_at`` more than 60s in the future — clock-attack guard
 
     On success returns the decoded dict (with ``_producer_service`` /
     ``_signed_at`` still present) and the verified producer service
@@ -424,6 +450,95 @@ def verify_event(
             "signature_mismatch",
             topic=topic,
             producer_service=body_producer,
+        )
+
+    # Replay-protection freshness check (RE-SEC-003).
+    #
+    # `_signed_at` was always covered by the HMAC but never read. A
+    # captured envelope could be replayed indefinitely. We check it
+    # only AFTER the HMAC verifies — checking before would be a
+    # pre-auth DoS surface (attacker forces parse errors on garbage).
+    #
+    # When ``strict_mode`` is False (rollout window) we downgrade
+    # stale/future to a warning log. The audit's recommendation is:
+    # if signing is non-strict, freshness is also non-strict.
+    signed_at_raw = evt.get(BODY_FIELD_SIGNED_AT)
+    if not signed_at_raw:
+        if strict_mode:
+            raise KafkaAuthError(
+                "missing_signed_at_in_body",
+                topic=topic,
+                producer_service=body_producer,
+            )
+        logger.warning(
+            "kafka_auth_missing_signed_at",
+            topic=topic,
+            producer_service=body_producer,
+        )
+        return evt, body_producer
+
+    try:
+        signed_at = datetime.fromisoformat(
+            str(signed_at_raw).replace("Z", "+00:00")
+        )
+    except (ValueError, AttributeError) as exc:
+        if strict_mode:
+            raise KafkaAuthError(
+                "invalid_signed_at_format",
+                topic=topic,
+                producer_service=body_producer,
+                signed_at=str(signed_at_raw),
+            ) from exc
+        logger.warning(
+            "kafka_auth_invalid_signed_at",
+            topic=topic,
+            producer_service=body_producer,
+            signed_at=str(signed_at_raw),
+            error=str(exc),
+        )
+        return evt, body_producer
+
+    if signed_at.tzinfo is None:
+        signed_at = signed_at.replace(tzinfo=timezone.utc)
+
+    now = (now_fn or (lambda: datetime.now(timezone.utc)))()
+    if now.tzinfo is None:
+        now = now.replace(tzinfo=timezone.utc)
+
+    age_seconds = (now - signed_at).total_seconds()
+    max_age = _max_signature_age()
+
+    if age_seconds > max_age:
+        if strict_mode:
+            raise KafkaAuthError(
+                "signed_at_stale",
+                topic=topic,
+                producer_service=body_producer,
+                age_seconds=int(age_seconds),
+                max_age_seconds=max_age,
+            )
+        logger.warning(
+            "kafka_auth_stale_signature_bypass",
+            topic=topic,
+            producer_service=body_producer,
+            age_seconds=int(age_seconds),
+            max_age_seconds=max_age,
+        )
+    elif age_seconds < -SIGNATURE_FUTURE_SKEW_SECONDS:
+        # Tolerate small clock skew, reject obvious future-dated forgeries.
+        if strict_mode:
+            raise KafkaAuthError(
+                "signed_at_in_future",
+                topic=topic,
+                producer_service=body_producer,
+                age_seconds=int(age_seconds),
+                skew_tolerance_seconds=SIGNATURE_FUTURE_SKEW_SECONDS,
+            )
+        logger.warning(
+            "kafka_auth_future_signature_bypass",
+            topic=topic,
+            producer_service=body_producer,
+            age_seconds=int(age_seconds),
         )
 
     return evt, body_producer

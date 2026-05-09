@@ -1,9 +1,6 @@
 from .models import *
 from .parser import RegulationParser
 
-# MappingEngine depends on optional ML packages (langchain, langchain_groq).
-# Import lazily so that the kernel package is usable without those deps installed.
-try:
-    from .graph import MappingEngine
-except ImportError:
-    MappingEngine = None  # type: ignore[assignment,misc]
+# MappingEngine was relocated to ``services.graph.app.mapping_engine`` as part of
+# the kernel-migration epic (#2223, #2228). Importers must update accordingly.
+

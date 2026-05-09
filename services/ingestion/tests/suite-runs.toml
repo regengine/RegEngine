@@ -54,7 +54,7 @@ poisoners = [
     "test_routes_health_metrics_1342.py",     # rewrites shared.kafka_consumer_base, app.config
     "test_task_handlers_scraping_1342.py",    # rewrites app.scraper_job, app.routes_scraping
     "test_task_handlers_sources_1342.py",     # rewrites regengine_ingestion(.sources), app.routes
-    "test_task_handlers_discovery_1342.py",   # rewrites kernel, kernel.discovery
+    "test_task_handlers_discovery_1342.py",   # rewrites app.discovery
     "test_task_handlers_regulation_1342.py",  # rewrites app.regulation_loader
 ]
 
