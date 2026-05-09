@@ -1,3 +1,7 @@
+> **ARCHIVED 2026-05-09** — pre-monolith snapshot. Contradicted README.md and ARCHITECTURE.md. See those files for canonical state. Kept for historical reference only.
+
+---
+
 # Current System Map
 
 **Purpose:** A survival map for a new technical leader. Not a vision doc.
