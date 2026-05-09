@@ -67,6 +67,8 @@ _sources_mod.FDAAdapter = _FDAAdapter
 _sources_mod.__file__ = str(service_dir / "regengine_ingestion_sources.py")
 
 _sources_pkg.sources = _sources_mod
+_REAL_REGENGINE_INGESTION = sys.modules.get("regengine_ingestion")
+_REAL_REGENGINE_INGESTION_SOURCES = sys.modules.get("regengine_ingestion.sources")
 sys.modules["regengine_ingestion"] = _sources_pkg
 sys.modules["regengine_ingestion.sources"] = _sources_mod
 
@@ -82,10 +84,39 @@ async def _stub_run_adapter_ingest(**_kwargs):
 
 _routes_stub._run_adapter_ingest = _stub_run_adapter_ingest
 _routes_stub.__file__ = str(service_dir / "app" / "routes.py")
+_REAL_APP_ROUTES = sys.modules.get("app.routes")
 sys.modules["app.routes"] = _routes_stub
 
 import app as _app_pkg  # noqa: E402
+_REAL_APP_ROUTES_ATTR = getattr(_app_pkg, "routes", None)
 _app_pkg.routes = _routes_stub
+
+
+@pytest.fixture(scope="module", autouse=True)
+def _restore_modules_on_module_teardown():
+    """Restore ``regengine_ingestion``, ``regengine_ingestion.sources``, and
+    ``app.routes`` after this file's tests finish.
+
+    The ``from app import task_handlers_sources`` import below requires the
+    stubs at module load time, so they must be installed at module level. We
+    restore (or evict) them on module teardown to prevent later test files
+    from importing the stubs instead of the real modules.
+    """
+    yield
+    for name, real in (
+        ("regengine_ingestion", _REAL_REGENGINE_INGESTION),
+        ("regengine_ingestion.sources", _REAL_REGENGINE_INGESTION_SOURCES),
+        ("app.routes", _REAL_APP_ROUTES),
+    ):
+        if real is not None:
+            sys.modules[name] = real
+        else:
+            sys.modules.pop(name, None)
+    if _REAL_APP_ROUTES_ATTR is not None:
+        _app_pkg.routes = _REAL_APP_ROUTES_ATTR
+    elif hasattr(_app_pkg, "routes"):
+        delattr(_app_pkg, "routes")
+
 
 from app import task_handlers_sources as ths  # noqa: E402
 from app.task_handlers_sources import (  # noqa: E402

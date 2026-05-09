@@ -53,8 +53,29 @@ def _noop_get_db():
 
 
 _shared_db_stub.get_db = _noop_get_db
-sys.modules.setdefault("shared", types.ModuleType("shared"))
+# NOTE: ``shared`` is a real package on sys.path; only override the leaf
+# ``shared.database`` submodule. Do NOT replace ``shared`` itself or other
+# tests that import ``shared.<x>`` will fail.
+_REAL_SHARED_DATABASE = sys.modules.get("shared.database")
 sys.modules["shared.database"] = _shared_db_stub
+
+
+@pytest.fixture(scope="module", autouse=True)
+def _restore_shared_database_on_module_teardown():
+    """Pop the shared.database stub after this file's tests finish.
+
+    Module-level ``sys.modules`` writes are required so that
+    ``from app.sandbox.router import router`` (below) resolves the stubbed
+    ``shared.database`` at import time. We can't move that import into a
+    fixture without rewriting the file. Instead, we restore (or evict) the
+    entry on module teardown so the stub doesn't poison later test files.
+    """
+    yield
+    if _REAL_SHARED_DATABASE is not None:
+        sys.modules["shared.database"] = _REAL_SHARED_DATABASE
+    else:
+        sys.modules.pop("shared.database", None)
+
 
 # IMPORTANT: `app.sandbox.__init__` does `from app.sandbox.router import router`,
 # which shadows the `router` submodule attribute on the package namespace with
