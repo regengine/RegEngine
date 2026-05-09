@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import socket
 import ssl
-from typing import Callable, Iterable, Optional
+from typing import Any, Callable, Dict, Iterable, Optional
 from urllib.parse import urlparse, urlunparse
 
 import httpx
@@ -32,6 +32,18 @@ logger = structlog.get_logger("safe-http")
 
 DEFAULT_TIMEOUT = 30.0
 DEFAULT_MAX_REDIRECTS = 5
+
+# Standard browser-like headers used by upstream fetchers. Kept here so callers
+# that want a single SSRF-safe entry point don't have to redefine them.
+STANDARD_BROWSER_HEADERS: Dict[str, str] = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,application/pdf,*/*;q=0.8",
+    "Accept-Language": "en-US,en;q=0.9",
+    "Accept-Encoding": "gzip, deflate, br",
+    "DNT": "1",
+    "Connection": "keep-alive",
+    "Upgrade-Insecure-Requests": "1",
+}
 
 
 def _build_ssl_context() -> ssl.SSLContext:
@@ -246,8 +258,54 @@ async def follow_redirects_safely(
     raise SSRFError(f"Too many redirects (>{max_hops}); last hop: {current_url}")
 
 
+def safe_fetch_content(
+    url: str,
+    *,
+    timeout: int = 30,
+    headers: Optional[dict] = None,
+) -> Dict[str, Any]:
+    """SSRF-safe sync fetch returning a normalized response dict.
+
+    This is the canonical "give me bytes for a URL" helper for ingestion-style
+    callers. It runs the URL through :func:`validate_url`, then through
+    :func:`safe_httpx_get_sync` so every redirect hop is re-validated with a
+    pinned IP (RE-SEC-001/002).
+
+    SSRF errors are NEVER swallowed: callers receive a ``ValueError`` whose
+    message starts with ``"URL validation failed:"`` and must not promote that
+    to a stronger fetcher (RE-SEC-004).
+
+    Returns ``{"content", "status_code", "headers", "content_type"}``.
+    """
+    try:
+        url = validate_url(url)
+    except SSRFError as e:
+        logger.warning("ssrf_validation_failed", url=url, error=str(e))
+        raise ValueError(f"URL validation failed: {str(e)}") from e
+
+    try:
+        response = safe_httpx_get_sync(
+            url, headers=headers or STANDARD_BROWSER_HEADERS, timeout=timeout
+        )
+    except SSRFError as e:
+        logger.warning("ssrf_error_during_fetch", url=url, error=str(e))
+        raise ValueError(f"URL validation failed: {str(e)}") from e
+
+    response.raise_for_status()
+    return {
+        "content": response.content,
+        "status_code": response.status_code,
+        "headers": dict(response.headers),
+        "content_type": response.headers.get(
+            "Content-Type", "application/octet-stream"
+        ),
+    }
+
+
 __all__ = [
+    "STANDARD_BROWSER_HEADERS",
     "safe_httpx_client",
     "safe_httpx_get_sync",
+    "safe_fetch_content",
     "follow_redirects_safely",
 ]
