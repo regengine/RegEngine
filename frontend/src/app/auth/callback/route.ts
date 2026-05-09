@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
+import { safeNextPath } from '@/lib/safe-redirect'
 // Must be dynamic — this route exchanges OAuth codes for sessions at request time
 export const dynamic = 'force-dynamic';
 
@@ -8,21 +9,21 @@ export async function GET(request: NextRequest) {
     const { searchParams, origin } = new URL(request.url)
     const code = searchParams.get('code')
     const nonce = request.headers.get('x-nonce') ?? ''
-    // Default to /dashboard for regular users; developer portal flows pass ?next=/developer/portal explicitly
-    const next = searchParams.get('next') ?? '/dashboard'
+    // Default to /dashboard for regular users; developer portal flows pass ?next=/developer/portal explicitly.
+    // Validated to reject `//evil.com`, backslash bypasses, and absolute URLs (RE-FE-AUDIT-002 / OQ-2).
+    const next = safeNextPath(searchParams.get('next'), '/dashboard')
 
     if (code) {
         // Compute the redirect URL before creating the response so we can attach
         // session cookies to the redirect. Without this, exchangeCodeForSession sets
         // cookies only on request.cookies (not visible to the browser) and the session
         // is lost — causing the reset-password page to see no session.
-        const forwardedHost = request.headers.get('x-forwarded-host')
-        const isLocalEnv = process.env.NODE_ENV === 'development'
-        const redirectBase = isLocalEnv
-            ? origin
-            : forwardedHost
-            ? `https://${forwardedHost}`
-            : origin
+        //
+        // We deliberately use `origin` (derived from request.url) and do NOT consult
+        // `x-forwarded-host`. Vercel sets request.url's host to the canonical
+        // user-facing domain, so the header branch was an attacker-controlled vector
+        // with no operational benefit. Closes RE-FE-AUDIT-001 / OQ-1.
+        const redirectBase = origin
 
         const response = NextResponse.redirect(`${redirectBase}${next}`)
 
