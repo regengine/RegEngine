@@ -21,7 +21,7 @@ from .scrapers.state_adaptors.tx_rss import TexasRegistryScraper
 from .scrapers.state_adaptors.google_discovery import GoogleDiscoveryScraper
 from .scrapers.state_adaptors.fda_enforcement import FDAEnforcementScraper
 from .models import ScrapeResponse, ScrapeRegistryResponse, IngestAllRegulationsResponse
-from kernel.discovery import discovery
+from .discovery import discovery
 from plugins.fsma.sources import FSMA_SOURCES
 
 logger = structlog.get_logger("ingestion.scrapers")

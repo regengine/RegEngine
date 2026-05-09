@@ -143,13 +143,21 @@ def _resolve_tenant_id(
 ) -> tuple[Optional[str], Optional[str]]:
     """Determine the authoritative tenant_id for an inbound NLP message (#1176).
 
-    Priority:
+    Authority:
 
-    * **Kafka header ``X-RegEngine-Tenant-ID``** — set by an authenticated
-      producer via ``inject_correlation_headers``. Trusted because the
-      producer is inside a request handler that already ran auth.
-    * **Payload ``tenant_id`` field** — legacy path. Lower trust: may have
-      been user-controllable at an earlier stage.
+    * **Payload ``tenant_id`` field** — the ONLY trusted source. The Kafka
+      message body is covered by the HMAC signature applied by
+      ``services/shared/kafka_auth.sign_event``; verifying that signature
+      (the consumer does so before this function is called) means the
+      payload tenant_id is bound to the producer's identity.
+    * **Kafka header ``X-RegEngine-Tenant-ID``** — advisory ONLY. Kafka
+      headers are NOT covered by the HMAC; a network-adjacent attacker who
+      captures one signed envelope can rewrite the header without
+      invalidating the body signature. Preferring the header would let any
+      capture+replay swap tenants — exactly the cross-tenant primitive the
+      signature was designed to prevent (RE-SEC-001). The header is
+      retained here only so we can defensively detect mismatches and so it
+      keeps flowing through correlation/trace logs.
 
     Validation:
 
@@ -158,7 +166,8 @@ def _resolve_tenant_id(
       bypasses).
     * If header AND payload both present and **disagree**, the message is
       treated as hostile (someone's trying to smuggle into another tenant)
-      and rejected to the FSMA DLQ.
+      and rejected to the FSMA DLQ. This is defense-in-depth on top of the
+      signature check — the body is authoritative regardless.
 
     Returns ``(resolved_tenant_id, rejection_reason)``. ``resolved`` is the
     validated UUID string when the message should be processed. When
@@ -190,8 +199,13 @@ def _resolve_tenant_id(
             f"tenant_id_mismatch header={header_tid!r} payload={payload_tid!r}"
         )
 
-    # Prefer the header when present (higher-trust source).
-    resolved = header_tid or payload_tid
+    # Authoritative tenant claim is the SIGNED body field. Kafka headers
+    # are not covered by the HMAC signature applied in
+    # ``services/shared/kafka_auth.sign_event``; preferring them over the
+    # body would let any envelope capture+rewrite swap tenants
+    # (RE-SEC-001). The header is retained for cross-trace correlation
+    # only; the mismatch check above is defense-in-depth.
+    resolved = payload_tid
 
     # Must be a valid UUID — rejects the "default" sentinel from #1268 and
     # any other non-UUID string that somehow made it past the producer.
@@ -1477,10 +1491,14 @@ def _run_consumer_loop(consumer: KafkaConsumer, producer: KafkaProducer) -> None
                             doc_hash = evt.get("document_hash") or evt.get("content_hash") or doc_id
                             norm_path = evt.get("normalized_s3_path")
                             inline_text = evt.get("text_clean")
-                            # #1176 — resolve tenant_id from header (preferred)
-                            # or payload. Fail-fast DLQ on missing / invalid /
-                            # mismatched values so downstream writes can never
-                            # happen without tenant context.
+                            # #1176 / RE-SEC-001 — resolve tenant_id from the
+                            # SIGNED payload field (authoritative). The Kafka
+                            # header is passed in only so the resolver can
+                            # defensively detect header/body mismatches; it is
+                            # NOT trusted (Kafka headers are outside the HMAC).
+                            # Fail-fast DLQ on missing / invalid / mismatched
+                            # values so downstream writes can never happen
+                            # without tenant context.
                             tenant_id, _tenant_reject_reason = _resolve_tenant_id(
                                 header_tenant_id=header_tenant_id,
                                 payload_tenant_id=evt.get("tenant_id"),

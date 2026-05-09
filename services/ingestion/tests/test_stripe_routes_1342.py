@@ -1062,11 +1062,41 @@ class TestCreatePortalSessionLegacy:
         )
 
         result = await routes_mod.create_portal_session_legacy(
-            "tenant-legacy", _=None
+            "tenant-legacy",
+            x_tenant_id=None,
+            principal=_principal(tenant_id="tenant-legacy"),
         )
         assert result.portal_url == "https://billing.stripe.com/session/legacy"
         assert result.customer_id == "cus_legacy"
         assert result.tenant_id == "tenant-legacy"
+
+    @pytest.mark.asyncio
+    async def test_url_tenant_mismatch_returns_404(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """RE-SEC-INGEST-001: legacy route must reject cross-tenant access.
+
+        An authenticated principal scoped to ``tenant-A`` must not be able to
+        mint a portal session for ``tenant-B`` by varying the URL path.
+        """
+        # If the guard fails, _ensure_customer_mapping would be called and
+        # leak the cross-tenant customer id. Stub it to fail loudly.
+        def _should_not_be_called(**_kwargs: Any) -> str:
+            raise AssertionError(
+                "tenant-mismatch must short-circuit before customer lookup"
+            )
+
+        monkeypatch.setattr(
+            customers_mod, "_ensure_customer_mapping", _should_not_be_called
+        )
+
+        with pytest.raises(Exception) as excinfo:
+            await routes_mod.create_portal_session_legacy(
+                "tenant-victim",
+                x_tenant_id=None,
+                principal=_principal(tenant_id="tenant-attacker"),
+            )
+        assert getattr(excinfo.value, "status_code", None) == 404
 
     @pytest.mark.asyncio
     async def test_redis_error_raises_503(
@@ -1079,7 +1109,9 @@ class TestCreatePortalSessionLegacy:
 
         with pytest.raises(Exception) as excinfo:
             await routes_mod.create_portal_session_legacy(
-                "tenant-legacy-err", _=None
+                "tenant-legacy-err",
+                x_tenant_id=None,
+                principal=_principal(tenant_id="tenant-legacy-err"),
             )
         assert getattr(excinfo.value, "status_code", None) == 503
 
@@ -1103,7 +1135,9 @@ class TestCreatePortalSessionLegacy:
 
         with pytest.raises(Exception) as excinfo:
             await routes_mod.create_portal_session_legacy(
-                "tenant-legacy-502", _=None
+                "tenant-legacy-502",
+                x_tenant_id=None,
+                principal=_principal(tenant_id="tenant-legacy-502"),
             )
         assert getattr(excinfo.value, "status_code", None) == 502
         assert "portal offline" in getattr(excinfo.value, "detail", "")
@@ -1125,7 +1159,9 @@ class TestCreatePortalSessionLegacy:
 
         with pytest.raises(Exception) as excinfo:
             await routes_mod.create_portal_session_legacy(
-                "tenant-legacy-no-url", _=None
+                "tenant-legacy-no-url",
+                x_tenant_id=None,
+                principal=_principal(tenant_id="tenant-legacy-no-url"),
             )
         assert getattr(excinfo.value, "status_code", None) == 502
         assert "missing portal URL" in getattr(excinfo.value, "detail", "")

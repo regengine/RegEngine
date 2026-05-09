@@ -77,6 +77,14 @@ class KafkaEventProducer:
     def emit_enforcement_change(self, item: EnforcementItem) -> bool:
         """Emit an enforcement change event.
 
+        Signed via :func:`shared.kafka_auth.sign_event` to mirror the
+        ``emit_fsma_event`` pattern (#2190 / RE-SEC-002). Producer-side
+        signing parity pre-empts a DLQ storm if a strict consumer is
+        wired up later, and removes the cross-tenant injection vector
+        that signing is designed to prevent. Add
+        ``KAFKA_ALLOWED_PRODUCERS_ENFORCEMENT_CHANGES`` on the consumer
+        side when one is introduced.
+
         Args:
             item: The enforcement item to emit
 
@@ -87,15 +95,38 @@ class KafkaEventProducer:
             source_type=item.source_type,
             item=item,
         )
+        event_dict = event.to_kafka_dict()
+        base_headers = inject_correlation_headers_tuples()
+        try:
+            signed_payload, signed_headers = sign_event(
+                event_dict,
+                producer_service=PRODUCER_SERVICE,
+                existing_headers=base_headers,
+            )
+        except KafkaAuthError as exc:
+            logger.error(
+                "enforcement_change_sign_failed",
+                source_id=item.source_id,
+                reason=exc.reason,
+                topic=self.topic_enforcement,
+            )
+            return False
 
         return self._send(
             topic=self.topic_enforcement,
             key=item.source_id,
-            value=event.to_kafka_dict(),
+            value=signed_payload,
+            headers=signed_headers,
         )
 
     def emit_high_priority_alert(self, item: EnforcementItem) -> bool:
         """Emit a high-priority alert for CRITICAL/HIGH severity items.
+
+        Signed via :func:`shared.kafka_auth.sign_event` for the same
+        producer-parity reasons documented on
+        :meth:`emit_enforcement_change` (#2190 / RE-SEC-002). Add
+        ``KAFKA_ALLOWED_PRODUCERS_ALERTS_HIGH_PRIORITY`` on the consumer
+        side when one is introduced.
 
         Args:
             item: The enforcement item (should be CRITICAL or HIGH severity)
@@ -108,11 +139,28 @@ class KafkaEventProducer:
             source_type=item.source_type,
             item=item,
         )
+        event_dict = event.to_kafka_dict()
+        base_headers = inject_correlation_headers_tuples()
+        try:
+            signed_payload, signed_headers = sign_event(
+                event_dict,
+                producer_service=PRODUCER_SERVICE,
+                existing_headers=base_headers,
+            )
+        except KafkaAuthError as exc:
+            logger.error(
+                "high_priority_alert_sign_failed",
+                source_id=item.source_id,
+                reason=exc.reason,
+                topic=self.topic_alerts,
+            )
+            return False
 
         return self._send(
             topic=self.topic_alerts,
             key=item.source_id,
-            value=event.to_kafka_dict(),
+            value=signed_payload,
+            headers=signed_headers,
         )
 
     def emit_batch(self, items: list[EnforcementItem]) -> tuple[int, int]:
