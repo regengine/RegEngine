@@ -597,6 +597,38 @@ class SchedulerService:
         )
         logger.info("job_scheduled", job_id="fsma_nightly_sync", cron="02:00 UTC")
 
+        # #2257 follow-up — replay the audit_log_buffer to the primary
+        # KDE_READ audit-log backend on a schedule. Cadence is env-tunable
+        # via AUDIT_BUFFER_RECONCILE_INTERVAL_SECONDS (default 300s).
+        try:
+            from services.graph.app.audit_buffer_reconciler import (  # noqa: PLC0415
+                get_interval_seconds,
+                run_reconcile_tick,
+            )
+
+            audit_buffer_interval = get_interval_seconds()
+            self._add_tracked_job(
+                run_reconcile_tick,
+                job_id="audit_buffer_reconcile",
+                trigger=IntervalTrigger(seconds=audit_buffer_interval),
+                name="Audit Log Buffer Reconciliation (#2257 follow-up)",
+                max_instances=1,  # Never run two reconciliation passes concurrently.
+            )
+            logger.info(
+                "job_scheduled",
+                job_id="audit_buffer_reconcile",
+                interval_seconds=audit_buffer_interval,
+            )
+        except ImportError as exc:
+            # Graph package not on path (e.g. minimal scheduler image): log
+            # and continue. The buffer still grows safely; ops will notice
+            # the missing replays via the unreplayed gauge.
+            logger.warning(
+                "audit_buffer_reconcile_unavailable",
+                error=str(exc),
+                hint="services.graph.app.audit_buffer_reconciler not importable",
+            )
+
         # #1150 — drain the persistent webhook outbox periodically. Only
         # register the job when an outbox path is actually configured, so
         # a scheduler with legacy (in-memory-only) delivery doesn't pay
