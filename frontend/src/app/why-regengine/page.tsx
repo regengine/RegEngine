@@ -17,8 +17,8 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 
 export const metadata: Metadata = {
-    title: 'Why RegEngine | FSMA 204 Compliance Built Different',
-    description: 'API-first, transparent pricing, 48-hour speed to compliance. See how RegEngine outpaces Trustwell, SafetyChain, and legacy competitors.',
+    title: 'Why RegEngine | FSMA 204 Compliance, API-First',
+    description: 'API-first architecture, published pricing, and a self-serve path to your first FSMA 204 export. See how RegEngine compares to Trustwell, SafetyChain, and ReposiTrak.',
     openGraph: {
         title: 'Why RegEngine | FSMA 204 Compliance Built Different',
         description: 'API-first, transparent pricing, 48-hour speed to compliance. See how RegEngine outpaces Trustwell, SafetyChain, and legacy competitors.',
@@ -51,25 +51,25 @@ const COMPARISON_DATA: ComparisonRow[] = [
         reositrak: 'Contact sales',
     },
     {
-        feature: '48-Hour Time to Compliance',
-        regengine: true,
-        foodlogiq: '6+ months',
-        safetychain: '4-6 months',
-        reositrak: '3-6 months',
+        feature: 'Time to first export',
+        regengine: 'Days (self-serve)',
+        foodlogiq: 'Sales-led implementation',
+        safetychain: 'Sales-led implementation',
+        reositrak: 'Retailer-coordinated',
     },
     {
         feature: 'All 7 FSMA 204 CTE Types',
         regengine: 'Full coverage',
-        foodlogiq: '5 covered',
-        safetychain: '6 covered',
-        reositrak: '6 covered',
+        foodlogiq: 'Verify with vendor',
+        safetychain: 'Verify with vendor',
+        reositrak: 'Verify with vendor',
     },
     {
         feature: 'EPCIS 2.0 Native',
         regengine: true,
-        foodlogiq: 'Conversion layer',
-        safetychain: 'Conversion layer',
-        reositrak: 'Conversion layer',
+        foodlogiq: 'Verify with vendor',
+        safetychain: 'Verify with vendor',
+        reositrak: 'Verify with vendor',
     },
     {
         feature: 'CSV Import + Mapping',
@@ -81,23 +81,23 @@ const COMPARISON_DATA: ComparisonRow[] = [
     {
         feature: 'Works with Existing ERP/WMS',
         regengine: 'By design',
-        foodlogiq: 'Limited',
-        safetychain: 'Limited',
-        reositrak: 'Limited',
+        foodlogiq: 'Verify with vendor',
+        safetychain: 'Verify with vendor',
+        reositrak: 'Verify with vendor',
     },
     {
         feature: 'Self-Serve Onboarding',
         regengine: true,
-        foodlogiq: 'Sales-led only',
-        safetychain: 'Sales-led only',
-        reositrak: 'Sales-led only',
+        foodlogiq: 'Sales-led',
+        safetychain: 'Sales-led',
+        reositrak: 'Retailer-mediated',
     },
     {
         feature: 'Per-CTE KDE Validation',
         regengine: true,
-        foodlogiq: 'Batch only',
-        safetychain: 'Batch only',
-        reositrak: 'Batch only',
+        foodlogiq: 'Verify with vendor',
+        safetychain: 'Verify with vendor',
+        reositrak: 'Verify with vendor',
     },
     {
         feature: 'FDA-Ready Export',
@@ -139,24 +139,24 @@ const DIFFERENTIATORS = [
     },
     {
         icon: Zap,
-        title: '48-Hour Time to Compliance',
+        title: 'Self-serve, days not months',
         description:
-            'First FDA-ready CTE export in two days. Competitors take 3–6 months. Speed matters when your supply chain stops for recalls.',
-        detail: 'No custom integrations needed. CSV upload or API payload → validation → compliance export. Lean, iterative, fast.',
+            'Get from signup to a first FSMA 204 export in days. CSV upload or API payload → validation → export. No 3–6 month enterprise implementation.',
+        detail: 'Major retailers and FDA enforcement deadlines arrive on calendar dates; teams ship sooner when the platform is self-serve.',
     },
     {
         icon: Lock,
         title: 'Full CTE/KDE Coverage',
         description:
-            'All 7 FSMA 204 CTE types. Per-CTE KDE validation (not batch). Missing CTEs are a leading cause of FDA recall response delays.',
-        detail: 'Every field in every CTE type is validated individually. No surprises on FDA submission day.',
+            'All 7 FSMA 204 CTE types. Per-CTE KDE validation (not batch). Incomplete CTEs are a common gap teams discover during recall drills.',
+        detail: 'Every field in every CTE type is validated individually so gaps are visible before you submit.',
     },
     {
         icon: Workflow,
         title: 'EPCIS 2.0 Native',
         description:
-            "FDA's preferred standard, baked in. No conversion layer. No data loss in transformation. Your data stays clean.",
-        detail: 'Competitors bolt EPCIS on top of legacy schemas. We built EPCIS 2.0 first, then added everything else.',
+            "FDA's preferred standard, baked in. No conversion layer between ingest and export, so EPCIS 2.0 stays end-to-end.",
+        detail: 'We started on EPCIS 2.0; verify EPCIS coverage with each vendor for your stack.',
     },
     {
         icon: CheckCircle,
@@ -185,7 +185,7 @@ export default function WhyRegEnginePage() {
                         </span>
                     </h1>
                     <p className="text-lg sm:text-xl text-re-text-secondary mb-8 max-w-3xl leading-relaxed">
-                        RegEngine is the only FSMA 204 platform with an API-first architecture, transparent pricing, and a 48-hour path to FDA-ready compliance. No 6-month implementations. No hidden costs. No vendor lock-in.
+                        RegEngine pairs an API-first architecture with published pricing and a self-serve onboarding path designed to get your first FSMA 204 export ready for review in days, not months.
                     </p>
                     <div className="flex flex-col sm:flex-row gap-4">
                         <Button asChild size="lg">
@@ -375,7 +375,7 @@ export default function WhyRegEnginePage() {
                                 Every feature in RegEngine has an API. REST endpoints. Webhooks for real-time events. CSV templates for ops teams. Your developers can integrate in hours, not months.
                             </p>
                             <p className="text-re-text-tertiary text-sm mb-6">
-                                Competitors built UI-first, then bolted APIs on as an afterthought. We started with APIs. Your systems stay in control.
+                                RegEngine started with APIs and added the dashboard on top, so every dashboard action is reachable programmatically. Verify API surface depth with each vendor for your stack.
                             </p>
                             <ul className="space-y-2">
                                 {[
@@ -465,20 +465,20 @@ HTTP 201
                     <div className="grid md:grid-cols-2 gap-8 items-center">
                         <div>
                             <h3 className="text-2xl sm:text-3xl font-bold text-[var(--re-text-primary)] mb-4">
-                                48 Hours to Retailer-Ready Onboarding
+                                Self-serve onboarding, days not months
                             </h3>
                             <p className="text-re-text-secondary mb-4 leading-relaxed">
-                                When a recall hits, every hour matters. RegEngine gets you from signup to mapped supplier data and retailer-readiness review in 48 hours. Once records are mapped, FDA-ready exports build in under 12 minutes.
+                                When a deadline approaches, every week matters. RegEngine takes teams from signup to mapped supplier data and retailer-readiness review in days. Once records are mapped, FSMA-formatted exports build in minutes.
                             </p>
                             <p className="text-re-text-tertiary text-sm mb-6">
-                                Competitors average 3–6 months to first export. Your supply chain can't wait that long.
+                                Sales-led platforms typically run multi-month implementations. Verify timelines with each vendor.
                             </p>
                             <div className="space-y-3">
                                 {[
                                     { step: '1', label: 'Sign up, create a facility' },
                                     { step: '2', label: 'Upload your CTEs (CSV or API)' },
                                     { step: '3', label: 'RegEngine validates all KDEs' },
-                                    { step: '4', label: 'Export FDA-ready trace data' },
+                                    { step: '4', label: 'Export §1.1455-formatted trace data' },
                                 ].map((item) => (
                                     <div key={item.step} className="flex gap-4 items-start">
                                         <div className="flex h-8 w-8 items-center justify-center rounded-full bg-re-info/30 border border-[var(--re-info)]/50 text-sm font-semibold text-[var(--re-info)]">
@@ -491,22 +491,25 @@ HTTP 201
                         </div>
                         <div className="rounded-lg border border-[var(--re-surface-border)] bg-gradient-to-br from-[var(--re-info)]/10 to-transparent p-8">
                             <div className="text-center">
-                                <p className="text-sm text-re-text-tertiary mb-2">Typical Implementation Time</p>
+                                <p className="text-sm text-re-text-tertiary mb-2">Onboarding model</p>
                                 <div className="space-y-4">
                                     <div>
-                                        <p className="text-2xl font-bold text-re-success mb-1">48 hours</p>
+                                        <p className="text-2xl font-bold text-re-success mb-1">Self-serve</p>
                                         <p className="text-xs text-re-text-tertiary">RegEngine</p>
                                     </div>
                                     <div className="h-px bg-[var(--re-surface-border)]" />
                                     <div>
-                                        <p className="text-2xl font-bold text-re-text-tertiary mb-1">4–6 months</p>
-                                        <p className="text-xs text-re-text-muted">Trustwell, SafetyChain</p>
+                                        <p className="text-2xl font-bold text-re-text-tertiary mb-1">Sales-led</p>
+                                        <p className="text-xs text-re-text-muted">Trustwell, SafetyChain (per their public materials)</p>
                                     </div>
                                     <div>
-                                        <p className="text-2xl font-bold text-re-text-tertiary mb-1">3–6 months</p>
-                                        <p className="text-xs text-re-text-muted">ReposiTrak, Legacy systems</p>
+                                        <p className="text-2xl font-bold text-re-text-tertiary mb-1">Retailer-coordinated</p>
+                                        <p className="text-xs text-re-text-muted">ReposiTrak (per their public materials)</p>
                                     </div>
                                 </div>
+                                <p className="text-[10px] text-re-text-muted mt-4 leading-relaxed">
+                                    Competitors named are trademarks of their respective owners. Verify current onboarding timelines directly with each vendor.
+                                </p>
                             </div>
                         </div>
                     </div>
@@ -537,10 +540,10 @@ HTTP 201
                                 Complete CTE/KDE Coverage
                             </h3>
                             <p className="text-re-text-secondary mb-4 leading-relaxed">
-                                All 7 FSMA 204 CTE types, fully implemented. Every field validated individually (not batch). Missing CTEs are a leading cause of FDA recall response delays.
+                                All 7 FSMA 204 CTE types, fully implemented. Every field validated individually (not batch). Incomplete CTEs are a common gap teams discover during recall drills.
                             </p>
                             <p className="text-re-text-tertiary text-sm mb-6">
-                                Most competitors cover a subset of CTEs or validate in batch. RegEngine covers all 7, with per-CTE KDE validation that catches errors before FDA submission.
+                                Verify CTE coverage and validation depth with each vendor for your stack. RegEngine covers all 7 with per-CTE KDE validation that surfaces errors before submission.
                             </p>
                             <ul className="space-y-2">
                                 {[
@@ -565,17 +568,17 @@ HTTP 201
                                 EPCIS 2.0 Native
                             </h3>
                             <p className="text-re-text-secondary mb-4 leading-relaxed">
-                                FDA's preferred format. We built EPCIS 2.0 first, then added everything else. No conversion layer. No data loss. Clean exports every time.
+                                FDA's preferred format. RegEngine treats EPCIS 2.0 as the primary schema, so exports stay in EPCIS 2.0 end-to-end without a lossy conversion step.
                             </p>
                             <p className="text-re-text-tertiary text-sm mb-6">
-                                Competitors grafted EPCIS onto legacy schemas. We started fresh. Your compliance data is pristine from day one.
+                                Verify EPCIS coverage with each vendor; some platforms layer EPCIS over legacy schemas, which can introduce conversion edges.
                             </p>
                             <ul className="space-y-2">
                                 {[
                                     'EPCIS 2.0 XML + JSON serialization',
                                     'FDA traceability event format',
                                     'No third-party conversion needed',
-                                    'Future-proof for FDA infrastructure upgrades',
+                                    'Aligned with FDA\'s published EPCIS 2.0 direction',
                                 ].map((item, idx) => (
                                     <li key={idx} className="flex gap-3 text-sm text-re-text-secondary">
                                         <Check className="h-5 w-5 text-re-success flex-shrink-0" />
