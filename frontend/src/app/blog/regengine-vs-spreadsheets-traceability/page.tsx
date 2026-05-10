@@ -89,12 +89,12 @@ export default function RegEngineVsSpreadsheets() {
                   <li>• Complete audit trail: who entered data, when, and all changes</li>
                   <li>• Data integrity protection—changes are logged and cannot be undone silently</li>
                   <li>• Access controls: see who accessed which data and when</li>
-                  <li>• FDA-ready compliance reports with full traceability of the data itself</li>
+                  <li>• Exports formatted to the §1.1455(c) sortable spreadsheet structure, with the underlying audit trail preserved</li>
                 </ul>
               </div>
             </div>
             <p className="text-[1.05rem] text-[var(--re-text-secondary)] leading-relaxed">
-              When an FDA inspector asks, "Can you prove this data was entered correctly and hasn't been altered?" a spreadsheet fails the test. RegEngine passes it.
+              An audit trail and chained hashing won't certify your data is correct — only your operation can do that — but they make it materially easier to show how a record was entered, by whom, and whether it changed after ingest. A standalone spreadsheet generally cannot.
             </p>
           </div>
 
@@ -275,13 +275,15 @@ export default function RegEngineVsSpreadsheets() {
                 <h4 className="font-semibold text-[var(--re-text-primary)] mb-3">
                   Spreadsheet Total Cost of Ownership
                 </h4>
+                <p className="text-[var(--re-text-secondary)] text-sm mb-3 italic">
+                  Illustrative line items, not a forecast — model your own operation against your actual labor and recall-history baseline.
+                </p>
                 <ul className="space-y-2 text-[var(--re-text-secondary)] text-sm">
-                  <li>• Staff time to manage spreadsheets: $40K-80K/year</li>
-                  <li>• Data entry errors and corrections: $20K-40K/year</li>
-                  <li>• Supplier data collection and management: $30K-60K/year</li>
-                  <li>• FDA response preparation and compliance work: $50K-100K/year (sporadic but high effort)</li>
-                  <li>• Risk of non-compliance, enforcement action, or recall: $500K+ (potential)</li>
-                  <li>• <strong>Total 2-year cost: $180K-360K+ (plus compliance risk)</strong></li>
+                  <li>• Staff time to maintain spreadsheets and reconcile lot codes</li>
+                  <li>• Rework when data-entry errors propagate downstream</li>
+                  <li>• Time spent collecting and chasing supplier KDEs</li>
+                  <li>• Effort required to prepare a §1.1455(c) sortable spreadsheet on request</li>
+                  <li>• Exposure if a recall, withdrawal, or FDA inspection lands while records are scattered</li>
                 </ul>
               </div>
 
@@ -290,17 +292,16 @@ export default function RegEngineVsSpreadsheets() {
                   RegEngine Total Cost of Ownership
                 </h4>
                 <ul className="space-y-2 text-[var(--re-text-secondary)] text-sm">
-                  <li>• RegEngine subscription: $15K-50K/year (depending on volume)</li>
-                  <li>• Implementation and training: $10K-20K (one-time)</li>
-                  <li>• Staff time reduction: -$30K-50K/year (automation handles data entry)</li>
-                  <li>• FDA response preparation: 30 minutes instead of 8 hours (minimal cost)</li>
-                  <li>• Compliance assurance: built-in, reduces risk to near-zero</li>
-                  <li>• <strong>Total 2-year cost: $40K-120K (with compliance confidence)</strong></li>
+                  <li>• RegEngine subscription (priced against volume — contact us for a quote)</li>
+                  <li>• One-time implementation and team onboarding</li>
+                  <li>• Less staff time spent on manual reconciliation once ingestion is wired in</li>
+                  <li>• Pre-formatted §1.1455(c) export rather than ad-hoc preparation</li>
+                  <li>• Audit trail and chained hashing to support — not replace — your compliance program</li>
                 </ul>
               </div>
             </div>
             <p className="text-[1.05rem] text-[var(--re-text-secondary)] leading-relaxed">
-              RegEngine typically pays for itself within the first year through labor savings and risk reduction.
+              Whether RegEngine pays for itself depends on your volume, team, and recall history. We're happy to walk through the math with your numbers.
             </p>
           </div>
 
@@ -348,7 +349,7 @@ export default function RegEngineVsSpreadsheets() {
             <ul className="space-y-3 text-[1.05rem] text-[var(--re-text-secondary)] leading-relaxed">
               <li className="flex gap-3">
                 <CheckCircle2 className="w-5 h-5 text-[var(--re-brand)] flex-shrink-0 mt-0.5" />
-                <span>Spreadsheets fail at FSMA 204 compliance because they lack audit trails, scale poorly, and can't meet the 24-hour response requirement.</span>
+                <span>Stand-alone spreadsheets struggle with FSMA 204 because they lack audit trails, scale poorly, and make a 24-hour §1.1455(c) export hard to assemble — that's a workflow problem, not a verdict on the file format itself.</span>
               </li>
               <li className="flex gap-3">
                 <CheckCircle2 className="w-5 h-5 text-[var(--re-brand)] flex-shrink-0 mt-0.5" />

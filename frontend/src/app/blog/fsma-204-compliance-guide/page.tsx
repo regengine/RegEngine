@@ -300,11 +300,11 @@ export default function FSMA204ComplianceGuide() {
               </li>
               <li className="flex gap-3">
                 <CheckCircle2 className="w-5 h-5 text-[var(--re-brand)] flex-shrink-0 mt-0.5" />
-                <span>You must respond to FDA records requests within 24 hours with complete traceability data.</span>
+                <span>§1.1455(c) requires you to provide a sortable electronic spreadsheet to FDA as soon as possible, and not later than 24 hours after a request.</span>
               </li>
               <li className="flex gap-3">
                 <CheckCircle2 className="w-5 h-5 text-[var(--re-brand)] flex-shrink-0 mt-0.5" />
-                <span>Track 7 CTEs and associated KDEs at each step of your supply chain.</span>
+                <span>Identify which Critical Tracking Events occur at your operation (§§1.1325–1.1350) and capture the KDEs the rule requires for each one — not every CTE applies to every business.</span>
               </li>
               <li className="flex gap-3">
                 <CheckCircle2 className="w-5 h-5 text-[var(--re-brand)] flex-shrink-0 mt-0.5" />
