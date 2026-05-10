@@ -127,7 +127,7 @@ export default function FSMADashboardPage() {
                 </div>
                 <div className="mt-1 flex items-center gap-1 text-muted-foreground">
                   <p>Food Safety Traceability & Recall Management</p>
-                  <HelpTooltip content="FDA Food Safety Modernization Act Section 204 requires food facilities to maintain traceability records and respond to recalls within 24 hours." />
+                  <HelpTooltip content="FDA Food Safety Modernization Act Section 204 (21 CFR Part 1, Subpart S) requires covered persons to maintain traceability records and provide a sortable electronic spreadsheet of those records within 24 hours of an official FDA request, per §1.1455(c)." />
                 </div>
               </div>
             </div>

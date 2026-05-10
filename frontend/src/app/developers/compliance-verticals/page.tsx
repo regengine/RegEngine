@@ -35,12 +35,12 @@ const FRAMEWORKS = [
         title: 'Seafood',
         icon: Fish,
         description: 'Finfish and shellfish chain-of-custody controls',
-        details: 'Tracks vessel/source references, cold-chain transitions, and lot transformations so recalls can be traced from supplier to shelf fast.',
+        details: 'Reference scaffold for seafood obtained from a fishing vessel — uses §1.1335 First Land-Based Receiving as the entry CTE. Final CTE/KDE coverage is configured during onboarding.',
         jsonSnippet: `{
   "profile": "seafood",
   "ftl_categories": ["Fresh Finfish", "Crustaceans"],
-  "required_ctes": ["HARVESTING", "RECEIVING", "SHIPPING"],
-  "kde_focus": ["source_vessel", "landing_date", "temperature_log"]
+  "required_ctes": ["FIRST_LAND_BASED_RECEIVING", "RECEIVING", "SHIPPING"],
+  "kde_focus": ["harvest_vessel", "landing_date", "harvest_area"]
 }`,
     },
     {
