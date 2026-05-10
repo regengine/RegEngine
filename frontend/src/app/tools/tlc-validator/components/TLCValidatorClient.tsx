@@ -12,7 +12,7 @@ import { FREE_TOOLS } from '@/lib/fsma-tools-data';
 const TLC_VALIDATOR_CONFIG: ToolConfig = {
     id: 'tlc-validator',
     title: 'TLC Validator',
-    description: 'Stress-test your Traceability Lot Code (TLC) format against GS1 standards and FDAs requirement for uniqueness and parseability.',
+    description: 'Stress-test your Traceability Lot Code (TLC) format against GS1 conventions and common entropy/parseability pitfalls. FDA does not specify a TLC format; uniqueness must be enforced by your assignment system.',
     icon: 'FlaskConical',
     stages: {
         questions: [
@@ -86,13 +86,9 @@ export function TLCValidatorClient() {
         return (
             <div className="space-y-8">
                 <div className="flex flex-col items-center py-6 border-b border-[var(--re-border-default)]">
-                    <div
-                        className="text-4xl font-black mb-2"
-                        style={{ color: getScoreColor(score) }}
-                    >
-                        {score}/100
-                    </div>
-                    <Badge variant="outline" className="uppercase tracking-widest text-[10px]">Quality Score</Badge>
+                    <Badge variant="outline" className="uppercase tracking-widest text-[10px]" style={{ color: getScoreColor(score) }}>
+                        {findings.length === 0 ? 'No structural concerns detected' : `${findings.length} heuristic finding${findings.length === 1 ? '' : 's'}`}
+                    </Badge>
                     <div className="mt-4 font-mono bg-[var(--re-surface-elevated)] px-4 py-2 rounded border border-[var(--re-border-default)]">
                         {tlc}
                     </div>
@@ -104,7 +100,7 @@ export function TLCValidatorClient() {
                         {findings.length === 0 ? (
                             <div className="flex items-center gap-3 p-4 rounded-xl bg-[var(--re-brand-muted)] border border-[var(--re-brand)] / 20">
                                 <CheckCircle2 className="h-5 w-5 text-[var(--re-brand)]" />
-                                <span className="text-sm">Excellent! Your lot code is stable and system-compatible.</span>
+                                <span className="text-sm">No structural concerns detected by the heuristic checks. This is not a uniqueness guarantee — uniqueness must be enforced by your assignment system.</span>
                             </div>
                         ) : (
                             findings.map((f, i) => (

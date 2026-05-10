@@ -879,6 +879,48 @@ class TestSessionManagement:
         assert result["revoked_count"] == 3
         assert user.token_version == 3  # bumped from 2 to 3
 
+    @pytest.mark.asyncio
+    async def test_logout_all_revokes_outstanding_elevation_tokens(self, monkeypatch):
+        """#1380 lock-in: /logout-all must call
+        ``_revoke_all_elevation_tokens_for_user`` so outstanding elevation
+        tokens minted via /confirm are killed at the same time as the user's
+        sessions and access tokens.
+
+        The pre-existing ``test_logout_all_revokes_sessions_and_bumps_tv``
+        monkeypatches the helper to return 0 but never asserts it was
+        invoked — a regression that dropped the call would have left the
+        elevation-revocation contract silently unenforced (an attacker who'd
+        already obtained an elevation token would retain it through
+        logout-all). Lock in the contract here.
+        """
+        user = _make_user(token_version=0)
+        session_store = _make_session_store()
+        session_store.revoke_all_user_sessions = AsyncMock(return_value=1)
+
+        db = _make_db_with_user(user)
+        db.get = MagicMock(return_value=user)
+
+        revoke_elevation_mock = AsyncMock(return_value=2)
+        monkeypatch.setattr(
+            _sessions_router_mod,
+            "_revoke_all_elevation_tokens_for_user",
+            revoke_elevation_mock,
+        )
+
+        from services.admin.app.auth_routes import revoke_all_sessions
+        await revoke_all_sessions(
+            current_user=user,
+            db=db,
+            session_store=session_store,
+        )
+
+        # Contract: the elevation-revocation helper MUST be invoked once,
+        # with the calling user's id threaded through. A regression that
+        # dropped the call (or revoked the wrong user's tokens) fails here.
+        revoke_elevation_mock.assert_awaited_once()
+        await_args = revoke_elevation_mock.await_args
+        assert await_args.args[1] == user.id
+
 
 # ──────────────────────────────────────────────────────────────────────────────
 # 6. Password reset

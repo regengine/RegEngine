@@ -107,30 +107,37 @@ def test_query_api_rejects_query_string_tenant_id_override():
     assert isinstance(detail, dict) and detail.get("code") == "E_TENANT_MISMATCH"
 
 
-def test_query_api_uses_authenticated_principal_tenant_id():
-    """EPIC-A #1651: tenant_id must come from the authenticated principal,
-    never from a request-supplied header or query string.
+def test_query_api_rejects_x_tenant_id_override_header_mismatch():
+    """EPIC-A #1651: a conflicting X-Tenant-ID-Override header must produce
+    a 409 E_TENANT_MISMATCH, not a silent override.
+
+    resolve_tenant_context() inspects three caller-supplied surfaces for
+    competing tenant claims: path params, query string, and the
+    ``x-tenant-id-override`` header. This test exercises the header surface
+    so all three claim-channels are covered (the query-string channel is
+    covered by ``test_query_api_rejects_query_string_tenant_id_override``).
     """
     app = _build_app(scopes=["graph.query"])
     client = TestClient(app)
 
-    graph_payload = {"count": 0, "events": [], "next_cursor": None}
+    other_tenant = "33333333-3333-3333-3333-333333333333"
 
-    with patch("services.nlp.app.routes._graph_get", new_callable=AsyncMock) as mock_graph:
-        with patch("services.nlp.app.routes.emit_funnel_event") as mock_emit:
-            mock_graph.return_value = graph_payload
+    with patch("services.nlp.app.routes._graph_get", new_callable=AsyncMock):
+        response = client.post(
+            "/api/v1/query/traceability",
+            json={"query": "show me all lettuce from Supplier X in the last 30 days"},
+            headers={
+                "X-RegEngine-API-Key": "rge_test.secret",
+                # The mismatch detector reads x-tenant-id-override (lower-case
+                # via Starlette's case-insensitive header map).
+                "X-Tenant-ID-Override": other_tenant,
+            },
+        )
 
-            # Header overrides are silently ignored — the route now reads
-            # x-tenant-id-override (per resolve_tenant_context), not X-Tenant-ID.
-            response = client.post(
-                "/api/v1/query/traceability",
-                json={"query": "show me all lettuce from Supplier X in the last 30 days"},
-                headers={"X-RegEngine-API-Key": "rge_test.secret"},
-            )
-
-    assert response.status_code == 200
-    # The funnel event must record the principal's tenant, not any client-supplied value.
-    assert mock_emit.call_args.kwargs["tenant_id"] == "11111111-1111-1111-1111-111111111111"
+    assert response.status_code == 409
+    body = response.json()
+    detail = body.get("detail")
+    assert isinstance(detail, dict) and detail.get("code") == "E_TENANT_MISMATCH"
 
 
 def test_query_api_trace_backward_route_selection():
