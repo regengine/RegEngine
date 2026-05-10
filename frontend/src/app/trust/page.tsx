@@ -353,9 +353,9 @@ export default function TrustCenterPage() {
                             <tbody className="text-sm">
                                 <tr className="border-b border-[var(--re-surface-border)]">
                                     <td className="p-3 font-medium text-re-text-primary">Supabase</td>
-                                    <td className="p-3 text-re-text-muted">Database hosting, authentication</td>
-                                    <td className="p-3 text-re-text-muted">All tenant data, user accounts</td>
-                                    <td className="p-3 text-re-text-muted">US (AWS)</td>
+                                    <td className="p-3 text-re-text-muted">Database, authentication, and Auth-side transactional email (signup confirmation, password reset, magic link) via Supabase&apos;s default mailer</td>
+                                    <td className="p-3 text-re-text-muted">Tenant data, user accounts, recipient email for auth flows</td>
+                                    <td className="p-3 text-re-text-muted">US (AWS us-east-2)</td>
                                 </tr>
                                 <tr className="border-b border-[var(--re-surface-border)]">
                                     <td className="p-3 font-medium text-re-text-primary">Railway</td>
@@ -405,17 +405,11 @@ export default function TrustCenterPage() {
                                     <td className="p-3 text-re-text-muted">Billing identifiers and contact email</td>
                                     <td className="p-3 text-re-text-muted">US</td>
                                 </tr>
-                                <tr className="border-b border-[var(--re-surface-border)]">
+                                <tr>
                                     <td className="p-3 font-medium text-re-text-primary">Redpanda</td>
                                     <td className="p-3 text-re-text-muted">Kafka-compatible event streaming</td>
                                     <td className="p-3 text-re-text-muted">Ingested events in transit</td>
                                     <td className="p-3 text-re-text-muted">US</td>
-                                </tr>
-                                <tr>
-                                    <td className="p-3 font-medium text-re-text-primary">Object storage</td>
-                                    <td className="p-3 text-re-text-muted">Raw document and upload storage</td>
-                                    <td className="p-3 text-re-text-muted">Customer-uploaded documents</td>
-                                    <td className="p-3 text-re-text-muted">Per deployment</td>
                                 </tr>
                             </tbody>
                         </table>

@@ -53,8 +53,8 @@ const TOC = [
 const SUBPROCESSORS = [
   {
     name: 'Supabase',
-    purpose: 'Authentication, user database (PostgreSQL), and row-level security enforcement',
-    location: 'United States',
+    purpose: 'Authentication, user database (PostgreSQL), row-level security enforcement, and Auth-side transactional email (signup confirmation, password reset, magic link) via Supabase\'s default mailer',
+    location: 'United States (AWS us-east-2)',
     link: 'https://supabase.com/privacy',
   },
   {
