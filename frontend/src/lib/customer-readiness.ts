@@ -382,21 +382,21 @@ export const TRUST_ARTIFACTS: TrustArtifact[] = [
 export const SUPPORT_CHANNELS: SupportChannel[] = [
     {
         tier: 'Base',
-        responseWindow: 'Within 1 business day',
+        responseWindow: 'Best-effort email response',
         escalation: 'Email support with documented emergency recall instructions',
-        notes: 'Customers should maintain recurring exports and off-platform archives rather than depend on live support during a regulatory event.',
+        notes: 'Specific response windows are not promised at this tier. Maintain recurring exports and off-platform archives rather than rely on live support during a regulatory event.',
     },
     {
         tier: 'Standard',
-        responseWindow: 'Priority queue with same-business-day target for urgent issues',
+        responseWindow: 'Prioritized queue',
         escalation: 'Priority support plus recall escalation guidance in product',
-        notes: 'Recommended tier for teams actively rehearsing recall drills and supplier onboarding at scale.',
+        notes: 'Suggested for teams actively rehearsing recall drills or onboarding suppliers at scale. Specific response targets are set in the contract.',
     },
     {
         tier: 'Premium',
-        responseWindow: 'Custom SLA by contract',
+        responseWindow: 'Per contract',
         escalation: 'Named contacts, negotiated escalation tree, and security review support',
-        notes: 'Exact commitments are contractual, not implied by the public site.',
+        notes: 'All commitments — response time, named escalations, security obligations — live in the executed agreement.',
     },
 ];
 
