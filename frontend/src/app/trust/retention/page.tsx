@@ -22,7 +22,7 @@ export const metadata: Metadata = {
         'Data retention windows, export scheduling, format guarantees, and off-platform archive recommendations for FSMA 204 compliance.',
     openGraph: {
         title: 'Retention & Export Guidance | RegEngine',
-        description: 'Retention and export posture for RegEngine FSMA 204 compliance platform.',
+        description: 'Retention windows, export formats, and archive guidance for RegEngine FSMA 204.',
         url: 'https://regengine.co/trust/retention',
         type: 'website',
     },
@@ -75,7 +75,7 @@ const EXPORT_FORMATS = [
     {
         format: 'Audit evidence bundle',
         standard: 'RegEngine manifest',
-        useCase: 'Complete export with SHA-256 manifest hash for tamper-evident archival and regulatory proof',
+        useCase: 'Complete export with SHA-256 manifest hash for tamper-evident archival and audit support',
         icon: Hash,
     },
 ];
@@ -107,7 +107,7 @@ export default function RetentionPage() {
             <section className={`relative z-[2] ${sectionAlt}`}>
                 <div className="max-w-[980px] mx-auto py-10 sm:py-14 px-4 sm:px-6">                    <h2 className="font-display text-2xl font-bold text-[var(--re-text-primary)] mb-2">Retention timeline</h2>
                     <p className="text-sm text-[var(--re-text-muted)] mb-6 max-w-[720px]">
-                        RegEngine currently targets retention for the duration of your subscription plus a 90-day post-cancellation window. Contract terms and deployment posture may modify that default.
+                        RegEngine retains data for the duration of your subscription plus a contract-defined post-cancellation export window. Specific durations are set in your commercial agreement.
                     </p>
                     <div className="space-y-3">
                         {RETENTION_TIMELINE.map((phase) => {
@@ -167,7 +167,7 @@ export default function RetentionPage() {
                 <div className="max-w-[980px] mx-auto py-10 sm:py-14 px-4 sm:px-6">
                     <h2 className="font-display text-2xl font-bold text-[var(--re-text-primary)] mb-2">Export formats</h2>
                     <p className="text-sm text-[var(--re-text-muted)] mb-6 max-w-[720px]">
-                        These are the target export formats in the current product posture. Exact availability depends on plan, workflow, and deployment configuration.
+                        These are the export formats currently supported. Exact availability depends on plan, workflow, and deployment configuration.
                     </p>
                     <div className="grid gap-4 md:grid-cols-2">
                         {EXPORT_FORMATS.map((fmt) => {
@@ -189,7 +189,7 @@ export default function RetentionPage() {
 
             {/* Export scheduling */}
             <section className="relative z-[2] max-w-[980px] mx-auto py-10 sm:py-14 px-4 sm:px-6">
-                    <h2 className="font-display text-2xl font-bold text-[var(--re-text-primary)] mb-4">Export scheduling posture</h2>                <div className="grid gap-3 md:grid-cols-3">
+                    <h2 className="font-display text-2xl font-bold text-[var(--re-text-primary)] mb-4">Export scheduling</h2>                <div className="grid gap-3 md:grid-cols-3">
                         {[
                             { Icon: Calendar, label: 'Cadence options', value: 'Scoped per deployment', detail: 'Export frequency depends on the workflow configured for your account' },
                             { Icon: FolderArchive, label: 'Destinations', value: 'Varies by workflow', detail: 'Archive delivery may use object storage or downloadable bundles' },
@@ -219,7 +219,7 @@ export default function RetentionPage() {
                         <h3 className="text-lg font-bold text-[var(--re-text-primary)] mb-2">Our recommendation</h3>
                         <p className="text-sm text-[var(--re-text-muted)] leading-relaxed">
                             Set up weekly automated exports to your own object storage within the first week of onboarding.
-                            Use the audit evidence bundle format — it includes the manifest hash and is self-verifying.
+                            Use the audit evidence bundle format — it ships with a SHA-256 manifest so records can be verified out-of-band. Cryptographic signature verification across the message bus is rolling out.
                             This ensures you meet FSMA 204&apos;s two-year retention requirement regardless of your RegEngine subscription status.
                         </p>
                     </div>
