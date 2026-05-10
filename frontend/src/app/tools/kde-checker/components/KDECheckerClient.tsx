@@ -14,8 +14,8 @@ import { FREE_TOOLS } from '@/lib/fsma-tools-data';
 
 const KDE_CHECKER_CONFIG: ToolConfig = {
     id: 'kde-checker',
-    title: 'KDE Completeness Checker',
-    description: 'Tell us your product and your role in the supply chain, and we will generate your exact required KDE checklist.',
+    title: 'KDE Checklist Builder',
+    description: 'Tell us your product and your role in the supply chain and we\'ll draft a starting KDE checklist mapped to the relevant CTE under 21 CFR Part 1 Subpart S. Educational; review with your compliance team before relying on it.',
     icon: 'ClipboardList',
     stages: {
         questions: [
@@ -27,15 +27,15 @@ const KDE_CHECKER_CONFIG: ToolConfig = {
             },
             {
                 id: 'ctes',
-                text: 'Which events do you perform for this food? (Select all that apply)',
+                text: 'Which events do you perform for this food? (Select all that apply. For seafood received from a fishing vessel, use First Land-Based Receiving — non-seafood importers should use Receiving instead.)',
                 type: 'multi-select',
                 options: Object.entries(FSMA_CTES).map(([id, data]) => ({ label: data.name, value: id }))
             }
         ],
         leadGate: {
-            title: 'Download Your Custom Checklist',
-            description: 'We will generate a high-resolution PDF and an importable CSV template for your team.',
-            cta: 'Download Checklist Pack'
+            title: 'Download Your Draft Checklist',
+            description: 'We will generate a PDF and an importable CSV template for your team. This is a draft starting checklist — review against the rule and your operation\'s actual obligations before adoption.',
+            cta: 'Download Draft Checklist'
         }
     }
 };
@@ -52,8 +52,11 @@ export function KDECheckerClient() {
             <div className="space-y-8">
                 <div className="flex items-center justify-between gap-4">
                     <div>
-                        <h3 className="text-2xl font-bold">Your KDE Checklist</h3>
-                        <p className="text-[var(--re-text-tertiary)] mt-1">For {categoryName}</p>
+                        <h3 className="text-2xl font-bold">Your Draft KDE Checklist</h3>
+                        <p className="text-[var(--re-text-tertiary)] mt-1">For {categoryName} · Mapped to 21 CFR Part 1 Subpart S</p>
+                        <p className="text-[var(--re-text-muted)] text-xs mt-2 max-w-2xl">
+                            Starting checklist — not a regulatory determination. Verify against the rule for your specific operation, surface any §1.1305 exemptions that apply, and review with counsel before relying on it.
+                        </p>
                     </div>
                     <div className="flex gap-2">
                         <Button variant="outline" size="sm" className="h-8 gap-2 text-xs">
@@ -74,26 +77,15 @@ export function KDECheckerClient() {
                             <Card key={cteId} className="border-[var(--re-border-default)] bg-[var(--re-surface-elevated)] overflow-hidden">
                                 <div className="bg-[var(--re-brand-muted)] px-4 py-2 border-b border-[var(--re-border-default)] flex items-center justify-between">
                                     <span className="text-xs font-bold uppercase tracking-wider text-[var(--re-brand)]">{cte.name}</span>
-                                    <Badge variant="outline" className="bg-white/5 text-[10px]">REQUIRED</Badge>
+                                    <Badge variant="outline" className="bg-white/5 text-[10px]">{cte.cfr ?? 'Subpart S'}</Badge>
                                 </div>
                                 <CardContent className="p-4 space-y-3">
                                     {cte.kdes.map((kde, idx) => (
-                                        <div key={idx} className="flex items-start justify-between gap-3 group">
-                                            <div className="flex items-start gap-3">
-                                                <div className="mt-0.5 w-4 h-4 rounded border border-[var(--re-border-subtle)] flex items-center justify-center shrink-0 group-hover:border-[var(--re-brand)] transition-colors">
-                                                    <div className="w-2 h-2 rounded-sm bg-[var(--re-brand)] opacity-0 group-hover:opacity-20" />
-                                                </div>
-                                                <span className="text-sm text-[var(--re-text-secondary)]">{kde.name}</span>
+                                        <div key={idx} className="flex items-start gap-3 group">
+                                            <div className="mt-0.5 w-4 h-4 rounded border border-[var(--re-border-subtle)] flex items-center justify-center shrink-0 group-hover:border-[var(--re-brand)] transition-colors">
+                                                <div className="w-2 h-2 rounded-sm bg-[var(--re-brand)] opacity-0 group-hover:opacity-20" />
                                             </div>
-                                            <Badge
-                                                variant="outline"
-                                                className={`text-[9px] px-1.5 h-4 shrink-0 border-none ${kde.provide
-                                                    ? 'bg-[var(--re-brand-muted)] text-[var(--re-brand)]'
-                                                    : 'bg-[var(--re-surface-elevated)] text-[var(--re-text-muted)]'
-                                                    }`}
-                                            >
-                                                {kde.provide ? 'MAINTAIN & PROVIDE' : 'MAINTAIN ONLY'}
-                                            </Badge>
+                                            <span className="text-sm text-[var(--re-text-secondary)]">{kde.name}</span>
                                         </div>
                                     ))}
                                 </CardContent>
@@ -103,12 +95,12 @@ export function KDECheckerClient() {
                 </div>
 
                 <div className="p-6 rounded-2xl bg-[var(--re-brand-muted)] border border-[var(--re-brand)] / 20 flex flex-col items-center text-center">
-                    <h4 className="font-bold mb-2">Want to automate this capture?</h4>
+                    <h4 className="font-bold mb-2">Want help capturing these KDEs?</h4>
                     <p className="text-xs text-[var(--re-text-secondary)] mb-4 max-w-md">
-                        RegEngine automatically maps these KDEs based on your FTL list and provides one-click compliance validation.
+                        RegEngine helps teams ingest, validate, and structure KDEs by CTE so a §1.1455(c) sortable spreadsheet can be assembled when FDA asks. Compliance remains your operation&apos;s responsibility.
                     </p>
                     <Button className="bg-[var(--re-brand)] gap-2">
-                        Explore FSMA Automation <ArrowRight className="h-4 w-4" />
+                        Explore RegEngine <ArrowRight className="h-4 w-4" />
                     </Button>
                 </div>
             </div>

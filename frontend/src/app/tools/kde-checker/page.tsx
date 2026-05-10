@@ -7,14 +7,14 @@ import { EmailGate } from "@/components/tools/EmailGate";
 import { RelatedTools } from "@/components/tools/RelatedTools";
 
 export const metadata: Metadata = {
-    title: "KDE Checker | FSMA 204 Key Data Element Completeness Tool | RegEngine",
-    description: "Generate a customized Key Data Element (KDE) checklist based on your FTL product and trading role. Ensure full FDA Subpart S compliance. Free FSMA 204 tool.",
+    title: "KDE Checklist Builder | FSMA 204 Starting Checklist | RegEngine",
+    description: "Generate a starting KDE checklist mapped to your FTL product and trading role under 21 CFR Part 1 Subpart S. Educational; verify against the rule and consult counsel before relying on it.",
     alternates: {
         canonical: "https://regengine.co/tools/kde-checker",
     },
     openGraph: {
-        title: "KDE Checker — RegEngine",
-        description: "Generate a customized FSMA 204 Key Data Element checklist for your product and trading role. Free.",
+        title: "KDE Checklist Builder — RegEngine",
+        description: "Generate a starting KDE checklist mapped to your FTL product and trading role. Educational; not a regulatory determination.",
         type: "website",
         url: "https://regengine.co/tools/kde-checker",
     },
@@ -26,7 +26,7 @@ const jsonLd = {
     "name": "KDE Completeness Checker",
     "operatingSystem": "All",
     "applicationCategory": "BusinessApplication",
-    "description": "Customized Key Data Element (KDE) generator for FSMA 204 compliance.",
+    "description": "Starting Key Data Element (KDE) checklist mapped to your FTL product and trading role. Educational; not a regulatory determination.",
     "offers": {
         "@type": "Offer",
         "price": "0",

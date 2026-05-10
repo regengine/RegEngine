@@ -43,75 +43,124 @@ export const FSMA_FTL_CATEGORIES = [
 ].sort((a, b) => a.name.localeCompare(b.name));
 
 /**
- * FSMA 204 Critical Tracking Events (CTEs) and required KDEs
- * Source: FDA CTE/KDE requirements
+ * FSMA 204 Critical Tracking Events (CTEs) and KDE checklists.
+ *
+ * IMPORTANT: This is a STARTING CHECKLIST. The authoritative source is
+ * 21 CFR Part 1 Subpart S (§§1.1325–1.1350). Do not present these lists
+ * as "the" required KDEs without verifying against the rule for your
+ * specific operation.
+ *
+ * The `provide` flag previously indicated "must be provided to FDA on
+ * request" vs "maintain only" — that split does not match the rule
+ * (§1.1455(c) requires production of a sortable spreadsheet of required
+ * records). It is preserved here for layout compatibility but should be
+ * treated as informational; renderers should not present it as an
+ * authoritative obligation.
+ *
+ * §1.1325 covers Harvesting AND Cooling in a single section (no
+ * subparts). For seafood received from a fishing vessel, see
+ * `first_land_based_receiving` (§1.1335) — non-seafood importers
+ * perform §1.1345 Receiving, not FLBR.
  */
 export const FSMA_CTES = {
     harvesting: {
         name: 'Harvesting',
+        cfr: '21 CFR §1.1325',
         kdes: [
             { name: 'Traceability Lot Code', provide: true },
-            { name: 'Product Description', provide: true },
-            { name: 'Quantity/UOM', provide: true },
-            { name: 'Harvest Date', provide: true },
-            { name: 'Location Description (Farms)', provide: true },
-            { name: 'Business Name of Harvester', provide: true }
+            { name: 'Commodity and variety', provide: true },
+            { name: 'Quantity / Unit of Measure', provide: true },
+            { name: 'Date of harvesting', provide: true },
+            { name: 'Location description for the immediate subsequent recipient', provide: true },
+            { name: 'Location of the field or growing area', provide: true },
+            { name: 'Business name of the harvester', provide: true },
+            { name: 'Reference Document Type and Number', provide: true }
         ]
     },
     cooling: {
         name: 'Cooling',
+        cfr: '21 CFR §1.1325 (combined with Harvesting)',
         kdes: [
             { name: 'Traceability Lot Code', provide: true },
-            { name: 'Product Description', provide: true },
-            { name: 'Quantity/UOM', provide: true },
-            { name: 'Cooling Date', provide: true },
-            { name: 'Location Description (Cooler)', provide: true }
+            { name: 'Commodity and variety', provide: true },
+            { name: 'Quantity / Unit of Measure', provide: true },
+            { name: 'Date of cooling', provide: true },
+            { name: 'Location description for where the food was cooled', provide: true },
+            { name: 'Location description for the immediate subsequent recipient', provide: true },
+            { name: 'Reference Document Type and Number', provide: true }
         ]
     },
     initial_packing: {
-        name: 'Initial Packing',
+        name: 'Initial Packing (RAC, other than from a fishing vessel)',
+        cfr: '21 CFR §1.1330',
         kdes: [
             { name: 'Traceability Lot Code', provide: true },
-            { name: 'Product Description', provide: true },
-            { name: 'Quantity/UOM', provide: true },
-            { name: 'Date of Initial Packing', provide: true },
-            { name: 'Location Description (Packer)', provide: true },
-            { name: 'TLC Source Reference', provide: true }
+            { name: 'Commodity and variety', provide: true },
+            { name: 'Quantity / Unit of Measure', provide: true },
+            { name: 'Date of initial packing', provide: true },
+            { name: 'Location description of the initial packer', provide: true },
+            { name: 'Location description for the TLC source (farm, growing area, or container)', provide: true },
+            { name: 'TLC source reference', provide: true },
+            { name: 'Harvest date range of the lot', provide: true },
+            { name: 'Reference Document Type and Number', provide: true }
+        ]
+    },
+    first_land_based_receiving: {
+        name: 'First Land-Based Receiving (food obtained from a fishing vessel)',
+        cfr: '21 CFR §1.1335',
+        kdes: [
+            { name: 'Traceability Lot Code', provide: true },
+            { name: 'Species / commodity', provide: true },
+            { name: 'Harvest date range', provide: true },
+            { name: 'Location description for the harvest area (NMFS area or equivalent)', provide: true },
+            { name: 'Quantity / Unit of Measure', provide: true },
+            { name: 'Name and address of the harvest vessel', provide: true },
+            { name: 'Date of landing', provide: true },
+            { name: 'Location description of the first land-based receiver', provide: true },
+            { name: 'Reference Document Type and Number', provide: true }
         ]
     },
     shipping: {
         name: 'Shipping',
+        cfr: '21 CFR §1.1340',
         kdes: [
             { name: 'Traceability Lot Code', provide: true },
-            { name: 'Product Description', provide: true },
-            { name: 'Quantity/UOM', provide: true },
-            { name: 'Next Recipient Location', provide: true },
-            { name: 'Ship-from Location', provide: true },
-            { name: 'Shipping Date', provide: true },
-            { name: 'TLC Source Information', provide: true }
+            { name: 'Quantity / Unit of Measure', provide: true },
+            { name: 'Product description', provide: true },
+            { name: 'Location description for the immediate subsequent recipient (other than a transporter)', provide: true },
+            { name: 'Location description for where the food was shipped from', provide: true },
+            { name: 'Date of shipment', provide: true },
+            { name: 'Location description for the TLC source', provide: true },
+            { name: 'TLC source reference', provide: true },
+            { name: 'Reference Document Type and Number', provide: true }
         ]
     },
     receiving: {
-        name: 'Receiving',
+        name: 'Receiving (subject to §1.1305(j) restaurant/RFE exemption)',
+        cfr: '21 CFR §1.1345',
         kdes: [
-            { name: 'Traceability Lot Code', provide: false },
-            { name: 'Product Description', provide: false },
-            { name: 'Quantity/UOM', provide: false },
-            { name: 'Immediate Previous Source', provide: false },
-            { name: 'Receiving Location', provide: false },
-            { name: 'Date of Receipt', provide: false },
-            { name: 'TLC Source Information', provide: false }
+            { name: 'Traceability Lot Code', provide: true },
+            { name: 'Quantity / Unit of Measure', provide: true },
+            { name: 'Product description', provide: true },
+            { name: 'Location description for the immediate previous source (other than a transporter)', provide: true },
+            { name: 'Location description for where the food was received', provide: true },
+            { name: 'Date of receipt', provide: true },
+            { name: 'Location description for the TLC source', provide: true },
+            { name: 'TLC source reference', provide: true },
+            { name: 'Reference Document Type and Number', provide: true }
         ]
     },
     transformation: {
         name: 'Transformation',
+        cfr: '21 CFR §1.1350',
         kdes: [
-            { name: 'Input Lot Codes', provide: false },
-            { name: 'New Traceability Lot Code', provide: true },
-            { name: 'Product Description (New)', provide: true },
-            { name: 'Quantity/UOM (New)', provide: true },
-            { name: 'Transformation Date', provide: false },
-            { name: 'Location Description', provide: false }
+            { name: 'New Traceability Lot Code (output)', provide: true },
+            { name: 'Input TLCs and TLC sources', provide: true },
+            { name: 'New product description', provide: true },
+            { name: 'Quantity / Unit of Measure of the new product', provide: true },
+            { name: 'Location description where transformation occurred', provide: true },
+            { name: 'Date of transformation', provide: true },
+            { name: 'Reference Document Type and Number', provide: true }
         ]
     }
 };
