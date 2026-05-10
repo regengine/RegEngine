@@ -57,7 +57,7 @@ export const PRICING_TIERS = [
         price: '$425',
         period: '/mo',
         note: 'Save ~15% vs monthly billing',
-        features: ['Up to 500 CTEs/month', '1 facility', 'FSMA 204 traceability workspace', 'FDA-ready export'],
+        features: ['Up to 500 CTEs/month', '1 facility', 'FSMA 204 traceability workspace', '§1.1455(c)-formatted export'],
     },
     {
         revenue: '2–3 facilities',

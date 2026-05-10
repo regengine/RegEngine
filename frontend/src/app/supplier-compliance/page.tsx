@@ -35,7 +35,7 @@ const COMPLIANCE_STEPS = [
     {
         step: '3',
         title: 'Data is Verified & Recorded',
-        description: 'Your submission is SHA-256 hashed, chain-linked, and stored in FDA-ready format. You receive a verification receipt with your event ID instantly.',
+        description: 'Your submission is SHA-256 hashed, chain-linked, and stored in a §1.1455(c)-formatted structure. You receive a verification receipt with your event ID instantly.',
         icon: ShieldCheck,
         time: 'Instant',
     },

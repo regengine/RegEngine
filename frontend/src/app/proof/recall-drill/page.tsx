@@ -76,7 +76,7 @@ const DRILL_STEPS: DrillStep[] = [
         durationMs: 1800,
     },
     {
-        label: 'Generating FDA-ready recall CSV',
+        label: 'Generating §1.1455(c)-formatted recall CSV',
         detailLines: [
             'Wrote Section 204.2(g) Key Data Elements for each downstream lot',
             'Hash-anchored each record (SHA-256 chain integrity preserved)',
@@ -208,8 +208,8 @@ export default function RecallDrillPage() {
                         style={{ color: T.textDim }}
                     >
                         Click <span className="font-semibold" style={{ color: T.text }}>Start drill</span> — RegEngine
-                        traces the contaminated lot through 7 CTEs and produces an FDA-ready
-                        recall CSV in under 60 seconds.
+                        traces the contaminated lot through the applicable CTEs and produces a §1.1455(c)-formatted
+                        recall CSV in under 60 seconds. Synthetic data — illustrative only.
                     </p>
 
                     <div className="flex gap-3 justify-center flex-wrap">
