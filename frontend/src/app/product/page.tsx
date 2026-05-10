@@ -14,10 +14,10 @@ import {
 export const metadata: Metadata = {
   title: "Product | RegEngine",
   description:
-    "RegEngine preflights supplier traceability feeds, creates fix queues, gates production evidence, and exports verified FSMA 204 records.",
+    "RegEngine preflights supplier traceability feeds, creates fix queues, gates production evidence, and helps assemble FSMA 204 export packages from checked tenant data.",
   openGraph: {
     title: "Product | RegEngine",
-    description: "Supplier data readiness plus a gated FSMA 204 evidence engine.",
+    description: "Supplier data readiness plus an FSMA 204 evidence engine with explicit commit gates.",
     url: "https://regengine.co/product",
     type: "website",
   },
@@ -28,20 +28,20 @@ const stages = [
   { num: "02", title: "Preflight", detail: "KDE/CTE completeness and lineage checks", icon: ScanLine },
   { num: "03", title: "Fix queue", detail: "Owner-ready defects with severity and evidence impact", icon: ClipboardCheck },
   { num: "04", title: "Commit gate", detail: "Simulation, preflight, staging, production evidence", icon: GitCommitHorizontal },
-  { num: "05", title: "Export", detail: "FDA-ready records from verified tenant data", icon: FileOutput },
+  { num: "05", title: "Export", detail: "Export packages assembled from checked tenant records", icon: FileOutput },
 ];
 
 const controls = [
-  ["Tenant isolation", "Every record remains scoped to the authenticated tenant."],
+  ["Tenant isolation", "Records are scoped to the authenticated tenant via row-level policies; cross-tenant hardening is in active rollout."],
   ["Provenance", "Evidence commits require traceable source and run context."],
   ["Mode separation", "Sandbox work cannot silently become production evidence."],
-  ["Hash verification", "Committed evidence can be checked without trusting a dashboard."],
+  ["Hash verification", "Committed evidence carries content hashes so downstream consumers can re-check it independently. Strict downstream verification is rolling out."],
 ];
 
 const outcomes = [
   { icon: ShieldCheck, title: "Readiness is explicit", body: "Scores, fix counts, sources, and export eligibility stay visible." },
-  { icon: Lock, title: "Evidence is gated", body: "Production evidence requires identity, provenance, persistence, and clean mode state." },
-  { icon: FileOutput, title: "Exports are explainable", body: "FDA packages come from checked records, not a black-box promise." },
+  { icon: Lock, title: "Evidence is gated", body: "Production evidence is designed to require identity, provenance, persistence, and clean mode state. Rule enforcement is currently advisory in production and being promoted to blocking." },
+  { icon: FileOutput, title: "Exports are explainable", body: "Export packages come from checked records, not a black-box promise. Regulatory acceptance and retention obligations remain with the operator." },
 ];
 
 export default function ProductPage() {
