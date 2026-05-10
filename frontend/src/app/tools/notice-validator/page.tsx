@@ -20,45 +20,45 @@ const REQUIREMENTS: Requirement[] = [
     {
         id: 'fda-request-scope',
         regulation: 'FSMA 204',
-        citation: '21 CFR 1.1455',
-        label: 'Traceability Lot Scope',
-        description: 'Response should clearly identify the traceability lot code and affected product scope.',
+        citation: '21 CFR 1.1320',
+        label: 'Traceability Lot Code mention',
+        description: 'Draft should clearly identify the traceability lot code and affected product scope. TLC assignment lives in §1.1320; KDEs live in the per-event sections (§§1.1325-1.1350).',
         keywords: ['traceability lot code', 'tlc', 'lot code', 'product description', 'food traceability list'],
         weight: 'critical',
     },
     {
         id: 'fda-request-events',
         regulation: 'FSMA 204',
-        citation: '21 CFR 1.1325-1.1350',
-        label: 'Critical Tracking Events',
-        description: 'Response should reference the applicable receiving, transformation, shipping, or other covered events.',
+        citation: '21 CFR §§1.1325, 1.1330, 1.1335, 1.1340, 1.1345, 1.1350',
+        label: 'Critical Tracking Events mention',
+        description: 'Draft should name the applicable CTE(s). Per-event sections: harvesting/cooling §1.1325; initial packing §1.1330; first land-based receiving (seafood from a fishing vessel) §1.1335; shipping §1.1340; receiving §1.1345 (subject to the §1.1305(j) restaurant/RFE exemption); transformation §1.1350.',
         keywords: ['receiving', 'shipping', 'transformation', 'cte', 'critical tracking event'],
         weight: 'critical',
     },
     {
         id: 'fda-request-kdes',
         regulation: 'FSMA 204',
-        citation: '21 CFR 1.1325-1.1350',
-        label: 'Key Data Elements',
-        description: 'Response should include the KDEs needed to reconstruct lot movement and handling.',
+        citation: '21 CFR §§1.1325, 1.1330, 1.1335, 1.1340, 1.1345, 1.1350',
+        label: 'Key Data Elements mention',
+        description: 'Draft should mention the KDEs needed to reconstruct lot movement. Required KDEs are defined per CTE in the §§1.1325-1.1350 sections; this self-check only looks for keyword presence.',
         keywords: ['quantity', 'unit of measure', 'ship from', 'ship to', 'event date', 'kde'],
         weight: 'critical',
     },
     {
         id: 'fda-request-export',
         regulation: 'FSMA 204',
-        citation: '21 CFR 1.1455(c)',
-        label: 'Sortable Export Readiness',
-        description: 'Response should be organized in a sortable form appropriate for FDA request mode.',
+        citation: '21 CFR §1.1455(c)',
+        label: 'Sortable spreadsheet mention',
+        description: '§1.1455(c) requires you to provide a sortable electronic spreadsheet to FDA as soon as possible, and not later than 24 hours after request. This check looks for sortable-export language in the draft — it does not measure whether your operational 24-hour clock will be met.',
         keywords: ['csv', 'sortable spreadsheet', 'export', 'fda request', 'within 24 hours'],
         weight: 'important',
     },
     {
         id: 'fda-request-integrity',
         regulation: 'RegEngine',
-        citation: 'Evidence chain',
-        label: 'Record Integrity',
-        description: 'Response should preserve hashes, verification status, or audit references for the submitted records.',
+        citation: 'Integrity-marker mention',
+        label: 'Integrity-marker mention',
+        description: 'Checks whether the draft mentions hashes or audit references. This is a text check only — it does not verify any cryptographic chain.',
         keywords: ['sha256', 'chain hash', 'verification', 'audit trail', 'immutable'],
         weight: 'recommended',
     },
@@ -84,7 +84,7 @@ Key Data Elements Included:
 
 Export Package:
 - Sortable spreadsheet CSV attached
-- Generated within 24 hours of request
+- Sortable spreadsheet prepared per §1.1455(c) 24-hour availability requirement
 - SHA256 and chain hash references included for record verification`,
     bad: `Lot response attached.
 
@@ -92,6 +92,10 @@ Product moved through the system last week.
 
 Please review the records.`,
 };
+
+// Note: the "good" sample above is illustrative only — passing this self-check on a draft
+// does not mean the draft satisfies §1.1455(c); the rule requires actual record content,
+// not keyword presence.
 
 export default function NoticeValidatorPage() {
     const [noticeText, setNoticeText] = useState('');
@@ -106,20 +110,17 @@ export default function NoticeValidatorPage() {
             found: req.keywords.some((kw) => lower.includes(kw.toLowerCase())),
         }));
 
-        const score = Math.round((checks.filter((c) => c.found).length / checks.length) * 100);
-        let grade: 'A' | 'B' | 'C' | 'D' | 'F' = 'F';
-        if (score >= 90) grade = 'A';
-        else if (score >= 75) grade = 'B';
-        else if (score >= 60) grade = 'C';
-        else if (score >= 40) grade = 'D';
+        const detected = checks.filter((c) => c.found).length;
+        const total = checks.length;
+        const gaps = total - detected;
 
-        return { checks, score, grade };
+        return { checks, detected, total, gaps };
     }, [hasAnalyzed, noticeText]);
 
-    const gradeColor = (grade?: string) => {
-        if (grade === 'A') return 'text-re-brand border-re-brand/40 bg-re-brand-muted';
-        if (grade === 'B') return 'text-sky-500 border-sky-500/40 bg-sky-500/10';
-        if (grade === 'C') return 'text-re-warning border-re-warning/40 bg-re-warning-muted0/10';
+    const summaryColor = (gaps?: number) => {
+        if (gaps === 0) return 'text-re-brand border-re-brand/40 bg-re-brand-muted';
+        if (gaps && gaps <= 1) return 'text-sky-500 border-sky-500/40 bg-sky-500/10';
+        if (gaps && gaps <= 2) return 'text-re-warning border-re-warning/40 bg-re-warning-muted0/10';
         return 'text-rose-500 border-rose-500/40 bg-rose-500/10';
     };
 
@@ -128,12 +129,12 @@ export default function NoticeValidatorPage() {
         <main className="min-h-screen bg-[var(--re-surface-base)] text-[var(--re-text-secondary)]">
             <section className="max-w-[1100px] mx-auto px-6 py-20">
                 <div className="max-w-[760px]">
-                    <p className="text-xs uppercase tracking-[0.12em] text-[var(--re-brand)] mb-3">FSMA Request Validator</p>
+                    <p className="text-xs uppercase tracking-[0.12em] text-[var(--re-brand)] mb-3">FSMA Response Self-Check</p>
                     <h1 className="text-[clamp(32px,4vw,48px)] font-bold text-[var(--re-text-primary)] leading-tight">
-                        Check whether an FDA request response includes the core FSMA 204 record elements
+                        Spot keyword gaps in a draft FSMA 204 response before your team or counsel reviews it
                     </h1>
                     <p className="mt-4 text-lg text-[var(--re-text-muted)] leading-relaxed">
-                        Paste a draft response, export summary, or internal request memo. This validator looks for the essential traceability signals expected in an FSMA 204 response workflow.
+                        Paste a draft response, export summary, or internal request memo. This is a heuristic keyword self-check, not an FDA validator. It looks for keywords associated with FSMA 204 elements; presence of a keyword does not mean the underlying record content is sufficient. Have counsel and your QA lead review any response before submission to FDA.
                     </p>
                 </div>
 
@@ -166,7 +167,7 @@ export default function NoticeValidatorPage() {
                                 disabled={!noticeText.trim()}
                                 className="inline-flex items-center justify-center h-11 px-6 rounded-xl bg-[var(--re-brand)] text-white font-semibold disabled:opacity-40"
                             >
-                                Analyze Response
+                                Run keyword self-check
                                 <ArrowRight className="ml-2 h-4 w-4" />
                             </button>
                             <Link href="/docs/fsma-204" className="inline-flex items-center justify-center h-11 px-6 rounded-xl border border-[var(--re-surface-border)] text-[var(--re-text-primary)] font-semibold">
@@ -179,36 +180,22 @@ export default function NoticeValidatorPage() {
                         {results ? (
                             <LeadGate
                                 source="notice-validator"
-                                headline="Unlock Your Full Validation Report"
-                                subheadline="See every requirement check with pass/fail details and FSMA 204 citations."
-                                ctaText="Get Full Report"
-                                toolContext={{ quizGrade: results.grade, quizScore: results.score }}
+                                headline="See your full self-check breakdown"
+                                subheadline="See which elements are detected and which are gap-indicated, with the per-CTE citations to review with counsel. This is a keyword self-check, not a compliance determination."
+                                ctaText="See breakdown"
+                                toolContext={{ quizGrade: undefined, quizScore: results.detected }}
                                 teaser={
-                                    <div className={`rounded-2xl border p-6 ${gradeColor(results.grade)}`}>
-                                        <div className="flex items-center justify-between">
-                                            <div>
-                                                <p className="text-sm font-medium">Coverage grade</p>
-                                                <p className="mt-1 text-4xl font-bold">{results.grade}</p>
-                                            </div>
-                                            <div className="text-right">
-                                                <p className="text-sm font-medium">Match score</p>
-                                                <p className="mt-1 text-2xl font-bold">{results.score}%</p>
-                                            </div>
-                                        </div>
+                                    <div className={`rounded-2xl border p-6 ${summaryColor(results.gaps)}`}>
+                                        <p className="text-sm font-medium">Keyword self-check summary</p>
+                                        <p className="mt-1 text-2xl font-bold">{results.detected} of {results.total} elements detected · {results.gaps} gap-indicated</p>
+                                        <p className="mt-2 text-xs opacity-80">Heuristic keyword check on a draft. Not a compliance determination.</p>
                                     </div>
                                 }
                             >
-                                <div className={`rounded-2xl border p-6 ${gradeColor(results.grade)}`}>
-                                    <div className="flex items-center justify-between">
-                                        <div>
-                                            <p className="text-sm font-medium">Coverage grade</p>
-                                            <p className="mt-1 text-4xl font-bold">{results.grade}</p>
-                                        </div>
-                                        <div className="text-right">
-                                            <p className="text-sm font-medium">Match score</p>
-                                            <p className="mt-1 text-2xl font-bold">{results.score}%</p>
-                                        </div>
-                                    </div>
+                                <div className={`rounded-2xl border p-6 ${summaryColor(results.gaps)}`}>
+                                    <p className="text-sm font-medium">Keyword self-check summary</p>
+                                    <p className="mt-1 text-2xl font-bold">{results.detected} of {results.total} elements detected · {results.gaps} gap-indicated</p>
+                                    <p className="mt-2 text-xs opacity-80">Heuristic keyword check on a draft. Not a compliance determination — have counsel and your QA lead review before any FDA submission.</p>
                                 </div>
 
                                 {results.checks.map((check) => (
@@ -220,7 +207,7 @@ export default function NoticeValidatorPage() {
                                                 <XCircle className="h-5 w-5 text-rose-500 mt-0.5" />
                                             )}
                                             <div>
-                                                <p className="font-semibold text-[var(--re-text-primary)]">{check.label}</p>
+                                                <p className="font-semibold text-[var(--re-text-primary)]">{check.found ? 'Detected: ' : 'Gap indicated: '}{check.label}</p>
                                                 <p className="text-xs text-[var(--re-text-muted)] mt-1">{check.regulation} · {check.citation}</p>
                                                 <p className="text-sm text-[var(--re-text-muted)] mt-2">{check.description}</p>
                                             </div>
@@ -247,7 +234,7 @@ export default function NoticeValidatorPage() {
                                         <div>
                                             <p className="font-semibold text-[var(--re-text-primary)]">Scope note</p>
                                             <p className="mt-2 text-sm text-[var(--re-text-muted)]">
-                                                This is a heuristic checker for draft responses, not legal advice or a substitute for your full FDA export workflow.
+                                                Heuristic keyword self-check on a draft response. Does not validate FDA compliance, evidentiary integrity, or your 24-hour obligation under §1.1455(c). Have counsel and your QA lead review any response before submission to FDA.
                                             </p>
                                         </div>
                                     </div>
