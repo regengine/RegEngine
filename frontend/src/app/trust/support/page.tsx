@@ -4,7 +4,6 @@ import {
     ArrowLeft,
     ArrowRight,
     AlertTriangle,
-    Clock,
     HeadphonesIcon,
     Layers,
     LifeBuoy,
@@ -47,22 +46,22 @@ const ESCALATION_PATH = [
         description: 'Standard support channel for configuration questions, export issues, data mapping help, and non-urgent compliance questions.',
         icon: Mail,
         color: 'bg-re-brand/15 text-re-brand',
-        availability: 'Business hours · All plans',
+        availability: 'All plans',
     },
     {
         step: '3',
         title: 'Priority queue',
         description: 'Faster response for production issues affecting compliance workflows — ingestion failures, scoring errors, export failures, or integration breakages.',        icon: Zap,
         color: 'bg-re-warning-muted0/15 text-re-warning',
-        availability: 'Business hours · Standard and Premium',
+        availability: 'Standard and Premium',
     },
     {
         step: '4',
-        title: 'Emergency recall escalation',
-        description: 'Dedicated path for active FDA investigations or live recall events. Coordination may include direct founder involvement on data exports, response packaging, and timeline management when covered by plan or agreement.',
+        title: 'Recall-response coordination',
+        description: 'Customers with a recall-response addendum receive coordinated support on data exports and evidence packaging during active FDA investigations or live recall events, per the terms of that agreement. RegEngine does not own recall timeline management.',
         icon: Siren,
         color: 'bg-re-danger-muted0/15 text-re-danger',
-        availability: 'Extended hours · Premium (contractual)',
+        availability: 'Per contract',
     },
 ];
 
@@ -118,7 +117,7 @@ export default function SupportPage() {
                 <div className="max-w-[980px] mx-auto py-10 sm:py-14 px-4 sm:px-6">
                     <h2 className="font-display text-2xl font-bold text-[var(--re-text-primary)] mb-2">Escalation path</h2>
                     <p className="text-sm text-[var(--re-text-muted)] mb-6 max-w-[720px]">
-                        Four tiers, from self-serve to emergency recall. Each tier has a defined availability window and plan requirement.
+                        Four tiers, from self-serve to recall-response coordination. Plan availability is shown on each tier; specific response and availability commitments are negotiated per contract.
                     </p>
                     <div className="space-y-3">
                         {ESCALATION_PATH.map((tier) => {
@@ -141,19 +140,18 @@ export default function SupportPage() {
                 </div>
             </section>
 
-            {/* Response windows by plan */}
+            {/* Support channels by plan */}
             <section className="relative z-[2] max-w-[980px] mx-auto py-10 sm:py-14 px-4 sm:px-6">
-                <h2 className="font-display text-2xl font-bold text-[var(--re-text-primary)] mb-2">Response windows by plan</h2>
+                <h2 className="font-display text-2xl font-bold text-[var(--re-text-primary)] mb-2">Support channels by plan</h2>
                 <p className="text-sm text-[var(--re-text-muted)] mb-6 max-w-[720px]">
-                    Response windows are target timeframes, not contractual SLAs unless you have an enterprise agreement.
+                    We do not publish SLA numbers. Specific response, availability, and escalation commitments are negotiated per contract.
                 </p>
                 <div className="space-y-3">
                     {SUPPORT_CHANNELS.map((channel) => (
                         <div key={channel.tier} className={`${card} p-5`}>
                             <div className="flex items-center justify-between gap-3 mb-2">
                                 <div className="text-base font-semibold text-[var(--re-text-primary)]">{channel.tier}</div>
-                                <div className="flex items-center gap-1.5 text-sm text-[var(--re-text-muted)]">
-                                    <Clock className="h-3.5 w-3.5" />
+                                <div className="text-sm text-[var(--re-text-muted)]">
                                     {channel.responseWindow}
                                 </div>
                             </div>
@@ -166,7 +164,10 @@ export default function SupportPage() {
             {/* Recall emergency */}
             <section className={`relative z-[2] ${sectionAlt}`}>
                 <div className="max-w-[980px] mx-auto py-10 sm:py-14 px-4 sm:px-6">
-                    <h2 className="font-display text-2xl font-bold text-[var(--re-text-primary)] mb-4">During a live recall</h2>
+                    <h2 className="font-display text-2xl font-bold text-[var(--re-text-primary)] mb-2">During a live recall</h2>
+                    <p className="text-sm text-[var(--re-text-muted)] mb-6 max-w-[720px]">
+                        This page describes capabilities, not commitments. Customers should not rely on ad hoc vendor intervention to satisfy statutory retention or a live recall response — your recall-readiness plan owns that.
+                    </p>
                     <div className={`${card} p-6 border-re-danger/20 bg-re-danger-muted0/[0.02]`}>
                         <div className="flex items-start gap-4">
                             <div className="w-10 h-10 rounded-xl bg-re-danger-muted0/15 flex items-center justify-center flex-shrink-0">
@@ -176,9 +177,9 @@ export default function SupportPage() {
                                 <h3 className="text-base font-semibold text-[var(--re-text-primary)] mb-2">What RegEngine does during a recall</h3>
                                 <ul className="space-y-2 text-sm text-[var(--re-text-muted)]">
                                     <li>Generates FDA-formatted sortable spreadsheet for the affected product and date range</li>
-                                    <li>Provides hash-chain verification proof for all records in the recall scope</li>
-                                    <li>Exports complete CTE/KDE trail for affected lots with one-click bundle</li>
-                                    <li>Enterprise customers receive direct founder coordination for timeline management</li>
+                                    <li>Provides hash-manifest verification artifacts for records in the recall scope</li>
+                                    <li>Exports complete CTE/KDE trail for affected lots as a downloadable bundle</li>
+                                    <li>Customers with a recall-response addendum receive coordinated export and evidence support per contract</li>
                                 </ul>
                             </div>
                         </div>
