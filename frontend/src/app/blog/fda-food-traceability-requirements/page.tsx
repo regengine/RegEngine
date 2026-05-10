@@ -133,15 +133,15 @@ export default function FDAFoodTraceabilityRequirements() {
               </li>
               <li className="flex gap-3">
                 <CheckCircle2 className="w-5 h-5 text-[var(--re-brand)] flex-shrink-0 mt-0.5" />
-                <span>Retail stores and restaurants (for FTL foods they sell)</span>
+                <span>Retailers and wholesalers (for FTL foods they receive). Restaurants and other retail food establishments selling food directly to consumers may be exempt under §1.1305(j) — confirm scope with counsel.</span>
               </li>
               <li className="flex gap-3">
                 <CheckCircle2 className="w-5 h-5 text-[var(--re-brand)] flex-shrink-0 mt-0.5" />
-                <span>Food importers</span>
+                <span>First land-based receivers of food obtained from a fishing vessel (seafood) — §1.1335</span>
               </li>
             </ul>
             <p className="text-[1.05rem] text-[var(--re-text-secondary)] leading-relaxed">
-              The only exemptions are very small businesses with less than $1 million in annual food sales. Even then, you may still need to comply if you import FTL foods.
+              §1.1305 lists multiple narrow exemptions, including very small farms, certain retail food establishments selling directly to consumers, and entities meeting specific size and revenue thresholds that vary by category. There is no single "less than $1M" carve-out — confirm against the rule for your specific operation.
             </p>
           </div>
 
@@ -156,32 +156,32 @@ export default function FDAFoodTraceabilityRequirements() {
             <div className="space-y-5 mb-8">
               {[
                 {
-                  name: 'Growing',
-                  desc: 'For agricultural products, the harvest event and the associated farm information',
+                  name: 'Harvesting (§1.1325)',
+                  desc: 'When raw agricultural commodities are picked, collected, or gathered from a growing area',
                 },
                 {
-                  name: 'Receiving',
-                  desc: 'When your business receives product from a supplier or farm',
+                  name: 'Cooling (§1.1325)',
+                  desc: 'Active temperature reduction of a raw agricultural commodity before initial packing. §1.1325 covers Harvesting and Cooling in a single section.',
                 },
                 {
-                  name: 'Transforming',
-                  desc: 'When raw materials are processed into a new product (e.g., grinding grain, juicing fruit)',
+                  name: 'Initial Packing (§1.1330)',
+                  desc: 'First packing of a raw agricultural commodity (other than food obtained from a fishing vessel) into a container',
                 },
                 {
-                  name: 'Creating',
-                  desc: 'When you create a new product that combines multiple ingredients or components',
+                  name: 'First Land-Based Receiving (§1.1335)',
+                  desc: 'First land-based receipt of food obtained directly from a fishing vessel. Applies only to seafood from a fishing vessel; non-seafood importers perform §1.1345 Receiving, not FLBR.',
                 },
                 {
-                  name: 'Shipping',
-                  desc: 'When product leaves your facility to be sent to a customer or distributor',
+                  name: 'Shipping (§1.1340)',
+                  desc: 'When food leaves a facility en route to the next entity in the supply chain',
                 },
                 {
-                  name: 'First Land-Based Receiving',
-                  desc: 'When aquaculture or bivalve products arrive at the first land-based facility',
+                  name: 'Receiving (§1.1345)',
+                  desc: 'When food arrives at a facility. Restaurants and retail food establishments selling food directly to consumers may be exempt under §1.1305(j).',
                 },
                 {
-                  name: 'Initial Packing',
-                  desc: 'When product is first placed in its final consumer-facing or commercial container',
+                  name: 'Transformation (§1.1350)',
+                  desc: 'Manufacturing, processing, or significantly altering food, producing a new traceability lot from one or more input lots',
                 },
               ].map((cte, idx) => (
                 <div
@@ -203,7 +203,7 @@ export default function FDAFoodTraceabilityRequirements() {
               ))}
             </div>
             <p className="text-[1.05rem] text-[var(--re-text-secondary)] leading-relaxed">
-              Not every CTE applies to every business. A retail store may only track Receiving and Shipping. A farm tracks Growing and possibly Initial Packing. A manufacturer tracks Receiving, Transforming, and Shipping. Use RegEngine's <Link href="/tools/cte-mapper" className="text-[var(--re-brand)] hover:text-[var(--re-brand-dark)] underline transition-colors duration-200">CTE Mapper</Link> to identify which CTEs apply to your specific operations.
+              Not every CTE applies to every business — you only record CTEs that occur at your operation. A farm typically records Harvesting and Cooling (§1.1325) and possibly Initial Packing (§1.1330). A manufacturer records Receiving (§1.1345), Transformation (§1.1350), and Shipping (§1.1340). A seafood receiver from a fishing vessel records First Land-Based Receiving (§1.1335) — non-seafood importers record Receiving instead. Use RegEngine&apos;s <Link href="/tools/cte-mapper" className="text-[var(--re-brand)] hover:text-[var(--re-brand-dark)] underline transition-colors duration-200">CTE Mapper</Link> to walk through which CTEs apply to your role.
             </p>
           </div>
 
