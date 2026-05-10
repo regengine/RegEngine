@@ -57,7 +57,32 @@ export function SOPGeneratorClient() {
         const facList = facilities.filter(Boolean).map(f => `   - ${f}`).join('\n');
         const now = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
 
-        return `# FSMA 204 Traceability Plan
+        // Build CTE list per role. §1.1325 covers Harvesting AND Cooling (no subparts);
+        // §1.1330 = Initial Packing (RACs other than from a fishing vessel);
+        // §1.1335 = First Land-Based Receiving (food obtained from a fishing vessel);
+        // §1.1340 = Shipping; §1.1345 = Receiving (subject to §1.1305(j) exemption for
+        // restaurants and retail food establishments selling directly to consumers);
+        // §1.1350 = Transformation.
+        const ctes: string[] = [];
+        if (formData.company_type === 'grower') {
+            ctes.push('✅ Harvesting and Cooling (§1.1325)');
+            ctes.push('✅ Initial Packing of RACs (§1.1330)');
+        }
+        if (formData.company_type === 'importer') {
+            ctes.push('✅ First Land-Based Receiving — applies only to seafood obtained from a fishing vessel (§1.1335)');
+        }
+        ctes.push('✅ Shipping (§1.1340)');
+        if (formData.company_type === 'retailer') {
+            ctes.push('⚠️ Receiving (§1.1345) — verify whether the §1.1305(j) restaurant/retail-food-establishment exemption applies to your operation before adopting');
+        } else {
+            ctes.push('✅ Receiving (§1.1345)');
+        }
+        if (formData.company_type === 'manufacturer') {
+            ctes.push('✅ Transformation (§1.1350)');
+        }
+
+        return `# FSMA 204 Traceability Plan — DRAFT TEMPLATE
+*Unreviewed starting template. Not legal advice. Requires review by qualified food-safety/regulatory counsel before adoption.*
 
 **Company**: ${formData.company_name}
 **Type**: ${formData.company_type.charAt(0).toUpperCase() + formData.company_type.slice(1)}
@@ -70,18 +95,17 @@ ${prodList}
 ## Facilities
 ${facList}
 
-## CTE Procedures
-${formData.company_type === 'grower' || formData.company_type === 'manufacturer' ? '✅ Harvesting (§1.1325a)\n✅ Cooling (§1.1325b)\n' : ''}✅ Shipping (§1.1340)
-✅ Receiving (§1.1345)
-${formData.company_type === 'manufacturer' ? '✅ Transformation (§1.1350)\n' : ''}
+## CTE Procedures (per the Critical Tracking Events you indicated)
+${ctes.join('\n')}
+
 ## Operations
 ${formData.has_iot ? '✅ IoT Temperature Monitoring (Sensitech)' : '⬜ No IoT monitoring'}
 ${formData.has_erp ? '✅ ERP/WMS Integration via Webhook API' : '⬜ Manual data entry / CSV upload'}
 
-${retailers.length > 0 ? `## Retailer Requirements\n${retailers.map(r => `- ${r}`).join('\n')}` : ''}
+${retailers.length > 0 ? `## Retailer Requirements (informational)\n${retailers.map(r => `- ${r}`).join('\n')}\n\n*Specific retailer traceability requirements vary, change frequently, and should be confirmed directly with each buyer.*` : ''}
 
 ---
-*Full document available via POST /api/v1/sop/generate*`;
+**DISCLAIMER**: This document is an auto-generated starting template based on inputs you provided. It has not been reviewed by an attorney or regulatory specialist. RegEngine makes no representation that this template satisfies 21 CFR Part 1 Subpart S for your specific operation. You are responsible for tailoring procedures, verifying CFR citations against the current eCFR, and consulting qualified counsel before using this document for compliance, audits, or retailer submissions. See also §1.1455(c) for the sortable-spreadsheet records-on-request obligation, which is not covered in detail by this template.`;
     };
 
     const validProducts = products.filter(Boolean);
@@ -91,7 +115,7 @@ ${retailers.length > 0 ? `## Retailer Requirements\n${retailers.map(r => `- ${r}
     return (
         <FreeToolPageShell
             title="SOP Generator"
-            subtitle="Auto-generate a complete FSMA 204 Traceability Plan and Standard Operating Procedures for your organization."
+            subtitle="Auto-generate a starting-template FSMA 204 Traceability Plan and SOP scaffold. Output is a draft starting point — review with your food-safety team and counsel before audit or retailer use."
             relatedToolIds={['ftl-checker', 'cte-mapper', 'drill-simulator']}
         >
             <AnimatePresence mode="wait">
@@ -241,7 +265,7 @@ ${retailers.length > 0 ? `## Retailer Requirements\n${retailers.map(r => `- ${r}
                             className="w-full bg-[var(--re-brand)] hover:brightness-110 text-white h-12 rounded-xl font-bold text-base"
                         >
                             <FileText className="mr-2 h-5 w-5" />
-                            Generate Traceability Plan
+                            Generate Draft Template
                         </Button>
                     </motion.div>
                 )}
@@ -251,7 +275,7 @@ ${retailers.length > 0 ? `## Retailer Requirements\n${retailers.map(r => `- ${r}
                         <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 2, ease: 'linear' }}>
                             <FileText className="h-12 w-12 text-[var(--re-brand)]" />
                         </motion.div>
-                        <div className="text-lg font-bold">Generating your Traceability Plan...</div>
+                        <div className="text-lg font-bold">Generating your draft template...</div>
                         <div className="text-sm text-muted-foreground">Customizing CTE procedures for {formData.company_type}</div>
                     </motion.div>
                 )}
@@ -260,18 +284,18 @@ ${retailers.length > 0 ? `## Retailer Requirements\n${retailers.map(r => `- ${r}
                     <motion.div key="preview" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
                         <div className="flex items-center gap-3">
                             <CheckCircle2 className="h-6 w-6 text-re-brand" />
-                            <h2 className="text-lg font-bold">Plan Generated</h2>
+                            <h2 className="text-lg font-bold">Draft Generated</h2>
                         </div>
 
                         <LeadGate
                             source="sop-generator"
-                            headline="Download Your Traceability Plan"
-                            subheadline="Get the full FSMA 204 SOP document customized for your operation — ready to print, share with auditors, or submit to retailers."
-                            ctaText="Unlock Full Plan"
+                            headline="Download Your Draft Template"
+                            subheadline="Get a customizable starting-template FSMA 204 Traceability Plan. Review with your food-safety team and counsel before audit or retailer use — not legal advice."
+                            ctaText="Unlock Draft Template"
                             toolContext={{ toolInputs: formData }}
                             teaser={
                                 <div className="space-y-2 pb-4">
-                                    <p className="text-sm text-[var(--re-text-muted)]">Your plan has been generated with custom CTE procedures.</p>
+                                    <p className="text-sm text-[var(--re-text-muted)]">A draft starting template has been generated based on your inputs. Not legal advice; review before adoption.</p>
                                     <pre className="whitespace-pre-wrap text-xs font-mono text-[var(--re-text-muted)] max-h-[120px] overflow-hidden">{generatedDoc?.slice(0, 400)}...</pre>
                                 </div>
                             }
