@@ -261,11 +261,11 @@ ${idx + 1}. Gap: ${g.gapType}
     )
     .join('')}
 
-PASS/FAIL: ${result.scores.overallScore >= 70 ? 'PASSED' : 'FAILED'}
+SELF-CHECK RESULT: ${result.scores.overallScore >= 70 ? 'No gaps indicated by this check' : 'Gaps indicated — review below'}
 STATUS: ${
             result.scores.overallScore >= 70
-                ? 'Your traceability records meet FSMA 204 requirements'
-                : 'Critical gaps detected. Recommend immediate remediation.'
+                ? 'Self-check found no gaps in the dimensions evaluated below. This is a self-reported indicator based on the columns you uploaded; it is not an FDA determination and does not evaluate all §1.1455 KDEs or CTEs.'
+                : 'Self-reported gaps in the dimensions evaluated below. Review the items, then verify against the full §1.1455 record set.'
         }
 
 ---
@@ -318,11 +318,12 @@ STATUS: ${
         >
             <div className="text-center mb-12">
                 <h1 className="text-4xl font-bold mb-3" style={{ color: 'var(--re-text-primary)' }}>
-                    Can Your Records Survive an FDA Investigation?
+                    Rehearse Your FSMA 204 Records-on-Request Workflow
                 </h1>
                 <p className="text-lg" style={{ color: 'var(--re-text-secondary)' }}>
-                    Upload your actual traceability records. We'll validate them against FSMA 204
-                    requirements in real-time — no data leaves your browser.
+                    Upload your traceability records. The drill checks file shape and column-level completeness
+                    against a subset of FSMA 204 dimensions — no data leaves your browser. This is a self-paced
+                    rehearsal, not an FDA simulation or compliance determination.
                 </p>
             </div>
 
@@ -574,7 +575,7 @@ STATUS: ${
                 className="w-full max-w-4xl mx-auto"
             >
                 <h2 className="text-2xl font-bold text-center mb-8" style={{ color: 'var(--re-text-primary)' }}>
-                    Compliance Assessment
+                    Self-Check Summary
                 </h2>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
@@ -591,7 +592,7 @@ STATUS: ${
                                     result.scores.overallScore >= 70 ? 'bg-re-success' : 'bg-re-danger'
                                 }`}
                             >
-                                {result.scores.overallScore >= 70 ? 'PASSED' : 'FAILED'}
+                                {result.scores.overallScore >= 70 ? 'No gaps indicated' : 'Gaps indicated'}
                             </Badge>
                         </CardContent>
                     </Card>
@@ -677,7 +678,7 @@ STATUS: ${
                                         result.scores.overallScore >= 70 ? 'bg-re-success' : 'bg-re-danger'
                                     }`}
                                 >
-                                    {result.scores.overallScore >= 70 ? 'PASSED' : 'FAILED'}
+                                    {result.scores.overallScore >= 70 ? 'No gaps indicated' : 'Gaps indicated'}
                                 </Badge>
                             </div>
                             <div className="space-y-4">
@@ -1005,8 +1006,8 @@ STATUS: ${
 
     return (
         <FreeToolPageShell
-            title="FDA Recall Drill Simulator"
-            subtitle="Real-time compliance testing for FSMA 204 traceability records"
+            title="24-Hour Drill Simulator"
+            subtitle="Self-paced rehearsal for your §1.1455(c) records-on-request workflow"
             relatedToolIds={['ftl-checker', 'cte-mapper', 'kde-checker']}
         >
             <div className="py-8">
