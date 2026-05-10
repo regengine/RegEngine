@@ -64,7 +64,7 @@ const DATA_FLOW_STEPS = [
     {
         step: '1',
         title: 'Ingest',
-        description: 'CTE events can arrive via CSV upload, webhook, or API call. Validation behavior depends on the workflow configured for that ingest path.',
+        description: 'CTE events arrive via CSV upload, webhook, or EPCIS. CSV and webhook paths run validation synchronously; EPCIS validation runs asynchronously. All paths persist before scoring.',
         color: 'bg-re-info-muted0/15 text-re-info',
     },
     {
@@ -76,12 +76,12 @@ const DATA_FLOW_STEPS = [
     {
         step: '3',
         title: 'Hash & Chain',
-        description: 'Validated events are designed to be SHA-256 hashed and linked into tenant-scoped integrity records. Final implementation details depend on the active evidence workflow.',
+        description: 'Validated events are SHA-256 hashed and chain-linked at ingest, scoped per tenant. Independent verification of exported bundles is offered at /verify; consumer-side enforcement of producer signatures across the message bus is rolling out.',
         color: 'bg-re-brand/15 text-re-brand',
     },    {
         step: '4',
         title: 'Score',
-        description: 'The compliance engine evaluates six dimensions: chain integrity, KDE completeness, CTE completeness, obligation coverage, product coverage, and export readiness.',
+        description: 'The compliance engine produces an advisory readiness signal across six weighted dimensions: export readiness, KDE completeness, CTE coverage, chain integrity, obligation coverage, and FTL product coverage. Per-dimension maturity varies; rule enforcement is opt-in per workflow and is advisory in production today.',
         color: 'bg-re-warning-muted0/15 text-re-warning',
     },
     {
@@ -96,7 +96,7 @@ const ISOLATION_CONTROLS = [
     {
         Icon: Lock,
         title: 'Row-Level Security',
-        detail: 'Current architecture is intended to scope database access to the authenticated tenant at the database-policy layer rather than relying only on application checks.',
+        detail: 'PostgreSQL row-level policies and authenticated tenant context scope reads at the database layer. Identity-resolution and graph-layer hardening is in progress; details available under NDA.',
     },
     {
         Icon: Hash,
@@ -109,8 +109,8 @@ const ISOLATION_CONTROLS = [
     },
     {
         Icon: ShieldCheck,
-        title: 'Immutable audit trail',
-        detail: 'Audit posture is designed around append-oriented evidence handling rather than in-place mutation of compliance records.',
+        title: 'Append-oriented audit handling',
+        detail: 'Compliance records are append-oriented after ingest; in-place mutation is not the supported path. Audit-chain coverage across review and admin surfaces is being expanded.',
     },
 ];
 
