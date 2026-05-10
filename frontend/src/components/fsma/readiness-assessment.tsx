@@ -167,10 +167,10 @@ export function FSMA204Assessment() {
     };
 
     const getReadinessLevel = (score: number) => {
-        if (score >= 80) return { level: 'Ready', color: 'text-re-success', bg: 'bg-re-success-muted', icon: CheckCircle2 };
-        if (score >= 60) return { level: 'Partially Ready', color: 'text-re-warning', bg: 'bg-re-warning-muted', icon: AlertTriangle };
-        if (score >= 40) return { level: 'Needs Improvement', color: 'text-orange-600', bg: 'bg-orange-100', icon: AlertTriangle };
-        return { level: 'Not Ready', color: 'text-re-danger', bg: 'bg-re-danger-muted', icon: XCircle };
+        if (score >= 80) return { level: 'No gaps indicated', color: 'text-re-success', bg: 'bg-re-success-muted', icon: CheckCircle2 };
+        if (score >= 60) return { level: 'Few gaps indicated', color: 'text-re-warning', bg: 'bg-re-warning-muted', icon: AlertTriangle };
+        if (score >= 40) return { level: 'Several gaps indicated', color: 'text-orange-600', bg: 'bg-orange-100', icon: AlertTriangle };
+        return { level: 'Many gaps indicated', color: 'text-re-danger', bg: 'bg-re-danger-muted', icon: XCircle };
     };
 
     const canProceed = () => {
@@ -421,8 +421,8 @@ export function FSMA204Assessment() {
                                 )}
                                 {!systemAnswers['24hr'] && (
                                     <div className="flex items-start gap-2 text-sm">
-                                        <XCircle className="h-4 w-4 text-re-danger mt-0.5" />
-                                        <span className="font-medium">Critical: Develop capability to produce records within 24 hours</span>
+                                        <AlertTriangle className="h-4 w-4 text-re-warning mt-0.5" />
+                                        <span>Gap indicated: ability to produce records within 24 hours of an FDA request — review your retrieval workflow.</span>
                                     </div>
                                 )}
                                 {!systemAnswers['testing'] && (

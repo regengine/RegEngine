@@ -6,14 +6,14 @@ import { EmailGate } from "@/components/tools/EmailGate";
 import { RelatedTools } from "@/components/tools/RelatedTools";
 
 export const metadata: Metadata = {
-    title: "FSMA 204 Readiness Assessment | Free Compliance Score Tool | RegEngine",
-    description: "Score your facility's FSMA 204 compliance readiness in minutes. Covers FTL product coverage, Critical Tracking Events, Key Data Elements, and system capabilities.",
+    title: "FSMA 204 Readiness Self-Check | Free Gap Indicator | RegEngine",
+    description: "Self-check your facility's FSMA 204 readiness across FTL product coverage, Critical Tracking Events, Key Data Elements, and system capabilities. Educational; not a compliance certification.",
     alternates: {
         canonical: "https://regengine.co/tools/readiness-assessment",
     },
     openGraph: {
-        title: "FSMA 204 Readiness Assessment — RegEngine",
-        description: "Score your facility's FSMA 204 compliance readiness across FTL coverage, CTEs, KDEs, and system capabilities. Free.",
+        title: "FSMA 204 Readiness Self-Check — RegEngine",
+        description: "Self-check your facility's FSMA 204 readiness across FTL coverage, CTEs, KDEs, and system capabilities. Free; educational only.",
         type: "website",
         url: "https://regengine.co/tools/readiness-assessment",
     },
@@ -25,7 +25,7 @@ const jsonLd = {
     "name": "FSMA 204 Readiness Assessment",
     "operatingSystem": "All",
     "applicationCategory": "BusinessApplication",
-    "description": "Score your facility's FSMA 204 compliance readiness across product coverage, CTEs, KDEs, and system capabilities.",
+    "description": "Self-check your facility's FSMA 204 readiness across product coverage, CTEs, KDEs, and system capabilities. Educational; not a compliance certification.",
     "offers": {
         "@type": "Offer",
         "price": "0",
@@ -38,9 +38,9 @@ const jsonLd = {
 };
 
 const relatedTools = [
-    { href: "/tools/drill-simulator", title: "24-Hour Drill Simulator", description: "Run a live FDA outbreak drill to test your record retrieval speed and accuracy." },
-    { href: "/tools/recall-readiness", title: "Recall Readiness Score", description: "Get an A–F grade on your ability to meet the FDA 24-hour retrieval mandate." },
-    { href: "/tools/sop-generator", title: "SOP Generator", description: "Auto-generate your FSMA 204 Traceability Plan and Standard Operating Procedures." },
+    { href: "/tools/drill-simulator", title: "24-Hour Drill Simulator", description: "Self-paced rehearsal for your §1.1455(c) records-on-request workflow." },
+    { href: "/tools/recall-readiness", title: "FSMA 204 Readiness Self-Check", description: "Self-check your readiness for the §1.1455(c) records-on-request obligation." },
+    { href: "/tools/sop-generator", title: "SOP Generator", description: "Auto-generate a starting-template FSMA 204 Traceability Plan — review with counsel before adoption." },
 ];
 
 export default function ReadinessAssessmentPage() {
@@ -48,8 +48,8 @@ export default function ReadinessAssessmentPage() {
         <Suspense fallback={
             <div className="min-h-screen bg-[var(--re-surface-base)] px-6 py-16">
                 <div className="max-w-2xl mx-auto text-center">
-                    <h1 className="text-2xl font-bold text-[var(--re-text-primary)] mb-3">FSMA 204 Readiness Assessment</h1>
-                    <p className="text-sm text-[var(--re-text-muted)] max-w-lg mx-auto mb-8 leading-relaxed">Score your facility&apos;s FSMA 204 compliance readiness in minutes. This assessment covers product coverage on the Food Traceability List, Critical Tracking Event mapping, Key Data Element completeness, and system integration capabilities.</p>
+                    <h1 className="text-2xl font-bold text-[var(--re-text-primary)] mb-3">FSMA 204 Readiness Self-Check</h1>
+                    <p className="text-sm text-[var(--re-text-muted)] max-w-lg mx-auto mb-8 leading-relaxed">A self-paced readiness self-check based on your answers. Covers product coverage on the Food Traceability List, Critical Tracking Event mapping, Key Data Element completeness, and system integration. Educational; not an FDA audit, certification, or compliance determination.</p>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-left mb-8">
                         <div className="rounded-xl border border-[rgba(255,255,255,0.06)] bg-[rgba(255,255,255,0.02)] p-4">
                             <h3 className="text-sm font-semibold text-re-brand mb-1">Product Coverage</h3>
@@ -65,7 +65,7 @@ export default function ReadinessAssessmentPage() {
                         </div>
                         <div className="rounded-xl border border-[rgba(255,255,255,0.06)] bg-[rgba(255,255,255,0.02)] p-4">
                             <h3 className="text-sm font-semibold text-re-brand mb-1">System Capabilities</h3>
-                            <p className="text-xs text-[var(--re-text-muted)]">Can your current systems produce FDA-ready exports within 24 hours of a records request?</p>
+                            <p className="text-xs text-[var(--re-text-muted)]">Can your current systems produce a sortable spreadsheet for an FDA records request within 24 hours (per §1.1455(c))?</p>
                         </div>
                     </div>
                     <div className="flex gap-2 items-center justify-center text-xs text-[var(--re-text-disabled)]">
