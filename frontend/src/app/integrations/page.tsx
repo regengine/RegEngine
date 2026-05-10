@@ -27,7 +27,7 @@ import styles from "./page.module.css";
 export const metadata: Metadata = {
   title: "Integrations - Supplier Data Intake | RegEngine",
   description:
-    "RegEngine integrates with ERPs, food safety platforms, retailers, IoT sensors, and custom systems. CSV, API, webhook, and SFTP ingestion.",
+    "RegEngine accepts supplier data via CSV, API, webhook, EPCIS, and SFTP, with custom-scoped connectors for ERP, food-safety, and retailer systems.",
 };
 
 const CATEGORY_ORDER: CapabilityCategory[] = [
@@ -62,7 +62,7 @@ const inflow = CAPABILITY_REGISTRY.find((item) => item.id === "inflow-lab");
 const proofStats = [
   ["Connector slug", "inflow-lab"],
   ["Backend id", "inflow_lab"],
-  ["CI coverage", "Live ingest"],
+  ["CI coverage", "Contract test"],
 ];
 
 const inflowPath = [
@@ -252,7 +252,7 @@ export default function IntegrationsPage() {
           </Link>
           <Link href="/trust" className={styles.secondaryButton}>
             <Activity aria-hidden="true" size={16} />
-            View evidence
+            Trust Center
           </Link>
         </div>
       </section>
