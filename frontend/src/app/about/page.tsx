@@ -58,13 +58,13 @@ const PRINCIPLES = [
     Icon: Target,
     title: "Accessible by default",
     description:
-      "Mid-market food companies deserve the same compliance tooling as Fortune 500 operators. RegEngine starts at $425/mo (billed annually), not $50K/year.",
+      "Mid-market food companies deserve modern compliance tooling. RegEngine starts at $425/mo (billed annually).",
   },
   {
     Icon: Shield,
     title: "Verifiable, not just claimed",
     description:
-      "Every compliance record is cryptographically hashed. Audit trails are immutable. You can verify our work independently with open-source tooling.",
+      "Compliance records are cryptographically hashed and append-oriented after ingest. Customers can independently verify export-bundle integrity using our published verify_chain.py script. Downstream signature verification across the message bus is rolling out.",
   },
   {
     Icon: Lightbulb,
@@ -76,7 +76,7 @@ const PRINCIPLES = [
     Icon: Sparkles,
     title: "AI-augmented, human-directed",
     description:
-      "AI accelerates development velocity. Every regulatory mapping, validation rule, and compliance decision is reviewed and approved by a human.",
+      "AI accelerates development velocity. Regulatory mappings and validation rules are reviewed by the founder before they ship to production.",
   },
 ];
 
@@ -216,8 +216,9 @@ export default function AboutPage() {
                 Faster iteration
               </p>
               <p className="text-xs text-[var(--re-text-muted)] mt-1 leading-relaxed">
-                No committee approvals. Customer feedback on Monday ships by
-                Friday. Regulatory updates deploy in hours, not quarters.
+                No committee approvals. Customer feedback typically ships within
+                the same week. Regulatory updates deploy without waiting for
+                quarterly release trains.
               </p>
             </div>
             <div className="rounded-lg bg-[var(--re-surface-card)] border border-[var(--re-surface-border)] p-4">
@@ -225,8 +226,9 @@ export default function AboutPage() {
                 Human accountability
               </p>
               <p className="text-xs text-[var(--re-text-muted)] mt-1 leading-relaxed">
-                AI writes code and drafts documentation. Every regulatory rule,
-                compliance mapping, and customer deliverable is human-reviewed.
+                AI writes code and drafts documentation. Regulatory rules and
+                compliance mappings are reviewed by the founder before they ship
+                to production.
               </p>
             </div>
           </div>

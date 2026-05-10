@@ -25,27 +25,27 @@ const capabilities = [
     {
         Icon: Webhook,
         title: 'Webhook Ingestion',
-        description: 'POST events with KDE validation. Every inbound CTE is validated against FSMA 204 Key Data Elements before chain-hashing.',
+        description: 'POST events with KDE validation. Inbound CTEs are validated against FSMA 204 Key Data Elements; failures surface as exceptions before package assembly.',
     },
     {
         Icon: Cog,
         title: 'Rules Engine',
-        description: '25+ FSMA 204 validation rules run automatically on every event. Catch missing fields, invalid TLCs, and schema violations in real time.',
+        description: '25+ FSMA 204 validation rules evaluate every ingested event. Missing required KDEs, invalid TLCs, and schema violations surface as exceptions in the dashboard.',
     },
     {
         Icon: Users,
         title: 'Identity Resolution',
-        description: 'Fuzzy matching across trading partners with confidence scoring. Deduplicate facilities, carriers, and contacts automatically.',
+        description: 'Fuzzy matching across trading partners with confidence scoring. Deduplicate facilities, carriers, and contacts.',
     },
     {
         Icon: FileSpreadsheet,
-        title: 'FDA Export',
-        description: '21 CFR 1.1455 sortable spreadsheet and EPCIS 2.0 event export. One API call to generate an FDA-ready compliance package.',
+        title: 'Records Export',
+        description: 'Generate a 21 CFR §1.1455(c) sortable-spreadsheet export and an EPCIS 2.0 event export with one API call.',
     },
     {
         Icon: BarChart3,
-        title: 'Compliance Scoring',
-        description: '6-dimension score with letter grade. Coverage, completeness, timeliness, accuracy, chain integrity, and identity resolution.',
+        title: 'Readiness Scoring',
+        description: 'Six-dimension internal readiness signal across export readiness, KDE completeness, CTE coverage, chain integrity, obligation coverage, and FTL product coverage. Not an FDA-issued rating.',
     },
     {
         Icon: GitBranch,

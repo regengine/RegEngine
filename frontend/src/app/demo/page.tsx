@@ -230,8 +230,7 @@ export default function DemoPage() {
       <div className="bg-gradient-to-r from-[var(--re-brand)]/10 to-purple-500/10 border border-[var(--re-brand)]/20 rounded-xl p-8 text-center">
         <h2 className="text-xl font-bold mb-2">This could be your data</h2>
         <p className="text-[var(--re-text-muted)] text-sm mb-6 max-w-lg mx-auto">
-          RegEngine connects to your ERP, validates every shipment against FSMA 204 rules in real time,
-          and gives you a compliance score your FDA inspector will love.
+          RegEngine ingests events from your ERP, validates them against 25+ FSMA 204 rules, and surfaces gaps before they become audit findings during a §1.1455(c) records request. The compliance score shown is RegEngine&apos;s internal six-dimension readiness signal — not an FDA-issued rating.
         </p>
         <div className="flex items-center justify-center gap-4">
           <Link
