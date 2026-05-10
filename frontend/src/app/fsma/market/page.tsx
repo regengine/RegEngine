@@ -32,7 +32,7 @@ export default function TargetMarketPage() {
             <div>
               <h1 className="text-3xl font-bold">FSMA 204 Target Market</h1>
               <p className="text-muted-foreground mt-1">
-                75+ companies subject to FDA Food Traceability requirements
+                75+ companies we have identified as likely FSMA 204 covered operators
               </p>
             </div>
           </div>
@@ -63,9 +63,7 @@ export default function TargetMarketPage() {
                 </div>
                 <div className="flex-1">
                   <p className="text-sm">
-                    These companies handle products on the FDA Food Traceability
-                    List (FTL) and must implement full-chain traceability
-                    including CTEs, KDEs, and 24-hour FDA response capabilities.
+                    These companies handle foods on the FDA Food Traceability List (FTL) and must capture CTEs/KDEs and produce a sortable records spreadsheet within 24 hours of an FDA request under §1.1455(c).
                   </p>
                 </div>
               </div>
