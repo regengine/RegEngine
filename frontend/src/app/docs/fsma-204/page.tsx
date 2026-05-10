@@ -3,7 +3,7 @@ import Link from 'next/link';
 
 export const metadata: Metadata = {
   title: 'FSMA 204 Developer Integration Guide | RegEngine',
-  description: 'Build FDA-compliant traceability systems with RegEngine APIs. CTEs, KDEs, FDA Request Mode, supply chain tracing, and cryptographic verification.',
+  description: 'Build your FSMA 204 traceability program on RegEngine APIs. CTEs, KDEs, FDA Request Mode, supply chain tracing, and hash-manifest verification.',
 };
 import { ArrowLeft, Utensils, CheckCircle, Clock, FileText, Zap, Shield, AlertTriangle, ExternalLink } from 'lucide-react';
 import { T as _T } from '@/lib/design-tokens';
@@ -55,7 +55,7 @@ export default function FSMA204GuidePage() {
                             borderRadius: '4px',
                             textTransform: 'uppercase',
                         }}>
-                            Most Complete
+                            Developer Guide
                         </span>
                     </div>
 
@@ -63,7 +63,7 @@ export default function FSMA204GuidePage() {
                         FSMA 204 Integration Guide
                     </h1>
                     <p style={{ color: T.textMuted, fontSize: '16px', maxWidth: '600px' }}>
-                        Build FDA-compliant traceability systems with RegEngine&apos;s Food Safety APIs
+                        Build your FSMA 204 traceability program on RegEngine&apos;s Food Safety APIs
                     </p>
                 </div>
             </div>
@@ -77,11 +77,11 @@ export default function FSMA204GuidePage() {
                 <div style={{ maxWidth: '900px', margin: '0 auto', display: 'flex', gap: '32px', flexWrap: 'wrap' }}>
                     <div className="flex items-center gap-2">
                         <Clock className="w-4 h-4 text-re-brand" />
-                        <span className="text-sm text-re-text-secondary">24-hour FDA response</span>
+                        <span className="text-sm text-re-text-secondary">24-hour sortable-spreadsheet obligation</span>
                     </div>
                     <div className="flex items-center gap-2">
                         <Shield className="w-4 h-4 text-re-brand" />
-                        <span className="text-sm text-re-text-secondary">21 CFR 1.1455 compliant</span>
+                        <span className="text-sm text-re-text-secondary">Aligned to 21 CFR § 1.1455(c)</span>
                     </div>
                     <div className="flex items-center gap-2">
                         <CheckCircle className="w-4 h-4 text-re-brand" />
@@ -142,7 +142,7 @@ export default function FSMA204GuidePage() {
                                 <p style={{ color: 'var(--re-text-primary)', fontWeight: 600, marginBottom: '4px' }}>Enforcement Delayed</p>
                                 <p className="text-re-text-secondary text-sm m-0">
                                     The FDA announced an enforcement discretion period ending <strong>July 20, 2028</strong>.
-                                    RegEngine auto-detected this regulatory change and updated all compliance facts.
+                                    RegEngine tracks FDA enforcement-discretion changes so your team isn&apos;t relying on stale dates.
                                 </p>
                             </div>
                         </div>
@@ -417,30 +417,11 @@ export default function FSMA204GuidePage() {
                         Verify, Don&apos;t Trust
                     </h2>
                     <p className="text-[var(--re-text-secondary)] leading-[1.7] mb-4">
-                        Every compliance record is cryptographically hashed. You can independently verify the integrity
-                        of your data without database access:
+                        Ingested events are SHA-256 hashed and chain-linked, and export bundles ship with a
+                        timestamped manifest. You can verify a downloaded bundle out-of-band via{' '}
+                        <Link href="/verify" className="text-[var(--re-brand)] hover:underline">/verify</Link>.
+                        Strict downstream signature verification across the message bus is rolling out.
                     </p>
-
-                    <div style={{
-                        background: 'rgba(0,0,0,0.6)',
-                        borderRadius: '8px',
-                        overflow: 'hidden',
-                        border: `1px solid ${T.border}`,
-                    }}>
-                        <div style={{
-                            background: 'rgba(255,255,255,0.05)',
-                            padding: '8px 16px',
-                            borderBottom: `1px solid ${T.border}`,
-                        }}>
-                            <span className="text-xs text-re-text-muted">Independent Verification</span>
-                        </div>
-                        <pre className="overflow-x-auto p-3 sm:p-[16px_20px] m-0 text-[12px] sm:text-[13px] leading-[1.5] text-[var(--re-text-tertiary)]">
-                            <code>{`python verify_chain.py --audit
-# ✓ Chain integrity verified
-# ✓ 1847 records validated
-# ✓ No hash mismatches detected`}</code>
-                        </pre>
-                    </div>
                 </section>
 
                 {/* API Reference Links */}
@@ -452,7 +433,7 @@ export default function FSMA204GuidePage() {
                     <div className="grid gap-3">
                         {[
                             { path: 'POST /api/v1/webhooks/ingest', desc: 'Create compliance events' },
-                            { path: 'GET /v1/fsma/export/fda-request', desc: 'Generate FDA-compliant export' },
+                            { path: 'GET /v1/fsma/export/fda-request', desc: 'Generate §1.1455-formatted sortable spreadsheet' },
                             { path: 'GET /v1/fsma/trace/forward/{tlc}', desc: 'Forward supply chain trace' },
                             { path: 'GET /v1/fsma/trace/backward/{tlc}', desc: 'Backward supply chain trace' },
                             { path: 'GET /v1/fsma/coverage', desc: 'Coverage status and freshness' },
