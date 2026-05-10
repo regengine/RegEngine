@@ -7,13 +7,13 @@ import { EmailGate } from "@/components/tools/EmailGate";
 
 export const metadata: Metadata = {
     title: "FSMA 204 Data Import Hub | Upload CSV, IoT & Webhook Traceability Data | RegEngine",
-    description: "Import FSMA 204 traceability data via CSV upload, IoT temperature logs, or webhook API. Supports Sensitech TempTale and all CTE types with auto-validation.",
+    description: "Import FSMA 204 traceability data via CSV upload, IoT temperature logs, or webhook API. Supports Sensitech TempTale and all CTE types with schema checks and field auto-mapping.",
     alternates: {
         canonical: "https://regengine.co/tools/data-import",
     },
     openGraph: {
         title: "FSMA 204 Data Import Hub — RegEngine",
-        description: "Import traceability data via CSV, IoT logs, or webhook API with FSMA 204 auto-validation. Free tool.",
+        description: "Import traceability data via CSV, IoT logs, or webhook API with FSMA 204 schema checks. Free tool.",
         type: "website",
         url: "https://regengine.co/tools/data-import",
     },
