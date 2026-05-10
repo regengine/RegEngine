@@ -72,7 +72,7 @@ const CTE_DATA: Record<string, CTEData> = {
   cooling: {
     slug: "cooling",
     name: "Cooling",
-    cfr: "21 CFR 1.1330",
+    cfr: "21 CFR 1.1325",
     description:
       "Records when harvested product was cooled to safe storage temperature. Critical for cold chain integrity and shelf life documentation.",
     whoNeedsThis: ["Pre-coolers", "Cold storage facilities", "Farms with on-site cooling"],
@@ -83,16 +83,16 @@ const CTE_DATA: Record<string, CTEData> = {
       { field: "Unit of Measure", description: "UOM for the quantity", example: "lbs" },
       { field: "Location", description: "Address or GLN of the cooling facility", example: "CoolCo Pre-Cool, Salinas, CA" },
       { field: "Cooling Date", description: "Date the product was cooled", example: "2026-04-15" },
-      { field: "Temperature", description: "Temperature the product was cooled to", example: "34°F" },
+      { field: "Temperature (recommended)", description: "Temperature the product was cooled to. Recommended for cold-chain practice; not required by §1.1325.", example: "34°F" },
     ],
     commonMistakes: [
       "Missing cooling date — data entry delays mean the cooling event is recorded hours or days late, often without the actual date.",
-      "Temperature not recorded — the cooler logs it but the traceability spreadsheet doesn't capture the value.",
+      "Temperature not captured — temperature isn't required by FSMA 204, but most cooling-chain audits expect it.",
       "Facility name inconsistency — using 'CoolCo', 'Cool Co LLC', and 'CoolCo Pre-Cool' interchangeably across records.",
     ],
     howRegEngineHelps: [
       "Flags missing cooling dates and prompts for the actual date, not the upload date.",
-      "Validates that temperature is present and within a plausible range for the commodity.",
+      "Captures temperature when present and validates plausibility against the commodity (audit-readiness aid; not a regulatory check).",
       "Detects facility name variations and suggests a canonical name for consistency.",
       "Cross-references the TLC against harvesting events to ensure the chain is unbroken.",
     ],
@@ -100,7 +100,7 @@ const CTE_DATA: Record<string, CTEData> = {
   initial_packing: {
     slug: "initial_packing",
     name: "Initial Packing",
-    cfr: "21 CFR 1.1335",
+    cfr: "21 CFR 1.1330",
     description:
       "Records when harvested product is first packed into containers for sale. This is where lot codes often multiply and traceability chains are most likely to break.",
     whoNeedsThis: ["Packhouses", "Fresh-cut processors", "Co-packers"],
@@ -119,7 +119,7 @@ const CTE_DATA: Record<string, CTEData> = {
       "CTE type aliases — some systems label this event as 'packing', 'pack', 'IP', or 'initial pack'. Mixed labels cause mapping failures.",
     ],
     howRegEngineHelps: [
-      "Requires input lot codes and blocks submission if they are missing — preventing the most common traceability break.",
+      "Requires input lot codes before an export can build — preventing the most common traceability break.",
       "Deduplicates rows automatically when it detects ERP-style per-case exports.",
       "Normalizes CTE type labels so 'packing', 'pack', and 'initial_packing' all map correctly.",
       "Validates that input TLCs reference real harvesting or cooling events in your data.",
@@ -164,9 +164,9 @@ const CTE_DATA: Record<string, CTEData> = {
       "Records when product arrives at a facility. Receiving is the mirror of shipping and completes each link in the traceability chain.",
     whoNeedsThis: [
       "Distribution centers",
-      "Retailers",
-      "Restaurants",
-      "Any entity that receives food on the FTL",
+      "Wholesalers",
+      "Foodservice distributors that receive (but do not sell directly to) consumers",
+      "Any entity receiving food on the FTL, subject to the §1.1305 exemptions",
     ],
     kdes: [
       { field: "Traceability Lot Code (TLC)", description: "Lot code of the product received", example: "PKG-2026-04-16-BLU-A01" },
@@ -186,7 +186,7 @@ const CTE_DATA: Record<string, CTEData> = {
       "Missing reference document — without a BOL or PO number, there is no way to link the receiving event to the corresponding shipping event.",
     ],
     howRegEngineHelps: [
-      "Requires immediate previous source and blocks submission when it is missing.",
+      "Requires immediate previous source before an export can build.",
       "Fuzzy-matches product descriptions between shipping and receiving events to flag mismatches before they become audit findings.",
       "Validates that a reference document (BOL, PO, or ASN) is present and cross-references it against shipping records.",
       "Highlights quantity discrepancies between what was shipped and what was received.",
@@ -228,13 +228,12 @@ const CTE_DATA: Record<string, CTEData> = {
   first_land_based_receiving: {
     slug: "first_land_based_receiving",
     name: "First Land-Based Receiving",
-    cfr: "21 CFR 1.1355",
+    cfr: "21 CFR 1.1335",
     description:
-      "Records when food first arrives on U.S. soil from a vessel or from outside the United States. This is the entry point for imported food into the domestic traceability chain.",
+      "Records the first land-based receipt of food obtained from a fishing vessel — the point at which seafood lands and enters the domestic traceability chain. This CTE applies only to food obtained from a fishing vessel; generic imported food entry is covered by ordinary Receiving (§1.1345).",
     whoNeedsThis: [
-      "Seafood docks",
-      "First receivers of imported food",
-      "Port facilities",
+      "Seafood docks and first receivers landing fish from vessels",
+      "Processors receiving directly from a fishing vessel",
     ],
     kdes: [
       { field: "Traceability Lot Code (TLC)", description: "Lot code assigned at first land-based receipt", example: "FLBR-2026-04-18-TUNA-01" },
@@ -457,7 +456,7 @@ export default async function CTELandingPage({
           </h2>
           <p className="text-[1rem] text-[var(--re-text-secondary)] leading-relaxed mb-8 max-w-[600px]">
             Upload your {data.name.toLowerCase()} data to the sandbox and
-            RegEngine catches these issues automatically — before the FDA does.
+            RegEngine surfaces these issues before they become audit findings during a §1.1455 records request.
           </p>
 
           <div className="space-y-3 max-w-[680px]">
