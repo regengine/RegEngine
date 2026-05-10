@@ -188,11 +188,11 @@ export function RecallReadinessClient() {
         else if (totalScore >= 55) color = 'var(--re-warning)';
 
         const gaps = [];
-        if (answers.pull_24h !== 'yes') gaps.push('Non-compliant: Cannot meet 24-hour FDA records retrieval mandate (21 CFR §1.1455(b)(3))');
-        if (answers.sortable_spreadsheet !== 'yes') gaps.push('Non-compliant: Missing electronic sortable spreadsheet capability (21 CFR §1.1455(b)(3)(ii))');
-        if (answers.digital_search !== 'yes') gaps.push('Fragility Risk: Manual/Paper records significantly delay outbreak investigations');
-        if (answers.tlc_stability === 'no') gaps.push('Compliance Gap: Improper TLC stability creates data linkage breaks');
-        if (answers.cte_coverage === 'no') gaps.push('Critical Gap: Missing Critical Tracking Event (CTE) recordkeeping for your role');
+        if (answers.pull_24h !== 'yes') gaps.push('Gap indicated: self-reported inability to assemble required records within 24 hours (21 CFR §1.1455(b)(3))');
+        if (answers.sortable_spreadsheet !== 'yes') gaps.push('Gap indicated: no electronic sortable spreadsheet workflow reported (21 CFR §1.1455(b)(3)(ii))');
+        if (answers.digital_search !== 'yes') gaps.push('Risk indicated: manual/paper records make a 24-hour assembly harder');
+        if (answers.tlc_stability === 'no') gaps.push('Gap indicated: TLC stability concern reported — risks data linkage breaks');
+        if (answers.cte_coverage === 'no') gaps.push('Gap indicated: missing Critical Tracking Event recordkeeping for your role');
 
         return (
             <div className="space-y-8">
@@ -205,7 +205,7 @@ export function RecallReadinessClient() {
                     >
                         <span className="text-5xl font-black">{grade}</span>
                     </motion.div>
-                    <h3 className="text-2xl font-bold">Your Readiness Grade</h3>
+                    <h3 className="text-2xl font-bold">Your Self-Reported Readiness Indicator</h3>
                     <p className="text-[var(--re-text-tertiary)] mt-1">Total score: {totalScore} / 100</p>
                 </div>
 
@@ -248,9 +248,9 @@ export function RecallReadinessClient() {
                             </div>
                             {submitError && <p className="text-sm text-[var(--re-danger)] text-center">{submitError}</p>}
                             <Button type="submit" disabled={submitting} className="w-full h-12 text-base bg-[var(--re-brand)] hover:brightness-110 mt-2">
-                                {submitting ? 'Submitting...' : 'Get My Free Assessment Report'} {!submitting && <ArrowRight className="ml-2 h-4 w-4" />}
+                                {submitting ? 'Submitting...' : 'Send Me My Self-Check Summary'} {!submitting && <ArrowRight className="ml-2 h-4 w-4" />}
                             </Button>
-                            <p className="text-[10px] text-center text-[var(--re-text-muted)]">No spam. Your data is encrypted and never shared.</p>
+                            <p className="text-[10px] text-center text-[var(--re-text-muted)]">We&apos;ll only use your details to follow up on this self-check. See our Privacy Policy.</p>
                         </form>
                     </div>
                 )}
@@ -261,13 +261,13 @@ export function RecallReadinessClient() {
                         <div className="p-4 rounded-xl bg-[var(--re-success-muted)] border border-[var(--re-success)] text-center">
                             <p className="text-sm font-semibold text-[var(--re-text-primary)]">
                                 <CheckCircle2 className="inline h-4 w-4 mr-1 text-[var(--re-success)]" />
-                                Assessment submitted! Check your inbox within 24 hours for your personalized report.
+                                Self-check submitted. We&apos;ll follow up with notes on your self-reported answers. This is not a compliance determination.
                             </p>
                         </div>
 
                         {gaps.length > 0 && (
                             <div className="space-y-4">
-                                <h4 className="text-sm font-semibold uppercase tracking-wider text-[var(--re-text-muted)]">Critical Gaps Detected</h4>
+                                <h4 className="text-sm font-semibold uppercase tracking-wider text-[var(--re-text-muted)]">Self-Reported Gaps</h4>
                                 <div className="space-y-2">
                                     {gaps.map((gap, i) => (
                                         <div key={i} className="flex items-center gap-3 p-3 rounded-lg bg-[var(--re-danger-muted)] border border-[var(--re-danger)]/20 text-sm">
@@ -295,7 +295,7 @@ export function RecallReadinessClient() {
                                     <Shield className="h-4 w-4 text-[var(--re-brand)]" /> RegEngine Platform
                                 </h4>
                                 <p className="text-xs text-[var(--re-text-secondary)] leading-relaxed mb-4">
-                                    RegEngine automates KDE capture and guarantees 24-hour retrieval with one-click sortable spreadsheet exports.
+                                    RegEngine helps teams organize KDEs and prepare sortable spreadsheet exports to support FSMA 204 records requests.
                                 </p>
                                 <Button className="w-full bg-[var(--re-brand)] text-xs h-8">
                                     Book a Compliance Audit
