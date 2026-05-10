@@ -1414,20 +1414,41 @@ def _rls_and_function_hardening() -> None:
 
 
 def _tenant_rls(table: str, column: str, policy: str) -> None:
+    schema, table_name = table.split(".", 1)
     op.execute(
         f"""
         DO $$
+        DECLARE
+            column_type text;
+            predicate text;
         BEGIN
             IF to_regclass('{table}') IS NULL THEN
                 RETURN;
             END IF;
+            SELECT data_type INTO column_type
+            FROM information_schema.columns
+            WHERE table_schema = '{schema}'
+              AND table_name = '{table_name}'
+              AND column_name = '{column}';
+            IF column_type IS NULL THEN
+                RETURN;
+            END IF;
+            IF column_type IN ('text', 'character varying') THEN
+                predicate := '{column} = get_tenant_context()::text';
+            ELSE
+                predicate := '{column} = get_tenant_context()';
+            END IF;
             EXECUTE 'ALTER TABLE {table} ENABLE ROW LEVEL SECURITY';
             EXECUTE 'ALTER TABLE {table} FORCE ROW LEVEL SECURITY';
             EXECUTE 'DROP POLICY IF EXISTS {policy} ON {table}';
-            EXECUTE 'CREATE POLICY {policy} ON {table}
-                FOR ALL
-                USING ({column} = get_tenant_context())
-                WITH CHECK ({column} = get_tenant_context())';
+            EXECUTE format(
+                'CREATE POLICY {policy} ON {table}
+                    FOR ALL
+                    USING (%s)
+                    WITH CHECK (%s)',
+                predicate,
+                predicate
+            );
         END $$;
         """
     )

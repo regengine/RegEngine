@@ -60,3 +60,21 @@ def test_fsma_tenant_backfills_are_guarded_by_org_id_presence(monkeypatch):
             re.VERBOSE | re.DOTALL,
         )
         assert pattern.search(sql), f"expected guarded tenant backfill for fsma.{table}"
+
+
+def test_tenant_rls_handles_legacy_text_tenant_ids(monkeypatch):
+    module = _load_migration_module()
+    executed_sql = []
+    monkeypatch.setattr(module.op, "execute", executed_sql.append)
+
+    module._tenant_rls("fsma.compliance_alerts", "tenant_id", "tenant_isolation_alerts")
+
+    assert len(executed_sql) == 1
+    sql = executed_sql[0]
+    assert "table_schema = 'fsma'" in sql
+    assert "table_name = 'compliance_alerts'" in sql
+    assert "column_name = 'tenant_id'" in sql
+    assert "column_type IN ('text', 'character varying')" in sql
+    assert "predicate := 'tenant_id = get_tenant_context()::text';" in sql
+    assert "predicate := 'tenant_id = get_tenant_context()';" in sql
+    assert "CREATE POLICY tenant_isolation_alerts ON fsma.compliance_alerts" in sql
