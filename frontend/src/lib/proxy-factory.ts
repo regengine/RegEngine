@@ -189,7 +189,7 @@ export interface StreamProxyConfig {
     /** Methods to export. Defaults to GET/POST/PUT/PATCH/DELETE/OPTIONS. */
     methods?: HttpMethod[];
     /** Should we retry this response against the next target base? */
-    shouldRetry?: (response: Response) => boolean;
+    shouldRetry?: (response: Response, path: string) => boolean;
     /** Optional: paths that skip the auth + session checks (used for admin/auth/login etc.). */
     isUnauthenticatedPath?: (path: string) => boolean;
 }
@@ -210,7 +210,7 @@ function defaultShouldRetry(response: Response): boolean {
 
 export function createStreamProxy(config: StreamProxyConfig): MethodHandlers {
     const methods = config.methods ?? [...DEFAULT_METHODS, 'OPTIONS' as HttpMethod];
-    const shouldRetry = config.shouldRetry ?? defaultShouldRetry;
+    const shouldRetry = config.shouldRetry ?? ((response: Response) => defaultShouldRetry(response));
     const responseHeaders = config.responseHeaderPassthrough ?? DEFAULT_STREAM_RESPONSE_HEADERS;
 
     const handler = async (
@@ -260,7 +260,7 @@ export function createStreamProxy(config: StreamProxyConfig): MethodHandlers {
                 const targetUrl = `${stripTrailingSlash(base)}/${path}${queryString}`;
                 try {
                     const response = await fetch(targetUrl, fetchOptions);
-                    if (shouldRetry(response)) {
+                    if (shouldRetry(response, path)) {
                         attemptErrors.push(
                             `target=${base} status=${response.status} reason=${response.headers.get('x-vercel-error') || 'vercel_error'}`,
                         );

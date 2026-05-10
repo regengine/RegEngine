@@ -62,7 +62,7 @@ def data_schemas_dir() -> Path:
 # ── sys.path helpers ──────────────────────────────────────────────
 
 def ensure_shared_importable() -> None:
-    """Add project root, kernel, and services directories to ``sys.path``.
+    """Add project root, shared, and services directories to ``sys.path``.
     
     This is the primary bootstrap mechanism for all RegEngine services.
     It ensures that ``from shared import ...`` and ``from app import ...`` 
