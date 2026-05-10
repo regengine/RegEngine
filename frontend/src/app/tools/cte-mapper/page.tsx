@@ -7,14 +7,14 @@ import { EmailGate } from "@/components/tools/EmailGate";
 import { RelatedTools } from "@/components/tools/RelatedTools";
 
 export const metadata: Metadata = {
-    title: "CTE Mapper | FSMA 204 Critical Tracking Event Supply Chain Tool | RegEngine",
-    description: "Visualize your supply chain nodes and see exactly who owes whom data under FSMA 204. Map all 7 Critical Tracking Events across your supply chain. Free tool.",
+    title: "CTE Mapper | FSMA 204 Critical Tracking Events by Role | RegEngine",
+    description: "See which Critical Tracking Events typically apply to your role under 21 CFR Part 1 Subpart S. Educational starting reference; §1.1305 exemptions may change which CTEs apply to your specific operation.",
     alternates: {
         canonical: "https://regengine.co/tools/cte-mapper",
     },
     openGraph: {
         title: "CTE Mapper — RegEngine",
-        description: "Visualize your supply chain nodes and map all 7 FSMA 204 Critical Tracking Events. Free tool.",
+        description: "See which Critical Tracking Events typically apply to your role under FSMA 204. Educational starting reference; not a regulatory determination.",
         type: "website",
         url: "https://regengine.co/tools/cte-mapper",
     },
@@ -26,7 +26,7 @@ const jsonLd = {
     "name": "CTE Coverage Mapper",
     "operatingSystem": "All",
     "applicationCategory": "BusinessApplication",
-    "description": "Supply chain node mapping tool for FSMA 204 Critical Tracking Events (CTE).",
+    "description": "Educational reference mapping common supply-chain roles to FSMA 204 Critical Tracking Events. Not a regulatory determination.",
     "offers": {
         "@type": "Offer",
         "price": "0",
@@ -46,19 +46,19 @@ function CTEMapperFallback() {
                     <svg className="w-8 h-8 text-re-brand" fill="none" viewBox="0 0 24 24" stroke="currentColor"><rect x="3" y="3" width="7" height="7" rx="1" strokeWidth="1.5"/><rect x="14" y="3" width="7" height="7" rx="1" strokeWidth="1.5"/><rect x="3" y="14" width="7" height="7" rx="1" strokeWidth="1.5"/><path d="M17.5 17.5h.01M14 17.5h3.5m0 0V14" strokeWidth="1.5" strokeLinecap="round"/></svg>
                 </div>
                 <h1 className="text-2xl font-bold text-[var(--re-text-primary)] mb-3">CTE Coverage Mapper</h1>
-                <p className="text-sm text-[var(--re-text-muted)] max-w-lg mx-auto leading-relaxed">Visualize your supply chain nodes and see exactly which Critical Tracking Events and Key Data Elements each link in your chain is responsible for under FSMA 204. Add facilities, define relationships, and identify coverage gaps.</p>
+                <p className="text-sm text-[var(--re-text-muted)] max-w-lg mx-auto leading-relaxed">See which Critical Tracking Events typically apply to your role under 21 CFR Part 1 Subpart S. Educational starting reference; §1.1305 exemptions may change which CTEs apply to your specific operation.</p>
             </div>
             <div className="max-w-2xl mx-auto">
-                <h2 className="text-lg font-semibold text-[var(--re-text-primary)] mb-4">The 7 FSMA 204 Critical Tracking Events</h2>
+                <h2 className="text-lg font-semibold text-[var(--re-text-primary)] mb-4">FSMA 204 Critical Tracking Events</h2>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-8">
                     {[
-                        { cte: "Harvesting", desc: "When a food is picked, collected, or gathered from a growing area." },
-                        { cte: "Cooling", desc: "Active temperature reduction after harvest — distinct from cold storage." },
-                        { cte: "Initial Packing", desc: "First time the raw agricultural commodity is packed for sale." },
-                        { cte: "First Land-Based Receiving", desc: "First U.S. land-based facility to receive an imported food." },
-                        { cte: "Shipping", desc: "Every time the food leaves a facility in the supply chain." },
-                        { cte: "Receiving", desc: "Every time the food arrives at a new facility." },
-                        { cte: "Transformation", desc: "Any manufacturing, processing, or significant alteration of the food." },
+                        { cte: "Harvesting (§1.1325)", desc: "When a food is picked, collected, or gathered from a growing area." },
+                        { cte: "Cooling (§1.1325)", desc: "Active temperature reduction after harvest. §1.1325 covers Harvesting and Cooling in a single section." },
+                        { cte: "Initial Packing (§1.1330)", desc: "First time a raw agricultural commodity (other than food obtained from a fishing vessel) is packed." },
+                        { cte: "First Land-Based Receiving (§1.1335)", desc: "First land-based receipt of food obtained from a fishing vessel. Applies only to food obtained from a fishing vessel — non-seafood importers perform §1.1345 Receiving, not FLBR." },
+                        { cte: "Shipping (§1.1340)", desc: "Every time the food leaves a facility in the supply chain." },
+                        { cte: "Receiving (§1.1345)", desc: "Every time the food arrives at a new facility. Subject to the §1.1305(j) exemption for restaurants and retail food establishments selling directly to consumers." },
+                        { cte: "Transformation (§1.1350)", desc: "Manufacturing, processing, or significant alteration that produces a new traceability lot." },
                     ].map((item) => (
                         <div key={item.cte} className="rounded-lg border border-[rgba(255,255,255,0.06)] bg-[rgba(255,255,255,0.02)] p-3">
                             <span className="text-sm font-semibold text-re-brand">{item.cte}</span>
@@ -97,7 +97,7 @@ export default function CTEMapperPage() {
             <RelatedTools tools={[
                 { href: "/tools/kde-checker", title: "KDE Checker", description: "Generate a customized Key Data Element checklist for each CTE and FTL product type." },
                 { href: "/tools/ftl-checker", title: "FTL Checker", description: "Verify which of your food products are covered by FDA FSMA 204 requirements." },
-                { href: "/tools/drill-simulator", title: "24-Hour Drill Simulator", description: "Test if your supply chain can meet the FDA 24-hour records retrieval mandate." },
+                { href: "/tools/drill-simulator", title: "24-Hour Drill Simulator", description: "Self-paced rehearsal for your §1.1455(c) records-on-request workflow." },
             ]} />
         </>
     );
