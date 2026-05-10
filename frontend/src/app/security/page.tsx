@@ -5,7 +5,7 @@ import { ArrowRight, Database, Download, FileCode2, Hash, KeyRound, Lock, Shield
 export const metadata: Metadata = {
   title: "Security | RegEngine",
   description:
-    "RegEngine security posture is centered on tenant isolation, evidence integrity, cryptographic verification, and exportability.",
+    "RegEngine security posture: tenant isolation, evidence integrity after ingest, verifiable export manifests, and exportability.",
   openGraph: {
     title: "Security | RegEngine",
     description: "Tenant isolation, evidence integrity, and verification posture for FSMA 204 records.",
@@ -15,18 +15,18 @@ export const metadata: Metadata = {
 };
 
 const verified = [
-  { title: "Tenant isolation", body: "PostgreSQL row-level policies and authenticated tenant context prevent cross-tenant reads.", icon: Lock },
-  { title: "Immutable evidence", body: "Committed compliance records are append-oriented and corrections preserve lineage.", icon: Database },
-  { title: "Hash verification", body: "Current export posture is designed so evidence can be checked outside the product UI.", icon: Hash },
+  { title: "Tenant isolation", body: "PostgreSQL row-level policies and authenticated tenant context are designed to restrict cross-tenant access. Identity-resolution and graph-layer hardening is in active rollout; details available under NDA.", icon: Lock },
+  { title: "Append-oriented evidence", body: "Committed compliance records are append-oriented after ingest, and corrections preserve lineage rather than mutating prior records.", icon: Database },
+  { title: "Hash verification", body: "Export bundles ship with a SHA-256 manifest so records can be checked outside the product UI; downstream consumer-side signature verification is rolling out.", icon: Hash },
   { title: "Operational gates", body: "Secrets, SAST, DAST, dependency, container, and SBOM checks run in CI.", icon: ShieldCheck },
 ];
 
 const controls = [
-  ["Encryption", "Managed-cloud encryption at rest and encrypted transport in transit"],
+  ["Encryption", "Encrypted transport in transit; encryption at rest provided by managed database and storage providers (see subprocessors)"],
   ["Identity", "JWT sessions, API keys, CSRF protection"],
-  ["Isolation", "Tenant-scoped database access"],
-  ["Audit", "Tamper-evident records and export manifests"],
-  ["Verification", "Open verifier script for chain checks"],
+  ["Isolation", "Tenant-scoped database access via PostgreSQL row-level policies"],
+  ["Audit", "Tamper-evident export manifests covering records after ingest; upstream entry is not cryptographically attested"],
+  ["Verification", "Open verifier script for export-bundle chain checks"],
   ["Disclosure", "security.txt and vulnerability intake"],
 ];
 
@@ -59,14 +59,15 @@ export default function SecurityPage() {
           </div>
         </div>
         <div className="re-panel overflow-hidden">
-          <div className="border-b border-[var(--re-surface-border)] p-4">
+          <div className="flex items-center justify-between border-b border-[var(--re-surface-border)] p-4">
             <p className="re-label">Verifier output</p>
+            <p className="re-label text-[var(--re-text-muted)]">Sample · illustrative</p>
           </div>
           <div className="bg-[var(--re-text-primary)] p-5 font-mono text-[12px] leading-6 text-[var(--re-surface-base)]">
             <p>$ python verify_chain.py --export fsma_package.json</p>
             <p className="mt-3 text-[#8fd19e]">verified: 430 records</p>
             <p className="text-[#8fd19e]">failed: 0 records</p>
-            <p className="text-[#f1c36d]">manifest: merkle root matched</p>
+            <p className="text-[#f1c36d]">manifest: hash matched</p>
             <p className="mt-3 text-[#d8d2c5]">result: evidence package intact</p>
           </div>
         </div>
