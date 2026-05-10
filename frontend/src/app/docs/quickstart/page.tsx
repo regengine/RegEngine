@@ -3,7 +3,7 @@ import Link from 'next/link';
 
 export const metadata: Metadata = {
   title: 'Quickstart | RegEngine',
-  description: 'Create your first tamper-evident compliance record in under 5 minutes with the RegEngine API.',
+  description: 'Create your first traceability event with a chained SHA-256 hash in under 5 minutes with the RegEngine API.',
 };
 import { ArrowLeft, Zap, Terminal, CheckCircle, Key, FileText, Code, ArrowRight } from 'lucide-react';
 import { T as _T } from '@/lib/design-tokens';
@@ -45,7 +45,7 @@ export default function QuickstartPage() {
                         Quickstart
                     </h1>
                     <p className="text-re-text-muted text-base">
-                        Create your first tamper-evident compliance record in under 5 minutes
+                        Create your first traceability event with a chained SHA-256 hash in under 5 minutes
                     </p>
                 </div>
             </div>
@@ -176,9 +176,9 @@ export REGENGINE_TENANT_ID="11111111-1111-1111-1111-111111111111"`}
                                 code={`python verify_chain.py --file export_2026_02.json --offline
 
 # Output:
-# ✓ Chain integrity verified
-# ✓ 1847 records validated
-# ✓ No hash mismatches detected`}
+# ✓ Chain re-hashed; no mismatches detected
+# ✓ 1847 records re-hashed against export
+# Note: integrity check is offline and advisory; tampering before ingest is out of scope.`}
                                 language="bash"
                             />
                         </div>
@@ -200,8 +200,8 @@ export REGENGINE_TENANT_ID="11111111-1111-1111-1111-111111111111"`}
                                 You&apos;re all set!
                             </h3>
                             <p className="text-re-text-secondary text-sm m-0">
-                                You&apos;ve created your first tamper-evident compliance record. The record is now
-                                part of an immutable chain that can be independently verified by auditors.
+                                You&apos;ve created your first traceability event with a chained SHA-256 hash. The record is now
+                                part of an append-only chain you can re-hash offline against your export to confirm nothing changed in transit.
                             </p>
                         </div>
                     </div>

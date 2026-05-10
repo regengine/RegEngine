@@ -37,11 +37,11 @@ const T = {
 export const metadata: Metadata = {
   title: 'API Documentation | RegEngine',
   description:
-    'RegEngine API documentation for FSMA 204 food traceability compliance. Ingest CTE/KDE records, evaluate compliance rules, and export FDA-ready audit packages.',
+    'RegEngine API documentation for FSMA 204 food traceability. Ingest CTE/KDE records, run advisory rule evaluation, and export §1.1455(c)-formatted audit packages.',
   openGraph: {
     title: 'API Documentation | RegEngine',
     description:
-      'RegEngine API documentation for FSMA 204 food traceability compliance. Ingest CTE/KDE records, evaluate compliance rules, and export FDA-ready audit packages.',
+      'RegEngine API documentation for FSMA 204 food traceability. Ingest CTE/KDE records, run advisory rule evaluation, and export §1.1455(c)-formatted audit packages.',
     type: 'website',
     url: 'https://regengine.co/docs',
     siteName: 'RegEngine',
@@ -57,7 +57,7 @@ const endpoints = [
     method: 'POST' as const,
     path: '/records/ingest',
     title: 'Ingest Records',
-    description: 'Ingest traceability records with CTE/KDE data. Each record is hash-chained for tamper evidence.',
+    description: 'Ingest traceability records with CTE/KDE data. Each record is hash-chained so you can detect tampering between ingest and export.',
     icon: Database,
   },
   {
@@ -71,14 +71,14 @@ const endpoints = [
     method: 'POST' as const,
     path: '/compliance/evaluate',
     title: 'Evaluate Compliance',
-    description: 'Run FSMA 204 rule evaluation against your records. Returns pass/fail with specific citations.',
+    description: 'Run FSMA 204 rule evaluation against your records. Returns advisory findings with CFR citations; informational and does not block ingestion.',
     icon: Shield,
   },
   {
     method: 'GET' as const,
     path: '/fda-export/{request_id}',
     title: 'FDA Export',
-    description: 'Export an FDA-ready audit package for a specific compliance request, including all supporting records.',
+    description: 'Export an audit package formatted to the §1.1455(c) sortable spreadsheet structure for a specific request, including supporting records.',
     icon: Send,
   },
   {
@@ -253,8 +253,8 @@ export default function DocsHomePage() {
             RegEngine API Documentation
           </h1>
           <p className="text-[16px] max-w-[600px] mb-8 leading-relaxed" style={{ color: T.textMuted }}>
-            Build FSMA 204 compliant traceability into any supply chain system.
-            Preflight supplier data, score readiness, fix missing KDEs, and commit only validated records as FDA-ready evidence.
+            Wire FSMA 204 traceability into any supply-chain system.
+            Preflight supplier data, surface gaps, fix missing KDEs, and commit records to a §1.1455(c)-formatted export pipeline. Your operation remains responsible for compliance.
           </p>
 
           {/* Quick start steps */}

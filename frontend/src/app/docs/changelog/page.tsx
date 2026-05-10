@@ -128,9 +128,9 @@ export default function ChangelogPage() {
                         </h4>
                         <ul className="m-0 pl-5 leading-[1.8]" style={{ color: T.text }}>
                             <li>FSMA 204 compliance module with CTEs and KDEs</li>
-                            <li>FDA Request Mode for 24-hour export compliance</li>
+                            <li>FDA Request Mode — produces a §1.1455(c) sortable spreadsheet to support your 24-hour response obligation</li>
                             <li>Graph-based supply chain tracing (forward/backward)</li>
-                            <li>Cryptographic record hashing for tamper evidence</li>
+                            <li>SHA-256 chained record hashing for tamper detection</li>
                             <li>FTL Checker tool for Food Traceability List verification</li>
                         </ul>
                     </div>
