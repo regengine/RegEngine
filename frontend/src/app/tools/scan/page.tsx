@@ -216,7 +216,7 @@ export default function ScanPage() {
                     isCompatible ? styles.badgeSuccess : styles.badgeError
                   }`}
                 >
-                  {isCompatible ? '✓ FSMA Compatible' : '✗ Not FSMA Compatible'}
+                  {isCompatible ? '✓ Likely FSMA-relevant fields detected' : '✗ Insufficient FSMA fields for a complete KDE set'}
                 </span>
               </div>
 
@@ -287,11 +287,17 @@ export default function ScanPage() {
                     onChange={(e) => setEventType(e.target.value)}
                     className={styles.input}
                   >
-                    <option>Receiving</option>
-                    <option>Shipping</option>
-                    <option>Transformation</option>
-                    <option>Aggregation</option>
+                    <option>Harvesting (§1.1325)</option>
+                    <option>Cooling (§1.1325)</option>
+                    <option>Initial Packing (§1.1330)</option>
+                    <option>First Land-Based Receiving — Seafood (§1.1335)</option>
+                    <option>Shipping (§1.1340)</option>
+                    <option>Receiving (§1.1345)</option>
+                    <option>Transformation (§1.1350)</option>
                   </select>
+                  <p className="text-[10px] text-[var(--re-text-muted)] mt-1">
+                    Selecting Receiving? §1.1305(j) may exempt restaurants and retail food establishments — confirm your role first.
+                  </p>
                 </div>
 
                 <div className={styles.formGroup}>
