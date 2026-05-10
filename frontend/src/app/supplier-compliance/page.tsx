@@ -7,11 +7,11 @@ import {
 import { Button } from '@/components/ui/button';
 
 export const metadata: Metadata = {
-    title: 'Your Buyer Requires FSMA 204 Compliance | RegEngine',
-    description: 'Major retailers are requiring FSMA 204 traceability from suppliers now. Get compliant in minutes, not months. No rip-and-replace required.',
+    title: 'Your Buyer Asked About FSMA 204 Traceability | RegEngine',
+    description: 'Major retailers are increasingly asking suppliers for FSMA 204 traceability data. Start submitting in minutes — full FSMA 204 program coverage takes longer. No rip-and-replace required.',
     openGraph: {
-        title: 'Your Buyer Requires FSMA 204 Compliance | RegEngine',
-        description: 'Major retailers are requiring FSMA 204 traceability from suppliers. Get compliant in minutes with RegEngine.',
+        title: 'Your Buyer Asked About FSMA 204 Traceability | RegEngine',
+        description: 'Major retailers are asking suppliers for traceability data. Start submitting in minutes with RegEngine.',
         url: 'https://regengine.co/supplier-compliance',
         type: 'website',
     },
@@ -41,11 +41,11 @@ const COMPLIANCE_STEPS = [
     },
 ];
 
+// Generic, hedged framing — we don't claim insider knowledge of specific
+// retailer contracting terms. If a buyer mandate is publicly cited, link
+// to the source rather than asserting it here.
 const RETAILERS_ENFORCING = [
-    { name: 'Walmart', detail: 'Supplier compliance clauses active since August 2025' },
-    { name: 'Albertsons', detail: 'FSMA 204 requirements in new supplier contracts' },
-    { name: 'Kroger', detail: 'Enhanced traceability requirements for fresh categories' },
-    { name: 'Costco', detail: 'Supplier quality programs incorporating traceability' },
+    { name: 'Major retailers', detail: 'Multiple top-10 grocers have publicly signaled supplier traceability expectations ahead of the 2028 deadline. Specific requirements vary by buyer — confirm directly with your buyer.' },
 ];
 
 const FAQ = [
@@ -198,7 +198,7 @@ export default function SupplierCompliancePage() {
                             {
                                 icon: Clock,
                                 title: 'The deadline',
-                                body: 'The FDA compliance deadline is July 20, 2028. However, major retailers like Walmart and Albertsons are already requiring compliance from suppliers. Market-driven enforcement is happening now.',
+                                body: 'The FDA compliance deadline is July 20, 2028. Many major retailers are signaling traceability expectations to suppliers ahead of that date. Specific retailer requirements vary by buyer and should be confirmed directly with your buyer.',
                             },
                             {
                                 icon: AlertTriangle,
@@ -275,10 +275,10 @@ export default function SupplierCompliancePage() {
             <section className="py-12 sm:py-16 px-4 sm:px-6 bg-[linear-gradient(135deg,var(--re-brand)_0%,#0ea5e9_100%)]">
                 <div className="max-w-[600px] mx-auto text-center">
                     <h2 className="text-2xl font-bold text-white mb-3">
-                        Do Not Lose Shelf Access
+                        Buyers are starting to ask
                     </h2>
                     <p className="text-base text-white/90 mb-8 leading-relaxed">
-                        The cost of non-compliance is not a fine — it is losing your buyer. Get your free readiness assessment and see where you stand.
+                        Be ready when they do. Get a free readiness self-check and see where your traceability records stand.
                     </p>
                     <div className="flex gap-3 justify-center flex-wrap">
                         <Link href="/retailer-readiness">

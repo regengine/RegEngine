@@ -89,8 +89,8 @@ const useItems = [
 
 const dontItems = [
   'We do not sell your personal data or compliance data to third parties.',
-  'We do not use your compliance data to train machine learning models.',
-  'We do not share your data with other RegEngine tenants. Row-Level Security enforces tenant isolation at the database level.',
+  'We do not train RegEngine-owned models on your compliance data. Where we use third-party LLM providers (e.g., OpenAI, Vertex AI) for extraction, those calls run under the providers\' standard data-handling terms — confirm specific terms with us before relying on this for sensitive content.',
+  'We do not share your data with other RegEngine tenants. PostgreSQL row-level policies and authenticated tenant context are designed to restrict cross-tenant access; identity-resolution and graph-layer hardening is in active rollout.',
   'We do not serve targeted ads.',
   'We do not share your data with data brokers.',
 ];
@@ -104,7 +104,7 @@ const storageItems = [
   {
     Icon: Lock,
     subtitle: 'Isolation',
-    text: "Each tenant's data is isolated via PostgreSQL Row-Level Security policies. This is enforced at the database layer, not the application layer.",
+    text: "Tenant data is isolated via PostgreSQL row-level policies and authenticated tenant context, designed to restrict cross-tenant access. Identity-resolution and graph-layer hardening is in active rollout — see the DPA for the full subprocessor list.",
   },
   {
     Icon: Hash,
@@ -392,10 +392,13 @@ export default function PrivacyPage() {
                     Third-Party Services
                   </h2>
                   <p className="text-[13px] text-[var(--re-text-muted)] leading-relaxed">
-                    We use a limited number of third-party services to operate RegEngine: cloud
-                    hosting (data storage and compute), payment processing (Stripe — they have their
-                    own privacy policy), and email delivery (transactional emails only). Each service
-                    provider is bound by data processing agreements.
+                    We use a limited list of third-party subprocessors to operate RegEngine — currently
+                    Supabase, Railway, Vercel, Sentry (incl. session replay), Resend, PostHog, OpenAI
+                    (incl. Vision), Google Cloud / Vertex AI, Stripe, and Redpanda. The full
+                    authoritative list, including purpose, data processed, and region, is in the{' '}
+                    <Link href="/dpa" className="text-[var(--re-brand)] underline">DPA</Link>. Each
+                    provider is bound by a data-processing agreement and material changes to the list
+                    are notified per the DPA.
                   </p>
                 </div>
               </div>
