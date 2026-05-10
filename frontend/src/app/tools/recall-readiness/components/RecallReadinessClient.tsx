@@ -13,8 +13,8 @@ import { submitAssessment, AssessmentFormData } from '@/app/actions/submit-asses
 
 const READINESS_TOOL_CONFIG: ToolConfig = {
     id: 'recall-readiness',
-    title: 'Recall Readiness Score',
-    description: 'Evaluate your ability to respond to an FDA FSMA 204 records request within the mandated 24-hour window.',
+    title: 'FSMA 204 Readiness Self-Check',
+    description: 'Self-check your readiness to provide a sortable electronic spreadsheet to FDA within 24 hours of request, per §1.1455(c).',
     icon: 'Shield',
     stages: {
         questions: [
@@ -181,18 +181,15 @@ export function RecallReadinessClient() {
             setLastAnswers(answers);
         }
 
-        let color = 'var(--re-danger)';
-        if (totalScore >= 90) color = 'var(--re-brand)';
-        else if (totalScore >= 80) color = 'var(--re-brand)';
-        else if (totalScore >= 70) color = 'var(--re-warning)';
-        else if (totalScore >= 55) color = 'var(--re-warning)';
-
-        const gaps = [];
+        const gaps: string[] = [];
         if (answers.pull_24h !== 'yes') gaps.push('Gap indicated: self-reported inability to assemble required records within 24 hours (21 CFR §1.1455(b)(3))');
         if (answers.sortable_spreadsheet !== 'yes') gaps.push('Gap indicated: no electronic sortable spreadsheet workflow reported (21 CFR §1.1455(b)(3)(ii))');
         if (answers.digital_search !== 'yes') gaps.push('Risk indicated: manual/paper records make a 24-hour assembly harder');
         if (answers.tlc_stability === 'no') gaps.push('Gap indicated: TLC stability concern reported — risks data linkage breaks');
         if (answers.cte_coverage === 'no') gaps.push('Gap indicated: missing Critical Tracking Event recordkeeping for your role');
+
+        const gapCount = gaps.length;
+        const indicatorColor = gapCount === 0 ? 'var(--re-brand)' : 'var(--re-warning)';
 
         return (
             <div className="space-y-8">
@@ -201,19 +198,21 @@ export function RecallReadinessClient() {
                         initial={{ scale: 0.5, opacity: 0 }}
                         animate={{ scale: 1, opacity: 1 }}
                         className="inline-flex items-center justify-center w-24 h-24 rounded-full border-4 mb-4"
-                        style={{ borderColor: color, color }}
+                        style={{ borderColor: indicatorColor, color: indicatorColor }}
                     >
-                        <span className="text-5xl font-black">{grade}</span>
+                        <span className="text-3xl font-black leading-tight text-center px-2">
+                            {gapCount === 0 ? 'No gaps' : `${gapCount} gap${gapCount === 1 ? '' : 's'}`}
+                        </span>
                     </motion.div>
-                    <h3 className="text-2xl font-bold">Your Self-Reported Readiness Indicator</h3>
-                    <p className="text-[var(--re-text-tertiary)] mt-1">Total score: {totalScore} / 100</p>
+                    <h3 className="text-2xl font-bold">Self-Check Result</h3>
+                    <p className="text-[var(--re-text-tertiary)] mt-1">Based on your self-reported answers — not a compliance verdict.</p>
                 </div>
 
                 {/* Lead capture form - gate detailed results */}
                 {!leadSubmitted && (
                     <div className="p-6 rounded-2xl border-2 border-[var(--re-brand)] bg-[var(--re-brand-muted)]">
                         <div className="text-center mb-5">
-                            <h3 className="text-lg font-bold text-[var(--re-text-primary)]">Get Your Full Compliance Report</h3>
+                            <h3 className="text-lg font-bold text-[var(--re-text-primary)]">Get a follow-up from the RegEngine team</h3>
                             <p className="text-sm text-[var(--re-text-tertiary)] mt-1">
                                 Share your details if you want a follow-up from the RegEngine team about your readiness results and next steps.
                             </p>

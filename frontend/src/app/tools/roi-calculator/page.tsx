@@ -22,7 +22,7 @@ export const metadata: Metadata = {
 const jsonLd = {
     "@context": "https://schema.org",
     "@type": "SoftwareApplication",
-    "name": "Regulatory ROI Calculator",
+    "name": "FSMA 204 Savings Estimator",
     "operatingSystem": "All",
     "applicationCategory": "BusinessApplication",
     "financialVariable": "Compliance ROI",

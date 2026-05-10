@@ -30,7 +30,7 @@ const jsonLd = {
 const relatedTools = [
     { href: '/tools/data-import', title: 'Data Import Hub', description: 'Import traceability data via CSV, IoT temperature logs, or webhook API before exporting.' },
     { href: '/tools/notice-validator', title: 'FDA Request Validator', description: 'Validate your draft FDA response against FSMA 204 record requirements before submission.' },
-    { href: '/tools/recall-readiness', title: 'Recall Readiness Score', description: 'Grade your ability to meet the FDA 24-hour records retrieval mandate.' },
+    { href: '/tools/recall-readiness', title: 'FSMA 204 Readiness Self-Check', description: 'Self-check your ability to meet the §1.1455(c) 24-hour records request obligation.' },
 ];
 
 export default function ExportLayout({ children }: { children: React.ReactNode }) {

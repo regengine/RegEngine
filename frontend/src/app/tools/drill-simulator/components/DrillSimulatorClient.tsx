@@ -584,16 +584,14 @@ STATUS: ${
                             <div className="flex justify-center mb-4">
                                 <ScoreCircle score={result.scores.overallScore} />
                             </div>
-                            <p className="text-4xl font-bold mb-2" style={{ color: 'var(--re-brand)' }}>
-                                {result.scores.grade}
-                            </p>
                             <Badge
-                                className={`text-white ${
-                                    result.scores.overallScore >= 70 ? 'bg-re-success' : 'bg-re-danger'
-                                }`}
+                                className="text-white bg-re-info"
                             >
-                                {result.scores.overallScore >= 70 ? 'No gaps indicated' : 'Gaps indicated'}
+                                {result.findings.length === 0 ? 'No gaps indicated' : `${result.findings.length} gap${result.findings.length === 1 ? '' : 's'} indicated`}
                             </Badge>
+                            <p className="text-xs mt-2" style={{ color: 'var(--re-text-tertiary)' }}>
+                                Self-check on synthetic drill data — not a compliance verdict.
+                            </p>
                         </CardContent>
                     </Card>
 
@@ -670,16 +668,12 @@ STATUS: ${
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                             <div className="flex flex-col items-center justify-center">
                                 <ScoreCircle score={result.scores.overallScore} />
-                                <p className="text-4xl font-bold mt-4" style={{ color: 'var(--re-brand)' }}>
-                                    {result.scores.grade}
-                                </p>
-                                <Badge
-                                    className={`mt-2 text-white ${
-                                        result.scores.overallScore >= 70 ? 'bg-re-success' : 'bg-re-danger'
-                                    }`}
-                                >
-                                    {result.scores.overallScore >= 70 ? 'No gaps indicated' : 'Gaps indicated'}
+                                <Badge className="mt-3 text-white bg-re-info">
+                                    {result.findings.length === 0 ? 'No gaps indicated' : `${result.findings.length} gap${result.findings.length === 1 ? '' : 's'} indicated`}
                                 </Badge>
+                                <p className="text-xs mt-2 text-center" style={{ color: 'var(--re-text-tertiary)' }}>
+                                    Self-check on synthetic drill data — not a compliance verdict.
+                                </p>
                             </div>
                             <div className="space-y-4">
                                 {[
