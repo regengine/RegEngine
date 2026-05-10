@@ -7,14 +7,14 @@ import { EmailGate } from "@/components/tools/EmailGate";
 import { RelatedTools } from "@/components/tools/RelatedTools";
 
 export const metadata: Metadata = {
-    title: "Recall Readiness Score | FSMA 204 24-Hour Records Retrieval Test | RegEngine",
-    description: "Get an A–F grade on your readiness to meet the FDA 24-hour records retrieval mandate for FSMA 204. Identify compliance gaps before an outbreak investigation.",
+    title: "FSMA 204 Readiness Self-Check | RegEngine",
+    description: "A self-reported readiness self-check for FSMA 204 traceability records. Educational; not a compliance certification.",
     alternates: {
         canonical: "https://regengine.co/tools/recall-readiness",
     },
     openGraph: {
-        title: "Recall Readiness Score — RegEngine",
-        description: "Grade your readiness to meet the FDA 24-hour records retrieval mandate. Identify FSMA 204 gaps. Free.",
+        title: "FSMA 204 Readiness Self-Check — RegEngine",
+        description: "A self-reported readiness self-check for FSMA 204 traceability records. Educational; not a compliance certification.",
         type: "website",
         url: "https://regengine.co/tools/recall-readiness",
     },
@@ -23,10 +23,10 @@ export const metadata: Metadata = {
 const jsonLd = {
     "@context": "https://schema.org",
     "@type": "SoftwareApplication",
-    "name": "Recall Readiness Score",
+    "name": "FSMA 204 Readiness Self-Check",
     "operatingSystem": "All",
     "applicationCategory": "BusinessApplication",
-    "description": "Compliance benchmarking tool for FDA 24-hour traceability record retrieval.",
+    "description": "A self-reported readiness self-check for FSMA 204 traceability records. Educational; not a compliance certification.",
     "offers": {
         "@type": "Offer",
         "price": "0",
@@ -47,7 +47,7 @@ export default function RecallReadinessPage() {
                     <Breadcrumbs
                         items={[
                             { label: "Free Tools", href: "/tools" },
-                            { label: "Recall Readiness Score" }
+                            { label: "FSMA 204 Readiness Self-Check" }
                         ]}
                     />
                     <Suspense>
@@ -58,7 +58,7 @@ export default function RecallReadinessPage() {
                 </div>
             </div>
             <RelatedTools tools={[
-                { href: "/tools/drill-simulator", title: "24-Hour Drill Simulator", description: "Practice an FDA outbreak response drill before a real investigation hits." },
+                { href: "/tools/drill-simulator", title: "24-Hour Drill Simulator", description: "Practice a §1.1455(c) records-request drill before a real one." },
                 { href: "/tools/readiness-assessment", title: "Readiness Assessment", description: "Score your full FSMA 204 compliance posture across all requirement areas." },
                 { href: "/tools/notice-validator", title: "FDA Request Validator", description: "Check whether your draft FDA response covers all required FSMA 204 elements." },
             ]} />
