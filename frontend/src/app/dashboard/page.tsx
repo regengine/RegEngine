@@ -49,8 +49,8 @@ import { useOnboardingStatus } from "@/hooks/use-onboarding";
 const getQuickActions = (tenantType: "retailer" | "supplier" | "system") => {
   const commonActions = [
     {
-      title: "Compliance Score",
-      description: "View your compliance grade",
+      title: "Self-Check Score",
+      description: "View your advisory readiness indicator",
       icon: Shield,
       href: "/dashboard/compliance",
       color: "text-re-brand",

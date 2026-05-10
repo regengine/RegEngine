@@ -421,7 +421,7 @@ function summarizeFeederDiagnosis(result: SandboxEvaluationResult): FeederDiagno
                 : "Sandbox diagnosis found corrections before mapping",
         impact:
             status === "clear"
-                ? "This test run can move into import mapping, but it still cannot create FDA-ready evidence."
+                ? "This test run can move into import mapping, but it still cannot create production compliance records."
                 : "Correct the highlighted rows and fields before treating this source as a monitored production feed.",
         buckets: [
             { id: "events", label: "Rows checked", count: result.total_events, tone: "info" },
@@ -454,7 +454,7 @@ function buildFeederRemediationPlan(result: SandboxEvaluationResult): FeederReme
     }
     steps.push({
         title: "Map only after diagnosis",
-        detail: "Use the test run to configure import mapping; FDA-ready evidence still requires signed-in production records.",
+        detail: "Use the test run to configure import mapping; production compliance records still requires signed-in production records.",
     });
     return steps;
 }
@@ -1347,7 +1347,7 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
         },
         {
             label: "Production evidence",
-            value: "FDA-ready evidence comes from signed-in production records",
+            value: "production compliance records comes from signed-in production records",
             tone: "border-emerald-200 bg-emerald-50 text-emerald-950",
         },
     ];
@@ -1376,7 +1376,7 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
         },
         {
             label: "Preview test handoff",
-            detail: "Test filters only; FDA-ready evidence stays in production exports",
+            detail: "Test filters only; production compliance records stays in production exports",
             state: runStage === "exported" ? "complete" : "pending",
         },
     ];
@@ -1481,7 +1481,7 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
                                     <Badge className="border border-amber-200 bg-amber-50 text-amber-800">Mock environment</Badge>
                                 </div>
                                 <p className="mt-1.5 max-w-3xl text-sm leading-6 text-slate-600">
-                                    Test supplier traceability data before production import. This lab uses mock or uploaded test records only; FDA-ready evidence starts after signed-in production import.
+                                    Test supplier traceability data before production import. This lab uses mock or uploaded test records only; production compliance records starts after signed-in production import.
                                 </p>
                                 <div data-dashboard-actions className="mt-3 flex flex-wrap gap-2">
                                     <Button className="h-9 bg-emerald-700 text-white hover:bg-emerald-800" onClick={startMachineDemo} disabled={isBusy}>
@@ -1523,7 +1523,7 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
                                 <span className="text-sm font-semibold text-slate-950">{activeDataBoundary}</span>
                             </div>
                             <p className="mt-1 max-w-4xl text-xs leading-5 text-slate-600">
-                                {boundaryStateDetail} The lab checks traceability handoffs (CTEs) and required data fields (KDEs), but it cannot create FDA-ready evidence.
+                                {boundaryStateDetail} The lab checks traceability handoffs (CTEs) and required data fields (KDEs), but it cannot create production compliance records.
                             </p>
                         </div>
                         <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
@@ -1554,7 +1554,7 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
                                     <p className="mt-1 text-sm leading-5 text-slate-500">
                                         {isStandalone
                                             ? "Review mock-generated records, trace lots, and preview test filters without mixing simulator data into production imports."
-                                            : "Validate FSMA 204 records, resolve exceptions, prove traceability, and keep FDA-ready evidence separate from test data."}
+                                            : "Validate FSMA 204 records, resolve exceptions, prove traceability, and keep production compliance records separate from test data."}
                                     </p>
                                 </div>
                                 <div className="flex w-full flex-col gap-2 sm:flex-row lg:w-auto">
@@ -1637,7 +1637,7 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
                                                 </div>
                                                 <p className="mt-2 text-sm text-slate-700">{exportReadinessLabel}</p>
                                                 <p className="mt-1 text-xs leading-5 text-slate-500">
-                                                    Test previews use the selected lot and date window. FDA-ready evidence comes later from signed-in production imports.
+                                                    Test previews use the selected lot and date window. production compliance records comes later from signed-in production imports.
                                                 </p>
                                             </div>
                                         </div>
@@ -1738,7 +1738,7 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
                                                 <div className={cn("rounded-lg border border-slate-200 bg-slate-950 text-white", isStandalone ? "p-4" : "p-3")}>
                                                     <p className="text-sm font-semibold">Test handoff preview</p>
                                                     <p className="mt-1 text-xs leading-5 text-slate-300">
-                                                        Preview test CSV or EPCIS JSON-LD filters. FDA-ready evidence is generated only from production records.
+                                                        Preview test CSV or EPCIS JSON-LD filters. production compliance records is generated only from production records.
                                                     </p>
                                                     <div className={cn("grid grid-cols-1 gap-2 sm:grid-cols-2", isStandalone ? "mt-4" : "mt-3")}>
                                                         <Button asChild className="h-9 bg-emerald-600 text-white hover:bg-emerald-700">
@@ -1964,7 +1964,7 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
                                                     <p className="text-sm font-semibold">Path to production</p>
                                                 </div>
                                                 <p className="mt-1 text-xs leading-5 text-slate-300">
-                                                    Move from free diagnosis to a monitored feed without treating sandbox rows as FDA-ready evidence.
+                                                    Move from free diagnosis to a monitored feed without treating sandbox rows as production compliance records.
                                                 </p>
                                                 <div className="mt-4 space-y-3">
                                                     {[
@@ -2028,7 +2028,7 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
                                                     <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4">
                                                         <p className="text-sm font-semibold text-emerald-900">No open fixes in the current run</p>
                                                         <p className="mt-1 text-xs leading-5 text-emerald-800">
-                                                            Ready lots can move to production import mapping. Sandbox and mock records still stay outside FDA-ready evidence.
+                                                            Ready lots can move to production import mapping. Sandbox and mock records still stay outside production compliance records.
                                                         </p>
                                                     </div>
                                                 ) : (
@@ -2302,7 +2302,7 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
                                                 <div className="rounded-lg border border-slate-200 bg-slate-950 p-4 text-white">
                                                     <p className="text-sm font-semibold">Test handoff preview</p>
                                                     <p className="mt-1 text-xs leading-5 text-slate-300">
-                                                        {exportReadyCount} lots are test complete. {exceptionLots.length} exception lots remain visible. FDA-ready evidence requires production records.
+                                                        {exportReadyCount} lots are test complete. {exceptionLots.length} exception lots remain visible. production compliance records requires production records.
                                                     </p>
                                                     <div className="mt-4 grid grid-cols-2 gap-2">
                                                         <Button asChild className="h-9 bg-emerald-600 text-white hover:bg-emerald-700">
@@ -2513,7 +2513,7 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
                                                 <FileSpreadsheet className="h-5 w-5 text-emerald-700" />
                                                 <p className="mt-3 text-sm font-semibold text-slate-950">Test CSV preview</p>
                                                 <p className="mt-1 text-xs leading-5 text-slate-500">
-                                                    Includes {exportReadyCount} test-complete lots. {exceptionLots.length} exception lots are flagged for review. FDA-ready evidence is generated only from production records.
+                                                    Includes {exportReadyCount} test-complete lots. {exceptionLots.length} exception lots are flagged for review. production compliance records is generated only from production records.
                                                 </p>
                                                 <Button asChild className="mt-4 h-9 bg-emerald-700 text-white hover:bg-emerald-800">
                                                     <a href={csvExportHref}>Preview test CSV</a>
@@ -2617,7 +2617,7 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
                                     Guided test run
                                 </CardTitle>
                                 <p className="mt-1 text-xs leading-5 text-slate-500">
-                                    Load test records, validate them, review exceptions, trace a lot, and preview a test handoff without creating FDA-ready evidence.
+                                    Load test records, validate them, review exceptions, trace a lot, and preview a test handoff without creating production compliance records.
                                 </p>
                             </CardHeader>
                             <CardContent className="space-y-4 p-4">
