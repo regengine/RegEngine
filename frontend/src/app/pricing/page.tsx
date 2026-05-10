@@ -96,7 +96,7 @@ const PRICING_TIERS = [
         cta: 'Start Standard Plan',
         features: [
             '2–3 facilities',
-            'Unlimited CTEs',
+            'No per-CTE caps (fair use)',
             'Everything in Base',
             'Multi-facility operations',
             'Retailer-specific readiness benchmarks',
@@ -117,37 +117,37 @@ const PRICING_TIERS = [
         cta: 'Start Premium Plan',
         features: [
             '4+ facilities',
-            'Unlimited CTEs',
+            'No per-CTE caps (fair use)',
             'Everything in Standard',
             'Priority onboarding support',
-            'Custom integration scoping',
-            'Dedicated Slack channel',
-            'Quarterly compliance reviews',
+            'Custom integration scoping (per scope of work)',
+            'Shared Slack channel (per agreement)',
+            'Quarterly compliance review (scheduled per agreement)',
         ],
     },
 ];
 
 const COMPETITOR_COMPARISON: PricingComparisonRow[] = [
-    { feature: 'Time to First FDA-Ready Export', regengine: 'under 12 minutes', foodlogiq: 'Weeks', repositrak: 'Hours–days', tracegains: 'Weeks' },
-    { feature: 'Public API + OpenAPI Docs', regengine: '✓', foodlogiq: '✗', repositrak: '✗', tracegains: '✗' },
-    { feature: 'Self-Serve Signup', regengine: '✓', foodlogiq: '✗', repositrak: '✗', tracegains: '✗' },
+    { feature: 'Time to first FDA-formatted export', regengine: 'Minutes (self-serve)', foodlogiq: 'Enterprise implementation', repositrak: 'Retailer-coordinated', tracegains: 'Enterprise implementation' },
+    { feature: 'Public API + OpenAPI Docs', regengine: '✓', foodlogiq: '◐', repositrak: '◐', tracegains: '◐' },
+    { feature: 'Self-Serve Signup', regengine: '✓', foodlogiq: '✗', repositrak: '◐', tracegains: '✗' },
     { feature: 'Developer Sandbox', regengine: '✓', foodlogiq: '✗', repositrak: '✗', tracegains: '✗' },
-    { feature: 'Cryptographic Audit Trail', regengine: '✓', foodlogiq: '✗', repositrak: '✗', tracegains: '✗' },
+    { feature: 'Hash-manifested audit trail', regengine: '✓', foodlogiq: '◐', repositrak: '◐', tracegains: '◐' },
     { feature: 'Free Trial', regengine: '14 days', foodlogiq: 'Demo only', repositrak: 'Demo only', tracegains: 'Demo only' },
     { feature: 'Pricing Model', regengine: 'Published, per-facility', foodlogiq: 'Enterprise contract', repositrak: 'Per-supplier tiers', tracegains: 'Enterprise contract' },
 ];
 
 const FAQ: PricingFaqItem[] = [
     { q: 'How do I choose between Base, Standard, and Premium?', a: 'It comes down to facility count. Base covers 1 facility with up to 500 CTEs/month. Standard handles 2–3 facilities with unlimited CTEs. Premium is for 4+ facilities with dedicated support and quarterly compliance reviews.' },
-    { q: 'What do Founding Design Partners get?', a: 'Founding Design Partners lock in 50% off GA pricing for the life of their account. You also get white-glove onboarding, custom integration scoping, and direct founder support. Your partner rate never increases.' },
+    { q: 'What do Founding Design Partners get?', a: 'Founding Design Partners lock in 50% off GA pricing for the life of their account. You also get white-glove onboarding and custom integration scoping. Support is delivered per the terms of your partner agreement. Your partner rate never increases.' },
     { q: 'Can I switch plans anytime?', a: "Yes! Upgrade anytime and we'll prorate. Downgrade at the end of your billing cycle." },
     { q: 'Do you offer annual billing?', a: 'Yes. Annual billing saves ~15% compared to monthly. Both options are available on all plans.' },
     { q: 'Does my partner pricing ever change?', a: 'No. Founding Design Partners lock in 50% off for the life of their account. Your rate never increases. This is our commitment to the partners who helped shape the product.' },
     { q: 'What integrations are available?', a: 'Core APIs and export flows are available today. ERP, retailer, and partner-system integrations are evaluated per delivery mode: native API, webhook, CSV/SFTP import, or custom-scoped implementation.' },
-    { q: 'What if the FDA delays enforcement again?', a: 'Retailers like Walmart and Kroger are already requiring traceability from suppliers, regardless of the FDA timeline. RegEngine keeps you audit-ready for both.' },
+    { q: 'What if the FDA delays enforcement again?', a: 'Major retailers are already requiring traceability data from suppliers regardless of the FDA timeline. RegEngine gives you the tooling and records to support either trigger — the FDA rule or a retailer mandate.' },
     { q: 'Do I need this if I\'m a small farm?', a: 'FSMA 204 applies to entities on the Food Traceability List handling specific foods. Use our free FTL Checker to see if your products are covered.' },
-    { q: 'Can I integrate with my existing ERP?', a: 'Yes. RegEngine accepts data via API, CSV upload, or scoped ERP integration. Onboarding typically takes under 48 hours.' },
-    { q: 'What happens to my data?', a: 'Your data is encrypted at rest (AES-256) and in transit (TLS 1.3). Each tenant gets row-level security isolation. We never share or sell your data.' },
+    { q: 'Can I integrate with my existing ERP?', a: 'Yes. RegEngine accepts data via API, CSV upload, or scoped ERP integration. Self-serve onboarding completes within days; complex ERP integrations are scoped separately.' },
+    { q: 'What happens to my data?', a: 'Data is encrypted in transit. Encryption at rest is provided by our managed database and storage providers (see the Trust Center subprocessor list). Tenant data is isolated via PostgreSQL row-level policies; tenant-trust hardening is in active rollout. We do not share or sell your data.' },
 ];
 
 export default async function PricingPage() {
