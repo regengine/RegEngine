@@ -81,7 +81,7 @@ const collectItems = [
 const useItems = [
   { Icon: Server, text: 'Providing and maintaining RegEngine services' },
   { Icon: Database, text: 'Processing your compliance data as directed by you' },
-  { Icon: FileText, text: 'Generating FDA-ready exports and reports you request' },
+  { Icon: FileText, text: 'Generating §1.1455(c)-formatted exports and reports you request' },
   { Icon: Bell, text: 'Sending transactional emails (account, billing, compliance alerts)' },
   { Icon: RefreshCw, text: 'Improving our platform based on aggregate usage patterns' },
   { Icon: Mail, text: 'Responding to your support requests' },

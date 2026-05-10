@@ -3,7 +3,7 @@ import type { Metadata } from 'next';
 export const metadata: Metadata = {
     title: 'Retailer Supplier FSMA 204 Compliance | RegEngine — Retailer-Ready in 48 Hours',
     description:
-        'Meet major retailer traceability requirements before their internal deadlines. API-first FSMA 204 compliance for food suppliers — automated CTEs, 5-second trace, and FDA-ready exports in under 12 minutes. Free assessment available.',
+        'Major retailers are signaling traceability expectations to suppliers ahead of the federal enforcement date — confirm directly with your buyer. API-first FSMA 204 traceability for food suppliers — automated CTEs and §1.1455(c)-formatted exports. Free self-check available.',
     keywords: [
         'retailer FSMA 204 compliance',
         'food supplier traceability',
@@ -17,7 +17,7 @@ export const metadata: Metadata = {
     openGraph: {
         title: 'Retailer-Ready in 48 Hours | RegEngine FSMA 204 Compliance',
         description:
-            'API-first traceability for food suppliers. Automated CTEs, 5-second trace, and FDA-ready exports in under 12 minutes. Free assessment.',
+            'API-first traceability for food suppliers. Automated CTEs and §1.1455(c)-formatted exports. Free self-check.',
         type: 'website',
         url: 'https://regengine.co/retailer-readiness',
     },

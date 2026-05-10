@@ -321,9 +321,9 @@ export default function PortalSubmissionPage() {
                 {/* Trust badges */}
                 <div className="flex items-center justify-center gap-4 mb-6 flex-wrap">
                     {[
-                        { icon: ShieldCheck, label: 'SHA-256 verified' },
-                        { icon: Clock, label: 'FSMA 204 compliant' },
-                        { icon: FileCheck, label: 'FDA-ready format' },
+                        { icon: ShieldCheck, label: 'SHA-256 hash-chained' },
+                        { icon: Clock, label: 'FSMA 204 program' },
+                        { icon: FileCheck, label: '§1.1455(c) format' },
                     ].map((badge) => (
                         <div key={badge.label} className="flex items-center gap-1.5 text-xs text-[var(--re-text-disabled)]">
                             <badge.icon className="h-3.5 w-3.5 text-[var(--re-brand)]" />

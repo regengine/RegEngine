@@ -323,7 +323,7 @@ export default function FSMA204ComplianceGuide() {
               Ready to implement FSMA 204 compliance?
             </h3>
             <p className="text-[var(--re-text-secondary)] mb-8">
-              RegEngine automates FSMA 204 data capture, verification, and FDA-ready reporting. Get your free readiness score to see where you stand.
+              RegEngine automates FSMA 204 data capture, hash-chained ingestion, and §1.1455(c)-formatted reporting. Run a free self-check to see where you stand.
             </p>
             <div className="flex flex-col sm:flex-row gap-3">
               <Link

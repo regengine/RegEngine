@@ -103,7 +103,7 @@ export default async function RootLayout({
             '@context': 'https://schema.org',
             '@type': 'Product',
             name: 'RegEngine FSMA 204 Compliance Platform',
-            description: 'FSMA 204 food traceability compliance software. Ingest supplier data, verify chain of custody, and produce FDA-ready audit exports in under 12 minutes after records are mapped.',
+            description: 'FSMA 204 food traceability software. Ingest supplier data, hash-chain records, and produce §1.1455(c)-formatted audit exports. Your operation remains responsible for compliance.',
             url: 'https://regengine.co',
             brand: {
               '@type': 'Brand',

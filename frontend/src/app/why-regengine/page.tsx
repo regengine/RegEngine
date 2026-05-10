@@ -675,7 +675,7 @@ HTTP 201
                                 },
                                 {
                                     title: 'We are NOT a supply chain analytics platform',
-                                    detail: 'We focus on compliance validation and FDA-ready exports. Advanced forecasting and sourcing tools live elsewhere.',
+                                    detail: 'We focus on advisory compliance validation and §1.1455(c)-formatted exports. Advanced forecasting and sourcing tools live elsewhere.',
                                 },
                                 {
                                     title: 'We do NOT promise 100% FDA audit success',
@@ -730,7 +730,7 @@ HTTP 201
                             {
                                 emoji: '⚖️',
                                 title: 'Compliance Officers',
-                                detail: 'You need per-CTE validation and FDA-ready exports. RegEngine gives you audit trails and evidence.',
+                                detail: 'You need per-CTE validation and §1.1455(c)-formatted exports. RegEngine gives you audit trails and supporting records.',
                             },
                         ].map((item, idx) => (
                             <div

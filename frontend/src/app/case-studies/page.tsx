@@ -18,7 +18,7 @@ const HERO_METRICS = [
     { value: '94.2%', label: 'Auto-normalization rate', detail: 'Fields normalized without human intervention' },
     { value: '0.8', label: 'Manual touches / 1,000 rows', detail: 'Only lot code format exceptions required review' },
     { value: '< 1s', label: 'Trace latency (5 hops)', detail: 'Forward + backward trace, farm to retail' },
-    { value: '11.6 min', label: 'Time to FDA-ready export', detail: 'From raw CSV upload to sortable spreadsheet' },
+    { value: '11.6 min', label: 'Time to §1.1455(c)-formatted export', detail: 'From raw CSV upload to sortable spreadsheet' },
 ];
 
 const SUPPLY_CHAIN = [
@@ -326,7 +326,7 @@ export default function CaseStudy() {
                             </div>
                             <p className="text-[var(--re-text-secondary)] mb-6">
                                 A "manual touch" is any point where a human must review, correct, or
-                                approve a record before it can proceed to FDA-ready export. Lower is better.
+                                approve a record before it can proceed to §1.1455(c)-formatted export. Lower is better.
                             </p>
                             <div className="space-y-4">
                                 <div className="bg-[var(--re-surface-elevated)] border border-[var(--re-surface-border)] rounded-lg p-4">
@@ -607,7 +607,7 @@ export default function CaseStudy() {
                     <h2 className="text-4xl font-bold mb-6">Run This Validation on Your Data</h2>
                     <p className="text-xl text-[var(--re-text-secondary)] mb-10 max-w-2xl mx-auto">
                         Upload a sample CSV. See your auto-normalization rate, KDE completeness score,
-                        and time to FDA-ready export — measured on your actual supply chain data.
+                        and time to §1.1455(c)-formatted export — measured on your actual supply chain data.
                     </p>
                     <div className="flex flex-col sm:flex-row gap-4 justify-center">
                         <Link

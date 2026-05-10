@@ -101,7 +101,7 @@ const DEMO_TIMELINE = [
     { time: '08:42', label: '12 Lots Identified', desc: 'Forward trace mapped all downstream distribution — 3 supplier origins confirmed', icon: Package, color: 'text-re-info', done: true },
     { time: '09:15', label: 'Supplier Notifications Sent', desc: '3 suppliers contacted: Salinas Valley Farms, Pacific Coast Growers, FreshCut Processing', icon: Users, color: 'text-re-warning', done: true },
     { time: '10:00', label: 'FDA CSV Export Generated', desc: '24-hour response package with all CTEs, KDEs, and chain hashes', icon: Download, color: 'text-re-brand', done: true },
-    { time: '—', label: 'Retailer EPCIS Notification', desc: 'GS1 EPCIS 2.0 export for Walmart, Kroger, and Albertsons portals', icon: ShoppingCart, color: 'text-muted-foreground', done: false },
+    { time: '—', label: 'Retailer EPCIS Notification', desc: 'GS1 EPCIS 2.0 export package ready for retailer portal upload — confirm specific format with each buyer', icon: ShoppingCart, color: 'text-muted-foreground', done: false },
     { time: '—', label: 'Investigation Closed', desc: 'All affected lots accounted for, remediation verified', icon: CheckCircle2, color: 'text-muted-foreground', done: false },
 ];
 
