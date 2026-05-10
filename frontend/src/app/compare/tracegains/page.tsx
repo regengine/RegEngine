@@ -5,26 +5,26 @@ import { CheckCircle, XCircle, Minus, ArrowRight, Shield, FileText, Zap, Users }
 export const metadata: Metadata = {
   title: "RegEngine vs TraceGains — FSMA 204 Compliance Comparison",
   description:
-    "Compare RegEngine and TraceGains for FSMA 204 compliance. Document management vs real-time traceability rule evaluation.",
+    "Compare RegEngine and TraceGains for FSMA 204 compliance. Supplier document management vs CTE-level traceability rule evaluation.",
 };
 
 const FEATURES = [
-  { feature: "Time to first compliance export", regengine: "check", competitor: "x", note: "Minutes vs weeks of setup" },
-  { feature: "Self-serve signup", regengine: "check", competitor: "x", note: "Fast account creation vs enterprise onboarding" },
-  { feature: "Public API + OpenAPI docs", regengine: "check", competitor: "x", note: "Full REST API vs limited integrations" },
-  { feature: "FSMA 204 rule engine (KDE + relational)", regengine: "check", competitor: "x", note: "Deep validation vs document storage" },
-  { feature: "Real-time compliance scoring", regengine: "check", competitor: "x", note: "Per-event scoring vs manual review" },
-  { feature: "CSV / API / webhook ingestion", regengine: "check", competitor: "partial", note: "All three vs document upload" },
+  { feature: "Time to first compliance export", regengine: "check", competitor: "partial", note: "Self-serve onboarding vs enterprise setup" },
+  { feature: "Self-serve signup", regengine: "check", competitor: "x", note: "Public account creation vs enterprise onboarding" },
+  { feature: "Public API + OpenAPI docs", regengine: "check", competitor: "partial", note: "Full REST API; verify TraceGains' current integration surface" },
+  { feature: "FSMA 204 rule engine (KDE + relational)", regengine: "check", competitor: "partial", note: "Per-event KDE validation; confirm TraceGains' current FSMA 204 coverage" },
+  { feature: "Per-event compliance scoring", regengine: "check", competitor: "partial", note: "Advisory readiness signal computed per event" },
+  { feature: "CSV / API / webhook ingestion", regengine: "check", competitor: "partial", note: "All three; verify TraceGains' current ingestion options" },
   { feature: "Supplier document management (COAs, specs)", regengine: "partial", competitor: "check", note: "TraceGains' core strength" },
   { feature: "Supplier onboarding portal", regengine: "check", competitor: "check", note: "Both offer supplier management" },
-  { feature: "Transparent pricing on website", regengine: "check", competitor: "x", note: "$425-$749/mo vs custom quotes" },
+  { feature: "Published pricing on website", regengine: "check", competitor: "x", note: "$425-$749/mo vs custom quotes" },
   { feature: "Free sandbox / developer tools", regengine: "check", competitor: "x", note: "Try before you buy" },
 ];
 
 const WHY_SWITCH = [
-  { title: "Traceability, not just documents", icon: Zap, desc: "TraceGains excels at collecting COAs and supplier specs. But FSMA 204 requires CTE-level traceability with KDE validation \u2014 something document management can\u2019t do." },
-  { title: "Real-time rule evaluation", icon: Shield, desc: "RegEngine validates every event against 31+ FSMA 204 rules in real time. TraceGains stores documents but doesn\u2019t validate the data inside them." },
-  { title: "Built for fresh produce", icon: FileText, desc: "TraceGains was built for CPG supplier quality management. RegEngine is purpose-built for produce, seafood, and FTL-covered commodities." },
+  { title: "CTE-level traceability", icon: Zap, desc: "TraceGains is strong at COA and supplier-spec collection. FSMA 204 also requires CTE-level KDE traceability \u2014 confirm coverage with each vendor for your commodities." },
+  { title: "Per-event rule evaluation", icon: Shield, desc: "RegEngine evaluates events against 31+ FSMA 204 rules as part of ingestion. Verify TraceGains' current validation features directly with their team." },
+  { title: "Built for FTL commodities", icon: FileText, desc: "TraceGains is positioned for CPG supplier quality management. RegEngine is built for produce, seafood, and other FTL-covered commodities." },
   { title: "Complement, don't replace", icon: Users, desc: "Many teams use TraceGains for supplier docs AND RegEngine for CTE traceability. They solve different problems \u2014 you may need both." },
 ];
 
@@ -89,6 +89,12 @@ export default function TraceGainsCompare() {
             <Link href="/pricing" className="inline-flex items-center gap-2 bg-white/10 text-white px-6 py-2.5 rounded-lg text-sm font-medium hover:bg-white/20 transition-colors">See Pricing</Link>
           </div>
         </div>
+
+        <p className="mt-10 text-[0.65rem] text-[var(--re-text-disabled)] leading-relaxed">
+          TraceGains is a trademark of its respective owner. Comparison reflects publicly available
+          information and RegEngine&apos;s interpretation; verify current capabilities and pricing
+          directly with the vendor.
+        </p>
       </div>
     </div>
   );

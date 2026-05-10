@@ -5,27 +5,27 @@ import { CheckCircle, XCircle, Minus, ArrowRight, Shield, Clock, Code, Zap } fro
 export const metadata: Metadata = {
   title: "RegEngine vs FoodLogiQ (Aptean) — FSMA 204 Compliance Comparison",
   description:
-    "Compare RegEngine and FoodLogiQ for FSMA 204 compliance. See how self-serve setup, real-time rule evaluation, and transparent pricing stack up against enterprise-only deployment.",
+    "Compare RegEngine and FoodLogiQ for FSMA 204 compliance. See how self-serve setup, rule evaluation, and transparent pricing differ from enterprise-only deployment.",
 };
 
 const FEATURES = [
-  { feature: "Time to first compliance export", regengine: "check", competitor: "x", note: "Minutes vs weeks of implementation" },
-  { feature: "Self-serve signup", regengine: "check", competitor: "x", note: "Fast account creation vs enterprise sales cycle" },
-  { feature: "Public API + OpenAPI docs", regengine: "check", competitor: "x", note: "Full REST API with interactive docs" },
-  { feature: "FSMA 204 rule engine (KDE + relational)", regengine: "check", competitor: "partial", note: "31 stateless + 3 cross-event rules vs basic KDE checks" },
-  { feature: "Real-time compliance scoring", regengine: "check", competitor: "partial", note: "Per-event scoring vs batch reporting" },
-  { feature: "CSV / API / webhook ingestion", regengine: "check", competitor: "partial", note: "All three vs API-only" },
+  { feature: "Time to first compliance export", regengine: "check", competitor: "partial", note: "Self-serve onboarding vs enterprise implementation" },
+  { feature: "Self-serve signup", regengine: "check", competitor: "x", note: "Public account creation vs enterprise sales cycle" },
+  { feature: "Public API + OpenAPI docs", regengine: "check", competitor: "partial", note: "Full REST API with interactive docs; verify FoodLogiQ's current API surface" },
+  { feature: "FSMA 204 rule engine (KDE + relational)", regengine: "check", competitor: "partial", note: "31 stateless + 3 cross-event rules; rule enforcement is configurable per workflow" },
+  { feature: "Per-event compliance scoring", regengine: "check", competitor: "partial", note: "Advisory readiness signal computed per event vs batch reporting" },
+  { feature: "CSV / API / webhook ingestion", regengine: "check", competitor: "partial", note: "All three; verify FoodLogiQ's current ingestion surface" },
   { feature: "Supplier portal with compliance scoring", regengine: "check", competitor: "check", note: "Both offer supplier management" },
   { feature: "Recall simulation drills", regengine: "check", competitor: "check", note: "FoodLogiQ's original strength" },
-  { feature: "Transparent pricing on website", regengine: "check", competitor: "x", note: "$425-$749/mo vs custom enterprise quotes" },
+  { feature: "Published pricing on website", regengine: "check", competitor: "x", note: "$425-$749/mo vs custom enterprise quotes" },
   { feature: "Free sandbox / developer tools", regengine: "check", competitor: "x", note: "Try before you buy" },
 ];
 
 const WHY_SWITCH = [
-  { title: "Deploy in minutes, not months", desc: "FoodLogiQ requires weeks of enterprise onboarding. RegEngine's sandbox validates your data in under 60 seconds, and the full platform is live in one CSV upload." },
-  { title: "Purpose-built for FSMA 204", desc: "FoodLogiQ started as recall management and bolted on FSMA 204. RegEngine was built from the ground up for the Food Traceability Rule with deep KDE validation and cross-event integrity checks." },
-  { title: "No vendor lock-in", desc: "Public API, OpenAPI docs, CSV export at any time. FoodLogiQ's closed ecosystem means your data goes in but doesn't easily come out." },
-  { title: "Predictable pricing", desc: "Facility-based pricing starting at $425/mo. No surprise quotes, no multi-year commitments required. FoodLogiQ's enterprise pricing often starts at 5-10x." },
+  { title: "Self-serve onboarding", desc: "RegEngine's sandbox returns FSMA 204 results in seconds and the full platform is live in one CSV upload. FoodLogiQ ships through enterprise implementation; verify current onboarding timelines with their team." },
+  { title: "Purpose-built for FSMA 204", desc: "FoodLogiQ originated as recall management; FSMA 204 capabilities were added later per their public roadmap. RegEngine was designed for the Food Traceability Rule from day one with KDE validation and cross-event integrity checks." },
+  { title: "Open data egress", desc: "RegEngine ships a public API, OpenAPI docs, and CSV export of every record. Confirm FoodLogiQ's current data-egress options with their team before committing." },
+  { title: "Published pricing", desc: "Facility-based pricing starting at $425/mo, no multi-year commitment required. FoodLogiQ pricing is custom-quoted — request both to compare for your facility count." },
 ];
 
 export default function FoodLogiQCompare() {
@@ -43,7 +43,7 @@ export default function FoodLogiQCompare() {
           </h1>
           <p className="text-[var(--re-text-muted)] text-lg max-w-2xl mx-auto">
             FoodLogiQ was built for enterprise recall management. RegEngine was built for FSMA 204 compliance from day one.
-            Acquired by Aptean in 2023 &mdash; future product direction uncertain.
+            FoodLogiQ was acquired by Aptean in 2023; check their roadmap for current direction.
           </p>
         </div>
 
@@ -103,6 +103,12 @@ export default function FoodLogiQCompare() {
             </Link>
           </div>
         </div>
+
+        <p className="mt-10 text-[0.65rem] text-[var(--re-text-disabled)] leading-relaxed">
+          FoodLogiQ and Aptean are trademarks of their respective owners. Comparison reflects publicly
+          available information and RegEngine&apos;s interpretation; verify current capabilities and pricing
+          directly with the vendor.
+        </p>
       </div>
     </div>
   );
