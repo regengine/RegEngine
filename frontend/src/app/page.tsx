@@ -306,7 +306,7 @@ export default function HomePage() {
             </RegulatoryCitationBlock>
             <div className="mt-5">
               <p className="mb-3 inline-flex border border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)] px-3 py-1 font-mono text-[11px] uppercase text-[var(--re-text-muted)]">
-                Demo workspace · sample data
+                Sample data · illustrative
               </p>
               <div className="grid gap-3 sm:grid-cols-2">
                 {[
