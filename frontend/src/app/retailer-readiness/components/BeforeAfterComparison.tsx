@@ -75,11 +75,11 @@ export default function BeforeAfterComparison({ revealRef, visible }: BeforeAfte
                     </div>
                     <div className="flex flex-col gap-4">
                         {[
-                            { label: 'Record keeping', value: 'Automated API capture' },
-                            { label: 'Trace response time', value: '< 5 seconds' },
-                            { label: 'Data format', value: 'FDA sortable spreadsheet' },
-                            { label: 'Supply chain visibility', value: 'Full chain, farm to store' },
-                            { label: 'FDA audit readiness', value: 'Click. Export. Done.' },
+                            { label: 'Record keeping', value: 'API + CSV capture' },
+                            { label: 'Trace lookup', value: 'Indexed lookup' },
+                            { label: 'Data format', value: '§1.1455 sortable spreadsheet' },
+                            { label: 'Supply chain visibility', value: 'Chain coverage scoped to your facilities' },
+                            { label: '§1.1455 records request', value: 'Sortable export ready when requested' },
                             { label: 'Team workflow', value: 'Zero portal logins' },
                         ].map((item, i) => (
                             <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: 12, borderBottom: `1px solid ${T.accent}08`, gap: 8 }}>

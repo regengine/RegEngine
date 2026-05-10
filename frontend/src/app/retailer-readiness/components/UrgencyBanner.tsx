@@ -16,7 +16,7 @@ export default function UrgencyBanner() {
             }}>
                 <span style={{ fontSize: 16 }}>⚠️</span>
                 <span style={{ fontSize: 'clamp(12px, 2.5vw, 14px)', color: T.warning, fontWeight: 500, lineHeight: 1.4 }}>
-                    Walmart, Kroger, and Costco require supplier traceability documentation — and conduct ongoing supplier audits.
+                    Major retailers are asking suppliers for traceability documentation ahead of the FDA compliance date. Specific requirements vary by buyer.
                 </span>
             </div>
         </div>

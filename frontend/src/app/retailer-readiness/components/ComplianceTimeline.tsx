@@ -24,8 +24,8 @@ export default function ComplianceTimeline({ revealRef, visible }: ComplianceTim
                     The Clock Is Already Running
                 </h2>
                 <p style={{ fontSize: 15, color: T.textMuted, maxWidth: 500, margin: '0 auto' }}>
-                    Major retailer internal deadlines come <strong className="text-re-warning">before</strong> the FDA mandate.
-                    Suppliers who wait will be too late.
+                    Many major retailers are signaling traceability expectations to suppliers ahead of the FDA mandate.
+                    Specific timelines vary — confirm with your buyer.
                 </p>
             </div>
 
@@ -74,8 +74,8 @@ export default function ComplianceTimeline({ revealRef, visible }: ComplianceTim
                             position: 'absolute', top: 24, left: '50%', transform: 'translateX(-50%)',
                             textAlign: 'center', whiteSpace: 'nowrap',
                         }}>
-                            <p style={{ fontSize: 13, fontWeight: 600, color: T.warning }}>Retailer Deadlines</p>
-                            <p className="text-[11px] text-re-text-disabled">Walmart Aug 2025 · Kroger Jun 2025</p>
+                            <p style={{ fontSize: 13, fontWeight: 600, color: T.warning }}>Retailer expectations</p>
+                            <p className="text-[11px] text-re-text-disabled">Varies by buyer · check supplier portal</p>
                         </div>
                     </div>
 

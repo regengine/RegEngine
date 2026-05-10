@@ -34,8 +34,7 @@ export default function ExitIntentPopup({ showExitIntent, setShowExitIntent, tra
                     Don&apos;t leave without your free assessment
                 </h3>
                 <p style={{ fontSize: 14, color: T.textMuted, lineHeight: 1.7, marginBottom: 24 }}>
-                    Major retailers are evaluating suppliers <strong className="text-re-warning">right now</strong>.
-                    Get a personalized gap analysis before your next category review.
+                    Get a gap analysis before <strong className="text-re-warning">your next buyer review</strong>.
                 </p>
                 <Link href="/tools/recall-readiness">
                     <button

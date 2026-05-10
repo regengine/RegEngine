@@ -48,8 +48,7 @@ export default function HeroSection({ heroRef }: HeroSectionProps) {
                 fontSize: 18, color: T.textMuted,
                 maxWidth: 540, margin: '0 auto 32px', lineHeight: 1.7,
             }}>
-                Walmart, Kroger, and Costco require supplier traceability — and audit suppliers regularly.
-                RegEngine gets you from first upload to FDA-ready export in 48 hours, fully retailer-ready in 2–4 weeks — via API and CSV ingest, no portal logins required.
+                Major retailers are increasingly asking suppliers for traceability documentation ahead of the FDA compliance date — specific requirements vary by buyer. RegEngine helps you get from first upload to a structured FSMA 204 export quickly via API and CSV ingest, no portal logins required.
             </p>
 
             <div className="flex flex-col sm:flex-row gap-3 justify-center items-center">
