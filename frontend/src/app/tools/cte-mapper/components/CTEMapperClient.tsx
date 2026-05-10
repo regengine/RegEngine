@@ -12,7 +12,7 @@ import { FREE_TOOLS } from '@/lib/fsma-tools-data';
 const CTE_MAPPER_CONFIG: ToolConfig = {
     id: 'cte-mapper',
     title: 'CTE Coverage Mapper',
-    description: 'Map your supply chain nodes to see who owes whom traceability data.',
+    description: 'Map your supply chain links to see which Critical Tracking Events typically apply at each step under 21 CFR Part 1 Subpart S. Educational only — exemptions under §1.1305 may change which CTEs apply to your specific operation.',
     icon: 'Truck',
     stages: {
         questions: [
@@ -21,11 +21,13 @@ const CTE_MAPPER_CONFIG: ToolConfig = {
                 text: 'What is your role in this transaction?',
                 type: 'select',
                 options: [
-                    { label: 'Farm (Primary Producer)', value: 'farm' },
-                    { label: 'Packer / Initial Packer', value: 'packer' },
-                    { label: 'Manufacturer / Processor', value: 'processor' },
+                    { label: 'Farm / Grower (harvesting, cooling)', value: 'farm' },
+                    { label: 'Initial Packer (RAC, not from a fishing vessel)', value: 'packer' },
+                    { label: 'First Land-Based Receiver (seafood from a fishing vessel)', value: 'flbr' },
+                    { label: 'Manufacturer / Processor (transformation)', value: 'processor' },
                     { label: 'Distributor / Warehouse', value: 'distributor' },
-                    { label: 'Retailer / Restaurant', value: 'retail' },
+                    { label: 'Retailer (RFE)', value: 'retail' },
+                    { label: 'Restaurant / direct-to-consumer (subject to §1.1305(j) exemption)', value: 'restaurant' },
                 ]
             },
             {
@@ -37,6 +39,7 @@ const CTE_MAPPER_CONFIG: ToolConfig = {
                     { label: 'From a Packer', value: 'packer' },
                     { label: 'From a Processor', value: 'processor' },
                     { label: 'From a Distributor', value: 'distributor' },
+                    { label: 'From a Fishing Vessel (we are the FLBR)', value: 'fishing_vessel' },
                     { label: 'N/A (We are the source)', value: 'none' },
                 ]
             },
@@ -53,9 +56,9 @@ const CTE_MAPPER_CONFIG: ToolConfig = {
             }
         ],
         leadGate: {
-            title: 'Get the Full Data Exchange Protocol',
-            description: 'We will send you a technical spec sheet of the exact API format or spreadsheet schema needed for this connection.',
-            cta: 'Send My Protocol'
+            title: 'Get the Full Data Exchange Reference',
+            description: 'We will send you a starter API and CSV spec for the connections you indicated. This is a starting reference; verify against the rule for your specific operation.',
+            cta: 'Send My Reference'
         }
     }
 };
@@ -64,12 +67,48 @@ const RoleIcon = ({ role, className }: { role: string; className?: string }) => 
     switch (role) {
         case 'farm': return <Factory className={className} />;
         case 'packer': return <Warehouse className={className} />;
+        case 'flbr': return <Warehouse className={className} />;
+        case 'fishing_vessel': return <Send className={className} />;
         case 'processor': return <Warehouse className={className} />;
         case 'distributor': return <Truck className={className} />;
         case 'retail': return <ShoppingCart className={className} />;
+        case 'restaurant': return <ShoppingCart className={className} />;
         case 'consumer': return <ShoppingCart className={className} />;
         default: return <Info className={className} />;
     }
+};
+
+// CTE assignment by role under 21 CFR Part 1 Subpart S. This is a starting
+// reference; §1.1305 exemptions may remove a CTE for a given operation.
+const ROLE_TO_CTES: Record<string, { ctes: string[]; note: string }> = {
+    farm: {
+        ctes: ['§1.1325 Harvesting and Cooling'],
+        note: 'Field-level harvesting and on-farm cooling records. If you also pack on-farm, see §1.1330 Initial Packing.',
+    },
+    packer: {
+        ctes: ['§1.1330 Initial Packing of a RAC (other than from a fishing vessel)', '§1.1340 Shipping'],
+        note: 'Initial Packing applies to raw agricultural commodities not obtained from a fishing vessel. Seafood from a vessel uses §1.1335 First Land-Based Receiving instead.',
+    },
+    flbr: {
+        ctes: ['§1.1335 First Land-Based Receiving (seafood from a fishing vessel)', '§1.1340 Shipping'],
+        note: 'FLBR applies only to food obtained from a fishing vessel. Non-seafood importers use §1.1345 Receiving, not FLBR.',
+    },
+    processor: {
+        ctes: ['§1.1345 Receiving', '§1.1350 Transformation', '§1.1340 Shipping'],
+        note: 'Transformation links input TLCs to a new TLC for the output product.',
+    },
+    distributor: {
+        ctes: ['§1.1345 Receiving', '§1.1340 Shipping'],
+        note: 'Receiving and Shipping records track lot movement through your facility.',
+    },
+    retail: {
+        ctes: ['§1.1345 Receiving (subject to the §1.1305(j) exemption)'],
+        note: 'Retail food establishments selling FTL food directly to consumers may qualify for the §1.1305(j) exemption. Confirm whether the exemption applies before relying on this.',
+    },
+    restaurant: {
+        ctes: ['§1.1345 Receiving (likely exempt under §1.1305(j))'],
+        note: '§1.1305(j) exempts restaurants and retail food establishments from the records requirement for food sold or distributed directly to consumers. Verify scope with counsel — you may still owe §1.1345 records for FTL food received but not sold direct.',
+    },
 };
 
 export function CTEMapperClient() {
@@ -149,32 +188,50 @@ export function CTEMapperClient() {
                     </motion.div>
                 </div>
 
+                <Card className="border-[var(--re-border-default)] bg-[var(--re-surface-elevated)]">
+                    <CardContent className="p-4 space-y-3">
+                        <h4 className="text-xs font-bold uppercase tracking-wider flex items-center gap-2">
+                            <Truck className="h-3 w-3 text-[var(--re-brand)]" /> CTEs typically assigned to your role
+                        </h4>
+                        {ROLE_TO_CTES[user_role] ? (
+                            <>
+                                <ul className="space-y-1 text-sm text-[var(--re-text-secondary)] list-disc list-inside">
+                                    {ROLE_TO_CTES[user_role].ctes.map((c) => <li key={c}>{c}</li>)}
+                                </ul>
+                                <p className="text-xs text-[var(--re-text-muted)] mt-2">{ROLE_TO_CTES[user_role].note}</p>
+                            </>
+                        ) : (
+                            <p className="text-xs text-[var(--re-text-muted)]">CTE assignment depends on your operation. See the per-event KDE Checklist Builder.</p>
+                        )}
+                    </CardContent>
+                </Card>
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <Card className="border-[var(--re-border-default)] bg-[var(--re-surface-elevated)]">
                         <CardContent className="p-4 space-y-2">
                             <h4 className="text-xs font-bold uppercase tracking-wider flex items-center gap-2">
-                                <Send className="h-3 w-3 text-[var(--re-info)]" /> Incoming Obligations
+                                <Send className="h-3 w-3 text-[var(--re-info)]" /> Incoming exchange (informational)
                             </h4>
                             <p className="text-xs text-[var(--re-text-secondary)]">
-                                You must verify that your {getRoleName(source_role)} sends the Traceability Lot Code (TLC) and source location for every delivery.
+                                If this food is on the FDA Food Traceability List and no §1.1305 exemption applies, your {getRoleName(source_role)} is generally required to send the Traceability Lot Code and ship-from KDEs under 21 CFR §1.1340. This tool does not determine FTL status or exemptions — use the FTL Checker first.
                             </p>
                         </CardContent>
                     </Card>
                     <Card className="border-[var(--re-border-default)] bg-[var(--re-surface-elevated)]">
                         <CardContent className="p-4 space-y-2">
                             <h4 className="text-xs font-bold uppercase tracking-wider flex items-center gap-2">
-                                <Send className="h-3 w-3 text-[var(--re-brand)]" /> Outgoing Obligations
+                                <Send className="h-3 w-3 text-[var(--re-brand)]" /> Outgoing exchange (informational)
                             </h4>
                             <p className="text-xs text-[var(--re-text-secondary)]">
-                                You are responsible for ensuring the {getRoleName(destination_role)} receives your ship-from KDEs and the original TLC.
+                                If this food is on the FDA Food Traceability List and no §1.1305 exemption applies, you generally provide ship-from KDEs and the TLC to the {getRoleName(destination_role)} under §1.1340. Confirm with counsel before relying on this.
                             </p>
                         </CardContent>
                     </Card>
                 </div>
 
-                <button className="w-full p-4 rounded-xl bg-[var(--re-brand)] text-white font-bold flex items-center justify-center gap-2 hover:brightness-110">
-                    Share This Data Protocol <ChevronRight className="h-5 w-5" />
-                </button>
+                <p className="text-[10px] text-center text-[var(--re-text-muted)] max-w-2xl mx-auto">
+                    This map is a starting reference under 21 CFR Part 1 Subpart S. It does not evaluate FTL coverage, partial exemptions, or your specific operation. Verify against the rule and consult counsel before relying on it.
+                </p>
             </div>
         );
     };
