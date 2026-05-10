@@ -28,11 +28,11 @@ import {
 export const metadata: Metadata = {
   title: "RegEngine — Compliance OS for Food Traceability",
   description:
-    "RegEngine turns messy supplier data into verified FSMA 204 evidence with readiness scoring, supplier gap queues, commit gates, and FDA-ready export packages.",
+    "RegEngine turns messy supplier data into FSMA 204 evidence packages with readiness scoring, supplier gap queues, commit gates, and FDA-formatted export packages.",
   openGraph: {
     title: "RegEngine — Compliance OS for Food Traceability",
     description:
-      "Preflight supplier data, find KDE gaps, gate evidence commits, and export verified FSMA 204 records.",
+      "Preflight supplier data, find KDE gaps, gate evidence commits, and export FSMA 204 records.",
     url: "https://regengine.co",
     type: "website",
     images: [{ url: "/og-image.png", width: 1200, height: 630, alt: "RegEngine food traceability command center" }],
@@ -98,8 +98,8 @@ const workflow = [
   { label: "Intake", detail: "CSV, API, EDI, or portal files enter the workbench.", icon: ScanLine },
   { label: "Interrogate", detail: "CTE/KDE coverage, identity, and facility scope are checked.", icon: Database },
   { label: "Correct", detail: "Every gap gets a reason, owner, and recovery path.", icon: ClipboardCheck },
-  { label: "Commit", detail: "Only verified records cross the evidence boundary.", icon: ShieldCheck },
-  { label: "Export", detail: "Build signed FDA, retailer, or internal evidence packets.", icon: PackageCheck },
+  { label: "Commit", detail: "Records pass commit gates for CTE/KDE coverage and supplier readiness before entering the evidence ledger.", icon: ShieldCheck },
+  { label: "Export", detail: "Build FDA-formatted, retailer, or internal evidence packets with producer-signed manifests.", icon: PackageCheck },
 ];
 
 const destinations = [
@@ -233,7 +233,7 @@ export default function HomePage() {
             FSMA 204 traceability evidence layer.
           </h1>
           <p className="mt-6 max-w-[620px] text-[18px] leading-8 text-[var(--re-text-muted)]">
-            Ingest supply-chain data through webhooks, CSV, EPCIS, or EDI. Preflight in our Inflow Workbench. Persist with a tamper-evident audit chain. Export FDA- and retailer-ready spreadsheets in seconds.
+            Ingest supply-chain data through webhooks, CSV, EPCIS, or EDI. Preflight in our Inflow Workbench. Persist with tamper-evidence after ingest. Export FDA- and retailer-formatted spreadsheets quickly.
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
             <ActionLink href="/verify" primary>
@@ -302,20 +302,25 @@ export default function HomePage() {
           </div>
           <div>
             <RegulatoryCitationBlock citation="21 CFR 1.1455" title="Records must be sortable and provided within 24 hours.">
-              RegEngine treats recall response as an operating state, not a static report. The interface keeps the evidence package, blockers, owners, and verification trail visible before the clock starts.
+              RegEngine helps you organize records so your team can respond inside the §1.1455 window. Regulatory acceptance and retention obligations remain with the operator; see the Trust Center for scope.
             </RegulatoryCitationBlock>
-            <div className="mt-5 grid gap-3 sm:grid-cols-2">
-              {[
-                ["Records with full provenance", "1,184"],
-                ["Open supplier blockers", "3"],
-                ["Facilities scoped", "12/14"],
-                ["Days since recall drill", "18"],
-              ].map(([label, value]) => (
-                <div key={label} className="border border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)] p-4">
-                  <p className="text-2xl font-semibold text-[var(--re-text-primary)]">{value}</p>
-                  <p className="mt-2 re-label">{label}</p>
-                </div>
-              ))}
+            <div className="mt-5">
+              <p className="mb-3 inline-flex border border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)] px-3 py-1 font-mono text-[11px] uppercase text-[var(--re-text-muted)]">
+                Demo workspace · sample data
+              </p>
+              <div className="grid gap-3 sm:grid-cols-2">
+                {[
+                  ["Records with full provenance", "1,184"],
+                  ["Open supplier blockers", "3"],
+                  ["Facilities scoped", "12/14"],
+                  ["Days since recall drill", "18"],
+                ].map(([label, value]) => (
+                  <div key={label} className="border border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)] p-4">
+                    <p className="text-2xl font-semibold text-[var(--re-text-primary)]">{value}</p>
+                    <p className="mt-2 re-label">{label}</p>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         </div>
