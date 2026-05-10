@@ -215,20 +215,20 @@ export default function CTEKDEGuidePage() {
               First Land-Based Receiving
             </h3>
             <p className="text-[var(--re-text-secondary)] mb-4">
-              Specific to imported foods. The first receipt of food at a U.S. port of entry or facility. Required for seafood and produce imported from outside the U.S.
+              Per §1.1335, this CTE applies <strong>only</strong> to food obtained from a fishing vessel — the first land-based receiver of seafood landed by a vessel. Non-seafood imports follow the §1.1345 Receiving CTE instead, not this one.
             </p>
             <div className="bg-[var(--re-surface-elevated)] border border-[var(--re-surface-border)] rounded p-4 mb-4 font-mono text-xs text-[var(--re-text-tertiary)] overflow-x-auto">
-              <code>{`Required KDEs:
-• Foreign Traceability Lot Code
-• Product Description
-• Quantity Received
-• Import Receipt Date & Location
-• U.S. Lot Code (if assigned)
-• Port of Entry
-• Importer/Receiving Facility Info`}</code>
+              <code>{`Required KDEs (per §1.1335):
+• Traceability Lot Code (assigned at first land-based receiving)
+• Species and harvest date range
+• NMFS Ocean Geographic Area of harvest
+• Vessel name (and unique vessel ID, if applicable)
+• Date of landing
+• Quantity and unit of measure
+• Reference Document Type and Number`}</code>
             </div>
             <p className="text-[var(--re-text-secondary)] text-sm">
-              <strong>Implementation note:</strong> Maintain documentation of foreign supplier information and original lot codes. Link to U.S. assigned lot code if re-lotting occurs.
+              <strong>Implementation note:</strong> If you are an importer of non-seafood Food Traceability List items, your obligation is §1.1345 Receiving (subject to the §1.1305(j) restaurant/RFE exemption when selling food directly to consumers) — not §1.1335.
             </p>
           </div>
 
@@ -239,9 +239,9 @@ export default function CTEKDEGuidePage() {
           </h2>
 
           <div className="mb-8 p-6 rounded-lg bg-[var(--re-surface-secondary)] border border-[var(--re-surface-border)]">
-            <h3 className="text-[var(--re-text-primary)] font-bold text-lg mb-4">The 7 Universal KDEs</h3>
+            <h3 className="text-[var(--re-text-primary)] font-bold text-lg mb-4">Common KDEs across CTEs</h3>
             <p className="text-[var(--re-text-secondary)] mb-6">
-              These KDEs are required at every CTE regardless of food category:
+              These KDEs recur across most CTEs, though the exact set required at each event differs by §§1.1325–1.1350. Confirm the specific KDE list against the section that governs the event at your operation:
             </p>
             <ul className="space-y-3">
               <li className="flex items-start gap-3 text-[var(--re-text-secondary)]">
