@@ -55,68 +55,69 @@ export function ROICalculatorClient() {
         return (
             <div className="space-y-8">
                 <div className="text-center space-y-2">
-                    <h3 className="text-3xl font-bold text-[var(--re-brand)]">
-                        ${(results.netBenefit / 1000).toFixed(1)}k Total Annual ROI
+                    <p className="text-sm uppercase tracking-widest text-[var(--re-text-muted)]">Illustrative · not a forecast</p>
+                    <h3 className="text-2xl font-semibold text-[var(--re-text-primary)]">
+                        Rough sense of where automation could pay back
                     </h3>
-                    <p className="text-[var(--re-text-tertiary)]">
-                        Based on your profile, here is your estimated compliance cost-savings breakdown.
+                    <p className="text-[var(--re-text-tertiary)] max-w-xl mx-auto">
+                        Numbers below are illustrative based on your inputs. Actual savings depend on your
+                        contracts, staffing, and existing systems. We don&apos;t publish a guaranteed ROI or payback
+                        period.
                     </p>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <ResultCard
-                        title="Labor Cost Savings"
-                        value={`$${(results.laborSavings / 1000).toFixed(1)}k`}
-                        description="Savings from automated data entry and 24hr record retrieval."
+                        title="Labor Time, Illustrative"
+                        value={`~$${(results.laborSavings / 1000).toFixed(1)}k`}
+                        description="Modeled labor-time avoided based on your reported manual hours. Illustrative only."
                         icon={Clock}
                         color="text-re-info bg-blue-400"
                     />
                     <ResultCard
-                        title="Risk Mitigation"
-                        value={`$${(results.riskReduction / 1000).toFixed(1)}k`}
-                        description="Reduction in potential violation fines and recall impacts."
+                        title="Risk Concentration, Illustrative"
+                        value={`~$${(results.riskReduction / 1000).toFixed(1)}k`}
+                        description="A small fraction of revenue used as a placeholder for compliance-event exposure. Illustrative; not a forecast or fine schedule."
                         icon={ShieldAlert}
                         color="text-re-danger bg-re-danger"
                     />
                     <ResultCard
-                        title="Operational Gains"
-                        value={`$${(results.operationalEfficiency / 1000).toFixed(1)}k`}
-                        description="Efficiency impact of real-time supply chain visibility."
+                        title="Operational Time, Illustrative"
+                        value={`~$${(results.operationalEfficiency / 1000).toFixed(1)}k`}
+                        description="Modeled time saved per record. Illustrative only."
                         icon={Zap}
                         color="text-re-warning bg-yellow-400"
                     />
                     <ResultCard
-                        title="Net Platform Benefit"
-                        value={`$${(results.netBenefit / 1000).toFixed(1)}k`}
-                        description="Total benefit minus estimated platform investment."
+                        title="Modeled Benefit Minus Platform"
+                        value={`~$${(results.netBenefit / 1000).toFixed(1)}k`}
+                        description="Modeled annual benefit minus an estimated platform cost. Illustrative only."
                         icon={TrendingUp}
                         color="text-re-brand bg-re-brand"
                     />
                 </div>
 
                 <Card className="bg-[var(--re-brand-muted)] border-[var(--re-brand)]/20 overflow-hidden">
-                    <div className="p-6 flex flex-col md:flex-row items-center justify-between gap-6">
-                        <div className="space-y-1">
-                            <h4 className="text-xl font-bold flex items-center gap-2">
-                                <Target className="h-5 w-5 text-[var(--re-brand)]" />
-                                {results.paybackMonths.toFixed(1)} Month Payback
-                            </h4>
-                            <p className="text-sm text-[var(--re-text-secondary)]">
-                                Your investment pays for itself in just a few months of operational use.
-                            </p>
-                        </div>
-                        <div className="text-4xl font-black text-[var(--re-brand)]">
-                            {results.roi.toFixed(0)}% <span className="text-sm font-medium">ROI</span>
-                        </div>
+                    <div className="p-6 space-y-2">
+                        <h4 className="text-base font-semibold flex items-center gap-2">
+                            <Target className="h-4 w-4 text-[var(--re-brand)]" />
+                            We don&apos;t publish a guaranteed ROI or payback period
+                        </h4>
+                        <p className="text-sm text-[var(--re-text-secondary)]">
+                            Book a 20-minute call and we&apos;ll model it against your actual record volume and current
+                            spend. The figures above are an illustrative starting point, not a commitment.
+                        </p>
                     </div>
                 </Card>
 
                 <div className="p-4 rounded-xl border border-[var(--re-border-default)] bg-[var(--re-surface-elevated)]/30">
                     <h5 className="text-xs font-bold uppercase tracking-widest text-[var(--re-text-muted)] mb-2">Methodology Note</h5>
                     <p className="text-[10px] text-[var(--re-text-tertiary)] leading-relaxed">
-                        ROI estimates are based on industry benchmarks for FSMA 204 compliance labor reduction (85%) and risk mitigation.
-                        Operational efficiency gains are conservatively capped at 35% of total benefit to account for variance in supply chain complexity.
-                        Actual results may vary based on existing ERP integrations and internal data hygiene.
+                        Estimates use simple multipliers applied to your reported hours, record volume, and revenue.
+                        We don&apos;t have verified customer ROI data yet — early-design partner pricing reflects that.
+                        FSMA 204 enforcement begins July 20, 2028; no public fine schedule exists, so the
+                        risk-concentration tile is illustrative only. Actual results depend on your contracts,
+                        existing systems, staffing, and data hygiene.
                     </p>
                 </div>
             </div>
@@ -131,10 +132,11 @@ export function ROICalculatorClient() {
                         <BarChart3 className="h-3 w-3" /> ROI Engine
                     </div>
                     <h1 className="text-4xl md:text-5xl font-black">
-                        The Cost of <span className="text-[var(--re-brand)]">Doing Nothing</span>
+                        Estimate the <span className="text-[var(--re-brand)]">Savings Opportunity</span>
                     </h1>
                     <p className="text-xl text-[var(--re-text-tertiary)] max-w-2xl mx-auto">
-                        Quantify the financial impact of manual compliance vs. the RegEngine platform.
+                        Get an illustrative sense of where compliance automation could pay back. We don&apos;t
+                        publish a guaranteed ROI or payback period.
                     </p>
                 </div>
 
@@ -155,18 +157,18 @@ export function ROICalculatorClient() {
                 <div className="mt-16 grid grid-cols-1 md:grid-cols-3 gap-8">
                     {[
                         {
-                            title: 'Labor Reduction',
-                            desc: 'Average 85% drop in time spent on data entry and record matching.',
+                            title: 'Labor time avoided',
+                            desc: 'Teams typically move record retrieval from hours to minutes. We don\'t have verified customer ROI data yet — early-design partner pricing reflects that.',
                             icon: Clock
                         },
                         {
-                            title: 'Math Trust™',
-                            desc: 'Cryptographic proof eliminates the need for expensive secondary audits.',
+                            title: 'Tamper-evident exports',
+                            desc: 'Signed event records (downstream verification rolling out) give auditors verifiable evidence — they don\'t replace audits.',
                             icon: ShieldAlert
                         },
                         {
-                            title: '24hr Response',
-                            desc: 'Meet the FDA 24hr mandate instantly without emergency manual extraction.',
+                            title: '§1.1455(c) ready',
+                            desc: 'Designed to support the §1.1455(c) 24-hour records-on-request standard once your data is in the system.',
                             icon: Zap
                         }
                     ].map((item, i) => (

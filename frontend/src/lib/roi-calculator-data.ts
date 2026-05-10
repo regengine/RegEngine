@@ -2,8 +2,8 @@ import { ToolConfig } from '@/types/fsma-tools';
 
 export const ROI_CALCULATOR_CONFIG: ToolConfig = {
     id: 'roi-calculator',
-    title: 'Regulatory ROI Calculator',
-    description: 'Calculate the potential annual savings by automating your compliance workflows with RegEngine.',
+    title: 'FSMA 204 Savings Estimator',
+    description: 'Get an illustrative sense of where compliance automation could pay back. Numbers depend on your inputs and on assumptions we publish in the methodology note. Not a forecast.',
     icon: 'TrendingUp',
     stages: {
         questions: [
@@ -53,9 +53,9 @@ export const ROI_CALCULATOR_CONFIG: ToolConfig = {
             }
         ],
         leadGate: {
-            title: 'Your ROI Analysis is Ready',
-            description: 'Enter your work email to view your personalized Regulatory ROI breakdown and cost-savings report.',
-            cta: 'View My ROI Results'
+            title: 'Your Illustrative Savings Estimate is Ready',
+            description: 'Enter your work email to see the illustrative breakdown. The numbers are not a forecast or commitment — book a call to model against your actual record volume.',
+            cta: 'View My Estimate'
         }
     }
 };
@@ -65,13 +65,18 @@ export const calculateROI = (answers: Record<string, any>) => {
     const manualHours = Number(answers['manual-hours'] || 0);
     const annualRevenue = Number(answers['annual-revenue'] || 0);
 
-    // 1. Labor Cost Savings (Manual Hours * $75/hr * 52 weeks * 85% efficiency gain)
+    // ILLUSTRATIVE COEFFICIENTS — not forecasts, not industry benchmarks. Surfaced
+    // honestly in the user-facing Methodology Note. Adjust here if assumptions change.
+    //
+    // 1. Modeled labor-time avoided: ManualHours * $75/hr loaded rate * 52 weeks * 0.85 capture rate
     const laborSavings = manualHours * 75 * 52 * 0.85;
 
-    // 2. Risk Reduction (Revenue * 0.05% expected violation cost * 90% risk reduction)
+    // 2. Modeled risk concentration placeholder: Revenue * 0.05% * 0.90. There is no
+    //    public FSMA 204 fine schedule; this is a small fraction of revenue used as a
+    //    rough placeholder, NOT an expected violation cost.
     const riskReduction = annualRevenue * 0.0005 * 0.90;
 
-    // 3. Operational Efficiency (Weekly Records * 0.5 minutes saved * $75/hr * 52 weeks)
+    // 3. Modeled operational time: WeeklyRecords * 0.5 min saved * $75/hr * 52 weeks * 0.95
     const rawOperationalEfficiency = (weeklyRecords * 0.5 / 60) * 75 * 52 * 0.95;
 
     // Cap operational efficiency at 35% of the total benefit to avoid overly optimistic results
