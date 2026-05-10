@@ -288,8 +288,8 @@ export const CAPABILITY_REGISTRY: CapabilityRegistryEntry[] = [
         category: 'developer_api',
         status: 'ga',
         delivery_mode: 'webhook',
-        integration_type: 'native_bidirectional',
-        customer_copy: 'Webhook ingestion is available for customer event submission and downstream normalization.',
+        integration_type: 'api_based_custom',
+        customer_copy: 'Webhook ingestion is available for inbound event submission and downstream normalization (one-way inbound).',
         evidence_url: '/docs/api',
     },
     {
@@ -309,7 +309,7 @@ export const CAPABILITY_REGISTRY: CapabilityRegistryEntry[] = [
         status: 'ga',
         delivery_mode: 'native_api',
         integration_type: 'native_bidirectional',
-        customer_copy: 'JSON-LD EPCIS ingest and export flows are part of the current FSMA-first product surface.',
+        customer_copy: 'JSON-LD EPCIS ingest and export are supported. Downstream signature verification is rolling out and not yet strict-mode by default.',
         evidence_url: '/developers',
     },
     {
@@ -338,7 +338,7 @@ export const TRUST_ARTIFACTS: TrustArtifact[] = [
     {
         id: 'security-overview',
         title: 'Security overview',
-        summary: 'Tenant isolation, audit integrity, disclosure path, and infrastructure controls.',
+        summary: 'Tenant isolation, tamper-evidence posture, disclosure path, and infrastructure controls.',
         access: 'public',
         href: '/security',
     },
@@ -400,41 +400,47 @@ export const SUPPORT_CHANNELS: SupportChannel[] = [
     },
 ];
 
+// Sample export-job configurations rendered on the Trust Center page as
+// examples of supported configurations — NOT live production telemetry.
+// Timestamps and manifest hashes below are placeholder strings and must
+// not be presented as real run data; the Trust Center renderer hides
+// timestamps for this reason. If you add a renderer that surfaces
+// `lastRun` / `nextRun` / `manifestHash`, label the area "Sample data".
 export const ARCHIVE_EXPORT_JOBS: ArchiveExportJob[] = [
     {
         id: 'job_fda_daily',
-        name: 'Daily FDA package archive',
+        name: 'Sample — Daily FDA package archive',
         format: 'FDA Package',
         cadence: 'Daily',
         destination: 'Object storage archive',
         status: 'active',
-        lastRun: '2026-05-04 06:00 UTC',
-        nextRun: '2026-05-05 06:00 UTC',
-        manifestHash: 'sha256:2d6f3d0ab2d5c2e1a31ab9814d392a1f',
+        lastRun: 'sample',
+        nextRun: 'sample',
+        manifestHash: 'sha256:sample-…',
         tenantId: 'tenant_demo_001',
     },
     {
         id: 'job_epcis_weekly',
-        name: 'Weekly EPCIS outbound bundle',
+        name: 'Sample — Weekly EPCIS outbound bundle',
         format: 'GS1 EPCIS 2.0',
         cadence: 'Weekly',
         destination: 'Downloadable bundle',
         status: 'active',
-        lastRun: '2026-05-03 08:30 UTC',
-        nextRun: '2026-05-10 08:30 UTC',
-        manifestHash: 'sha256:e8f6fd0cb8f4ff73c9d79b4123f0e2aa',
+        lastRun: 'sample',
+        nextRun: 'sample',
+        manifestHash: 'sha256:sample-…',
         tenantId: 'tenant_demo_001',
     },
     {
         id: 'job_audit_monthly',
-        name: 'Monthly audit evidence bundle',
+        name: 'Sample — Monthly audit evidence bundle',
         format: 'Audit Bundle',
         cadence: 'Monthly',
         destination: 'Object storage archive',
         status: 'active',
-        lastRun: '2026-05-01 02:00 UTC',
-        nextRun: '2026-06-01 02:00 UTC',
-        manifestHash: 'sha256:8f4a2b1c7e9d3f50a6b8c2e1d4f7a0b3',
+        lastRun: 'sample',
+        nextRun: 'sample',
+        manifestHash: 'sha256:sample-…',
         tenantId: 'tenant_demo_001',
     },
 ];
