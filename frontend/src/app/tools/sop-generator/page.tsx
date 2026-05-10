@@ -5,14 +5,14 @@ import { EmailGate } from "@/components/tools/EmailGate";
 import { RelatedTools } from "@/components/tools/RelatedTools";
 
 export const metadata: Metadata = {
-    title: "FSMA 204 SOP Generator | Auto-Generate Your Traceability Plan | RegEngine",
-    description: "Auto-generate your FSMA 204 Traceability Plan and Standard Operating Procedures in minutes. Customized for your company, products, and supply chain role. Free.",
+    title: "FSMA 204 SOP Generator | Draft Traceability Plan Template | RegEngine",
+    description: "Auto-generate a starting-template FSMA 204 Traceability Plan and SOP scaffold. Customized to your inputs; review with counsel before adoption — not legal advice.",
     alternates: {
         canonical: "https://regengine.co/tools/sop-generator",
     },
     openGraph: {
         title: "FSMA 204 SOP Generator — RegEngine",
-        description: "Auto-generate a complete FSMA 204 Traceability Plan and SOPs for your company. Download free.",
+        description: "Auto-generate a draft FSMA 204 Traceability Plan template. Review with counsel before audit or retailer use.",
         type: "website",
         url: "https://regengine.co/tools/sop-generator",
     },
@@ -24,7 +24,7 @@ const jsonLd = {
     "name": "RegEngine SOP Generator",
     "operatingSystem": "All",
     "applicationCategory": "BusinessApplication",
-    "description": "Auto-generate FSMA 204 Traceability Plans and Standard Operating Procedures.",
+    "description": "Auto-generate starting-template FSMA 204 Traceability Plans. Output is a draft; review with counsel before adoption.",
     "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
 };
 
