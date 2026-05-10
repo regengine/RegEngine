@@ -32,7 +32,7 @@ export default function StickyCTA({ showSticky, trackEvent }: StickyCTAProps) {
                     }}>
                         Recall response in minutes, not days
                     </span>
-                    <span className="hidden sm:inline text-[12px] text-re-text-muted" style={{ lineHeight: 1.3 }}>— FSMA 204 ready</span>
+                    <span className="hidden sm:inline text-[12px] text-re-text-muted" style={{ lineHeight: 1.3 }}>— built for §1.1455</span>
                 </div>
                 <Link href="/tools/recall-readiness">
                     <button

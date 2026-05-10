@@ -42,13 +42,13 @@ export default function FounderCredibility({ revealRef, visible }: FounderCredib
                     <p style={{ fontSize: 14, color: T.textMuted, lineHeight: 1.8, marginBottom: 16 }}>
                         Family restaurant kid. Organic farm hand. AmeriCorps volunteer. U.S. Senate staff. Startup closer.
                         I built RegEngine because compliance shouldn&apos;t require a six-figure platform and a twelve-month implementation.
-                        Your traceability data should be verified, exportable, and ready before anyone asks for it.
-                        Every Retailer Readiness Assessment is scored automatically against the current FDA rule model and retailer-specific benchmarks reflected in RegEngine. Results in minutes, not weeks.
+                        Your traceability data should be structured, exportable, and ready before anyone asks for it.
+                        Every Retailer Readiness Assessment is scored against RegEngine&apos;s implementation of the current FDA rule model and configurable retailer benchmarks. Results in minutes, not weeks.
                     </p>
                     <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap' }}>
                         {[
                             { value: '10+', label: 'Years across compliance & policy' },
-                            { value: '23', label: 'FDA categories covered' },
+                            { value: 'FTL', label: 'Coverage across FDA Food Traceability List groupings' },
                             { value: '< 24hr', label: 'Assessment turnaround' },
                         ].map((stat, i) => (
                             <div key={i}>

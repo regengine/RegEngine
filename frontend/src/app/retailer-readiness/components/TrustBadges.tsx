@@ -11,10 +11,10 @@ export default function TrustBadges() {
                 </p>
                 <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: 'clamp(16px, 4vw, 32px)' }}>
                     {[
-                        { icon: '📋', label: 'FSMA 204 Compliant' },
-                        { icon: '🛡️', label: 'All FDA FTL Categories' },
-                        { icon: '🔐', label: 'SHA-256 Audit Trail' },
-                        { icon: '⚡', label: '24-Hour FDA Response' },
+                        { icon: '📋', label: 'Built for FSMA 204 §1.1455' },
+                        { icon: '🛡️', label: 'FDA FTL coverage across commodity groupings' },
+                        { icon: '🔐', label: 'SHA-256 manifest on export bundles' },
+                        { icon: '⚡', label: 'Designed for the §1.1455 24-hour records request' },
                     ].map((item, i) => (
                         <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                             <span style={{ fontSize: 14 }}>{item.icon}</span>

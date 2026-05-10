@@ -32,10 +32,10 @@ export default function RiskCalculator({
                     Risk Calculator
                 </p>
                 <h2 className="re-section-title">
-                    What Does Losing a Major Retailer Cost You?
+                    Estimate Your Exposure
                 </h2>
                 <p style={{ fontSize: 15, color: T.textMuted }}>
-                    Drag the sliders. See the math. Then look at the pricing below.
+                    A rough sense of how much revenue is concentrated with your top retailer. Actual impact depends on your specific contract terms.
                 </p>
             </div>
 
@@ -92,7 +92,7 @@ export default function RiskCalculator({
                         background: T.dangerBg, border: `1px solid rgba(239,68,68,0.15)`,
                         borderRadius: 12, padding: 'clamp(16px, 3vw, 24px) clamp(12px, 2vw, 18px)', textAlign: 'center',
                     }}>
-                        <p style={{ fontSize: 11, color: T.danger, marginBottom: 8, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Annual Revenue at Risk</p>
+                        <p style={{ fontSize: 11, color: T.danger, marginBottom: 8, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Revenue concentrated with top retailer</p>
                         <p style={{
                             fontSize: 'clamp(1.5rem, 5vw, 34px)', fontWeight: 700, color: T.danger,
                             fontFamily: "'JetBrains Mono', monospace",
@@ -105,7 +105,7 @@ export default function RiskCalculator({
                         background: T.warningBg, border: `1px solid ${T.warningBorder}`,
                         borderRadius: 12, padding: 'clamp(16px, 3vw, 24px) clamp(12px, 2vw, 18px)', textAlign: 'center',
                     }}>
-                        <p style={{ fontSize: 11, color: T.warning, marginBottom: 8, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Monthly Risk</p>
+                        <p style={{ fontSize: 11, color: T.warning, marginBottom: 8, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Monthly Concentration</p>
                         <p style={{
                             fontSize: 'clamp(1.5rem, 5vw, 34px)', fontWeight: 700, color: T.warning,
                             fontFamily: "'JetBrains Mono', monospace",
@@ -132,9 +132,7 @@ export default function RiskCalculator({
                             RegEngine: {annualRevenue <= 50 ? '$425' : annualRevenue <= 200 ? '$549' : '$639'}/mo (Design Partner, billed annually)
                         </p>
                         <p style={{ fontSize: 13, color: T.text, lineHeight: 1.5 }}>
-                            That&apos;s <strong style={{ color: T.accent, fontSize: 15 }}>
-                                {((monthlyRisk / (annualRevenue <= 50 ? 425 : annualRevenue <= 200 ? 549 : 639))).toLocaleString(undefined, { maximumFractionDigits: 0 })}x less
-                            </strong> than what you risk losing every month.
+                            For context, RegEngine pricing is small relative to the revenue concentrated with a single top retailer. Actual retailer impact depends on your specific contract terms.
                         </p>
                     </div>
                 </div>
