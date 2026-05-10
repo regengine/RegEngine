@@ -25,7 +25,7 @@ const jsonLd = {
     "name": "FTL Coverage Checker",
     "operatingSystem": "All",
     "applicationCategory": "BusinessApplication",
-    "description": "Instantly verify if your food products are covered by FDA FSMA 204 requirements.",
+    "description": "Self-check whether your food products may fall under FDA FSMA 204 requirements. Informational; not a regulatory determination.",
     "offers": {
         "@type": "Offer",
         "price": "0",

@@ -318,8 +318,8 @@ const FTL_CATEGORIES = [
         name: 'Shell Eggs',
         category: 'Eggs',
         icon: Egg,
-        examples: 'Whole shell eggs (chicken, duck)',
-        exclusions: 'Farms with fewer than 3,000 laying hens are exempt per §1.1305(a)(2)',
+        examples: 'Shell eggs as defined under the FDA FTL — typically chicken shell eggs from farms with ≥3,000 laying hens',
+        exclusions: 'Farms with fewer than 3,000 laying hens are exempt per §1.1305(a)(2). Other species (duck, quail) may not be on the FTL — verify directly.',
         covered: true,
         outbreakFrequency: 'MODERATE',
         ctes: ['Shipping', 'Receiving'],
@@ -356,8 +356,8 @@ const FTL_CATEGORIES = [
         name: 'Soft Ripened & Semi-Soft Cheese',
         category: 'Dairy',
         icon: Milk,
-        examples: 'Brie, camembert, monterey jack, muenster, gouda, havarti, oaxaca, feta',
-        exclusions: 'Hard cheeses per 21 CFR 133.150 are excluded. Semi-soft classification per FDA guidance includes cheeses with moisture content >39%',
+        examples: 'Brie, camembert, monterey jack, muenster, havarti, oaxaca, feta (per FTL definition; verify your specific cheese)',
+        exclusions: 'Hard cheeses per 21 CFR 133.150 (e.g., aged cheddar, parmesan, asiago, aged gouda) are excluded. Semi-soft classification per FDA guidance includes cheeses with moisture content >39% — confirm the FDA classification for your cheese.',
         covered: true,
         outbreakFrequency: 'MODERATE',
         ctes: ['Receiving', 'Transformation', 'Shipping'],
@@ -376,43 +376,6 @@ const FTL_CATEGORIES = [
         ctes: ['Receiving', 'Transformation', 'Shipping'],
         cfrSections: '§1.1340, §1.1345, §1.1350',
         kdes: ['Traceability Lot Code (TLC)', 'Location Identifier (GLN)', 'Date/Time', 'Quantity & UOM', 'Product Description', 'Reference Document Type & Number', 'Input TLCs', 'New TLC Assigned']
-    },
-    {
-        id: 'canned-goods',
-        name: 'Canned/Processed',
-        category: 'Other',
-        icon: Apple,
-        examples: 'Canned vegetables, frozen dinners, dried products',
-        exclusions: 'Once food leaves fresh form (dried, frozen, canned), it is off the FTL',
-        covered: false,
-        outbreakFrequency: 'N/A',
-        ctes: [],
-        cfrSections: '',
-        kdes: []
-    },
-    {
-        id: 'bakery',
-        name: 'Bakery Products',
-        category: 'Other',
-        icon: Apple,
-        examples: 'Bread, pastries, cookies',
-        covered: false,
-        outbreakFrequency: 'N/A',
-        ctes: [],
-        cfrSections: '',
-        kdes: []
-    },
-    {
-        id: 'beverages',
-        name: 'Beverages',
-        category: 'Other',
-        icon: Apple,
-        examples: 'Juices, sodas, water',
-        covered: false,
-        outbreakFrequency: 'N/A',
-        ctes: [],
-        cfrSections: '',
-        kdes: []
     },
 ];
 
@@ -542,7 +505,7 @@ export function FTLCheckerClient() {
         try {
             await navigator.clipboard.writeText(url);
             setLinkCopied(true);
-            toast({ title: "Link copied!", description: "Share this URL to show your compliance status." });
+            toast({ title: "Link copied!", description: "Share this URL to show your self-check result. This is informational, not a compliance determination." });
             setTimeout(() => setLinkCopied(false), 3000);
         } catch {
             toast({ title: "Copy failed", description: "Please copy the URL manually.", variant: "destructive" });
@@ -738,7 +701,7 @@ export function FTLCheckerClient() {
                             FTL Coverage Checker
                         </h1>
                         <p style={{ fontSize: '18px', color: T.textMuted, maxWidth: '600px', margin: '0 auto 24px', lineHeight: 1.6 }}>
-                            Instantly check if your products are covered by FDA FSMA 204 Food Traceability requirements
+                            Self-check whether your products may fall under FDA FSMA 204 Food Traceability requirements. Informational; not a regulatory determination — verify against the FDA FTL.
                         </p>
                         <div className="ftl-hero-bullets" style={{ display: 'flex', justifyContent: 'center', gap: '24px', fontSize: '13px', color: T.textDim }}>
                             <span className="flex items-center gap-1.5"><CheckCircle2 size={14} className="text-re-brand" /> No account required</span>
@@ -837,7 +800,7 @@ export function FTLCheckerClient() {
                                                                 <Icon size={14} style={{ color: isSelected ? T.accent : T.textDim }} />
                                                                 <span style={{ fontWeight: 500, color: T.textPrimary, fontSize: '14px' }}>{category.name}</span>
                                                                 <span style={{ fontSize: '10px', fontWeight: 600, padding: '2px 6px', borderRadius: '4px', background: category.covered ? T.successBg : T.elevated, color: category.covered ? T.accent : T.textDim, border: `1px solid ${category.covered ? T.successBorder : T.border}` }}>
-                                                                    {category.covered ? 'On FTL' : 'Not on FTL'}
+                                                                    {category.covered ? 'Likely on FTL' : 'Likely not on FTL'}
                                                                 </span>
                                                             </div>
                                                             <p style={{ fontSize: '12px', color: T.textMuted, marginTop: '4px', lineHeight: 1.4 }}>{category.examples}</p>
@@ -1015,7 +978,7 @@ export function FTLCheckerClient() {
                                                             <CheckCircle2 size={14} className="text-re-brand" /> <a href={ecfrUrl(e.citation)} target="_blank" rel="noopener noreferrer" style={{ fontWeight: 500, color: T.accent, textDecoration: 'none' }}>{e.citation}</a>
                                                         </div>
                                                     ))}
-                                                    {results.exemptionStatus === 'NOT_EXEMPT' && <p style={{ fontSize: '13px', color: T.textMuted, margin: 0 }}>You must comply with FSMA 204 traceability requirements for covered products by July 2028.</p>}
+                                                    {results.exemptionStatus === 'NOT_EXEMPT' && <p style={{ fontSize: '13px', color: T.textMuted, margin: 0 }}>Based on the categories selected, your operation does not appear to qualify for a §1.1305 exemption. This is not a regulatory determination — confirm with counsel and the FDA Exemptions & Exclusions Tool before relying on it.</p>}
                                                 </div>
                                             </div>
                                         </div>
@@ -1047,7 +1010,7 @@ export function FTLCheckerClient() {
                                                     </div>
                                                     <div className="flex items-center gap-2">
                                                         {category.outbreakFrequency === 'HIGH' && <span style={{ fontSize: '10px', fontWeight: 600, padding: '2px 8px', borderRadius: '4px', background: T.dangerBg, color: T.danger, border: `1px solid ${T.dangerBorder}` }}>Higher Outbreak Frequency</span>}
-                                                        <span style={{ fontSize: '10px', fontWeight: 600, padding: '2px 8px', borderRadius: '4px', background: category.covered ? T.successBg : T.elevated, color: category.covered ? T.accent : T.textDim }}>{category.covered ? 'FSMA 204 Applies' : 'Not Covered'}</span>
+                                                        <span style={{ fontSize: '10px', fontWeight: 600, padding: '2px 8px', borderRadius: '4px', background: category.covered ? T.successBg : T.elevated, color: category.covered ? T.accent : T.textDim }}>{category.covered ? 'Likely on FTL — verify' : 'Likely not on FTL — verify'}</span>
                                                     </div>
                                                 </div>
                                                 {/* CTE/KDE Requirements - Only for covered categories */}
@@ -1099,7 +1062,7 @@ export function FTLCheckerClient() {
                                         <>
                                             <AlertTriangle size={28} className="mb-3" />
                                             <h3 style={{ fontSize: '20px', fontWeight: 700, margin: '0 0 12px' }}>Action Required</h3>
-                                            <p style={{ fontSize: '14px', opacity: 0.9, margin: '0 0 8px' }}>You have <strong>{results.coveredCount} product categories</strong> that require FSMA 204 compliance by <strong>July 2028</strong>.</p>
+                                            <p style={{ fontSize: '14px', opacity: 0.9, margin: '0 0 8px' }}>Based on your selections, <strong>{results.coveredCount} category{results.coveredCount === 1 ? '' : 'ies'}</strong> may fall under FSMA 204 by <strong>July 20, 2028</strong>. This is not a regulatory determination — verify each product against the FDA FTL.</p>
                                             <p style={{ fontSize: '13px', opacity: 0.8, margin: '0 0 20px' }}>But major retailers are already requiring traceability NOW.</p>
                                             {!emailSubmitted ? (
                                                 <form onSubmit={handleEmailSubmit} className="flex flex-col gap-3">
@@ -1190,7 +1153,7 @@ export function FTLCheckerClient() {
                                     </a>
                                 </div>
                                 <p style={{ fontSize: '11px', color: T.textMuted, margin: '16px 0 0', fontStyle: 'italic' }}>
-                                    This tool is for informational purposes only and does not constitute legal advice. Consult the full regulatory text and your legal counsel for compliance decisions. Last verified against eCFR: February 2026.
+                                    This tool is for informational purposes only and does not constitute legal advice or a regulatory determination. The category list is RegEngine's interpretation of the FDA Food Traceability List; verify each product directly against the FDA FTL and consult your legal counsel for compliance decisions. Last reviewed against the FDA FTL: May 2026.
                                 </p>
                             </div>
                             </LeadGate>
