@@ -16,7 +16,7 @@ export default function IntegrationHubPage() {
                 <div className="pt-8 pb-12">
                     <h1 className="text-3xl font-bold tracking-tight text-foreground mb-4">Data Integration Hub</h1>
                     <p className="text-muted-foreground text-lg max-w-3xl">
-                        Achieve 100% FDA compliance without ripping out your current ERP. RegEngine acts as an overlay data layer, ingesting your existing logistics data through 3 frictionless paths.
+                        Meet FSMA 204 records-keeping obligations without ripping out your current ERP. RegEngine acts as an overlay data layer that captures the CTEs and KDEs your operations require under 21 CFR Part 1, Subpart S — your operation remains responsible for compliance.
                     </p>
                 </div>
                 <div className="space-y-12">
@@ -29,7 +29,7 @@ export default function IntegrationHubPage() {
                                     The &quot;Overlay&quot; Traceability Model
                                 </h2>
                                 <p className="text-muted-foreground leading-relaxed">
-                                    RegEngine doesn&apos;t replace your WMS or inventory management system. We pull the specific Critical Tracking Events (CTEs) required by 21 CFR §1.1325–§1.1350, map them to your Traceability Lot Codes, and secure them in a cryptographically hashed ledger for instant FDA export.
+                                    RegEngine doesn&apos;t replace your WMS or inventory management system. We capture the Critical Tracking Events your operations require — Harvesting and Cooling (§1.1325), Initial Packing (§1.1330) for RACs other than from a fishing vessel, First Land-Based Receiving (§1.1335) for seafood from a fishing vessel, Shipping (§1.1340), Receiving (§1.1345, subject to §1.1305(j) restaurant/RFE exemption), and Transformation (§1.1350) — link them to your Traceability Lot Codes, and store them with SHA-256 manifests so you can produce a sortable electronic spreadsheet within 24 hours of an FDA request under §1.1455(c).
                                 </p>
                             </div>
                             <div className="shrink-0 w-full md:w-[320px] bg-background/50 backdrop-blur-sm rounded-xl border p-4">
@@ -47,7 +47,7 @@ export default function IntegrationHubPage() {
                                     <div className="w-0.5 h-4 bg-border ml-4"></div>
                                     <div className="flex items-center gap-3 text-sm">
                                         <div className="w-8 h-8 rounded-lg bg-[var(--re-success)]/10 flex items-center justify-center text-[var(--re-success)] shrink-0">3</div>
-                                        <span className="text-foreground">Instant 24-Hour FDA readiness</span>
+                                        <span className="text-foreground">Records ready for §1.1455(c) production</span>
                                     </div>
                                 </div>
                             </div>

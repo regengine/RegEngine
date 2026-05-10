@@ -50,7 +50,7 @@ function KnowledgeGraphFallback() {
             <div className="max-w-2xl mx-auto">
                 <h2 className="text-lg font-semibold text-[var(--re-text-primary)] mb-4">Node Types You Can Map</h2>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-8">
-                    {["Grower / Farm", "Cooler", "Packhouse", "Distributor / DC", "Processor", "Retailer"].map((node) => (
+                    {["Grower / Farm", "Cooler", "Packhouse", "First Land-Based Receiver (Seafood)", "Distributor / DC", "Processor", "Retailer"].map((node) => (
                         <div key={node} className="rounded-lg border border-[rgba(255,255,255,0.06)] bg-[rgba(255,255,255,0.02)] p-3 text-center">
                             <span className="text-xs font-medium text-re-brand">{node}</span>
                         </div>

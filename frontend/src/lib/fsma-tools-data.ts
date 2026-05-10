@@ -185,7 +185,7 @@ export const FREE_TOOLS = [
     {
         id: 'ftl-checker',
         title: 'FTL Coverage Checker',
-        description: 'Verify if your food products are on the FDA Food Traceability List.',
+        description: 'Check whether your food products may fall under the FDA Food Traceability List.',
         icon: Leaf,
         href: '/tools/ftl-checker'
     },
@@ -205,50 +205,50 @@ export const FREE_TOOLS = [
     },
     {
         id: 'readiness-assessment',
-        title: 'FSMA 204 Readiness Assessment',
-        description: 'Score your compliance readiness across products, CTEs, KDEs, and systems.',
+        title: 'FSMA 204 Readiness Self-Check',
+        description: 'Self-check your FSMA 204 readiness across products, CTEs, KDEs, and systems.',
         icon: CheckCircle2,
         href: '/tools/readiness-assessment'
     },
     {
         id: 'roi-calculator',
-        title: 'Regulatory ROI Calculator',
-        description: 'Quantify your savings from compliance automation.',
+        title: 'FSMA 204 Savings Estimator',
+        description: 'Estimate potential FSMA 204 savings — illustrative, not a guarantee.',
         icon: TrendingUp,
         href: '/tools/roi-calculator'
     },
     {
         id: 'kde-checker',
-        title: 'KDE Completeness Checker',
-        description: 'Build your customized KDE checklist.',
+        title: 'KDE Checklist Builder',
+        description: 'Build your CTE-specific KDE checklist, including §1.1335 First Land-Based Receiving for seafood.',
         icon: ClipboardList,
         href: '/tools/kde-checker'
     },
     {
         id: 'tlc-validator',
         title: 'TLC Validator',
-        description: 'Validate your Traceability Lot Code uniqueness.',
+        description: 'Stress-test your Traceability Lot Code format for GS1 compatibility and entropy risks.',
         icon: FlaskConical,
         href: '/tools/tlc-validator'
     },
     {
         id: 'cte-mapper',
         title: 'CTE Coverage Mapper',
-        description: 'Map your supply chain data exchange nodes.',
+        description: 'Map roles to required CTEs, with §1.1305(j) restaurant/RFE exemptions surfaced.',
         icon: Truck,
         href: '/tools/cte-mapper'
     },
     {
         id: 'drill-simulator',
         title: '24-Hour Drill Simulator',
-        description: 'Test your record retrieval speed.',
+        description: 'Self-paced rehearsal for the §1.1455(c) records-on-request workflow.',
         icon: Timer,
         href: '/tools/drill-simulator'
     },
     {
         id: 'recall-readiness',
-        title: 'Recall Readiness Score',
-        description: 'Get an A-F grade on your 24-hour records retrieval mandate.',
+        title: 'FSMA 204 Readiness Self-Check',
+        description: 'Self-check your §1.1455(c) records-on-request workflow.',
         icon: ShieldCheck,
         href: '/tools/recall-readiness'
     },
@@ -269,7 +269,7 @@ export const FREE_TOOLS = [
     {
         id: 'export',
         title: 'FDA Export Package Generator',
-        description: 'Generate a verifiable 21 CFR 1.1455 compliance package with SHA-256 chain verification.',
+        description: 'Generate a §1.1455(c) sortable spreadsheet with SHA-256 integrity hashes.',
         icon: FileOutput,
         href: '/tools/export'
     }

@@ -83,9 +83,33 @@ const SUBPROCESSORS = [
   },
   {
     name: 'Sentry',
-    purpose: 'Error monitoring and performance tracking (no personal traceability data)',
+    purpose: 'Error monitoring, performance tracing, and session replay. Stack traces and replays of authenticated UI may include incidental tenant identifiers and request context.',
     location: 'United States',
     link: 'https://sentry.io/privacy/',
+  },
+  {
+    name: 'PostHog',
+    purpose: 'Product analytics for consented users. Captures product events after user consent.',
+    location: 'United States',
+    link: 'https://posthog.com/privacy',
+  },
+  {
+    name: 'OpenAI',
+    purpose: 'LLM extraction and label-image vision. Processes document text and uploaded label images for KDE extraction.',
+    location: 'United States (multi-region)',
+    link: 'https://openai.com/policies/privacy-policy',
+  },
+  {
+    name: 'Google Cloud / Vertex AI',
+    purpose: 'Gemini-based extraction. Processes document text submitted for extraction.',
+    location: 'us-central1',
+    link: 'https://cloud.google.com/terms/cloud-privacy-notice',
+  },
+  {
+    name: 'Redpanda',
+    purpose: 'Kafka-compatible event streaming for ingested events in transit.',
+    location: 'United States',
+    link: 'https://redpanda.com/legal/privacy-policy',
   },
 ];
 
@@ -105,7 +129,7 @@ const SECURITY_MEASURES = [
   {
     Icon: Shield,
     title: 'Tenant Isolation',
-    text: 'Customer data is isolated at the database layer using PostgreSQL Row-Level Security policies. No application-level bypass is possible. Each tenant can only access their own traceability and compliance records.',
+    text: 'Customer data is isolated using PostgreSQL row-level policies and authenticated tenant context, designed to restrict cross-tenant access. Identity-resolution and graph-layer hardening is in active rollout; details available under NDA.',
   },
   {
     Icon: Server,
