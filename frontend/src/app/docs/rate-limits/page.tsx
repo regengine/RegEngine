@@ -44,9 +44,9 @@ export default function RateLimitsDocsPage() {
 
                     <Card>
                         <CardHeader>
-                            <CardTitle>Response Headers</CardTitle>
+                            <CardTitle>Response Headers (on 429 only)</CardTitle>
                             <CardDescription>
-                                Every API response includes headers to tell you about your current rate limit status.
+                                Rate-limit metadata is returned on <code>429 Too Many Requests</code> responses. Successful responses do not currently include rate-limit headers — rely on <code>Retry-After</code> for backoff.
                             </CardDescription>
                         </CardHeader>
                         <CardContent>
@@ -57,15 +57,19 @@ export default function RateLimitsDocsPage() {
                                 </div>
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 border-b pb-4 text-sm">
                                     <div className="font-mono text-purple-600">X-RateLimit-Limit</div>
-                                    <div className="md:col-span-2">The maximum number of requests allowed in the current time window.</div>
+                                    <div className="md:col-span-2">The maximum requests allowed in the current window for this scope.</div>
                                 </div>
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 border-b pb-4 text-sm">
                                     <div className="font-mono text-purple-600">X-RateLimit-Remaining</div>
-                                    <div className="md:col-span-2">The number of requests remaining in the current time window.</div>
+                                    <div className="md:col-span-2">Always <code>0</code> on a 429 response.</div>
+                                </div>
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 border-b pb-4 text-sm">
+                                    <div className="font-mono text-purple-600">X-RateLimit-Tenant</div>
+                                    <div className="md:col-span-2">The tenant ID the limit was applied to.</div>
                                 </div>
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                                    <div className="font-mono text-purple-600">X-RateLimit-Reset</div>
-                                    <div className="md:col-span-2">The time (Unix timestamp) when the current window resets.</div>
+                                    <div className="font-mono text-purple-600">X-RateLimit-Scope</div>
+                                    <div className="md:col-span-2">The bucket/scope that was exceeded (e.g. <code>ingest</code>, <code>webhook_read</code>).</div>
                                 </div>
                             </div>
                         </CardContent>

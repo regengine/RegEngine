@@ -220,7 +220,7 @@ export default function RecallResponsePage() {
                 <Button variant="outline" asChild>
                   <Link href="/dashboard/compliance">
                     <Shield className="w-4 h-4 mr-2" />
-                    Check Compliance Score
+                    Check Self-Check Score
                   </Link>
                 </Button>
                 <ExportAndCompleteButton request={focusedRequest} />

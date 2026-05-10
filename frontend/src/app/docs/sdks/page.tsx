@@ -63,7 +63,7 @@ export default function SDKsDocsPage() {
                             { title: 'Python SDK', badge: 'Planned', color: '#3776ab' },
                             { title: 'Node.js SDK', badge: 'Planned', color: '#339933' },
                             { title: 'Go SDK', badge: 'Planned', color: '#00add8' },
-                            { title: 'REST Client', badge: 'Available now — OpenAPI 3.0 spec', color: 'var(--re-text-muted)' },
+                            { title: 'REST Client', badge: 'Available now — REST + JSON', color: 'var(--re-text-muted)' },
                         ].map((item) => (
                             <div key={item.title} className="p-5 rounded-lg flex justify-between items-center" style={{
                                 background: T.surface,
