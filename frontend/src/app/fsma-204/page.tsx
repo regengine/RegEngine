@@ -17,10 +17,10 @@ const FTL_EXAMPLES = [
   { category: "Fruits", examples: "Tomatoes, peppers, melons, berries" },
   { category: "Fresh Herbs", examples: "Cilantro, basil, parsley" },
   { category: "Seafood", examples: "Finfish, crustaceans, mollusks" },
-  { category: "Shell Eggs", examples: "All shell eggs" },
+  { category: "Shell Eggs", examples: "Shell eggs (per FDA FTL definition)" },
   { category: "Nut Butters", examples: "Peanut butter, almond butter" },
-  { category: "Cheeses", examples: "Soft and semi-soft cheeses" },
-  { category: "Ready-to-Eat Deli", examples: "Pre-made salads" },
+  { category: "Cheeses", examples: "Cheeses other than hard cheese (per FTL)" },
+  { category: "Ready-to-Eat Deli Salads", examples: "RTE deli salads (per FTL)" },
 ];
 const CTES_PLAIN = [
   {
@@ -44,8 +44,8 @@ const CTES_PLAIN = [
   {
     name: "First Land-Based Receiving",
     icon: Anchor,
-    who: "First US receiver of imported food",
-    what: "Record when imported food first arrives on US soil, the lot code, origin, and entry details.",
+    who: "Receivers of seafood from a fishing vessel",
+    what: "Per §1.1330: record when seafood was received from a fishing vessel, the lot code, the harvest and landing location, and the receiving facility — distinct from generic imported-food entry.",
   },
   {
     name: "Shipping",
@@ -82,13 +82,13 @@ const STEPS = [
   {
     num: "3",
     title: "RegEngine maps your events",
-    desc: "We automatically organize your data into the 7 Critical Tracking Events the FDA requires — harvesting, cooling, initial packing, first land-based receiving, shipping, receiving, and transformation. You see a simple dashboard showing what\u2019s covered and what\u2019s missing.",
+    desc: "We map your data to the FSMA 204 Critical Tracking Events defined in the rule — harvesting, cooling, initial packing, first land-based receiving, shipping, receiving, and transformation. You only record the events that occur at your operation. The dashboard shows what\u2019s covered and what\u2019s missing.",
     cta: null,
   },
   {
     num: "4",
     title: "Be ready when they ask",
-    desc: "When the FDA or a retailer like Walmart requests traceability records, RegEngine generates the exact sortable spreadsheet they need — in minutes, not days.",
+    desc: "When the FDA or a retailer requests traceability records, RegEngine produces a sortable electronic spreadsheet structured to FDA's §1.1455 format — populated from the lot codes, dates, and locations you've uploaded. Compliance remains your operation's legal responsibility.",
     cta: null,
   },
 ];
@@ -155,7 +155,7 @@ export default function FSMA204BusinessGuidePage() {
           <p>
             The FDA&apos;s Food Safety Modernization Act Section 204 — commonly called &ldquo;FSMA 204&rdquo; or the &ldquo;Food Traceability Rule&rdquo; — requires anyone who grows, receives, ships, or transforms certain high-risk foods to keep detailed traceability records.
           </p>          <p>
-            The goal is simple: when a foodborne illness outbreak happens, the FDA needs to trace contaminated products from the farm to the store shelf within <strong className="text-[var(--re-text-primary)]">24 hours</strong>. Before this rule, that process took weeks.
+            The goal is simple: when a foodborne illness outbreak happens, FDA can request your traceability records and you must produce a sortable electronic spreadsheet within <strong className="text-[var(--re-text-primary)]">24 hours</strong>. Before this rule, that process could take weeks.
           </p>
           <p>
             The rule was finalized in 2022. The original compliance date was January 20, 2026. <strong className="text-[var(--re-text-primary)]">Congress directed FDA not to enforce the rule before July 20, 2028.</strong> The requirements themselves have not changed.
@@ -169,7 +169,7 @@ export default function FSMA204BusinessGuidePage() {
             <div>
               <p className="font-medium text-[var(--re-text-primary)] mb-1">The deadline moved — the rule didn&apos;t.</p>
               <p className="text-[0.9rem] text-[var(--re-text-secondary)] leading-relaxed">
-                Congress directed FDA not to enforce before July 2028, but retailers like Walmart, Kroger, and Costco are already requiring traceability data from suppliers. Walmart has required ASN compliance since August 2025. Kroger has enforced EDI 856 compliance with chargebacks since June 2025. If you sell to a major retailer, your real deadline has already passed.
+                Congress directed FDA not to enforce before July 2028, but major retailers have published supplier traceability programs that pre-date the federal enforcement date. If you sell to a major retailer, check your supplier portal — your effective deadline may already have passed.
               </p>
             </div>
           </div>
@@ -185,7 +185,7 @@ export default function FSMA204BusinessGuidePage() {
             Are your products covered?
           </h2>
           <p className="text-[1rem] text-[var(--re-text-secondary)] leading-relaxed mb-8 max-w-[600px]">
-            FSMA 204 only applies to foods on the FDA&apos;s Food Traceability List. Here are the main categories:
+            FSMA 204 only applies to foods on the FDA&apos;s Food Traceability List. The FTL has 23 commodity groupings — examples below. Use the FTL Checker for a definitive answer for your specific products.
           </p>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-8">
@@ -271,7 +271,7 @@ export default function FSMA204BusinessGuidePage() {
             <div className="p-5 rounded-xl border border-[rgba(16,163,74,0.2)] bg-[rgba(16,163,74,0.03)]">
               <p className="font-mono text-[0.7rem] font-medium text-[var(--re-brand-dark)] uppercase tracking-[0.06em] mb-3">With RegEngine</p>
               <p className="text-[0.9rem] text-[var(--re-text-secondary)] leading-relaxed">
-                Click &ldquo;Export&rdquo; in your dashboard. RegEngine generates the FDA-required spreadsheet with all your lot codes, dates, and locations. Done in minutes.
+                Click &ldquo;Export&rdquo; in your dashboard. RegEngine produces a sortable electronic spreadsheet structured to FDA&apos;s §1.1455 format, populated from your uploaded lot codes, dates, and locations. Done in minutes.
               </p>
             </div>
           </div>
@@ -283,7 +283,7 @@ export default function FSMA204BusinessGuidePage() {
           Getting started
         </p>
         <h2 className="font-serif text-[2rem] font-bold text-[var(--re-text-primary)] tracking-tight leading-tight mb-3">
-          How to get compliant with RegEngine.
+          How RegEngine supports your FSMA 204 program.
         </h2>
         <p className="text-[1rem] text-[var(--re-text-secondary)] leading-relaxed mb-10 max-w-[600px]">
           No IT department required. No six-figure software contract. If you can fill out a spreadsheet, you can use RegEngine.
@@ -337,11 +337,11 @@ export default function FSMA204BusinessGuidePage() {
                 a: "That\u2019s a great start. The challenge is that the FDA requires a specific format and the ability to trace lots forward and backward through your supply chain. RegEngine takes your existing data and organizes it into the structure the FDA expects.",
               },              {
                 q: "How is this different from what Walmart already asks for?",
-                a: "Walmart and other major retailers have been requiring traceability data ahead of the FDA deadline. If you already supply traceability data to a retailer, you\u2019re partially prepared. RegEngine ensures your records meet both retailer and FDA requirements from one system.",
+                a: "Major retailers have been requiring traceability data ahead of the FDA deadline. If you already supply traceability data to a retailer, you\u2019re partially prepared. RegEngine helps you produce records structured to meet retailer schemas and FDA\u2019s \u00a71.1455 sortable-spreadsheet format from one system.",
               },
               {
                 q: "What happens if I\u2019m not compliant by July 2028?",
-                a: "The FDA can issue warning letters, request voluntary recalls, or in serious cases, pursue injunctions. Beyond enforcement, retailers may drop non-compliant suppliers. The bigger risk for most farms is losing a customer like Walmart over missing traceability data.",
+                a: "FDA enforcement under §1.1455 focuses on producing the required records on request. Beyond direct enforcement, major retailers may drop non-compliant suppliers — the bigger risk for most farms is losing a key retail customer over missing traceability data.",
               },
               {
                 q: "How much does this cost?",
