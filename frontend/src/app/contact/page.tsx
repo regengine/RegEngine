@@ -46,8 +46,8 @@ export default function ContactPage() {
         {/* Gap Analysis Offer */}
         <div className="mt-6 inline-flex items-center gap-3 rounded-xl border border-[var(--re-brand)]/20 bg-[var(--re-brand-muted)] px-5 py-3">
           <span className="text-sm text-[var(--re-text-primary)]">
-            <strong className="text-[var(--re-brand)]">Book a free gap analysis call</strong>{' '}
-            — 30 minutes with our founder to assess your FSMA 204 readiness.
+            <strong className="text-[var(--re-brand)]">Book a free gap-analysis call</strong>{' '}
+            — 30 minutes with the founder to walk through your FSMA 204 posture and identify coverage gaps.
           </span>
           <a
             href="https://calendly.com/regengine/fsma-strategy-session"

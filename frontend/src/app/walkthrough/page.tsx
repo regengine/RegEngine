@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 
 export const metadata: Metadata = {
   title: '24-Hour FDA Response Walkthrough | RegEngine',
-  description: 'Step-by-step: how RegEngine turns messy supplier data into a defensible FDA response package under deadline.',
+  description: 'Illustrative step-by-step scenario showing how RegEngine assembles a §1.1455(c) records-on-request package from supplier data.',
   openGraph: {
     title: '24-Hour FDA Response Walkthrough | RegEngine',
     description: 'See exactly what happens when the FDA requests your traceability records.',
@@ -23,7 +23,7 @@ const TIMELINE = [
     title: 'FDA request arrives',
     icon: Clock,
     description: 'The FDA sends a records request under 21 CFR 1.1455: "Provide all traceability records for Romaine Lettuce lots R-2026-0312 through R-2026-0318, from farm to retail, within 24 hours."',
-    detail: 'This is a real scenario. The FDA can request records for any product on the Food Traceability List. You have 24 hours to respond with complete chain-of-custody documentation.',
+    detail: 'This is an illustrative scenario. Under §1.1455(c), the FDA can request records for products on the Food Traceability List, and you must produce a sortable electronic spreadsheet within 24 hours. Real timing varies by completeness of upstream supplier data.',
     color: 'red',
   },
   {
@@ -100,7 +100,7 @@ const TIMELINE = [
     title: 'Package submitted to FDA',
     icon: CheckCircle2,
     description: 'The package is submitted with a recorded submission method, recipient, and timestamp. The request case moves to "submitted" status. Total time: 1 hour 40 minutes.',
-    detail: 'If the FDA questions any record, the SHA-256 hash chain proves the data hasn\'t been modified since ingestion. The verify_chain.py script can independently confirm integrity.',
+    detail: 'The SHA-256 manifest lets the FDA or your auditor verify the package hasn\'t changed since assembly. The verify_chain.py script can independently re-check the manifest. Downstream message-bus signature verification is rolling out and not yet strict-mode by default.',
     color: 'emerald',
   },
 ];
@@ -192,7 +192,7 @@ export default function WalkthroughPage() {
                           </div>
                         ))}
                         <p className="text-[0.75rem] text-re-danger font-semibold mt-3 pt-2 border-t border-re-danger/20">
-                          SUBMISSION BLOCKED until all defects resolved or waived
+                          Export build is blocked until defects are resolved or waived
                         </p>
                       </div>
                     )}
@@ -221,7 +221,7 @@ export default function WalkthroughPage() {
         <div className="max-w-[800px] mx-auto py-12 sm:py-16 px-4 sm:px-6">
           <h2 className="text-2xl font-bold text-re-text-primary mb-3">You cannot submit if:</h2>
           <p className="text-sm text-re-text-muted mb-6">
-            RegEngine enforces these checks at package assembly time. There is no bypass.
+            RegEngine surfaces these checks at package assembly time. Rule enforcement is configurable per workflow — in production today, rule failures are recorded as exceptions and surfaced in the dashboard rather than blocking ingest.
           </p>
           <div className="grid sm:grid-cols-2 gap-3">
             {[
@@ -259,7 +259,7 @@ export default function WalkthroughPage() {
       <section className="relative z-[2] max-w-[700px] mx-auto px-6 py-12 sm:py-16 text-center">
         <h2 className="text-2xl font-bold text-re-text-primary mb-3">This is what RegEngine does.</h2>
         <p className="text-[0.95rem] text-re-text-muted mb-6 max-w-lg mx-auto">
-          It takes messy, inconsistent supplier data and turns it into a defensible FDA response under deadline. Nothing more. Nothing less.
+          It takes messy, inconsistent supplier data and turns it into a §1.1455(c)-formatted records-on-request package under deadline. Nothing more. Nothing less.
         </p>
         <div className="flex gap-3 justify-center flex-wrap">
           <Link href="/pricing">
