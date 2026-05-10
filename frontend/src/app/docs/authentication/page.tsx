@@ -22,7 +22,7 @@ export default function AuthenticationDocsPage() {
                         <h1 className="text-4xl font-bold">Authentication</h1>
                     </div>
                     <p className="text-xl text-muted-foreground">
-                        Secure your API requests with Bearer Token authentication.
+                        Authenticate API requests with an API key in the X-RegEngine-API-Key header.
                     </p>
                 </div>
 
@@ -73,7 +73,7 @@ export default function AuthenticationDocsPage() {
                                     </div>
                                     <div className="flex gap-3">
                                         <div className="w-24 font-medium text-muted-foreground">Revoke</div>
-                                        <div>Revoke a key immediately if compromised. This takes effect within 60 seconds.</div>
+                                        <div>Revoked keys are rejected on subsequent requests. Allow a short propagation window for in-flight cached lookups.</div>
                                     </div>
                                 </div>
                             </div>

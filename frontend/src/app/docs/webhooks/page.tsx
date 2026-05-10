@@ -53,7 +53,7 @@ export default function WebhooksDocsPage() {
                             padding: '4px 10px',
                             borderRadius: '4px',
                         }}>
-                            Coming Q2 2026
+                            Roadmap
                         </span>
                     </div>
 
@@ -79,7 +79,7 @@ export default function WebhooksDocsPage() {
                     <div className="grid gap-3">
                         {[
                             { event: 'record.created', desc: 'New compliance record created' },
-                            { event: 'record.verified', desc: 'Record independently verified' },
+                            { event: 'record.chain_extended', desc: 'Record appended to the hash chain' },
                             { event: 'compliance.alert', desc: 'Regulatory change detected' },
                             { event: 'document.ingested', desc: 'New document processed' },
                             { event: 'fact.extracted', desc: 'Compliance fact extracted from document' },
@@ -141,9 +141,9 @@ export default function WebhooksDocsPage() {
   "created": "2026-03-15T14:23:01Z",
   "data": {
     "framework": "FSMA_204",
-    "change_type": "enforcement_date_updated",
-    "previous_value": "2026-01-20",
-    "new_value": "2028-07-20",
+    "change_type": "guidance_updated",
+    "previous_value": "draft-guidance-2024-09",
+    "new_value": "draft-guidance-2026-02",
     "source_url": "fda.gov/..."
   }
 }`}</code>
