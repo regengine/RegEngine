@@ -51,13 +51,13 @@ const FTL_CATEGORIES = [
 
 // Critical Tracking Events (CTEs)
 const CTES = [
-    { id: 'harvesting', name: 'Harvesting', description: 'Harvesting of raw agricultural commodities' },
-    { id: 'cooling', name: 'Cooling', description: 'Cooling before initial packing' },
-    { id: 'initial_packing', name: 'Initial Packing', description: 'Initial packing of raw agricultural commodities' },
-    { id: 'first_receiver', name: 'First Land-Based Receiving', description: 'First receipt of food at a US facility from a fishing vessel or import' },
-    { id: 'shipping', name: 'Shipping', description: 'Sending food from one location to another' },
-    { id: 'receiving', name: 'Receiving', description: 'Receipt of food at a facility' },
-    { id: 'transformation', name: 'Transformation', description: 'Manufacturing, processing, or changing a food' },
+    { id: 'harvesting', name: 'Harvesting (§1.1325)', description: 'Harvesting of raw agricultural commodities' },
+    { id: 'cooling', name: 'Cooling (§1.1325)', description: 'Cooling of an RAC before initial packing (combined with Harvesting in §1.1325)' },
+    { id: 'initial_packing', name: 'Initial Packing (§1.1330)', description: 'Initial packing of a raw agricultural commodity (other than food obtained from a fishing vessel)' },
+    { id: 'first_receiver', name: 'First Land-Based Receiving (§1.1335) — Seafood', description: 'First land-based receipt of food obtained directly from a fishing vessel. Applies only to seafood obtained from a fishing vessel — non-seafood importers perform §1.1345 Receiving, not FLBR.' },
+    { id: 'shipping', name: 'Shipping (§1.1340)', description: 'Sending food from one location to another' },
+    { id: 'receiving', name: 'Receiving (§1.1345)', description: 'Receipt of food at a facility. Subject to the §1.1305(j) exemption for restaurants and retail food establishments selling food directly to consumers.' },
+    { id: 'transformation', name: 'Transformation (§1.1350)', description: 'Manufacturing, processing, or changing a food into a new traceability lot' },
 ];
 
 // Key Data Elements (KDEs)

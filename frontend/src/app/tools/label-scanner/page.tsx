@@ -243,12 +243,13 @@ export default function LabelScannerPage() {
                     </div>
                     <div>
                         <h1 className="text-3xl font-bold text-[var(--re-text-primary)]">Label Scanner</h1>
-                        <p className="text-sm text-[var(--re-text-muted)]">NLP-based food label extraction</p>
+                        <p className="text-sm text-[var(--re-text-muted)]">Computer-vision food-label extraction</p>
                     </div>
                 </div>
                 <p className="text-base text-[var(--re-text-muted)] leading-relaxed max-w-[640px]">
-                    Upload or photograph a food product label. Computer vision extracts product name, lot code, GTIN, expiry date,
-                    allergens, and maps everything to FSMA 204 Key Data Elements automatically.
+                    Upload or photograph a food product label. Computer vision attempts to extract product name, lot code, GTIN,
+                    expiry date, and allergens, and suggests a mapping to FSMA 204 Key Data Elements. Always review extracted
+                    values before ingesting — OCR mistakes are common, and a label is not itself a CTE record.
                 </p>
             </section>
 
@@ -368,7 +369,7 @@ export default function LabelScannerPage() {
                                         <div className={`flex items-center gap-2 px-3 py-2 rounded-lg ${result.fsma_compatible ? 'bg-re-brand-muted border border-re-brand/20' : 'bg-re-warning-muted0/10 border border-re-warning/20'}`}>
                                             {result.fsma_compatible ? <Check className="h-4 w-4 text-re-brand" /> : <Zap className="h-4 w-4 text-re-warning" />}
                                             <span className={`text-sm font-medium ${result.fsma_compatible ? 'text-re-brand' : 'text-re-warning'}`}>
-                                                {result.fsma_compatible ? 'FSMA 204 Compatible' : 'Partial KDE Coverage'}
+                                                {result.fsma_compatible ? 'Label contains likely-KDE fields' : 'Label is missing common KDE fields'}
                                             </span>
                                         </div>                                        {result.product_name && (
                                             <div className="flex items-start justify-between gap-3 py-1.5">
