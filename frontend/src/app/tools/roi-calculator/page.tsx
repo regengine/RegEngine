@@ -6,14 +6,14 @@ import { EmailGate } from "@/components/tools/EmailGate";
 import { RelatedTools } from "@/components/tools/RelatedTools";
 
 export const metadata: Metadata = {
-    title: "FSMA 204 ROI Calculator | Compliance Automation Savings | RegEngine",
-    description: "Calculate the ROI of automating FSMA 204 compliance. Estimate labor savings, recall cost reduction, and efficiency gains vs. manual traceability. Free tool.",
+    title: "FSMA 204 Savings Estimator | Illustrative ROI | RegEngine",
+    description: "Estimate the rough savings opportunity from automating FSMA 204 compliance. Illustrative only — actual savings depend on your contracts, staffing, and existing systems.",
     alternates: {
         canonical: "https://regengine.co/tools/roi-calculator",
     },
     openGraph: {
-        title: "FSMA 204 ROI Calculator — RegEngine",
-        description: "Calculate your labor savings and recall cost reduction from automating FSMA 204 traceability. Free ROI tool.",
+        title: "FSMA 204 Savings Estimator — RegEngine",
+        description: "Estimate the rough savings opportunity from automating FSMA 204 traceability. Illustrative only.",
         type: "website",
         url: "https://regengine.co/tools/roi-calculator",
     },
@@ -44,8 +44,8 @@ function ROICalculatorFallback() {
                 <div className="w-16 h-16 rounded-2xl bg-re-brand-muted border border-re-brand/20 flex items-center justify-center mx-auto mb-6">
                     <svg className="w-8 h-8 text-re-brand" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
                 </div>
-                <h2 className="text-2xl font-bold text-[var(--re-text-primary)] mb-3">FSMA 204 ROI Calculator</h2>
-                <p className="text-sm text-[var(--re-text-muted)] max-w-lg mx-auto leading-relaxed">Estimate your labor savings, recall cost reduction, and compliance efficiency gains from automating FSMA 204 traceability with RegEngine. Enter your facility count, product volume, and current compliance spend to see personalized results.</p>
+                <h2 className="text-2xl font-bold text-[var(--re-text-primary)] mb-3">FSMA 204 Savings Estimator</h2>
+                <p className="text-sm text-[var(--re-text-muted)] max-w-lg mx-auto leading-relaxed">Get a rough sense of where automation could pay back. Numbers are illustrative — actual savings depend on your contracts, staffing, and existing systems.</p>
             </div>
             <div className="max-w-2xl mx-auto">
                 <h2 className="text-lg font-semibold text-[var(--re-text-primary)] mb-4">What This Calculator Measures</h2>
@@ -55,8 +55,8 @@ function ROICalculatorFallback() {
                         <p className="text-xs text-[var(--re-text-muted)]">Compare manual spreadsheet-based traceability against automated ingestion, validation, and export.</p>
                     </div>
                     <div className="rounded-xl border border-[rgba(255,255,255,0.06)] bg-[rgba(255,255,255,0.02)] p-4">
-                        <h3 className="text-sm font-semibold text-re-brand mb-1">Recall Risk Savings</h3>
-                        <p className="text-xs text-[var(--re-text-muted)]">Estimate the cost difference between a 24-hour FDA response with cryptographic records vs. multi-day manual lookup.</p>
+                        <h3 className="text-sm font-semibold text-re-brand mb-1">Recall Risk Savings (illustrative)</h3>
+                        <p className="text-xs text-[var(--re-text-muted)]">Rough sense of the cost difference between a §1.1455(c) 24-hour records response and a multi-day manual lookup. Not a forecast.</p>
                     </div>
                     <div className="rounded-xl border border-[rgba(255,255,255,0.06)] bg-[rgba(255,255,255,0.02)] p-4">
                         <h3 className="text-sm font-semibold text-re-brand mb-1">Compliance Efficiency</h3>
@@ -64,7 +64,7 @@ function ROICalculatorFallback() {
                     </div>
                     <div className="rounded-xl border border-[rgba(255,255,255,0.06)] bg-[rgba(255,255,255,0.02)] p-4">
                         <h3 className="text-sm font-semibold text-re-brand mb-1">Retailer Readiness</h3>
-                        <p className="text-xs text-[var(--re-text-muted)]">See how quickly you can meet Walmart, Kroger, and Costco traceability requirements with automated evidence generation.</p>
+                        <p className="text-xs text-[var(--re-text-muted)]">See how quickly you can prepare records to support major-retailer traceability programs. Specific retailer requirements vary by buyer.</p>
                     </div>
                 </div>
                 <div className="flex gap-2 items-center justify-center text-xs text-[var(--re-text-disabled)]">
