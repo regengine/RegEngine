@@ -12,9 +12,9 @@ auth fixtures. These cover:
 from __future__ import annotations
 
 import csv
+import defusedxml.ElementTree as ET
 import io
 import sys
-import xml.etree.ElementTree as ET
 from pathlib import Path
 
 import pytest

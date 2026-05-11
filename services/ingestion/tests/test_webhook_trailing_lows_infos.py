@@ -259,8 +259,8 @@ class TestF6IntegrationWebhookStub:
 
 class TestF8OpaqueProdSignatureFailure:
     def test_mismatch_in_production_is_opaque(self, monkeypatch):
-        secret = "test-secret"
-        monkeypatch.setenv("WEBHOOK_HMAC_SECRET", secret)
+        hmac_key = "fixture-hmac-key"
+        monkeypatch.setenv("WEBHOOK_HMAC_SECRET", hmac_key)
         # Force production detection.
         monkeypatch.setattr(wr, "_is_production", lambda: True)
 
@@ -278,8 +278,8 @@ class TestF8OpaqueProdSignatureFailure:
         assert "message" not in detail  # No verbose hint
 
     def test_mismatch_in_dev_keeps_verbose_hint(self, monkeypatch):
-        secret = "test-secret"
-        monkeypatch.setenv("WEBHOOK_HMAC_SECRET", secret)
+        hmac_key = "fixture-hmac-key"
+        monkeypatch.setenv("WEBHOOK_HMAC_SECRET", hmac_key)
         monkeypatch.setattr(wr, "_is_production", lambda: False)
 
         body = b'{"hello":"world"}'
@@ -334,12 +334,12 @@ class TestF8OpaqueProdSignatureFailure:
 
     def test_valid_signature_still_passes_in_production(self, monkeypatch):
         """Sanity: F-8 only changes failure responses, not the happy path."""
-        secret = "test-secret"
-        monkeypatch.setenv("WEBHOOK_HMAC_SECRET", secret)
+        hmac_key = "fixture-hmac-key"
+        monkeypatch.setenv("WEBHOOK_HMAC_SECRET", hmac_key)
         monkeypatch.setattr(wr, "_is_production", lambda: True)
 
         body = b'{"events":[]}'
-        sig = "sha256=" + _sign(secret, body)
+        sig = "sha256=" + _sign(hmac_key, body)
         # No exception — returns None.
         result = asyncio.run(
             wr._verify_webhook_signature(

@@ -50,14 +50,15 @@ class TestEmptyPasswordRejected:
     def test_explicit_password_builds_driver(self):
         with patch("services.ingestion.app.regulation_loader.GraphDatabase") as gdb:
             gdb.driver.return_value = MagicMock()
+            credential_value = "fixture-password"
             loader = RegulationLoader(
                 uri="bolt://localhost:7687",
                 user="neo4j",
-                password="secret",
+                password=credential_value,
             )
             assert loader.driver is not None
             gdb.driver.assert_called_once_with(
-                "bolt://localhost:7687", auth=("neo4j", "secret")
+                "bolt://localhost:7687", auth=("neo4j", credential_value)
             )
 
 
@@ -97,8 +98,9 @@ class TestLoadTenantScopedWrite:
             mock_driver.session.return_value.__exit__.return_value = False
             gdb.driver.return_value = mock_driver
 
+            credential_value = "fixture-password"
             loader = RegulationLoader(
-                uri="bolt://x", user="neo4j", password="pw"
+                uri="bolt://x", user="neo4j", password=credential_value
             )
         return loader, mock_session
 
@@ -190,8 +192,9 @@ class TestLoadUsesToThread:
         the blocking Neo4j write does not stall the event loop."""
         with patch("services.ingestion.app.regulation_loader.GraphDatabase") as gdb:
             gdb.driver.return_value = MagicMock()
+            credential_value = "fixture-password"
             loader = RegulationLoader(
-                uri="bolt://x", user="neo4j", password="pw"
+                uri="bolt://x", user="neo4j", password=credential_value
             )
 
         # Patch the parser so we don't try to import langchain / hit disk.

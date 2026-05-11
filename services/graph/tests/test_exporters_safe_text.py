@@ -7,9 +7,9 @@ Covers RE-SEC-001 (XML), RE-SEC-002 (CSV-as-Excel), RE-SEC-003
 from __future__ import annotations
 
 import csv
+import defusedxml.ElementTree as ET
 import io
 import sys
-import xml.etree.ElementTree as ET
 from pathlib import Path
 
 import pytest
