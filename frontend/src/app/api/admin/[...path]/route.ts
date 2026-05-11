@@ -1,7 +1,6 @@
 import { NextRequest } from 'next/server';
-import { createStreamProxy, applyCookieCredentials, passthroughRequestHeaders, isPublicHost, stripTrailingSlash } from '@/lib/proxy-factory';
-
-const DEFAULT_ADMIN_URL = 'http://localhost:8400';
+import { createStreamProxy, applyCookieCredentials, passthroughRequestHeaders } from '@/lib/proxy-factory';
+import { getAdminTargets as resolveAdminTargets, shouldRetryAdminProxyResponse } from '@/lib/admin-targets';
 
 // force-dynamic ensures the proxy runs as a serverless function on every request.
 export const dynamic = 'force-dynamic';
@@ -25,42 +24,24 @@ const UNAUTHENTICATED_AUTH_PATHS = new Set([
 ]);
 
 function getAdminTargets(): string[] {
-    const candidates: string[] = [];
-    const publicAdminUrl = process.env.NEXT_PUBLIC_ADMIN_URL;
-    const publicApiBase = process.env.NEXT_PUBLIC_API_BASE_URL;
-    const internalAdminUrl = process.env.ADMIN_SERVICE_URL;
-
-    if (publicAdminUrl) {
-        candidates.push(publicAdminUrl);
-    }
-
-    if (publicApiBase) {
-        candidates.push(`${stripTrailingSlash(publicApiBase)}/admin`);
-    }
-
+    const candidates = resolveAdminTargets(process.env);
     const runningOnVercel = Boolean(
         process.env.VERCEL || process.env.VERCEL_URL || process.env.VERCEL_ENV,
     );
-    if (internalAdminUrl && (!runningOnVercel || isPublicHost(internalAdminUrl))) {
-        candidates.push(internalAdminUrl);
+
+    if (candidates.length === 0 && runningOnVercel) {
+        console.error(
+            '[proxy/admin] No admin backend URL configured — set NEXT_PUBLIC_ADMIN_URL, NEXT_PUBLIC_API_BASE_URL, or ADMIN_SERVICE_URL',
+        );
     }
 
-    if (candidates.length === 0) {
-        if (runningOnVercel) {
-            console.error(
-                '[proxy/admin] No admin backend URL configured — set NEXT_PUBLIC_ADMIN_URL, NEXT_PUBLIC_API_BASE_URL, or ADMIN_SERVICE_URL',
-            );
-        } else {
-            candidates.push(DEFAULT_ADMIN_URL);
-        }
-    }
-
-    return Array.from(new Set(candidates.map(stripTrailingSlash)));
+    return candidates;
 }
 
 const { GET, POST, PUT, PATCH, DELETE, OPTIONS } = createStreamProxy({
     serviceName: 'admin',
     resolveTargetBases: getAdminTargets,
+    shouldRetry: shouldRetryAdminProxyResponse,
     isUnauthenticatedPath: (path) => UNAUTHENTICATED_AUTH_PATHS.has(path),
     buildHeaders: (request: NextRequest) => {
         const headers = new Headers();

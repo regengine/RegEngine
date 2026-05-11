@@ -58,9 +58,6 @@ COPY scripts/run-migrations.sh /app/scripts/run-migrations.sh
 # Copy all service code
 COPY services /app/services
 
-# Copy kernel package (obligation, discovery, graph, reporting modules)
-COPY kernel /app/kernel
-
 # Copy plugins (FSMA sources, etc.)
 COPY plugins /app/plugins
 

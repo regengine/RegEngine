@@ -38,6 +38,24 @@ def downgrade() -> None:
     pass
 
 
+def _conditional_tenant_backfill(schema: str, table: str, source_column: str = "org_id") -> str:
+    return f"""
+        DO $mig$
+        BEGIN
+            IF EXISTS (
+                SELECT 1
+                FROM information_schema.columns
+                WHERE table_schema = '{schema}'
+                  AND table_name = '{table}'
+                  AND column_name = '{source_column}'
+            ) THEN
+                EXECUTE 'UPDATE {schema}.{table} SET tenant_id = {source_column} WHERE tenant_id IS NULL';
+            END IF;
+        END;
+        $mig$;
+        """
+
+
 def _core_admin_tables() -> None:
     op.execute(
         """
@@ -696,7 +714,7 @@ def _authority_lineage_tables() -> None:
 
 def _fsma_infrastructure_tables() -> None:
     op.execute(
-        """
+        f"""
         CREATE SCHEMA IF NOT EXISTS fsma;
 
         CREATE TABLE IF NOT EXISTS fsma.organizations (
@@ -727,7 +745,7 @@ def _fsma_infrastructure_tables() -> None:
             updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
         );
         ALTER TABLE fsma.products ADD COLUMN IF NOT EXISTS tenant_id UUID;
-        UPDATE fsma.products SET tenant_id = org_id WHERE tenant_id IS NULL;
+        {_conditional_tenant_backfill("fsma", "products")}
         CREATE INDEX IF NOT EXISTS idx_fsma_products_tenant ON fsma.products(tenant_id);
         CREATE INDEX IF NOT EXISTS idx_fsma_products_org ON fsma.products(org_id);
         CREATE INDEX IF NOT EXISTS idx_fsma_products_ftl
@@ -750,7 +768,7 @@ def _fsma_infrastructure_tables() -> None:
             created_at TIMESTAMPTZ NOT NULL DEFAULT now()
         );
         ALTER TABLE fsma.locations ADD COLUMN IF NOT EXISTS tenant_id UUID;
-        UPDATE fsma.locations SET tenant_id = org_id WHERE tenant_id IS NULL;
+        {_conditional_tenant_backfill("fsma", "locations")}
         CREATE INDEX IF NOT EXISTS idx_fsma_locations_tenant ON fsma.locations(tenant_id);
         CREATE INDEX IF NOT EXISTS idx_fsma_locations_org ON fsma.locations(org_id);
 
@@ -768,7 +786,7 @@ def _fsma_infrastructure_tables() -> None:
             updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
         );
         ALTER TABLE fsma.suppliers ADD COLUMN IF NOT EXISTS tenant_id UUID;
-        UPDATE fsma.suppliers SET tenant_id = org_id WHERE tenant_id IS NULL;
+        {_conditional_tenant_backfill("fsma", "suppliers")}
         CREATE INDEX IF NOT EXISTS idx_fsma_suppliers_tenant ON fsma.suppliers(tenant_id);
         CREATE INDEX IF NOT EXISTS idx_fsma_suppliers_org ON fsma.suppliers(org_id);
 
@@ -799,7 +817,7 @@ def _fsma_infrastructure_tables() -> None:
             updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
         );
         ALTER TABLE fsma.critical_tracking_events ADD COLUMN IF NOT EXISTS tenant_id UUID;
-        UPDATE fsma.critical_tracking_events SET tenant_id = org_id WHERE tenant_id IS NULL;
+        {_conditional_tenant_backfill("fsma", "critical_tracking_events")}
         CREATE INDEX IF NOT EXISTS idx_fsma_cte_tenant ON fsma.critical_tracking_events(tenant_id);
         CREATE INDEX IF NOT EXISTS idx_fsma_cte_org ON fsma.critical_tracking_events(org_id);
         CREATE INDEX IF NOT EXISTS idx_fsma_cte_product ON fsma.critical_tracking_events(product_id);
@@ -835,7 +853,7 @@ def _fsma_infrastructure_tables() -> None:
             created_at TIMESTAMPTZ NOT NULL DEFAULT now()
         );
         ALTER TABLE fsma.audit_log ADD COLUMN IF NOT EXISTS tenant_id UUID;
-        UPDATE fsma.audit_log SET tenant_id = org_id WHERE tenant_id IS NULL;
+        {_conditional_tenant_backfill("fsma", "audit_log")}
         CREATE INDEX IF NOT EXISTS idx_fsma_audit_log_tenant ON fsma.audit_log(tenant_id);
         CREATE INDEX IF NOT EXISTS idx_fsma_audit_org ON fsma.audit_log(org_id);
         CREATE INDEX IF NOT EXISTS idx_fsma_audit_entity ON fsma.audit_log(entity_type, entity_id);
@@ -855,7 +873,7 @@ def _fsma_infrastructure_tables() -> None:
             assessed_by UUID
         );
         ALTER TABLE fsma.recall_assessments ADD COLUMN IF NOT EXISTS tenant_id UUID;
-        UPDATE fsma.recall_assessments SET tenant_id = org_id WHERE tenant_id IS NULL;
+        {_conditional_tenant_backfill("fsma", "recall_assessments")}
         CREATE INDEX IF NOT EXISTS idx_fsma_recall_tenant ON fsma.recall_assessments(tenant_id);
         CREATE INDEX IF NOT EXISTS idx_fsma_recall_org ON fsma.recall_assessments(org_id);
 
@@ -873,7 +891,7 @@ def _fsma_infrastructure_tables() -> None:
             created_at TIMESTAMPTZ NOT NULL DEFAULT now()
         );
         ALTER TABLE fsma.compliance_snapshots ADD COLUMN IF NOT EXISTS tenant_id UUID;
-        UPDATE fsma.compliance_snapshots SET tenant_id = org_id WHERE tenant_id IS NULL;
+        {_conditional_tenant_backfill("fsma", "compliance_snapshots")}
         CREATE INDEX IF NOT EXISTS idx_fsma_snapshots_tenant_date
             ON fsma.compliance_snapshots(tenant_id, snapshot_date DESC);
 
@@ -893,7 +911,7 @@ def _fsma_infrastructure_tables() -> None:
             created_at TIMESTAMPTZ NOT NULL DEFAULT now()
         );
         ALTER TABLE fsma.compliance_alerts ADD COLUMN IF NOT EXISTS tenant_id UUID;
-        UPDATE fsma.compliance_alerts SET tenant_id = org_id WHERE tenant_id IS NULL;
+        {_conditional_tenant_backfill("fsma", "compliance_alerts")}
         CREATE INDEX IF NOT EXISTS idx_fsma_alerts_tenant_unresolved
             ON fsma.compliance_alerts(tenant_id)
             WHERE resolved = false;
@@ -1396,20 +1414,41 @@ def _rls_and_function_hardening() -> None:
 
 
 def _tenant_rls(table: str, column: str, policy: str) -> None:
+    schema, table_name = table.split(".", 1)
     op.execute(
         f"""
         DO $$
+        DECLARE
+            column_type text;
+            predicate text;
         BEGIN
             IF to_regclass('{table}') IS NULL THEN
                 RETURN;
             END IF;
+            SELECT data_type INTO column_type
+            FROM information_schema.columns
+            WHERE table_schema = '{schema}'
+              AND table_name = '{table_name}'
+              AND column_name = '{column}';
+            IF column_type IS NULL THEN
+                RETURN;
+            END IF;
+            IF column_type IN ('text', 'character varying') THEN
+                predicate := '{column} = get_tenant_context()::text';
+            ELSE
+                predicate := '{column} = get_tenant_context()';
+            END IF;
             EXECUTE 'ALTER TABLE {table} ENABLE ROW LEVEL SECURITY';
             EXECUTE 'ALTER TABLE {table} FORCE ROW LEVEL SECURITY';
             EXECUTE 'DROP POLICY IF EXISTS {policy} ON {table}';
-            EXECUTE 'CREATE POLICY {policy} ON {table}
-                FOR ALL
-                USING ({column} = get_tenant_context())
-                WITH CHECK ({column} = get_tenant_context())';
+            EXECUTE format(
+                'CREATE POLICY {policy} ON {table}
+                    FOR ALL
+                    USING (%s)
+                    WITH CHECK (%s)',
+                predicate,
+                predicate
+            );
         END $$;
         """
     )

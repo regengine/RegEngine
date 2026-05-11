@@ -44,14 +44,14 @@ function localFallback(service: ServiceName): string {
 export function getServiceURL(service: ServiceName): string {
     const isClient = typeof window !== 'undefined';
 
-    const gatewayUrl = isClient ? process.env.NEXT_PUBLIC_API_BASE_URL : null;
-
     if (!isClient) {
         return getServerServiceURL(service);
     }
 
     if (service === 'admin') {
-        return gatewayUrl ? `${gatewayUrl}/admin` : '/api/admin';
+        // Keep browser admin calls on the same-origin Next.js proxy so
+        // auth/session handling and multi-target upstream fallback stay in one place.
+        return '/api/admin';
     }
 
     if (service === 'ingestion') {
@@ -66,6 +66,7 @@ export function getServiceURL(service: ServiceName): string {
         return '/api/graph';
     }
 
+    const gatewayUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
     if (gatewayUrl) {
         return `${gatewayUrl}/${service}`;
     }
