@@ -30,7 +30,7 @@ def upgrade() -> None:
         """
         CREATE TABLE IF NOT EXISTS public.audit_log_buffer (
             id                   uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-            tenant_id            text NOT NULL,
+            tenant_id            uuid NOT NULL,
             actor                text NOT NULL,
             event_type           text NOT NULL,
             payload              jsonb NOT NULL,

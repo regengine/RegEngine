@@ -9,9 +9,9 @@ from __future__ import annotations
 import csv
 import io
 import sys
-import xml.etree.ElementTree as ET
 from pathlib import Path
 
+import defusedxml.ElementTree as ET
 import pytest
 
 # Make the repo root importable so `services.graph...` resolves.

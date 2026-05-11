@@ -53,7 +53,7 @@ class TestEmptyPasswordRejected:
             loader = RegulationLoader(
                 uri="bolt://localhost:7687",
                 user="neo4j",
-                password="secret",
+                password="secret",  # pragma: allowlist secret
             )
             assert loader.driver is not None
             gdb.driver.assert_called_once_with(
@@ -98,7 +98,7 @@ class TestLoadTenantScopedWrite:
             gdb.driver.return_value = mock_driver
 
             loader = RegulationLoader(
-                uri="bolt://x", user="neo4j", password="pw"
+                uri="bolt://x", user="neo4j", password="pw"  # pragma: allowlist secret
             )
         return loader, mock_session
 
@@ -191,7 +191,7 @@ class TestLoadUsesToThread:
         with patch("services.ingestion.app.regulation_loader.GraphDatabase") as gdb:
             gdb.driver.return_value = MagicMock()
             loader = RegulationLoader(
-                uri="bolt://x", user="neo4j", password="pw"
+                uri="bolt://x", user="neo4j", password="pw"  # pragma: allowlist secret
             )
 
         # Patch the parser so we don't try to import langchain / hit disk.

@@ -259,7 +259,7 @@ class TestF6IntegrationWebhookStub:
 
 class TestF8OpaqueProdSignatureFailure:
     def test_mismatch_in_production_is_opaque(self, monkeypatch):
-        secret = "test-secret"
+        secret = "test-secret"  # pragma: allowlist secret
         monkeypatch.setenv("WEBHOOK_HMAC_SECRET", secret)
         # Force production detection.
         monkeypatch.setattr(wr, "_is_production", lambda: True)
@@ -278,7 +278,7 @@ class TestF8OpaqueProdSignatureFailure:
         assert "message" not in detail  # No verbose hint
 
     def test_mismatch_in_dev_keeps_verbose_hint(self, monkeypatch):
-        secret = "test-secret"
+        secret = "test-secret"  # pragma: allowlist secret
         monkeypatch.setenv("WEBHOOK_HMAC_SECRET", secret)
         monkeypatch.setattr(wr, "_is_production", lambda: False)
 
@@ -334,7 +334,7 @@ class TestF8OpaqueProdSignatureFailure:
 
     def test_valid_signature_still_passes_in_production(self, monkeypatch):
         """Sanity: F-8 only changes failure responses, not the happy path."""
-        secret = "test-secret"
+        secret = "test-secret"  # pragma: allowlist secret
         monkeypatch.setenv("WEBHOOK_HMAC_SECRET", secret)
         monkeypatch.setattr(wr, "_is_production", lambda: True)
 

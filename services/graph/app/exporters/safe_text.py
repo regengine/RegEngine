@@ -22,8 +22,8 @@ printers. These helpers — used at every export boundary — close that class.
 from __future__ import annotations
 
 import urllib.parse
+from html import escape as _html_escape
 from typing import Any
-from xml.sax.saxutils import escape as _xml_sax_escape
 
 # ---------------------------------------------------------------------------
 # XML
@@ -34,15 +34,14 @@ def xml_escape(text: Any) -> str:
 
     Returns ``''`` for ``None``.
 
-    NOTE: Prefer ``xml.etree.ElementTree.Element`` + ``.text`` for new code.
-    ``ElementTree.tostring`` handles every escaping case correctly. This
-    helper exists only for legacy string-concat builders that are too
-    tangled to migrate in one PR.
+    NOTE: Prefer a structural XML builder for new code. This helper exists
+    only for legacy string-concat builders that are too tangled to migrate
+    in one PR.
     """
     if text is None:
         return ""
     s = str(text)
-    return _xml_sax_escape(s, {'"': "&quot;", "'": "&apos;"})
+    return _html_escape(s, quote=True)
 
 
 # ---------------------------------------------------------------------------
