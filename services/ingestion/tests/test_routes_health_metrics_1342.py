@@ -160,6 +160,7 @@ class TestHealthKafkaUnconfigured:
             "status": "healthy",
             "service": "regengine",
             "kafka": "not_configured",
+            "webhook_hmac_configured": False,
         }
         # kafka_health_check must not be called when unconfigured.
         assert _kafka_health_calls == []
@@ -203,6 +204,7 @@ class TestHealthKafkaAvailable:
             "status": "healthy",
             "service": "regengine",
             "kafka": "available",
+            "webhook_hmac_configured": False,
         }
 
     def test_forwards_configured_bootstrap_servers_and_timeout(self, monkeypatch):
@@ -237,6 +239,7 @@ class TestHealthKafkaUnavailable:
             "status": "degraded",
             "service": "regengine",
             "kafka": "unavailable",
+            "webhook_hmac_configured": False,
         }
 
     def test_unknown_status_also_degrades(self, monkeypatch):

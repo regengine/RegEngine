@@ -592,6 +592,7 @@ class TestRefreshUnverifiedJWTFallback:
         # decode_access_token() will raise on signature verification; the
         # fix means we now fall through to the membership-ordered path
         # rather than the previous unverified-decode shortcut.
+        wrong_key = f"wrong-key-{tenant_b_id}"
         forged = _jwt.encode(
             {
                 "sub": str(user.id),
@@ -599,7 +600,7 @@ class TestRefreshUnverifiedJWTFallback:
                 "tenant_id": str(tenant_b_id),
                 "exp": 9999999999,
             },
-            "wrong-key-attacker-controlled",
+            wrong_key,
             algorithm="HS256",
         )
 

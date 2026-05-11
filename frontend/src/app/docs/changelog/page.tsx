@@ -50,6 +50,112 @@ export default function ChangelogPage() {
             {/* Content */}
             <div className="max-w-[700px] mx-auto py-12 px-6">
 
+                {/* v1.6.0 — Proof Bundle Verification */}
+                <section className="mb-12">
+                    <div className="flex items-center gap-3 mb-5 pb-4" style={{ borderBottom: `1px solid ${T.border}` }}>
+                        <span className="text-white text-xs font-semibold px-2.5 py-1 rounded" style={{ background: T.accent }}>
+                            v1.6.0
+                        </span>
+                        <span className="text-sm" style={{ color: T.textMuted }}>May 10, 2026</span>
+                        <span className="bg-[rgba(16,185,129,0.2)] text-[11px] font-semibold px-2 py-0.5 rounded" style={{ color: T.accent }}>
+                            Latest
+                        </span>
+                    </div>
+
+                    <h2 className="text-[1.1rem] sm:text-[1.3rem] font-semibold text-[var(--re-text-primary)] mb-4">
+                        Proof Bundle Verification
+                    </h2>
+
+                    <div className="mb-6">
+                        <h4 className="text-xs font-semibold uppercase tracking-wide mb-3" style={{ color: T.textMuted }}>
+                            Verification
+                        </h4>
+                        <ul className="m-0 pl-5 leading-[1.8]" style={{ color: T.text }}>
+                            <li>Offline verifier now validates the current audit bundle structure, including EPCIS package contents</li>
+                            <li>Tampered proof-bundle sample added so evaluators can see failure detection instead of only the happy path</li>
+                            <li>Root Docker deploy context and admin proxy routing aligned with the consolidated production surface</li>
+                        </ul>
+                    </div>
+                </section>
+
+                {/* v1.5.0 — Trust and Safety Copy Sweep */}
+                <section className="mb-12">
+                    <div className="flex items-center gap-3 mb-5 pb-4" style={{ borderBottom: `1px solid ${T.border}` }}>
+                        <span className="text-white text-xs font-semibold px-2.5 py-1 rounded" style={{ background: T.accent }}>
+                            v1.5.0
+                        </span>
+                        <span className="text-sm" style={{ color: T.textMuted }}>May 9, 2026</span>
+                    </div>
+
+                    <h2 className="text-[1.1rem] sm:text-[1.3rem] font-semibold text-[var(--re-text-primary)] mb-4">
+                        Trust and Safety Sweep
+                    </h2>
+
+                    <div className="mb-6">
+                        <h4 className="text-xs font-semibold uppercase tracking-wide mb-3" style={{ color: T.textMuted }}>
+                            Product Copy
+                        </h4>
+                        <ul className="m-0 pl-5 leading-[1.8]" style={{ color: T.text }}>
+                            <li>Outcome-promise language removed across marketing, docs, blog, dashboards, and tool result UIs</li>
+                            <li>Self-check tools now use gap-indicated framing instead of A-F grades or pass/fail compliance verdicts</li>
+                            <li>DPA, Privacy, and Trust Center subprocessor copy reconciled against current production dependencies</li>
+                            <li>Rate-limit and SDK docs corrected to match the backend contract that is actually deployed</li>
+                        </ul>
+                    </div>
+                </section>
+
+                {/* v1.4.0 — Security and Tenant Isolation Hardening */}
+                <section className="mb-12">
+                    <div className="flex items-center gap-3 mb-5 pb-4" style={{ borderBottom: `1px solid ${T.border}` }}>
+                        <span className="text-white text-xs font-semibold px-2.5 py-1 rounded" style={{ background: T.accent }}>
+                            v1.4.0
+                        </span>
+                        <span className="text-sm" style={{ color: T.textMuted }}>May 9, 2026</span>
+                    </div>
+
+                    <h2 className="text-[1.1rem] sm:text-[1.3rem] font-semibold text-[var(--re-text-primary)] mb-4">
+                        Security and Tenant Isolation Hardening
+                    </h2>
+
+                    <div className="mb-6">
+                        <h4 className="text-xs font-semibold uppercase tracking-wide mb-3" style={{ color: T.textMuted }}>
+                            Security
+                        </h4>
+                        <ul className="m-0 pl-5 leading-[1.8]" style={{ color: T.text }}>
+                            <li>Webhook read endpoints tightened against cross-tenant IDOR and tenant-existence oracle leaks</li>
+                            <li>SSRF defenses and IP pinning added for outbound fetch surfaces in ingestion and scheduler workflows</li>
+                            <li>Login CSRF origin allowlist and JWT/CSRF key separation hardened in the auth surface</li>
+                            <li>Project Sentinel checks added for anchorable signing-asymmetry findings</li>
+                        </ul>
+                    </div>
+                </section>
+
+                {/* v1.3.0 — Production Auth and Architecture Cleanup */}
+                <section className="mb-12">
+                    <div className="flex items-center gap-3 mb-5 pb-4" style={{ borderBottom: `1px solid ${T.border}` }}>
+                        <span className="text-white text-xs font-semibold px-2.5 py-1 rounded" style={{ background: T.accent }}>
+                            v1.3.0
+                        </span>
+                        <span className="text-sm" style={{ color: T.textMuted }}>April 21, 2026</span>
+                    </div>
+
+                    <h2 className="text-[1.1rem] sm:text-[1.3rem] font-semibold text-[var(--re-text-primary)] mb-4">
+                        Production Auth and API Cleanup
+                    </h2>
+
+                    <div className="mb-6">
+                        <h4 className="text-xs font-semibold uppercase tracking-wide mb-3" style={{ color: T.textMuted }}>
+                            Platform
+                        </h4>
+                        <ul className="m-0 pl-5 leading-[1.8]" style={{ color: T.text }}>
+                            <li>Production login 500 resolved with the v062 Alembic migration path</li>
+                            <li>Auth route split started to reduce the large legacy handler into reviewed modules</li>
+                            <li>Frontend audit sprint closed navigation, contrast, token, and data-fetching cleanup items</li>
+                            <li>Security sweep from April 12 resolved JWT rotation, revocation, and CORS hardening gaps</li>
+                        </ul>
+                    </div>
+                </section>
+
                 {/* v1.2.0 — Phase 4: Accessibility Polish */}
                 <section className="mb-12">
                     <div className="flex items-center gap-3 mb-5 pb-4" style={{ borderBottom: `1px solid ${T.border}` }}>
@@ -57,9 +163,6 @@ export default function ChangelogPage() {
                             v1.2.0
                         </span>
                         <span className="text-sm" style={{ color: T.textMuted }}>March 4, 2026</span>
-                        <span className="bg-[rgba(16,185,129,0.2)] text-[11px] font-semibold px-2 py-0.5 rounded" style={{ color: T.accent }}>
-                            Latest
-                        </span>
                     </div>
 
                     <h2 className="text-[1.1rem] sm:text-[1.3rem] font-semibold text-[var(--re-text-primary)] mb-4">
@@ -88,7 +191,7 @@ export default function ChangelogPage() {
                         <span className="text-white text-xs font-semibold px-2.5 py-1 rounded" style={{ background: T.accent }}>
                             v1.1.0
                         </span>
-                        <span className="text-sm" style={{ color: T.textMuted }}>March 4, 2026</span>
+                        <span className="text-sm" style={{ color: T.textMuted }}>March 3, 2026</span>
                     </div>
 
                     <h2 className="text-[1.1rem] sm:text-[1.3rem] font-semibold text-[var(--re-text-primary)] mb-4">

@@ -26,6 +26,12 @@ def record_rate_limit(tenant_id: str, allowed: bool):
     tenant_rate_limit_hits_total.labels(tenant_id=tenant_id, status=status).inc()
 
 
+def rate_limit_reset_epoch(window: int = 60, now: float | None = None) -> int:
+    """Return a Unix timestamp for the next rate-limit window boundary."""
+    safe_window = max(1, int(window))
+    return int((time.time() if now is None else now) + safe_window)
+
+
 def _redact_connection_url(url: str) -> str:
     try:
         parsed = urlsplit(url)
@@ -139,7 +145,9 @@ class TenantRateLimitMiddleware(BaseHTTPMiddleware):
             key = f"ip:{request.client.host if request.client else 'unknown'}"
 
         limit = self.tenant_overrides.get(tenant_id, self.default_rpm)
-        allowed, remaining = _bucket.is_allowed(key, limit)
+        window = 60
+        reset_epoch = rate_limit_reset_epoch(window)
+        allowed, remaining = _bucket.is_allowed(key, limit, window)
         record_rate_limit(tenant_id, allowed)
 
         if not allowed:
@@ -152,14 +160,18 @@ class TenantRateLimitMiddleware(BaseHTTPMiddleware):
                 headers={
                     "X-RateLimit-Limit": str(limit),
                     "X-RateLimit-Remaining": "0",
+                    "X-RateLimit-Reset": str(reset_epoch),
                     "X-RateLimit-Tenant": tenant_id,
+                    "X-RateLimit-Scope": "global",
                 },
             )
 
         response = await call_next(request)
-        response.headers["X-RateLimit-Limit"] = str(limit)
-        response.headers["X-RateLimit-Remaining"] = str(remaining)
-        response.headers["X-RateLimit-Tenant"] = tenant_id
+        response.headers["X-RateLimit-Limit"] = str(getattr(request.state, "rate_limit_limit", limit))
+        response.headers["X-RateLimit-Remaining"] = str(getattr(request.state, "rate_limit_remaining", remaining))
+        response.headers["X-RateLimit-Reset"] = str(getattr(request.state, "rate_limit_reset", reset_epoch))
+        response.headers["X-RateLimit-Tenant"] = str(getattr(request.state, "rate_limit_tenant", tenant_id))
+        response.headers["X-RateLimit-Scope"] = str(getattr(request.state, "rate_limit_scope", "global"))
         return response
 
 

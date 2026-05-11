@@ -5,11 +5,15 @@ on:
     branches: [main, develop]
     paths:
       - 'frontend/**'
+      - 'scripts/check_trust_safety_copy.py'
+      - 'scripts/trust_safety_copy_allowlist.txt'
       - '.github/workflows/frontend-ci.yml'
   pull_request:
     branches: [main]
     paths:
       - 'frontend/**'
+      - 'scripts/check_trust_safety_copy.py'
+      - 'scripts/trust_safety_copy_allowlist.txt'
       - '.github/workflows/frontend-ci.yml'
 
 # Cancel in-progress runs for the same branch/PR
@@ -124,6 +128,9 @@ jobs:
         run: |
           cd frontend
           npm run lint
+
+      - name: Ban trust-and-safety outcome-promise copy
+        run: python3 scripts/check_trust_safety_copy.py
 
   # ── Tests ────────────────────────────────────────────────
   test:

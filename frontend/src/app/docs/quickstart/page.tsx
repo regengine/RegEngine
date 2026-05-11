@@ -156,6 +156,15 @@ export REGENGINE_TENANT_ID="11111111-1111-1111-1111-111111111111"`}
 }`}
                                 language="json"
                             />
+
+                            <div className="mt-4">
+                                <CodeBlock
+                                    code={`const resp = await fetch("https://regengine.co/api/v1/webhooks/ingest", requestOptions);
+const remaining = resp.headers.get("X-RateLimit-Remaining");
+console.log(\`Requests left in this window: \${remaining ?? "unknown"}\`);`}
+                                    language="javascript"
+                                />
+                            </div>
                         </div>
                     </div>
                 </section>

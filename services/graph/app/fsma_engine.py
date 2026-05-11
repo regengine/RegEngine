@@ -538,7 +538,7 @@ class FSMAApplicabilityEngine:
 
         Returns:
             dict with keys:
-              - status ("EXEMPT" | "NOT_EXEMPT")
+              - status ("EXEMPT" | "UNKNOWN" | "NOT_EXEMPT")
               - is_exempt (bool)
               - active_exemptions (list of qualifying exemption dicts)
               - unanswered_count (int)
@@ -567,4 +567,3 @@ class FSMAApplicabilityEngine:
             "active_exemptions": active,
             "unanswered_count": unanswered,
         }
-

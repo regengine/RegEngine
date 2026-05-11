@@ -120,7 +120,7 @@ def test_ingest_events_emits_first_ingest_funnel_event(monkeypatch) -> None:
     app.dependency_overrides[_get_db_session] = _fake_get_db_session
     captured: dict[str, object] = {}
 
-    monkeypatch.setattr(webhook_router_v2, "_check_rate_limit", lambda _tenant_id: None)
+    monkeypatch.setattr(webhook_router_v2, "_check_rate_limit", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(webhook_router_v2, "_check_obligations", lambda *_args, **_kwargs: [])
     monkeypatch.setattr(webhook_router_v2, "_publish_graph_sync", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(

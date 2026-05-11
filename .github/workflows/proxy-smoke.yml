@@ -45,6 +45,8 @@ jobs:
           NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
           NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder-anon-key-for-ci-build
           NEXT_PUBLIC_API_BASE_URL: http://localhost:8000
+          CSRF_SECRET: ci-csrf-key-for-proxy-smoke # pragma: allowlist secret
+          JWT_SIGNING_KEY: ci-jwt-key-for-proxy-smoke
         run: cd frontend && npm run build
 
       - name: Start Next.js server
@@ -52,6 +54,8 @@ jobs:
           NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
           NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder-anon-key-for-ci-build
           NEXT_PUBLIC_API_BASE_URL: http://localhost:8000
+          CSRF_SECRET: ci-csrf-key-for-proxy-smoke # pragma: allowlist secret
+          JWT_SIGNING_KEY: ci-jwt-key-for-proxy-smoke
         run: |
           cd frontend
           npm start &

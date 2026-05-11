@@ -77,8 +77,8 @@ def _default_settings(tenant_id: str) -> SettingsResponse:
             IntegrationStatus(id="kroger", name="Kroger 84.51°", category="retailer", status="disconnected"),
         ],
         api_keys=[
-            {"id": "key-001", "name": "Production API Key", "prefix": "rge_prod_", "created": now.isoformat(), "last_used": now.isoformat(), "status": "active"},
-            {"id": "key-002", "name": "Development Key", "prefix": "rge_dev_", "created": now.isoformat(), "last_used": None, "status": "active"},
+            {"id": "key-001", "name": "Production API Key", "prefix": "rge_live_", "created": now.isoformat(), "last_used": now.isoformat(), "status": "active"},
+            {"id": "key-002", "name": "Test API Key", "prefix": "rge_test_", "created": now.isoformat(), "last_used": None, "status": "active"},
         ],
         plan={
             "id": "professional",

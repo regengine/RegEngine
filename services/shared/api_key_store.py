@@ -321,7 +321,7 @@ class DatabaseAPIKeyStore:
     @staticmethod
     def _generate_key_id() -> str:
         """Generate a unique key identifier."""
-        return f"rge_{secrets.token_urlsafe(16)}"
+        return f"rge_live_{secrets.token_urlsafe(16)}"
 
     @staticmethod
     def _generate_secret() -> str:

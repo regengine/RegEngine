@@ -186,16 +186,16 @@ class TestDefaultSettings:
         categories = {i.category for i in result.integrations}
         assert {"iot", "erp", "retailer"} <= categories
 
-    def test_api_keys_include_prod_and_dev(self):
+    def test_api_keys_include_live_and_test(self):
         result = _default_settings("tenant-1")
         prefixes = {k["prefix"] for k in result.api_keys}
-        assert "rge_prod_" in prefixes
-        assert "rge_dev_" in prefixes
+        assert "rge_live_" in prefixes
+        assert "rge_test_" in prefixes
 
-    def test_dev_key_has_never_been_used(self):
+    def test_test_key_has_never_been_used(self):
         result = _default_settings("tenant-1")
-        dev_key = next(k for k in result.api_keys if k["prefix"] == "rge_dev_")
-        assert dev_key["last_used"] is None
+        test_key = next(k for k in result.api_keys if k["prefix"] == "rge_test_")
+        assert test_key["last_used"] is None
 
     def test_plan_is_professional(self):
         result = _default_settings("tenant-1")

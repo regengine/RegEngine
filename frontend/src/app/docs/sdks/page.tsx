@@ -63,7 +63,7 @@ export default function SDKsDocsPage() {
                             { title: 'Python SDK', badge: 'Planned', color: '#3776ab' },
                             { title: 'Node.js SDK', badge: 'Planned', color: '#339933' },
                             { title: 'Go SDK', badge: 'Planned', color: '#00add8' },
-                            { title: 'REST Client', badge: 'Available now — REST + JSON', color: 'var(--re-text-muted)' },
+                            { title: 'REST Client', badge: 'Available now — OpenAPI 3.0', color: 'var(--re-text-muted)' },
                         ].map((item) => (
                             <div key={item.title} className="p-5 rounded-lg flex justify-between items-center" style={{
                                 background: T.surface,
@@ -83,15 +83,25 @@ export default function SDKsDocsPage() {
                         What to Use Now
                     </h3>
                     <p className="text-sm mb-4" style={{ color: T.text }}>
-                        Until SDKs are released, use our REST API directly. All endpoints accept JSON and return JSON.
+                        Until SDKs are released, use our REST API directly or import the public OpenAPI 3.0 spec into your client generator.
                     </p>
-                    <Link
-                        href="/docs/api"
-                        className="inline-flex items-center gap-2 text-sm no-underline"
-                        style={{ color: T.accent }}
-                    >
-                        View API Reference →
-                    </Link>
+                    <div className="flex flex-wrap gap-4">
+                        <Link
+                            href="/docs/api"
+                            className="inline-flex items-center gap-2 text-sm no-underline"
+                            style={{ color: T.accent }}
+                        >
+                            View API Reference →
+                        </Link>
+                        <Link
+                            href="/api/openapi.json"
+                            className="inline-flex items-center gap-2 text-sm no-underline"
+                            style={{ color: T.accent }}
+                        >
+                            <FileText className="w-4 h-4" />
+                            Download OpenAPI spec
+                        </Link>
+                    </div>
                 </section>
 
                 {/* Notify CTA */}

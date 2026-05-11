@@ -448,16 +448,22 @@ def test_verify_review_event_rejects_wrong_producer(monkeypatch):
 
 def test_verify_review_event_dev_bypass_requires_local_env(monkeypatch):
     from services.admin.app import review_consumer as rc_mod
+    from shared.kafka_auth import BODY_FIELD_PRODUCER_SERVICE
 
     monkeypatch.delenv("KAFKA_EVENT_SIGNING_KEY", raising=False)
     monkeypatch.setenv("ENVIRONMENT", "development")
 
-    verified = rc_mod._verify_review_event({"tenant_id": "abc"}, headers=[])
+    unsigned_review_event = {
+        "tenant_id": "abc",
+        BODY_FIELD_PRODUCER_SERVICE: "nlp-service",
+    }
+
+    verified = rc_mod._verify_review_event(unsigned_review_event, headers=[])
     assert verified["tenant_id"] == "abc"
 
     monkeypatch.setenv("ENVIRONMENT", "production")
     with pytest.raises(rc_mod.KafkaAuthError) as excinfo:
-        rc_mod._verify_review_event({"tenant_id": "abc"}, headers=[])
+        rc_mod._verify_review_event(unsigned_review_event, headers=[])
     assert excinfo.value.reason == "signing_key_not_configured"
 
 
