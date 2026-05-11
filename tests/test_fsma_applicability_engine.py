@@ -2,9 +2,8 @@
 Unit tests for FSMAApplicabilityEngine.
 
 Tests the expanded 23-category FTL list and 6-exemption evaluation logic.
-Runs locally without the full Docker stack by stubbing the `shared` modules
-that are only needed by other classes in fsma_engine.py (not by
-FSMAApplicabilityEngine itself).
+Runs locally without the full Docker stack by loading the migrated graph
+service module directly.
 """
 
 import importlib.util
@@ -15,8 +14,7 @@ from pathlib import Path
 import pytest
 
 # ---------------------------------------------------------------------------
-# Stub `shared.*` before loading fsma_engine.py so the import succeeds
-# locally without the full Docker/services stack.
+# Stub legacy `shared.*` imports defensively before loading fsma_engine.py.
 # FSMAApplicabilityEngine itself has zero dependency on these modules.
 # ---------------------------------------------------------------------------
 def _make_stub(name: str, **attrs):
@@ -42,14 +40,8 @@ sys.modules.setdefault("shared", _shared)
 sys.modules.setdefault("shared.validators", _validators)
 sys.modules.setdefault("shared.fsma_rules", _fsma_rules)
 
-# Now load the engine module directly (bypasses package import side effects)
-_engine_path = (
-    Path(__file__).resolve().parents[1]
-    / "services"
-    / "graph"
-    / "app"
-    / "fsma_engine.py"
-)
+# Now load the engine module directly (bypasses service package side effects).
+_engine_path = Path(__file__).resolve().parents[1] / "services" / "graph" / "app" / "fsma_engine.py"
 _spec = importlib.util.spec_from_file_location("fsma_engine_module", _engine_path)
 _mod = importlib.util.module_from_spec(_spec)
 # Must register in sys.modules BEFORE exec_module so Python 3.9 dataclasses
@@ -246,7 +238,7 @@ class TestEvaluateExemptions:
     """Tests for evaluate_exemptions()."""
 
     def test_no_answers_unknown(self, engine):
-        """No answers -> UNKNOWN with 6 unanswered."""
+        """No answers → UNKNOWN with 6 unanswered."""
         result = engine.evaluate_exemptions({})
         assert result["status"] == "UNKNOWN"
         assert result["is_exempt"] is False

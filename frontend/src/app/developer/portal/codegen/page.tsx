@@ -309,7 +309,7 @@ export default function CodeGenPage() {
           <label className="text-xs font-medium mb-1.5 block" style={{ color: 'var(--re-text-muted)' }}>API Key</label>
           <input
             type="text"
-            placeholder="rge_dev_..."
+            placeholder="rge_live_..."
             value={apiKey}
             onChange={(e) => setApiKey(e.target.value)}
             className="w-full px-3 py-2 rounded-md text-sm font-mono"

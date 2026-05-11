@@ -38,6 +38,7 @@ from fastapi import (
     HTTPException,
     Query,
     Request,
+    Response,
     UploadFile,
 )
 from prometheus_client import Counter, Histogram
@@ -45,7 +46,7 @@ from prometheus_client import Counter, Histogram
 from shared.auth import APIKey, require_api_key
 from shared.database import SessionLocal
 from shared.task_queue import enqueue_task
-from shared.tenant_rate_limiting import consume_tenant_rate_limit
+from shared.tenant_rate_limiting import consume_tenant_rate_limit, rate_limit_reset_epoch
 
 from .config import get_settings
 from .kafka_utils import send
@@ -161,29 +162,42 @@ def _endpoint_rate_limit(bucket: str, rpm: int):
 
     async def _check(
         request: Request,
+        response: Response,
         api_key: APIKey = Depends(require_api_key),
     ) -> APIKey:
         tenant_id = api_key.tenant_id or "anonymous"
+        window = 60
         allowed, remaining = consume_tenant_rate_limit(
             tenant_id=tenant_id,
             bucket_suffix=f"endpoint.{bucket}",
             limit=rpm,
-            window=60,
+            window=window,
         )
         if not allowed:
+            reset = str(rate_limit_reset_epoch(window))
             raise HTTPException(
                 status_code=429,
                 detail=f"Rate limit exceeded for tenant '{tenant_id}' on '{bucket}'",
                 headers={
-                    "Retry-After": "60",
+                    "Retry-After": str(window),
                     "X-RateLimit-Limit": str(rpm),
                     "X-RateLimit-Remaining": "0",
+                    "X-RateLimit-Reset": reset,
                     "X-RateLimit-Tenant": tenant_id,
                     "X-RateLimit-Scope": bucket,
                 },
             )
+        reset = str(rate_limit_reset_epoch(window))
+        request.state.rate_limit_limit = rpm
         request.state.rate_limit_remaining = remaining
+        request.state.rate_limit_reset = reset
+        request.state.rate_limit_tenant = tenant_id
         request.state.rate_limit_scope = bucket
+        response.headers["X-RateLimit-Limit"] = str(rpm)
+        response.headers["X-RateLimit-Remaining"] = str(remaining)
+        response.headers["X-RateLimit-Reset"] = reset
+        response.headers["X-RateLimit-Tenant"] = tenant_id
+        response.headers["X-RateLimit-Scope"] = bucket
         return api_key
 
     return _check

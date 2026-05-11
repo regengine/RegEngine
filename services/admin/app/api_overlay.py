@@ -9,7 +9,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 from typing import Any, Optional
-from uuid import UUID
+from uuid import NAMESPACE_URL, UUID, uuid5
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -530,8 +530,9 @@ async def create_mapping(
     """
     tenant_id = get_tenant_id_from_api_key(api_key)
 
-    # Use API key owner as created_by (could be enhanced with user management)
-    created_by = UUID(api_key.key_id.replace("rge_", "").replace("-", "")[:32].ljust(32, "0"))
+    # Use a stable UUID derived from the API key id; key ids may include
+    # environment prefixes such as rge_live_ and are not UUID material.
+    created_by = uuid5(NAMESPACE_URL, f"regengine-api-key:{api_key.key_id}")
 
     mapping = ControlMapping(
         tenant_id=tenant_id,

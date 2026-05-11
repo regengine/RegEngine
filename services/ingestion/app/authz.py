@@ -13,14 +13,14 @@ from datetime import datetime, timezone
 from functools import lru_cache
 from typing import Optional
 
-from fastapi import Depends, Header, HTTPException, Request
+from fastapi import Depends, Header, HTTPException, Request, Response
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 
 from shared.api_key_store import APIKeyResponse
 from shared.auth import APIKey, require_api_key
 from shared.permissions import has_permission
-from shared.tenant_rate_limiting import consume_tenant_rate_limit
+from shared.tenant_rate_limiting import consume_tenant_rate_limit, rate_limit_reset_epoch
 
 logger = logging.getLogger("authz")
 
@@ -152,6 +152,29 @@ def _rpm_for_permission(required_permission: str, principal: IngestionPrincipal)
 
 def _rate_limit_window_seconds() -> int:
     return max(1, int(os.getenv("INGESTION_RBAC_RATE_LIMIT_WINDOW_SECONDS", "60")))
+
+
+def _store_rate_limit_headers(
+    request: Request,
+    response: Response,
+    *,
+    limit: int,
+    remaining: int,
+    tenant_id: str,
+    scope: str,
+    window: int,
+) -> None:
+    reset = str(rate_limit_reset_epoch(window))
+    request.state.rate_limit_limit = limit
+    request.state.rate_limit_remaining = remaining
+    request.state.rate_limit_reset = reset
+    request.state.rate_limit_tenant = tenant_id
+    request.state.rate_limit_scope = scope
+    response.headers["X-RateLimit-Limit"] = str(limit)
+    response.headers["X-RateLimit-Remaining"] = str(remaining)
+    response.headers["X-RateLimit-Reset"] = reset
+    response.headers["X-RateLimit-Tenant"] = tenant_id
+    response.headers["X-RateLimit-Scope"] = scope
 
 
 def _tenant_for_rate_limit(request: Request, principal: IngestionPrincipal) -> str:
@@ -372,6 +395,7 @@ def require_permission(required_permission: str):
 
     async def _dependency(
         request: Request,
+        response: Response,
         principal: IngestionPrincipal = Depends(get_ingestion_principal),
     ) -> IngestionPrincipal:
         if has_permission(principal.scopes, required_permission):
@@ -402,6 +426,7 @@ def require_permission(required_permission: str):
                 window=window,
             )
             if not allowed:
+                reset = str(rate_limit_reset_epoch(window))
                 raise HTTPException(
                     status_code=429,
                     detail=f"Rate limit exceeded for tenant '{tenant_id}' on '{scope}'",
@@ -409,14 +434,21 @@ def require_permission(required_permission: str):
                         "Retry-After": str(window),
                         "X-RateLimit-Limit": str(rpm),
                         "X-RateLimit-Remaining": "0",
+                        "X-RateLimit-Reset": reset,
                         "X-RateLimit-Tenant": tenant_id,
                         "X-RateLimit-Scope": scope,
                     },
                 )
 
-            # Keep remaining available for downstream handlers/logging if needed.
-            request.state.rate_limit_remaining = remaining
-            request.state.rate_limit_scope = scope
+            _store_rate_limit_headers(
+                request,
+                response,
+                limit=rpm,
+                remaining=remaining,
+                tenant_id=tenant_id,
+                scope=scope,
+                window=window,
+            )
             return principal
         raise HTTPException(
             status_code=403,

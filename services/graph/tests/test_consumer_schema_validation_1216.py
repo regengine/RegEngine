@@ -82,8 +82,8 @@ class TestConsumerInvalidPayloadRouting:
 
     These tests drive a single iteration of the consumer loop with a
     mocked ``confluent_kafka`` consumer. We bypass the schema registry /
-    Avro deserializer wiring and assert the DLQ path fires with
-    ``reason=invalid_schema``.
+    Avro deserializer wiring and assert the DLQ path fires with the
+    expected invalid-payload reason.
     """
 
     def _make_record(self, value, topic: str = "graph.update"):

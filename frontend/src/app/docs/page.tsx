@@ -55,7 +55,7 @@ const API_BASE = 'https://your-preview-host/api/v1';
 const endpoints = [
   {
     method: 'POST' as const,
-    path: '/records/ingest',
+    path: '/webhooks/ingest',
     title: 'Ingest Records',
     description: 'Ingest traceability records with CTE/KDE data. Each record is hash-chained so you can detect tampering between ingest and export.',
     icon: Database,
@@ -123,8 +123,8 @@ function MethodBadge({ method }: { method: string }) {
 
 /* ─── Code Samples ─────────────────────────────────────────── */
 
-const curlSample = `curl -X POST ${API_BASE}/records/ingest \\
-  -H "X-RegEngine-API-Key: re_live_abc123..." \\
+const curlSample = `curl -X POST ${API_BASE}/webhooks/ingest \\
+  -H "X-RegEngine-API-Key: rge_live_abc123..." \\
   -H "Content-Type: application/json" \\
   -d '{
     "source": "erp",
@@ -146,9 +146,9 @@ const curlSample = `curl -X POST ${API_BASE}/records/ingest \\
 const pythonSample = `import requests
 
 resp = requests.post(
-    "${API_BASE}/records/ingest",
+    "${API_BASE}/webhooks/ingest",
     headers={
-        "X-RegEngine-API-Key": "re_live_abc123...",
+        "X-RegEngine-API-Key": "rge_live_abc123...",
         "Content-Type": "application/json",
     },
     json={
@@ -171,11 +171,11 @@ resp = requests.post(
 print(resp.json())`;
 
 const jsSample = `const resp = await fetch(
-  "${API_BASE}/records/ingest",
+  "${API_BASE}/webhooks/ingest",
   {
     method: "POST",
     headers: {
-      "X-RegEngine-API-Key": "re_live_abc123...",
+      "X-RegEngine-API-Key": "rge_live_abc123...",
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
@@ -319,7 +319,7 @@ export default function DocsHomePage() {
                   fontFamily: T.fontMono,
                 }}
               >
-                X-RegEngine-API-Key: <span style={{ color: T.textMuted }}>re_live_...</span>
+                X-RegEngine-API-Key: <span style={{ color: T.textMuted }}>rge_live_...</span>
               </code>
             </div>
           </div>
@@ -381,7 +381,7 @@ export default function DocsHomePage() {
             Ingest Your First Record
           </h2>
           <p className="text-sm mb-6" style={{ color: T.textMuted }}>
-            Send a traceability event to the <code className="font-mono text-[13px]" style={{ color: T.accent }}>POST /records/ingest</code> endpoint.
+            Send a traceability event to the <code className="font-mono text-[13px]" style={{ color: T.accent }}>POST /webhooks/ingest</code> endpoint.
           </p>
 
           {/* Tab bar (static, no JS needed -- all samples shown with labels) */}

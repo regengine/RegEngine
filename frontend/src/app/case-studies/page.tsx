@@ -463,14 +463,14 @@ export default function CaseStudy() {
                 </div>
             </section>
 
-            {/* Metric 5: Time to FDA-Ready Export */}
+            {/* Metric 5: Time to §1.1455(c)-Formatted Export */}
             <section className="px-4 sm:px-6 lg:px-8 py-16">
                 <div className="max-w-5xl mx-auto">
                     <div className="grid md:grid-cols-2 gap-12 items-start">
                         <div>
                             <div className="flex items-center gap-3 mb-4">
                                 <FileSpreadsheet className="w-6 h-6 text-re-brand" />
-                                <h2 className="text-2xl font-bold">Metric 5: Time to FDA-Ready Export</h2>
+                                <h2 className="text-2xl font-bold">Metric 5: Time to §1.1455(c)-Formatted Export</h2>
                             </div>
                             <p className="text-[var(--re-text-secondary)] mb-6">
                                 End-to-end: from uploading a raw CSV with messy supplier data to

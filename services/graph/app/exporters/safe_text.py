@@ -21,8 +21,8 @@ printers. These helpers — used at every export boundary — close that class.
 
 from __future__ import annotations
 
+import html
 import urllib.parse
-from html import escape as _html_escape
 from typing import Any
 
 # ---------------------------------------------------------------------------
@@ -41,7 +41,7 @@ def xml_escape(text: Any) -> str:
     if text is None:
         return ""
     s = str(text)
-    return _html_escape(s, quote=True)
+    return html.escape(s, quote=True)
 
 
 # ---------------------------------------------------------------------------

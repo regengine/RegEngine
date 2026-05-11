@@ -22,7 +22,7 @@ interface ApiKey {
 
 function generateApiKey(): string {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-    let result = 'rge_dev_';
+    let result = 'rge_test_';
     for (let i = 0; i < 32; i++) {
         result += chars.charAt(Math.floor(Math.random() * chars.length));
     }

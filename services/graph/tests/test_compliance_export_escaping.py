@@ -12,6 +12,7 @@ auth fixtures. These cover:
 from __future__ import annotations
 
 import csv
+import defusedxml.ElementTree as ET
 import io
 import sys
 from pathlib import Path
