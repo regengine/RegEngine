@@ -42,8 +42,14 @@ sys.modules.setdefault("shared", _shared)
 sys.modules.setdefault("shared.validators", _validators)
 sys.modules.setdefault("shared.fsma_rules", _fsma_rules)
 
-# Now load the engine module directly (bypasses kernel/__init__.py → langchain)
-_engine_path = Path(__file__).resolve().parents[1] / "kernel" / "reporting" / "fsma_engine.py"
+# Now load the engine module directly (bypasses package import side effects)
+_engine_path = (
+    Path(__file__).resolve().parents[1]
+    / "services"
+    / "graph"
+    / "app"
+    / "fsma_engine.py"
+)
 _spec = importlib.util.spec_from_file_location("fsma_engine_module", _engine_path)
 _mod = importlib.util.module_from_spec(_spec)
 # Must register in sys.modules BEFORE exec_module so Python 3.9 dataclasses
@@ -239,10 +245,10 @@ class TestGetExemptionDefinitions:
 class TestEvaluateExemptions:
     """Tests for evaluate_exemptions()."""
 
-    def test_no_answers_not_exempt(self, engine):
-        """No answers → NOT_EXEMPT with 6 unanswered."""
+    def test_no_answers_unknown(self, engine):
+        """No answers -> UNKNOWN with 6 unanswered."""
         result = engine.evaluate_exemptions({})
-        assert result["status"] == "NOT_EXEMPT"
+        assert result["status"] == "UNKNOWN"
         assert result["is_exempt"] is False
         assert result["active_exemptions"] == []
         assert result["unanswered_count"] == 6
@@ -311,5 +317,5 @@ class TestEvaluateExemptions:
     def test_unknown_exemption_id_ignored(self, engine):
         """Unknown exemption IDs in answers are silently ignored."""
         result = engine.evaluate_exemptions({"unknown-exemption": True})
-        assert result["status"] == "NOT_EXEMPT"
+        assert result["status"] == "UNKNOWN"
         assert result["active_exemptions"] == []

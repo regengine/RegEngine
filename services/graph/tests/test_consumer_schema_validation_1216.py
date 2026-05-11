@@ -5,7 +5,7 @@ legacy path and blindly called ``evt.get(...)``. A non-dict payload would
 crash the worker and a junk dict would silently upsert garbage into
 Neo4j. These tests exercise the validation branch added in #1216:
 
-1. Non-dict payload  → route to DLQ with ``reason=invalid_schema``
+1. Non-dict payload  → route to DLQ with ``reason=payload_not_dict``
 2. Dict missing required fields → route to DLQ with ``reason=invalid_schema``
 3. Dict matching the legacy schema → parses into ``LegacyGraphEvent``
 """
@@ -156,8 +156,8 @@ class TestConsumerInvalidPayloadRouting:
         reasons = [
             call.kwargs.get("reason") for call in mock_send_dlq.call_args_list
         ]
-        assert "invalid_schema" in reasons, (
-            f"expected invalid_schema DLQ call, got {reasons}"
+        assert "payload_not_dict" in reasons, (
+            f"expected payload_not_dict DLQ call, got {reasons}"
         )
         fake_consumer.commit.assert_called()
 

@@ -452,7 +452,10 @@ def test_verify_review_event_dev_bypass_requires_local_env(monkeypatch):
     monkeypatch.delenv("KAFKA_EVENT_SIGNING_KEY", raising=False)
     monkeypatch.setenv("ENVIRONMENT", "development")
 
-    verified = rc_mod._verify_review_event({"tenant_id": "abc"}, headers=[])
+    verified = rc_mod._verify_review_event(
+        {"tenant_id": "abc", "_producer_service": "nlp-service"},
+        headers=[],
+    )
     assert verified["tenant_id"] == "abc"
 
     monkeypatch.setenv("ENVIRONMENT", "production")

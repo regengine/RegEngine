@@ -82,7 +82,7 @@ const STEPS = [
   {
     num: "3",
     title: "RegEngine maps your events",
-    desc: "We map your data to the FSMA 204 Critical Tracking Events defined in the rule — harvesting, cooling, initial packing, first land-based receiving, shipping, receiving, and transformation. You only record the events that occur at your operation. The dashboard shows what\u2019s covered and what\u2019s missing.",
+    desc: "We map your data to the 7 Critical Tracking Events defined in FSMA 204: harvesting, cooling, initial packing, first land-based receiving, shipping, receiving, and transformation. You only record the events that occur at your operation. The dashboard shows what\u2019s covered and what\u2019s missing.",
     cta: null,
   },
   {
