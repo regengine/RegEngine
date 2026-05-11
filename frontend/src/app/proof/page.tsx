@@ -5,7 +5,7 @@ import { ArrowRight, Download, FileJson, FileSpreadsheet, Hash, Terminal } from 
 export const metadata: Metadata = {
     title: "Proof | RegEngine",
     description:
-        "Download three real RegEngine artifacts — FSMA 204 sortable spreadsheet, EPCIS 2.0 JSON-LD export, and a hash-chained audit bundle — without signing up.",
+        "Download three real RegEngine artifacts — FSMA 204 sortable spreadsheet, EPCIS 2.0 JSON-LD export, and a Merkle-rooted audit bundle — without signing up.",
     openGraph: {
         title: "Verify RegEngine without signing up",
         description:
@@ -50,14 +50,14 @@ const ARTIFACTS: Artifact[] = [
         why: "Walmart, Kroger, Sysco, and US Foods are converging on EPCIS 2.0 for supplier ingest. Confirm that what RegEngine emits validates against your retailer's onboarding tests before you sign a contract.",
     },
     {
-        name: "Hash-chained audit bundle",
+        name: "Merkle-rooted audit bundle",
         href: "/proof/audit-bundle.zip",
         filename: "audit-bundle.zip",
-        sizeBytes: 1116,
+        sizeBytes: 2266,
         icon: Hash,
         formatLabel: "ZIP · SHA-256 + Merkle root",
         summary:
-            "The CSV plus a manifest.json with per-file SHA-256 hashes and a Merkle root computed by production code.",
+            "The CSV and EPCIS payload plus a manifest.json with per-file SHA-256 hashes and a Merkle root computed by production code.",
         why: "Auditors and insurers increasingly want evidence the dashboard cannot lie. The bundle lets a third party verify the export matches what RegEngine signed — without trusting our database, our UI, or our word.",
     },
 ];
@@ -101,10 +101,10 @@ export default function ProofPage() {
                     </div>
                     <div className="bg-[var(--re-text-primary)] p-5 font-mono text-[12px] leading-6 text-[var(--re-surface-base)]">
                         <p>$ unzip -p audit-bundle.zip manifest.json | jq .merkle.root</p>
-                        <p className="mt-3 text-[#8fd19e]">&quot;8c6cc4e980be8bc9072543541216b8f9158b817641634cd4b7689a1aae68a824&quot;</p>
+                        <p className="mt-3 text-[#8fd19e]">&quot;a320428f40579ec9eaea1a640614d26649f2111a0cc6f6b379003d25278bb6d2&quot;</p>
                         <p className="mt-3">$ python verify_chain.py audit-bundle.zip</p>
                         <p className="mt-3 text-[#8fd19e]">manifest: ok</p>
-                        <p className="text-[#8fd19e]">files: 1 / 1 sha256 matches</p>
+                        <p className="text-[#8fd19e]">files: 2 / 2 sha256 matches</p>
                         <p className="text-[#f1c36d]">merkle: root recomputed and matched</p>
                         <p className="mt-3 text-[#d8d2c5]">result: bundle intact</p>
                     </div>
@@ -187,6 +187,57 @@ export default function ProofPage() {
                             <p className="mt-3 text-[#8fd19e]"># 3. (Optional) Recompute the leaf yourself</p>
                             <p>shasum -a 256 fsma-204-sample.csv</p>
                         </div>
+                    </div>
+                </div>
+            </section>
+
+            <section className="re-section">
+                <div className="re-container grid gap-8 md:grid-cols-[0.75fr_1fr]">
+                    <div>
+                        <p className="re-label mb-4">Watch it fail</p>
+                        <h2 className="text-3xl font-semibold leading-tight">
+                            A tampered bundle is published next to the real one.
+                        </h2>
+                        <p className="mt-5 text-sm leading-6 text-[var(--re-text-muted)]">
+                            <code className="font-mono text-[12px]">audit-bundle-tampered.zip</code> is byte-for-byte identical to the real bundle except a single byte in the CSV has been flipped. The manifest&apos;s declared hash was left untouched. Run the verifier against it and watch it exit non-zero. If the script ever passed a tampered bundle, the entire proof on this page would be worthless.
+                        </p>
+                        <Link
+                            href="/proof/audit-bundle-tampered.zip"
+                            className="mt-6 inline-flex h-11 items-center gap-2 border border-[var(--re-text-primary)] px-5 text-[13px] font-semibold text-[var(--re-text-primary)]"
+                        >
+                            <Download className="h-4 w-4" /> Download audit-bundle-tampered.zip
+                        </Link>
+                    </div>
+                    <div className="re-panel overflow-hidden">
+                        <div className="border-b border-[var(--re-surface-border)] p-4">
+                            <p className="re-label">Tampered output</p>
+                        </div>
+                        <div className="bg-[var(--re-text-primary)] p-5 font-mono text-[12px] leading-6 text-[var(--re-surface-base)]">
+                            <p>$ python verify_chain.py audit-bundle-tampered.zip</p>
+                            <p className="mt-3 text-[#8fd19e]">manifest: ok</p>
+                            <p className="text-[#e58c8c]">verify: FAILED — fsma-204-sample.csv: sha256 mismatch</p>
+                            <p className="text-[#e58c8c]">result: bundle TAMPERED</p>
+                            <p className="mt-3 text-[#d8d2c5]">$ echo $?</p>
+                            <p className="text-[#d8d2c5]">1</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section className="re-section">
+                <div className="re-container">
+                    <p className="re-label mb-4">Changelog</p>
+                    <div className="re-panel p-6 text-sm leading-6 text-[var(--re-text-muted)]">
+                        <p className="font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--re-text-secondary)]">2026-05-09 — verifier mismatch found and fixed</p>
+                        <p className="mt-3">
+                            A reader running the recipe on this page got an argparse error instead of a verification. The verifier we&apos;d shipped didn&apos;t match the bundle we&apos;d shipped — the hashes were correct, but the script next to them read JSON, not the zip the page describes.
+                        </p>
+                        <p className="mt-3">
+                            Replaced with a verifier that opens the zip, recomputes every per-file SHA-256, and rebuilds the Merkle root using the same algorithm RegEngine ships in <code className="font-mono text-[12px]">services/shared/merkle_tree.py</code>. Added the EPCIS payload to <code className="font-mono text-[12px]">manifest.json</code>, added a <code className="font-mono text-[12px]">build</code> block (commit, generated_at, release), and published <code className="font-mono text-[12px]">audit-bundle-tampered.zip</code> so anyone can watch the new verifier fail closed.
+                        </p>
+                        <p className="mt-3">
+                            If you found the original bug before we did — thank you. That&apos;s the system working.
+                        </p>
                     </div>
                 </div>
             </section>
