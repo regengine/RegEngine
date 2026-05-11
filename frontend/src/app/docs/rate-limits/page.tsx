@@ -22,7 +22,7 @@ export default function RateLimitsDocsPage() {
                         <h1 className="text-4xl font-bold">Rate Limits</h1>
                     </div>
                     <p className="text-xl text-muted-foreground">
-                        Understanding API quotas and handling 429 errors.
+                        Understanding API quotas, response headers, and 429 backoff.
                     </p>
                 </div>
 
@@ -44,9 +44,9 @@ export default function RateLimitsDocsPage() {
 
                     <Card>
                         <CardHeader>
-                            <CardTitle>Response Headers (on 429 only)</CardTitle>
+                            <CardTitle>Response Headers</CardTitle>
                             <CardDescription>
-                                Rate-limit metadata is returned on <code>429 Too Many Requests</code> responses. Successful responses do not currently include rate-limit headers — rely on <code>Retry-After</code> for backoff.
+                                Rate-limit metadata is returned on successful responses and <code>429 Too Many Requests</code> responses so clients can back off before exhausting a bucket.
                             </CardDescription>
                         </CardHeader>
                         <CardContent>
@@ -61,7 +61,11 @@ export default function RateLimitsDocsPage() {
                                 </div>
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 border-b pb-4 text-sm">
                                     <div className="font-mono text-purple-600">X-RateLimit-Remaining</div>
-                                    <div className="md:col-span-2">Always <code>0</code> on a 429 response.</div>
+                                    <div className="md:col-span-2">Requests remaining in the current window. This is <code>0</code> on a 429 response.</div>
+                                </div>
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 border-b pb-4 text-sm">
+                                    <div className="font-mono text-purple-600">X-RateLimit-Reset</div>
+                                    <div className="md:col-span-2">Unix timestamp for the next rate-limit window boundary.</div>
                                 </div>
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 border-b pb-4 text-sm">
                                     <div className="font-mono text-purple-600">X-RateLimit-Tenant</div>
@@ -88,10 +92,14 @@ export default function RateLimitsDocsPage() {
                                 Your client should handle this by pausing requests until the time specified in the <code className="text-primary">Retry-After</code> header.
                             </p>
                             <div className="bg-slate-950 rounded-lg p-4 font-mono text-sm text-slate-50">
-                                <div className="text-slate-400">// Example 429 Response</div>
+                                <div className="text-slate-400">{'// Example 429 Response'}</div>
                                 HTTP/1.1 429 Too Many Requests<br />
                                 Content-Type: application/json<br />
                                 Retry-After: 30<br />
+                                X-RateLimit-Limit: 75<br />
+                                X-RateLimit-Remaining: 0<br />
+                                X-RateLimit-Reset: 1778522430<br />
+                                X-RateLimit-Scope: webhooks.ingest<br />
                                 <br />
                                 {"{"}<br />
                                 &nbsp;&nbsp;"error": {"{"}<br />

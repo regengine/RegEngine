@@ -58,7 +58,7 @@ const analysisStages = [
     { name: 'Mapping CTEs and KDEs...', duration: 800 },
     { name: 'Checking chain of custody...', duration: 600 },
     { name: 'Analyzing timeline gaps...', duration: 700 },
-    { name: 'Calculating compliance score...', duration: 500 },
+    { name: 'Calculating self-check score...', duration: 500 },
 ];
 
 export function DrillSimulatorClient() {
@@ -986,9 +986,9 @@ STATUS: ${
         return (
             <LeadGate
                 source="drill-simulator"
-                headline="Get Your Full Compliance Report"
-                subheadline="Unlock detailed findings, gap analysis, and a downloadable audit report."
-                ctaText="Unlock Full Report"
+                headline="Get Your Drill Findings"
+                subheadline="Unlock detailed findings, gap analysis, and a downloadable self-check report."
+                ctaText="Unlock Findings"
                 toolContext={{ toolInputs: { score: result.scores.overallScore, grade: result.scores.grade, scenario: state.selectedScenario } }}
                 teaser={teaser}
                 onUnlock={() => {}}

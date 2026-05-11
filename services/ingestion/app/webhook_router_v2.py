@@ -37,7 +37,7 @@ from .config import get_settings
 from .tenant_validation import validate_tenant_id
 from shared.funnel_events import emit_funnel_event
 from shared.idempotency import IdempotencyDependency
-from shared.tenant_rate_limiting import consume_tenant_rate_limit
+from shared.tenant_rate_limiting import consume_tenant_rate_limit, rate_limit_reset_epoch
 from .webhook_models import (
     ChainVerifyResponse,
     EventResult,
@@ -477,7 +477,25 @@ _WEBHOOK_READ_RATE_LIMIT_WINDOW_SECS = max(
 )
 
 
-def _check_read_rate_limit(tenant_id: str, scope: str) -> None:
+def _store_rate_limit_state(
+    request: Request | None,
+    *,
+    limit: int,
+    remaining: int,
+    tenant_id: str,
+    scope: str,
+    window: int,
+) -> None:
+    if request is None:
+        return
+    request.state.rate_limit_limit = limit
+    request.state.rate_limit_remaining = remaining
+    request.state.rate_limit_reset = str(rate_limit_reset_epoch(window))
+    request.state.rate_limit_tenant = tenant_id
+    request.state.rate_limit_scope = scope
+
+
+def _check_read_rate_limit(tenant_id: str, scope: str, request: Request | None = None) -> None:
     """Tenant-scoped sliding-window limit for webhook READ endpoints.
 
     Distinct from ``_check_rate_limit`` (ingest): smaller default budget,
@@ -491,6 +509,7 @@ def _check_read_rate_limit(tenant_id: str, scope: str) -> None:
         window=_WEBHOOK_READ_RATE_LIMIT_WINDOW_SECS,
     )
     if not allowed:
+        reset = str(rate_limit_reset_epoch(_WEBHOOK_READ_RATE_LIMIT_WINDOW_SECS))
         raise HTTPException(
             status_code=429,
             detail=(
@@ -501,10 +520,19 @@ def _check_read_rate_limit(tenant_id: str, scope: str) -> None:
                 "Retry-After": str(_WEBHOOK_READ_RATE_LIMIT_WINDOW_SECS),
                 "X-RateLimit-Limit": str(_WEBHOOK_READ_RATE_LIMIT_RPM),
                 "X-RateLimit-Remaining": "0",
+                "X-RateLimit-Reset": reset,
                 "X-RateLimit-Tenant": tenant_id,
                 "X-RateLimit-Scope": f"webhooks.read.{scope}",
             },
         )
+    _store_rate_limit_state(
+        request,
+        limit=_WEBHOOK_READ_RATE_LIMIT_RPM,
+        remaining=remaining,
+        tenant_id=tenant_id,
+        scope=f"webhooks.read.{scope}",
+        window=_WEBHOOK_READ_RATE_LIMIT_WINDOW_SECS,
+    )
     logger.debug(
         "webhook_read_rate_limit_allow tenant_id=%s scope=%s remaining=%s",
         tenant_id,
@@ -513,7 +541,7 @@ def _check_read_rate_limit(tenant_id: str, scope: str) -> None:
     )
 
 
-def _check_rate_limit(tenant_id: str) -> None:
+def _check_rate_limit(tenant_id: str, request: Request | None = None) -> None:
     """Tenant-scoped sliding-window limit for webhook ingestion."""
     allowed, remaining = consume_tenant_rate_limit(
         tenant_id=tenant_id,
@@ -522,6 +550,7 @@ def _check_rate_limit(tenant_id: str) -> None:
         window=_WEBHOOK_RATE_LIMIT_WINDOW_SECS,
     )
     if not allowed:
+        reset = str(rate_limit_reset_epoch(_WEBHOOK_RATE_LIMIT_WINDOW_SECS))
         raise HTTPException(
             status_code=429,
             detail=(
@@ -532,10 +561,19 @@ def _check_rate_limit(tenant_id: str) -> None:
                 "Retry-After": str(_WEBHOOK_RATE_LIMIT_WINDOW_SECS),
                 "X-RateLimit-Limit": str(_WEBHOOK_RATE_LIMIT_RPM),
                 "X-RateLimit-Remaining": "0",
+                "X-RateLimit-Reset": reset,
                 "X-RateLimit-Tenant": tenant_id,
                 "X-RateLimit-Scope": "webhooks.ingest",
             },
         )
+    _store_rate_limit_state(
+        request,
+        limit=_WEBHOOK_RATE_LIMIT_RPM,
+        remaining=remaining,
+        tenant_id=tenant_id,
+        scope="webhooks.ingest",
+        window=_WEBHOOK_RATE_LIMIT_WINDOW_SECS,
+    )
     logger.debug(
         "webhook_rate_limit_allow tenant_id=%s remaining=%s",
         tenant_id,
@@ -1178,6 +1216,7 @@ def _resolve_ingest_tenant_id(
 )
 async def ingest_events(
     payload: WebhookPayload,
+    request: Request,
     principal: IngestionPrincipal = Depends(require_permission("webhooks.ingest")),
     x_regengine_api_key: Optional[str] = Header(default=None, alias="X-RegEngine-API-Key"),
     x_tenant_id: Optional[str] = Header(default=None, alias="X-Tenant-ID"),
@@ -1199,7 +1238,7 @@ async def ingest_events(
     )
 
     # Rate limiting (tenant-scoped)
-    _check_rate_limit(tenant_id)
+    _check_rate_limit(tenant_id, request=request)
 
     results: list[EventResult] = []
     accepted = 0
@@ -1614,6 +1653,7 @@ def _enforce_webhooks_read_principal(
     description="Returns the most recently ingested traceability events for the scan history widget.",
 )
 async def recent_events_endpoint(
+    request: Request,
     tenant_id: str,
     limit: int = 10,
     principal: IngestionPrincipal = Depends(get_ingestion_principal),
@@ -1627,7 +1667,7 @@ async def recent_events_endpoint(
     """
     validate_tenant_id(tenant_id)
     _enforce_webhooks_read_principal(tenant_id, principal, scope="recent")
-    _check_read_rate_limit(tenant_id, scope="recent")
+    _check_read_rate_limit(tenant_id, scope="recent", request=request)
     return await get_recent_events(tenant_id, limit)
 
 
@@ -1641,6 +1681,7 @@ async def recent_events_endpoint(
     ),
 )
 async def verify_chain(
+    request: Request,
     tenant_id: str,
     principal: IngestionPrincipal = Depends(get_ingestion_principal),
     _auth: None = Depends(_verify_api_key_present),
@@ -1653,7 +1694,7 @@ async def verify_chain(
     """
     validate_tenant_id(tenant_id)
     _enforce_webhooks_read_principal(tenant_id, principal, scope="chain_verify")
-    _check_read_rate_limit(tenant_id, scope="chain_verify")
+    _check_read_rate_limit(tenant_id, scope="chain_verify", request=request)
     db_session = None
     try:
         from shared.database import SessionLocal

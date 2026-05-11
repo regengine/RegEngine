@@ -884,6 +884,11 @@ class TestRequirePermission:
         client = TestClient(app)
         resp = client.get("/protected")
         assert resp.status_code == 200
+        assert resp.headers["X-RateLimit-Limit"]
+        assert resp.headers["X-RateLimit-Remaining"]
+        assert resp.headers["X-RateLimit-Reset"]
+        assert resp.headers["X-RateLimit-Tenant"] == "t"
+        assert resp.headers["X-RateLimit-Scope"] == "fda.export"
         assert consumed  # rate limit was consumed
         tenant_id, bucket, limit, window = consumed[0]
         assert tenant_id == "t"
@@ -971,6 +976,7 @@ class TestRequirePermission:
         assert resp.status_code == 429
         assert resp.headers["Retry-After"] == "60"
         assert resp.headers["X-RateLimit-Remaining"] == "0"
+        assert resp.headers["X-RateLimit-Reset"]
         assert resp.headers["X-RateLimit-Tenant"] == "t"
         assert resp.headers["X-RateLimit-Scope"] == "fda.export"
 

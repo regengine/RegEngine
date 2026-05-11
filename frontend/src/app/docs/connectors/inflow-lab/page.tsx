@@ -22,7 +22,7 @@ export const metadata: Metadata = {
 
 const ingestExample = `curl -X POST https://your-preview-host/api/v1/webhooks/ingest \\
   -H "Content-Type: application/json" \\
-  -H "X-RegEngine-API-Key: re_live_..." \\
+  -H "X-RegEngine-API-Key: rge_live_..." \\
   -H "X-Tenant-ID: 00000000-0000-0000-0000-000000000000" \\
   -H "Idempotency-Key: inflow-lab-test-001" \\
   -d '{

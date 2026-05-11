@@ -100,7 +100,7 @@ const COMPARISON_DATA: ComparisonRow[] = [
         reositrak: 'Verify with vendor',
     },
     {
-        feature: 'FDA-Ready Export',
+        feature: '§1.1455(c)-Formatted Export',
         regengine: true,
         foodlogiq: true,
         safetychain: true,

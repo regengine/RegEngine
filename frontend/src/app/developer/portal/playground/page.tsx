@@ -275,7 +275,7 @@ export default function APIPlayground() {
 
   const [demoMode, setDemoMode] = useState(false);
   const [selectedEndpoint, setSelectedEndpoint] = useState(ENDPOINTS[0]);
-  const [apiKey, setApiKey] = useState('rge_dev_');
+  const [apiKey, setApiKey] = useState('rge_test_');
   const [tenantId, setTenantId] = useState('');
   const [pathParamValues, setPathParamValues] = useState<Record<string, string>>({});
   const [queryParamValues, setQueryParamValues] = useState<Record<string, string>>({});
@@ -303,7 +303,7 @@ export default function APIPlayground() {
       setApiKey('demo-key-sandbox');
       setTenantId('demo-tenant');
     } else {
-      setApiKey('rge_dev_');
+      setApiKey('rge_test_');
       setTenantId('');
     }
     setResponse(null);
@@ -586,7 +586,7 @@ export default function APIPlayground() {
                 type="text"
                 value={apiKey}
                 onChange={(e) => setApiKey(e.target.value)}
-                placeholder="rge_dev_..."
+                placeholder="rge_live_..."
                 className="w-full px-3 py-2.5 text-sm bg-white/[0.02] border border-white/[0.06] text-[var(--re-text-primary)] rounded-md font-mono"
               />
             </div>
