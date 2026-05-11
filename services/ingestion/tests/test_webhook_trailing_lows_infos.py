@@ -296,7 +296,8 @@ class TestF8OpaqueProdSignatureFailure:
         assert "HMAC" in detail["message"]
 
     def test_unsupported_scheme_in_production_is_opaque(self, monkeypatch):
-        monkeypatch.setenv("WEBHOOK_HMAC_SECRET", "test-secret")
+        hmac_key = "fixture-hmac-key"
+        monkeypatch.setenv("WEBHOOK_HMAC_SECRET", hmac_key)
         monkeypatch.setattr(wr, "_is_production", lambda: True)
 
         with pytest.raises(HTTPException) as exc_info:
@@ -316,7 +317,8 @@ class TestF8OpaqueProdSignatureFailure:
     def test_unsupported_scheme_in_dev_keeps_message_but_no_scheme_echo(
         self, monkeypatch
     ):
-        monkeypatch.setenv("WEBHOOK_HMAC_SECRET", "test-secret")
+        hmac_key = "fixture-hmac-key"
+        monkeypatch.setenv("WEBHOOK_HMAC_SECRET", hmac_key)
         monkeypatch.setattr(wr, "_is_production", lambda: False)
 
         with pytest.raises(HTTPException) as exc_info:

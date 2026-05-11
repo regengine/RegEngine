@@ -12,6 +12,7 @@ import io
 import sys
 from pathlib import Path
 
+import defusedxml.ElementTree as ET
 import pytest
 
 # Make the repo root importable so `services.graph...` resolves.

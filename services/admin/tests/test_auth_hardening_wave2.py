@@ -593,7 +593,7 @@ class TestRefreshUnverifiedJWTFallback:
         # fix means we now fall through to the membership-ordered path
         # rather than the previous unverified-decode shortcut.
         wrong_key = f"wrong-key-{tenant_b_id}"
-        forged = _jwt.encode(
+        forged = _jwt.encode(  # nosemgrep: python.jwt.security.jwt-hardcode.jwt-python-hardcoded-secret
             {
                 "sub": str(user.id),
                 "tid": str(tenant_b_id),

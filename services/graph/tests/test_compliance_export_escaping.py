@@ -17,6 +17,7 @@ import io
 import sys
 from pathlib import Path
 
+import defusedxml.ElementTree as ET
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
