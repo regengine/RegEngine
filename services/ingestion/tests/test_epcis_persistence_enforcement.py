@@ -257,11 +257,17 @@ class TestEnforceCteOnly:
         assert status in (200, 201)
         assert _FakeCTEPersistence.last_called is True
 
-    def test_canonical_error_accepts(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """If normalize_epcis_event raises, pre-eval treats as no-verdict
-        and the event is accepted. Preserves best-effort semantics for
-        transient canonical bugs."""
-        _FakeEngine.summary_to_return = _critical_summary()  # would reject if eval ran
+    def test_canonical_error_raises_500_under_enforcement(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Finding A (Suite 4 audit 2026-05-12): under cte_only a
+        pre-eval crash must produce HTTPException(500), NOT a silent
+        accept. The previous "swallow → no-verdict → accept" behavior
+        defeated the compliance product — every broken rule looked
+        like a passing one. Compliance-defensibility now demands a
+        loud 5xx so ops triages instead of the event slipping through
+        with no audit trail."""
+        from fastapi import HTTPException
+
+        _FakeEngine.summary_to_return = _critical_summary()
 
         def _raise(event: Any, tenant_id: str) -> Any:
             raise RuntimeError("canonical broken")
@@ -270,11 +276,16 @@ class TestEnforceCteOnly:
         monkeypatch.setattr(_canon_mod, "normalize_epcis_event", _raise)
 
         from app.epcis import persistence as persistence_mod
-        payload, status = persistence_mod._persist_prepared_event_in_session(
-            db_session=MagicMock(), tenant_id="t-1", prepared=_make_prepared(),
-        )
-        assert status in (200, 201)
-        assert _FakeCTEPersistence.last_called is True
+        with pytest.raises(HTTPException) as exc:
+            persistence_mod._persist_prepared_event_in_session(
+                db_session=MagicMock(), tenant_id="t-1", prepared=_make_prepared(),
+            )
+        assert exc.value.status_code == 500
+        detail = exc.value.detail if isinstance(exc.value.detail, dict) else {}
+        assert detail.get("error") == "RULES_ENGINE_EVAL_FAILED"
+        # The legacy CTE write MUST NOT have been called — the route
+        # bails before persistence when enforcement is active.
+        assert _FakeCTEPersistence.last_called is False
 
 
 # ---------------------------------------------------------------------------
