@@ -285,19 +285,21 @@ class TestPreEvalCteOnly:
         reject, _, _summary_unused = wrv2._rules_preeval_reject(_make_event, db_session=None, tenant_id="t")
         assert reject is False
 
-    def test_canonical_error_does_not_reject(self, monkeypatch, _make_event):
-        """A canonical-normalization crash must never reject the event.
-        Treating it as no-verdict preserves the pre-refactor best-effort
-        behavior for every tenant when the canonical module has a
-        transient bug."""
+    def test_canonical_error_raises_500_under_enforcement(self, monkeypatch, _make_event):
+        """Finding A (Suite 4 audit 2026-05-12): under cte_only/all a
+        canonical/eval crash must NOT be silently swallowed as
+        "no-verdict → accept" — that defeats the product's purpose.
+        It must surface as HTTPException(500, RULES_ENGINE_EVAL_FAILED)."""
         _install(
             monkeypatch,
-            summary=_critical_summary(),  # would reject if eval ran
+            summary=_critical_summary(),
             canonical_raises=RuntimeError("canonical broken"),
         )
-        reject, reason, _summary_unused = wrv2._rules_preeval_reject(_make_event, db_session=None, tenant_id="t")
-        assert reject is False
-        assert reason is None
+        with pytest.raises(HTTPException) as exc:
+            wrv2._rules_preeval_reject(_make_event, db_session=None, tenant_id="t")
+        assert exc.value.status_code == 500
+        detail = exc.value.detail if isinstance(exc.value.detail, dict) else {}
+        assert detail.get("error") == "RULES_ENGINE_EVAL_FAILED"
 
 
 # ---------------------------------------------------------------------------
@@ -387,23 +389,40 @@ class TestPreEvalReturnsSummary:
         # (pre-short-circuit). Either is OK — the threaded block falls
         # back to evaluate_event when summary is None or has no results.
 
-    def test_summary_none_when_canonical_errors(self, monkeypatch, _make_event):
-        """When canonical normalization raises, the helper logs and
-        returns ``(False, None, None)`` — preserves best-effort semantics
-        and signals the threaded block to fall back to evaluate_event."""
+    def test_canonical_errors_raise_500_under_enforcement(self, monkeypatch, _make_event):
+        """Finding A: when canonical normalization raises under
+        cte_only/all, the helper MUST raise HTTPException(500). Returning
+        ``(False, None, None)`` (the pre-fix behavior) silently accepted
+        every event whenever the rules subsystem crashed — the opposite
+        of what the compliance product is supposed to do."""
         monkeypatch.setenv("RULES_ENGINE_ENFORCE", "cte_only")
         _install(
             monkeypatch,
-            summary=_critical_summary(),  # would reject if eval ran
+            summary=_critical_summary(),
             canonical_raises=RuntimeError("canonical broken"),
         )
+        with pytest.raises(HTTPException) as exc:
+            wrv2._rules_preeval_reject(
+                _make_event, db_session=None, tenant_id="t"
+            )
+        assert exc.value.status_code == 500
+
+    def test_canonical_errors_swallowed_under_off(self, monkeypatch, _make_event):
+        """Under OFF mode (current prod default) a canonical/eval crash
+        is still swallowed as warn+no-verdict. The compliance product is
+        in log-and-accept mode; making OFF-mode crashes 5xx would break
+        ingestion for every prod tenant overnight."""
+        monkeypatch.setenv("RULES_ENGINE_ENFORCE", "off")
+        _install(
+            monkeypatch,
+            summary=_critical_summary(),
+            canonical_raises=RuntimeError("canonical broken"),
+        )
+        # OFF short-circuits before normalize, so canonical_raises won't
+        # actually be hit. The contract under OFF is "no 5xx, no reject".
         reject, reason, summary = wrv2._rules_preeval_reject(
             _make_event, db_session=None, tenant_id="t"
         )
         assert reject is False
         assert reason is None
-        assert summary is None, (
-            "canonical/eval errors must produce summary=None so the "
-            "threaded block falls back to re-evaluation rather than "
-            "persisting an empty result set"
-        )
+        assert summary is None

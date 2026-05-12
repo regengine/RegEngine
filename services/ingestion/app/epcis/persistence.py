@@ -680,7 +680,12 @@ def _persist_prepared_event_in_session(
     # ``RulesEngine.persist_summary`` instead of re-running every rule
     # — eliminates the double-eval that lands when the flag flips on.
     _preeval_summary = None
-    from shared.rules.enforcement import current_mode, should_reject, EnforcementMode  # noqa: PLC0415
+    from shared.rules.enforcement import (  # noqa: PLC0415
+        current_mode,
+        should_reject,
+        EnforcementMode,
+        handle_preeval_exception,
+    )
     if current_mode() != EnforcementMode.OFF:
         try:
             from shared.canonical_event import normalize_epcis_event  # noqa: PLC0415
@@ -705,13 +710,42 @@ def _persist_prepared_event_in_session(
             )
         except (ImportError, ValueError, TypeError, RuntimeError,
                 AttributeError, KeyError) as _pre_err:
-            logger.warning(
-                "epcis_rules_preeval_skipped: %s", str(_pre_err),
-            )
+            # Finding A — under enforcement modes a pre-eval crash must
+            # become a 5xx, NOT a silent accept. ``handle_preeval_exception``
+            # logs+Sentry+raises HTTPException(500) under cte_only/all
+            # and warns+returns under off.
+            handle_preeval_exception(_pre_err, where="epcis_persistence")
 
         if _preeval_summary is not None:
             _reject, _reason = should_reject(_preeval_summary)
             if _reject:
+                # Finding B — write the durable audit row BEFORE raising
+                # the 422 so it survives the caller's outer rollback.
+                # Uses its own session so commit is independent.
+                try:
+                    from shared.rules.rejection_audit import (  # noqa: PLC0415
+                        record_rejection,
+                        reasons_from_summary,
+                    )
+                    _first_crit = (
+                        (_preeval_summary.critical_failures or [None])[0]
+                    )
+                    record_rejection(
+                        tenant_id=tenant_id,
+                        rule_id=getattr(_first_crit, "rule_id", None),
+                        rule_version=getattr(_first_crit, "rule_version", None),
+                        event_id=str(_pre_canonical.event_id),
+                        reasons=reasons_from_summary(_preeval_summary),
+                        source="epcis_preeval",
+                        enforcement_mode=current_mode(),
+                    )
+                except Exception:  # noqa: BLE001
+                    # record_rejection never raises, but defend the
+                    # reject decision against any future change.
+                    logger.error(
+                        "epcis_rejection_audit_inline_error",
+                    )
+
                 # Raise HTTPException so the caller's db_session.rollback()
                 # unwinds any in-flight state and the HTTP layer returns
                 # a structured 422. For the atomic-batch caller this

@@ -916,10 +916,16 @@ def _rules_preeval_reject(event: IngestEvent, db_session, tenant_id: str):
     at the call-site destructure with ``ValueError: not enough values
     to unpack``. Restored consistent 3-tuple here. See spawned task.
     """
-    from shared.rules.enforcement import current_mode, should_reject, EnforcementMode  # noqa: PLC0415
+    from shared.rules.enforcement import (  # noqa: PLC0415
+        current_mode,
+        should_reject,
+        EnforcementMode,
+        handle_preeval_exception,
+    )
     if current_mode() == EnforcementMode.OFF:
         return False, None, None
 
+    canonical = None
     try:
         canonical = normalize_webhook_event(event, tenant_id)
         from shared.rules_engine import RulesEngine  # noqa: PLC0415
@@ -940,10 +946,35 @@ def _rules_preeval_reject(event: IngestEvent, db_session, tenant_id: str):
         summary = engine.evaluate_event(event_data, persist=False, tenant_id=tenant_id)
     except (ImportError, SQLAlchemyError, ValueError, TypeError, RuntimeError,
             AttributeError, KeyError) as err:
-        logger.warning("rules_preeval_skipped", extra={"error": str(err)})
+        # Finding A — fail loud under cte_only/all; HTTPException(500)
+        # bubbles up to ingest_events and the route returns 5xx instead
+        # of silently accepting because a rule crashed.
+        handle_preeval_exception(err, where="webhook_router_v2")
+        # If we reach here, mode was OFF (handle_preeval_exception
+        # returned). Treat as no-verdict.
         return False, None, None
 
     reject, reason = should_reject(summary)
+    if reject:
+        # Finding B — durable audit row BEFORE the caller marks the
+        # event rejected. Independent session = survives outer rollback.
+        try:
+            from shared.rules.rejection_audit import (  # noqa: PLC0415
+                record_rejection,
+                reasons_from_summary,
+            )
+            _first_crit = (summary.critical_failures or [None])[0]
+            record_rejection(
+                tenant_id=tenant_id,
+                rule_id=getattr(_first_crit, "rule_id", None),
+                rule_version=getattr(_first_crit, "rule_version", None),
+                event_id=str(canonical.event_id) if canonical is not None else None,
+                reasons=reasons_from_summary(summary),
+                source="webhook_router_v2_preeval",
+                enforcement_mode=current_mode(),
+            )
+        except Exception:  # noqa: BLE001
+            logger.error("webhook_v2_rejection_audit_inline_error")
     return reject, reason, summary
 
 
