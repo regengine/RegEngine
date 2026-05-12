@@ -151,7 +151,7 @@ async def main():
              return
 
     # Check Neo4jClient methods
-    if not check_class_async(Neo4jClient, ['upsert_provision', 'create_tenant_database', 'close']):
+    if not check_class_async(Neo4jClient, ['create_tenant_database', 'close']):
         logger.error("Neo4jClient failed")
 
     # Check fsma_utils

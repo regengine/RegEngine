@@ -178,9 +178,13 @@ class TestAuthGate:
         assert resp.status_code == 403
         assert "Tenant mismatch" in resp.json()["detail"]
 
-    def test_wildcard_scope_can_query_any_tenant(self):
-        """A principal with wildcard scopes (``*``) bypasses the tenant-
-        match check — used by admin/superuser contexts."""
+    def test_wildcard_scope_cannot_query_other_tenant(self):
+        """A tenant-bound principal with wildcard ``*`` scope MUST still
+        be denied cross-tenant queries. Wildcard grants action breadth,
+        not tenant breadth. Regression for the 2026-05 audit fix
+        (services/ingestion/app/authz.py:385). Master/admin contexts that
+        legitimately need cross-tenant reach are unbound (``tenant_id=None``)
+        and unaffected."""
         principal = _make_principal(
             tenant_id="admin-tenant", scopes=["metrics.read", "*"]
         )
@@ -189,8 +193,8 @@ class TestAuthGate:
             "/api/v1/metrics/compliance",
             params={"tenant_id": OTHER_TENANT},
         )
-        assert resp.status_code == 200
-        assert resp.json()["tenant_id"] == OTHER_TENANT
+        assert resp.status_code == 403
+        assert "Tenant mismatch" in resp.json()["detail"]
 
 
 # ---------------------------------------------------------------------------
@@ -247,9 +251,13 @@ class TestTenantResolution:
     )
     def test_invalid_tenant_format_returns_400(self, bad_tenant):
         """The ``validate_tenant_id`` regex blocks SQL-injection and
-        length bypasses before any query fires."""
+        length bypasses before any query fires.
+
+        Uses ``tenant_id=None`` so the format-validation path runs without
+        being short-circuited by the cross-tenant check (which the 2026-05
+        wildcard-bypass fix tightened)."""
         principal = _make_principal(
-            tenant_id="admin", scopes=["metrics.read", "*"]
+            tenant_id=None, scopes=["metrics.read", "*"]
         )
         client = _build_client(principal, FakeSession())
         resp = client.get(

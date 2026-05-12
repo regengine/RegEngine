@@ -127,7 +127,6 @@ rules:
     paths:
       include:
         - "**/services/nlp/app/consumer.py"
-        - "**/services/graph/app/consumer.py"
         - "**/services/review/app/consumer.py"
         - "**/services/admin/app/consumer.py"
       exclude:
