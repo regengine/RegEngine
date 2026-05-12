@@ -79,6 +79,10 @@ python -c "import secrets; print(secrets.token_urlsafe(64))"
 # Copy the output and paste it as AUTH_SECRET_KEY in .env
 ```
 
+Copy the same `AUTH_SECRET_KEY` into `frontend/.env.local` as well. The
+backend signs RegEngine login tokens with this value, and the Next.js session
+route verifies those tokens before writing the HTTP-only workspace cookie.
+
 Your `.env` file should look like this:
 
 ```bash
