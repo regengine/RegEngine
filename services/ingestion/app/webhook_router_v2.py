@@ -1613,8 +1613,15 @@ def _enforce_webhooks_read_principal(
     3. On mismatch, return **404 Not Found** (not 403) — avoids the
        tenant-existence oracle a 403 would create.
 
-    Wildcard (``*``) and ``admin.*`` principals (legacy master-key /
-    operator) bypass the tenant pin but must still hold the permission.
+    Wildcard (``*``) and ``admin.*`` scopes grant permission BREADTH
+    (which actions a key may perform), NOT tenant BREADTH (which tenants
+    it may act on). A tenant-bound key carrying ``*`` MUST NOT pivot to
+    another tenant by passing ``?tenant_id=<other>``. The only callers
+    that legitimately need cross-tenant reads (legacy master / dev_open)
+    carry ``tenant_id=None`` and bypass the pin via the unbound branch
+    below — they never relied on the wildcard short-circuit. Closes the
+    third instance of the same antipattern fixed in PR #2328 (authz.py,
+    inflow_workbench.py).
     """
     # Permission check first — a key without webhooks.read should never
     # learn whether a tenant exists.
@@ -1629,12 +1636,14 @@ def _enforce_webhooks_read_principal(
             detail="Insufficient permissions: requires 'webhooks.read'",
         )
 
-    # Wildcard principals (master/admin) keep cross-tenant access.
-    if "*" in principal.scopes or _has_permission(principal.scopes, "admin.*"):
+    principal_tenant = principal.tenant_id
+    # Unbound principals (master/dev_open, tenant_id=None) keep
+    # cross-tenant access. Bound principals — including those holding
+    # ``*`` or ``admin.*`` — must match the URL tenant.
+    if principal_tenant is None:
         return
 
-    principal_tenant = principal.tenant_id
-    if not principal_tenant or principal_tenant != url_tenant_id:
+    if principal_tenant != url_tenant_id:
         logger.warning(
             "webhooks_read_tenant_mismatch url_tenant=%s principal_tenant=%s key_id=%s scope=%s",
             url_tenant_id,

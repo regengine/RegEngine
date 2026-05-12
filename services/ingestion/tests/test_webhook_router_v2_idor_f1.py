@@ -229,9 +229,16 @@ class TestPermissionEnforced:
 
 
 class TestWildcardPrincipalBypass:
-    """Master/admin keys (scopes=["*"]) keep cross-tenant access."""
+    """Wildcard ``*`` is permission BREADTH, not tenant BREADTH.
 
-    def test_wildcard_can_query_any_tenant(self, monkeypatch):
+    Only unbound principals (``tenant_id=None``, e.g. legacy_master /
+    dev_open) keep cross-tenant access. A tenant-bound key carrying
+    ``*`` or ``admin.*`` MUST NOT pivot to another tenant — that was
+    the third instance of the antipattern fixed in PR #2328.
+    """
+
+    def test_unbound_master_can_query_any_tenant(self, monkeypatch):
+        """``tenant_id=None`` + ``*`` = legitimate master key, cross-tenant ok."""
         principal = IngestionPrincipal(
             key_id="master",
             scopes=["*"],
@@ -245,6 +252,54 @@ class TestWildcardPrincipalBypass:
             headers={"X-RegEngine-API-Key": "any"},
         )
         assert resp.status_code == 200
+
+    def test_wildcard_cannot_pivot_cross_tenant(self, monkeypatch):
+        """Tenant-bound key with ``*`` MUST NOT read another tenant's webhooks."""
+        principal = IngestionPrincipal(
+            key_id="tenant-a-wildcard",
+            scopes=["*"],
+            tenant_id=TENANT_A,
+            auth_mode="test",
+        )
+        client = _client(monkeypatch, principal=principal)
+        resp = client.get(
+            "/api/v1/webhooks/recent",
+            params={"tenant_id": TENANT_B},
+            headers={"X-RegEngine-API-Key": "any"},
+        )
+        assert resp.status_code == 404, resp.text
+
+    def test_wildcard_same_tenant_still_works(self, monkeypatch):
+        """Tenant-bound key with ``*`` reading its OWN tenant still succeeds."""
+        principal = IngestionPrincipal(
+            key_id="tenant-a-wildcard",
+            scopes=["*"],
+            tenant_id=TENANT_A,
+            auth_mode="test",
+        )
+        client = _client(monkeypatch, principal=principal)
+        resp = client.get(
+            "/api/v1/webhooks/recent",
+            params={"tenant_id": TENANT_A},
+            headers={"X-RegEngine-API-Key": "any"},
+        )
+        assert resp.status_code == 200, resp.text
+
+    def test_admin_wildcard_cannot_pivot_cross_tenant(self, monkeypatch):
+        """``admin.*`` scope follows the same rule — no cross-tenant pivot."""
+        principal = IngestionPrincipal(
+            key_id="tenant-a-admin",
+            scopes=["webhooks.read", "admin.*"],
+            tenant_id=TENANT_A,
+            auth_mode="test",
+        )
+        client = _client(monkeypatch, principal=principal)
+        resp = client.get(
+            "/api/v1/webhooks/recent",
+            params={"tenant_id": TENANT_B},
+            headers={"X-RegEngine-API-Key": "any"},
+        )
+        assert resp.status_code == 404, resp.text
 
 
 # ---------------------------------------------------------------------------
