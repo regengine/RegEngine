@@ -189,15 +189,17 @@ class TestAuthGate:
         assert resp.status_code == 403, (method, url, resp.text)
         assert "Tenant mismatch" in resp.json()["detail"]
 
-    def test_wildcard_scope_bypasses_tenant_match(self):
-        """A principal with ``*`` wildcard can query any tenant."""
+    def test_wildcard_scope_does_not_bypass_tenant_match(self):
+        """A tenant-bound principal with ``*`` wildcard MUST still be denied
+        cross-tenant access. Wildcard grants action breadth, not tenant
+        breadth. Regression for the 2026-05 audit fix (authz.py:385)."""
         principal = _make_principal(
             tenant_id="admin", scopes=["audit.read", "*"]
         )
         client = _build_client(principal, FakeSession())
         resp = client.get(f"/api/v1/audit/summary?tenant_id={OTHER_TENANT}")
-        assert resp.status_code == 200
-        assert resp.json()["tenant_id"] == OTHER_TENANT
+        assert resp.status_code == 403
+        assert "Tenant mismatch" in resp.json()["detail"]
 
 
 # =========================================================================
@@ -246,9 +248,13 @@ class TestTenantResolution:
 
     def test_invalid_tenant_format_rejected(self):
         """Illegal characters in the query param are rejected before
-        any SQL fires."""
+        any SQL fires.
+
+        Uses ``tenant_id=None`` so the format-validation path runs without
+        being short-circuited by the cross-tenant check (which the 2026-05
+        wildcard-bypass fix tightened)."""
         principal = _make_principal(
-            tenant_id="admin", scopes=["audit.read", "*"]
+            tenant_id=None, scopes=["audit.read", "*"]
         )
         session = FakeSession()
         client = _build_client(principal, session)

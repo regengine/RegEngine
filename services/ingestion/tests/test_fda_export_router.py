@@ -329,9 +329,10 @@ def test_export_denied_cross_tenant(monkeypatch: pytest.MonkeyPatch) -> None:
     customer pull another customer's full FSMA traceability graph, which
     is a P0 multi-tenant data-leak.
 
-    The wildcard-scope carve-out (``"*" in principal.scopes``) intentionally
-    does NOT apply to this test — we're asserting the default, non-sysadmin
-    path. A sibling test elsewhere in the suite covers the wildcard case.
+    The wildcard-scope carve-out was removed by the 2026-05 audit fix
+    (services/ingestion/app/authz.py:385): a tenant-bound principal with
+    ``*`` scope is now ALSO denied cross-tenant. See
+    ``test_authz_1342.py::test_cross_tenant_denied_with_wildcard``.
     """
     app = FastAPI()
     app.include_router(fda_router)

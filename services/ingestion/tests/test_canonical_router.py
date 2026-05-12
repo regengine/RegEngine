@@ -664,8 +664,11 @@ class TestTenantIsolation:
         assert resp.status_code == 403
         assert "tenant" in resp.json()["detail"].lower()
 
-    def test_wildcard_scope_allows_cross_tenant(self) -> None:
-        """Principal with wildcard scope can query any tenant."""
+    def test_wildcard_scope_does_not_allow_cross_tenant(self) -> None:
+        """A tenant-bound principal with wildcard ``*`` scope MUST still
+        be denied cross-tenant access. Wildcard grants action breadth, not
+        tenant breadth. Regression for the 2026-05 audit fix
+        (services/ingestion/app/authz.py:385)."""
         principal = IngestionPrincipal(
             key_id="admin-key",
             scopes=["*"],
@@ -678,7 +681,8 @@ class TestTenantIsolation:
         ])
         c = _make_app_and_client(principal, session)
         resp = c.get("/api/v1/records", params={"tenant_id": OTHER_TENANT_ID})
-        assert resp.status_code == 200
+        assert resp.status_code == 403
+        assert "tenant" in resp.json()["detail"].lower()
 
     def test_principal_tenant_used_when_no_query_param(self) -> None:
         """When tenant_id query param is omitted, principal.tenant_id is used."""
