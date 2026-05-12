@@ -69,6 +69,11 @@ tenacity>=8.2.3
 slowapi>=0.1.9
 feedparser>=6.0.0
 email-validator>=2.0.0
+# Pinned to >=2.7.0 for CVE-2026-44431 (cross-origin header leak via low-level
+# ProxyManager API) and CVE-2026-44432 (Brotli decompression bomb via partial
+# reads / drain_conn). Transitive of botocore/docker/requests/sentry-sdk/
+# testcontainers; floored here so the lockfile cannot regress below the fix.
+urllib3>=2.7.0
 
 # Messaging / Kafka
 confluent-kafka[schema-registry,avro]>=2.3.0
