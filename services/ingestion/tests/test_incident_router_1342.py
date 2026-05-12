@@ -341,14 +341,17 @@ class TestAuthGate:
         assert resp.status_code == 403
         assert "Tenant mismatch" in resp.json()["detail"]
 
-    def test_wildcard_scope_can_query_any_tenant(self, session):
+    def test_wildcard_scope_cannot_query_other_tenant(self, session):
+        """A tenant-bound principal with ``*`` scope MUST still be denied
+        cross-tenant queries. Wildcard grants action breadth, not tenant
+        breadth. Regression for 2026-05 audit fix (authz.py:385)."""
         principal = _make_principal(
             tenant_id="admin", scopes=["incidents.read", "*"]
         )
         c = _build_client(principal, session)
         resp = c.get(f"/api/v1/incidents?tenant_id={OTHER_TENANT}")
-        assert resp.status_code == 200
-        assert resp.json()["tenant_id"] == OTHER_TENANT
+        assert resp.status_code == 403
+        assert "Tenant mismatch" in resp.json()["detail"]
 
 
 # =========================================================================
@@ -402,8 +405,12 @@ class TestTenantResolution:
         assert "Tenant context required" in resp.json()["detail"]
 
     def test_invalid_tenant_format_rejected(self, session):
+        # Use a principal without a bound tenant so the format-validation
+        # path (400) runs before the cross-tenant check (403). The 2026-05
+        # audit fix means wildcard scope no longer waives the cross-tenant
+        # check, so this test must isolate format validation explicitly.
         principal = _make_principal(
-            tenant_id="admin", scopes=["incidents.read", "*"]
+            tenant_id=None, scopes=["incidents.read", "*"]
         )
         c = _build_client(principal, session)
         resp = c.get("/api/v1/incidents?tenant_id=bad;tenant")

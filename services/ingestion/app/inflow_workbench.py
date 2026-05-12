@@ -211,13 +211,19 @@ def _resolve_workbench_tenant(
     x_tenant_id: Optional[str],
     principal: IngestionPrincipal,
 ) -> str:
-    """Resolve tenant context from the authenticated workbench principal."""
-    if "*" in principal.scopes:
-        if explicit_tenant_id or x_tenant_id:
-            return resolve_principal_tenant_id(explicit_tenant_id, x_tenant_id, None)
-        if principal.tenant_id:
-            return principal.tenant_id
-        raise HTTPException(status_code=400, detail="Tenant context required")
+    """Resolve tenant context from the authenticated workbench principal.
+
+    Wildcard ``*`` scope grants permission BREADTH (which actions), not
+    tenant BREADTH (which tenants). A tenant-scoped key carrying ``*``
+    MUST NOT be able to write into another tenant by passing
+    ``?tenant_id=other`` — that was the bypass closed by the 2026-05
+    wildcard-scope audit (services/ingestion/app/inflow_workbench.py:215).
+
+    Internal/master callers (legacy_master, dev_open) carry
+    ``tenant_id=None`` and so flow through ``resolve_principal_tenant_id``
+    with ``principal_tenant=None``; they retain their existing ability to
+    pass an explicit tenant context.
+    """
     return resolve_principal_tenant_id(explicit_tenant_id, x_tenant_id, principal.tenant_id)
 
 
