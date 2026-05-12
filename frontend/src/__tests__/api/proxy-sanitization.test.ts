@@ -65,6 +65,19 @@ function primeJwtEnv(secret: string): void {
     resetJwtKeysForTesting();
 }
 
+function primeJwtMigrationEnv({
+    jwtSecret,
+    legacyAuthSecret,
+}: {
+    jwtSecret: string;
+    legacyAuthSecret: string;
+}): void {
+    process.env.JWT_SIGNING_KEY = jwtSecret;
+    process.env.AUTH_SECRET_KEY = legacyAuthSecret;
+    delete process.env.JWT_PREVIOUS_KEY;
+    resetJwtKeysForTesting();
+}
+
 describe('requireProxyAuth', () => {
     it('does not treat REGENGINE_API_KEY as a caller credential', () => {
         process.env.REGENGINE_API_KEY = 'server-side-key'; // pragma: allowlist secret
@@ -417,6 +430,23 @@ describe('validateProxySession RegEngine JWT hardening', () => {
 
     it('accepts a valid RegEngine JWT with matching tenant context', async () => {
         primeJwtEnv(testSigningMaterial);
+        const token = await signToken({ tenant_id: 'tenant-a' });
+
+        const response = await validateProxySession(makeProxyRequest({}, {
+            re_access_token: token,
+            re_tenant_id: 'tenant-a',
+        }));
+
+        expect(response).toBeNull();
+    });
+
+    it('accepts legacy AUTH_SECRET_KEY-signed tokens during JWT_SIGNING_KEY rollout', async () => {
+        const rolloutSigningMaterial = 'new-rollout-jwt-material';
+
+        primeJwtMigrationEnv({
+            jwtSecret: rolloutSigningMaterial,
+            legacyAuthSecret: testSigningMaterial,
+        });
         const token = await signToken({ tenant_id: 'tenant-a' });
 
         const response = await validateProxySession(makeProxyRequest({}, {

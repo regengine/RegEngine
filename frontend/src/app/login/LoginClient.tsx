@@ -253,7 +253,10 @@ export default function LoginPage() {
                 setError('Unable to reach authentication service. Check API configuration and try again.');
             } else if (apiError.message?.includes('DNS_HOSTNAME_RESOLVED_PRIVATE')) {
                 setError('Authentication service is misconfigured for public access.');
-            } else if (apiError.message === 'Secure session could not be established. Please try again.') {
+            } else if (
+                apiError.message === 'Session could not be established. Please try again.' ||
+                apiError.message === 'Secure session could not be established. Please try again.'
+            ) {
                 setError(apiError.message);
             } else {
                 setError(errorDetail || 'An unexpected error occurred. Please try again.');

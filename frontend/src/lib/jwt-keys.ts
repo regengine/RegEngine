@@ -11,7 +11,8 @@
  *   JWT_SIGNING_KEY_DATE  — ISO-8601 date when the current key was created (optional, for age tracking)
  *   JWT_PREVIOUS_KEY      — Previous key still accepted for verification during rotation (optional)
  *   JWT_PREVIOUS_KEY_DATE — ISO-8601 date when the previous key was created (optional)
- *   AUTH_SECRET_KEY        — Legacy fallback; used if JWT_SIGNING_KEY is not set
+ *   AUTH_SECRET_KEY        — Legacy fallback; used if JWT_SIGNING_KEY is not set,
+ *                            and accepted for verification during migration
  *
  * ─────────────────────────────────────────────────────────────────────
  * Rotation procedure:
@@ -91,14 +92,16 @@ function readEnv(name: string): string | undefined {
 
 let _signingKey: JWTKey | null = null;
 let _previousKey: JWTKey | null = null;
+let _legacyAuthKey: JWTKey | null = null;
 let _initialized = false;
 
 function ensureInitialized(): void {
     if (_initialized) return;
     _initialized = true;
 
-    const currentSecret =
-        readEnv('JWT_SIGNING_KEY') || readEnv('AUTH_SECRET_KEY');
+    const jwtSigningSecret = readEnv('JWT_SIGNING_KEY');
+    const legacyAuthSecret = readEnv('AUTH_SECRET_KEY');
+    const currentSecret = jwtSigningSecret || legacyAuthSecret;
     if (currentSecret) {
         _signingKey = buildKey(
             currentSecret,
@@ -112,6 +115,20 @@ function ensureInitialized(): void {
             previousSecret,
             readEnv('JWT_PREVIOUS_KEY_DATE'),
         );
+    }
+
+    // During the JWT_SIGNING_KEY rollout, the frontend runtime may have both
+    // JWT_SIGNING_KEY and legacy AUTH_SECRET_KEY configured while the backend
+    // login service still signs RegEngine session tokens with AUTH_SECRET_KEY.
+    // Keep AUTH_SECRET_KEY as verification-only material so valid login tokens
+    // are accepted without using the legacy key for new frontend signing.
+    if (
+        jwtSigningSecret &&
+        legacyAuthSecret &&
+        legacyAuthSecret !== jwtSigningSecret &&
+        legacyAuthSecret !== previousSecret
+    ) {
+        _legacyAuthKey = buildKey(legacyAuthSecret);
     }
 }
 
@@ -143,6 +160,7 @@ export function getVerificationKeys(): JWTKey[] {
     const keys: JWTKey[] = [];
     if (_signingKey) keys.push(_signingKey);
     if (_previousKey) keys.push(_previousKey);
+    if (_legacyAuthKey) keys.push(_legacyAuthKey);
     return keys;
 }
 
@@ -197,5 +215,6 @@ export function rotateKey(): { instructions: string[] } {
 export function _resetForTesting(): void {
     _signingKey = null;
     _previousKey = null;
+    _legacyAuthKey = null;
     _initialized = false;
 }

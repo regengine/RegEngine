@@ -486,6 +486,29 @@ describe('LoginPage', () => {
             });
         });
 
+        it('shows session establishment errors instead of the generic fallback', async () => {
+            const user = userEvent.setup();
+            const mockResponse = {
+                access_token: 'test-token',
+                user: { id: '123', email: 'test@example.com', is_sysadmin: false },
+                tenant_id: 'tenant-123',
+            };
+            mockLogin.mockRejectedValueOnce(new Error('Session could not be established. Please try again.'));
+            (apiClient.login as any).mockResolvedValueOnce(mockResponse);
+
+            render(<LoginPage />);
+
+            await user.type(screen.getByLabelText(/email/i), 'test@example.com');
+            await user.type(screen.getByLabelText(/^password$/i), 'password');
+            await user.click(screen.getByRole('button', { name: /sign in/i }));
+
+            await waitFor(() => {
+                expect(screen.getByRole('alert')).toHaveTextContent(
+                    'Session could not be established. Please try again.',
+                );
+            });
+        });
+
         it('clears error when submitting again', async () => {
             const user = userEvent.setup();
             const error = { response: { status: 401 } };
