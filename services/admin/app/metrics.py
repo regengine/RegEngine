@@ -14,7 +14,6 @@ from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple
 from urllib.parse import urlparse
 from uuid import UUID
 
-import httpx
 import structlog
 from prometheus_client import Counter, Gauge, REGISTRY
 from sqlalchemy import text
@@ -947,13 +946,19 @@ class HallucinationTracker:
                 if dispatcher is not None:
                     status_code, _body_excerpt = dispatcher(url, payload_bytes, headers)
                 else:
-                    with httpx.Client(timeout=5.0) as client:
-                        resp = client.post(
-                            url,
-                            content=payload_bytes,
-                            headers=headers,
-                        )
-                        status_code = resp.status_code
+                    # SSRF-safe fallback: re-validates URL + pins to a
+                    # validated IP. SSRFError surfaces as ValueError and
+                    # is caught by the broad ``except Exception`` below,
+                    # which enqueues for durable retry.
+                    from shared.safe_http import safe_httpx_post_sync
+
+                    resp = safe_httpx_post_sync(
+                        url,
+                        data=payload_bytes,
+                        headers=headers,
+                        timeout=5.0,
+                    )
+                    status_code = resp.status_code
             except Exception as exc:  # noqa: BLE001 — classified below
                 transport_error = str(exc)
 
