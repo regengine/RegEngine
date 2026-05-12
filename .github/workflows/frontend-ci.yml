@@ -203,11 +203,35 @@ jobs:
           cd frontend
           npm audit --audit-level=high
 
+  production-readiness:
+    name: Production Readiness Gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e  # v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: |
+          cd frontend
+          npm ci
+
+      - name: Run production readiness gate
+        run: |
+          cd frontend
+          npm run readiness:production
+
   # ── CI Summary ───────────────────────────────────────────
   ci-status:
     name: CI Status Gate
     if: always()
-    needs: [promise-audit, build, lint, test, smoke, security]
+    needs: [promise-audit, build, lint, test, smoke, security, production-readiness]
     runs-on: ubuntu-latest
     steps:
       - name: Check results
@@ -218,14 +242,16 @@ jobs:
           echo "Tests:    ${{ needs.test.result }}"
           echo "Smoke:    ${{ needs.smoke.result }}"
           echo "Security: ${{ needs.security.result }}"
+          echo "Readiness:${{ needs.production-readiness.result }}"
           echo "E2E:      advisory (runs separately)"
           if [[ "${{ needs.promise-audit.result }}" == "failure" \
              || "${{ needs.build.result }}" == "failure" \
              || "${{ needs.lint.result }}" == "failure" \
              || "${{ needs.test.result }}" == "failure" \
              || "${{ needs.smoke.result }}" == "failure" \
-             || "${{ needs.security.result }}" == "failure" ]]; then
-            echo "::error::Promise audit, build, lint, unit tests, deterministic smoke, or security audit failed"
+             || "${{ needs.security.result }}" == "failure" \
+             || "${{ needs.production-readiness.result }}" == "failure" ]]; then
+            echo "::error::Promise audit, build, lint, unit tests, deterministic smoke, security audit, or production readiness failed"
             exit 1
           fi
           echo "All blocking frontend checks passed"
