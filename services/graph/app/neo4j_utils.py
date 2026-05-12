@@ -1,12 +1,10 @@
 from __future__ import annotations
 
-import hashlib
-import json
 import threading
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 from uuid import UUID
 
-from neo4j import AsyncGraphDatabase, AsyncSession, GraphDatabase
+from neo4j import AsyncGraphDatabase, GraphDatabase
 
 from .config import settings
 
@@ -110,42 +108,6 @@ class Neo4jClient:
         if self._driver:
             await self._driver.close()
 
-    async def upsert_provision(
-        self,
-        *,
-        document_id: str,
-        doc_hash: str,
-        provision: Dict[str, Any],
-        embedding: Optional[List[float]] = None,
-    ) -> None:
-        """Upsert a provision node and link it to its document."""
-
-        def _encode(value: Any) -> Any:
-            if isinstance(value, (dict, list)):
-                return json.dumps(value)
-            return value
-
-        extraction_payload = _encode(provision.get("extraction"))
-        provenance_payload = _encode(provision.get("provenance"))
-
-        async with self.session() as session:
-            await session.run(
-                CYPHER_UPSERT_PROVISION,
-                document_id=document_id,
-                doc_hash=doc_hash,
-                provision_hash=provision.get("content_hash"),
-                text_clean=provision.get("text_clean"),
-                extraction=extraction_payload,
-                provenance=provenance_payload,
-                status=provision.get("status"),
-                reviewer_id=provision.get("reviewer_id"),
-                tenant_id=provision.get("tenant_id"),
-                embedding=embedding,
-                jurisdiction_codes=(provision.get("extraction", {}) or {}).get(
-                    "jurisdiction_codes", []
-                ),
-            )
-
     async def create_tenant_database(self, tenant_id: UUID) -> None:
         """Create a new tenant database (requires admin privileges).
 
@@ -178,123 +140,3 @@ class Neo4jClient:
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         """Async context manager cleanup."""
         await self.close()
-
-
-CYPHER_UPSERT = """
-MERGE (d:Document {id: $doc_id})
-  ON CREATE SET d.source_url = $source_url, d.created_at = timestamp()
-  ON MATCH SET  d.source_url = coalesce($source_url, d.source_url)
-WITH d
-UNWIND $jurisdictions AS jname
-  MERGE (j:Jurisdiction {name: jname})
-  MERGE (d)-[:MENTIONS]->(j)
-WITH d, collect(j) AS jurisdiction_nodes
-UNWIND $obligations AS ob
-  MERGE (c:Concept {name: coalesce(ob.concept, 'unspecified')})
-    MERGE (p:Provision {pid: ob.pid})
-    ON CREATE SET p.text = ob.text, p.tx_from = timestamp(), p.valid_from = timestamp(), p.hash = ob.hash, p.tenant_id = $tenant_id
-    ON MATCH  SET p.text = ob.text, p.hash = ob.hash, p.tenant_id = $tenant_id
-  MERGE (p)-[:IN_DOCUMENT]->(d)
-  MERGE (p)-[:ABOUT]->(c)
-  FOREACH (jn IN jurisdiction_nodes |
-    MERGE (p)-[:APPLIES_TO]->(jn)
-  )
-  FOREACH (_ IN CASE WHEN ob.threshold_is_set THEN [1] ELSE [] END |
-    MERGE (t:Threshold {pid: ob.pid})
-      ON CREATE SET t.value = ob.threshold_value, t.unit = ob.threshold_unit, t.unit_normalized = ob.threshold_unit_normalized
-      ON MATCH  SET t.value = ob.threshold_value, t.unit = ob.threshold_unit, t.unit_normalized = ob.threshold_unit_normalized
-    MERGE (p)-[:HAS_THRESHOLD]->(t)
-  )
-  WITH p, ob
-  MERGE (prov:Provenance {doc_id: $doc_id, start: ob.start, end: ob.end})
-    ON CREATE SET prov.page = ob.page
-    ON MATCH SET prov.page = coalesce(ob.page, prov.page)
-  MERGE (p)-[:PROVENANCE]->(prov)
-"""
-
-
-CYPHER_UPSERT_PROVISION = """
-MERGE (d:Document {hash: $doc_hash})
-  ON CREATE SET d.id = $document_id, d.created_at = timestamp()
-  ON MATCH SET d.id = coalesce(d.id, $document_id)
-MERGE (p:Provision {hash: $provision_hash})
-  ON CREATE SET
-    p.text_clean = $text_clean,
-    p.status = $status,
-    p.reviewer_id = $reviewer_id,
-        p.provenance = $provenance,
-    p.extraction = $extraction,
-    p.embedding = $embedding,
-    p.doc_hash = $doc_hash,
-    p.tenant_id = $tenant_id,
-    p.created_at = timestamp()
-  ON MATCH SET
-    p.text_clean = $text_clean,
-    p.status = $status,
-    p.reviewer_id = $reviewer_id,
-        p.provenance = $provenance,
-    p.extraction = $extraction,
-    p.embedding = $embedding,
-    p.doc_hash = $doc_hash,
-    p.tenant_id = $tenant_id
-MERGE (p)-[:IN_DOCUMENT]->(d)
-WITH p
-UNWIND coalesce($jurisdiction_codes, []) AS jcode
-    MERGE (j:Jurisdiction {code: jcode})
-    MERGE (p)-[:APPLIES_TO]->(j)
-"""
-
-
-def upsert_from_entities(
-    session, doc_id: str, source_url: str | None, entities: List[dict], tenant_id: str | None = None
-):
-    jurisdictions = sorted(
-        {
-            e.get("attrs", {}).get("name")
-            for e in entities
-            if e.get("type") == "JURISDICTION"
-            and e.get("attrs")
-            and e["attrs"].get("name")
-        }
-    ) or ["Unknown"]
-
-    obligations = []
-    obligation_entities = [e for e in entities if e.get("type") == "OBLIGATION"]
-    thresholds = [e for e in entities if e.get("type") == "THRESHOLD"]
-
-    for entity in obligation_entities:
-        pid = f"{doc_id}:{entity['start']}:{entity['end']}"
-        contained_thresholds = [
-            t
-            for t in thresholds
-            if entity["start"] <= t.get("start", 0) <= entity["end"]
-            and t.get("end", 0) <= entity["end"]
-        ]
-        threshold = contained_thresholds[0] if contained_thresholds else None
-        threshold_attrs = threshold.get("attrs", {}) if threshold else {}
-        obligations.append(
-            {
-                "pid": pid,
-                "text": entity.get("text", ""),
-                "hash": hashlib.sha256(entity.get("text", "").encode()).hexdigest()[
-                    :16
-                ],
-                "start": entity.get("start"),
-                "end": entity.get("end"),
-                "concept": entity.get("attrs", {}).get("concept"),
-                "page": entity.get("attrs", {}).get("page"),
-                "threshold_is_set": bool(threshold),
-                "threshold_value": threshold_attrs.get("value"),
-                "threshold_unit": threshold_attrs.get("unit"),
-                "threshold_unit_normalized": threshold_attrs.get("unit_normalized"),
-            }
-        )
-
-    session.run(
-        CYPHER_UPSERT,
-        doc_id=doc_id,
-        source_url=source_url,
-        jurisdictions=jurisdictions,
-        obligations=obligations,
-        tenant_id=tenant_id
-    )
