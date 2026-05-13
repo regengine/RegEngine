@@ -1,0 +1,63 @@
+name: Public OpenAPI Spec Drift
+
+# Closes #2308. Fails the build if `frontend/public/openapi.json` is stale
+# relative to the ingestion FastAPI app. Devs adding/modifying public routes
+# must run `python scripts/generate_openapi.py` and commit the result.
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'services/ingestion/**'
+      - 'services/shared/**'
+      - 'shared/**'
+      - 'scripts/generate_openapi.py'
+      - 'frontend/public/openapi.json'
+      - 'requirements.lock'
+      - '.github/workflows/openapi-public-spec.yml'
+  push:
+    branches: [main, develop]
+    paths:
+      - 'services/ingestion/**'
+      - 'services/shared/**'
+      - 'shared/**'
+      - 'scripts/generate_openapi.py'
+      - 'frontend/public/openapi.json'
+      - 'requirements.lock'
+      - '.github/workflows/openapi-public-spec.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: openapi-public-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  drift-check:
+    name: Drift check
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+
+      - name: Setup Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
+        with:
+          python-version: '3.11'
+
+      - name: Cache pip packages
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae  # v5
+        with:
+          path: ~/.cache/pip
+          key: pip-${{ hashFiles('requirements.lock') }}
+          restore-keys: |
+            pip-
+
+      - name: Install dependencies
+        run: |
+          pip install --require-hashes -r requirements.lock
+
+      - name: Verify openapi.json is in sync
+        run: |
+          python scripts/generate_openapi.py --check
