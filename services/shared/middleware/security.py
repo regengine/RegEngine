@@ -2,7 +2,11 @@ from fastapi import FastAPI
 from starlette.middleware.cors import CORSMiddleware
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
-from shared.cors import get_allowed_headers, get_allowed_origins
+from shared.cors import (
+    get_allowed_headers,
+    get_allowed_origins,
+    should_allow_credentials,
+)
 
 # Paths exempt from TrustedHost validation (infra probes, metrics).
 # Railway's internal health-checker may send a Host header that doesn't
@@ -35,8 +39,7 @@ def add_security(app: FastAPI):
     app.add_middleware(
         CORSMiddleware,
         allow_origins=origins,
-        allow_origin_regex=r"https://regengine[a-z0-9-]*\.(up\.railway\.app|vercel\.app)",
-        allow_credentials=True,
+        allow_credentials=should_allow_credentials(),
         allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
         allow_headers=get_allowed_headers(),
     )

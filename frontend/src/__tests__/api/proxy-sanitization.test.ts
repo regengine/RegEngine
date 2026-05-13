@@ -15,8 +15,24 @@
 import { afterEach, describe, it, expect, vi } from 'vitest';
 import { createHmac } from 'node:crypto';
 import { createServerClient } from '@supabase/ssr';
-import { requireAdminCapability, requireProxyAuth, sanitizePath, validateProxySession, validateUuid, safeSegment, hasSupabaseSessionCookies } from '@/lib/api-proxy';
-import { applyCookieCredentials, applyFirstPartyServiceCredentials, createStreamProxy, passthroughRequestHeaders } from '@/lib/proxy-factory';
+import {
+    requireAdminCapability,
+    requireFreshAdminCapability,
+    requireProxyAuth,
+    proxyError,
+    sanitizePath,
+    validateProxySession,
+    validateUuid,
+    safeSegment,
+    hasSupabaseSessionCookies,
+} from '@/lib/api-proxy';
+import {
+    applyCookieCredentials,
+    applyFirstPartyServiceCredentials,
+    createJsonProxy,
+    createStreamProxy,
+    passthroughRequestHeaders,
+} from '@/lib/proxy-factory';
 import { _resetForTesting as resetJwtKeysForTesting } from '@/lib/jwt-keys';
 import type { NextRequest } from 'next/server';
 
@@ -32,6 +48,8 @@ const ORIGINAL_SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const ORIGINAL_SUPABASE_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
 afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
     if (ORIGINAL_REGENGINE_API_KEY === undefined) {
         delete process.env.REGENGINE_API_KEY;
     } else {
@@ -84,6 +102,43 @@ function makeProxyRequest(
     } as unknown as NextRequest;
 }
 
+function makeRouteRequest(options: {
+    headers?: Record<string, string>;
+    cookies?: Record<string, string>;
+    url?: string;
+    jsonBody?: unknown;
+    rawBody?: string;
+    body?: ReadableStream<Uint8Array> | null;
+} = {}): NextRequest {
+    const headers = new Headers({
+        'x-regengine-api-key': 'real-api-key',
+        ...(options.headers ?? {}),
+    });
+    const cookies = options.cookies ?? {};
+    return {
+        url: options.url ?? 'https://frontend.example/api/proxy/reports?debug=true',
+        headers,
+        cookies: {
+            get: (name: string) => {
+                const value = cookies[name];
+                return value ? { name, value } : undefined;
+            },
+            getAll: () => Object.entries(cookies).map(([name, value]) => ({ name, value })),
+        },
+        json: async () => {
+            if (options.jsonBody === undefined) {
+                throw new SyntaxError('No JSON body');
+            }
+            return options.jsonBody;
+        },
+        arrayBuffer: async () => {
+            const body = options.rawBody ?? '';
+            return new TextEncoder().encode(body).buffer;
+        },
+        body: options.body ?? null,
+    } as unknown as NextRequest;
+}
+
 function base64url(value: string): string {
     return Buffer.from(value, 'utf8').toString('base64url');
 }
@@ -106,6 +161,208 @@ function primeJwtMigrationEnv({
     delete process.env.JWT_PREVIOUS_KEY;
     resetJwtKeysForTesting();
 }
+
+async function responseJson(response: Response): Promise<Record<string, unknown>> {
+    return await response.json() as Record<string, unknown>;
+}
+
+function expectNoInternalProxyDetails(body: Record<string, unknown>): void {
+    const serialized = JSON.stringify(body);
+    expect(body).not.toHaveProperty('details');
+    expect(serialized).not.toMatch(/internal\.service\.local|postgres\.internal|10\.0\.0\.5/i);
+    expect(serialized).not.toMatch(/ENOTFOUND|getaddrinfo|ECONNREFUSED|Traceback|\/Users\/sellers|target=/i);
+}
+
+describe('proxy 5xx error sanitization', () => {
+    it('strips details from shared 5xx proxy errors', async () => {
+        const response = proxyError(
+            'getaddrinfo ENOTFOUND internal.service.local',
+            502,
+            {
+                code: 'UPSTREAM_DNS_FAILURE',
+                details: ['target=http://internal.service.local error=ECONNREFUSED'],
+            },
+        );
+
+        expect(response.status).toBe(502);
+        const body = await responseJson(response);
+        expect(body).toEqual({ error: 'Bad gateway' });
+        expectNoInternalProxyDetails(body);
+    });
+
+    it('returns a generic JSON proxy body when fetch throws', async () => {
+        const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        vi.stubGlobal('fetch', vi.fn().mockRejectedValue(
+            new Error('getaddrinfo ENOTFOUND internal.service.local at /Users/sellers/app/proxy.ts:1'),
+        ));
+        const handlers = createJsonProxy({
+            serviceName: 'review',
+            buildTargetUrl: () => 'http://internal.service.local/review/reports',
+            buildHeaders: () => new Headers(),
+            methods: ['GET'],
+        });
+
+        const response = await handlers.GET!(
+            makeRouteRequest(),
+            { params: Promise.resolve({ path: ['reports'] }) },
+        );
+
+        expect(response.status).toBe(500);
+        const body = await responseJson(response);
+        expect(body).toEqual({ error: 'Internal server error' });
+        expectNoInternalProxyDetails(body);
+        expect(errorSpy).toHaveBeenCalledWith(
+            expect.stringContaining('[proxy/review] 500'),
+            expect.objectContaining({ error: expect.any(Error) }),
+        );
+    });
+
+    it('does not echo upstream JSON details for 5xx JSON proxy responses', async () => {
+        const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({
+            detail: 'Traceback for http://postgres.internal:5432/query',
+            attempt: 'target=http://internal.service.local',
+        }), {
+            status: 503,
+            headers: { 'content-type': 'application/json' },
+        })));
+        const handlers = createJsonProxy({
+            serviceName: 'compliance',
+            buildTargetUrl: () => 'http://internal.service.local/compliance/check',
+            buildHeaders: () => new Headers(),
+            methods: ['GET'],
+        });
+
+        const response = await handlers.GET!(
+            makeRouteRequest(),
+            { params: Promise.resolve({ path: ['check'] }) },
+        );
+
+        expect(response.status).toBe(503);
+        const body = await responseJson(response);
+        expect(body).toEqual({ error: 'Service temporarily unavailable' });
+        expectNoInternalProxyDetails(body);
+        expect(errorSpy).toHaveBeenCalledWith(
+            expect.stringContaining('[proxy/compliance] 503'),
+            expect.objectContaining({
+                targetUrl: 'http://internal.service.local/compliance/check',
+            }),
+        );
+    });
+
+    it('keeps stream proxy attempt details out of all-target failure bodies', async () => {
+        const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        vi.stubGlobal('fetch', vi.fn()
+            .mockRejectedValueOnce(new Error('ECONNREFUSED 10.0.0.5:8400'))
+            .mockResolvedValueOnce(new Response('private dns', {
+                status: 502,
+                headers: { 'x-vercel-error': 'DNS_HOSTNAME_RESOLVED_PRIVATE' },
+            })));
+        const handlers = createStreamProxy({
+            serviceName: 'ingestion',
+            resolveTargetBases: () => ['http://10.0.0.5:8400', 'http://internal.service.local'],
+            buildHeaders: () => new Headers(),
+            methods: ['GET'],
+        });
+
+        const response = await handlers.GET!(
+            makeRouteRequest(),
+            { params: Promise.resolve({ path: ['jobs'] }) },
+        );
+
+        expect(response.status).toBe(502);
+        const body = await responseJson(response);
+        expect(body).toEqual({ error: 'Bad gateway' });
+        expectNoInternalProxyDetails(body);
+        expect(errorSpy).toHaveBeenCalledWith(
+            expect.stringContaining('all targets failed'),
+            expect.arrayContaining([
+                expect.stringContaining('target=http://10.0.0.5:8400'),
+                expect.stringContaining('target=http://internal.service.local'),
+            ]),
+        );
+    });
+
+    it('does not pass through upstream 5xx stream bodies', async () => {
+        const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(
+            'Traceback: connect to http://postgres.internal failed at /Users/sellers/service.py',
+            { status: 500, headers: { 'content-type': 'text/plain' } },
+        )));
+        const handlers = createStreamProxy({
+            serviceName: 'admin',
+            resolveTargetBases: () => ['http://internal.service.local'],
+            buildHeaders: () => new Headers(),
+            methods: ['GET'],
+        });
+
+        const response = await handlers.GET!(
+            makeRouteRequest(),
+            { params: Promise.resolve({ path: ['users'] }) },
+        );
+
+        expect(response.status).toBe(500);
+        const body = await responseJson(response);
+        expect(body).toEqual({ error: 'Internal server error' });
+        expectNoInternalProxyDetails(body);
+        expect(errorSpy).toHaveBeenCalledWith(
+            expect.stringContaining('[proxy/admin] 500'),
+            expect.objectContaining({
+                targetUrl: 'http://internal.service.local/users?debug=true',
+                upstreamError: expect.stringContaining('postgres.internal'),
+            }),
+        );
+    });
+
+    it('rejects stream proxy request bodies over the configured byte cap', async () => {
+        vi.stubGlobal('fetch', vi.fn());
+        const body = new ReadableStream<Uint8Array>({
+            start(controller) {
+                controller.enqueue(new TextEncoder().encode('abc'));
+                controller.enqueue(new TextEncoder().encode('def'));
+                controller.close();
+            },
+        });
+        const handlers = createStreamProxy({
+            serviceName: 'ingestion',
+            resolveTargetBases: () => ['http://internal.service.local'],
+            buildHeaders: () => new Headers(),
+            methods: ['POST'],
+            maxBodyBytes: 4,
+            isUnauthenticatedPath: () => true,
+        });
+
+        const response = await handlers.POST!(
+            makeRouteRequest({ body, headers: {} }),
+            { params: Promise.resolve({ path: ['upload'] }) },
+        );
+
+        expect(response.status).toBe(413);
+        expect(await responseJson(response)).toEqual({ error: 'Request body too large' });
+        expect(fetch).not.toHaveBeenCalled();
+    });
+
+    it('rejects stream proxy bodies with oversized content-length before reading', async () => {
+        vi.stubGlobal('fetch', vi.fn());
+        const handlers = createStreamProxy({
+            serviceName: 'ingestion',
+            resolveTargetBases: () => ['http://internal.service.local'],
+            buildHeaders: () => new Headers(),
+            methods: ['POST'],
+            maxBodyBytes: 4,
+            isUnauthenticatedPath: () => true,
+        });
+
+        const response = await handlers.POST!(
+            makeRouteRequest({ headers: { 'content-length': '5' }, rawBody: 'abcde' }),
+            { params: Promise.resolve({ path: ['upload'] }) },
+        );
+
+        expect(response.status).toBe(413);
+        expect(await responseJson(response)).toEqual({ error: 'Request body too large' });
+        expect(fetch).not.toHaveBeenCalled();
+    });
+});
 
 describe('requireProxyAuth', () => {
     it('does not treat REGENGINE_API_KEY as a caller credential', () => {
@@ -171,30 +428,105 @@ describe('requireAdminCapability', () => {
         expect(response?.status).toBe(403);
     });
 
-    it('allows sysadmin and owner/admin sessions or explicit admin keys', () => {
-        expect(
-            requireAdminCapability(
-                makeProxyRequest(
-                    {},
-                    {
-                        re_access_token: 'real-token',
-                        re_user: JSON.stringify({
-                            id: 'user-1',
-                            email: 'owner@example.com',
-                            is_sysadmin: false,
-                            role_name: 'owner',
-                            status: 'active',
-                        }),
-                    },
-                ),
+    it('does not trust client-readable user cookies as admin authority', () => {
+        const response = requireAdminCapability(
+            makeProxyRequest(
+                {},
+                {
+                    re_access_token: 'real-token',
+                    re_user: JSON.stringify({
+                        id: 'user-1',
+                        email: 'owner@example.com',
+                        is_sysadmin: false,
+                        role_name: 'owner',
+                        status: 'active',
+                    }),
+                },
             ),
-        ).toBeNull();
+        );
 
+        expect(response?.status).toBe(403);
+    });
+
+    it('allows explicit admin keys', () => {
         expect(
             requireAdminCapability(
                 makeProxyRequest({}, { re_admin_key: 'real-admin-key' }),
             ),
         ).toBeNull();
+    });
+});
+
+describe('requireFreshAdminCapability', () => {
+    it('does not trust client-readable user cookies when the backend says member', async () => {
+        vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({
+            id: 'user-1',
+            email: 'owner-cookie@example.com',
+            status: 'active',
+            is_sysadmin: false,
+            role_name: 'member',
+            permissions: [],
+        }), {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+        })));
+
+        const response = await requireFreshAdminCapability(
+            makeProxyRequest(
+                {},
+                {
+                    re_access_token: 'real-token',
+                    re_user: JSON.stringify({
+                        id: 'user-1',
+                        email: 'owner-cookie@example.com',
+                        is_sysadmin: false,
+                        role_name: 'owner',
+                        status: 'active',
+                    }),
+                },
+            ),
+        );
+
+        expect(response?.status).toBe(403);
+        expect(fetch).toHaveBeenCalledWith(
+            'http://localhost:8400/auth/me',
+            expect.objectContaining({
+                headers: expect.objectContaining({
+                    authorization: 'Bearer real-token',
+                }),
+            }),
+        );
+    });
+
+    it('allows admin roles from the fresh backend session', async () => {
+        vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({
+            id: 'user-1',
+            email: 'admin@example.com',
+            status: 'active',
+            is_sysadmin: false,
+            role_name: 'Owner',
+            permissions: ['*'],
+        }), {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+        })));
+
+        const response = await requireFreshAdminCapability(
+            makeProxyRequest({}, { re_access_token: 'real-token' }),
+        );
+
+        expect(response).toBeNull();
+    });
+
+    it('allows explicit admin keys without a backend session check', async () => {
+        vi.stubGlobal('fetch', vi.fn());
+
+        const response = await requireFreshAdminCapability(
+            makeProxyRequest({}, { re_admin_key: 'real-admin-key' }),
+        );
+
+        expect(response).toBeNull();
+        expect(fetch).not.toHaveBeenCalled();
     });
 });
 
