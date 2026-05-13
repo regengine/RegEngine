@@ -206,7 +206,7 @@ export default function WalkthroughPage() {
         </Step>
 
         {/* Step 5 */}
-        <Step n={5} title="Produce an FDA-ready export">
+        <Step n={5} title="Produce an FDA-formatted export">
           <p className="leading-[1.7] mb-3">
             For the lot you just shipped, generate the sortable spreadsheet FDA inspectors expect:
           </p>
