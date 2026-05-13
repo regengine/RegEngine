@@ -33,6 +33,7 @@ import {
     ClipboardList,
     Eye,
     FlaskConical,
+    Bot,
 } from 'lucide-react';
 
 // ---------------------------------------------------------------------------
@@ -102,6 +103,7 @@ const COLLAPSIBLE_SECTIONS: CollapsibleSection[] = [
             { label: 'Requests', href: '/requests', icon: ClipboardList },
             { label: 'Identity', href: '/identity', icon: Fingerprint },
             { label: 'Review', href: '/review', icon: Eye },
+            { label: 'Agent reviews', href: '/dashboard/agent-reviews', icon: Bot },
             { label: 'Audit', href: '/dashboard/audit-log', icon: ScrollText },
             { label: 'Readiness', href: '/fsma', icon: ShieldCheck },
             { label: 'Incidents', href: '/dashboard/issues', icon: AlertTriangle },

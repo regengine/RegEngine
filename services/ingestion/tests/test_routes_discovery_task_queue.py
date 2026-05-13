@@ -11,6 +11,7 @@ Coverage:
 
 from __future__ import annotations
 
+import hashlib
 from unittest.mock import MagicMock
 
 from fastapi import FastAPI
@@ -74,6 +75,10 @@ class TestApproveDiscovery:
         assert kw["task_type"] == "discovery_scrape"
         assert kw["payload"] == {"body": "CPPA Warning", "url": "https://cppa.ca.gov/item/1"}
         assert kw["tenant_id"] == "tenant-disco"
+        expected_hash = hashlib.sha256(
+            "CPPA Warninghttps://cppa.ca.gov/item/1".encode("utf-8")
+        ).hexdigest()
+        assert kw["idempotency_key"] == f"discovery_scrape:tenant-disco:{expected_hash}"
 
     def test_item_removed_from_redis(self, monkeypatch):
         client, fake_redis, _, _ = _build_client(monkeypatch)
@@ -134,6 +139,13 @@ class TestBulkApproveDiscovery:
         payloads = [c.kwargs["payload"] for c in mock_enqueue.call_args_list]
         assert {"body": "Reg A", "url": "https://example.com/a"} in payloads
         assert {"body": "Reg B", "url": "https://example.com/b"} in payloads
+        keys = {c.kwargs["idempotency_key"] for c in mock_enqueue.call_args_list}
+        expected_a = hashlib.sha256("Reg Ahttps://example.com/a".encode("utf-8")).hexdigest()
+        expected_b = hashlib.sha256("Reg Bhttps://example.com/b".encode("utf-8")).hexdigest()
+        assert keys == {
+            f"discovery_scrape:tenant-disco:{expected_a}",
+            f"discovery_scrape:tenant-disco:{expected_b}",
+        }
 
     def test_single_commit_for_all_items(self, monkeypatch):
         client, fake_redis, _, fake_session = _build_client(monkeypatch)

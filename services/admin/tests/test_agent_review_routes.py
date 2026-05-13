@@ -1,0 +1,102 @@
+"""Tests for agent operator review endpoints."""
+
+from __future__ import annotations
+
+import uuid
+from unittest.mock import MagicMock
+
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+
+from shared.agent_operator_view import AgentReviewListResponse
+
+
+def _make_user(*, is_sysadmin: bool) -> MagicMock:
+    user = MagicMock()
+    user.id = uuid.uuid4()
+    user.is_sysadmin = is_sysadmin
+    return user
+
+
+def _build_app(user: MagicMock, db: MagicMock) -> FastAPI:
+    from services.admin.app.agent_review_routes import router
+    from services.admin.app.dependencies import get_current_user, get_session
+
+    app = FastAPI()
+    app.include_router(router, prefix="/v1")
+    app.dependency_overrides[get_current_user] = lambda: user
+    app.dependency_overrides[get_session] = lambda: db
+    return app
+
+
+def test_agent_review_items_use_authenticated_tenant(monkeypatch) -> None:
+    tenant_id = uuid.uuid4()
+    db = MagicMock()
+    helper = MagicMock(return_value=AgentReviewListResponse(items=[], total=0, limit=50, offset=0))
+    from services.admin.app import agent_review_routes as routes
+
+    monkeypatch.setattr(routes.TenantContext, "get_tenant_context", lambda session: tenant_id)
+    monkeypatch.setattr(routes, "fetch_agent_review_items", helper)
+
+    client = TestClient(_build_app(_make_user(is_sysadmin=False), db))
+    resp = client.get("/v1/agent-reviews/items")
+
+    assert resp.status_code == 200
+    assert resp.json() == {"items": [], "total": 0, "limit": 50, "offset": 0}
+    helper.assert_called_once()
+    assert helper.call_args.kwargs["tenant_id"] == str(tenant_id)
+    assert helper.call_args.kwargs["limit"] == 50
+    assert helper.call_args.kwargs["offset"] == 0
+
+
+def test_agent_review_items_reject_cross_tenant_filter_for_non_sysadmin(monkeypatch) -> None:
+    auth_tenant = uuid.uuid4()
+    other_tenant = uuid.uuid4()
+    from services.admin.app import agent_review_routes as routes
+
+    monkeypatch.setattr(routes.TenantContext, "get_tenant_context", lambda session: auth_tenant)
+
+    client = TestClient(
+        _build_app(_make_user(is_sysadmin=False), MagicMock()),
+        raise_server_exceptions=False,
+    )
+    resp = client.get(f"/v1/agent-reviews/items?tenant_id={other_tenant}")
+
+    assert resp.status_code == 403
+
+
+def test_agent_review_items_sysadmin_can_bind_requested_tenant(monkeypatch) -> None:
+    requested_tenant = uuid.uuid4()
+    db = MagicMock()
+    helper = MagicMock(return_value=AgentReviewListResponse(items=[], total=0, limit=25, offset=5))
+    bound_tenants = []
+    from services.admin.app import agent_review_routes as routes
+
+    monkeypatch.setattr(routes.TenantContext, "get_tenant_context", lambda session: None)
+    monkeypatch.setattr(routes, "set_tenant_guc", lambda session, tenant_id: bound_tenants.append((session, tenant_id)))
+    monkeypatch.setattr(routes, "fetch_agent_review_items", helper)
+
+    client = TestClient(_build_app(_make_user(is_sysadmin=True), db))
+    resp = client.get(
+        f"/v1/agent-reviews/items?tenant_id={requested_tenant}&limit=25&offset=5"
+    )
+
+    assert resp.status_code == 200
+    assert bound_tenants == [(db, str(requested_tenant))]
+    assert helper.call_args.kwargs["tenant_id"] == str(requested_tenant)
+    assert helper.call_args.kwargs["limit"] == 25
+    assert helper.call_args.kwargs["offset"] == 5
+
+
+def test_agent_review_items_require_tenant_context(monkeypatch) -> None:
+    from services.admin.app import agent_review_routes as routes
+
+    monkeypatch.setattr(routes.TenantContext, "get_tenant_context", lambda session: None)
+
+    client = TestClient(
+        _build_app(_make_user(is_sysadmin=False), MagicMock()),
+        raise_server_exceptions=False,
+    )
+    resp = client.get("/v1/agent-reviews/items")
+
+    assert resp.status_code == 403

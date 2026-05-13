@@ -229,6 +229,11 @@ def test_core_tables_exist(pg_engine: Engine) -> None:
         ("fsma", "hash_chain"),
         # V043 — Canonical traceability events
         ("fsma", "traceability_events"),
+        # v079 — Ingestion run receipt ledger
+        ("fsma", "ingestion_run_receipts"),
+        # v080 — Agent operator persistence
+        ("fsma", "agent_artifacts"),
+        ("fsma", "agent_artifact_reviews"),
         # V044 — Versioned rules engine
         ("fsma", "rule_definitions"),
         # V047 — Identity resolution
@@ -318,6 +323,98 @@ def test_tenant_id_not_null_on_audit_and_tasks(pg_engine: Engine) -> None:
         assert row.is_nullable == "NO", (
             f"fsma.{table}.tenant_id is nullable (#1287 regression)"
         )
+
+
+def test_task_queue_hardening_columns_and_idempotency_index(pg_engine: Engine) -> None:
+    """Guard the task queue hardening schema exposed by the shared API."""
+
+    expected_columns = {
+        "idempotency_key",
+        "scheduled_at",
+        "visibility_timeout_seconds",
+    }
+    with pg_engine.connect() as conn:
+        rows = conn.execute(
+            text(
+                "SELECT column_name FROM information_schema.columns "
+                "WHERE table_schema = 'fsma' AND table_name = 'task_queue'"
+            )
+        ).fetchall()
+        index_row = conn.execute(
+            text(
+                "SELECT indexdef FROM pg_indexes "
+                "WHERE schemaname = 'fsma' "
+                "AND tablename = 'task_queue' "
+                "AND indexname = 'idx_task_queue_idempotency'"
+            )
+        ).fetchone()
+
+    present = {row.column_name for row in rows}
+    missing = expected_columns - present
+    assert not missing, f"task_queue hardening columns missing: {sorted(missing)}"
+    assert index_row is not None, "idx_task_queue_idempotency missing"
+    assert "idempotency_key" in index_row.indexdef
+    assert "WHERE (idempotency_key IS NOT NULL)" in index_row.indexdef
+
+
+def test_agent_operator_persistence_tables_and_indexes(pg_engine: Engine) -> None:
+    """Guard the v080 persistence surface used by the operator view."""
+
+    expected_columns = {
+        "agent_artifacts": {
+            "artifact_id",
+            "tenant_id",
+            "artifact_version",
+            "artifact_type",
+            "confidence",
+            "requires_human_review",
+            "ingestion_run_id",
+            "source_hashes",
+            "artifact",
+            "payload",
+            "artifact_hash",
+        },
+        "agent_artifact_reviews": {
+            "review_id",
+            "tenant_id",
+            "artifact_id",
+            "ingestion_run_id",
+            "advisory_receipt_id",
+            "status",
+            "reviewed_by",
+            "reviewed_at",
+            "decision_metadata",
+        },
+    }
+    with pg_engine.connect() as conn:
+        rows = conn.execute(
+            text(
+                "SELECT table_name, column_name FROM information_schema.columns "
+                "WHERE table_schema = 'fsma' "
+                "AND table_name IN ('agent_artifacts', 'agent_artifact_reviews')"
+            )
+        ).fetchall()
+        index_rows = conn.execute(
+            text(
+                "SELECT tablename, indexname FROM pg_indexes "
+                "WHERE schemaname = 'fsma' "
+                "AND tablename IN ('agent_artifacts', 'agent_artifact_reviews')"
+            )
+        ).fetchall()
+
+    present_by_table: dict[str, set[str]] = {}
+    for row in rows:
+        present_by_table.setdefault(row.table_name, set()).add(row.column_name)
+
+    for table_name, columns in expected_columns.items():
+        missing = columns - present_by_table.get(table_name, set())
+        assert not missing, f"fsma.{table_name} missing columns: {sorted(missing)}"
+
+    index_names = {row.indexname for row in index_rows}
+    assert "idx_agent_artifacts_tenant_created" in index_names
+    assert "idx_agent_artifacts_tenant_run" in index_names
+    assert "idx_agent_reviews_tenant_status" in index_names
+    assert "idx_agent_reviews_tenant_artifact" in index_names
 
 
 def test_baseline_downgrade_is_blocked(database_url: str) -> None:

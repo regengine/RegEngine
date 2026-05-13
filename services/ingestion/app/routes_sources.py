@@ -19,6 +19,10 @@ logger = structlog.get_logger("ingestion")
 router = APIRouter(tags=["ingestion-sources"])
 
 
+def _source_task_key(task_type: str, tenant_id: str, job_id: str) -> str:
+    return f"{task_type}:{tenant_id}:{job_id}"
+
+
 @router.post("/v1/ingest/federal-register", status_code=202, response_model=FederalRegisterResponse)
 async def ingest_federal_register(
     payload: FederalRegisterIngestRequest,
@@ -44,6 +48,11 @@ async def ingest_federal_register(
                 "agencies": payload.agencies,
             },
             tenant_id=api_key.tenant_id,
+            idempotency_key=_source_task_key(
+                "federal_register_ingest",
+                api_key.tenant_id,
+                job_id,
+            ),
         )
         db.commit()
     finally:
@@ -76,6 +85,7 @@ async def ingest_ecfr(
                 "cfr_part": payload.cfr_part,
             },
             tenant_id=api_key.tenant_id,
+            idempotency_key=_source_task_key("ecfr_ingest", api_key.tenant_id, job_id),
         )
         db.commit()
     finally:
@@ -107,6 +117,7 @@ async def ingest_fda(
                 "max_documents": payload.max_documents,
             },
             tenant_id=api_key.tenant_id,
+            idempotency_key=_source_task_key("fda_ingest", api_key.tenant_id, job_id),
         )
         db.commit()
     finally:
