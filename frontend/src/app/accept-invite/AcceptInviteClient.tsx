@@ -2,34 +2,58 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { apiClient } from '@/lib/api-client';
-import { isSupabaseConfigured } from '@/lib/supabase/config';
 import { Loader2, CheckCircle, AlertCircle } from 'lucide-react';
+
+function readInviteTokenFromLocation(): string | null {
+    if (typeof window === 'undefined') return null;
+
+    const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+    const hashToken = hashParams.get('token');
+    if (hashToken) return hashToken;
+
+    return new URLSearchParams(window.location.search).get('token');
+}
+
+function scrubSensitiveInviteUrl(): void {
+    if (typeof window === 'undefined') return;
+
+    const url = new URL(window.location.href);
+    const hashParams = new URLSearchParams(url.hash.replace(/^#/, ''));
+    const hasSensitiveParams = url.searchParams.has('token') || url.searchParams.has('email') || hashParams.has('token');
+    if (!hasSensitiveParams) return;
+
+    url.searchParams.delete('token');
+    url.searchParams.delete('email');
+    url.hash = '';
+    window.history.replaceState(null, document.title, `${url.pathname}${url.search}`);
+}
 
 export default function AcceptInvitePage() {
     const MIN_PASSWORD_LENGTH = 12;
     const router = useRouter();
-    const searchParams = useSearchParams();
-    const token = searchParams.get('token');
-    const emailParam = searchParams.get('email');
 
     const [isLoading, setIsLoading] = useState(false);
     const [step, setStep] = useState<'verify' | 'form' | 'success'>('form');
     const [error, setError] = useState<string | null>(null);
+    const [token, setToken] = useState<string | null | undefined>(undefined);
 
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
     const [name, setName] = useState('');
 
     useEffect(() => {
-        if (!token) {
+        const inviteToken = readInviteTokenFromLocation();
+        setToken(inviteToken);
+        scrubSensitiveInviteUrl();
+        if (!inviteToken) {
             setError("Invalid invitation link.");
         }
-    }, [token]);
+    }, []);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -47,30 +71,22 @@ export default function AcceptInvitePage() {
 
         setIsLoading(true);
         try {
+            if (!token) {
+                setError("Invalid invitation link.");
+                return;
+            }
+
             await apiClient.acceptInvite({
-                token: token!,
+                token,
                 password,
                 name
             });
 
-            // Automatically sign the user in so they don't have to re-enter credentials
-            if (emailParam && isSupabaseConfigured()) {
-                const signInResponse = await fetch('/api/auth/supabase/sign-in', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    credentials: 'include',
-                    body: JSON.stringify({ email: emailParam, password }),
-                });
-                if (signInResponse.ok) {
-                    router.push('/dashboard');
-                    return;
-                }
-            }
-
-            // Fallback to success screen if auto-login is not possible
             setStep('success');
         } catch (err: unknown) {
-            console.error(err);
+            if (process.env.NODE_ENV !== 'production') {
+                console.error(err);
+            }
             const axiosError = err as { response?: { data?: { detail?: string } } };
             if (axiosError?.response?.data?.detail) {
                 setError(axiosError.response.data.detail);
@@ -111,7 +127,12 @@ export default function AcceptInvitePage() {
                     <CardDescription>Create your account to join the workspace.</CardDescription>
                 </CardHeader>
                 <CardContent>
-                    {!token ? (
+                    {token === undefined ? (
+                        <div className="flex items-center gap-2 text-muted-foreground p-4">
+                            <Loader2 className="h-5 w-5 animate-spin" />
+                            <span>Checking invitation...</span>
+                        </div>
+                    ) : !token ? (
                         <div className="flex items-center gap-2 text-destructive bg-destructive/10 p-4 rounded-md">
                             <AlertCircle className="h-5 w-5" />
                             <span>Missing invitation token. Please check your link.</span>
