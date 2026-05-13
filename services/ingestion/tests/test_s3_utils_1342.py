@@ -4,7 +4,7 @@ We never touch real S3; every test monkeypatches ``s3_utils._client`` to
 return a ``_FakeS3`` that records calls, and patches ``get_settings`` to
 provide credentials. The module has several non-trivial branches:
 
-- _client: raises NotImplementedError when credentials are missing.
+- _client: raises HTTPException(503) when credentials are missing (#2348).
 - _ensure_bucket_security: logs-and-continues on ClientError/BotoCoreError.
 - put_json / put_bytes: NoSuchBucket triggers auto-create + retry; any
   other error becomes HTTPException(500).
@@ -161,25 +161,47 @@ def _silence_logger(monkeypatch):
 
 class TestClientFactory:
 
-    def test_raises_when_credentials_missing(self, monkeypatch):
+    def test_raises_503_when_credentials_missing(self, monkeypatch):
+        # #2348: legible 503 instead of NotImplementedError → 500.
+        from fastapi import HTTPException
         monkeypatch.setattr(s3_utils, "get_settings", lambda: SimpleNamespace(
             object_storage_access_key_id=None,
             object_storage_secret_access_key=None,
             object_storage_region="us-east-1",
             object_storage_endpoint_url=None,
         ))
-        with pytest.raises(NotImplementedError, match="S3 storage is not configured"):
+        with pytest.raises(HTTPException) as excinfo:
             s3_utils._client()
+        assert excinfo.value.status_code == 503
+        assert "Document storage is not configured" in excinfo.value.detail
 
-    def test_raises_when_only_access_key_present(self, monkeypatch):
+    def test_raises_503_when_only_access_key_present(self, monkeypatch):
+        from fastapi import HTTPException
         monkeypatch.setattr(s3_utils, "get_settings", lambda: SimpleNamespace(
             object_storage_access_key_id="akid",
             object_storage_secret_access_key=None,
             object_storage_region="us-east-1",
             object_storage_endpoint_url=None,
         ))
-        with pytest.raises(NotImplementedError):
+        with pytest.raises(HTTPException) as excinfo:
             s3_utils._client()
+        assert excinfo.value.status_code == 503
+
+    def test_is_object_storage_configured(self, monkeypatch):
+        monkeypatch.setattr(s3_utils, "get_settings", lambda: SimpleNamespace(
+            object_storage_access_key_id=None,
+            object_storage_secret_access_key=None,
+            object_storage_region="us-east-1",
+            object_storage_endpoint_url=None,
+        ))
+        assert s3_utils.is_object_storage_configured() is False
+        monkeypatch.setattr(s3_utils, "get_settings", lambda: SimpleNamespace(
+            object_storage_access_key_id="akid",
+            object_storage_secret_access_key="skid",
+            object_storage_region="us-east-1",
+            object_storage_endpoint_url=None,
+        ))
+        assert s3_utils.is_object_storage_configured() is True
 
     def test_returns_boto_client_when_configured(self, monkeypatch):
         called = {}

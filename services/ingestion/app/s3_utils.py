@@ -27,12 +27,23 @@ RAW_INGEST_BUCKET = "regengine-ingest-raw"
 _SSE = {"ServerSideEncryption": "AES256"}
 
 
+def is_object_storage_configured() -> bool:
+    """Return True when object-storage credentials are present in settings."""
+    settings = get_settings()
+    return bool(
+        settings.object_storage_access_key_id and settings.object_storage_secret_access_key
+    )
+
+
 def _client() -> BaseClient:
     settings = get_settings()
     if not settings.object_storage_access_key_id or not settings.object_storage_secret_access_key:
-        raise NotImplementedError(
-            "S3 storage is not configured — set OBJECT_STORAGE_ACCESS_KEY_ID and "
-            "OBJECT_STORAGE_SECRET_ACCESS_KEY environment variables before using S3 operations."
+        # Surface a legible 503 to callers instead of an uncaught NotImplementedError
+        # that FastAPI converts to a 500. See #2348.
+        logger.warning("object_storage_not_configured")
+        raise HTTPException(
+            status_code=503,
+            detail="Document storage is not configured for this environment.",
         )
     session = boto3.session.Session()
     return session.client(

@@ -43,6 +43,17 @@ from app.routes import router as ingestion_router
 async def lifespan(app: FastAPI):
     # Startup
     logger.info("ingestion_service_startup")
+    # #2348: warn at boot if document-storage credentials are absent —
+    # /v1/ingest/{url,file,direct,regulation} will return 503 until configured.
+    try:
+        from app.s3_utils import is_object_storage_configured
+        if not is_object_storage_configured():
+            logger.warning(
+                "object_storage_disabled — /v1/ingest/* endpoints will return 503; "
+                "set OBJECT_STORAGE_ACCESS_KEY_ID and OBJECT_STORAGE_SECRET_ACCESS_KEY to enable"
+            )
+    except Exception as exc:
+        logger.warning("object_storage_probe_failed: %s", exc)
     # Register all integration connectors (best-effort: Kafka/external services
     # may be unavailable in CI or lightweight deployments)
     try:
