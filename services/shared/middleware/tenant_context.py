@@ -30,7 +30,7 @@ from typing import Optional, Callable
 
 from fastapi import Request, HTTPException
 from fastapi.responses import JSONResponse
-from prometheus_client import Counter
+from prometheus_client import Counter, REGISTRY
 from starlette.middleware.base import BaseHTTPMiddleware
 
 logger = logging.getLogger(__name__)
@@ -49,14 +49,27 @@ _TENANT_EXEMPT_PATHS: frozenset[str] = frozenset({
     "/api/v1/billing/webhook/stripe",
 })
 
+def _safe_counter(name: str, description: str, labelnames: list[str]) -> Counter:
+    """Return an existing Prometheus Counter when this module is re-imported."""
+    try:
+        return Counter(name, description, labelnames)
+    except ValueError:
+        collector = REGISTRY._names_to_collectors.get(name)  # type: ignore[attr-defined]
+        if collector is None and name.endswith("_total"):
+            collector = REGISTRY._names_to_collectors.get(name[:-6])  # type: ignore[attr-defined]
+        if collector is not None:
+            return collector  # type: ignore[return-value]
+        return Counter(name, description, labelnames, registry=None)
+
+
 # Track spoofing attempts for alerting
-tenant_header_rejected_total = Counter(
+tenant_header_rejected_total = _safe_counter(
     "tenant_header_rejected_total",
     "Unauthenticated X-RegEngine-Tenant-ID header rejections",
     ["client_host"],
 )
 
-tenant_extraction_failed_total = Counter(
+tenant_extraction_failed_total = _safe_counter(
     "tenant_extraction_failed_total",
     "Tenant context extraction failures on non-exempt paths",
     ["error_type"],

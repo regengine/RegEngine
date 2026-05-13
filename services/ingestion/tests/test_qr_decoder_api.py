@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import base64
+import io
 import sys
 from pathlib import Path
 
@@ -18,9 +18,15 @@ from app.authz import IngestionPrincipal, get_ingestion_principal
 import app.qr_decoder as qr_decoder
 from app.qr_decoder import router as qr_router
 
-SAMPLE_PNG_BYTES = base64.b64decode(
-    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO7+R1kAAAAASUVORK5CYII="
-)
+def _tiny_png_bytes() -> bytes:
+    from PIL import Image
+
+    buf = io.BytesIO()
+    Image.new("L", (4, 4), color=255).save(buf, format="PNG")
+    return buf.getvalue()
+
+
+SAMPLE_PNG_BYTES = _tiny_png_bytes()
 
 
 @pytest.fixture()
