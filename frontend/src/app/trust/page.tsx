@@ -353,7 +353,7 @@ export default function TrustCenterPage() {
                             <tbody className="text-sm">
                                 <tr className="border-b border-[var(--re-surface-border)]">
                                     <td className="p-3 font-medium text-re-text-primary">Supabase</td>
-                                    <td className="p-3 text-re-text-muted">Database, authentication, and Auth-side transactional email (signup confirmation, password reset, magic link) via Supabase&apos;s default mailer</td>
+                                    <td className="p-3 text-re-text-muted">Database, authentication, and row-level security. Auth-side transactional email (signup confirmation, password reset, magic link) is routed through Resend as the SMTP transport.</td>
                                     <td className="p-3 text-re-text-muted">Tenant data, user accounts, recipient email for auth flows</td>
                                     <td className="p-3 text-re-text-muted">US (AWS us-east-2)</td>
                                 </tr>
@@ -377,8 +377,8 @@ export default function TrustCenterPage() {
                                 </tr>
                                 <tr className="border-b border-[var(--re-surface-border)]">
                                     <td className="p-3 font-medium text-re-text-primary">Resend</td>
-                                    <td className="p-3 text-re-text-muted">Transactional email (invites, verifications)</td>
-                                    <td className="p-3 text-re-text-muted">Recipient email and invite metadata</td>
+                                    <td className="p-3 text-re-text-muted">Transactional email (invites, verifications, and Supabase Auth signup/reset/magic-link via SMTP transport)</td>
+                                    <td className="p-3 text-re-text-muted">Recipient email, invite metadata, and auth-flow recipient email</td>
                                     <td className="p-3 text-re-text-muted">US</td>
                                 </tr>
                                 <tr className="border-b border-[var(--re-surface-border)]">
