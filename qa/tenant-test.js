@@ -122,9 +122,18 @@ check('auth-context.tsx exists', fs.existsSync(authContext), 'Missing auth conte
 
 if (fs.existsSync(authContext)) {
   const authContent = fs.readFileSync(authContext, 'utf8');
-  check('Auth context uses Supabase onAuthStateChange',
-    authContent.includes('onAuthStateChange'),
-    'Missing Supabase auth state listener'
+  // Auth context must source session state from somewhere live —
+  // either Supabase's onAuthStateChange listener (legacy) or the
+  // HTTP-only-cookie session source via /api/session + getSessionInfo
+  // (post-#2353 hardening). Either is acceptable; both being absent
+  // is the regression we want to catch.
+  const hasSupabaseListener = authContent.includes('onAuthStateChange');
+  const hasCookieSession =
+    authContent.includes('/api/session') &&
+    authContent.includes('getSessionInfo');
+  check('Auth context wires a live session source',
+    hasSupabaseListener || hasCookieSession,
+    'Missing both Supabase auth state listener AND /api/session getSessionInfo flow'
   );
   check('Auth context does NOT clear on INITIAL_SESSION null',
     !authContent.includes("case 'INITIAL_SESSION'") ||
