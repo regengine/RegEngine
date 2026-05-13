@@ -45,7 +45,7 @@ describe('AcceptInviteClient', () => {
         await waitFor(() => {
             expect(acceptInviteMock).toHaveBeenCalledWith({
                 token: 'fragment-secret',
-                password: 'StrongInvite123!',
+                password: 'StrongInvite123!', // pragma: allowlist secret
                 name: 'Invite User',
             });
         });

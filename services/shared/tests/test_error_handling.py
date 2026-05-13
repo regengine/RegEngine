@@ -20,7 +20,7 @@ def _client() -> TestClient:
             status_code=503,
             detail={
                 "message": "Database http://postgres.internal unavailable",
-                "dsn": "postgresql://user:pass@postgres.internal/app",
+                "dsn": "postgresql://user:pass@postgres.internal/app",  # pragma: allowlist secret
             },
         )
 
@@ -34,7 +34,7 @@ def _client() -> TestClient:
     @app.get("/value-error")
     async def value_error():
         raise ValueError(
-            "psycopg connect failed for postgresql://user:pass@postgres.internal/app at /Users/sellers/app.py",
+            "psycopg connect failed for postgresql://user:pass@postgres.internal/app at /Users/sellers/app.py",  # pragma: allowlist secret
         )
 
     @app.get("/safe-value-error")
