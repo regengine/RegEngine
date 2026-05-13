@@ -7,7 +7,9 @@ Limits: 100 requests/minute per source IP.
 
 from __future__ import annotations
 
+import ipaddress
 import logging
+import os
 from datetime import datetime, timezone
 from typing import Dict
 
@@ -109,15 +111,85 @@ def _check_redis(client_ip: str, now: float) -> int:
 # ---------------------------------------------------------------------------
 
 
+def _trusted_proxy_cidrs() -> list:
+    """Parse trusted-proxy CIDRs from env.
+
+    Mirrors ``services/admin/app/audit_middleware.py``: ``X-Forwarded-For``
+    is honored ONLY when the immediate connection peer falls inside one
+    of these CIDRs. Without that gate, an attacker can mint a fresh
+    per-IP rate-limit bucket on every request by rotating the header,
+    fully bypassing the limiter.
+
+    Two env vars accepted (in order): ``STRIPE_TRUSTED_PROXY_CIDRS``
+    (specific) wins over ``TRUSTED_PROXY_CIDRS`` (shared). Unset = XFF
+    ignored; the raw socket address is used.
+    """
+    raw = (
+        os.getenv("STRIPE_TRUSTED_PROXY_CIDRS", "").strip()
+        or os.getenv("TRUSTED_PROXY_CIDRS", "").strip()
+    )
+    if not raw:
+        return []
+    cidrs = []
+    for item in raw.split(","):
+        item = item.strip()
+        if not item:
+            continue
+        try:
+            cidrs.append(ipaddress.ip_network(item, strict=False))
+        except ValueError:
+            logger.warning("stripe_trusted_proxy_cidr_invalid value=%s", item)
+    return cidrs
+
+
+def _is_trusted_proxy(client_host: str | None) -> bool:
+    if not client_host:
+        return False
+    try:
+        client_ip = ipaddress.ip_address(client_host)
+    except ValueError:
+        return False
+    for cidr in _trusted_proxy_cidrs():
+        if client_ip in cidr:
+            return True
+    return False
+
+
+def _looks_like_ip(value: str) -> bool:
+    try:
+        ipaddress.ip_address(value)
+    except ValueError:
+        return False
+    return True
+
+
+def _client_ip(request) -> str:
+    """Resolve the real client IP.
+
+    Honors ``X-Forwarded-For`` only when the peer is a trusted proxy
+    (#XFF-bypass-2026-05-12). Otherwise falls back to
+    ``request.client.host``.
+    """
+    client_host = request.client.host if request.client else None
+
+    if _is_trusted_proxy(client_host):
+        forwarded = request.headers.get("X-Forwarded-For") or request.headers.get(
+            "x-forwarded-for"
+        )
+        if forwarded:
+            first_hop = forwarded.split(",")[0].strip()
+            if first_hop and _looks_like_ip(first_hop):
+                return first_hop
+
+    return client_host or "unknown"
+
+
 def _check_stripe_webhook_rate_limit(request) -> None:
     """Check per-IP rate limit for Stripe webhook requests.
 
     Raises HTTPException(429) with a Retry-After header if the limit is exceeded.
     """
-    client_ip = (
-        request.headers.get("X-Forwarded-For", "").split(",")[0].strip()
-        or (request.client.host if request.client else "unknown")
-    )
+    client_ip = _client_ip(request)
     now = datetime.now(timezone.utc).timestamp()
     retry_after = _check_redis(client_ip, now)
 
