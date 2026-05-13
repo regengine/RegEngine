@@ -73,6 +73,41 @@ jobs:
           fi
         continue-on-error: false
 
+  # ── Trust-and-Safety Copy Gate ──────────────────────────
+  # Bans outcome-promise phrases (FDA-ready, FDA-compliant, 100% FDA compliance,
+  # FDA-certified) repo-wide on every PR — not just when frontend paths change —
+  # so drift cannot return via marketing copy, docs, or component changes that
+  # bypass the frontend-ci path filter. See issue #2313 and PR #2305 for
+  # canonical replacements (e.g. "§1.1455(c)-formatted",
+  # "supports your FSMA 204 program", "production compliance records").
+  trust-safety-copy:
+    name: Trust & Safety Copy Gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+
+      - name: Ban FDA outcome-promise phrases
+        run: |
+          # Site-wide grep gate (frontend/src). Allowlists the negative-assertion
+          # test that pins these phrases as absent from UI copy.
+          # See PR #2305 for canonical replacements.
+          if grep -rEn -i "FDA-ready|FDA-compliant|100%[[:space:]]+FDA[[:space:]]+compliance|FDA[ -]?certified" \
+              frontend/src \
+              --include="*.ts" --include="*.tsx" --include="*.md" --include="*.mdx" \
+              | grep -v "__tests__/components/sandbox-diagnosis.test.ts"; then
+            echo ""
+            echo "::error::Banned trust-and-safety outcome-promise phrase detected."
+            echo "Operators are responsible for compliance; RegEngine output does not"
+            echo "satisfy regulator inspection on its own. See PR #2305 for canonical"
+            echo "replacements (e.g. '§1.1455(c)-formatted', 'supports your FSMA 204"
+            echo "program', 'production compliance records')."
+            exit 1
+          fi
+          echo "Trust-and-safety copy gate passed."
+
+      - name: Run check_trust_safety_copy.py (frontend/src deep scan)
+        run: python3 scripts/check_trust_safety_copy.py
+
   # ── Label PR ────────────────────────────────────────────
   label:
     name: Auto-Label PR
