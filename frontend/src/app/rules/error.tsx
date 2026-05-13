@@ -12,7 +12,9 @@ export default function RulesError({
     reset: () => void;
 }) {
     useEffect(() => {
-        console.error('Rules error:', error);
+        if (process.env.NODE_ENV !== 'production') {
+            console.error('Rules error:', error);
+        }
     }, [error]);
 
     const isBackendError = error.message?.includes('fetch') ||

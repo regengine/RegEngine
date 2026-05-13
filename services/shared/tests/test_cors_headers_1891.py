@@ -6,6 +6,22 @@ import pytest
 
 from shared.cors import get_allowed_headers
 
+_CLOUD_ENV_VARS = (
+    "DATABASE_URL",
+    "ENV",
+    "RAILWAY_ENVIRONMENT",
+    "RAILWAY_PROJECT_ID",
+    "RAILWAY_SERVICE_NAME",
+    "VERCEL_ENV",
+    "VERCEL_URL",
+)
+
+
+@pytest.fixture(autouse=True)
+def clean_cloud_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+    for name in _CLOUD_ENV_VARS:
+        monkeypatch.delenv(name, raising=False)
+
 
 def test_default_cors_headers_are_explicit(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("CORS_ALLOWED_HEADERS", raising=False)

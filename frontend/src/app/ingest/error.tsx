@@ -12,7 +12,9 @@ export default function IngestError({
     reset: () => void;
 }) {
     useEffect(() => {
-        console.error('Ingest error:', error);
+        if (process.env.NODE_ENV !== 'production') {
+            console.error('Ingest error:', error);
+        }
     }, [error]);
 
     const isBackendError = error.message?.includes('fetch') ||

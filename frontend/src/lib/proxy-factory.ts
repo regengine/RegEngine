@@ -118,6 +118,7 @@ export function createJsonProxy(config: JsonProxyConfig): MethodHandlers {
             const queryString = new URL(request.url).search;
             const targetUrl = config.buildTargetUrl(path, queryString, request);
             if (!targetUrl) {
+                console.error(`[proxy/${config.serviceName}] 503 — backend not configured`);
                 return proxyError(`${config.serviceName} backend not configured`, 503);
             }
 
@@ -148,6 +149,13 @@ export function createJsonProxy(config: JsonProxyConfig): MethodHandlers {
 
             if (!response.ok) {
                 const detail = extractDetail(data);
+                if (response.status >= 500) {
+                    console.error(`[proxy/${config.serviceName}] ${response.status} — upstream request failed`, {
+                        targetUrl,
+                        detail: data,
+                    });
+                    return proxyError(`${config.serviceName} request failed`, response.status);
+                }
                 return NextResponse.json(
                     { error: detail ?? `${config.serviceName} request failed` },
                     { status: response.status },
@@ -159,9 +167,8 @@ export function createJsonProxy(config: JsonProxyConfig): MethodHandlers {
             }
             return NextResponse.json(data);
         } catch (error: unknown) {
-            const message = error instanceof Error ? error.message : `${config.serviceName} request failed`;
-            console.error(`[proxy/${config.serviceName}] 500 —`, message);
-            return proxyError(message, 500);
+            console.error(`[proxy/${config.serviceName}] 500 — proxy request failed`, { error });
+            return proxyError(`${config.serviceName} request failed`, 500);
         }
     };
 
@@ -197,6 +204,8 @@ export interface StreamProxyConfig {
     shouldRetry?: (response: Response, path: string) => boolean;
     /** Optional: paths that skip the auth + session checks (used for admin/auth/login etc.). */
     isUnauthenticatedPath?: (path: string) => boolean;
+    /** Maximum request body bytes buffered for retryable stream proxy forwarding. */
+    maxBodyBytes?: number;
 }
 
 const DEFAULT_STREAM_RESPONSE_HEADERS = [
@@ -208,16 +217,70 @@ const DEFAULT_STREAM_RESPONSE_HEADERS = [
 
 const VERCEL_PRIVATE_DNS_ERROR = 'DNS_HOSTNAME_RESOLVED_PRIVATE';
 const SYSTEM_TENANT_ID = '00000000-0000-0000-0000-000000000001';
+const DEFAULT_STREAM_PROXY_MAX_BODY_BYTES = 100 * 1024 * 1024;
+
+class ProxyRequestBodyTooLargeError extends Error {
+    constructor(readonly maxBytes: number) {
+        super(`Request body too large (max ${maxBytes} bytes)`);
+        this.name = 'ProxyRequestBodyTooLargeError';
+    }
+}
 
 function defaultShouldRetry(response: Response): boolean {
     const header = response.headers.get('x-vercel-error') || '';
     return header.includes(VERCEL_PRIVATE_DNS_ERROR);
 }
 
+async function readUpstreamErrorForLog(response: Response): Promise<string | undefined> {
+    try {
+        const text = await response.clone().text();
+        return text ? text.slice(0, 1000) : undefined;
+    } catch {
+        return undefined;
+    }
+}
+
+async function readRequestBodyWithLimit(
+    request: NextRequest,
+    maxBytes: number,
+): Promise<ArrayBuffer | undefined> {
+    const contentLength = Number(request.headers.get('content-length') || 0);
+    if (Number.isFinite(contentLength) && contentLength > maxBytes) {
+        throw new ProxyRequestBodyTooLargeError(maxBytes);
+    }
+
+    if (!request.body) return undefined;
+
+    const reader = request.body.getReader();
+    const chunks: Uint8Array[] = [];
+    let total = 0;
+
+    while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        total += value.byteLength;
+        if (total > maxBytes) {
+            throw new ProxyRequestBodyTooLargeError(maxBytes);
+        }
+        chunks.push(value);
+    }
+
+    if (total === 0) return undefined;
+
+    const merged = new Uint8Array(total);
+    let offset = 0;
+    for (const chunk of chunks) {
+        merged.set(chunk, offset);
+        offset += chunk.byteLength;
+    }
+    return merged.buffer;
+}
+
 export function createStreamProxy(config: StreamProxyConfig): MethodHandlers {
     const methods = config.methods ?? [...DEFAULT_METHODS, 'OPTIONS' as HttpMethod];
     const shouldRetry = config.shouldRetry ?? ((response: Response) => defaultShouldRetry(response));
     const responseHeaders = config.responseHeaderPassthrough ?? DEFAULT_STREAM_RESPONSE_HEADERS;
+    const maxBodyBytes = config.maxBodyBytes ?? DEFAULT_STREAM_PROXY_MAX_BODY_BYTES;
 
     const handler = async (
         request: NextRequest,
@@ -246,6 +309,7 @@ export function createStreamProxy(config: StreamProxyConfig): MethodHandlers {
             const queryString = new URL(request.url).search;
             const bases = config.resolveTargetBases();
             if (bases.length === 0) {
+                console.error(`[proxy/${config.serviceName}] 503 — no upstream targets configured`);
                 return proxyError(`${config.serviceName} backend not configured`, 503);
             }
 
@@ -259,9 +323,15 @@ export function createStreamProxy(config: StreamProxyConfig): MethodHandlers {
             const hasRequestBody = !METHODS_WITHOUT_BODY.has(method);
             let requestBody: ArrayBuffer | undefined;
             if (hasRequestBody) {
-                const buffer = await request.arrayBuffer();
-                if (buffer.byteLength > 0) {
-                    requestBody = buffer;
+                try {
+                    requestBody = await readRequestBodyWithLimit(request, maxBodyBytes);
+                } catch (error) {
+                    if (error instanceof ProxyRequestBodyTooLargeError) {
+                        return proxyError('Request body too large', 413);
+                    }
+                    throw error;
+                }
+                if (requestBody) {
                     fetchOptions.body = requestBody;
                 }
             }
@@ -276,6 +346,14 @@ export function createStreamProxy(config: StreamProxyConfig): MethodHandlers {
                             `target=${base} status=${response.status} reason=${response.headers.get('x-vercel-error') || 'vercel_error'}`,
                         );
                         continue;
+                    }
+
+                    if (response.status >= 500) {
+                        console.error(`[proxy/${config.serviceName}] ${response.status} — upstream request failed`, {
+                            targetUrl,
+                            upstreamError: await readUpstreamErrorForLog(response),
+                        });
+                        return proxyError(`${config.serviceName} request failed`, response.status);
                     }
 
                     const outgoing = new Headers();
@@ -302,11 +380,10 @@ export function createStreamProxy(config: StreamProxyConfig): MethodHandlers {
             }
 
             console.error(`[proxy/${config.serviceName}] 502 — all targets failed:`, attemptErrors);
-            return proxyError(`Unable to reach ${config.serviceName} service`, 502, { details: attemptErrors });
+            return proxyError(`Unable to reach ${config.serviceName} service`, 502);
         } catch (error: unknown) {
-            const message = error instanceof Error ? error.message : `${config.serviceName} request failed`;
-            console.error(`[proxy/${config.serviceName}] 500 —`, message);
-            return proxyError(message, 500);
+            console.error(`[proxy/${config.serviceName}] 500 — proxy request failed`, { error });
+            return proxyError(`${config.serviceName} request failed`, 500);
         }
     };
 

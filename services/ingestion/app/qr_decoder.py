@@ -13,6 +13,11 @@ from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from pydantic import BaseModel, Field
 
 from .authz import IngestionPrincipal, require_permission
+from .shared.upload_limits import (
+    MAX_IMAGE_FILE_SIZE_BYTES,
+    read_upload_with_limit,
+    validated_image_content_type,
+)
 from shared.funnel_events import emit_funnel_event
 
 logger = logging.getLogger("qr-decoder")
@@ -257,11 +262,14 @@ async def decode_qr_image(
     if not file.content_type or not file.content_type.startswith("image/"):
         raise HTTPException(status_code=400, detail="Upload must be an image content type")
 
-    image_bytes = await file.read()
+    image_bytes = await read_upload_with_limit(
+        file,
+        max_bytes=MAX_IMAGE_FILE_SIZE_BYTES,
+        label="Image payload",
+    )
     if not image_bytes:
         raise HTTPException(status_code=400, detail="Uploaded image is empty")
-    if len(image_bytes) > 10 * 1024 * 1024:
-        raise HTTPException(status_code=413, detail="Image payload too large (max 10MB)")
+    validated_image_content_type(image_bytes, file.content_type)
 
     raw_value = _decode_image_bytes(image_bytes)
     fields = _parse_gs1_payload(raw_value)
