@@ -63,10 +63,11 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Optional, Sequence, Tuple
 from uuid import UUID
 
-import httpx
 import structlog
 from sqlalchemy import text
 from sqlalchemy.orm import Session
+
+from shared.safe_http import safe_httpx_post_sync
 
 logger = structlog.get_logger("webhook_outbox")
 
@@ -271,17 +272,28 @@ HttpPoster = Callable[[str, bytes, dict], Tuple[int, str]]
 
 
 def default_http_poster(url: str, body: bytes, headers: dict) -> Tuple[int, str]:
-    """Default HTTP poster using ``httpx``.
+    """Default HTTP poster using the SSRF-safe wrapper.
 
-    Raises on connection/timeout errors (the drainer treats raised
-    exceptions as transient failures → reschedule). Returns the status
-    code + truncated body on a successful HTTP round-trip regardless of
+    Routes through :func:`shared.safe_http.safe_httpx_post_sync` so the
+    tenant-controlled webhook URL is re-validated against the blocklist
+    and pinned to a validated IP at dispatch time. SSRF rejections are
+    raised as :class:`SSRFError` (subclass of ``ValueError``); the
+    drainer treats raised exceptions as transient failures (reschedule),
+    which is fine — a misconfigured URL will keep failing and eventually
+    flip to ``failed`` via ``max_attempts``.
+
+    Raises on connection/timeout errors. Returns the status code +
+    truncated body on a successful HTTP round-trip regardless of
     status code.
     """
-    with httpx.Client(timeout=DEFAULT_HTTP_TIMEOUT_SECONDS) as client:
-        resp = client.post(url, content=body, headers=headers)
-        body_excerpt = (resp.text or "")[:500]
-        return resp.status_code, body_excerpt
+    resp = safe_httpx_post_sync(
+        url,
+        data=body,
+        headers=headers,
+        timeout=DEFAULT_HTTP_TIMEOUT_SECONDS,
+    )
+    body_excerpt = (resp.text or "")[:500]
+    return resp.status_code, body_excerpt
 
 
 def _is_transient_status(status_code: int) -> bool:

@@ -116,26 +116,6 @@ def _handle_nlp_extraction(payload: Dict[str, Any]) -> None:
         raise
 
 
-def _handle_graph_update(payload: Dict[str, Any]) -> None:
-    """Upsert extracted entities into the knowledge graph.
-
-    Replaces Kafka topic: fsma.events.extracted / graph.update
-    Falls back gracefully when Neo4j is not configured (PostgreSQL
-    recursive CTEs handle lot tracing instead).
-    """
-    try:
-        from services.graph.app.neo4j_utils import upsert_from_entities
-        entities = payload.get("entities", [])
-        if entities:
-            upsert_from_entities(entities)
-            logger.info("graph_update_complete", entities=len(entities))
-    except ImportError:
-        logger.debug("graph_neo4j_unavailable_skipping_upsert")
-    except Exception:
-        logger.exception("graph_update_failed")
-        raise
-
-
 def _handle_review_item(payload: Dict[str, Any]) -> None:
     """Record a low-confidence extraction for human review.
 
@@ -160,7 +140,6 @@ def _handle_review_item(payload: Dict[str, Any]) -> None:
 
 TASK_HANDLERS: Dict[str, Callable[[Dict[str, Any]], None]] = {
     "nlp_extraction": _handle_nlp_extraction,
-    "graph_update": _handle_graph_update,
     "review_item": _handle_review_item,
 }
 

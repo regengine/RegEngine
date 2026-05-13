@@ -6,8 +6,8 @@
 # focused endpoint tests in services/ingestion/tests.
 
 fastapi>=0.136.1
-pydantic>=2.13.4
-pydantic-settings>=2.14.0
+pydantic>=2.13.3
+pydantic-settings>=2.14.1
 httpx>=0.28.1
 python-dotenv>=1.2.2
 pytest>=9.0.3
