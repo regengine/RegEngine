@@ -8,7 +8,7 @@ import {
   Database, FileUp, Clock, Sparkles, Share2, Check, Link2,
   X, File,
 } from 'lucide-react';
-import { usePostHog } from 'posthog-js/react';
+import { usePostHog } from '@/lib/posthog-provider';
 import { SandboxGrid } from './sandbox-grid';
 import { SandboxResultsCTA } from './sandbox-grid/SandboxResultsCTA';
 import { generateComplianceReport } from './sandbox-grid/SandboxPdfReport';

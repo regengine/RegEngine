@@ -75,7 +75,7 @@ export function ScanHistoryWidget() {
   const isLoading = Boolean(tenantId && isAuthenticated) && loading;
 
   return (
-    <Card>
+    <Card className="min-h-[260px]">
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between">
           <CardTitle className="text-base flex items-center gap-2">
@@ -90,13 +90,13 @@ export function ScanHistoryWidget() {
           </Link>
         </div>
       </CardHeader>
-      <CardContent>
+      <CardContent className="min-h-[196px]">
         {isLoading ? (
-          <div className="flex items-center justify-center py-8 text-sm text-muted-foreground">
+          <div className="flex min-h-[168px] items-center justify-center text-sm text-muted-foreground">
             Loading...
           </div>
         ) : events.length === 0 ? (
-          <div className="text-center py-8">
+          <div className="min-h-[168px] text-center py-8">
             <ScanLine className="h-8 w-8 text-muted-foreground/30 mx-auto mb-2" />
             <p className="text-sm text-muted-foreground">No scans yet</p>
             <Link

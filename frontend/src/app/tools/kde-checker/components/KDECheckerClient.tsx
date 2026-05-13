@@ -2,7 +2,7 @@
 
 import { FSMAToolShell } from '@/components/fsma/FSMAToolShell';
 import { ToolConfig } from '@/types/fsma-tools';
-import { usePostHog } from 'posthog-js/react';
+import { usePostHog } from '@/lib/posthog-provider';
 import { FSMA_FTL_CATEGORIES, FSMA_CTES } from '@/lib/fsma-tools-data';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';

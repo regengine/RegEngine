@@ -1,7 +1,5 @@
 /** @type {import('next').NextConfig} */
 // Last deployed: 2026-02-13
-const { withSentryConfig } = require("@sentry/nextjs");
-
 const isStatic = process.env.REGENGINE_DEPLOY_MODE === 'static';
 const isDocker = process.env.REGENGINE_DEPLOY_MODE === 'docker';
 const apiGatewayUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
@@ -137,6 +135,11 @@ const nextConfig = {
                 destination: '/dashboard/settings',
                 permanent: true,
             },
+            {
+                source: '/mobile/capture',
+                destination: '/fsma/field-capture',
+                permanent: true,
+            },
             // Canonical path for the compliance landing is /dashboard/compliance.
             // The sub-pages under /compliance/* (labels, profile, snapshots,
             // status, traceability-plan) have their own content and are linked
@@ -232,4 +235,10 @@ const sentryWebpackPluginOptions = {
     disableClientWebpackPlugin: !isProduction,
 };
 
-module.exports = withSentryConfig(nextConfig, sentryWebpackPluginOptions);
+const enableSentryBuildPlugin =
+    process.env.REGENGINE_ENABLE_SENTRY_BUILD === 'true' ||
+    (isProduction && Boolean(process.env.SENTRY_AUTH_TOKEN && process.env.NEXT_PUBLIC_SENTRY_DSN));
+
+module.exports = enableSentryBuildPlugin
+    ? require("@sentry/nextjs").withSentryConfig(nextConfig, sentryWebpackPluginOptions)
+    : nextConfig;

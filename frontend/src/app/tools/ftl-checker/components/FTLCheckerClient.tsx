@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { usePostHog } from 'posthog-js/react';
+import { usePostHog } from '@/lib/posthog-provider';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Breadcrumbs } from "@/components/layout/breadcrumbs";
 import { RelatedTools } from "@/components/layout/related-tools";

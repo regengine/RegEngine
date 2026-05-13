@@ -157,7 +157,11 @@ describe('Dashboard Inflow Lab', () => {
             isHydrated: true,
             tenantId: null,
         } as ReturnType<typeof useAuth>);
-        vi.mocked(useTenant).mockReturnValue({ tenantId: null } as ReturnType<typeof useTenant>);
+        vi.mocked(useTenant).mockReturnValue({
+            tenantId: null,
+            setTenantId: vi.fn(),
+            isSystemTenant: false,
+        } as unknown as ReturnType<typeof useTenant>);
         const localStore: Record<string, string> = {};
         const sessionStore: Record<string, string> = {};
         vi.stubGlobal('localStorage', {

@@ -13,9 +13,10 @@ from __future__ import annotations
 import json
 import logging
 import os
+import uuid
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from pydantic import BaseModel, Field
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -59,6 +60,17 @@ class ProductCatalogResponse(BaseModel):
 
 class CreateProductRequest(BaseModel):
     """Request to add a product."""
+    name: str
+    category: str
+    sku: str = ""
+    gtin: str = ""
+    description: str = ""
+    suppliers: list[str] = Field(default_factory=list)
+    facilities: list[str] = Field(default_factory=list)
+
+
+class UpdateProductRequest(BaseModel):
+    """Request to update a product."""
     name: str
     category: str
     sku: str = ""
@@ -229,10 +241,10 @@ def _db_add_product(tenant_id: str, product: Product) -> bool:
         db.execute(
             text("""
                 INSERT INTO fsma.products
-                    (tenant_id, org_id, name, ftl_category, ftl_covered, sku, gtin,
+                    (id, tenant_id, org_id, name, ftl_category, ftl_covered, sku, gtin,
                      description, unit_of_measure)
                 VALUES
-                    (CAST(:tid AS uuid), CAST(:tid AS uuid), :name, :cat, :ftl, :sku, :gtin,
+                    (CAST(:id AS uuid), CAST(:tid AS uuid), CAST(:tid AS uuid), :name, :cat, :ftl, :sku, :gtin,
                      :desc, :uom)
                 ON CONFLICT (tenant_id, gtin) WHERE gtin IS NOT NULL AND gtin != ''
                 DO UPDATE SET
@@ -242,6 +254,7 @@ def _db_add_product(tenant_id: str, product: Product) -> bool:
                     updated_at = now()
             """),
             {
+                "id": product.id,
                 "tid": tenant_id,
                 "name": product.name,
                 "cat": product.category,
@@ -256,6 +269,95 @@ def _db_add_product(tenant_id: str, product: Product) -> bool:
         return True
     except SQLAlchemyError as e:
         logger.warning("db_catalog_insert_failed: %s", e)
+        db.rollback()
+        return False
+    finally:
+        db.close()
+
+
+def _db_get_product(tenant_id: str, product_id: str) -> Product | None:
+    """Fetch a single product from fsma.products."""
+    from sqlalchemy import text
+    db = get_db_safe()
+    if db is None:
+        return None
+    try:
+        row = db.execute(
+            text(
+                "SELECT id, name, description, gtin, sku, ftl_category, ftl_covered, "
+                "unit_of_measure, created_at "
+                "FROM fsma.products WHERE tenant_id = CAST(:tid AS uuid) AND id = CAST(:id AS uuid) LIMIT 1"
+            ),
+            {"tid": tenant_id, "id": product_id},
+        ).fetchone()
+        return _fsma_row_to_product(row) if row else None
+    except SQLAlchemyError as e:
+        logger.warning("db_catalog_product_read_failed: %s", e)
+        return None
+    finally:
+        db.close()
+
+
+def _db_update_product(tenant_id: str, product_id: str, product: Product) -> Product | None:
+    """Update a product in fsma.products."""
+    from sqlalchemy import text
+    db = get_db_safe()
+    if db is None:
+        return None
+    try:
+        row = db.execute(
+            text("""
+                UPDATE fsma.products
+                SET name = :name,
+                    ftl_category = :cat,
+                    ftl_covered = :ftl,
+                    sku = :sku,
+                    gtin = :gtin,
+                    description = :desc,
+                    updated_at = now()
+                WHERE tenant_id = CAST(:tid AS uuid)
+                  AND id = CAST(:id AS uuid)
+                RETURNING id, name, description, gtin, sku, ftl_category, ftl_covered,
+                          unit_of_measure, created_at
+            """),
+            {
+                "tid": tenant_id,
+                "id": product_id,
+                "name": product.name,
+                "cat": product.category,
+                "ftl": product.ftl_covered,
+                "sku": product.sku,
+                "gtin": product.gtin,
+                "desc": product.description,
+            },
+        ).fetchone()
+        db.commit()
+        return _fsma_row_to_product(row) if row else None
+    except SQLAlchemyError as e:
+        logger.warning("db_catalog_product_update_failed: %s", e)
+        db.rollback()
+        return None
+    finally:
+        db.close()
+
+
+def _db_delete_product(tenant_id: str, product_id: str) -> bool:
+    """Delete a product from fsma.products."""
+    from sqlalchemy import text
+    db = get_db_safe()
+    if db is None:
+        return False
+    try:
+        result = db.execute(
+            text(
+                "DELETE FROM fsma.products WHERE tenant_id = CAST(:tid AS uuid) AND id = CAST(:id AS uuid)"
+            ),
+            {"tid": tenant_id, "id": product_id},
+        )
+        db.commit()
+        return bool(result.rowcount)
+    except SQLAlchemyError as e:
+        logger.warning("db_catalog_product_delete_failed: %s", e)
         db.rollback()
         return False
     finally:
@@ -335,6 +437,32 @@ def learn_from_event(tenant_id: str, event: dict) -> None:
 # _db_get_catalog falls back to deriving products from fsma.traceability_events.
 # Full CRUD for fsma.tenant_products can be wired here when needed.
 _catalog_store: dict[str, list[Product]] = {}
+
+
+def _memory_get_product(tenant_id: str, product_id: str) -> Product | None:
+    for product in _catalog_store.get(tenant_id, []):
+        if product.id == product_id:
+            return product
+    return None
+
+
+def _memory_update_product(tenant_id: str, product_id: str, product: Product) -> Product | None:
+    products = _catalog_store.get(tenant_id, [])
+    for index, existing in enumerate(products):
+        if existing.id == product_id:
+            product.created_at = existing.created_at
+            product.cte_count = existing.cte_count
+            product.last_cte = existing.last_cte
+            products[index] = product
+            return product
+    return None
+
+
+def _memory_delete_product(tenant_id: str, product_id: str) -> bool:
+    products = _catalog_store.get(tenant_id, [])
+    before = len(products)
+    _catalog_store[tenant_id] = [product for product in products if product.id != product_id]
+    return len(_catalog_store[tenant_id]) != before
 
 
 def _memory_learn(tenant_id: str, gtin: str, name: str, facility: str, now: str):
@@ -423,7 +551,7 @@ async def add_product(
     is_ftl = request.category in FTL_CATEGORIES
 
     product = Product(
-        id=f"{tenant_id}-prod-{now.timestamp():.0f}",
+        id=str(uuid.uuid4()),
         name=request.name,
         category=request.category,
         ftl_covered=is_ftl,
@@ -476,3 +604,73 @@ async def lookup_by_gtin(
 async def get_ftl_categories():
     """Get all FTL product categories."""
     return {"categories": FTL_CATEGORIES, "total": len(FTL_CATEGORIES)}
+
+
+@router.get(
+    "/{tenant_id}/{product_id}",
+    summary="Get product",
+)
+async def get_product(
+    tenant_id: str,
+    product_id: str,
+    _: None = Depends(_verify_api_key),
+):
+    """Get one product from the catalog."""
+    product = _db_get_product(tenant_id, product_id) or _memory_get_product(tenant_id, product_id)
+    if not product:
+        raise HTTPException(status_code=404, detail="Product not found")
+    return {"product": product.model_dump()}
+
+
+@router.put(
+    "/{tenant_id}/{product_id}",
+    summary="Update product",
+)
+async def update_product(
+    tenant_id: str,
+    product_id: str,
+    request: UpdateProductRequest,
+    _: None = Depends(_verify_api_key),
+):
+    """Update one product in the catalog."""
+    now = datetime.now(timezone.utc)
+    is_ftl = request.category in FTL_CATEGORIES
+    existing = _db_get_product(tenant_id, product_id) or _memory_get_product(tenant_id, product_id)
+    if not existing:
+        raise HTTPException(status_code=404, detail="Product not found")
+
+    product = Product(
+        id=product_id,
+        name=request.name,
+        category=request.category,
+        ftl_covered=is_ftl,
+        sku=request.sku,
+        gtin=request.gtin,
+        description=request.description,
+        suppliers=request.suppliers,
+        facilities=request.facilities,
+        cte_count=existing.cte_count,
+        last_cte=existing.last_cte,
+        created_at=existing.created_at or now.isoformat(),
+    )
+
+    updated = _db_update_product(tenant_id, product_id, product) or _memory_update_product(tenant_id, product_id, product)
+    if not updated:
+        raise HTTPException(status_code=404, detail="Product not found")
+    return {"updated": True, "product": updated.model_dump(), "ftl_covered": is_ftl}
+
+
+@router.delete(
+    "/{tenant_id}/{product_id}",
+    status_code=204,
+    summary="Delete product",
+)
+async def delete_product(
+    tenant_id: str,
+    product_id: str,
+    _: None = Depends(_verify_api_key),
+):
+    """Delete one product from the catalog."""
+    if _db_delete_product(tenant_id, product_id) or _memory_delete_product(tenant_id, product_id):
+        return Response(status_code=204)
+    raise HTTPException(status_code=404, detail="Product not found")

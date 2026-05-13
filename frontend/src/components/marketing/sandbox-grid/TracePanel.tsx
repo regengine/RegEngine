@@ -7,7 +7,7 @@ import {
   Loader2, Download, MapPin, Package, Clock, X,
   ChevronRight,
 } from 'lucide-react';
-import { usePostHog } from 'posthog-js/react';
+import { usePostHog } from '@/lib/posthog-provider';
 import { SandboxResultsCTA } from './SandboxResultsCTA';
 
 // ---------------------------------------------------------------------------

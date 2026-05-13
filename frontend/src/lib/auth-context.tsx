@@ -5,7 +5,6 @@ import { User } from '@/types/api';
 import { apiClient } from './api-client';
 import { fetchWithCsrf } from './fetch-with-csrf';
 import { sanitizePermissions } from './permissions';
-import { createSupabaseBrowserClient, isSupabaseConfigured } from '@/lib/supabase/client';
 
 interface AuthContextType {
   user: User | null;
@@ -26,12 +25,16 @@ interface AuthContextType {
   setDemoMode: (enabled: boolean) => void;
   completeOnboarding: () => void;
   clearCredentials: () => Promise<void>;
-  login: (token: string, user: User, tenantId?: string) => Promise<void>;
+  login: (token: string, user: User, tenantId?: string, options?: LoginOptions) => Promise<void>;
   logout: () => Promise<void>;
   isAuthenticated: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+type LoginOptions = {
+  remember?: boolean;
+};
 
 /**
  * HTTP-only cookie auth — CRITICAL #2 fix complete.
@@ -75,6 +78,7 @@ async function setSessionCookies(params: {
   adminKey?: string | null;
   tenantId?: string | null;
   user?: User | null;
+  remember?: boolean;
 }): Promise<boolean> {
   if (typeof window === 'undefined') return false;
   const body: Record<string, unknown> = {};
@@ -84,6 +88,7 @@ async function setSessionCookies(params: {
   if (params.tenantId) body.tenant_id = params.tenantId;
   if (params.user) body.user = params.user;
   if (Object.keys(body).length === 0) return true;
+  body.remember_me = params.remember ?? true;
   try {
     // CSRF bootstrap: /api/session is no longer exempt from the CSRF
     // double-submit check, so this POST needs a valid X-CSRF-Token header.
@@ -149,44 +154,6 @@ async function getSessionInfo(): Promise<{
   } catch {
     return null;
   }
-}
-
-function getStoredPermissionFallback(): string[] | undefined {
-  if (typeof window === 'undefined') return undefined;
-
-  try {
-    const storedUser = localStorage.getItem(STORAGE_KEYS.USER);
-    if (!storedUser) return undefined;
-    const parsedUser = JSON.parse(storedUser) as { permissions?: unknown };
-    return sanitizePermissions(parsedUser.permissions);
-  } catch {
-    return undefined;
-  }
-}
-
-function buildSupabaseAppUser(
-  sourceUser: {
-    id: string;
-    email?: string | null;
-    user_metadata?: Record<string, unknown>;
-  },
-  fallbackPermissions?: string[],
-): User {
-  const explicitPermissions = sanitizePermissions(sourceUser.user_metadata?.permissions);
-  const appUser: User = {
-    id: sourceUser.id,
-    email: sourceUser.email || '',
-    is_sysadmin: Boolean(sourceUser.user_metadata?.is_sysadmin),
-    status: 'active',
-    role_name: typeof sourceUser.user_metadata?.role === 'string' ? sourceUser.user_metadata.role : 'member',
-  };
-
-  const permissions = explicitPermissions ?? fallbackPermissions;
-  if (permissions) {
-    appUser.permissions = permissions;
-  }
-
-  return appUser;
 }
 
 function normalizeUserProfile(user: User | null | undefined): User | null {
@@ -263,11 +230,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const hydrate = async () => {
       // If middleware redirected here with an auth error the JWT is expired or
       // invalid. Clear stale client state so the nav doesn't render an
-      // authenticated shell on the login page while Supabase session still
-      // exists. Without this, the Supabase onAuthStateChange guard
-      // (if (accessToken) return) sees the stale COOKIE_MANAGED_PLACEHOLDER
-      // and skips re-authentication, leaving the UI in a broken half-logged-in
-      // state until the user hard-refreshes.
+      // authenticated shell on the login page.
       const isAuthError =
         window.location.search.includes('error=session_expired') ||
         window.location.search.includes('error=token_invalid');
@@ -334,198 +297,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     hydrate();
   }, []);
 
-  // ---- Supabase auth state listener ----
-  useEffect(() => {
-    if (!isSupabaseConfigured()) {
-      return;
-    }
-
-    // If the middleware redirected to /login with an error param, the custom
-    // JWT session is dead. Don't let a surviving Supabase session silently
-    // re-authenticate — that causes stale nav state where the UI flickers
-    // between authenticated and unauthenticated.
-    const isAuthErrorRedirect =
-      typeof window !== 'undefined' &&
-      (window.location.search.includes('error=session_expired') ||
-       window.location.search.includes('error=token_invalid'));
-
-    let subscription: { unsubscribe: () => void } | undefined;
-    try {
-      const supabase = createSupabaseBrowserClient();
-
-      // Use getUser() instead of getSession() — getUser() validates the JWT
-      // against the Supabase auth server, while getSession() only reads the
-      // local cookie/storage (which can be spoofed).
-      supabase.auth.getUser().then(async ({ data: { user: validatedUser } }) => {
-        if (isAuthErrorRedirect || logoutInProgressRef.current) return;
-        if (validatedUser && !accessToken) {
-          const appUser = buildSupabaseAppUser(
-            validatedUser,
-            user?.permissions ?? getStoredPermissionFallback(),
-          );
-          // Do not write a Supabase token or placeholder into re_access_token.
-          // Middleware verifies that cookie as a RegEngine JWT; writing any
-          // other value causes the next protected navigation to bounce to
-          // /login?error=session_expired. Keep profile/tenant cookies in sync
-          // and let middleware use the Supabase-cookie fallback when no
-          // RegEngine JWT exists.
-          await setSessionCookies({
-            user: appUser,
-            tenantId: validatedUser.user_metadata?.tenant_id || null,
-          });
-          setAccessTokenState(COOKIE_MANAGED_PLACEHOLDER);
-          setUserState(appUser);
-          apiClient.setAccessToken(COOKIE_MANAGED_PLACEHOLDER);
-          apiClient.setUser(appUser);
-          if (validatedUser.user_metadata?.tenant_id) {
-            setTenantIdState(validatedUser.user_metadata.tenant_id);
-            apiClient.setCurrentTenant(validatedUser.user_metadata.tenant_id);
-            localStorage.setItem(STORAGE_KEYS.TENANT_ID, validatedUser.user_metadata.tenant_id);
-          }
-          localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(appUser));
-        }
-      });
-
-      const { data } = supabase.auth.onAuthStateChange(async (event, session) => {
-        if ((isAuthErrorRedirect || logoutInProgressRef.current) && event !== 'SIGNED_OUT') return;
-
-        // #1073 Scope listener reactions explicitly. Supabase replays
-        // INITIAL_SESSION and SIGNED_IN on network reconnect, sleep/wake,
-        // and internal token refresh. If we reacted to every replay we'd
-        // clobber a freshly-set re_access_token with a stale Supabase
-        // value (or null it), producing the intermittent "you got logged
-        // out" reports. Only two events should mutate auth state:
-        //   TOKEN_REFRESHED — Supabase rotated; sync non-JWT session metadata.
-        //   SIGNED_OUT      — user (or another tab) signed out; clear state.
-        // INITIAL_SESSION and SIGNED_IN are bootstrapped by the dedicated
-        // getUser().then(...) block above; we ignore them here so replays
-        // are a no-op.
-        if (event !== 'TOKEN_REFRESHED' && event !== 'SIGNED_OUT') {
-          return;
-        }
-
-        if (event === 'TOKEN_REFRESHED' && session?.access_token && session.user) {
-          // Guard: if a custom RegEngine JWT session is already established
-          // (accessToken is set), do NOT overwrite re_access_token with the
-          // Supabase access_token. The middleware verifies re_access_token
-          // using the RegEngine signing key (HS256) — writing a Supabase JWT
-          // here would fail verification and trigger a redirect loop.
-          //
-          // This callback should only bootstrap auth state when the user has
-          // a surviving Supabase session but no custom JWT (e.g. page refresh
-          // where Supabase cookie persists but re_access_token expired).
-          if (accessToken) return;
-
-          const appUser = buildSupabaseAppUser(
-            session.user,
-            user?.permissions ?? getStoredPermissionFallback(),
-          );
-          // Never write session.access_token to re_access_token. That cookie is
-          // reserved for the custom RegEngine JWT minted by the backend login
-          // endpoint; middleware rejects Supabase JWTs in that slot.
-          await setSessionCookies({
-            user: appUser,
-            tenantId: session.user.user_metadata?.tenant_id || null,
-          });
-          setAccessTokenState(COOKIE_MANAGED_PLACEHOLDER);
-          setUserState(appUser);
-          apiClient.setAccessToken(COOKIE_MANAGED_PLACEHOLDER);
-          apiClient.setUser(appUser);
-          localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(appUser));
-        }
-
-        if (event === 'SIGNED_OUT') {
-          setAccessTokenState(null);
-          setUserState(null);
-          setApiKeyState(null);
-          setAdminKeyState(null);
-          setTenantIdState(null);
-          setIsOnboarded(false);
-          setDemoModeState(false);
-          apiClient.setAccessToken(null);
-          apiClient.setUser(null);
-          apiClient.setCurrentTenant(null);
-          if (typeof window !== 'undefined') {
-            Object.values(STORAGE_KEYS).forEach(key => localStorage.removeItem(key));
-          }
-          await clearSessionCookies();
-          logoutInProgressRef.current = false;
-        }
-      });
-      subscription = data.subscription;
-    } catch {
-      // Supabase not configured — skip
-    }
-    return () => subscription?.unsubscribe();
-  }, [accessToken, user?.permissions]);
-
-  // ---- Proactive token refresh timer ----
-  // Supabase sessions persist longer than the custom RegEngine JWT. This timer
-  // keeps non-sensitive profile metadata fresh, but it must not overwrite
-  // re_access_token with a Supabase token. Middleware verifies re_access_token
-  // using the RegEngine JWT key.
-  const refreshTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  useEffect(() => {
-    // Only run when authenticated
-    if (!accessToken || !isHydrated || !isSupabaseConfigured()) return;
-
-    // #1075 Shorten the proactive refresh cadence. Access-token TTL is 60 min
-    // and the backend has no per-token rotation marker — the old token stays
-    // valid until natural expiration. Refreshing at 45 min left a 15-min
-    // overlap window where an exfiltrated (XSS-stolen, shared-device-swiped)
-    // access token was still usable on the backend after the legitimate
-    // client had rotated past it.
-    //
-    // Refresh at 55 min instead: the overlap is now bounded by (60 - 55) =
-    // 5 min of the previous token's remaining validity. Does not address
-    // token compromise at rest on the backend (issue covers backend-side
-    // revocation as the next step), but halves the blast-radius window
-    // for the frontend-triggered rotation path.
-    const REFRESH_INTERVAL_MS = 55 * 60 * 1000; // 55 min (5-min overlap with 60-min TTL)
-
-    const refreshSession = async () => {
-      try {
-        const supabase = createSupabaseBrowserClient();
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session?.access_token && session.user) {
-          // Keep profile and tenant cookies fresh without touching
-          // re_access_token. A future backend endpoint can mint a fresh
-          // RegEngine JWT; until then, preserving the existing custom JWT is
-          // safer than replacing it with an unverifiable Supabase JWT.
-          const appUser = buildSupabaseAppUser(
-            session.user,
-            user?.permissions ?? getStoredPermissionFallback(),
-          );
-          await setSessionCookies({
-            tenantId: session.user.user_metadata?.tenant_id || null,
-            user: appUser,
-          });
-          if (process.env.NODE_ENV !== 'production') {
-            // eslint-disable-next-line no-console
-            console.info('[auth] Proactive token refresh succeeded');
-          }
-        }
-      } catch {
-        if (process.env.NODE_ENV !== 'production') {
-          console.warn('[auth] Proactive token refresh failed — session may expire');
-        }
-      }
-    };
-
-    // Run immediately on mount (covers the case where page was open but idle)
-    // then set up the recurring timer.
-    refreshSession();
-    refreshTimerRef.current = setInterval(refreshSession, REFRESH_INTERVAL_MS);
-
-    return () => {
-      if (refreshTimerRef.current) {
-        clearInterval(refreshTimerRef.current);
-        refreshTimerRef.current = null;
-      }
-    };
-  }, [accessToken, isHydrated, user?.permissions]);
-
   const setApiKey = useCallback(async (key: string | null) => {
     if (key) {
       // MUST await — middleware checks this cookie on the next request.
@@ -586,7 +357,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  const login = useCallback(async (token: string, loginUser: User, loginTenantId?: string) => {
+  const login = useCallback(async (
+    token: string,
+    loginUser: User,
+    loginTenantId?: string,
+    options?: LoginOptions,
+  ) => {
     logoutInProgressRef.current = false;
     const normalizedLoginUser = normalizeUserProfile(loginUser);
 
@@ -621,6 +397,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       accessToken: token,
       tenantId: loginTenantId,
       user: normalizedLoginUser,
+      remember: options?.remember ?? true,
     });
 
     if (!cookiesOk) {
@@ -656,20 +433,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const logout = useCallback(async () => {
     logoutInProgressRef.current = true;
     await clearCredentials();
-    // Sign out from Supabase too — prevents the dual-auth desync where
-    // custom JWT cookies are cleared but Supabase session persists,
-    // causing the onAuthStateChange listener to silently re-authenticate.
-    if (!isSupabaseConfigured()) {
-      logoutInProgressRef.current = false;
-      return;
-    }
-
-    try {
-      const supabase = createSupabaseBrowserClient();
-      await supabase.auth.signOut();
-    } catch {
-      logoutInProgressRef.current = false;
-    }
+    logoutInProgressRef.current = false;
   }, [clearCredentials]);
 
   const isAuthenticated = !!(user && accessToken);

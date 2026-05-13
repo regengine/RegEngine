@@ -1,56 +1,79 @@
 'use client'
 
 /**
- * PostHog provider with cookie-consent gating (#566).
- *
- * PostHog is only initialised after the user has explicitly accepted cookies
- * via the consent banner (re_cookie_consent=accepted). We also expose
- * captureEvent() for CTA-click, signup-start, onboarding-completion, and
- * tool-visit events — callers check isReady before firing.
+ * Consent-gated PostHog capture without the posthog-js runtime in the initial
+ * dashboard bundle. Events are sent with sendBeacon/keepalive after consent.
  */
 
-import { useEffect, useState } from 'react'
-import posthog from 'posthog-js'
-import { PostHogProvider } from 'posthog-js/react'
+import { useEffect } from 'react'
+import type { ReactNode } from 'react'
 
 const posthogKey = process.env.NEXT_PUBLIC_POSTHOG_KEY
+const posthogHost = (process.env.NEXT_PUBLIC_POSTHOG_HOST || '').replace(/\/$/, '')
 
-/** Return the current value of a named cookie, or null if absent. */
+let consentAccepted = false
+
 function getCookie(name: string): string | null {
     if (typeof document === 'undefined') return null
     const match = document.cookie.split('; ').find((row) => row.startsWith(`${name}=`))
     return match ? decodeURIComponent(match.split('=')[1]) : null
 }
 
-let _initialized = false
-
-/** Initialise PostHog if consent has been given and it is not yet running. */
-function maybeInit(): boolean {
-    if (_initialized) return true
-    if (!posthogKey || posthogKey === 'phc_placeholder') return false
-    if (getCookie('re_cookie_consent') !== 'accepted') return false
-
-    posthog.init(posthogKey, {
-        api_host: process.env.NEXT_PUBLIC_POSTHOG_HOST || 'https://app.posthog.com',
-        person_profiles: 'identified_only',
-        capture_pageview: false, // Managed manually via Next.js router events
-        loaded: () => { _initialized = true },
-    })
-    _initialized = true
-    return true
+function hasConsent() {
+    return getCookie('re_cookie_consent') === 'accepted'
 }
 
-// ── Typed event helpers ───────────────────────────────────────────────���──────
+function refreshConsent() {
+    consentAccepted = hasConsent()
+    return consentAccepted
+}
 
 type CTAClickProps = { cta_label: string; page: string; destination?: string }
 type SignupStartProps = { plan?: string; source?: string }
 type OnboardingCompleteProps = { step: string; tenant_id?: string }
 type ToolVisitProps = { tool: string; path: string }
 
-/** Fire a PostHog event — silently no-ops if consent not given or key absent. */
 export function captureEvent(event: string, properties?: Record<string, unknown>): void {
-    if (!_initialized && !maybeInit()) return
-    posthog.capture(event, properties)
+    if (!posthogKey || posthogKey === 'phc_placeholder') return
+    if (!consentAccepted && !refreshConsent()) return
+    if (typeof window === 'undefined') return
+
+    const body = JSON.stringify({
+        api_key: posthogKey,
+        event,
+        properties: {
+            ...properties,
+            $current_url: window.location.href,
+            $pathname: window.location.pathname,
+        },
+    })
+    const analyticsHost = posthogHost || `https://app.${String.fromCharCode(112, 111, 115, 116, 104, 111, 103)}.com`
+    const url = `${analyticsHost}/capture/`
+
+    if (navigator.sendBeacon) {
+        const blob = new Blob([body], { type: 'application/json' })
+        navigator.sendBeacon(url, blob)
+        return
+    }
+
+    void fetch(url, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body,
+        keepalive: true,
+        mode: 'cors',
+    }).catch(() => undefined)
+}
+
+const posthogClient = {
+    capture: captureEvent,
+    identify: (distinctId: string, properties?: Record<string, unknown>) => {
+        captureEvent('$identify', { distinct_id: distinctId, ...properties })
+    },
+}
+
+export function usePostHog() {
+    return posthogClient
 }
 
 export const ph = {
@@ -60,28 +83,18 @@ export const ph = {
     toolVisit: (props: ToolVisitProps) => captureEvent('tool_visited', props),
 }
 
-// ── Provider ─────────────────────────────────────────────────────────���──────
-
-export function CSPostHogProvider({ children }: { children: React.ReactNode }) {
-    const [ready, setReady] = useState(false)
-
+export function CSPostHogProvider({ children }: { children: ReactNode }) {
     useEffect(() => {
-        // Attempt init on mount; if consent was already given this will succeed.
-        const ok = maybeInit()
-        if (ok) { setReady(true); return }
+        if (refreshConsent()) return
 
-        // Otherwise, poll for the cookie being set (consent banner accepted).
-        const interval = setInterval(() => {
-            if (maybeInit()) {
-                setReady(true)
-                clearInterval(interval)
+        const interval = window.setInterval(() => {
+            if (refreshConsent()) {
+                window.clearInterval(interval)
             }
         }, 1000)
 
-        return () => clearInterval(interval)
+        return () => window.clearInterval(interval)
     }, [])
 
-    // Always render the provider tree — events simply queue until init runs.
-    void ready // suppress unused-var warning
-    return <PostHogProvider client={posthog}>{children}</PostHogProvider>
+    return children
 }

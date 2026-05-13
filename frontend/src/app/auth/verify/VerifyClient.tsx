@@ -25,7 +25,6 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Loader2, ShieldCheck, AlertTriangle } from 'lucide-react';
@@ -39,18 +38,22 @@ export default function VerifyClient({ tokenHash, type }: VerifyClientProps) {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const router = useRouter();
-    const supabase = createSupabaseBrowserClient();
 
     const handleVerify = async () => {
         setLoading(true);
         setError(null);
 
-        const { error: verifyError } = await supabase.auth.verifyOtp({
-            token_hash: tokenHash,
-            type: type === 'recovery' ? 'recovery' : 'recovery',
+        const response = await fetch('/api/auth/supabase/verify-otp', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({
+                token_hash: tokenHash,
+                type: type === 'recovery' ? 'recovery' : 'recovery',
+            }),
         });
 
-        if (verifyError) {
+        if (!response.ok) {
             // Token already used or expired
             router.push('/forgot-password?error=link_expired');
             return;

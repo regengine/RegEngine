@@ -1,10 +1,12 @@
 
 import hashlib
 import html
+import json
 import os
 import re
 import secrets
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from typing import Any
 from uuid import UUID
 
@@ -44,11 +46,52 @@ def _build_invite_link(token: str) -> tuple[str, str]:
     return relative_link, absolute_link
 
 
+def _record_e2e_invite_email(recipient_email: str, invite_link: str) -> bool:
+    """Record an invite email in the Playwright-only outbox fixture."""
+    outbox_path = os.getenv("REGENGINE_E2E_EMAIL_OUTBOX")
+    e2e_enabled = os.getenv("REGENGINE_E2E_MODE", "").strip().lower() == "true"
+    environment = os.getenv("REGENGINE_ENV", "").strip().lower()
+    cloud_deployment = any(
+        os.getenv(marker)
+        for marker in (
+            "RAILWAY_ENVIRONMENT",
+            "RAILWAY_SERVICE_NAME",
+            "VERCEL_ENV",
+            "VERCEL_URL",
+            "RENDER",
+            "FLY_APP_NAME",
+        )
+    )
+    if (
+        not outbox_path
+        or not e2e_enabled
+        or environment not in {"development", "dev", "test", "local"}
+        or cloud_deployment
+    ):
+        return False
+
+    record = {
+        "type": "invite_email",
+        "to": recipient_email,
+        "invite_link": invite_link,
+        "recorded_at": datetime.now(timezone.utc).isoformat(),
+    }
+    path = Path(outbox_path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8") as outbox:
+        outbox.write(json.dumps(record, sort_keys=True) + "\n")
+    return True
+
+
 def _send_invite_email(recipient_email: str, invite_link: str) -> None:
     """Send invite email via Resend if configured."""
+    recorded_e2e_outbox = _record_e2e_invite_email(recipient_email, invite_link)
     resend_api_key = os.getenv("RESEND_API_KEY")
     if not resend_api_key:
-        logger.warning("invite_email_skipped_missing_resend_api_key", email=mask_email(recipient_email))
+        if recorded_e2e_outbox:
+            logger.info("invite_email_recorded_e2e_outbox", email=mask_email(recipient_email))
+        else:
+            logger.warning("invite_email_skipped_missing_resend_api_key", email=mask_email(recipient_email))
         return
 
     try:

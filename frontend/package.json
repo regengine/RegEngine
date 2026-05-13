@@ -14,6 +14,7 @@
     "readiness:production": "node scripts/production-readiness.mjs",
     "verify:ssr": "node scripts/verify-public-ssr.mjs",
     "test:e2e": "env -u NO_COLOR playwright test",
+    "test:e2e:authenticated-core": "env -u NO_COLOR playwright test authenticated-core-journeys.spec.ts --project=chromium --reporter=list --retries=2",
     "test:demo-smoke": "env -u NO_COLOR playwright test --config=playwright.demo-smoke.config.ts"
   },
   "knip": {

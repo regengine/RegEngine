@@ -8,7 +8,7 @@ import {
   getCoreRowModel,
   useReactTable,
 } from '@tanstack/react-table';
-import { usePostHog } from 'posthog-js/react';
+import { usePostHog } from '@/lib/posthog-provider';
 import { useGridHistory } from './use-grid-history';
 import { buildCellErrorMap } from './cell-error-map';
 import { FixItTooltip } from './FixItTooltip';

@@ -2,7 +2,7 @@
 
 import { FSMAToolShell } from '@/components/fsma/FSMAToolShell';
 import { ToolConfig } from '@/types/fsma-tools';
-import { usePostHog } from 'posthog-js/react';
+import { usePostHog } from '@/lib/posthog-provider';
 import { Badge } from '@/components/ui/badge';
 import { Shield, Search, AlertTriangle, CheckCircle2, FlaskConical, ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';

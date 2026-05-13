@@ -7,7 +7,6 @@ import {
     Package, Truck, CheckCircle2, AlertTriangle, Loader2,
     ArrowRight, ShieldCheck, Clock, FileCheck,
 } from 'lucide-react';
-import axios from 'axios';
 import { getServiceURL } from '@/lib/api-config';
 
 /* ------------------------------------------------------------------ */
@@ -59,6 +58,39 @@ interface SupplierPreflightResult {
     };
 }
 
+async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
+    const response = await fetch(url, {
+        ...init,
+        headers: {
+            ...(init?.body ? { 'Content-Type': 'application/json' } : {}),
+            ...(init?.headers || {}),
+        },
+    });
+    const data = await response.text().then((text) => {
+        if (!text) return null;
+        try {
+            return JSON.parse(text);
+        } catch {
+            return text;
+        }
+    });
+    if (!response.ok) {
+        throw { status: response.status, data };
+    }
+    return data as T;
+}
+
+function getRequestErrorMessage(error: unknown, fallback: string): string {
+    if (error && typeof error === 'object' && 'data' in error) {
+        const data = (error as { data?: unknown }).data;
+        if (data && typeof data === 'object' && 'detail' in data) {
+            const detail = (data as { detail?: unknown }).detail;
+            if (typeof detail === 'string' && detail.trim()) return detail;
+        }
+    }
+    return fallback;
+}
+
 /* ------------------------------------------------------------------ */
 /*  Page                                                               */
 /* ------------------------------------------------------------------ */
@@ -101,13 +133,13 @@ export default function PortalSubmissionPage() {
         if (!portalId) return;
         setLoadingPortal(true);
 
-        axios.get(`${baseUrl}/api/v1/portal/${portalId}`)
-            .then((res) => {
-                setPortal(res.data);
+        requestJson<PortalDetails>(`${baseUrl}/api/v1/portal/${portalId}`)
+            .then((data) => {
+                setPortal(data);
                 setPortalError(null);
             })
             .catch((err) => {
-                const msg = err.response?.data?.detail || 'This portal link is not found or has expired.';
+                const msg = getRequestErrorMessage(err, 'This portal link is not found or has expired.');
                 setPortalError(msg);
             })
             .finally(() => setLoadingPortal(false));
@@ -142,18 +174,17 @@ export default function PortalSubmissionPage() {
         setPreflighting(true);
         setSubmitError(null);
         try {
-            const { data } = await axios.post<SupplierPreflightResult>(
+            const data = await requestJson<SupplierPreflightResult>(
                 `${baseUrl}/api/v1/portal/${portalId}/preflight`,
-                submissionPayload(),
+                {
+                    method: 'POST',
+                    body: JSON.stringify(submissionPayload()),
+                },
             );
             setPreflight(data);
             return data;
         } catch (err: unknown) {
-            if (axios.isAxiosError(err)) {
-                setSubmitError(err.response?.data?.detail || 'Preflight failed. Please try again.');
-            } else {
-                setSubmitError('Preflight failed. Please try again.');
-            }
+            setSubmitError(getRequestErrorMessage(err, 'Preflight failed. Please try again.'));
             return null;
         } finally {
             setPreflighting(false);
@@ -174,9 +205,12 @@ export default function PortalSubmissionPage() {
                 setSubmitError(preflightResult?.message || 'Preflight must pass before submission.');
                 return;
             }
-            const { data } = await axios.post<SubmissionResult>(
+            const data = await requestJson<SubmissionResult>(
                 `${baseUrl}/api/v1/portal/${portalId}/submit`,
-                submissionPayload(),
+                {
+                    method: 'POST',
+                    body: JSON.stringify(submissionPayload()),
+                },
             );
             if (data.status !== 'accepted') {
                 setSubmitError(data.message || 'Submission did not pass final validation.');
@@ -184,11 +218,7 @@ export default function PortalSubmissionPage() {
             }
             setResult(data);
         } catch (err: unknown) {
-            if (axios.isAxiosError(err)) {
-                setSubmitError(err.response?.data?.detail || 'Submission failed. Please try again.');
-            } else {
-                setSubmitError('Submission failed. Please try again.');
-            }
+            setSubmitError(getRequestErrorMessage(err, 'Submission failed. Please try again.'));
         } finally {
             setSubmitting(false);
         }

@@ -103,8 +103,10 @@ export default function IssuesPage() {
             const signal = AbortSignal.timeout(8000);
             const requestInit = { credentials: 'include' as const, signal };
 
+            const deadlineSearch = new URLSearchParams({ tenant_id: tenantId || '' });
+
             const [deadlineRes, pendingRes] = await Promise.allSettled([
-                fetchWithCsrf(`${base}/api/v1/requests/deadlines`, requestInit),
+                fetchWithCsrf(`${base}/api/v1/requests/deadlines?${deadlineSearch}`, requestInit),
                 fetchWithCsrf(`${base}/api/v1/compliance/pending-reviews/${tenantId}`, requestInit),
             ]);
 
