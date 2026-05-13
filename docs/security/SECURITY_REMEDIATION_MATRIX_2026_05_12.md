@@ -54,6 +54,7 @@ The highest-risk remediation queue is:
 - `detect-secrets-hook` passes locally after synthetic test fixtures were allowlisted and baseline line numbers were refreshed.
 - The prior ingestion CI failure narrowed to `services/ingestion/tests/test_qr_decoder_api.py`; its sample image fixture now uses a real PIL-generated PNG so byte-level image validation succeeds before the monkeypatched QR decoder path. The focused QR decoder test slice passes locally.
 - The fresh PR #2367 shared-test failure narrowed to duplicate Prometheus collector registration when `services/shared/middleware/tenant_context.py` is re-imported during collection; tenant-context counters now reuse existing collectors. The exact shared CI command passes locally with `443 passed, 10 skipped` and `46.13%` coverage.
+- The later ingestion service shard failure narrowed to stale webhook test stubbing in `services/ingestion/tests/test_task_handlers_regulation_1342.py`; the handler now uses the SSRF-safe shared HTTP helper, and the test fixture now stubs that helper directly. The focused regulation-handler test file passes locally.
 - Full ingestion xdist verification remains delegated to GitHub CI because this local machine does not have Postgres/Redis service tooling available.
 
 ## Remediation Matrix
