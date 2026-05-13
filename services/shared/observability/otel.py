@@ -12,18 +12,11 @@ from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from opentelemetry.sdk.trace.sampling import TraceIdRatioBased
 from opentelemetry.sdk.resources import Resource
-# OTLP exporters depend on the proto-grpc/proto-common version pair; minor
-# drift between them breaks the import (an internal symbol moves). They are
-# only invoked when ENABLE_OTEL=true, so degrade to None on ImportError and
-# guard the call sites — matches the pattern used for SQLAlchemyInstrumentor
-# and HTTPXClientInstrumentor above.
 try:
     from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
-except ImportError:  # pragma: no cover
-    OTLPSpanExporter = None  # type: ignore[assignment,misc]
-try:
     from opentelemetry.exporter.otlp.proto.grpc._log_exporter import OTLPLogExporter
-except ImportError:  # pragma: no cover
+except ImportError:  # pragma: no cover - depends on optional exporter package versions
+    OTLPSpanExporter = None  # type: ignore[assignment,misc]
     OTLPLogExporter = None  # type: ignore[assignment,misc]
 from opentelemetry.sdk._logs import LoggerProvider, LoggingHandler
 from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
@@ -115,6 +108,22 @@ def _instrument_downstream_clients() -> None:
         logger.warning("otel_httpx_package_missing")
 
 
+def _add_otlp_span_exporter(trace_provider: TracerProvider, endpoint: str, service_name: str) -> None:
+    if OTLPSpanExporter is None:
+        logger.warning("otel_trace_exporter_unavailable", service=service_name)
+        return
+    trace_exporter = OTLPSpanExporter(endpoint=endpoint)
+    trace_provider.add_span_processor(BatchSpanProcessor(trace_exporter))
+
+
+def _add_otlp_log_exporter(log_provider: LoggerProvider, endpoint: str, service_name: str) -> None:
+    if OTLPLogExporter is None:
+        logger.warning("otel_log_exporter_unavailable", service=service_name)
+        return
+    log_exporter = OTLPLogExporter(endpoint=endpoint)
+    log_provider.add_log_record_processor(BatchLogRecordProcessor(log_exporter))
+
+
 def add_observability(app: FastAPI, service_name: str):
     """Unified entry point for FastAPI OTel (Tracing + Baggage + Logs)."""
     if not _otel_enabled():
@@ -129,21 +138,13 @@ def add_observability(app: FastAPI, service_name: str):
         sampling_rate = float(os.getenv("OTEL_TRACE_SAMPLING_RATE", "0.1"))
         trace_provider = TracerProvider(sampler=TraceIdRatioBased(sampling_rate), resource=resource)
         if _set_tracer_provider_if_unset(trace_provider, service_name):
-            if OTLPSpanExporter is None:
-                logger.warning("otel_trace_exporter_unavailable", service=service_name)
-            else:
-                trace_exporter = OTLPSpanExporter(endpoint=endpoint)
-                trace_provider.add_span_processor(BatchSpanProcessor(trace_exporter))
+            _add_otlp_span_exporter(trace_provider, endpoint, service_name)
 
         # 2. Logging (OTLP)
         try:
-            if OTLPLogExporter is None:
-                logger.warning("otel_log_exporter_unavailable", service=service_name)
-            else:
-                log_provider = LoggerProvider(resource=resource)
-                logs.set_logger_provider(log_provider)
-                log_exporter = OTLPLogExporter(endpoint=endpoint)
-                log_provider.add_log_record_processor(BatchLogRecordProcessor(log_exporter))
+            log_provider = LoggerProvider(resource=resource)
+            logs.set_logger_provider(log_provider)
+            _add_otlp_log_exporter(log_provider, endpoint, service_name)
         except Exception as e:
             logger.warning("otel_log_setup_failed", service=service_name, error=str(e))
 
@@ -166,21 +167,13 @@ def setup_standalone_observability(service_name: str):
         sampling_rate = float(os.getenv("OTEL_TRACE_SAMPLING_RATE", "0.1"))
         trace_provider = TracerProvider(sampler=TraceIdRatioBased(sampling_rate), resource=resource)
         if _set_tracer_provider_if_unset(trace_provider, service_name):
-            if OTLPSpanExporter is None:
-                logger.warning("otel_trace_exporter_unavailable", service=service_name)
-            else:
-                trace_exporter = OTLPSpanExporter(endpoint=endpoint)
-                trace_provider.add_span_processor(BatchSpanProcessor(trace_exporter))
+            _add_otlp_span_exporter(trace_provider, endpoint, service_name)
 
         # 2. Logging (OTLP)
         try:
-            if OTLPLogExporter is None:
-                logger.warning("otel_log_exporter_unavailable", service=service_name)
-            else:
-                log_provider = LoggerProvider(resource=resource)
-                logs.set_logger_provider(log_provider)
-                log_exporter = OTLPLogExporter(endpoint=endpoint)
-                log_provider.add_log_record_processor(BatchLogRecordProcessor(log_exporter))
+            log_provider = LoggerProvider(resource=resource)
+            logs.set_logger_provider(log_provider)
+            _add_otlp_log_exporter(log_provider, endpoint, service_name)
         except Exception as e:
             logger.warning("otel_log_setup_failed", service=service_name, error=str(e))
 

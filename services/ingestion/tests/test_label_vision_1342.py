@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import io
 import json
 import sys
 from types import ModuleType, SimpleNamespace
@@ -44,10 +45,27 @@ class _FakeUpload:
 
     def __init__(self, *, content_type: str | None, content: bytes):
         self.content_type = content_type
-        self._content = content
+        self._buffer = io.BytesIO(content)
 
-    async def read(self) -> bytes:
-        return self._content
+    async def read(self, size: int = -1) -> bytes:
+        return self._buffer.read(size)
+
+
+def _tiny_png_bytes() -> bytes:
+    from PIL import Image
+
+    buf = io.BytesIO()
+    Image.new("RGB", (2, 2), color=(255, 255, 255)).save(buf, format="PNG")
+    return buf.getvalue()
+
+
+VALID_PNG = _tiny_png_bytes()
+
+
+def _padded_png(size: int) -> bytes:
+    if size < len(VALID_PNG):
+        raise ValueError("requested PNG size is smaller than the fixture")
+    return VALID_PNG + (b"\0" * (size - len(VALID_PNG)))
 
 
 def _choice(content):
@@ -148,7 +166,7 @@ class TestInputValidation:
     def test_oversized_body_rejected(self):
         up = _FakeUpload(
             content_type="image/png",
-            content=b"\x00" * (10 * 1024 * 1024 + 1),
+            content=_padded_png(10 * 1024 * 1024 + 1),
         )
         with pytest.raises(HTTPException) as exc_info:
             asyncio.run(lv.analyze_label(file=up, api_key="k"))
@@ -161,9 +179,16 @@ class TestInputValidation:
             monkeypatch,
             response=_choice(json.dumps({"fsma_compatible": True, "product_name": "p"})),
         )
-        up = _FakeUpload(content_type="image/jpeg", content=b"\x00" * (10 * 1024 * 1024))
+        up = _FakeUpload(content_type="image/png", content=_padded_png(10 * 1024 * 1024))
         out = asyncio.run(lv.analyze_label(file=up, api_key="k"))
         assert out.product_name == "p"
+
+    def test_spoofed_image_content_rejected(self):
+        up = _FakeUpload(content_type="image/png", content=b"not really an image")
+        with pytest.raises(HTTPException) as exc_info:
+            asyncio.run(lv.analyze_label(file=up, api_key="k"))
+        assert exc_info.value.status_code == 400
+        assert "invalid image" in exc_info.value.detail.lower()
 
 
 # ---------------------------------------------------------------------------
@@ -175,7 +200,7 @@ class TestUnavailableFallback:
 
     def test_missing_api_key_returns_unavailable(self, monkeypatch):
         monkeypatch.delenv("OPENAI_API_KEY", raising=False)
-        up = _FakeUpload(content_type="image/jpeg", content=b"\x01\x02")
+        up = _FakeUpload(content_type="image/png", content=VALID_PNG)
         out = asyncio.run(lv.analyze_label(file=up, api_key="k"))
         assert out.analysis_engine == "unavailable"
         assert "OPENAI_API_KEY" in (out.raw_text or "")
@@ -183,7 +208,7 @@ class TestUnavailableFallback:
     def test_empty_api_key_returns_unavailable(self, monkeypatch):
         """Empty env var should be treated as unset by the handler."""
         monkeypatch.setenv("OPENAI_API_KEY", "")
-        up = _FakeUpload(content_type="image/jpeg", content=b"\x01\x02")
+        up = _FakeUpload(content_type="image/png", content=VALID_PNG)
         out = asyncio.run(lv.analyze_label(file=up, api_key="k"))
         assert out.analysis_engine == "unavailable"
 
@@ -220,7 +245,7 @@ class TestHappyPath:
         }
         captured = _install_openai(monkeypatch, response=_choice(json.dumps(parsed)))
 
-        up = _FakeUpload(content_type="image/jpeg", content=b"IMG")
+        up = _FakeUpload(content_type="image/png", content=VALID_PNG)
         out = asyncio.run(lv.analyze_label(file=up, api_key="k"))
 
         assert out.product_name == "Organic Apples"
@@ -254,7 +279,7 @@ class TestHappyPath:
             monkeypatch,
             response=_choice(json.dumps({"fsma_compatible": False})),
         )
-        up = _FakeUpload(content_type="image/png", content=b"PNGBYTES")
+        up = _FakeUpload(content_type="image/png", content=VALID_PNG)
         asyncio.run(lv.analyze_label(file=up, api_key="k"))
 
         kwargs = captured["client"].chat.completions.last_kwargs
@@ -267,7 +292,7 @@ class TestHappyPath:
         assert content_parts[0]["type"] == "text"
         assert "FSMA 204" in content_parts[0]["text"]
         assert content_parts[1]["type"] == "image_url"
-        expected_b64 = base64.b64encode(b"PNGBYTES").decode("utf-8")
+        expected_b64 = base64.b64encode(VALID_PNG).decode("utf-8")
         assert content_parts[1]["image_url"]["url"] == f"data:image/png;base64,{expected_b64}"
 
     def test_auto_build_kde_list_when_model_omits_it(self, set_api_key, monkeypatch):
@@ -285,7 +310,7 @@ class TestHappyPath:
             # no fsma_kdes key
         }
         _install_openai(monkeypatch, response=_choice(json.dumps(parsed)))
-        up = _FakeUpload(content_type="image/jpeg", content=b"x")
+        up = _FakeUpload(content_type="image/png", content=VALID_PNG)
         out = asyncio.run(lv.analyze_label(file=up, api_key="k"))
 
         fields_present = {kde.field for kde in out.fsma_kdes}
@@ -306,14 +331,14 @@ class TestHappyPath:
         """fsma_kdes=[] triggers the auto-build branch (truthy check `if not fsma_kdes`)."""
         parsed = {"gtin": "X", "fsma_kdes": []}
         _install_openai(monkeypatch, response=_choice(json.dumps(parsed)))
-        up = _FakeUpload(content_type="image/jpeg", content=b"x")
+        up = _FakeUpload(content_type="image/png", content=VALID_PNG)
         out = asyncio.run(lv.analyze_label(file=up, api_key="k"))
         assert [k.field for k in out.fsma_kdes] == ["gtin"]
 
     def test_defaults_when_parsed_fields_missing(self, set_api_key, monkeypatch):
         """Unknown keys → LabelVisionResponse defaults (None / [] / False)."""
         _install_openai(monkeypatch, response=_choice(json.dumps({})))
-        up = _FakeUpload(content_type="image/webp", content=b"x")
+        up = _FakeUpload(content_type="image/png", content=VALID_PNG)
         out = asyncio.run(lv.analyze_label(file=up, api_key="k"))
         assert out.product_name is None
         assert out.allergens == []
@@ -331,7 +356,7 @@ class TestFailureModes:
 
     def test_empty_model_content_raises_502(self, set_api_key, monkeypatch):
         _install_openai(monkeypatch, response=_choice(None))
-        up = _FakeUpload(content_type="image/jpeg", content=b"x")
+        up = _FakeUpload(content_type="image/png", content=VALID_PNG)
         with pytest.raises(HTTPException) as exc_info:
             asyncio.run(lv.analyze_label(file=up, api_key="k"))
         assert exc_info.value.status_code == 502
@@ -340,14 +365,14 @@ class TestFailureModes:
     def test_empty_string_model_content_raises_502(self, set_api_key, monkeypatch):
         """Content == '' is also treated as empty (falsy check)."""
         _install_openai(monkeypatch, response=_choice(""))
-        up = _FakeUpload(content_type="image/jpeg", content=b"x")
+        up = _FakeUpload(content_type="image/png", content=VALID_PNG)
         with pytest.raises(HTTPException) as exc_info:
             asyncio.run(lv.analyze_label(file=up, api_key="k"))
         assert exc_info.value.status_code == 502
 
     def test_unparseable_json_raises_502(self, set_api_key, monkeypatch):
         _install_openai(monkeypatch, response=_choice("not-json-at-all"))
-        up = _FakeUpload(content_type="image/jpeg", content=b"x")
+        up = _FakeUpload(content_type="image/png", content=VALID_PNG)
         with pytest.raises(HTTPException) as exc_info:
             asyncio.run(lv.analyze_label(file=up, api_key="k"))
         assert exc_info.value.status_code == 502
@@ -363,7 +388,7 @@ class TestFailureModes:
     ])
     def test_client_exceptions_become_502(self, set_api_key, monkeypatch, exc):
         _install_openai(monkeypatch, raises=exc)
-        up = _FakeUpload(content_type="image/jpeg", content=b"x")
+        up = _FakeUpload(content_type="image/png", content=VALID_PNG)
         with pytest.raises(HTTPException) as exc_info:
             asyncio.run(lv.analyze_label(file=up, api_key="k"))
         assert exc_info.value.status_code == 502
@@ -384,7 +409,7 @@ class TestFailureModes:
                 raise AttributeError(name)
 
         monkeypatch.setitem(sys.modules, "openai", _M())
-        up = _FakeUpload(content_type="image/jpeg", content=b"x")
+        up = _FakeUpload(content_type="image/png", content=VALID_PNG)
         with pytest.raises(HTTPException) as exc_info:
             asyncio.run(lv.analyze_label(file=up, api_key="k"))
         assert exc_info.value.status_code == 502
@@ -392,7 +417,7 @@ class TestFailureModes:
     def test_uncaught_exception_propagates(self, set_api_key, monkeypatch):
         """RuntimeError is NOT in the catch tuple → it bubbles out."""
         _install_openai(monkeypatch, raises=RuntimeError("boom"))
-        up = _FakeUpload(content_type="image/jpeg", content=b"x")
+        up = _FakeUpload(content_type="image/png", content=VALID_PNG)
         with pytest.raises(RuntimeError):
             asyncio.run(lv.analyze_label(file=up, api_key="k"))
 

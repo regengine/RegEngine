@@ -241,7 +241,13 @@ class TestLogging:
         assert "log_format json_audit" in nginx_config
         assert '"timestamp"' in nginx_config
         assert '"request_id"' in nginx_config
+        assert '"request_path"' in nginx_config
         assert '"status"' in nginx_config
+
+    def test_json_log_format_does_not_log_raw_query_string(self, nginx_config):
+        """Access logs use path-only URI values so raw query params stay out of logs."""
+        assert "$request_uri" not in nginx_config
+        assert '"request_path":"$uri"' in nginx_config
     
     def test_access_log_uses_json(self, nginx_config):
         """Access log uses JSON format."""
@@ -283,11 +289,12 @@ class TestProxyConfiguration:
     
     def test_ingestion_large_body(self, nginx_config):
         """Ingestion route allows large file uploads."""
-        assert "client_max_body_size" in nginx_config
+        match = re.search(r'location /ingest/ \{(?P<body>.*?)\n        \}', nginx_config, re.S)
+        assert match, "Ingestion location block not found"
         # Should be at least 50M
-        match = re.search(r'client_max_body_size\s+(\d+)M', nginx_config)
-        assert match, "client_max_body_size not found"
-        size = int(match.group(1))
+        size_match = re.search(r'client_max_body_size\s+(\d+)M', match.group('body'))
+        assert size_match, "ingestion client_max_body_size not found"
+        size = int(size_match.group(1))
         assert size >= 50, "Should allow at least 50M uploads"
 
 

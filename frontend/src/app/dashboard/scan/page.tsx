@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useTenant } from '@/lib/tenant-context';
 import {
@@ -10,10 +10,7 @@ import {
     QrCode,
     Scan,
     Smartphone,
-    Wifi,
-    WifiOff,
     Loader2,
-    Package,
     Camera,
 } from 'lucide-react';
 
@@ -21,11 +18,24 @@ import {
 /*  QR Code generator — renders inline SVG via the `qrcode` package   */
 /* ------------------------------------------------------------------ */
 let qrcodeLib: typeof import('qrcode') | null = null;
+const SAFE_SCAN_TENANT_ID = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/;
 
-function useQRCodeSVG(text: string) {
-    const [svg, setSvg] = useState<string | null>(null);
+function toSafeSvgDataUrl(svg: string): string | null {
+    const trimmedSvg = svg.trim();
+    if (
+        !trimmedSvg.startsWith('<svg') ||
+        /<script\b|<foreignObject\b|\son[a-z]+\s*=|javascript:/i.test(trimmedSvg)
+    ) {
+        return null;
+    }
+    return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(trimmedSvg)}`;
+}
+
+function useQRCodeSvgDataUrl(text: string) {
+    const [svgDataUrl, setSvgDataUrl] = useState<string | null>(null);
     useEffect(() => {
-        let cancelled = false;        (async () => {
+        let cancelled = false;
+        (async () => {
             if (!qrcodeLib) {
                 qrcodeLib = await import('qrcode');
             }
@@ -35,11 +45,11 @@ function useQRCodeSVG(text: string) {
                 color: { dark: '#10b981', light: '#00000000' },
                 width: 240,
             });
-            if (!cancelled) setSvg(result);
+            if (!cancelled) setSvgDataUrl(toSafeSvgDataUrl(result));
         })();
         return () => { cancelled = true; };
     }, [text]);
-    return svg;
+    return svgDataUrl;
 }
 
 /* ------------------------------------------------------------------ */
@@ -64,14 +74,15 @@ const card = 'rounded-xl border border-[var(--re-surface-border)] bg-[var(--re-s
 export default function ScanPage() {
     const isMobile = useIsMobile();
     const { tenantId } = useTenant();
-    const capturePath = tenantId
-        ? `/fsma/field-capture?tenant_id=${encodeURIComponent(tenantId)}`
+    const safeTenantId = SAFE_SCAN_TENANT_ID.test(tenantId) ? tenantId : null;
+    const capturePath = safeTenantId
+        ? `/fsma/field-capture?tenant_id=${encodeURIComponent(safeTenantId)}`
         : '/fsma/field-capture';
     const captureURL = typeof window !== 'undefined'
         ? `${window.location.origin}${capturePath}`
         : `https://regengine.co${capturePath}`;
 
-    const qrSvg = useQRCodeSVG(captureURL);
+    const qrSvgDataUrl = useQRCodeSvgDataUrl(captureURL);
     const [copied, setCopied] = useState(false);
 
     const handleCopy = useCallback(async () => {
@@ -82,14 +93,15 @@ export default function ScanPage() {
 
     return (
         <div className="p-4 sm:p-6 max-w-[980px] mx-auto space-y-6">
-            {/* Header */}            <div>
+            {/* Header */}
+            <div>
                 <h1 className="text-2xl font-bold text-[var(--re-text-primary)]">Field Capture</h1>
                 <p className="text-sm text-[var(--re-text-muted)] mt-1 max-w-[640px]">
                     Scan barcodes and capture photos from the factory floor. Events flow directly into your compliance pipeline with offline support.
                 </p>
                 <p className="text-xs text-[var(--re-text-disabled)] mt-2">
-                    {tenantId
-                        ? `Shared capture links stay scoped to tenant ${tenantId}.`
+                    {safeTenantId
+                        ? `Shared capture links stay scoped to tenant ${safeTenantId}.`
                         : 'Shared capture links use the active dashboard tenant once a session is established.'}
                 </p>
             </div>
@@ -115,7 +127,8 @@ export default function ScanPage() {
                             Launch Scanner
                         </Link>
                     </div>
-                </div>            ) : (
+                </div>
+            ) : (
                 /* ---- Desktop: QR share card + instructions ---- */
                 <div className="grid gap-6 md:grid-cols-2">
                     {/* QR Code card */}
@@ -131,8 +144,12 @@ export default function ScanPage() {
                         {/* QR Code */}
                         <div className="flex justify-center mb-5">
                             <div className="w-[240px] h-[240px] rounded-xl border border-[var(--re-surface-border)] bg-white/5 flex items-center justify-center p-4">
-                                {qrSvg ? (
-                                    <div dangerouslySetInnerHTML={{ __html: qrSvg }} />
+                                {qrSvgDataUrl ? (
+                                    <img
+                                        src={qrSvgDataUrl}
+                                        alt="Field capture QR code"
+                                        className="h-full w-full"
+                                    />
                                 ) : (
                                     <Loader2 className="h-6 w-6 text-[var(--re-text-disabled)] animate-spin" />
                                 )}

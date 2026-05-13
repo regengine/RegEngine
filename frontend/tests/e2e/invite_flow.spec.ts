@@ -73,6 +73,7 @@ test.describe('User Invite Flow', () => {
         console.log(`Intercepted Invite Link: ${inviteLink}`);
         expect(inviteLink).toBeTruthy();
         expect(inviteLink).toContain('token=');
+        expect(inviteLink).not.toContain('?token=');
 
         // Wait for success toast or list update (UI verification)
         try {
@@ -92,10 +93,12 @@ test.describe('User Invite Flow', () => {
 
         // Navigate to invite link
         // Ensure it uses the frontend port (3001)
-        const token = inviteLink.split('token=')[1];
+        const inviteUrl = new URL(inviteLink, 'http://localhost');
+        const token = new URLSearchParams(inviteUrl.hash.slice(1)).get('token');
+        expect(token).toBeTruthy();
 
-        // inviteLink is relative path from backend (e.g. "/accept-invite?token=...")
-        await page2.goto(`/accept-invite?token=${token}`);
+        // inviteLink is relative path from backend (e.g. "/accept-invite#token=...").
+        await page2.goto(`/accept-invite#token=${token}`);
 
         // Verify Accept Page
         await expect(page2.getByRole('heading', { name: 'Accept Invitation' }).first()).toBeVisible();

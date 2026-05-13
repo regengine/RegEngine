@@ -22,6 +22,11 @@ from pydantic import BaseModel, Field
 from sqlalchemy import text
 
 from .webhook_compat import _verify_api_key
+from .shared.upload_limits import (
+    MAX_CSV_FILE_SIZE_BYTES,
+    read_upload_with_limit,
+    sanitize_upload_filename,
+)
 from shared.database import get_db_safe
 
 logger = logging.getLogger("integration-router")
@@ -607,8 +612,18 @@ async def upload_csv(
     from shared.external_connectors.base import ConnectorConfig
     from shared.external_connectors.csv_sftp import CSVSFTPConnector
 
-    content = await file.read()
-    csv_text = content.decode("utf-8-sig")  # handle BOM
+    safe_filename = sanitize_upload_filename(file.filename, fallback="upload.csv")
+    content = await read_upload_with_limit(
+        file,
+        max_bytes=MAX_CSV_FILE_SIZE_BYTES,
+        label="CSV file",
+    )
+    if not content:
+        raise HTTPException(status_code=400, detail="Empty CSV upload")
+    try:
+        csv_text = content.decode("utf-8-sig")  # handle BOM
+    except UnicodeDecodeError as exc:
+        raise HTTPException(status_code=422, detail="CSV upload must be valid UTF-8") from exc
 
     config = ConnectorConfig(
         connector_id="csv_sftp",
@@ -621,13 +636,13 @@ async def upload_csv(
         },
     )
     connector = CSVSFTPConnector(config)
-    events = connector.parse_csv(csv_text, source_file=file.filename or "upload.csv")
+    events = connector.parse_csv(csv_text, source_file=safe_filename)
 
     # Convert to ingest format
     ingest_events = [e.to_ingest_dict() for e in events]
 
     return {
-        "filename": file.filename,
+        "filename": safe_filename,
         "rows_parsed": len(events),
         "events": ingest_events,
         "source_system": source_system,

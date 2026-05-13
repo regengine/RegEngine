@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { fetchWithCsrf } from '@/lib/fetch-with-csrf';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader } from '@/components/ui/card';
@@ -16,6 +17,7 @@ export default function ForgotPasswordClient() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const linkExpired = searchParams.get('error') === 'link_expired';
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
@@ -29,25 +31,14 @@ export default function ForgotPasswordClient() {
         setError(null);
 
         try {
-            // Build the redirect URL so Supabase routes through our /auth/callback
-            // handler, which exchanges the recovery code for a session and then
-            // forwards to /reset-password.
-            const origin =
-                typeof window !== 'undefined'
-                    ? window.location.origin
-                    : process.env.NEXT_PUBLIC_SITE_URL ?? 'https://regengine.co';
-            const redirectTo = `${origin}/auth/callback?next=/reset-password`;
-
-            const response = await fetch('/api/auth/supabase/reset-email', {
+            const res = await fetchWithCsrf('/api/admin/auth/forgot-password', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                credentials: 'include',
-                body: JSON.stringify({ email: trimmed, redirectTo }),
+                body: JSON.stringify({ email: trimmed }),
             });
 
-            if (!response.ok) {
-                const payload = await response.json().catch(() => null);
-                setError(payload?.error || 'Failed to send reset email. Please try again.');
+            if (!res.ok) {
+                setError('Failed to send reset email. Please try again.');
                 return;
             }
 

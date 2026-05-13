@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import asyncio
 import io
+import zipfile
 from typing import Optional
 
 import pytest
@@ -34,7 +35,13 @@ from app.shared.upload_limits import (
     MAX_CSV_FILE_SIZE_BYTES,
     MAX_EDI_FILE_SIZE_BYTES,
     MAX_FILE_SIZE_BYTES,
+    MAX_IMAGE_FILE_SIZE_BYTES,
+    MAX_REGULATION_FILE_SIZE_BYTES,
     read_upload_with_limit,
+    regulation_upload_type,
+    sanitize_upload_filename,
+    stream_upload_to_file_with_limit,
+    validate_regulation_upload_content,
 )
 
 
@@ -184,6 +191,12 @@ class TestUploadLimitConstants:
     def test_edi_cap_is_5mb(self):
         assert MAX_EDI_FILE_SIZE_BYTES == 5 * 1024 * 1024
 
+    def test_image_cap_is_10mb(self):
+        assert MAX_IMAGE_FILE_SIZE_BYTES == 10 * 1024 * 1024
+
+    def test_regulation_cap_is_100mb(self):
+        assert MAX_REGULATION_FILE_SIZE_BYTES == 100 * 1024 * 1024
+
     def test_csv_and_edi_caps_are_below_generic_cap(self):
         """CSV/EDI are structured formats — tighter caps are intentional."""
         assert MAX_CSV_FILE_SIZE_BYTES <= MAX_FILE_SIZE_BYTES
@@ -213,3 +226,76 @@ class TestReadUploadSignature:
     def test_read_upload_is_exported(self):
         assert hasattr(upload_limits, "read_upload_with_limit")
         assert callable(upload_limits.read_upload_with_limit)
+
+
+class TestStreamUploadToFileWithLimit:
+
+    def test_streams_to_path_and_returns_prefix(self, tmp_path):
+        payload = b"%PDF-" + b"A" * 100
+        destination = tmp_path / "upload.pdf"
+        total, prefix = _run(
+            stream_upload_to_file_with_limit(
+                _make_upload(payload),
+                destination,
+                max_bytes=1024,
+                label="PDF",
+                prefix_bytes=8,
+            )
+        )
+        assert total == len(payload)
+        assert prefix == payload[:8]
+        assert destination.read_bytes() == payload
+
+    def test_stream_oversize_raises_413(self, tmp_path):
+        destination = tmp_path / "upload.bin"
+        with pytest.raises(HTTPException) as exc_info:
+            _run(
+                stream_upload_to_file_with_limit(
+                    _make_upload(b"x" * 20),
+                    destination,
+                    max_bytes=8,
+                    label="streamed file",
+                )
+            )
+        assert exc_info.value.status_code == 413
+        assert "streamed file" in exc_info.value.detail
+
+
+class TestFilenameAndDocumentValidation:
+
+    def test_sanitize_upload_filename_uses_basename_and_strips_controls(self):
+        assert sanitize_upload_filename("../secret\n-token.pdf") == "secret-token.pdf"
+        assert sanitize_upload_filename("..") == "upload"
+        assert sanitize_upload_filename("   ") == "upload"
+
+    def test_regulation_upload_type_is_case_insensitive(self):
+        assert regulation_upload_type("REG.PDF") == "pdf"
+        assert regulation_upload_type("policy.DOCX") == "docx"
+
+    def test_regulation_upload_type_rejects_other_extensions(self):
+        with pytest.raises(HTTPException) as exc_info:
+            regulation_upload_type("policy.txt")
+        assert exc_info.value.status_code == 400
+
+    def test_pdf_content_signature_validation(self):
+        validate_regulation_upload_content("pdf", b"%PDF-1.7")
+        with pytest.raises(HTTPException) as exc_info:
+            validate_regulation_upload_content("pdf", b"not-pdf")
+        assert exc_info.value.status_code == 400
+
+    def test_docx_parser_validation(self, tmp_path):
+        docx_path = tmp_path / "valid.docx"
+        with zipfile.ZipFile(docx_path, "w") as archive:
+            archive.writestr("[Content_Types].xml", "<Types />")
+            archive.writestr("word/document.xml", "<w:document />")
+        prefix = docx_path.read_bytes()[:8]
+        validate_regulation_upload_content("docx", prefix, path=docx_path)
+
+    def test_docx_parser_validation_rejects_zip_without_word_document(self, tmp_path):
+        docx_path = tmp_path / "invalid.docx"
+        with zipfile.ZipFile(docx_path, "w") as archive:
+            archive.writestr("[Content_Types].xml", "<Types />")
+        prefix = docx_path.read_bytes()[:8]
+        with pytest.raises(HTTPException) as exc_info:
+            validate_regulation_upload_content("docx", prefix, path=docx_path)
+        assert exc_info.value.status_code == 400
