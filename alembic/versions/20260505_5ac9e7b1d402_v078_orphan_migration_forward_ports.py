@@ -1025,7 +1025,21 @@ def _outbox_tables() -> None:
           AND a.operation = b.operation
           AND a.dedupe_key IS NOT NULL
           AND a.dedupe_key = b.dedupe_key;
-        DROP INDEX IF EXISTS public.uq_graph_outbox_dedupe;
+        DO $$
+        BEGIN
+            IF EXISTS (
+                SELECT 1
+                FROM pg_class idx
+                JOIN pg_namespace ns ON ns.oid = idx.relnamespace
+                LEFT JOIN pg_constraint con ON con.conindid = idx.oid
+                WHERE ns.nspname = 'public'
+                  AND idx.relname = 'uq_graph_outbox_dedupe'
+                  AND idx.relkind = 'i'
+                  AND con.oid IS NULL
+            ) THEN
+                DROP INDEX public.uq_graph_outbox_dedupe;
+            END IF;
+        END $$;
         DO $$
         BEGIN
             IF NOT EXISTS (
@@ -1066,7 +1080,21 @@ def _outbox_tables() -> None:
           AND a.event_type = b.event_type
           AND a.dedupe_key IS NOT NULL
           AND a.dedupe_key = b.dedupe_key;
-        DROP INDEX IF EXISTS public.uq_webhook_outbox_dedupe;
+        DO $$
+        BEGIN
+            IF EXISTS (
+                SELECT 1
+                FROM pg_class idx
+                JOIN pg_namespace ns ON ns.oid = idx.relnamespace
+                LEFT JOIN pg_constraint con ON con.conindid = idx.oid
+                WHERE ns.nspname = 'public'
+                  AND idx.relname = 'uq_webhook_outbox_dedupe'
+                  AND idx.relkind = 'i'
+                  AND con.oid IS NULL
+            ) THEN
+                DROP INDEX public.uq_webhook_outbox_dedupe;
+            END IF;
+        END $$;
         DO $$
         BEGIN
             IF NOT EXISTS (
