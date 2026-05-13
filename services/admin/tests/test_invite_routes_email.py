@@ -27,8 +27,9 @@ def test_build_invite_link_uses_configured_base_url(monkeypatch):
     monkeypatch.setenv("INVITE_BASE_URL", "https://app.regengine.test")
     relative, absolute = invite_routes._build_invite_link("abc123")
 
-    assert relative == "/accept-invite?token=abc123"
-    assert absolute == "https://app.regengine.test/accept-invite?token=abc123"
+    assert relative == "/accept-invite#token=abc123"
+    assert absolute == "https://app.regengine.test/accept-invite#token=abc123"
+    assert "?" not in relative
 
 
 def test_send_invite_email_uses_resend_when_key_configured(monkeypatch):
@@ -36,7 +37,7 @@ def test_send_invite_email_uses_resend_when_key_configured(monkeypatch):
     monkeypatch.setenv("RESEND_FROM_EMAIL", "onboarding@regengine.test")
     monkeypatch.setitem(sys.modules, "resend", _DummyResend)
 
-    invite_routes._send_invite_email("buyer@example.com", "https://regengine.co/accept-invite?token=t")
+    invite_routes._send_invite_email("buyer@example.com", "https://regengine.co/accept-invite#token=t")
 
     assert _DummyResend.api_key == "re_test_key"
     assert _DummyEmails.last_payload is not None
@@ -47,4 +48,4 @@ def test_send_invite_email_uses_resend_when_key_configured(monkeypatch):
 
 def test_send_invite_email_noop_without_api_key(monkeypatch):
     monkeypatch.delenv("RESEND_API_KEY", raising=False)
-    invite_routes._send_invite_email("buyer@example.com", "https://regengine.co/accept-invite?token=t")
+    invite_routes._send_invite_email("buyer@example.com", "https://regengine.co/accept-invite#token=t")

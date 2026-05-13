@@ -4,6 +4,51 @@ import { createServerClient } from '@supabase/ssr'
 // Must be dynamic — this route exchanges OAuth codes for sessions at request time
 export const dynamic = 'force-dynamic';
 
+function resolveSafeNextPath(nextPath: string | null, origin: string): string {
+    if (!nextPath) return '/dashboard'
+
+    const trimmed = nextPath.trim()
+    if (!trimmed.startsWith('/') || trimmed.startsWith('//') || /[\u0000-\u001F\u007F\\]/.test(trimmed)) {
+        return '/dashboard'
+    }
+
+    try {
+        const parsed = new URL(trimmed, origin)
+        if (parsed.origin !== origin || parsed.pathname === '/login' || parsed.pathname.startsWith('/login/')) {
+            return '/dashboard'
+        }
+        return `${parsed.pathname}${parsed.search}${parsed.hash}`
+    } catch {
+        return '/dashboard'
+    }
+}
+
+function normalizePublicOrigin(value: string | null | undefined): string | null {
+    if (!value) return null
+
+    const trimmed = value.trim()
+    if (!trimmed) return null
+
+    const candidate = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`
+    try {
+        const parsed = new URL(candidate)
+        if (!['http:', 'https:'].includes(parsed.protocol)) return null
+        return parsed.origin
+    } catch {
+        return null
+    }
+}
+
+function resolveRedirectOrigin(requestOrigin: string): string {
+    if (process.env.NODE_ENV === 'development') return requestOrigin
+
+    return (
+        normalizePublicOrigin(process.env.NEXT_PUBLIC_SITE_URL) ??
+        normalizePublicOrigin(process.env.VERCEL_URL) ??
+        requestOrigin
+    )
+}
+
 export async function GET(request: NextRequest) {
     const { searchParams, origin } = new URL(request.url)
     const code = searchParams.get('code')
@@ -16,15 +61,8 @@ export async function GET(request: NextRequest) {
         // session cookies to the redirect. Without this, exchangeCodeForSession sets
         // cookies only on request.cookies (not visible to the browser) and the session
         // is lost — causing the reset-password page to see no session.
-        const forwardedHost = request.headers.get('x-forwarded-host')
-        const isLocalEnv = process.env.NODE_ENV === 'development'
-        const redirectBase = isLocalEnv
-            ? origin
-            : forwardedHost
-            ? `https://${forwardedHost}`
-            : origin
-
-        const response = NextResponse.redirect(`${redirectBase}${next}`)
+        const redirectOrigin = resolveRedirectOrigin(origin)
+        const response = NextResponse.redirect(new URL(resolveSafeNextPath(next, redirectOrigin), redirectOrigin))
 
         const supabase = createServerClient(
             process.env.NEXT_PUBLIC_SUPABASE_URL!,

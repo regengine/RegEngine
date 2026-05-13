@@ -180,6 +180,62 @@ class TestIngestRegulation:
         resp = self._post(client, content=b"data", filename="reg.txt")
         assert resp.status_code == 400
 
+    def test_spoofed_pdf_content_returns_400_and_cleans_staging(self, monkeypatch, tmp_path):
+        monkeypatch.setattr("app.routes.SessionLocal", lambda: MagicMock())
+        monkeypatch.setattr("app.routes.enqueue_task", MagicMock())
+        monkeypatch.setattr("app.routes.redis.from_url", lambda *a, **kw: MagicMock())
+        monkeypatch.setenv("INGEST_STAGING_DIR", str(tmp_path))
+
+        import importlib
+        import app.task_handlers_regulation as thr
+        importlib.reload(thr)
+        monkeypatch.setattr("app.routes.get_staging_path", thr.get_staging_path)
+
+        client = _build_client(_make_api_key(us=True), monkeypatch)
+        resp = self._post(client, content=b"not a pdf", filename="reg.pdf")
+        assert resp.status_code == 400
+        assert "PDF content" in resp.json()["detail"]
+        assert list(tmp_path.iterdir()) == []
+
+    def test_streaming_limit_returns_413_and_cleans_staging(self, monkeypatch, tmp_path):
+        monkeypatch.setattr("app.routes.SessionLocal", lambda: MagicMock())
+        monkeypatch.setattr("app.routes.enqueue_task", MagicMock())
+        monkeypatch.setattr("app.routes.redis.from_url", lambda *a, **kw: MagicMock())
+        monkeypatch.setattr("app.routes.MAX_REGULATION_FILE_SIZE_BYTES", 16)
+        monkeypatch.setenv("INGEST_STAGING_DIR", str(tmp_path))
+
+        import importlib
+        import app.task_handlers_regulation as thr
+        importlib.reload(thr)
+        monkeypatch.setattr("app.routes.get_staging_path", thr.get_staging_path)
+
+        client = _build_client(_make_api_key(us=True), monkeypatch)
+        resp = self._post(client, content=b"%PDF-" + b"x" * 32, filename="reg.pdf")
+        assert resp.status_code == 413
+        assert list(tmp_path.iterdir()) == []
+
+    def test_malicious_filename_is_sanitized_before_queue_payload(self, monkeypatch, tmp_path):
+        fake_session = MagicMock()
+        mock_enqueue = MagicMock(return_value=1)
+        monkeypatch.setattr("app.routes.SessionLocal", lambda: fake_session)
+        monkeypatch.setattr("app.routes.enqueue_task", mock_enqueue)
+        monkeypatch.setattr("app.routes.redis.from_url", lambda *a, **kw: MagicMock())
+        monkeypatch.setenv("INGEST_STAGING_DIR", str(tmp_path))
+
+        import importlib
+        import app.task_handlers_regulation as thr
+        importlib.reload(thr)
+        monkeypatch.setattr("app.routes.get_staging_path", thr.get_staging_path)
+
+        client = _build_client(_make_api_key(us=True), monkeypatch)
+        resp = self._post(client, filename="../../secret-token.pdf")
+
+        assert resp.status_code == 202
+        payload = mock_enqueue.call_args.kwargs["payload"]
+        assert payload["filename"] == "secret-token.pdf"
+        assert ".." not in payload["filename"]
+        assert "/" not in payload["filename"]
+
     def test_db_commit_called(self, monkeypatch, tmp_path):
         fake_session = MagicMock()
         monkeypatch.setattr("app.routes.SessionLocal", lambda: fake_session)

@@ -61,7 +61,7 @@ test.describe('Dashboard Inflow Lab', () => {
         await expect(page.getByRole('button', { name: /Run sandbox test/i })).toBeVisible();
         await expect(page.getByRole('link', { name: 'Open fix queue' })).toHaveAttribute(
             'href',
-            '/dashboard/exceptions',
+            '/exceptions',
         );
     });
 
@@ -171,7 +171,8 @@ test.describe('Dashboard Inflow Lab', () => {
         });
         expect(inviteResponse.ok()).toBeTruthy();
         const invitePayload = await inviteResponse.json();
-        const token = new URL(`http://localhost${invitePayload.invite_link as string}`).searchParams.get('token');
+        const inviteUrl = new URL(invitePayload.invite_link as string, 'http://localhost');
+        const token = new URLSearchParams(inviteUrl.hash.slice(1)).get('token');
         expect(token).toBeTruthy();
 
         const acceptResponse = await request.post('/api/admin/v1/auth/accept-invite', {

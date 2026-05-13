@@ -23,6 +23,24 @@ function getPasswordStrength(password: string): { score: number; label: string; 
     return { score, label: 'Strong', color: 'bg-re-brand' };
 }
 
+function scrubRecoveryHash(): void {
+    if (typeof window === 'undefined' || !window.location.hash) return;
+
+    const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+    const hasSensitiveRecoveryData =
+        hashParams.has('access_token') ||
+        hashParams.has('refresh_token') ||
+        hashParams.get('type') === 'recovery';
+
+    if (!hasSensitiveRecoveryData) return;
+
+    window.history.replaceState(
+        null,
+        document.title,
+        `${window.location.pathname}${window.location.search}`,
+    );
+}
+
 export default function ResetPasswordClient() {
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
@@ -52,6 +70,7 @@ export default function ResetPasswordClient() {
     useEffect(() => {
         const check = () => {
             supabase.auth.getSession().then(({ data: { session } }) => {
+                scrubRecoveryHash();
                 if (session) {
                     setSessionReady(true);
                 } else {
@@ -69,10 +88,6 @@ export default function ResetPasswordClient() {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
-        if (password.length < 8) {
-            setError('Password must be at least 8 characters.');
-            return;
-        }
         if (password !== confirmPassword) {
             setError('Passwords do not match.');
             return;
@@ -93,11 +108,7 @@ export default function ResetPasswordClient() {
                 return;
             }
 
-            const adminBase = process.env.NEXT_PUBLIC_API_BASE_URL
-                ? `${process.env.NEXT_PUBLIC_API_BASE_URL}/admin`
-                : '/api/admin';
-
-            const res = await fetchWithCsrf(`${adminBase}/auth/reset-password`, {
+            const res = await fetchWithCsrf('/api/admin/auth/reset-password', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -237,7 +248,7 @@ export default function ResetPasswordClient() {
                                             autoComplete="new-password"
                                             autoFocus
                                             className="h-11 pr-10"
-                                            placeholder="Min. 8 characters"
+                                            placeholder="New password"
                                         />
                                         <button
                                             type="button"

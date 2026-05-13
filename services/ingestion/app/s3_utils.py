@@ -2,11 +2,17 @@
 
 Provides low-level S3 operations for the ingestion service, including
 raw document persistence to the 'regengine-ingest-raw' bucket.
+
+These helpers store uploads as private ``s3://`` object URIs only. They do
+not generate public HTTP object URLs or mount user-uploaded content under
+the application origin; download flows must use a separate object/download
+origin with signed URLs and attachment/nosniff response handling.
 """
 
 from __future__ import annotations
 
 import json
+import re
 from datetime import datetime, timezone
 from typing import Any, Optional
 from uuid import uuid4
@@ -25,6 +31,9 @@ RAW_INGEST_BUCKET = "regengine-ingest-raw"
 
 # All uploads use AES-256 server-side encryption at rest.
 _SSE = {"ServerSideEncryption": "AES256"}
+_SAFE_COMPONENT_RE = re.compile(r"[^A-Za-z0-9._-]+")
+_CONTROL_CHARS_RE = re.compile(r"[\x00-\x1f\x7f]+")
+_MAX_KEY_COMPONENT_CHARS = 120
 
 
 def _client() -> BaseClient:
@@ -85,7 +94,9 @@ def put_json(bucket: str, key: str, payload: Any) -> str:
 
     try:
         body = json.dumps(payload, default=_json_serializer).encode("utf-8")
-        _client().put_object(Bucket=bucket, Key=key, Body=body, ContentType="application/json", **_SSE)
+        s3 = _client()
+        _validate_s3_key(key)
+        s3.put_object(Bucket=bucket, Key=key, Body=body, ContentType="application/json", **_SSE)
         return f"s3://{bucket}/{key}"
     except (ClientError, BotoCoreError) as exc:
         if isinstance(exc, ClientError) and exc.response["Error"]["Code"] == "NoSuchBucket":
@@ -112,14 +123,17 @@ def put_bytes(
     """Upload raw bytes to S3 and return the object URI."""
 
     try:
-        _client().put_object(Bucket=bucket, Key=key, Body=content, ContentType=content_type, **_SSE)
+        s3 = _client()
+        _validate_s3_key(key)
+        s3.put_object(Bucket=bucket, Key=key, Body=content, ContentType=content_type, **_SSE)
         return f"s3://{bucket}/{key}"
     except (ClientError, BotoCoreError) as exc:
         if isinstance(exc, ClientError) and exc.response["Error"]["Code"] == "NoSuchBucket":
-             # Auto-create bucket for dev/demo robustness
+            # Auto-create bucket for dev/demo robustness.
             try:
-                _client().create_bucket(Bucket=bucket)
-                _client().put_object(Bucket=bucket, Key=key, Body=content, ContentType=content_type, **_SSE)
+                s3.create_bucket(Bucket=bucket)
+                _ensure_bucket_security(s3, bucket)
+                s3.put_object(Bucket=bucket, Key=key, Body=content, ContentType=content_type, **_SSE)
                 return f"s3://{bucket}/{key}"
             except Exception as create_exc:
                 logger.error("s3_create_bucket_failed", bucket=bucket, error=str(create_exc))
@@ -146,6 +160,7 @@ def _ensure_bucket(client: BaseClient, bucket: str) -> None:
         if error_code in ("404", "NoSuchBucket"):
             try:
                 client.create_bucket(Bucket=bucket)
+                _ensure_bucket_security(client, bucket)
                 logger.info("s3_bucket_created", bucket=bucket)
             except (ClientError, BotoCoreError) as create_exc:
                 logger.error("s3_create_bucket_failed", bucket=bucket, error=str(create_exc))
@@ -157,6 +172,61 @@ def _ensure_bucket(client: BaseClient, bucket: str) -> None:
 # ---------------------------------------------------------------------------
 # Raw document persistence for the 'regengine-ingest-raw' bucket
 # ---------------------------------------------------------------------------
+
+
+def safe_s3_key_component(
+    value: str | None,
+    *,
+    fallback: str = "component",
+    max_length: int = _MAX_KEY_COMPONENT_CHARS,
+    lower: bool = False,
+) -> str:
+    """Sanitize one caller-controlled S3 key component.
+
+    S3 keys are not filesystem paths, but keeping components basename-only
+    and allowlisted avoids dot segments, control characters, and misleading
+    operator paths in downstream tooling.
+    """
+    raw = _CONTROL_CHARS_RE.sub("", str(value or ""))
+    component = raw.replace("\\", "/").rsplit("/", 1)[-1].strip()
+    if lower:
+        component = component.lower()
+    component = _SAFE_COMPONENT_RE.sub("_", component)
+    component = re.sub(r"_+", "_", component)
+    component = re.sub(r"\.+", ".", component)
+    component = component.strip(" ._-")
+    if not component or component in {".", ".."}:
+        component = fallback
+    if len(component) > max_length:
+        stem, dot, suffix = component.rpartition(".")
+        if dot and suffix:
+            suffix = suffix[:20]
+            available = max(1, max_length - len(suffix) - 1)
+            component = f"{stem[:available]}.{suffix}"
+        else:
+            component = component[:max_length]
+    return component or fallback
+
+
+def _safe_s3_prefix(prefix: str | None) -> str:
+    if not prefix:
+        return ""
+    parts = [
+        safe_s3_key_component(part, fallback="segment")
+        for part in str(prefix).replace("\\", "/").split("/")
+        if part.strip()
+    ]
+    return "/".join(parts)
+
+
+def _validate_s3_key(key: str) -> None:
+    if not key or key.startswith("/") or "//" in key:
+        raise ValueError("S3 key must be a non-empty relative object key")
+    parts = key.split("/")
+    if any(part in {"", ".", ".."} for part in parts):
+        raise ValueError("S3 key contains an unsafe path segment")
+    if _CONTROL_CHARS_RE.search(key):
+        raise ValueError("S3 key contains control characters")
 
 
 def upload_raw_document(
@@ -176,16 +246,17 @@ def upload_raw_document(
     now = datetime.now(timezone.utc)
     document_id = str(uuid4())
     date_prefix = now.strftime("%Y/%m/%d")
-    safe_type = document_type.lower().replace(" ", "_")
+    safe_tenant_id = safe_s3_key_component(tenant_id, fallback="tenant")
+    safe_type = safe_s3_key_component(document_type, fallback="unknown", lower=True)
 
     suffix = ""
     if filename:
-        # Sanitize filename for use in S3 key
-        safe_name = filename.replace("/", "_").replace("\\", "_").strip()
+        safe_name = safe_s3_key_component(filename, fallback="")
         if safe_name:
             suffix = f"-{safe_name}"
 
-    key = f"{tenant_id}/{date_prefix}/{safe_type}/{document_id}{suffix}"
+    key = f"{safe_tenant_id}/{date_prefix}/{safe_type}/{document_id}{suffix}"
+    _validate_s3_key(key)
 
     s3 = _client()
     s3_metadata: dict[str, str] = {
@@ -285,9 +356,10 @@ def list_raw_documents(
     ``s3_uri`` for each object.
     """
     s3 = _client()
-    search_prefix = f"{tenant_id}/"
     if prefix:
-        search_prefix = f"{tenant_id}/{prefix}"
+        search_prefix = f"{safe_s3_key_component(tenant_id, fallback='tenant')}/{_safe_s3_prefix(prefix)}"
+    else:
+        search_prefix = f"{safe_s3_key_component(tenant_id, fallback='tenant')}/"
 
     documents: list[dict[str, Any]] = []
     try:

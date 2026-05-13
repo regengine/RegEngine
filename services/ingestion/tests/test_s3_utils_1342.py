@@ -304,6 +304,8 @@ class TestPutBytes:
         assert uri == "s3://b/k"
         assert len(fake_client.put_calls) == 2
         assert fake_client.create_calls == [{"Bucket": "b"}]
+        assert "public_access_block" in fake_client.ensure_security_calls
+        assert "bucket_encryption" in fake_client.ensure_security_calls
 
     def test_create_fails_raises_500(self, fake_client):
         fake_client.put_object_raises = _client_error("NoSuchBucket")
@@ -354,11 +356,13 @@ class TestEnsureBucket:
         fake_client.head_bucket_raises = _client_error("404", op="HeadBucket")
         s3_utils._ensure_bucket(fake_client, "b")
         assert fake_client.create_calls == [{"Bucket": "b"}]
+        assert "public_access_block" in fake_client.ensure_security_calls
 
     def test_missing_bucket_NoSuchBucket_creates(self, fake_client):
         fake_client.head_bucket_raises = _client_error("NoSuchBucket", op="HeadBucket")
         s3_utils._ensure_bucket(fake_client, "b")
         assert fake_client.create_calls == [{"Bucket": "b"}]
+        assert "bucket_encryption" in fake_client.ensure_security_calls
 
     def test_create_bucket_failure_reraises(self, fake_client):
         fake_client.head_bucket_raises = _client_error("404", op="HeadBucket")
@@ -430,7 +434,8 @@ class TestUploadRawDocument:
         out = s3_utils.upload_raw_document(
             content=b"x", tenant_id="t", filename="../etc/passwd",
         )
-        assert ".._etc_passwd" in out["key"]
+        assert out["key"].endswith("-passwd")
+        assert ".." not in out["key"]
         # No raw slashes past the built-in prefix layers
         assert "/passwd" not in out["key"]
 
@@ -447,6 +452,29 @@ class TestUploadRawDocument:
         )
         assert "/food_safety_pdf/" in out["key"]
 
+    def test_document_type_dot_segments_are_sanitized(self, fake_client):
+        out = s3_utils.upload_raw_document(
+            content=b"x",
+            tenant_id="tenant/../../secret",
+            document_type="../Policy Draft",
+            filename="..\x00/evil name.pdf",
+        )
+        key_parts = out["key"].split("/")
+        assert key_parts[0] == "secret"
+        assert "policy_draft" in key_parts
+        assert out["key"].endswith("-evil_name.pdf")
+        assert ".." not in out["key"]
+
+    def test_created_raw_bucket_is_hardened_before_upload(self, fake_client):
+        fake_client.head_bucket_raises = _client_error("NoSuchBucket", op="HeadBucket")
+        s3_utils.upload_raw_document(content=b"x", tenant_id="t")
+        assert fake_client.create_calls == [{"Bucket": "regengine-ingest-raw"}]
+        assert fake_client.ensure_security_calls == [
+            "public_access_block",
+            "bucket_encryption",
+        ]
+        assert "ACL" not in fake_client.put_calls[0]
+
     def test_client_error_becomes_500(self, fake_client):
         fake_client.put_object_raises = _client_error("SlowDown")
         with pytest.raises(HTTPException) as exc_info:
@@ -459,6 +487,21 @@ class TestUploadRawDocument:
         with pytest.raises(HTTPException) as exc_info:
             s3_utils.upload_raw_document(content=b"x", tenant_id="t")
         assert exc_info.value.status_code == 500
+
+
+class TestSafeS3KeyComponent:
+
+    def test_basename_allowlist_and_length_cap(self):
+        value = "../Customer Secret \x00 Report.final.pdf"
+        assert s3_utils.safe_s3_key_component(value) == "Customer_Secret_Report.final.pdf"
+
+    def test_empty_and_dot_segments_fall_back(self):
+        assert s3_utils.safe_s3_key_component("..", fallback="x") == "x"
+        assert s3_utils.safe_s3_key_component("   ", fallback="x") == "x"
+
+    def test_put_helpers_reject_unsafe_full_keys(self, fake_client):
+        with pytest.raises(ValueError):
+            s3_utils.put_bytes("b", "raw/../evil", b"x")
 
 
 # ---------------------------------------------------------------------------

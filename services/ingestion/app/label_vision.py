@@ -18,6 +18,11 @@ from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from pydantic import BaseModel, Field
 
 from shared.auth import APIKey, require_api_key
+from .shared.upload_limits import (
+    MAX_IMAGE_FILE_SIZE_BYTES,
+    read_upload_with_limit,
+    validated_image_content_type,
+)
 
 logger = logging.getLogger("label-vision")
 
@@ -116,21 +121,22 @@ async def analyze_label(
     file: UploadFile = File(..., description="Photo of food label or packaging"),
     api_key: APIKey = Depends(require_api_key),
 ) -> LabelVisionResponse:
-    # Validate image
+    # Validate image type before forwarding it as a model data URI.
     if not file.content_type or not file.content_type.startswith("image/"):
         raise HTTPException(status_code=400, detail="Upload must be an image")
 
-    image_bytes = await file.read()
+    image_bytes = await read_upload_with_limit(
+        file,
+        max_bytes=MAX_IMAGE_FILE_SIZE_BYTES,
+        label="Image",
+    )
     if not image_bytes:
         raise HTTPException(status_code=400, detail="Uploaded image is empty")
-    if len(image_bytes) > 10 * 1024 * 1024:
-        raise HTTPException(status_code=413, detail="Image too large (max 10 MB)")
+    content_type = validated_image_content_type(image_bytes, file.content_type)
 
     # Encode to base64
     image_b64 = base64.b64encode(image_bytes).decode("utf-8")
 
-    # Determine content type for the data URI
-    content_type = file.content_type or "image/jpeg"
     # Try GPT-4o vision
     openai_api_key = os.getenv("OPENAI_API_KEY")
     if not openai_api_key:

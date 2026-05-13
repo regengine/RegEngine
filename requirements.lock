@@ -1235,9 +1235,7 @@ greenlet==3.5.0 \
     --hash=sha256:f35807464c4c58c55f0d31dfa83c541a5615d825c2fe3d2b95360cf7c4e3c0a8 \
     --hash=sha256:f8c30c2225f40dd76c50790f0eb3b5c7c18431efb299e2782083e1981feed243 \
     --hash=sha256:fa94cb2288681e3a11645958f1871d48ee9211bd2f66628fdace505927d6e564
-    # via
-    #   -r requirements.in
-    #   sqlalchemy
+    # via -r requirements.in
 groq==0.37.1 \
     --hash=sha256:7353d6dfb60834fd7aacbb86af106e2dc2aeaff6d0edd65fb2fd0f16bd39314c \
     --hash=sha256:b49f8c8898c55eaec9f71f1342f3fcacc9560d67a08ce5f35fbfb84e8dacd3da
@@ -1567,9 +1565,9 @@ langchain-community==0.4.1 \
     --hash=sha256:2135abb2c7748a35c84613108f7ebf30f8505b18c3c18305ffaecfc7651f6c6a \
     --hash=sha256:f3b211832728ee89f169ddce8579b80a085222ddb4f4ed445a46e977d17b1e85
     # via -r requirements.in
-langchain-core==1.3.0 \
-    --hash=sha256:14a39f528bf459aa3aa40d0a7f7f1bae7520d435ef991ae14a4ceb74d8c49046 \
-    --hash=sha256:baf16ee028475df177b9ab8869a751c79406d64a6f12125b93802991b566cced
+langchain-core==1.3.3 \
+    --hash=sha256:18aae8506f37da7f74398492279a7d6efcee4f8e23c4c41c7af080eeb7ef7bd1 \
+    --hash=sha256:fa510a5db8efdc0c6ff41c0939fb5c00a0183c11f6b84233e892e3227ff69182
     # via
     #   -r requirements.in
     #   langchain
@@ -1584,6 +1582,10 @@ langchain-groq==1.1.2 \
     --hash=sha256:1f59f12233e8e6280c968bca6c40a7e5434e971e9a5387ad23c4c64ec776de10 \
     --hash=sha256:67d1d752fb6590be517735947ec49b4ab9ed9191c7cca79f105d227775c67ae5
     # via -r requirements.in
+langchain-protocol==0.0.15 \
+    --hash=sha256:461eb794358f83d5e42635a5797799ffec7b4702314e34edf73ac21e75d3ef79 \
+    --hash=sha256:9ab2d11ee73944754f10e037e717098d3a6796f0e58afa9cadda6154e7655ade
+    # via langchain-core
 langchain-text-splitters==1.1.2 \
     --hash=sha256:782a723db0a4746ac91e251c7c1d57fd23636e4f38ed733074e28d7a86f41627 \
     --hash=sha256:a2de0d799ff31886429fd6e2e0032df275b60ec817c19059a7b46181cc1c2f10
@@ -4242,6 +4244,7 @@ typing-extensions==4.15.0 \
     #   groq
     #   grpcio
     #   langchain-core
+    #   langchain-protocol
     #   limits
     #   openai
     #   opentelemetry-api
@@ -4278,9 +4281,9 @@ tzlocal==5.3.1 \
     --hash=sha256:cceffc7edecefea1f595541dbd6e990cb1ea3d19bf01b2809f362a03dd7921fd \
     --hash=sha256:eb1a66c3ef5847adf7a834f1be0800581b683b5608e74f86ecbcef8ab91bb85d
     # via apscheduler
-urllib3==2.6.3 \
-    --hash=sha256:1b62b6884944a57dbe321509ab94fd4d3b307075e0c2eae991ac71ee15ad38ed \
-    --hash=sha256:bf272323e553dfb2e87d9bfd225ca7b0f467b919d7bbd355436d3fd37cb0acd4
+urllib3==2.7.0 \
+    --hash=sha256:231e0ec3b63ceb14667c67be60f2f2c40a518cb38b03af60abc813da26505f4c \
+    --hash=sha256:9fb4c81ebbb1ce9531cce37674bbc6f1360472bc18ca9a553ede278ef7276897
     # via
     #   botocore
     #   docker

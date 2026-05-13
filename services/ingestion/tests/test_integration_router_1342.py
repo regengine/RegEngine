@@ -534,6 +534,65 @@ class TestCsvUpload:
         )
         assert resp.status_code == 200
 
+    def test_csv_upload_rejects_empty_file(self, client):
+        resp = client.post(
+            f"/api/v1/integrations/csv-upload/{TENANT}",
+            files={"file": ("empty.csv", b"", "text/csv")},
+        )
+        assert resp.status_code == 400
+        assert resp.json()["detail"] == "Empty CSV upload"
+
+    def test_csv_upload_rejects_invalid_utf8(self, client):
+        resp = client.post(
+            f"/api/v1/integrations/csv-upload/{TENANT}",
+            files={"file": ("bad.csv", b"\xff\xfe\xff", "text/csv")},
+        )
+        assert resp.status_code == 422
+
+    def test_csv_upload_rejects_oversize_before_parse(self, client, monkeypatch):
+        called = {"parse": False}
+
+        class _FakeCSVConnector:
+            def __init__(self, config):
+                pass
+
+            def parse_csv(self, csv_text, source_file):
+                called["parse"] = True
+                return []
+
+        from shared.external_connectors import csv_sftp
+
+        monkeypatch.setattr(csv_sftp, "CSVSFTPConnector", _FakeCSVConnector)
+        monkeypatch.setattr(integration_router, "MAX_CSV_FILE_SIZE_BYTES", 8)
+        resp = client.post(
+            f"/api/v1/integrations/csv-upload/{TENANT}",
+            files={"file": ("big.csv", b"lot,qty\nLOT-1,10\n", "text/csv")},
+        )
+        assert resp.status_code == 413
+        assert called["parse"] is False
+
+    def test_csv_upload_sanitizes_filename_for_parser_and_response(self, client, monkeypatch):
+        parsed_with = {}
+
+        class _FakeCSVConnector:
+            def __init__(self, config):
+                pass
+
+            def parse_csv(self, csv_text, source_file):
+                parsed_with["source_file"] = source_file
+                return []
+
+        from shared.external_connectors import csv_sftp
+
+        monkeypatch.setattr(csv_sftp, "CSVSFTPConnector", _FakeCSVConnector)
+        resp = client.post(
+            f"/api/v1/integrations/csv-upload/{TENANT}",
+            files={"file": ("../../customer-secret.csv", b"lot,qty\n", "text/csv")},
+        )
+        assert resp.status_code == 200
+        assert resp.json()["filename"] == "customer-secret.csv"
+        assert parsed_with["source_file"] == "customer-secret.csv"
+
 
 # ---------------------------------------------------------------------------
 # POST /webhook/{tenant_id}/{connector_id}
