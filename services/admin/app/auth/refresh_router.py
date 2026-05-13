@@ -20,11 +20,13 @@ from sqlalchemy.orm import Session
 from ..audit import AuditLogger
 from ..auth_utils import (
     REFRESH_TOKEN_EXPIRE_DAYS,
+    SESSION_IDLE_TIMEOUT_MINUTES,
     create_access_token,
     create_refresh_token,
     decode_access_token,
     hash_token,
 )
+from .. import auth_utils
 from ..database import get_session
 from ..dependencies import get_session_store
 from ..session_store import RedisSessionStore
@@ -35,6 +37,7 @@ from shared.rate_limit import limiter
 
 router = APIRouter()
 logger = structlog.get_logger("auth")
+_DEFAULT_SESSION_IDLE_TIMEOUT_MINUTES = SESSION_IDLE_TIMEOUT_MINUTES
 
 
 class RefreshRequest(BaseModel):
@@ -144,6 +147,31 @@ async def refresh_session(
     if session.expires_at < datetime.now(timezone.utc):
         logger.warning("refresh_expired_session", session_id=str(session.id))
         raise HTTPException(status_code=401, detail="Session expired")
+
+    now = datetime.now(timezone.utc)
+    idle_timeout_minutes = SESSION_IDLE_TIMEOUT_MINUTES
+    auth_utils_idle_timeout = getattr(
+        auth_utils,
+        "SESSION_IDLE_TIMEOUT_MINUTES",
+        _DEFAULT_SESSION_IDLE_TIMEOUT_MINUTES,
+    )
+    if (
+        idle_timeout_minutes == _DEFAULT_SESSION_IDLE_TIMEOUT_MINUTES
+        and auth_utils_idle_timeout != _DEFAULT_SESSION_IDLE_TIMEOUT_MINUTES
+    ):
+        idle_timeout_minutes = auth_utils_idle_timeout
+    last_used_at = getattr(session, "last_used_at", None)
+    if isinstance(last_used_at, datetime):
+        idle_deadline = last_used_at + timedelta(minutes=idle_timeout_minutes)
+        if idle_deadline <= now:
+            await _maybe_await(session_store.revoke_session(session.id))
+            logger.warning(
+                "refresh_idle_timeout",
+                session_id=str(session.id),
+                user_id=str(session.user_id),
+                idle_deadline=idle_deadline.isoformat(),
+            )
+            raise HTTPException(status_code=401, detail="Session idle timeout")
 
     # ROTATION: Generate new refresh token
     new_raw_refresh_token = create_refresh_token()
@@ -264,6 +292,8 @@ async def refresh_session(
         "tenant_status": real_tenant_status,  # #1401: re-queried, never hardcoded
         "is_sysadmin": bool(user.is_sysadmin),
         "tv": int(getattr(user, "token_version", 0) or 0),
+        "sid": str(session.id),
+        "session_id": str(session.id),
     }
     access_token = create_access_token(access_token_data)
 

@@ -10,7 +10,7 @@ describe('getAdminTargets', () => {
     it('tries both monolith-root and legacy /admin shapes for a public API base', () => {
         const targets = getAdminTargets({
             NEXT_PUBLIC_API_BASE_URL: 'https://api.example.com/',
-        } as NodeJS.ProcessEnv);
+        } as unknown as NodeJS.ProcessEnv);
 
         expect(targets).toEqual([
             'https://api.example.com',
@@ -26,7 +26,7 @@ describe('getAdminTargets', () => {
             NEXT_PUBLIC_ADMIN_URL: 'https://admin.example.com/',
             NEXT_PUBLIC_API_BASE_URL: 'https://api.example.com',
             ADMIN_SERVICE_URL: 'http://admin.railway.internal:8080',
-        } as NodeJS.ProcessEnv);
+        } as unknown as NodeJS.ProcessEnv);
 
         expect(targets).toEqual([
             'https://admin.example.com',
@@ -39,7 +39,7 @@ describe('getAdminTargets', () => {
         const targets = getAdminTargets({
             VERCEL: '1',
             ADMIN_SERVICE_URL: 'https://admin-public.example.com/',
-        } as NodeJS.ProcessEnv);
+        } as unknown as NodeJS.ProcessEnv);
 
         expect(targets).toEqual(['https://admin-public.example.com']);
     });

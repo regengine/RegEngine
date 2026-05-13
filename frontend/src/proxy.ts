@@ -429,11 +429,13 @@ async function requireAppAuth(request: NextRequest, requestHeaders?: Headers): P
                 return NextResponse.redirect(new URL('/dashboard', request.url));
             }
         }
-        // Forward x-nonce via Supabase response cookies (supabaseResponse is a NextResponse.next())
-        if (requestHeaders) {
-            requestHeaders.forEach((value, key) => supabaseResponse.headers.set(key, value));
-        }
-        return supabaseResponse;
+        // Forward enriched request headers (including x-nonce) to the route handler.
+        // The Supabase response may carry refreshed auth cookies; preserve them on
+        // the new NextResponse.next() instead of writing request headers onto the
+        // response, which does not make headers().get('x-nonce') visible.
+        const response = NextResponse.next({ request: { headers: requestHeaders ?? request.headers } });
+        supabaseResponse.cookies.getAll().forEach((cookie) => response.cookies.set(cookie));
+        return response;
     }
 
     // Neither auth method succeeded — redirect to login
@@ -452,6 +454,19 @@ async function requireAppAuth(request: NextRequest, requestHeaders?: Headers): P
     return NextResponse.redirect(url);
 }
 
+function shouldUpgradeInsecureRequests(request: NextRequest): boolean {
+    const forwardedProto = request.headers.get('x-forwarded-proto')?.toLowerCase();
+    const isHttps = request.nextUrl.protocol === 'https:' || forwardedProto === 'https';
+    const hostname = request.nextUrl.hostname.toLowerCase();
+    const isLocalHost =
+        hostname === 'localhost' ||
+        hostname === '127.0.0.1' ||
+        hostname === '::1' ||
+        hostname.endsWith('.local');
+
+    return process.env.NODE_ENV === 'production' && isHttps && !isLocalHost;
+}
+
 export async function proxy(request: NextRequest) {
     const { pathname } = request.nextUrl;
 
@@ -466,6 +481,7 @@ export async function proxy(request: NextRequest) {
     const csp = buildCsp(nonce, {
         allowDevUnsafeEval: process.env.NODE_ENV === 'development',
         allowDevUnsafeInline: process.env.NODE_ENV === 'development',
+        upgradeInsecureRequests: shouldUpgradeInsecureRequests(request),
     });
 
     // Clone request headers and inject the nonce so server components can use it

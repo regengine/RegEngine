@@ -16,6 +16,7 @@ export const AUTHENTICATED_APP_ROUTE_PREFIXES = [
     '/records',
     '/exceptions',
     '/requests',
+    '/reports',
     '/identity',
     '/review',
     '/audit',

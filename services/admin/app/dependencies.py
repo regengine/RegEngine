@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from fastapi import Depends, HTTPException, Path, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
@@ -66,6 +67,74 @@ def _is_supabase_auth_exception(exc: Exception) -> bool:
     )
 
 
+def _credentials_exception() -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+
+
+def _session_store_exception() -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        detail="Authentication service temporarily unavailable",
+    )
+
+
+async def _enforce_session_bound_token(
+    *,
+    local_session_id: UUID,
+    token_user_id: Optional[str],
+    user: UserModel,
+    session_store: RedisSessionStore,
+) -> None:
+    try:
+        session_data = await session_store.get_session(local_session_id)
+    except Exception as exc:
+        logger.error(
+            "session_bound_token_store_unavailable",
+            user_id=token_user_id,
+            session_id=str(local_session_id),
+            error=str(exc),
+        )
+        raise _session_store_exception() from exc
+
+    if session_data is None:
+        logger.warning(
+            "missing_session_bound_token_rejected",
+            user_id=token_user_id,
+            session_id=str(local_session_id),
+        )
+        raise _credentials_exception()
+    if session_data.is_revoked:
+        logger.warning(
+            "revoked_session_bound_token_rejected",
+            user_id=token_user_id,
+            session_id=str(local_session_id),
+        )
+        raise _credentials_exception()
+
+    expires_at = session_data.expires_at
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+    if expires_at <= datetime.now(timezone.utc):
+        logger.warning(
+            "expired_session_bound_token_rejected",
+            user_id=token_user_id,
+            session_id=str(local_session_id),
+        )
+        raise _credentials_exception()
+    if session_data.user_id != user.id:
+        logger.warning(
+            "wrong_user_session_bound_token_rejected",
+            user_id=token_user_id,
+            session_id=str(local_session_id),
+            session_user_id=str(session_data.user_id),
+        )
+        raise _credentials_exception()
+
+
 def get_session_store() -> RedisSessionStore:
     """Dependency injection for Redis session store.
     
@@ -90,17 +159,15 @@ def get_session_store() -> RedisSessionStore:
 
 async def get_current_user(
     token: str = Depends(oauth2_scheme), 
-    db: Session = Depends(get_session)
+    db: Session = Depends(get_session),
+    session_store: Optional[RedisSessionStore] = Depends(get_session_store),
 ) -> UserModel:
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
+    credentials_exception = _credentials_exception()
     
     user_id = None
     tenant_id = None
     token_version_claim: Optional[int] = None
+    local_session_id: Optional[UUID] = None
 
     # 1. Try Supabase Auth First (Production Path)
     sb = get_supabase()
@@ -156,6 +223,27 @@ async def get_current_user(
             # The live user row carries the current version; a mismatch means
             # this token was invalidated by a password reset or logout-all.
             token_version_claim = _parse_token_version(payload.get("tv"))
+            sid_raw = payload.get("sid")
+            session_id_raw = payload.get("session_id")
+            if sid_raw and session_id_raw and str(sid_raw) != str(session_id_raw):
+                logger.warning(
+                    "mismatched_session_claims_rejected",
+                    user_id=user_id,
+                    sid=str(sid_raw),
+                    session_id=str(session_id_raw),
+                )
+                raise credentials_exception
+            session_id_claim = sid_raw or session_id_raw
+            if session_id_claim:
+                try:
+                    local_session_id = UUID(str(session_id_claim))
+                except (TypeError, ValueError) as exc:
+                    logger.warning(
+                        "invalid_session_claim_rejected",
+                        user_id=user_id,
+                        session_id=str(session_id_claim),
+                    )
+                    raise credentials_exception from exc
 
             if user_id is None:
                 raise credentials_exception
@@ -204,6 +292,17 @@ async def get_current_user(
     if user is None:
         logger.warning("user_not_found_in_db", user_id=user_id)
         raise credentials_exception
+
+    if local_session_id is not None:
+        store = session_store
+        if store is None or not hasattr(store, "get_session"):
+            store = get_session_store()
+        await _enforce_session_bound_token(
+            local_session_id=local_session_id,
+            token_user_id=user_id,
+            user=user,
+            session_store=store,
+        )
 
     # SECURITY (#1860): enforce token_version. /auth/logout-all and
     # /auth/reset-password bump user.token_version expecting this check;

@@ -10,7 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader } from '@/components/ui/
 import { Loader2, CheckCircle2 } from 'lucide-react';
 import { apiClient } from '@/lib/api-client';
 import { useAuth } from '@/lib/auth-context';
-import { createSupabaseBrowserClient, isSupabaseConfigured } from '@/lib/supabase/client';
+import { isSupabaseConfigured } from '@/lib/supabase/config';
 import { PLAN_LABELS } from '@/lib/constants';
 
 function SignupForm() {
@@ -51,13 +51,14 @@ function SignupForm() {
         // #538 fix: Establish Supabase session alongside custom JWT.
         // Middleware cross-validates both sessions — without this the user
         // hits a redirect loop on the next protected route.
-        const supabase = createSupabaseBrowserClient();
-        const { error: sbError } = await supabase.auth.signInWithPassword({
-          email,
-          password,
+        const sbResponse = await fetch('/api/auth/supabase/sign-in', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ email, password }),
         });
-        if (sbError) {
-          console.error('[signup] Supabase session sync failed:', sbError.message);
+        if (!sbResponse.ok && process.env.NODE_ENV !== 'production') {
+          console.error('[signup] Supabase session sync failed:', sbResponse.status);
         }
       }
 

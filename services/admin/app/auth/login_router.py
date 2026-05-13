@@ -163,6 +163,8 @@ async def login(
         # #1349 / #1375 — token_version binds this access token to the user's
         # current password/session generation. Bumped on reset or logout-all.
         "tv": int(getattr(user, "token_version", 0) or 0),
+        "sid": str(session_data.id),
+        "session_id": str(session_data.id),
     }
 
     access_token = create_access_token(access_token_data)

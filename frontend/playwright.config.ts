@@ -20,6 +20,13 @@ const localTestAdminPassword =
 const localAdminServiceUrl = process.env.ADMIN_SERVICE_URL || 'http://localhost:8000';
 const localAdminMasterKey =
     process.env.ADMIN_MASTER_KEY || 'playwright-local-admin-master-key-2026';
+const localRegEngineApiKey =
+    process.env.API_KEY ||
+    process.env.REGENGINE_API_KEY ||
+    'playwright-local-regengine-api-key-2026';
+const localEmailOutboxPath =
+    process.env.REGENGINE_E2E_EMAIL_OUTBOX ||
+    '/tmp/regengine-playwright-email-outbox.jsonl';
 const localAdminHealthUrl = new URL(
     '/health',
     localAdminServiceUrl.endsWith('/') ? localAdminServiceUrl : `${localAdminServiceUrl}/`
@@ -39,6 +46,10 @@ if (!externalBaseURL) {
     process.env.COMPLIANCE_SERVICE_URL =
         process.env.COMPLIANCE_SERVICE_URL || localAdminServiceUrl;
     process.env.ADMIN_MASTER_KEY = localAdminMasterKey;
+    process.env.API_KEY = localRegEngineApiKey;
+    process.env.REGENGINE_API_KEY = process.env.REGENGINE_API_KEY || localRegEngineApiKey;
+    process.env.REGENGINE_E2E_MODE = process.env.REGENGINE_E2E_MODE || 'true';
+    process.env.REGENGINE_E2E_EMAIL_OUTBOX = localEmailOutboxPath;
 }
 
 const forwardedEnv = { ...process.env };
@@ -89,6 +100,12 @@ export default defineConfig({
                     AUTH_SECRET_KEY: process.env.AUTH_SECRET_KEY || localJwtSigningKey,
                     JWT_SIGNING_KEY: process.env.JWT_SIGNING_KEY || localJwtSigningKey,
                     ADMIN_MASTER_KEY: process.env.ADMIN_MASTER_KEY || localAdminMasterKey,
+                    API_KEY: process.env.API_KEY || localRegEngineApiKey,
+                    REGENGINE_API_KEY:
+                        process.env.REGENGINE_API_KEY || localRegEngineApiKey,
+                    REGENGINE_E2E_MODE: process.env.REGENGINE_E2E_MODE || 'true',
+                    REGENGINE_E2E_EMAIL_OUTBOX:
+                        process.env.REGENGINE_E2E_EMAIL_OUTBOX || localEmailOutboxPath,
                     DATABASE_URL:
                         process.env.DATABASE_URL || 'sqlite:////tmp/regengine-playwright-shared.db',
                     ADMIN_FALLBACK_SQLITE:
@@ -118,6 +135,9 @@ export default defineConfig({
                     TEST_ADMIN_PASSWORD:
                         process.env.TEST_ADMIN_PASSWORD || localTestAdminPassword,
                     ADMIN_MASTER_KEY: process.env.ADMIN_MASTER_KEY || localAdminMasterKey,
+                    API_KEY: process.env.API_KEY || localRegEngineApiKey,
+                    REGENGINE_API_KEY:
+                        process.env.REGENGINE_API_KEY || localRegEngineApiKey,
                     ADMIN_SERVICE_URL: process.env.ADMIN_SERVICE_URL || localAdminServiceUrl,
                     INGESTION_SERVICE_URL:
                         process.env.INGESTION_SERVICE_URL || localAdminServiceUrl,

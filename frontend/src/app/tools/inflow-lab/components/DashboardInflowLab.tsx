@@ -58,9 +58,15 @@ type LineageNode = {
     state: CteState;
 };
 
-type InflowHealth = { ok?: boolean; build?: { version?: string; commit_sha_short?: string } };
+type OptionalOfflinePayload = {
+    available?: boolean;
+    offline?: boolean;
+    detail?: string;
+};
 
-type InflowStatus = {
+type InflowHealth = OptionalOfflinePayload & { ok?: boolean; build?: { version?: string; commit_sha_short?: string } };
+
+type InflowStatus = OptionalOfflinePayload & {
     running?: boolean;
     config?: { source?: string; scenario?: string; delivery?: { mode?: string; tenant_id?: string | null } };
     stats?: {
@@ -90,6 +96,11 @@ type InflowRecord = {
         timestamp: string;
     };
 };
+
+function optionalOfflineDetail(...payloads: OptionalOfflinePayload[]) {
+    const offline = payloads.find((payload) => payload.offline || payload.available === false);
+    return offline ? offline.detail || "Inflow Lab service unavailable" : null;
+}
 
 type SandboxEventEvaluation = {
     event_index: number;
@@ -630,13 +641,13 @@ export function DashboardInflowLab({ previewMode = false }: { previewMode?: bool
             const [healthPayload, statusPayload, eventsPayload] = await Promise.all([
                 inflowJson<InflowHealth>("/api/healthz"),
                 inflowJson<InflowStatus>("/api/simulate/status"),
-                inflowJson<{ events?: InflowRecord[] }>("/api/events?limit=100"),
+                inflowJson<OptionalOfflinePayload & { events?: InflowRecord[] }>("/api/events?limit=100"),
             ]);
             const nextEvents = (eventsPayload.events || []).map(toTraceEvent);
             setHealth(healthPayload);
             setServiceStatus(statusPayload);
             setServiceEvents(nextEvents);
-            setServiceError(null);
+            setServiceError(optionalOfflineDetail(healthPayload, statusPayload, eventsPayload));
             if (!selectedLot && nextEvents.length) {
                 setSelectedLot(nextEvents[0].lotCode);
             }

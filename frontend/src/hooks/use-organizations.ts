@@ -1,24 +1,6 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { createClient } from '@supabase/supabase-js';
-
-// Use a dedicated client that queries the fsma schema.
-// Lazy-init to avoid "supabaseUrl is required" errors in test/CI environments.
-// SupabaseClient type for non-default schema requires a generic cast.
-// Using the base client type since we only call .from().select() on it.
-import type { SupabaseClient } from '@supabase/supabase-js';
-let _fsmaClient: SupabaseClient | null = null;
-function getFsmaClient(): SupabaseClient | null {
-    if (!_fsmaClient) {
-        const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-        const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-        if (!url || !key) return null;
-        // Schema override requires casting — Supabase generics don't support custom schemas without codegen
-        _fsmaClient = createClient(url, key, { db: { schema: 'fsma' } } as unknown as Parameters<typeof createClient>[2]);
-    }
-    return _fsmaClient;
-}
 
 export type OrgType = 'retailer' | 'supplier' | 'manufacturer' | 'distributor' | 'grower' | 'importer';
 
@@ -55,35 +37,15 @@ export function useOrganizations(): UseOrganizationsResult {
 
         async function fetchOrgs() {
             try {
-                const client = getFsmaClient();
-                if (!client) {
-                    // No Supabase credentials — degrade gracefully (CI/test)
-                    setOrganizations([]);
-                    setIsLoading(false);
-                    return;
-                }
-                const { data, error: queryError } = await client
-                    .from('organizations')
-                    .select('id, name, slug, plan, type, primary_contact, contact_email, phone, address, fei_number')
-                    .order('name');
+                const response = await fetch('/api/fsma/organizations', { credentials: 'include' });
+                const payload = response.ok ? await response.json() : { organizations: [] };
 
                 if (cancelled) return;
 
-                if (queryError) {
-                    // Table may not exist yet or RLS blocks access — degrade gracefully
-                    if (process.env.NODE_ENV !== 'production') {
-                        console.warn('Failed to fetch organizations:', queryError.message);
-                    }
-                    setError(queryError.message);
-                    setOrganizations([]);
-                } else {
-                    setOrganizations(data ?? []);
-                }
-            } catch (err) {
+                setOrganizations(payload.organizations ?? []);
+                setError(typeof payload.error === 'string' ? payload.error : null);
+            } catch {
                 if (!cancelled) {
-                    if (process.env.NODE_ENV !== 'production') {
-                        console.warn('Organizations fetch failed:', err);
-                    }
                     setOrganizations([]);
                 }
             } finally {

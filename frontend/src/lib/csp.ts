@@ -35,6 +35,7 @@ export function shouldApplyCspProxy(pathname: string): boolean {
 type BuildCspOptions = {
   allowDevUnsafeEval?: boolean;
   allowDevUnsafeInline?: boolean;
+  upgradeInsecureRequests?: boolean;
 };
 
 export function buildCsp(nonce: string, options: BuildCspOptions = {}): string {
@@ -81,8 +82,11 @@ export function buildCsp(nonce: string, options: BuildCspOptions = {}): string {
     "base-uri 'self'",
     "form-action 'self'",
     "object-src 'none'",
-    "upgrade-insecure-requests",
   ];
+
+  if (options.upgradeInsecureRequests ?? true) {
+    directives.push("upgrade-insecure-requests");
+  }
 
   return directives.join('; ');
 }

@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { apiClient } from '@/lib/api-client';
-import { createSupabaseBrowserClient, isSupabaseConfigured } from '@/lib/supabase/client';
+import { isSupabaseConfigured } from '@/lib/supabase/config';
 import { Loader2, CheckCircle, AlertCircle } from 'lucide-react';
 
 export default function AcceptInvitePage() {
@@ -55,12 +55,13 @@ export default function AcceptInvitePage() {
 
             // Automatically sign the user in so they don't have to re-enter credentials
             if (emailParam && isSupabaseConfigured()) {
-                const supabase = createSupabaseBrowserClient();
-                const { error: signInError } = await supabase.auth.signInWithPassword({
-                    email: emailParam,
-                    password,
+                const signInResponse = await fetch('/api/auth/supabase/sign-in', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ email: emailParam, password }),
                 });
-                if (!signInError) {
+                if (signInResponse.ok) {
                     router.push('/dashboard');
                     return;
                 }

@@ -200,12 +200,23 @@ async def get_system_metrics(
 
     score_data: Dict[str, Any] = {}
     chain_data: Dict[str, Any] = {}
+    ingestion_headers: Dict[str, str] = {}
+    ingestion_api_key = os.getenv("REGENGINE_API_KEY") or os.getenv("API_KEY")
+    if ingestion_api_key:
+        ingestion_headers = {
+            "X-RegEngine-API-Key": ingestion_api_key,
+            "X-Tenant-ID": tenant,
+        }
 
     async with resilient_client(timeout=12.0, circuit_name="ingestion-service") as client:
-        score_task = client.get(f"{base}/api/v1/compliance/score/{tenant}")
+        score_task = client.get(
+            f"{base}/api/v1/compliance/score/{tenant}",
+            headers=ingestion_headers or None,
+        )
         chain_task = client.get(
             f"{base}/api/v1/webhooks/chain/verify",
             params={"tenant_id": tenant},
+            headers=ingestion_headers or None,
         )
         score_resp, chain_resp = await asyncio.gather(
             score_task, chain_task, return_exceptions=True,

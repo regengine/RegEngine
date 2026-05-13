@@ -15,12 +15,19 @@ from uuid import UUID
 
 from fastapi import status
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class LoginRequest(BaseModel):
-    email: str = Field(max_length=255)
-    password: str = Field(max_length=128)
+    email: str = Field(min_length=1, max_length=255)
+    password: str = Field(min_length=1, max_length=128)
+
+    @field_validator("email", "password")
+    @classmethod
+    def reject_blank_values(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("must not be empty")
+        return value
 
 
 class TokenResponse(BaseModel):

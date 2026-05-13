@@ -2,7 +2,7 @@
 
 import { FSMAToolShell } from '@/components/fsma/FSMAToolShell';
 import { ROI_CALCULATOR_CONFIG, calculateROI } from '@/lib/roi-calculator-data';
-import { usePostHog } from 'posthog-js/react';
+import { usePostHog } from '@/lib/posthog-provider';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
     Calculator,
