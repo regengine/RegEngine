@@ -48,12 +48,27 @@ const TABS = [
     { id: 'integrations' as const, label: 'Integrations', icon: Plug },
 ];
 
+type SettingsProfile = {
+    company_name?: string;
+    company_type?: string;
+    primary_contact?: string;
+    contact_email?: string;
+    phone?: string;
+    address?: string;
+    fei_number?: string;
+};
+
+type SettingsResponse = {
+    profile?: SettingsProfile;
+};
+
 export default function SettingsPage() {
     const { user, isAuthenticated } = useAuth();
-    const { tenantId } = useTenant();
+    const { tenantId, isSystemTenant } = useTenant();
     const { organizations } = useOrganizations();
-    const currentOrg = organizations.find(o => o.id === tenantId);
-    const { data: subscriptionData, isLoading: subLoading, isError: subError } = useCurrentSubscription(tenantId);
+    const effectiveTenantId = isSystemTenant ? null : tenantId;
+    const currentOrg = organizations.find(o => o.id === effectiveTenantId);
+    const { data: subscriptionData, isLoading: subLoading, isError: subError } = useCurrentSubscription(effectiveTenantId ?? undefined);
 
     const [saved, setSaved] = useState(false);
     const [activeTab, setActiveTab] = useState<'profile' | 'api' | 'retention' | 'integrations'>('profile');
@@ -66,6 +81,22 @@ export default function SettingsPage() {
         phone: '',
         address: '',
         fei_number: '',
+    });
+
+    const { data: settingsData } = useQuery({
+        queryKey: ['settings', tenantId],
+        queryFn: async (): Promise<SettingsResponse | null> => {
+            const { getServiceURL } = await import('@/lib/api-config');
+            const base = getServiceURL('ingestion');
+            const res = await fetchWithCsrf(`${base}/api/v1/settings/${effectiveTenantId}`, {
+                credentials: 'include',
+                headers: { 'Content-Type': 'application/json' },
+            });
+            if (!res.ok) return null;
+            return res.json();
+        },
+        enabled: !!effectiveTenantId && isAuthenticated,
+        retry: false,
     });
 
     // Populate profile from org context / auth user when available
@@ -82,13 +113,29 @@ export default function SettingsPage() {
         }
     }, [currentOrg, user]);
 
+    useEffect(() => {
+        const savedProfile = settingsData?.profile;
+        if (!savedProfile) return;
+        if (!Object.values(savedProfile).some(value => Boolean(value))) return;
+        setProfile(prev => ({
+            ...prev,
+            company_name: savedProfile.company_name ?? prev.company_name,
+            company_type: savedProfile.company_type ?? prev.company_type,
+            primary_contact: savedProfile.primary_contact ?? prev.primary_contact,
+            contact_email: savedProfile.contact_email ?? prev.contact_email,
+            phone: savedProfile.phone ?? prev.phone,
+            address: savedProfile.address ?? prev.address,
+            fei_number: savedProfile.fei_number ?? prev.fei_number,
+        }));
+    }, [settingsData]);
+
     // Fetch real integration status from backend
     const { data: integrationsData } = useQuery({
         queryKey: ['integrations', tenantId],
         queryFn: async () => {
             const { getServiceURL } = await import('@/lib/api-config');
             const base = getServiceURL('ingestion');
-            const res = await fetchWithCsrf(`${base}/api/v1/integrations/${tenantId}`, {
+            const res = await fetchWithCsrf(`${base}/api/v1/integrations/status/${effectiveTenantId}`, {
                 credentials: 'include',
                 headers: { 'Content-Type': 'application/json' },
             });
@@ -103,7 +150,7 @@ export default function SettingsPage() {
             }
             return null;
         },
-        enabled: !!tenantId && isAuthenticated,
+        enabled: !!effectiveTenantId && isAuthenticated,
     });
     const integrations = integrationsData ?? INTEGRATIONS;
 
@@ -120,7 +167,7 @@ export default function SettingsPage() {
         mutationFn: async () => {
             const { getServiceURL } = await import('@/lib/api-config');
             const base = getServiceURL('ingestion');
-            const res = await fetchWithCsrf(`${base}/api/v1/settings/${tenantId}/profile`, {
+            const res = await fetchWithCsrf(`${base}/api/v1/settings/${effectiveTenantId}/profile`, {
                 method: 'PUT',
                 credentials: 'include',
                 headers: {
@@ -140,9 +187,9 @@ export default function SettingsPage() {
     const saving = saveProfileMutation.isPending;
     const saveError = saveProfileMutation.error?.message ?? null;
     const handleSave = useCallback(() => {
-        if (!tenantId || !isAuthenticated) return;
+        if (!effectiveTenantId || !isAuthenticated) return;
         saveProfileMutation.mutate();
-    }, [isAuthenticated, tenantId, saveProfileMutation]);
+    }, [effectiveTenantId, isAuthenticated, saveProfileMutation]);
     return (
         <div className="min-h-screen bg-background p-4 md:p-8 pt-4">
             <div className="mx-auto max-w-4xl space-y-6">

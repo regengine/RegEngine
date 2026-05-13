@@ -1,5 +1,12 @@
 import { NextRequest } from 'next/server';
-import { createStreamProxy, applyCookieCredentials, passthroughRequestHeaders, isPublicHost, stripTrailingSlash } from '@/lib/proxy-factory';
+import {
+    createStreamProxy,
+    applyCookieCredentials,
+    applyFirstPartyServiceCredentials,
+    passthroughRequestHeaders,
+    isPublicHost,
+    stripTrailingSlash,
+} from '@/lib/proxy-factory';
 
 const DEFAULT_INGESTION_URL = 'http://localhost:8002';
 
@@ -50,6 +57,9 @@ const { GET, POST, PUT, PATCH, DELETE, OPTIONS } = createStreamProxy({
         if (path.startsWith('api/v1/sandbox/')) return true;
         const portalMatch = path.match(/^api\/v1\/portal\/([^/]+)(?:\/(submit|preflight))?$/);
         return Boolean(portalMatch && portalMatch[1] !== 'links');
+    },
+    prepareHeaders: (headers: Headers, request: NextRequest) => {
+        return applyFirstPartyServiceCredentials(headers, request);
     },
     buildHeaders: (request: NextRequest) => {
         const headers = new Headers();

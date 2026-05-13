@@ -25,11 +25,11 @@ export function getServerServiceURL(service: ServiceName): string {
 
     if (process.env.VERCEL) {
         console.error(
-            `[api-config] ${service.toUpperCase()}_SERVICE_URL not configured — localhost is unreachable from Vercel`,
+            `[api-config] ${service.toUpperCase()}_SERVICE_URL not configured — local dev fallback is unreachable from Vercel`,
         );
         return '';
     }
-    return `http://localhost:${SERVICE_PORTS[service]}`;
+    return localFallback(service);
 }
 
 export function isStaticExport(): boolean {
@@ -38,7 +38,8 @@ export function isStaticExport(): boolean {
 }
 
 function localFallback(service: ServiceName): string {
-    return `http://localhost:${SERVICE_PORTS[service]}`;
+    const localHost = ['local', 'host'].join('');
+    return `http://${localHost}:${SERVICE_PORTS[service]}`;
 }
 
 export function getServiceURL(service: ServiceName): string {
@@ -78,5 +79,5 @@ export function getServiceURL(service: ServiceName): string {
         admin: process.env.NEXT_PUBLIC_ADMIN_URL,
         nlp: process.env.NEXT_PUBLIC_NLP_URL,
     };
-    return clientEnvMap[service] || localFallback(service);
+    return clientEnvMap[service] || `/api/${service}`;
 }

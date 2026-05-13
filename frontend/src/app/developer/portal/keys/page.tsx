@@ -1,8 +1,8 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { useAuth } from '@/lib/auth-context';
+import { fetchWithCsrf } from '@/lib/fetch-with-csrf';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -20,24 +20,7 @@ interface ApiKey {
     revoked_at: string | null;
 }
 
-function generateApiKey(): string {
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-    let result = 'rge_test_';
-    for (let i = 0; i < 32; i++) {
-        result += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    return result;
-}
-
-async function hashKey(key: string): Promise<string> {
-    const encoder = new TextEncoder();
-    const data = encoder.encode(key);
-    const hash = await crypto.subtle.digest('SHA-256', data);
-    return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
-}
-
 export default function ApiKeysPage() {
-    const supabase = createSupabaseBrowserClient();
     const { user: authUser } = useAuth();
     const [keys, setKeys] = useState<ApiKey[]>([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -51,30 +34,16 @@ export default function ApiKeysPage() {
     const loadKeys = useCallback(async () => {
         if (!authUser) return;
 
-        const { data: profile, error: profileError } = await supabase
-            .from('developer_profiles')
-            .select('id')
-            .eq('auth_user_id', authUser.id)
-            .maybeSingle();
-
-        if (profileError && process.env.NODE_ENV !== 'production') {
-            console.error('Failed to fetch developer profile:', profileError.message);
+        const response = await fetch('/api/developer/portal/keys', { credentials: 'include' });
+        if (!response.ok) {
+            setIsLoading(false);
+            return;
         }
-        if (!profile) return;
-        setDeveloperId(profile.id);
-
-        const { data, error } = await supabase
-            .from('developer_api_keys')
-            .select('*')
-            .eq('developer_id', profile.id)
-            .order('created_at', { ascending: false });
-
-        if (error && process.env.NODE_ENV !== 'production') {
-            console.error('Failed to fetch API keys:', error.message);
-        }
-        setKeys(data || []);
+        const data = await response.json();
+        setDeveloperId(data.developerId);
+        setKeys(data.keys || []);
         setIsLoading(false);
-    }, [supabase, authUser]);
+    }, [authUser]);
 
     useEffect(() => { loadKeys(); }, [loadKeys]);
 
@@ -82,35 +51,29 @@ export default function ApiKeysPage() {
         if (!developerId || !newKeyName.trim()) return;
         setIsCreating(true);
 
-        const rawKey = generateApiKey();
-        const keyHash = await hashKey(rawKey);
-        const keyPrefix = rawKey.substring(0, 12);
+        const response = await fetchWithCsrf('/api/developer/portal/keys', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ name: newKeyName.trim() }),
+        });
 
-        const { error } = await supabase
-            .from('developer_api_keys')
-            .insert({
-                developer_id: developerId,
-                name: newKeyName.trim(),
-                key_prefix: keyPrefix,
-                key_hash: keyHash,
-                scopes: ['read', 'write'],
-            });
-
-        if (!error) {
-            setRevealedKey(rawKey);
+        if (response.ok) {
+            const data = await response.json();
+            setRevealedKey(data.rawKey);
             setNewKeyName('');
             setShowCreate(false);
-            await loadKeys();
+            setKeys(data.keys || []);
         }
 
         setIsCreating(false);
     }
 
     async function revokeKey(keyId: string) {
-        await supabase
-            .from('developer_api_keys')
-            .update({ enabled: false, revoked_at: new Date().toISOString() })
-            .eq('id', keyId);
+        await fetchWithCsrf(`/api/developer/portal/keys/${encodeURIComponent(keyId)}`, {
+            method: 'DELETE',
+            credentials: 'include',
+        });
         await loadKeys();
     }
 

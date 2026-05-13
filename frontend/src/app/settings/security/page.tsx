@@ -85,7 +85,7 @@ export default function SecuritySettingsPage() {
             <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
                 {/* Breadcrumb */}
                 <Link
-                    href="/settings"
+                    href="/dashboard/settings"
                     className="inline-flex items-center text-sm text-muted-foreground hover:text-primary mb-6"
                 >
                     <ArrowLeft className="h-4 w-4 mr-1" />

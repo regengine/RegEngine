@@ -194,6 +194,12 @@ export function hasRealCallerCredential(request: NextRequest): boolean {
   return false;
 }
 
+export function hasSupabaseSessionCookies(request: NextRequest): boolean {
+  return request.cookies
+    .getAll()
+    .some((cookie) => cookie.name.startsWith('sb-'));
+}
+
 function parseProxyUser(request: NextRequest): User | null {
   const rawUser = request.cookies.get('re_user')?.value;
   if (!rawUser) return null;
@@ -253,6 +259,7 @@ export function requireAdminCapability(request: NextRequest): NextResponse | nul
  */
 export async function validateProxySession(
   request: NextRequest,
+  options: { requireSupabaseSession?: boolean } = {},
 ): Promise<NextResponse | null> {
   const regengineToken = request.cookies.get('re_access_token')?.value;
   if (isUsableCallerCredential(regengineToken)) {
@@ -277,20 +284,35 @@ export async function validateProxySession(
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-  // Skip validation when Supabase is not configured
-  if (!supabaseUrl || !supabaseKey) return null;
+  // Skip validation when Supabase is not configured unless this request relies
+  // on Supabase cookies as its only caller credential.
+  if (!supabaseUrl || !supabaseKey) {
+    if (options.requireSupabaseSession) {
+      return NextResponse.json(
+        { error: 'Supabase session validation unavailable' },
+        { status: 401 },
+      );
+    }
+    return null;
+  }
 
   // Only validate when Supabase session cookies are present
-  const hasSupabaseCookies = request.cookies
-    .getAll()
-    .some((c) => c.name.startsWith('sb-'));
-  if (!hasSupabaseCookies) return null;
+  const hasSupabaseCookies = hasSupabaseSessionCookies(request);
+  if (!hasSupabaseCookies) {
+    if (options.requireSupabaseSession) {
+      return NextResponse.json(
+        { error: 'Session expired or invalid — please log in again' },
+        { status: 401 },
+      );
+    }
+    return null;
+  }
 
   // Also skip if the request carries an API key — backend handles that auth
   const hasApiKey =
     !!request.cookies.get('re_api_key')?.value ||
     !!request.headers.get('x-regengine-api-key');
-  if (hasApiKey) return null;
+  if (hasApiKey && !options.requireSupabaseSession) return null;
 
   try {
     const supabase = createServerClient(supabaseUrl, supabaseKey, {
@@ -317,7 +339,14 @@ export async function validateProxySession(
       );
     }
   } catch {
-    // Supabase SDK error — don't block the request, let backend validate
+    if (options.requireSupabaseSession) {
+      return NextResponse.json(
+        { error: 'Session expired or invalid — please log in again' },
+        { status: 401 },
+      );
+    }
+    // Supabase SDK error — don't block requests that also carry backend-validated
+    // credentials; let the backend make the final auth decision.
     return null;
   }
 

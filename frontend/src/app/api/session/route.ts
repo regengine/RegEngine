@@ -10,22 +10,39 @@
  *   GET    /api/session — return session info (user, tenant) WITHOUT exposing raw tokens
  *   DELETE /api/session — clear all session cookies (logout)
  *
- * Cookie settings: httpOnly, secure (prod), sameSite=lax, path=/, maxAge=7d
+ * Cookie settings: httpOnly, secure (prod), sameSite=lax, path=/,
+ * maxAge=7d for remembered sessions or browser-session cookies otherwise.
  */
 import { NextRequest, NextResponse } from 'next/server';
+import { createServerClient } from '@supabase/ssr';
 import { jwtVerify } from 'jose';
 import { generateCsrfToken, signCsrfToken, CSRF_COOKIE, CSRF_SIG_COOKIE } from '@/lib/csrf';
+import { getAdminTargets, shouldRetryAdminProxyResponse } from '@/lib/admin-targets';
 import { getVerificationKeys } from '@/lib/jwt-keys';
 
 const SEVEN_DAYS = 60 * 60 * 24 * 7;
 
-const COOKIE_OPTIONS = {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax' as const,
-    path: '/',
-    maxAge: SEVEN_DAYS,
+type SessionUser = {
+    id: string;
+    email: string;
+    is_sysadmin: boolean;
+    status: string;
+    role_name?: string;
+    permissions?: string[];
 };
+
+function cookieOptionsFor(rememberSession: boolean) {
+    const baseCookieOptions = {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax' as const,
+        path: '/',
+    };
+
+    return rememberSession
+        ? { ...baseCookieOptions, maxAge: SEVEN_DAYS }
+        : baseCookieOptions;
+}
 
 export async function POST(request: NextRequest) {
     try {
@@ -57,7 +74,8 @@ export async function POST(request: NextRequest) {
         }
 
         const body = await request.json();
-        const { access_token, api_key, admin_key, tenant_id, user } = body;
+        const { access_token, api_key, admin_key, tenant_id, user, remember_me } = body;
+        const cookieOptions = cookieOptionsFor(remember_me !== false);
 
         let verifiedTenantId: string | null = null;
         if (isUsableCredential(access_token)) {
@@ -88,24 +106,33 @@ export async function POST(request: NextRequest) {
 
         const response = NextResponse.json({ ok: true });
 
-        if (access_token) {
-            response.cookies.set('re_access_token', access_token, COOKIE_OPTIONS);
+        if (isUsableCredential(access_token)) {
+            if (!isUsableCredential(api_key)) {
+                response.cookies.delete('re_api_key');
+            }
+            if (!isUsableCredential(admin_key)) {
+                response.cookies.delete('re_admin_key');
+            }
         }
-        if (api_key) {
-            response.cookies.set('re_api_key', api_key, COOKIE_OPTIONS);
+
+        if (isUsableCredential(access_token)) {
+            response.cookies.set('re_access_token', access_token, cookieOptions);
         }
-        if (admin_key) {
-            response.cookies.set('re_admin_key', admin_key, COOKIE_OPTIONS);
+        if (isUsableCredential(api_key)) {
+            response.cookies.set('re_api_key', api_key, cookieOptions);
+        }
+        if (isUsableCredential(admin_key)) {
+            response.cookies.set('re_admin_key', admin_key, cookieOptions);
         }
         if (resolvedTenantId) {
             response.cookies.set('re_tenant_id', resolvedTenantId, {
-                ...COOKIE_OPTIONS,
+                ...cookieOptions,
                 httpOnly: false, // tenant_id is not sensitive — UI reads it
             });
         }
         if (user) {
             response.cookies.set('re_user', JSON.stringify(user), {
-                ...COOKIE_OPTIONS,
+                ...cookieOptions,
                 httpOnly: false, // client needs user info for UI rendering
             });
         }
@@ -116,10 +143,10 @@ export async function POST(request: NextRequest) {
         const csrfSig = await signCsrfToken(csrfToken);
 
         response.cookies.set(CSRF_COOKIE, csrfToken, {
-            ...COOKIE_OPTIONS,
+            ...cookieOptions,
             httpOnly: false, // JS must read this to send as X-CSRF-Token header
         });
-        response.cookies.set(CSRF_SIG_COOKIE, csrfSig, COOKIE_OPTIONS);
+        response.cookies.set(CSRF_SIG_COOKIE, csrfSig, cookieOptions);
 
         return response;
     } catch {
@@ -165,6 +192,68 @@ function isRegEngineSessionPayload(payload: Record<string, unknown>): boolean {
     return true;
 }
 
+function hasSupabaseSessionCookies(request: NextRequest): boolean {
+    return request.cookies.getAll().some((cookie) => cookie.name.startsWith('sb-'));
+}
+
+async function getSupabaseSessionInfo(request: NextRequest): Promise<{
+    tenant_id: string | null;
+    user: SessionUser;
+} | null> {
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    if (!supabaseUrl || !supabaseKey || !hasSupabaseSessionCookies(request)) {
+        return null;
+    }
+
+    try {
+        const supabase = createServerClient(supabaseUrl, supabaseKey, {
+            cookies: {
+                getAll() {
+                    return request.cookies.getAll();
+                },
+                setAll() {
+                    // /api/session GET only mirrors state; middleware handles
+                    // Supabase auth cookie refreshes.
+                },
+            },
+        });
+        const {
+            data: { user },
+            error,
+        } = await supabase.auth.getUser();
+        if (error || !user) return null;
+
+        const metadata = {
+            ...(user.user_metadata || {}),
+            ...(user.app_metadata || {}),
+        } as Record<string, unknown>;
+        const permissions = Array.isArray(metadata.permissions)
+            ? metadata.permissions.filter((permission): permission is string => typeof permission === 'string')
+            : [];
+        const roleName = typeof metadata.role_name === 'string'
+            ? metadata.role_name
+            : typeof metadata.role === 'string'
+                ? metadata.role
+                : undefined;
+        const tenantId = typeof metadata.tenant_id === 'string' ? metadata.tenant_id : null;
+
+        return {
+            tenant_id: tenantId,
+            user: {
+                id: user.id,
+                email: user.email || '',
+                is_sysadmin: Boolean(metadata.is_sysadmin),
+                status: typeof metadata.status === 'string' ? metadata.status : 'active',
+                role_name: roleName,
+                permissions,
+            },
+        };
+    } catch {
+        return null;
+    }
+}
+
 export async function GET(request: NextRequest) {
     const access_token = request.cookies.get('re_access_token')?.value || null;
     const api_key = request.cookies.get('re_api_key')?.value || null;
@@ -181,15 +270,33 @@ export async function GET(request: NextRequest) {
         }
     }
 
+    const supabaseSession = access_token ? null : await getSupabaseSessionInfo(request);
+    const resolvedTenantId = tenant_id || supabaseSession?.tenant_id || null;
+    const resolvedUser = user || supabaseSession?.user || null;
+    const isAuthenticated = Boolean(access_token || supabaseSession);
+
     // NEVER return raw tokens/keys — only booleans indicating their presence
     const response = NextResponse.json({
-        authenticated: !!access_token,
+        authenticated: isAuthenticated,
         has_api_key: !!api_key,
         has_admin_key: !!admin_key,
-        has_credentials: !!(access_token || api_key || admin_key),
-        tenant_id,
-        user,
+        has_credentials: !!(access_token || api_key || admin_key || supabaseSession),
+        tenant_id: resolvedTenantId,
+        user: resolvedUser,
     });
+
+    if (!tenant_id && resolvedTenantId) {
+        response.cookies.set('re_tenant_id', resolvedTenantId, {
+            ...cookieOptionsFor(true),
+            httpOnly: false,
+        });
+    }
+    if (!userCookie && resolvedUser) {
+        response.cookies.set('re_user', JSON.stringify(resolvedUser), {
+            ...cookieOptionsFor(true),
+            httpOnly: false,
+        });
+    }
 
     // CSRF bootstrap: issue the double-submit cookie pair on the first GET so
     // the subsequent POST /api/session (and every other mutating request) can
@@ -206,16 +313,21 @@ export async function GET(request: NextRequest) {
         const csrfSig = await signCsrfToken(csrfToken);
 
         response.cookies.set(CSRF_COOKIE, csrfToken, {
-            ...COOKIE_OPTIONS,
+            ...cookieOptionsFor(true),
             httpOnly: false, // JS must read this to send as X-CSRF-Token header
         });
-        response.cookies.set(CSRF_SIG_COOKIE, csrfSig, COOKIE_OPTIONS);
+        response.cookies.set(CSRF_SIG_COOKIE, csrfSig, cookieOptionsFor(true));
     }
 
     return response;
 }
 
-export async function DELETE() {
+export async function DELETE(request: NextRequest) {
+    const accessToken = request.cookies.get('re_access_token')?.value;
+    if (isUsableCredential(accessToken)) {
+        await revokeBackendSession(accessToken);
+    }
+
     const response = NextResponse.json({ ok: true });
     response.cookies.delete('re_access_token');
     response.cookies.delete('re_api_key');
@@ -225,4 +337,23 @@ export async function DELETE() {
     response.cookies.delete(CSRF_COOKIE);
     response.cookies.delete(CSRF_SIG_COOKIE);
     return response;
+}
+
+async function revokeBackendSession(accessToken: string): Promise<void> {
+    for (const target of getAdminTargets()) {
+        try {
+            const response = await fetch(`${target}/auth/logout`, {
+                method: 'POST',
+                headers: {
+                    Authorization: `Bearer ${accessToken}`,
+                },
+            });
+
+            if (!shouldRetryAdminProxyResponse(response, 'auth/logout')) {
+                return;
+            }
+        } catch {
+            // Best effort only: local cookie teardown must still complete.
+        }
+    }
 }

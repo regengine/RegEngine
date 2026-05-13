@@ -319,6 +319,166 @@ def test_resolve_tenant_does_not_fall_back_to_demo_uuid():
     assert "5946c58f" not in str(exc.value.detail)
 
 
+@pytest.mark.asyncio
+async def test_system_metrics_forwards_service_credentials_with_tenant(monkeypatch):
+    """Admin system metrics must call ingestion as a scoped first-party service.
+
+    The tenant comes from the already-bound auth/RLS context, and the service
+    API key comes from server env only. Forwarding one without the other would
+    either fail backend auth or risk an unscoped backend read.
+    """
+    from services.admin.app import system_routes as routes_mod
+
+    tenant_id = "11111111-1111-4111-8111-111111111111"
+    client_calls = []
+
+    class FakeResponse:
+        def __init__(self, payload):
+            self.status_code = 200
+            self._payload = payload
+
+        def json(self):
+            return self._payload
+
+    class FakeClient:
+        async def get(self, url, **kwargs):
+            client_calls.append((url, kwargs))
+            if url.endswith(f"/api/v1/compliance/score/{tenant_id}"):
+                return FakeResponse(
+                    {"overall_score": 97, "grade": "A", "events_analyzed": 12}
+                )
+            return FakeResponse({"chain_length": 12, "chain_valid": True})
+
+    class FakeResilientClient:
+        async def __aenter__(self):
+            return FakeClient()
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+    db = MagicMock()
+    result = MagicMock()
+    result.scalar.return_value = 0
+    result.fetchone.return_value = (0,)
+    db.execute.return_value = result
+
+    monkeypatch.setenv("REGENGINE_API_KEY", "server-side-service-key")
+    monkeypatch.delenv("API_KEY", raising=False)
+    monkeypatch.setattr(routes_mod, "_get_ingestion_base", lambda: "https://ingestion.test")
+    monkeypatch.setattr(routes_mod, "_resolve_tenant", lambda _db: tenant_id)
+    monkeypatch.setattr(routes_mod, "resilient_client", lambda **_kwargs: FakeResilientClient())
+
+    response = await routes_mod.get_system_metrics(
+        current_user=SimpleNamespace(id="user-1"),
+        db=db,
+    )
+
+    assert response.compliance_score == 97
+    assert response.events_ingested == 12
+    assert response.chain_length == 12
+    assert len(client_calls) == 2
+    for _, kwargs in client_calls:
+        assert kwargs["headers"] == {
+            "X-RegEngine-API-Key": "server-side-service-key",
+            "X-Tenant-ID": tenant_id,
+        }
+
+
+@pytest.mark.asyncio
+async def test_system_metrics_does_not_forward_empty_service_credentials(monkeypatch):
+    from services.admin.app import system_routes as routes_mod
+
+    tenant_id = "11111111-1111-4111-8111-111111111111"
+    client_calls = []
+
+    class FakeResponse:
+        status_code = 200
+
+        def json(self):
+            return {}
+
+    class FakeClient:
+        async def get(self, url, **kwargs):
+            client_calls.append((url, kwargs))
+            return FakeResponse()
+
+    class FakeResilientClient:
+        async def __aenter__(self):
+            return FakeClient()
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+    db = MagicMock()
+    result = MagicMock()
+    result.scalar.return_value = 0
+    result.fetchone.return_value = (0,)
+    db.execute.return_value = result
+
+    monkeypatch.delenv("REGENGINE_API_KEY", raising=False)
+    monkeypatch.delenv("API_KEY", raising=False)
+    monkeypatch.setattr(routes_mod, "_get_ingestion_base", lambda: "https://ingestion.test")
+    monkeypatch.setattr(routes_mod, "_resolve_tenant", lambda _db: tenant_id)
+    monkeypatch.setattr(routes_mod, "resilient_client", lambda **_kwargs: FakeResilientClient())
+
+    await routes_mod.get_system_metrics(current_user=SimpleNamespace(id="user-1"), db=db)
+
+    assert len(client_calls) == 2
+    for _, kwargs in client_calls:
+        assert kwargs["headers"] is None
+
+
+@pytest.mark.asyncio
+async def test_system_metrics_uses_legacy_api_key_fallback_with_tenant(monkeypatch):
+    """If REGENGINE_API_KEY is absent, the legacy API_KEY fallback is still
+    tenant-scoped. This keeps local/older deployments working without ever
+    sending an unscoped service credential to ingestion.
+    """
+    from services.admin.app import system_routes as routes_mod
+
+    tenant_id = "11111111-1111-4111-8111-111111111111"
+    client_calls = []
+
+    class FakeResponse:
+        status_code = 200
+
+        def json(self):
+            return {}
+
+    class FakeClient:
+        async def get(self, url, **kwargs):
+            client_calls.append((url, kwargs))
+            return FakeResponse()
+
+    class FakeResilientClient:
+        async def __aenter__(self):
+            return FakeClient()
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+    db = MagicMock()
+    result = MagicMock()
+    result.scalar.return_value = 0
+    result.fetchone.return_value = (0,)
+    db.execute.return_value = result
+
+    monkeypatch.delenv("REGENGINE_API_KEY", raising=False)
+    monkeypatch.setenv("API_KEY", "legacy-service-key")
+    monkeypatch.setattr(routes_mod, "_get_ingestion_base", lambda: "https://ingestion.test")
+    monkeypatch.setattr(routes_mod, "_resolve_tenant", lambda _db: tenant_id)
+    monkeypatch.setattr(routes_mod, "resilient_client", lambda **_kwargs: FakeResilientClient())
+
+    await routes_mod.get_system_metrics(current_user=SimpleNamespace(id="user-1"), db=db)
+
+    assert len(client_calls) == 2
+    for _, kwargs in client_calls:
+        assert kwargs["headers"] == {
+            "X-RegEngine-API-Key": "legacy-service-key",
+            "X-Tenant-ID": tenant_id,
+        }
+
+
 # =========================================================================
 # #1392 -- brute force limiter shared across workers
 # =========================================================================

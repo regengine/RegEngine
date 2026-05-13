@@ -7,8 +7,10 @@
  * matching the deploy-configured ALLOWED_ORIGINS list (production only).
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { POST, GET } from '@/app/api/session/route';
+import { createHmac } from 'crypto';
+import { POST, GET, DELETE } from '@/app/api/session/route';
 import { isCsrfExempt } from '@/lib/csrf';
+import { _resetForTesting as resetJwtKeysForTesting } from '@/lib/jwt-keys';
 import type { NextRequest } from 'next/server';
 
 function makeRequest({
@@ -39,10 +41,14 @@ function makeRequest({
 describe('POST /api/session Origin enforcement (RE-SEC-003)', () => {
     beforeEach(() => {
         vi.clearAllMocks();
+        resetJwtKeysForTesting();
     });
 
     afterEach(() => {
         vi.unstubAllEnvs();
+        vi.doUnmock('jose');
+        vi.unstubAllGlobals();
+        resetJwtKeysForTesting();
     });
 
     it('rejects POST with no Origin header in production', async () => {
@@ -154,4 +160,199 @@ describe('POST /api/session Origin enforcement (RE-SEC-003)', () => {
 
         expect(response.status).toBe(500);
     });
+
+    it('sets persistent credential cookies by default for remembered sessions', async () => {
+        const response = await POST(
+            makeRequest({
+                body: {
+                    api_key: 'persistent-api-key',
+                    tenant_id: 'tenant-persistent',
+                    user: { id: 'user-persistent', email: 'persistent@example.com' },
+                },
+            }),
+        );
+
+        expect(response.status).toBe(200);
+        expect(response.cookies.get('re_api_key')).toEqual(
+            expect.objectContaining({
+                name: 're_api_key',
+                value: 'persistent-api-key',
+                maxAge: 60 * 60 * 24 * 7,
+            }),
+        );
+        expect(response.cookies.get('re_tenant_id')?.maxAge).toBe(60 * 60 * 24 * 7);
+        expect(response.cookies.get('re_user')?.maxAge).toBe(60 * 60 * 24 * 7);
+        expect(response.cookies.get('re_csrf')?.maxAge).toBe(60 * 60 * 24 * 7);
+        expect(response.cookies.get('re_csrf_sig')?.maxAge).toBe(60 * 60 * 24 * 7);
+    });
+
+    it('omits Max-Age when remember_me is false so cookies are browser-session scoped', async () => {
+        const response = await POST(
+            makeRequest({
+                body: {
+                    api_key: 'session-api-key',
+                    tenant_id: 'tenant-session',
+                    user: { id: 'user-session', email: 'session@example.com' },
+                    remember_me: false,
+                },
+            }),
+        );
+
+        expect(response.status).toBe(200);
+        expect(response.cookies.get('re_api_key')).toEqual(
+            expect.objectContaining({
+                name: 're_api_key',
+                value: 'session-api-key',
+            }),
+        );
+        expect(response.cookies.get('re_api_key')?.maxAge).toBeUndefined();
+        expect(response.cookies.get('re_tenant_id')?.maxAge).toBeUndefined();
+        expect(response.cookies.get('re_user')?.maxAge).toBeUndefined();
+        expect(response.cookies.get('re_csrf')?.maxAge).toBeUndefined();
+        expect(response.cookies.get('re_csrf_sig')?.maxAge).toBeUndefined();
+    });
+
+    it('sets production credential cookies with HttpOnly, Secure, and SameSite=Lax', async () => {
+        vi.stubEnv('NODE_ENV', 'production');
+        vi.stubEnv('ALLOWED_ORIGINS', 'https://app.regengine.io');
+
+        const response = await POST(
+            makeRequest({
+                headers: { origin: 'https://app.regengine.io' },
+                body: { api_key: 'prod-api-key' },
+            }),
+        );
+
+        expect(response.status).toBe(200);
+        expect(response.cookies.get('re_api_key')).toEqual(
+            expect.objectContaining({
+                name: 're_api_key',
+                value: 'prod-api-key',
+                httpOnly: true,
+                secure: true,
+                sameSite: 'lax',
+            }),
+        );
+    });
+
+    it('deletes stale API/admin key cookies when accepting a new access token without those fields', async () => {
+        vi.stubEnv('JWT_SIGNING_KEY', 'session-origin-test-secret');
+        resetJwtKeysForTesting();
+        const accessToken = await signRegEngineJwt('session-origin-test-secret', 'tenant-access');
+
+        const response = await POST(
+            makeRequest({
+                body: {
+                    access_token: accessToken,
+                    tenant_id: 'tenant-access',
+                },
+                cookies: {
+                    re_api_key: 'stale-api-key',
+                    re_admin_key: 'stale-admin-key',
+                },
+            }),
+        );
+
+        expect(response.status).toBe(200);
+        expect(response.cookies.get('re_access_token')?.value).toBe(accessToken);
+        expect(response.cookies.get('re_api_key')).toEqual(
+            expect.objectContaining({ name: 're_api_key', value: '' }),
+        );
+        expect(response.cookies.get('re_admin_key')).toEqual(
+            expect.objectContaining({ name: 're_admin_key', value: '' }),
+        );
+    });
+
+    it('deletes stale API/admin key cookies when new access token body includes unusable key fields', async () => {
+        vi.stubEnv('JWT_SIGNING_KEY', 'session-origin-test-secret');
+        resetJwtKeysForTesting();
+        const accessToken = await signRegEngineJwt('session-origin-test-secret', 'tenant-access');
+
+        const response = await POST(
+            makeRequest({
+                body: {
+                    access_token: accessToken,
+                    tenant_id: 'tenant-access',
+                    api_key: '',
+                    admin_key: 'cookie-managed',
+                },
+                cookies: {
+                    re_api_key: 'stale-api-key',
+                    re_admin_key: 'stale-admin-key',
+                },
+            }),
+        );
+
+        expect(response.status).toBe(200);
+        expect(response.cookies.get('re_api_key')).toEqual(
+            expect.objectContaining({ name: 're_api_key', value: '' }),
+        );
+        expect(response.cookies.get('re_admin_key')).toEqual(
+            expect.objectContaining({ name: 're_admin_key', value: '' }),
+        );
+    });
+
+    it('DELETE calls backend logout with the bearer token and clears cookies', async () => {
+        vi.stubEnv('NEXT_PUBLIC_ADMIN_URL', 'https://admin.regengine.test');
+        const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+        vi.stubGlobal('fetch', fetchMock);
+
+        const response = await DELETE(
+            makeRequest({
+                method: 'DELETE',
+                cookies: { re_access_token: 'access-token-to-revoke' },
+            }),
+        );
+
+        expect(fetchMock).toHaveBeenCalledWith('https://admin.regengine.test/auth/logout', {
+            method: 'POST',
+            headers: {
+                Authorization: 'Bearer access-token-to-revoke',
+            },
+        });
+        expect(response.cookies.get('re_access_token')).toEqual(
+            expect.objectContaining({ name: 're_access_token', value: '' }),
+        );
+        expect(response.cookies.get('re_api_key')).toEqual(
+            expect.objectContaining({ name: 're_api_key', value: '' }),
+        );
+        expect(response.cookies.get('re_admin_key')).toEqual(
+            expect.objectContaining({ name: 're_admin_key', value: '' }),
+        );
+    });
+
+    it('DELETE without an access token skips backend logout and still clears cookies', async () => {
+        const fetchMock = vi.fn();
+        vi.stubGlobal('fetch', fetchMock);
+
+        const response = await DELETE(makeRequest({ method: 'DELETE', cookies: {} }));
+
+        expect(fetchMock).not.toHaveBeenCalled();
+        expect(response.cookies.get('re_access_token')).toEqual(
+            expect.objectContaining({ name: 're_access_token', value: '' }),
+        );
+        expect(response.cookies.get('re_api_key')).toEqual(
+            expect.objectContaining({ name: 're_api_key', value: '' }),
+        );
+        expect(response.cookies.get('re_admin_key')).toEqual(
+            expect.objectContaining({ name: 're_admin_key', value: '' }),
+        );
+    });
 });
+
+async function signRegEngineJwt(secret: string, tenantId: string): Promise<string> {
+    const header = base64url(JSON.stringify({ alg: 'HS256', typ: 'JWT' }));
+    const payload = base64url(JSON.stringify({
+        tenant_id: tenantId,
+        aud: 'regengine-api',
+        iss: 'regengine-admin',
+    }));
+    const signature = createHmac('sha256', secret)
+        .update(`${header}.${payload}`)
+        .digest('base64url');
+    return `${header}.${payload}.${signature}`;
+}
+
+function base64url(value: string): string {
+    return Buffer.from(value).toString('base64url');
+}

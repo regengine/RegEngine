@@ -1,12 +1,8 @@
-import { createBrowserClient } from '@supabase/ssr'
+import { getSupabaseConfig, isSupabaseConfigured } from './config'
 
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
-const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
+export { isSupabaseConfigured } from './config'
+
 let hasWarnedMissingSupabaseConfig = false
-
-export function isSupabaseConfigured() {
-    return Boolean(SUPABASE_URL && SUPABASE_ANON_KEY)
-}
 
 function warnMissingSupabaseConfig() {
     if (process.env.NODE_ENV === 'production' || hasWarnedMissingSupabaseConfig) {
@@ -20,7 +16,9 @@ function warnMissingSupabaseConfig() {
     )
 }
 
-export function createSupabaseBrowserClient() {
+export async function createSupabaseBrowserClient() {
+    const { createBrowserClient } = await import('@supabase/ssr')
+    const { url, anonKey } = getSupabaseConfig()
     if (!isSupabaseConfigured()) {
         warnMissingSupabaseConfig()
         // Return a stub during build/prerender when env vars aren't available.
@@ -30,5 +28,5 @@ export function createSupabaseBrowserClient() {
             'placeholder-anon-key'
         )
     }
-    return createBrowserClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+    return createBrowserClient(url, anonKey)
 }

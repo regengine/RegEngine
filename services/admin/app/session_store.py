@@ -720,9 +720,16 @@ class RedisSessionStore:
         Returns:
             True if revoked, False if not found
         """
+        client = await self._get_client()
+        data = await client.hgetall(self._session_key(session_id))
+        if not data:
+            return False
+
+        old_token_hash = data.get("refresh_token_hash") if isinstance(data, dict) else None
         return await self.update_session(
             session_id,
-            {"is_revoked": "true"}
+            {"is_revoked": "true"},
+            old_token_hash=old_token_hash,
         )
     
     async def delete_session(self, session_id: UUID) -> bool:

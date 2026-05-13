@@ -5,6 +5,7 @@ describe('app route ownership', () => {
     it('treats operational root routes as authenticated app routes', () => {
         expect(isAuthenticatedAppRoute('/rules')).toBe(true);
         expect(isAuthenticatedAppRoute('/records/evt_123')).toBe(true);
+        expect(isAuthenticatedAppRoute('/reports/abc123')).toBe(true);
         expect(isAuthenticatedAppRoute('/compliance/profile')).toBe(true);
     });
 
@@ -15,6 +16,7 @@ describe('app route ownership', () => {
 
     it('hides marketing chrome on authenticated app and field capture routes', () => {
         expect(shouldHideMarketingChrome('/dashboard')).toBe(true);
+        expect(shouldHideMarketingChrome('/reports/abc123')).toBe(true);
         expect(shouldHideMarketingChrome('/settings/security')).toBe(true);
         expect(shouldHideMarketingChrome('/mobile/capture')).toBe(true);
     });
