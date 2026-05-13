@@ -142,6 +142,54 @@ def test_scoped_principal_rejects_cross_tenant_workbench_write(tmp_path, monkeyp
     assert "Tenant mismatch" in response.json()["detail"]
 
 
+def test_wildcard_scope_rejects_cross_tenant_workbench_write(tmp_path, monkeypatch):
+    """A tenant-scoped principal carrying wildcard ``*`` permission MUST
+    still be denied cross-tenant writes. Wildcard grants action breadth,
+    not tenant breadth. Regression for the 2026-05 audit finding
+    (inflow_workbench.py:215)."""
+    client = _client(
+        tmp_path,
+        monkeypatch,
+        principal=_principal(scopes=["*"], tenant_id="tenant-a"),
+    )
+
+    response = client.post(
+        "/api/v1/inflow-workbench/runs",
+        json={
+            "tenant_id": "tenant-b",  # cross-tenant override attempt
+            "source": "inflow-lab-data-feeder",
+            "csv": "cte_type,traceability_lot_code\nshipping,TLC-FEED-002",
+            "result": _sandbox_result(blocked=False),
+        },
+    )
+
+    assert response.status_code == 403, response.text
+    assert "Tenant mismatch" in response.json()["detail"]
+
+
+def test_wildcard_scope_same_tenant_workbench_write_still_works(tmp_path, monkeypatch):
+    """Regression guard: removing the wildcard tenant bypass must not
+    break same-tenant writes for ``*``-scope principals."""
+    client = _client(
+        tmp_path,
+        monkeypatch,
+        principal=_principal(scopes=["*"], tenant_id="tenant-a"),
+    )
+
+    response = client.post(
+        "/api/v1/inflow-workbench/runs",
+        json={
+            "tenant_id": "tenant-a",
+            "source": "inflow-lab-data-feeder",
+            "csv": "cte_type,traceability_lot_code\nshipping,TLC-FEED-002",
+            "result": _sandbox_result(blocked=False),
+        },
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["tenant_id"] == "tenant-a"
+
+
 def test_scoped_principal_supplies_tenant_when_body_omits_it(tmp_path, monkeypatch):
     client = _client(
         tmp_path,
@@ -308,7 +356,15 @@ def test_commit_gate_enforces_evidence_boundary(tmp_path, monkeypatch):
 
 
 def test_uuid_tenant_saved_run_prefers_db_store_and_hashes_inputs(tmp_path, monkeypatch):
-    client = _client(tmp_path, monkeypatch)
+    tenant_id = "11111111-1111-1111-1111-111111111111"
+    # 2026-05 wildcard-bypass fix (inflow_workbench.py:215): the principal
+    # tenant must match the request tenant — wildcard scope no longer
+    # waives this cross-check.
+    client = _client(
+        tmp_path,
+        monkeypatch,
+        principal=_principal(scopes=["*"], tenant_id=tenant_id),
+    )
     captured: dict[str, workbench.WorkbenchRun] = {}
 
     def fake_db_save_run(run: workbench.WorkbenchRun) -> bool:
@@ -317,7 +373,6 @@ def test_uuid_tenant_saved_run_prefers_db_store_and_hashes_inputs(tmp_path, monk
 
     monkeypatch.setattr(workbench, "_db_save_run", fake_db_save_run)
 
-    tenant_id = "11111111-1111-1111-1111-111111111111"
     csv = "cte_type,traceability_lot_code\nshipping,TLC-FEED-002"
     response = client.post(
         "/api/v1/inflow-workbench/runs",
@@ -339,8 +394,13 @@ def test_uuid_tenant_saved_run_prefers_db_store_and_hashes_inputs(tmp_path, monk
 
 
 def test_tenant_qualified_fix_update_can_use_db_store(tmp_path, monkeypatch):
-    client = _client(tmp_path, monkeypatch)
     tenant_id = "22222222-2222-2222-2222-222222222222"
+    # 2026-05 wildcard-bypass fix: principal must own the tenant being acted on.
+    client = _client(
+        tmp_path,
+        monkeypatch,
+        principal=_principal(scopes=["*"], tenant_id=tenant_id),
+    )
     calls: list[tuple[str, str, str | None]] = []
 
     def fake_db_update_fix_item(

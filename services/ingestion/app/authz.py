@@ -400,13 +400,23 @@ def require_permission(required_permission: str):
     ) -> IngestionPrincipal:
         if has_permission(principal.scopes, required_permission):
             # Cross-check: if the principal has a tenant_id AND the request
-            # specifies a different tenant_id, reject unless principal has wildcard scope.
+            # specifies a different tenant_id, reject. Wildcard ``*`` scope
+            # grants permission BREADTH (which actions), not tenant BREADTH
+            # (which tenants) — a tenant-scoped key with ``*`` MUST NOT be
+            # able to pivot to another tenant by passing ``?tenant_id=other``.
+            #
+            # Internal/master callers (legacy_master, dev_open) carry
+            # ``tenant_id=None`` and so already bypass this check via the
+            # ``principal.tenant_id`` guard below; they do not need (and
+            # never needed) the wildcard short-circuit.
+            #
+            # Fixes the wildcard-bypass finding in the 2026-05 audit
+            # (services/ingestion/app/authz.py:385).
             requested_tenant = _requested_tenant_context(request)
             if (
                 requested_tenant
                 and principal.tenant_id
                 and requested_tenant != principal.tenant_id
-                and "*" not in principal.scopes
             ):
                 raise HTTPException(
                     status_code=403,

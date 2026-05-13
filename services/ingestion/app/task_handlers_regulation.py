@@ -95,12 +95,14 @@ async def _process_regulation_from_file(
 
         if webhook:
             try:
-                async with httpx.AsyncClient() as client:
-                    await client.post(
-                        webhook,
-                        json={"job_id": job_id, "status": "completed", "regulation": name, "sections": count},
-                    )
-            except (httpx.HTTPError, OSError) as exc:
+                # SSRF-safe: re-validates URL + pins to validated IP.
+                from shared.safe_http import safe_httpx_post_async
+
+                await safe_httpx_post_async(
+                    webhook,
+                    json={"job_id": job_id, "status": "completed", "regulation": name, "sections": count},
+                )
+            except (httpx.HTTPError, OSError, ValueError) as exc:
                 logger.error("ingestion_webhook_failed", job_id=job_id, error=str(exc))
 
     except (redis.RedisError, ConnectionError, OSError, ValueError) as exc:
@@ -108,9 +110,13 @@ async def _process_regulation_from_file(
         r.setex(f"ingest:status:{job_id}", 7200, f"failed: {exc}")
         if webhook:
             try:
-                async with httpx.AsyncClient() as client:
-                    await client.post(webhook, json={"job_id": job_id, "status": "failed", "error": str(exc)})
-            except (httpx.HTTPError, OSError):
+                from shared.safe_http import safe_httpx_post_async
+
+                await safe_httpx_post_async(
+                    webhook,
+                    json={"job_id": job_id, "status": "failed", "error": str(exc)},
+                )
+            except (httpx.HTTPError, OSError, ValueError):
                 pass
     finally:
         if os.path.exists(tmp_path):
