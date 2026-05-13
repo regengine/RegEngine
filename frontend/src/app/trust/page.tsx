@@ -411,6 +411,12 @@ export default function TrustCenterPage() {
                                     <td className="p-3 text-re-text-muted">Ingested events in transit</td>
                                     <td className="p-3 text-re-text-muted">US</td>
                                 </tr>
+                                <tr>
+                                    <td className="p-3 font-medium text-re-text-primary">Cloudflare R2</td>
+                                    <td className="p-3 text-re-text-muted">Object storage for ingested document artifacts</td>
+                                    <td className="p-3 text-re-text-muted">Raw uploads, normalized JSON, parsed text extracts</td>
+                                    <td className="p-3 text-re-text-muted">Global edge</td>
+                                </tr>
                             </tbody>
                         </table>
                     </div>
