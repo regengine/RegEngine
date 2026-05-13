@@ -400,7 +400,7 @@ async def ingest_edi_856(
 
     _verify_partner_id(x_partner_id)
 
-    raw_bytes = await file.read()
+    raw_bytes = await read_upload_with_limit(file, max_bytes=MAX_EDI_FILE_SIZE_BYTES, label="EDI file")
     if not raw_bytes:
         raise HTTPException(status_code=400, detail="Empty EDI payload")
 

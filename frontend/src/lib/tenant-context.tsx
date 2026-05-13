@@ -5,7 +5,13 @@ import { apiClient } from './api-client';
 import { useAuth } from './auth-context';
 
 // Default to System Tenant if no other context is available
-const DEFAULT_TENANT_ID = '00000000-0000-0000-0000-000000000001';
+export const DEFAULT_TENANT_ID = '00000000-0000-0000-0000-000000000001';
+const TENANT_ID_PATTERN =
+    /^(?:[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|[A-Za-z0-9][A-Za-z0-9_-]{0,127})$/;
+
+export function isSafeTenantId(value: unknown): value is string {
+    return typeof value === 'string' && TENANT_ID_PATTERN.test(value);
+}
 
 interface TenantContextType {
     tenantId: string;
@@ -21,7 +27,15 @@ function readStoredTenantId(): string | null {
     }
 
     try {
-        return localStorage.getItem('regengine_tenant_id');
+        const storedTenantId = localStorage.getItem('regengine_tenant_id');
+        if (!storedTenantId) {
+            return null;
+        }
+        if (isSafeTenantId(storedTenantId)) {
+            return storedTenantId;
+        }
+        localStorage.removeItem('regengine_tenant_id');
+        return null;
     } catch {
         return null;
     }
@@ -49,7 +63,7 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
             return;
         }
 
-        const resolvedTenantId = authTenantId || readStoredTenantId();
+        const resolvedTenantId = isSafeTenantId(authTenantId) ? authTenantId : readStoredTenantId();
         if (!resolvedTenantId || resolvedTenantId === tenantId) {
             return;
         }
@@ -60,14 +74,19 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
 
     // Update local storage and API client on change
     const updateTenant = (id: string) => {
-        setTenantId(id);
+        const safeTenantId = isSafeTenantId(id) ? id : DEFAULT_TENANT_ID;
+        setTenantId(safeTenantId);
         try {
-            localStorage.setItem('regengine_tenant_id', id);
+            if (safeTenantId === id) {
+                localStorage.setItem('regengine_tenant_id', safeTenantId);
+            } else {
+                localStorage.removeItem('regengine_tenant_id');
+            }
         } catch {
             // Ignore storage write failures; in-memory state still updates.
         }
         // Sync with API client for X-Tenant-ID header
-        apiClient.setCurrentTenant(id);
+        apiClient.setCurrentTenant(safeTenantId);
     };
 
     const value = {

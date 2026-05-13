@@ -37,11 +37,6 @@ export class DashboardErrorBoundary extends React.Component<
                     <h2 className="text-lg font-semibold mb-2">Something went wrong</h2>
                     <p className="text-sm text-muted-foreground max-w-md mb-6">
                         An unexpected error occurred while rendering this page.
-                        {this.state.error?.message && (
-                            <span className="block mt-2 font-mono text-xs text-re-danger/80">
-                                {this.state.error.message}
-                            </span>
-                        )}
                     </p>
                     <button
                         onClick={() => {

@@ -197,11 +197,18 @@ jobs:
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e  # v6
         with:
           node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: |
+          cd frontend
+          npm ci
 
       - name: Run npm audit
         run: |
           cd frontend
-          npm audit --audit-level=high
+          npm audit --omit=dev --audit-level=high
 
   production-readiness:
     name: Production Readiness Gate

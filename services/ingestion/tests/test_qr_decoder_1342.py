@@ -384,4 +384,12 @@ class TestDecodeEndpointGuards:
             files={"file": ("big.png", oversize, "image/png")},
         )
         assert response.status_code == 413
-        assert response.json()["detail"] == "Image payload too large (max 10MB)"
+        assert response.json()["detail"] == "Image payload too large (max 10 MB)"
+
+    def test_spoofed_image_bytes_return_400(self, client: TestClient) -> None:
+        response = client.post(
+            "/api/v1/qr/decode",
+            files={"file": ("qr.png", b"not-an-image", "image/png")},
+        )
+        assert response.status_code == 400
+        assert "Invalid image" in response.json()["detail"]
