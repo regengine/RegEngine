@@ -29,6 +29,55 @@ except ImportError:
 
 logger = structlog.get_logger("error_handler")
 
+GENERIC_INTERNAL_ERROR_MESSAGE = "An internal error occurred"
+GENERIC_BAD_REQUEST_MESSAGE = "Invalid request"
+_CLIENT_SAFE_KEYS = ("client_safe", "safe_for_client")
+
+
+class ClientSafeValueError(ValueError):
+    """ValueError whose message is intentionally safe for API clients."""
+
+    client_safe = True
+
+
+def _is_server_error_status(status_code: int) -> bool:
+    return 500 <= status_code <= 599
+
+
+def _is_client_safe_detail(detail: object) -> bool:
+    if any(bool(getattr(detail, key, False)) for key in _CLIENT_SAFE_KEYS):
+        return True
+    if isinstance(detail, dict):
+        return any(detail.get(key) is True for key in _CLIENT_SAFE_KEYS)
+    return False
+
+
+def _is_client_safe_exception(exc: Exception) -> bool:
+    return any(bool(getattr(exc, key, False)) for key in _CLIENT_SAFE_KEYS)
+
+
+def _detail_message(detail: object, fallback: str) -> str:
+    if isinstance(detail, dict):
+        message = detail.get("message")
+        return message if isinstance(message, str) and message else fallback
+    if isinstance(detail, str) and detail:
+        return detail
+    return fallback
+
+
+def _safe_http_error_content(status_code: int, detail: object) -> dict:
+    if _is_server_error_status(status_code):
+        message = (
+            _detail_message(detail, GENERIC_INTERNAL_ERROR_MESSAGE)
+            if _is_client_safe_detail(detail)
+            else GENERIC_INTERNAL_ERROR_MESSAGE
+        )
+        return {"type": f"http_{status_code}", "message": message}
+
+    if isinstance(detail, dict):
+        return detail
+    return {"type": f"http_{status_code}", "message": str(detail)}
+
 
 def _sentry_before_send(event, hint):
     """Sentry before_send hook — stamp tenant_id / correlation_id on every event.
@@ -139,12 +188,16 @@ def set_sentry_user_context(user_id: str | None = None, tenant_id: str | None = 
 
 async def _http_exception_handler(request: Request, exc: StarletteHTTPException) -> JSONResponse:
     """Handle HTTP exceptions with structured JSON response."""
-    detail = exc.detail
-    if isinstance(detail, dict):
-        return JSONResponse(status_code=exc.status_code, content={"error": detail})
+    if _is_server_error_status(exc.status_code):
+        logger.warning(
+            "http_exception",
+            status_code=exc.status_code,
+            detail=exc.detail,
+            path=str(request.url.path),
+        )
     return JSONResponse(
         status_code=exc.status_code,
-        content={"error": {"type": f"http_{exc.status_code}", "message": str(detail)}},
+        content={"error": _safe_http_error_content(exc.status_code, exc.detail)},
     )
 
 
@@ -159,9 +212,10 @@ async def _validation_exception_handler(request: Request, exc: RequestValidation
 async def _value_error_handler(request: Request, exc: ValueError) -> JSONResponse:
     """Handle ValueError as a 400 Bad Request."""
     logger.warning("value_error", detail=str(exc), path=str(request.url.path))
+    message = str(exc) if _is_client_safe_exception(exc) else GENERIC_BAD_REQUEST_MESSAGE
     return JSONResponse(
         status_code=400,
-        content={"error": {"type": "bad_request", "message": str(exc)}},
+        content={"error": {"type": "bad_request", "message": message}},
     )
 
 
@@ -176,7 +230,7 @@ async def _unhandled_exception_handler(request: Request, exc: Exception) -> JSON
 
     error_body: dict = {
         "type": "internal_error",
-        "message": "An internal error occurred",
+        "message": GENERIC_INTERNAL_ERROR_MESSAGE,
     }
 
     # Best-effort: include correlation + request IDs so users can reference

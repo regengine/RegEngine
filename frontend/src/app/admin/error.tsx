@@ -12,7 +12,9 @@ export default function AdminError({
     reset: () => void;
 }) {
     useEffect(() => {
-        console.error('Admin error:', error);
+        if (process.env.NODE_ENV !== 'production') {
+            console.error('Admin error:', error);
+        }
     }, [error]);
 
     const isBackendError = error.message?.includes('fetch') ||

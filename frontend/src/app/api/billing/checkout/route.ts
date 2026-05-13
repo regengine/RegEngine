@@ -23,6 +23,9 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'plan_id is required' }, { status: 400 });
         }
 
+        const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://regengine.co';
+        const encodedPlanId = encodeURIComponent(String(plan_id));
+
         // Build the request to the backend billing service
         const checkoutPayload = {
             plan_id,
@@ -30,8 +33,8 @@ export async function POST(request: NextRequest) {
             customer_email: customer_email || undefined,
             tenant_id: tenant_id || undefined,
             tenant_name: tenant_name || undefined,
-            success_url: `${process.env.NEXT_PUBLIC_SITE_URL || 'https://regengine.co'}/signup?checkout=success&plan=${plan_id}&session_id={CHECKOUT_SESSION_ID}`,
-            cancel_url: `${process.env.NEXT_PUBLIC_SITE_URL || 'https://regengine.co'}/pricing?checkout=cancelled`,
+            success_url: `${siteUrl}/signup?checkout=success&plan=${encodedPlanId}`,
+            cancel_url: `${siteUrl}/pricing?checkout=cancelled`,
         };
 
         // Get API key from HTTP-only cookie (set by /api/session) or env

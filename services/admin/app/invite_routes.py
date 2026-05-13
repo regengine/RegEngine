@@ -41,7 +41,9 @@ def _get_invite_base_url() -> str:
 
 def _build_invite_link(token: str) -> tuple[str, str]:
     """Build relative and absolute invite links from a token."""
-    relative_link = f"/accept-invite?token={token}"
+    # Put the one-time secret in the fragment so it is not sent to servers,
+    # proxies, or gateway logs. The client scrubs it from browser history.
+    relative_link = f"/accept-invite#token={token}"
     absolute_link = f"{_get_invite_base_url()}{relative_link}"
     return relative_link, absolute_link
 

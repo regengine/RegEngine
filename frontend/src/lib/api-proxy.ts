@@ -11,7 +11,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 import { jwtVerify } from 'jose';
 import { getVerificationKeys } from './jwt-keys';
-import type { User } from '@/types/api';
+import { getServerServiceURL } from './api-config';
 
 // ---------------------------------------------------------------------------
 // Path sanitisation
@@ -79,6 +79,17 @@ export interface ProxyErrorBody {
   details?: string[];
 }
 
+function isServerErrorStatus(status: number): boolean {
+  return status >= 500 && status <= 599;
+}
+
+export function genericProxyErrorMessage(status: number): string {
+  if (status === 502) return 'Bad gateway';
+  if (status === 503) return 'Service temporarily unavailable';
+  if (status === 504) return 'Gateway timeout';
+  return 'Internal server error';
+}
+
 /**
  * Returns a NextResponse with a standardised error JSON shape.
  */
@@ -87,9 +98,12 @@ export function proxyError(
   status: number,
   opts?: { code?: string; details?: string[] },
 ): NextResponse<ProxyErrorBody> {
-  const body: ProxyErrorBody = { error: message };
-  if (opts?.code) body.code = opts.code;
-  if (opts?.details) body.details = opts.details;
+  const serverError = isServerErrorStatus(status);
+  const body: ProxyErrorBody = {
+    error: serverError ? genericProxyErrorMessage(status) : message,
+  };
+  if (!serverError && opts?.code) body.code = opts.code;
+  if (!serverError && opts?.details) body.details = opts.details;
   return NextResponse.json(body, { status });
 }
 
@@ -200,26 +214,6 @@ export function hasSupabaseSessionCookies(request: NextRequest): boolean {
     .some((cookie) => cookie.name.startsWith('sb-'));
 }
 
-function parseProxyUser(request: NextRequest): User | null {
-  const rawUser = request.cookies.get('re_user')?.value;
-  if (!rawUser) return null;
-
-  try {
-    const parsed = JSON.parse(rawUser);
-    if (!parsed || typeof parsed !== 'object') {
-      return null;
-    }
-    return parsed as User;
-  } catch {
-    return null;
-  }
-}
-
-function hasAdminRole(user: User | null): boolean {
-  const roleName = user?.role_name?.toLowerCase();
-  return Boolean(user?.is_sysadmin || roleName === 'admin' || roleName === 'owner');
-}
-
 export function hasAdminCapability(request: NextRequest): boolean {
   if (isUsableCallerCredential(request.cookies.get('re_admin_key')?.value)) {
     return true;
@@ -229,7 +223,7 @@ export function hasAdminCapability(request: NextRequest): boolean {
     return true;
   }
 
-  return hasAdminRole(parseProxyUser(request));
+  return false;
 }
 
 export function requireAdminCapability(request: NextRequest): NextResponse | null {
@@ -241,6 +235,78 @@ export function requireAdminCapability(request: NextRequest): NextResponse | nul
     { error: 'Forbidden — admin capability required' },
     { status: 403 },
   );
+}
+
+function getSessionBearerToken(request: NextRequest): string | null {
+  const authorization = request.headers.get('authorization');
+  if (isUsableCallerCredential(authorization) && authorization.toLowerCase().startsWith('bearer ')) {
+    const token = authorization.slice('bearer '.length).trim();
+    return isUsableCallerCredential(token) ? token : null;
+  }
+
+  const cookieToken = request.cookies.get('re_access_token')?.value;
+  return isUsableCallerCredential(cookieToken) ? cookieToken : null;
+}
+
+function hasFreshAdminRole(body: {
+  status?: unknown;
+  is_sysadmin?: unknown;
+  role_name?: unknown;
+  permissions?: unknown;
+}): boolean {
+  if (body.status !== 'active') {
+    return false;
+  }
+  if (body.is_sysadmin === true) {
+    return true;
+  }
+  const roleName = typeof body.role_name === 'string' ? body.role_name.toLowerCase() : '';
+  if (roleName === 'admin' || roleName === 'owner') {
+    return true;
+  }
+  return Array.isArray(body.permissions) && body.permissions.includes('*');
+}
+
+export async function requireFreshAdminCapability(request: NextRequest): Promise<NextResponse | null> {
+  if (hasAdminCapability(request)) {
+    return null;
+  }
+
+  const token = getSessionBearerToken(request);
+  if (!token) {
+    return requireAdminCapability(request);
+  }
+
+  const adminBase = getServerServiceURL('admin');
+  if (!adminBase) {
+    console.error('[api-proxy] 503 — admin service is not configured');
+    return proxyError('Admin capability check unavailable', 503);
+  }
+
+  try {
+    const response = await fetch(`${adminBase.replace(/\/+$/, '')}/auth/me`, {
+      method: 'GET',
+      headers: {
+        accept: 'application/json',
+        authorization: `Bearer ${token}`,
+      },
+      cache: 'no-store',
+    });
+
+    if (!response.ok) {
+      return requireAdminCapability(request);
+    }
+
+    const body = await response.json().catch(() => null);
+    if (body && typeof body === 'object' && hasFreshAdminRole(body as Record<string, unknown>)) {
+      return null;
+    }
+  } catch (error) {
+    console.warn('[api-proxy] Fresh admin capability check failed', error);
+    return proxyError('Admin capability check unavailable', 503);
+  }
+
+  return requireAdminCapability(request);
 }
 
 // ---------------------------------------------------------------------------
@@ -401,14 +467,8 @@ function isRegEngineSessionPayload(payload: Record<string, unknown>): boolean {
  */
 export function staticExportGuard(serviceName: string): NextResponse | null {
   if (process.env.REGENGINE_DEPLOY_MODE === 'static') {
-    return NextResponse.json(
-      {
-        error: `${serviceName} proxy unavailable in static export mode`,
-        static_mode: true,
-        hint: 'Deploy with server-side rendering to enable API proxying',
-      },
-      { status: 503 },
-    );
+    console.error(`[proxy/${serviceName}] 503 — proxy unavailable in static export mode`);
+    return proxyError(`${serviceName} proxy unavailable in static export mode`, 503);
   }
   return null;
 }
