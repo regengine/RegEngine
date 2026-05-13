@@ -106,12 +106,14 @@ async def lifespan(app: FastAPI):
         from services.ingestion.app.task_handlers_scraping import register_scraping_handlers
         from services.ingestion.app.task_handlers_discovery import register_discovery_handlers
         from services.ingestion.app.task_handlers_regulation import register_regulation_handlers
+        from shared.agent_task_bridge import register_agent_bridge_handlers
         from shared.task_queue import TaskWorker
         from shared.database import engine as _db_engine
         register_source_handlers()
         register_scraping_handlers()
         register_discovery_handlers()
         register_regulation_handlers()
+        register_agent_bridge_handlers()
         _ingestion_worker = TaskWorker(engine=_db_engine)
         _ingestion_worker.start()
         app.state.ingestion_worker = _ingestion_worker

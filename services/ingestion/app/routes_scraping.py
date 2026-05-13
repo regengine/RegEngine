@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import time
 import uuid
 
@@ -38,6 +39,10 @@ ADAPTORS: dict[str, AdaptorRegistryScraper] = {
 }
 
 
+def _url_hash(url: str) -> str:
+    return hashlib.sha256(url.encode("utf-8")).hexdigest()
+
+
 @router.post("/v1/scrape/cppa", status_code=202, response_model=ScrapeResponse)
 async def scrape_cppa(
     url: str,
@@ -58,6 +63,9 @@ async def scrape_cppa(
                     "tenant_id": api_key.tenant_id,
                 },
                 tenant_id=api_key.tenant_id,
+                idempotency_key=(
+                    f"state_scrape:{api_key.tenant_id}:cppa:US-CA:{_url_hash(url)}"
+                ),
             )
             db.commit()
             return {"status": "accepted", "message": "CPPA scrape job started"}
@@ -71,6 +79,7 @@ async def scrape_cppa(
                 "tenant_id": api_key.tenant_id,
             },
             tenant_id=api_key.tenant_id,
+            idempotency_key=f"generic_scrape:{api_key.tenant_id}:US-CA:{_url_hash(url)}",
         )
         db.commit()
         return {"status": "accepted", "message": "Generic scrape job started"}

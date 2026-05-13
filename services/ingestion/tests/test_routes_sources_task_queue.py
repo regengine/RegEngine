@@ -83,6 +83,9 @@ class TestIngestFederalRegister:
         assert kw["payload"]["job_id"] == fixed
         assert kw["payload"]["vertical"] == "food_safety"
         assert kw["payload"]["tenant_id"] == "tenant-abc"
+        assert kw["idempotency_key"] == (
+            f"federal_register_ingest:tenant-abc:{fixed}"
+        )
 
     def test_non_us_returns_403(self, monkeypatch):
         _patch_enqueue(monkeypatch)
@@ -137,11 +140,16 @@ class TestIngestECFR:
     VALID_ECFR = {"vertical": "food_safety", "cfr_title": 21, "cfr_part": 110}
 
     def test_accepted_enqueues_correct_task_type(self, monkeypatch):
+        fixed = "00000000-0000-0000-0000-000000000003"
+        monkeypatch.setattr("app.routes_sources.uuid.uuid4", lambda: uuid.UUID(fixed))
         mock_enqueue, _ = _patch_enqueue(monkeypatch)
         client = _build_client(_make_api_key(us=True))
         resp = client.post(self.ENDPOINT, json=self.VALID_ECFR)
         assert resp.status_code == 202
         assert _enqueue_kwargs(mock_enqueue)["task_type"] == "ecfr_ingest"
+        assert _enqueue_kwargs(mock_enqueue)["idempotency_key"] == (
+            f"ecfr_ingest:tenant-abc:{fixed}"
+        )
 
     def test_non_us_returns_403(self, monkeypatch):
         _patch_enqueue(monkeypatch)
@@ -179,11 +187,16 @@ class TestIngestFDA:
     ENDPOINT = "/v1/ingest/fda"
 
     def test_accepted_enqueues_correct_task_type(self, monkeypatch):
+        fixed = "00000000-0000-0000-0000-000000000004"
+        monkeypatch.setattr("app.routes_sources.uuid.uuid4", lambda: uuid.UUID(fixed))
         mock_enqueue, _ = _patch_enqueue(monkeypatch)
         client = _build_client(_make_api_key(us=True))
         resp = client.post(self.ENDPOINT, json={"vertical": "food_safety"})
         assert resp.status_code == 202
         assert _enqueue_kwargs(mock_enqueue)["task_type"] == "fda_ingest"
+        assert _enqueue_kwargs(mock_enqueue)["idempotency_key"] == (
+            f"fda_ingest:tenant-abc:{fixed}"
+        )
 
     def test_non_us_returns_403(self, monkeypatch):
         _patch_enqueue(monkeypatch)

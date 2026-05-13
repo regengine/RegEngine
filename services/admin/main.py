@@ -26,6 +26,7 @@ from app.config import get_settings
 from app.logging_config import configure_logging
 from app.routes import router, v1_router
 from app.compliance_routes import router as compliance_router
+from app.agent_review_routes import router as agent_review_router
 from contextlib import asynccontextmanager
 from typing import AsyncIterator, Optional
 from fastapi import FastAPI
@@ -289,6 +290,7 @@ app.include_router(router)
 app.include_router(v1_router)
 app.include_router(overlay_router)
 app.include_router(compliance_router)
+app.include_router(agent_review_router, prefix="/v1")
 
 from app.system_routes import router as system_router
 app.include_router(system_router, prefix="/v1")

@@ -139,6 +139,7 @@ class TestIngestRegulation:
         assert kw["payload"]["filename"] == "reg.pdf"
         assert kw["payload"]["tenant_id"] == "tenant-reg"
         assert "file_path" in kw["payload"]
+        assert kw["idempotency_key"] == f"regulation_ingest:tenant-reg:{kw['payload']['job_id']}"
 
     def test_staging_file_written(self, monkeypatch, tmp_path):
         fake_session = MagicMock()

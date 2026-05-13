@@ -352,6 +352,7 @@ async def ingest_regulation(
                 "webhook": webhook,
             },
             tenant_id=api_key.tenant_id,
+            idempotency_key=f"regulation_ingest:{api_key.tenant_id}:{job_id}",
         )
         db.commit()
     except Exception as e:
