@@ -73,6 +73,36 @@ jobs:
           fi
         continue-on-error: false
 
+  # ── Copy Lint: Ban A-F Grade / Verdict UIs in /tools ────
+  copy-lint-tools-grade-verdicts:
+    name: Copy Lint — ban A-F grade/verdict UIs in /tools
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+
+      - name: Grep for banned grade/verdict copy in frontend/src/app/tools
+        run: |
+          set -o pipefail
+          SCOPE="frontend/src/app/tools"
+          if [ ! -d "$SCOPE" ]; then
+            echo "Scope directory $SCOPE missing; skipping."
+            exit 0
+          fi
+          PATTERN='Compliance Score|Compliance Grade|Get Your.*Compliance Report|Grade your ability'
+          echo "### 🚫 Banned grade/verdict copy in $SCOPE" >> "$GITHUB_STEP_SUMMARY"
+          HITS=$(grep -rnE "$PATTERN" "$SCOPE" --include='*.tsx' --include='*.ts' || true)
+          if [ -n "$HITS" ]; then
+            echo "Banned phrases found in $SCOPE:"
+            echo "$HITS"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            echo "$HITS" >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "Self-check tools must not present A-F grades or pass/fail verdicts. See issue #2314." >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+          echo "- ✅ No banned grade/verdict phrases found" >> "$GITHUB_STEP_SUMMARY"
+
   # ── Label PR ────────────────────────────────────────────
   label:
     name: Auto-Label PR

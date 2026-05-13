@@ -42,6 +42,15 @@ export default function RateLimitsDocsPage() {
                         </CardContent>
                     </Card>
 
+                    {/*
+                     * Rate-limit header docs — propagation tracker: regengine/RegEngine#2317.
+                     * Coordinate edits here with:
+                     *   - #2307 (emit X-RateLimit-* on 200 responses across all routes)
+                     *   - #2308 (publish public OpenAPI spec describing these headers)
+                     * Keep the wording compatible with both pre- and post-#2307 behavior:
+                     * headers are guaranteed on 429s and present-when-emitted on 2xx.
+                     * Do NOT re-litigate the wording without checking #2317 first.
+                     */}
                     <Card>
                         <CardHeader>
                             <CardTitle>Response Headers</CardTitle>
