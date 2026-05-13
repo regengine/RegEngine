@@ -158,8 +158,16 @@ export REGENGINE_TENANT_ID="11111111-1111-1111-1111-111111111111"`}
                             />
 
                             <div className="mt-4">
+                                <p className="text-[var(--re-text-secondary)] leading-[1.7] mb-3 text-sm">
+                                    When present on a 200 response, RegEngine exposes <code className="bg-black/30 px-1.5 py-0.5 rounded">X-RateLimit-Remaining</code> so
+                                    clients can back off before hitting a 429. Always guard for absence — coverage is rolling out per route. See{' '}
+                                    <Link href="/docs/rate-limits" className="underline" style={{ color: T.accent }}>Rate Limits</Link>{' '}
+                                    for the full header set.
+                                </p>
                                 <CodeBlock
                                     code={`const resp = await fetch("https://regengine.co/api/v1/webhooks/ingest", requestOptions);
+// When present on a 200 response, RegEngine exposes X-RateLimit-Remaining.
+// Always treat the header as optional; not every route emits it yet.
 const remaining = resp.headers.get("X-RateLimit-Remaining");
 console.log(\`Requests left in this window: \${remaining ?? "unknown"}\`);`}
                                     language="javascript"
