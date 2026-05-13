@@ -467,10 +467,12 @@ if _router_enabled("admin"):
     from services.admin.app.routes import router as admin_router, v1_router as admin_v1_router
     from services.admin.app.api_overlay import router as overlay_router
     from services.admin.app.compliance_routes import router as admin_compliance_router
+    from services.admin.app.agent_review_routes import router as agent_review_router
     app.include_router(admin_router, tags=["Admin"])
     app.include_router(admin_v1_router, tags=["Admin V1"])
     app.include_router(overlay_router, tags=["Compliance Overlay"])
     app.include_router(admin_compliance_router, tags=["Admin Compliance"])
+    app.include_router(agent_review_router, prefix="/v1", tags=["Agent Reviews"])
 
     from services.admin.app.system_routes import router as system_router
     app.include_router(system_router, prefix="/v1", tags=["System"])
