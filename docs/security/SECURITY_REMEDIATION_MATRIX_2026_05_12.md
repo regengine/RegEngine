@@ -45,6 +45,16 @@ The highest-risk remediation queue is:
 - SEC-20/21/22: npm and Python vulnerable pins are upgraded and CI audit gates install from committed locks before scanning.
 - SEC-23: deterministic XSS/field-crawl Playwright coverage was added, but the full authenticated runtime crawl still needs a healthy local authenticated app/backend fixture for end-to-end evidence.
 
+## PR #2358 CI Cleanup - 2026-05-13
+
+- Branch was rebased onto `origin/main`; the original remediation patch is already present on `main`, so the PR branch now carries focused CI cleanup commits.
+- Frontend lint and the production-readiness ESLint slice pass locally after restoring the supported ESLint 9.x line for `eslint-config-next@16.2.6`.
+- `requirements.lock` matches the CI `pip-compile --allow-unsafe --generate-hashes --output-file=requirements.lock requirements.in` freshness command; hash dry-run install and `pip-audit` both pass locally.
+- `qa/tenant-test.js` passes locally with `24 passed, 0 failed`, confirming the auth context wires a live session source.
+- `detect-secrets-hook` passes locally after synthetic test fixtures were allowlisted and baseline line numbers were refreshed.
+- The prior ingestion CI failure narrowed to `services/ingestion/tests/test_qr_decoder_api.py`; its sample image fixture now uses a real PIL-generated PNG so byte-level image validation succeeds before the monkeypatched QR decoder path. The focused QR decoder test slice passes locally.
+- Full ingestion xdist verification remains delegated to GitHub CI because this local machine does not have Postgres/Redis service tooling available.
+
 ## Remediation Matrix
 
 | ID | Original check | Finding status | Severity | Evidence | Fix owner | Fix summary | Files likely touched | Tests to add/update | Verification command | Residual risk |
