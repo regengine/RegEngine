@@ -2,8 +2,14 @@
 
 - **Date:** 2026-05-12
 - **Issue:** regengine/RegEngine#2312
-- **Status:** Proposed — awaiting founder approval
+- **Status:** **DECIDED — Resend SMTP** (ratified 2026-05-12)
 - **Author:** Research pass via session worktree `wt-2026-05-12/i2312`
+
+## Decision
+
+**Route Supabase Auth through Resend SMTP.** Resend is already a contracted, paid subprocessor with verified domain — this expands existing scope rather than adding a new vendor. The built-in mailer's ~3-4 emails/hour ceiling is a real launch blocker. Verify `auth.regengine.co` in Resend (or use `auth@regengine.co` on the existing apex), set `GOTRUE_SMTP_*` in the **Supabase dashboard** (not Railway — Supabase Auth is Supabase-hosted), then update DPA SUBPROCESSORS row for Supabase to disclose Resend as the SMTP transport. Execution checklist tracked in the implementation issue spawned from #2312.
+
+The options analysis below is preserved as historical context for the decision.
 
 ## TL;DR
 
