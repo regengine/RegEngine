@@ -65,8 +65,8 @@ export default function ScanPage() {
     const isMobile = useIsMobile();
     const { tenantId } = useTenant();
     const capturePath = tenantId
-        ? `/mobile/capture?tenant_id=${encodeURIComponent(tenantId)}`
-        : '/mobile/capture';
+        ? `/fsma/field-capture?tenant_id=${encodeURIComponent(tenantId)}`
+        : '/fsma/field-capture';
     const captureURL = typeof window !== 'undefined'
         ? `${window.location.origin}${capturePath}`
         : `https://regengine.co${capturePath}`;

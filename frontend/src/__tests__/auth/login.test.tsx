@@ -10,13 +10,13 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import LoginPage from '@/app/login/page';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
 import { apiClient } from '@/lib/api-client';
-import { createSupabaseBrowserClient, isSupabaseConfigured } from '@/lib/supabase/client';
+import { isSupabaseConfigured } from '@/lib/supabase/config';
 
 // Mock Next.js router
 vi.mock('next/navigation', () => ({
@@ -38,14 +38,11 @@ vi.mock('@/lib/api-client', () => ({
 }));
 
 // Mock Supabase session sync so login tests stay local and deterministic.
-vi.mock('@/lib/supabase/client', () => ({
+vi.mock('@/lib/supabase/config', () => ({
     isSupabaseConfigured: vi.fn(() => true),
-    createSupabaseBrowserClient: vi.fn(() => ({
-        auth: {
-            signInWithPassword: vi.fn().mockResolvedValue({ error: null }),
-        },
-    })),
 }));
+
+const mockFetch = vi.fn();
 
 describe('LoginPage', () => {
     const mockPush = vi.fn();
@@ -56,7 +53,7 @@ describe('LoginPage', () => {
 
     // Track the current auth state so mockLogin can trigger user update
     let authState: { user: any; login: any; clearCredentials: any; isHydrated: boolean };
-    const mockLogin = vi.fn().mockImplementation(async (_token: string, user: any, _tenantId?: string) => {
+    const mockLogin = vi.fn().mockImplementation(async (_token: string, user: any, _tenantId?: string, _options?: { remember?: boolean }) => {
         // Simulate what the real login does: update user state
         authState.user = user;
         // useAuth mock will return updated user on next render
@@ -79,11 +76,13 @@ describe('LoginPage', () => {
         (useAuth as any).mockReturnValue(authState);
         (apiClient.getOnboardingStatus as any).mockResolvedValue({ is_complete: true });
         (isSupabaseConfigured as any).mockReturnValue(true);
-        (createSupabaseBrowserClient as any).mockReturnValue({
-            auth: {
-                signInWithPassword: vi.fn().mockResolvedValue({ error: null }),
-            },
+        mockFetch.mockImplementation((url: string) => {
+            if (url === '/api/auth/supabase/sign-in') {
+                return Promise.resolve({ ok: true, json: () => Promise.resolve({ ok: true }) });
+            }
+            return Promise.reject(new Error(`Unmocked fetch: ${url}`));
         });
+        global.fetch = mockFetch;
         if (typeof window !== 'undefined' && window.localStorage?.clear) {
             window.localStorage.clear();
         }
@@ -96,17 +95,64 @@ describe('LoginPage', () => {
             expect(screen.getByRole('heading', { name: /sign in/i })).toBeInTheDocument();
             expect(screen.getByLabelText(/email/i)).toBeInTheDocument();
             expect(screen.getByLabelText(/^password$/i)).toBeInTheDocument();
+            expect(screen.getByRole('checkbox', { name: /remember me/i })).toBeChecked();
             expect(screen.getByRole('button', { name: /sign in/i })).toBeInTheDocument();
         });
 
-        it('has proper autocomplete attributes', () => {
+        it('has password-manager friendly field attributes', () => {
             render(<LoginPage />);
 
             const emailInput = screen.getByLabelText(/email/i);
             const passwordInput = screen.getByLabelText(/^password$/i);
 
+            expect(emailInput).toHaveAttribute('id', 'email');
+            expect(emailInput).toHaveAttribute('name', 'email');
             expect(emailInput).toHaveAttribute('autocomplete', 'email');
+            expect(passwordInput).toHaveAttribute('id', 'password');
+            expect(passwordInput).toHaveAttribute('name', 'password');
             expect(passwordInput).toHaveAttribute('autocomplete', 'current-password');
+        });
+
+        it('does not show validation errors before user interaction or browser autofill', async () => {
+            const user = userEvent.setup();
+            render(<LoginPage />);
+
+            const emailInput = screen.getByLabelText(/email/i);
+            const passwordInput = screen.getByLabelText(/^password$/i);
+
+            expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+            expect(emailInput).not.toHaveAttribute('aria-invalid', 'true');
+            expect(passwordInput).not.toHaveAttribute('aria-invalid', 'true');
+
+            await user.type(emailInput, 'autofilled@example.com');
+            await user.type(passwordInput, 'AutofilledPassword123!');
+
+            expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+            expect(emailInput).not.toHaveAttribute('aria-invalid', 'true');
+            expect(passwordInput).not.toHaveAttribute('aria-invalid', 'true');
+        });
+
+        it('toggles password visibility without changing the password value', async () => {
+            const user = userEvent.setup();
+            render(<LoginPage />);
+
+            const passwordInput = screen.getByLabelText(/^password$/i);
+
+            await user.type(passwordInput, 'VisibleToggle123!');
+            await user.click(screen.getByRole('button', { name: /show password/i }));
+
+            expect(passwordInput).toHaveAttribute('type', 'text');
+            expect(passwordInput).toHaveValue('VisibleToggle123!');
+
+            await user.click(screen.getByRole('button', { name: /hide password/i }));
+
+            expect(passwordInput).toHaveAttribute('type', 'password');
+            expect(passwordInput).toHaveValue('VisibleToggle123!');
+
+            fireEvent.keyDown(passwordInput, { key: 'p', altKey: true });
+
+            expect(passwordInput).toHaveAttribute('type', 'text');
+            expect(passwordInput).toHaveValue('VisibleToggle123!');
         });
 
         it('renders return to public site link', () => {
@@ -187,6 +233,17 @@ describe('LoginPage', () => {
 
             expect(passwordInput).toHaveValue('SecurePassword123!');
         });
+
+        it('accepts pasted password input', async () => {
+            const user = userEvent.setup();
+            render(<LoginPage />);
+
+            const passwordInput = screen.getByLabelText(/^password$/i);
+            await user.click(passwordInput);
+            await user.paste('PastedPassword123!');
+
+            expect(passwordInput).toHaveValue('PastedPassword123!');
+        });
     });
 
     describe('Successful Login', () => {
@@ -231,7 +288,35 @@ describe('LoginPage', () => {
                 expect(mockLogin).toHaveBeenCalledWith(
                     'test-token',
                     mockResponse.user,
-                    'tenant-123'
+                    'tenant-123',
+                    { remember: true }
+                );
+            });
+        });
+
+        it('passes unchecked remember-me choice to auth context', async () => {
+            const user = userEvent.setup();
+            const mockResponse = {
+                access_token: 'test-token',
+                user: { id: '123', email: 'test@example.com', is_sysadmin: false },
+                tenant_id: 'tenant-123',
+            };
+
+            (apiClient.login as any).mockResolvedValueOnce(mockResponse);
+
+            render(<LoginPage />);
+
+            await user.type(screen.getByLabelText(/email/i), 'test@example.com');
+            await user.type(screen.getByLabelText(/^password$/i), 'password123');
+            await user.click(screen.getByRole('checkbox', { name: /remember me/i }));
+            await user.click(screen.getByRole('button', { name: /sign in/i }));
+
+            await waitFor(() => {
+                expect(mockLogin).toHaveBeenCalledWith(
+                    'test-token',
+                    mockResponse.user,
+                    'tenant-123',
+                    { remember: false }
                 );
             });
         });
@@ -257,11 +342,57 @@ describe('LoginPage', () => {
                 expect(mockLogin).toHaveBeenCalledWith(
                     'test-token',
                     mockResponse.user,
-                    'tenant-123'
+                    'tenant-123',
+                    { remember: true }
                 );
             });
-            expect(createSupabaseBrowserClient).not.toHaveBeenCalled();
+            expect(mockFetch).not.toHaveBeenCalledWith(
+                '/api/auth/supabase/sign-in',
+                expect.anything(),
+            );
             expect(mockPush).toHaveBeenCalledWith('/dashboard');
+        });
+
+        it('submits on Enter from the email field', async () => {
+            const user = userEvent.setup();
+            const mockResponse = {
+                access_token: 'test-token',
+                user: { id: '123', email: 'test@example.com', is_sysadmin: false },
+                tenant_id: 'tenant-123',
+            };
+
+            (apiClient.login as any).mockResolvedValueOnce(mockResponse);
+
+            render(<LoginPage />);
+
+            await user.type(screen.getByLabelText(/email/i), 'test@example.com');
+            await user.type(screen.getByLabelText(/^password$/i), 'password123');
+            await user.click(screen.getByLabelText(/email/i));
+            await user.keyboard('{Enter}');
+
+            await waitFor(() => {
+                expect(apiClient.login).toHaveBeenCalledWith('test@example.com', 'password123');
+            });
+        });
+
+        it('submits on Enter from the password field', async () => {
+            const user = userEvent.setup();
+            const mockResponse = {
+                access_token: 'test-token',
+                user: { id: '123', email: 'test@example.com', is_sysadmin: false },
+                tenant_id: 'tenant-123',
+            };
+
+            (apiClient.login as any).mockResolvedValueOnce(mockResponse);
+
+            render(<LoginPage />);
+
+            await user.type(screen.getByLabelText(/email/i), 'test@example.com');
+            await user.type(screen.getByLabelText(/^password$/i), 'password123{Enter}');
+
+            await waitFor(() => {
+                expect(apiClient.login).toHaveBeenCalledWith('test@example.com', 'password123');
+            });
         });
 
         it('redirects to dashboard for regular users', async () => {
@@ -308,6 +439,32 @@ describe('LoginPage', () => {
 
             await waitFor(() => {
                 expect(mockPush).toHaveBeenCalledWith('/dashboard/fsma');
+            });
+        });
+
+        it('redirects to a protected report deep link after login', async () => {
+            const user = userEvent.setup();
+            const mockResponse = {
+                access_token: 'test-token',
+                user: { id: '123', email: 'test@example.com', is_sysadmin: false },
+                tenant_id: 'tenant-123',
+            };
+
+            mockSearchParamGet.mockImplementation((key: string) => {
+                if (key === 'next') return '/reports/abc123';
+                return null;
+            });
+
+            (apiClient.login as any).mockResolvedValueOnce(mockResponse);
+
+            render(<LoginPage />);
+
+            await user.type(screen.getByLabelText(/email/i), 'test@example.com');
+            await user.type(screen.getByLabelText(/^password$/i), 'password123');
+            await user.click(screen.getByRole('button', { name: /sign in/i }));
+
+            await waitFor(() => {
+                expect(mockPush).toHaveBeenCalledWith('/reports/abc123');
             });
         });
 
@@ -450,6 +607,8 @@ describe('LoginPage', () => {
             await waitFor(() => {
                 expect(screen.getByRole('alert')).toHaveTextContent(/unexpected error occurred/i);
             });
+            expect(screen.getByLabelText(/email/i)).toHaveValue('test@example.com');
+            expect(screen.getByLabelText(/^password$/i)).toHaveValue('password');
         });
 
         it('shows string error detail when backend returns plain text', async () => {
@@ -477,13 +636,18 @@ describe('LoginPage', () => {
 
             render(<LoginPage />);
 
-            await user.type(screen.getByLabelText(/email/i), 'test@example.com');
-            await user.type(screen.getByLabelText(/^password$/i), 'password');
+            const emailInput = screen.getByLabelText(/email/i);
+            const passwordInput = screen.getByLabelText(/^password$/i);
+
+            await user.type(emailInput, 'test@example.com');
+            await user.type(passwordInput, 'password');
             await user.click(screen.getByRole('button', { name: /sign in/i }));
 
             await waitFor(() => {
                 expect(screen.getByRole('alert')).toHaveTextContent(/unexpected error occurred/i);
             });
+            expect(emailInput).toHaveValue('test@example.com');
+            expect(passwordInput).toHaveValue('password');
         });
 
         it('shows session establishment errors instead of the generic fallback', async () => {
@@ -605,9 +769,56 @@ describe('LoginPage', () => {
                 tenant_id: 'tenant-123',
             });
         });
+
+        it('prevents duplicate login submissions while loading', async () => {
+            const user = userEvent.setup();
+            let resolveLogin!: (value: unknown) => void;
+            const loginPromise = new Promise((resolve) => {
+                resolveLogin = resolve;
+            });
+
+            (apiClient.login as any).mockReturnValue(loginPromise);
+
+            render(<LoginPage />);
+
+            await user.type(screen.getByLabelText(/email/i), 'test@example.com');
+            await user.type(screen.getByLabelText(/^password$/i), 'password');
+            await user.dblClick(screen.getByRole('button', { name: /sign in/i }));
+
+            await waitFor(() => {
+                expect(screen.getByRole('button', { name: /securing session/i })).toBeDisabled();
+            });
+            await user.keyboard('{Enter}');
+            expect(apiClient.login).toHaveBeenCalledTimes(1);
+
+            resolveLogin({
+                access_token: 'token',
+                user: { id: '123', email: 'test@example.com', is_sysadmin: false },
+                tenant_id: 'tenant-123',
+            });
+        });
     });
 
     describe('Accessibility', () => {
+        it('tabs from email to password to remember me to submit without traps', async () => {
+            const user = userEvent.setup();
+            render(<LoginPage />);
+
+            const emailInput = screen.getByLabelText(/email/i);
+            const passwordInput = screen.getByLabelText(/^password$/i);
+            const rememberCheckbox = screen.getByRole('checkbox', { name: /remember me/i });
+            const submitButton = screen.getByRole('button', { name: /sign in/i });
+
+            emailInput.focus();
+            expect(emailInput).toHaveFocus();
+            await user.tab();
+            expect(passwordInput).toHaveFocus();
+            await user.tab();
+            expect(rememberCheckbox).toHaveFocus();
+            await user.tab();
+            expect(submitButton).toHaveFocus();
+        });
+
         it('associates error with inputs via aria-invalid', async () => {
             const user = userEvent.setup();
             const error = { response: { status: 401 } };

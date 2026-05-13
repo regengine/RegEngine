@@ -89,7 +89,7 @@ describe('Inflow Lab API proxy', () => {
         await expect(response.json()).resolves.toEqual({ loaded: true });
     });
 
-    it('returns an unavailable response when the simulator service cannot be reached', async () => {
+    it('returns a quiet offline payload for optional read probes when the simulator service cannot be reached', async () => {
         mockFetch.mockRejectedValueOnce(new Error('ECONNREFUSED'));
 
         const response = await GET(
@@ -98,8 +98,10 @@ describe('Inflow Lab API proxy', () => {
         );
 
         await expect(response.json()).resolves.toMatchObject({
-            error: 'Inflow Lab service unavailable',
+            ok: true,
+            available: false,
+            offline: true,
         });
-        expect(response.status).toBe(502);
+        expect(response.status).toBe(200);
     });
 });

@@ -169,6 +169,32 @@ function responseHeaders(contract: EndpointContract, upstream?: Response) {
     return headers;
 }
 
+function isOptionalReadProbe(contract: EndpointContract, method: string) {
+    return (
+        method === "GET" &&
+        (contract.name === "health" || contract.name === "status" || contract.name === "records")
+    );
+}
+
+function optionalOfflineResponse(contract: EndpointContract, detail?: string, upstreamStatus?: number) {
+    return NextResponse.json(
+        {
+            ok: true,
+            available: false,
+            offline: true,
+            events: contract.name === "records" ? [] : undefined,
+            status: contract.name === "status" ? "offline" : undefined,
+            health: contract.name === "health" ? "offline" : undefined,
+            detail,
+            upstream_status: upstreamStatus,
+        },
+        {
+            status: 200,
+            headers: responseHeaders(contract),
+        }
+    );
+}
+
 async function proxyInflowLab(request: NextRequest, params: Promise<{ path?: string[] }>) {
     const method = request.method.toUpperCase();
     if (!ALLOWED_METHODS.has(method)) {
@@ -227,6 +253,13 @@ async function proxyInflowLab(request: NextRequest, params: Promise<{ path?: str
         }
 
         if (!isJsonResponse(upstream)) {
+            if (isOptionalReadProbe(contract, method)) {
+                return optionalOfflineResponse(
+                    contract,
+                    upstream.headers.get("content-type") || "missing content-type",
+                    upstream.status
+                );
+            }
             return proxyError(
                 "Inflow Lab upstream returned a non-JSON response",
                 upstream.ok ? 502 : upstream.status,
@@ -241,6 +274,13 @@ async function proxyInflowLab(request: NextRequest, params: Promise<{ path?: str
 
         const payload = await readUpstreamJson(upstream);
         if (!upstream.ok) {
+            if (isOptionalReadProbe(contract, method)) {
+                return optionalOfflineResponse(
+                    contract,
+                    upstreamMessage(payload) || "Inflow Lab upstream unavailable",
+                    upstream.status
+                );
+            }
             return proxyError(
                 upstreamMessage(payload) || "Inflow Lab upstream request failed",
                 upstream.status,
@@ -255,6 +295,10 @@ async function proxyInflowLab(request: NextRequest, params: Promise<{ path?: str
         });
     } catch (error) {
         const correlationId = crypto.randomUUID();
+        if (isOptionalReadProbe(contract, method)) {
+            const detail = error instanceof Error ? error.message : "Inflow Lab service unavailable";
+            return optionalOfflineResponse(contract, detail);
+        }
         console.error("[inflow-lab] Proxy request failed", { correlationId, error });
         return proxyError(
             "Inflow Lab service unavailable",

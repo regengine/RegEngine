@@ -2,7 +2,7 @@
 
 import { FSMAToolShell } from '@/components/fsma/FSMAToolShell';
 import { ToolConfig } from '@/types/fsma-tools';
-import { usePostHog } from 'posthog-js/react';
+import { usePostHog } from '@/lib/posthog-provider';
 import { Card, CardContent } from '@/components/ui/card';
 import { motion } from 'framer-motion';
 import { ArrowDown, Truck, Factory, Warehouse, ShoppingCart, Send, Info, ChevronRight } from 'lucide-react';

@@ -26,12 +26,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import {
     sanitizePath,
+    validateUuid,
     proxyError,
     requireProxyAuth,
     validateProxySession,
     staticExportGuard,
     isCookieManagedCredentialHeader,
     isUsableCallerCredential,
+    hasSupabaseSessionCookies,
 } from './api-proxy';
 
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'OPTIONS';
@@ -102,9 +104,10 @@ export function createJsonProxy(config: JsonProxyConfig): MethodHandlers {
             if (staticResponse) return staticResponse;
 
             const authError = requireProxyAuth(request);
-            if (authError) return authError;
+            const requireSupabaseSession = Boolean(authError && hasSupabaseSessionCookies(request));
+            if (authError && !requireSupabaseSession) return authError;
 
-            const sessionError = await validateProxySession(request);
+            const sessionError = await validateProxySession(request, { requireSupabaseSession });
             if (sessionError) return sessionError;
 
             const path = sanitizePath(pathParts);
@@ -184,6 +187,8 @@ export interface StreamProxyConfig {
     resolveTargetBases: () => string[];
     /** Build outbound headers. */
     buildHeaders: (request: NextRequest) => Headers;
+    /** Optional post-auth hook to mutate/validate outbound headers before fetch. */
+    prepareHeaders?: (headers: Headers, request: NextRequest, path: string) => NextResponse | null;
     /** Upstream response headers to pass through to the client. */
     responseHeaderPassthrough?: string[];
     /** Methods to export. Defaults to GET/POST/PUT/PATCH/DELETE/OPTIONS. */
@@ -202,6 +207,7 @@ const DEFAULT_STREAM_RESPONSE_HEADERS = [
 ];
 
 const VERCEL_PRIVATE_DNS_ERROR = 'DNS_HOSTNAME_RESOLVED_PRIVATE';
+const SYSTEM_TENANT_ID = '00000000-0000-0000-0000-000000000001';
 
 function defaultShouldRetry(response: Response): boolean {
     const header = response.headers.get('x-vercel-error') || '';
@@ -230,9 +236,10 @@ export function createStreamProxy(config: StreamProxyConfig): MethodHandlers {
             const skipAuth = config.isUnauthenticatedPath?.(path) ?? false;
             if (!skipAuth) {
                 const authError = requireProxyAuth(request);
-                if (authError) return authError;
+                const requireSupabaseSession = Boolean(authError && hasSupabaseSessionCookies(request));
+                if (authError && !requireSupabaseSession) return authError;
 
-                const sessionError = await validateProxySession(request);
+                const sessionError = await validateProxySession(request, { requireSupabaseSession });
                 if (sessionError) return sessionError;
             }
 
@@ -243,6 +250,10 @@ export function createStreamProxy(config: StreamProxyConfig): MethodHandlers {
             }
 
             const headers = config.buildHeaders(request);
+            if (!skipAuth) {
+                const headerError = config.prepareHeaders?.(headers, request, path);
+                if (headerError) return headerError;
+            }
             const fetchOptions: RequestInit = { method, headers };
 
             const hasRequestBody = !METHODS_WITHOUT_BODY.has(method);
@@ -413,4 +424,57 @@ export function applyCookieCredentials(
     }
 
     return headers;
+}
+
+/** Inject first-party service credentials for server-side proxy calls.
+ *
+ * Browser JavaScript never receives the configured service API key. The proxy
+ * only injects it after caller/session validation has already passed, and only
+ * when a valid tenant context is present so backend RLS remains scoped.
+ */
+export function applyFirstPartyServiceCredentials(
+    headers: Headers,
+    request: NextRequest,
+): NextResponse | null {
+    const existingApiKey = headers.get('x-regengine-api-key');
+    const isBrowserRequest = Boolean(request.headers.get('origin') || request.headers.get('referer'));
+    if (
+        existingApiKey &&
+        !isCookieManagedCredentialHeader('x-regengine-api-key', existingApiKey) &&
+        !isBrowserRequest
+    ) {
+        return null;
+    }
+
+    const serverApiKey = process.env.REGENGINE_API_KEY || process.env.API_KEY;
+    if (!isUsableCallerCredential(serverApiKey)) {
+        if (
+            existingApiKey &&
+            !isCookieManagedCredentialHeader('x-regengine-api-key', existingApiKey) &&
+            isBrowserRequest
+        ) {
+            headers.delete('x-regengine-api-key');
+            return proxyError('First-party service proxy is not configured', 503, {
+                code: 'SERVICE_CREDENTIAL_UNAVAILABLE',
+            });
+        }
+        return null;
+    }
+
+    const tenantId = validateProxyTenantId(request.cookies.get('re_tenant_id')?.value || headers.get('x-tenant-id'));
+    if (!tenantId) {
+        return proxyError('Tenant context required for first-party service proxy', 401, {
+            code: 'TENANT_CONTEXT_REQUIRED',
+        });
+    }
+
+    headers.set('x-regengine-api-key', serverApiKey);
+    headers.set('x-tenant-id', tenantId);
+    return null;
+}
+
+function validateProxyTenantId(value: string | null | undefined): string | null {
+    const tenantId = validateUuid(value);
+    if (tenantId) return tenantId;
+    return value?.toLowerCase() === SYSTEM_TENANT_ID ? SYSTEM_TENANT_ID : null;
 }

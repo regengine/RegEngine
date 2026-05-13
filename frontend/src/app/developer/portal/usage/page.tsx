@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { useAuth } from '@/lib/auth-context';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -24,7 +23,6 @@ interface EndpointSummary {
 }
 
 export default function UsagePage() {
-    const supabase = createSupabaseBrowserClient();
     const { user: authUser } = useAuth();
     const [usage, setUsage] = useState<UsageRow[]>([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -32,38 +30,23 @@ export default function UsagePage() {
 
     const loadUsage = useCallback(async () => {
         setIsLoading(true);
-        if (!authUser) return;
-
-        const { data: profile, error: profileError } = await supabase
-            .from('developer_profiles')
-            .select('id')
-            .eq('auth_user_id', authUser.id)
-            .maybeSingle();
-
-        if (profileError && process.env.NODE_ENV !== 'production') {
-            console.error('Failed to fetch developer profile:', profileError.message);
+        if (!authUser) {
+            setIsLoading(false);
+            return;
         }
-        if (!profile) return;
 
-        const since = new Date();
-        if (timeRange === '24h') since.setHours(since.getHours() - 24);
-        else if (timeRange === '7d') since.setDate(since.getDate() - 7);
-        else since.setDate(since.getDate() - 30);
-
-        const { data, error } = await supabase
-            .from('developer_api_usage')
-            .select('endpoint, method, status_code, response_time_ms, created_at')
-            .eq('developer_id', profile.id)
-            .gte('created_at', since.toISOString())
-            .order('created_at', { ascending: false })
-            .limit(1000);
-
-        if (error && process.env.NODE_ENV !== 'production') {
-            console.error('Failed to fetch usage data:', error.message);
+        const response = await fetch(`/api/developer/portal/usage?range=${timeRange}`, {
+            credentials: 'include',
+        });
+        if (!response.ok) {
+            setUsage([]);
+            setIsLoading(false);
+            return;
         }
-        setUsage(data || []);
+        const data = await response.json();
+        setUsage(data.usage || []);
         setIsLoading(false);
-    }, [supabase, authUser, timeRange]);
+    }, [authUser, timeRange]);
 
     useEffect(() => { loadUsage(); }, [loadUsage]);
 

@@ -53,10 +53,10 @@ describe('ScanPage', () => {
         expect(screen.getByText('Shared capture links stay scoped to tenant tenant-123.')).toBeInTheDocument();
         expect(screen.getByRole('link', { name: /open scanner in new tab/i })).toHaveAttribute(
             'href',
-            '/mobile/capture?tenant_id=tenant-123',
+            '/fsma/field-capture?tenant_id=tenant-123',
         );
         expect(
-            screen.getByText((content) => content.includes('/mobile/capture?tenant_id=tenant-123')),
+            screen.getByText((content) => content.includes('/fsma/field-capture?tenant_id=tenant-123')),
         ).toBeInTheDocument();
     });
 });

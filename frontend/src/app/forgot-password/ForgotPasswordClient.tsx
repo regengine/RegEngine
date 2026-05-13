@@ -2,7 +2,6 @@
 
 import { useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader } from '@/components/ui/card';
@@ -17,13 +16,6 @@ export default function ForgotPasswordClient() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const linkExpired = searchParams.get('error') === 'link_expired';
-    // Use the SSR-aware browser client (PKCE flow) so the recovery email sends a
-    // ?code= query param that /auth/callback can exchange server-side. The plain
-    // @supabase/supabase-js client defaults to the legacy implicit flow which puts
-    // tokens in the URL hash — invisible to the server and incompatible with our
-    // /auth/callback route handler.
-    const supabase = createSupabaseBrowserClient();
-
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
@@ -46,13 +38,16 @@ export default function ForgotPasswordClient() {
                     : process.env.NEXT_PUBLIC_SITE_URL ?? 'https://regengine.co';
             const redirectTo = `${origin}/auth/callback?next=/reset-password`;
 
-            const { error: supabaseError } = await supabase.auth.resetPasswordForEmail(
-                trimmed,
-                { redirectTo }
-            );
+            const response = await fetch('/api/auth/supabase/reset-email', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ email: trimmed, redirectTo }),
+            });
 
-            if (supabaseError) {
-                setError(supabaseError.message || 'Failed to send reset email. Please try again.');
+            if (!response.ok) {
+                const payload = await response.json().catch(() => null);
+                setError(payload?.error || 'Failed to send reset email. Please try again.');
                 return;
             }
 

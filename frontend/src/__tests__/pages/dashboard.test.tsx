@@ -261,12 +261,12 @@ describe('DashboardPage', () => {
             });
 
             const calls = mockFetch.mock.calls as [string, RequestInit | undefined][];
-            const pendingReviewsCall = calls.find(([url]) =>
-                url.includes('/api/ingestion/api/v1/compliance/pending-reviews/tenant-123')
+            const readinessSummaryCall = calls.find(([url]) =>
+                url.includes('/api/ingestion/api/v1/inflow-workbench/readiness/summary')
             );
 
-            expect(pendingReviewsCall).toBeDefined();
-            const [, init] = pendingReviewsCall as [string, RequestInit];
+            expect(readinessSummaryCall).toBeDefined();
+            const [, init] = readinessSummaryCall as [string, RequestInit];
             expect(init.credentials).toBe('include');
             expect(new Headers(init.headers).get('X-RegEngine-API-Key')).toBeNull();
         });

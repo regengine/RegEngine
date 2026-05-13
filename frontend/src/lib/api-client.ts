@@ -1,7 +1,5 @@
-import axios, { AxiosInstance } from 'axios';
 import { getServiceURL } from './api-config';
 import { getCsrfHeaders, CSRF_PROTECTED_METHODS } from './csrf';
-import { sanitizePermissions } from './permissions';
 import type {
   HealthCheckResponse,
   APIKeyResponse,
@@ -51,31 +49,6 @@ import type {
 import type { ReviewItem } from '@/types/review';
 
 const COOKIE_MANAGED_PLACEHOLDER = 'cookie-managed';
-
-function buildSupabaseSessionUser(
-  sessionUser: {
-    id: string;
-    email?: string | null;
-    user_metadata?: Record<string, unknown>;
-  },
-  fallbackPermissions?: string[],
-): User {
-  const explicitPermissions = sanitizePermissions(sessionUser.user_metadata?.permissions);
-  const user: User = {
-    id: sessionUser.id,
-    email: sessionUser.email || '',
-    is_sysadmin: Boolean(sessionUser.user_metadata?.is_sysadmin),
-    status: 'active',
-    role_name: typeof sessionUser.user_metadata?.role === 'string' ? sessionUser.user_metadata.role : 'member',
-  };
-
-  const permissions = explicitPermissions ?? fallbackPermissions;
-  if (permissions) {
-    user.permissions = permissions;
-  }
-
-  return user;
-}
 
 type ReviewQueueResponse = ReviewItemRaw[] | {
   items?: ReviewItemRaw[];
@@ -178,11 +151,54 @@ export interface SystemMetricsResponse {
   open_alerts?: number | null;
 }
 
+type RequestParams = Record<string, string | number | boolean | null | undefined>;
+
+type RequestConfig = {
+  headers?: Record<string, string>;
+  params?: RequestParams;
+  timeout?: number;
+  responseType?: 'blob';
+};
+
+type ApiResponse<T = any> = {
+  data: T;
+  headers: Record<string, string>;
+  status: number;
+};
+
+type ServiceClient = {
+  get<T = any>(path: string, config?: RequestConfig): Promise<ApiResponse<T>>;
+  post<T = any>(path: string, data?: unknown, config?: RequestConfig): Promise<ApiResponse<T>>;
+  put<T = any>(path: string, data?: unknown, config?: RequestConfig): Promise<ApiResponse<T>>;
+  patch<T = any>(path: string, data?: unknown, config?: RequestConfig): Promise<ApiResponse<T>>;
+  delete<T = any>(path: string, config?: RequestConfig): Promise<ApiResponse<T>>;
+};
+
+function appendParams(url: string, params?: RequestParams): string {
+  if (!params) return url;
+  const search = new URLSearchParams();
+  Object.entries(params).forEach(([key, value]) => {
+    if (value === null || value === undefined) return;
+    search.append(key, String(value));
+  });
+  const query = search.toString();
+  if (!query) return url;
+  return `${url}${url.includes('?') ? '&' : '?'}${query}`;
+}
+
+function isBodyInit(value: unknown): value is BodyInit {
+  return typeof value === 'string'
+    || (typeof FormData !== 'undefined' && value instanceof FormData)
+    || (typeof Blob !== 'undefined' && value instanceof Blob)
+    || (typeof ArrayBuffer !== 'undefined' && value instanceof ArrayBuffer)
+    || (typeof URLSearchParams !== 'undefined' && value instanceof URLSearchParams);
+}
+
 class APIClient {
-  private adminClient: AxiosInstance;
-  private ingestionClient: AxiosInstance;
-  private complianceClient: AxiosInstance;
-  private graphClient: AxiosInstance;
+  private adminClient: ServiceClient;
+  private ingestionClient: ServiceClient;
+  private complianceClient: ServiceClient;
+  private graphClient: ServiceClient;
 
   // Current tenant for multi-tenancy
   private currentTenantId: string | null = null;
@@ -215,93 +231,99 @@ class APIClient {
     return this.user;
   }
 
-  private createClient(baseURL: string): AxiosInstance {
-    const client = axios.create({
-      baseURL,
-      timeout: 30000,
-      // Send cookies to same-origin proxy routes so the proxy can read
-      // HTTP-only session cookies for credential injection.
-      withCredentials: true,
-    });
+  private createClient(baseURL: string): ServiceClient {
+    const request = async <T>(
+      method: string,
+      path: string,
+      data?: unknown,
+      config: RequestConfig = {},
+    ): Promise<ApiResponse<T>> => {
+      const trimmedBase = baseURL.replace(/\/+$/, '');
+      const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+      const url = appendParams(`${trimmedBase}${normalizedPath}`, config.params);
+      const headers: Record<string, string> = { ...(config.headers || {}) };
 
-    client.interceptors.request.use((config) => {
-      // API key is NO LONGER injected here — it lives in HTTP-only cookies
-      // and the server-side proxy reads it. This prevents XSS from stealing keys.
-
-      // Real bearer tokens are forwarded. The cookie-managed placeholder is
-      // intentionally omitted so the proxy can inject the HTTP-only cookie.
-      if (this.accessToken && !isCookieManagedCredential(this.accessToken)) {
-        config.headers['Authorization'] = `Bearer ${this.accessToken}`;
+      // API keys are not injected by browser code. They live in HTTP-only
+      // cookies and the server-side proxy reads them.
+      if (this.accessToken && !isCookieManagedCredential(this.accessToken) && !headers.Authorization) {
+        headers.Authorization = `Bearer ${this.accessToken}`;
       }
 
-      // Add X-Tenant-ID header for multi-tenancy if tenant is set
-      if (this.currentTenantId && !config.headers['X-Tenant-ID']) {
-        config.headers['X-Tenant-ID'] = this.currentTenantId;
+      if (this.currentTenantId && !headers['X-Tenant-ID']) {
+        headers['X-Tenant-ID'] = this.currentTenantId;
       }
 
-      // CSRF header on mutating requests (double-submit cookie pattern)
-      const method = (config.method || 'GET').toUpperCase();
-      if (CSRF_PROTECTED_METHODS.has(method)) {
-        const csrfHeaders = getCsrfHeaders();
-        Object.assign(config.headers, csrfHeaders);
+      if (CSRF_PROTECTED_METHODS.has(method.toUpperCase())) {
+        Object.assign(headers, getCsrfHeaders());
       }
 
-      return config;
-    });
-
-    // Response interceptor: on 401, attempt a silent token refresh via
-    // Supabase session and retry the original request once. This catches
-    // the edge case where the custom JWT expires between proactive refresh
-    // timer runs (e.g. laptop sleep/wake).
-    client.interceptors.response.use(
-      (response) => response,
-      async (error) => {
-        const originalRequest = error.config;
-        if (
-          error.response?.status === 401 &&
-          !originalRequest._retried &&
-          typeof window !== 'undefined'
-        ) {
-          originalRequest._retried = true;
-          try {
-            // Dynamically import to avoid circular deps
-            const { createSupabaseBrowserClient, isSupabaseConfigured } = await import('@/lib/supabase/client');
-            if (!isSupabaseConfigured()) {
-              return Promise.reject(error);
-            }
-            const supabase = createSupabaseBrowserClient();
-            const { data: { session } } = await supabase.auth.getSession();
-            if (session?.access_token) {
-              const sessionUser = session.user
-                ? buildSupabaseSessionUser(session.user, this.user?.permissions)
-                : undefined;
-              // Refresh the HTTP-only cookie with the current Supabase token.
-              // /api/session no longer bootstraps CSRF cookies — they are
-              // issued by GET /api/session on hydrate — so this POST must
-              // carry the X-CSRF-Token header like every other mutating call.
-              await fetch('/api/session', {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  ...getCsrfHeaders(),
-                },
-                body: JSON.stringify({
-                  access_token: session.access_token,
-                  user: sessionUser,
-                }),
-              });
-              // Retry the original request — cookie is now refreshed
-              return client(originalRequest);
-            }
-          } catch {
-            // Refresh failed — fall through to original error
+      let body: BodyInit | undefined;
+      if (data !== undefined && data !== null) {
+        if (isBodyInit(data)) {
+          body = data;
+        } else {
+          body = JSON.stringify(data);
+          if (!headers['Content-Type']) {
+            headers['Content-Type'] = 'application/json';
           }
         }
-        return Promise.reject(error);
       }
-    );
 
-    return client;
+      const controller = new AbortController();
+      const timeoutMs = config.timeout ?? 30000;
+      const timeoutId = timeoutMs > 0
+        ? globalThis.setTimeout(() => controller.abort(), timeoutMs)
+        : undefined;
+
+      try {
+        const response = await fetch(url, {
+          method,
+          headers,
+          body,
+          credentials: 'include',
+          signal: controller.signal,
+        });
+        const responseHeaders: Record<string, string> = {};
+        response.headers.forEach((value, key) => {
+          responseHeaders[key.toLowerCase()] = value;
+        });
+
+        const responseData = config.responseType === 'blob'
+          ? await response.blob()
+          : await response.text().then((text) => {
+            if (!text) return null;
+            try {
+              return JSON.parse(text);
+            } catch {
+              return text;
+            }
+          });
+
+        if (!response.ok) {
+          const error = new Error(response.statusText || 'Request failed') as Error & {
+            response?: ApiResponse<unknown>;
+            isAxiosError?: boolean;
+          };
+          error.isAxiosError = true;
+          error.response = { data: responseData, headers: responseHeaders, status: response.status };
+          throw error;
+        }
+
+        return { data: responseData as T, headers: responseHeaders, status: response.status };
+      } finally {
+        if (timeoutId !== undefined) {
+          globalThis.clearTimeout(timeoutId);
+        }
+      }
+    };
+
+    return {
+      get: (path, config) => request('GET', path, undefined, config),
+      post: (path, data, config) => request('POST', path, data, config),
+      put: (path, data, config) => request('PUT', path, data, config),
+      patch: (path, data, config) => request('PATCH', path, data, config),
+      delete: (path, config) => request('DELETE', path, undefined, config),
+    };
   }
 
 
@@ -491,7 +513,7 @@ class APIClient {
     request: LabelBatchInitRequest,
     tenantId?: string
   ): Promise<LabelBatchInitResponse> {
-    const headers = tenantId ? { 'X-Tenant-ID': tenantId } : {};
+    const headers: Record<string, string> = tenantId ? { 'X-Tenant-ID': tenantId } : {};
     const { data } = await this.graphClient.post('/v1/labels/batch/init', request, { headers });
     return data;
   }
