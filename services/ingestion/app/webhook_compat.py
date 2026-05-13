@@ -178,6 +178,13 @@ async def ingest_events(
                 except (ImportError, ValueError, TypeError, RuntimeError) as canon_err:
                     canon_sp.rollback()
                     summary = None
+                    # Finding A — under enforcement modes (cte_only/all)
+                    # a canonical/rules crash must not silently accept.
+                    # ``handle_preeval_exception`` raises HTTPException(500)
+                    # in those modes; under OFF it warns and returns
+                    # so the legacy best-effort accept path remains.
+                    from shared.rules.enforcement import handle_preeval_exception  # noqa: PLC0415
+                    handle_preeval_exception(canon_err, where="webhook_compat")
                     logger.warning("compat_canonical_write_skipped: %s", str(canon_err))
 
                 # Enforcement: if RULES_ENGINE_ENFORCE is set and the
@@ -189,9 +196,41 @@ async def ingest_events(
                 # flag is off or the rules path fails best-effort.
                 reject_reason: Optional[str] = None
                 if summary is not None:
-                    from shared.rules.enforcement import should_reject
+                    from shared.rules.enforcement import should_reject, current_mode
                     should, reject_reason = should_reject(summary)
                     if should:
+                        # Finding B — durable rejection audit row,
+                        # written via its own session BEFORE the
+                        # outer savepoint rollback wipes the in-flight
+                        # rule_evaluations rows. Without this the
+                        # rejection trace lived in stdout only.
+                        try:
+                            from shared.rules.rejection_audit import (
+                                record_rejection,
+                                reasons_from_summary,
+                            )
+                            _first_crit = (
+                                (summary.critical_failures or [None])[0]
+                            )
+                            # ``summary is not None`` implies the try block
+                            # above committed, so ``canonical`` is bound.
+                            _canon_event_id = None
+                            try:
+                                _canon_event_id = str(canonical.event_id)
+                            except (NameError, AttributeError):
+                                _canon_event_id = None
+                            record_rejection(
+                                tenant_id=tenant_id,
+                                rule_id=getattr(_first_crit, "rule_id", None),
+                                rule_version=getattr(_first_crit, "rule_version", None),
+                                event_id=_canon_event_id,
+                                reasons=reasons_from_summary(summary),
+                                source="webhook_compat",
+                                enforcement_mode=current_mode(),
+                            )
+                        except Exception:  # noqa: BLE001
+                            logger.error("compat_rejection_audit_inline_error")
+
                         savepoint.rollback()
                         results.append(EventResult(
                             traceability_lot_code=event.traceability_lot_code,

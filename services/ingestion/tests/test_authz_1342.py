@@ -940,13 +940,44 @@ class TestRequirePermission:
         assert resp.status_code == 400
         assert "Conflicting tenant context" in resp.json()["detail"]
 
-    def test_cross_tenant_allowed_with_wildcard(self, monkeypatch):
+    def test_cross_tenant_denied_with_wildcard(self, monkeypatch):
+        """A tenant-scoped principal with wildcard ``*`` permission MUST
+        still be denied cross-tenant access — wildcard grants action
+        breadth, not tenant breadth. Regression for the 2026-05 audit
+        finding (authz.py:385). Internal master/dev callers are unaffected
+        because they carry ``tenant_id=None``."""
         p = IngestionPrincipal(
             key_id="k", scopes=["*"], tenant_id="t-a"
         )
         app, _ = self._app_with(p, monkeypatch)
         client = TestClient(app)
         resp = client.get("/protected?tenant_id=t-b")
+        assert resp.status_code == 403
+        assert "Tenant mismatch" in resp.json()["detail"]
+
+    def test_same_tenant_wildcard_still_works(self, monkeypatch):
+        """Regression guard: removing the wildcard bypass must not break
+        same-tenant access for ``*``-scope principals."""
+        p = IngestionPrincipal(
+            key_id="k", scopes=["*"], tenant_id="t-a"
+        )
+        app, _ = self._app_with(p, monkeypatch)
+        client = TestClient(app)
+        resp = client.get("/protected?tenant_id=t-a")
+        assert resp.status_code == 200
+
+    def test_master_principal_cross_tenant_still_allowed(self, monkeypatch):
+        """Legacy master / dev-open principals (tenant_id=None, scopes=['*'])
+        retain cross-tenant access — they bypass the check via the
+        ``principal.tenant_id`` guard, not via the wildcard short-circuit
+        that the audit removed."""
+        p = IngestionPrincipal(
+            key_id="legacy-master", scopes=["*"], tenant_id=None,
+            auth_mode="legacy_master",
+        )
+        app, _ = self._app_with(p, monkeypatch)
+        client = TestClient(app)
+        resp = client.get("/protected?tenant_id=any-tenant")
         assert resp.status_code == 200
 
     def test_same_tenant_query_ok(self, monkeypatch):

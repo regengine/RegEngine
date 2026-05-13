@@ -73,6 +73,11 @@ tenacity = ">=8.2.3"
 slowapi = ">=0.1.9"
 feedparser = ">=6.0.0"
 email-validator = ">=2.0.0"
+# Pinned to >=2.7.0 to address CVE-2026-44431 (cross-origin header leak via
+# ProxyManager) and CVE-2026-44432 (Brotli decompression bomb via drain_conn).
+# Transitive dep of botocore/docker/requests/sentry-sdk/testcontainers — direct
+# pin floors the version across all consumers in the lockfile.
+urllib3 = ">=2.7.0"
 
 # Messaging / Kafka
 confluent-kafka = {extras = ["schema-registry", "avro"], version = ">=2.3.0"}
