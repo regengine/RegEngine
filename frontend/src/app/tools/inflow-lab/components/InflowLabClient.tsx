@@ -454,7 +454,7 @@ function buildFeederRemediationPlan(result: SandboxEvaluationResult): FeederReme
     }
     steps.push({
         title: "Map only after diagnosis",
-        detail: "Use the test run to configure import mapping; formal records still require signed-in production imports.",
+        detail: "Use the test run to configure import mapping; formal production records still require signed-in imports.",
     });
     return steps;
 }
@@ -1347,7 +1347,7 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
         },
         {
             label: "Production evidence",
-            value: "Formal records come from signed-in production imports",
+            value: "Formal production records come from signed-in imports",
             tone: "border-emerald-200 bg-emerald-50 text-emerald-950",
         },
     ];
@@ -1376,7 +1376,7 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
         },
         {
             label: "Preview test handoff",
-            detail: "Test filters only; production evidence stays in production exports",
+            detail: "Test filters only; formal production records stay in production exports",
             state: runStage === "exported" ? "complete" : "pending",
         },
     ];
@@ -1481,7 +1481,7 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
                                     <Badge className="border border-amber-200 bg-amber-50 text-amber-800">Mock environment</Badge>
                                 </div>
                                 <p className="mt-1.5 max-w-3xl text-sm leading-6 text-slate-600">
-                                    Test supplier traceability data before production import. This lab uses mock or uploaded test records only; formal records start after signed-in production import.
+                                    Test supplier traceability data before production import. This lab uses mock or uploaded test records only; formal production records start after signed-in import.
                                 </p>
                                 <div data-dashboard-actions className="mt-3 flex flex-wrap gap-2">
                                     <Button className="h-9 bg-emerald-700 text-white hover:bg-emerald-800" onClick={startMachineDemo} disabled={isBusy}>
@@ -1637,7 +1637,7 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
                                                 </div>
                                                 <p className="mt-2 text-sm text-slate-700">{exportReadinessLabel}</p>
                                                 <p className="mt-1 text-xs leading-5 text-slate-500">
-                                                    Test previews use the selected lot and date window. Formal records come later from signed-in production imports.
+                                                    Test previews use the selected lot and date window. Formal production records come later from signed-in imports.
                                                 </p>
                                             </div>
                                         </div>
@@ -1738,7 +1738,7 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
                                                 <div className={cn("rounded-lg border border-slate-200 bg-slate-950 text-white", isStandalone ? "p-4" : "p-3")}>
                                                     <p className="text-sm font-semibold">Test handoff preview</p>
                                                     <p className="mt-1 text-xs leading-5 text-slate-300">
-                                                        Preview test CSV or EPCIS JSON-LD filters. Production evidence is generated only from production records.
+                                                        Preview test CSV or EPCIS JSON-LD filters. Formal production records are generated only from imported production data.
                                                     </p>
                                                     <div className={cn("grid grid-cols-1 gap-2 sm:grid-cols-2", isStandalone ? "mt-4" : "mt-3")}>
                                                         <Button asChild className="h-9 bg-emerald-600 text-white hover:bg-emerald-700">
@@ -2028,7 +2028,7 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
                                                     <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4">
                                                         <p className="text-sm font-semibold text-emerald-900">No open fixes in the current run</p>
                                                         <p className="mt-1 text-xs leading-5 text-emerald-800">
-                                                            Ready lots can move to production import mapping. Sandbox and mock records still stay outside the production evidence stream.
+                                                            Ready lots can move to production import mapping. Sandbox and mock records still stay outside formal production records.
                                                         </p>
                                                     </div>
                                                 ) : (
@@ -2302,7 +2302,7 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
                                                 <div className="rounded-lg border border-slate-200 bg-slate-950 p-4 text-white">
                                                     <p className="text-sm font-semibold">Test handoff preview</p>
                                                     <p className="mt-1 text-xs leading-5 text-slate-300">
-                                                        {exportReadyCount} lots are test complete. {exceptionLots.length} exception lots remain visible. Formal records require production records.
+                                                        {exportReadyCount} lots are test complete. {exceptionLots.length} exception lots remain visible. Formal production records require signed-in imports.
                                                     </p>
                                                     <div className="mt-4 grid grid-cols-2 gap-2">
                                                         <Button asChild className="h-9 bg-emerald-600 text-white hover:bg-emerald-700">
@@ -2513,7 +2513,7 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
                                                 <FileSpreadsheet className="h-5 w-5 text-emerald-700" />
                                                 <p className="mt-3 text-sm font-semibold text-slate-950">Test CSV preview</p>
                                                 <p className="mt-1 text-xs leading-5 text-slate-500">
-                                                    Includes {exportReadyCount} test-complete lots. {exceptionLots.length} exception lots are flagged for review. Production evidence is generated only from production records.
+                                                    Includes {exportReadyCount} test-complete lots. {exceptionLots.length} exception lots are flagged for review. Formal production records are generated only from imported production data.
                                                 </p>
                                                 <Button asChild className="mt-4 h-9 bg-emerald-700 text-white hover:bg-emerald-800">
                                                     <a href={csvExportHref}>Preview test CSV</a>
