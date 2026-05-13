@@ -11,7 +11,9 @@ export default function ErrorBoundary({
     reset: () => void;
 }) {
     useEffect(() => {
-        console.error(error);
+        if (process.env.NODE_ENV !== 'production') {
+            console.error(error);
+        }
     }, [error]);
 
     const isBackendError = error.message?.includes('fetch') ||

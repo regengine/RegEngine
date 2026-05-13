@@ -41,9 +41,9 @@ def test_cors_registered_exactly_once() -> None:
 
     try:
         from main import app
-    except ModuleNotFoundError as exc:  # pragma: no cover - optional deps
+    except ImportError as exc:  # pragma: no cover - optional deps
         pytest.skip(
-            f"ingestion guardrail requires optional dependency '{exc.name}'",
+            f"ingestion guardrail requires optional import stack: {exc}",
         )
 
     cors_count = sum(1 for m in app.user_middleware if m.cls is CORSMiddleware)

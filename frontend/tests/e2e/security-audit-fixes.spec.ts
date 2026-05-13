@@ -1,3 +1,5 @@
+import { readdirSync, readFileSync, statSync } from 'node:fs';
+import path from 'node:path';
 import { test, expect, type Page, type BrowserContext } from '@playwright/test';
 import {
     adminAuthenticatedE2ESkipReason,
@@ -35,6 +37,10 @@ const ADMIN_EMAIL = process.env.TEST_ADMIN_EMAIL || process.env.TEST_USER_EMAIL 
 const ADMIN_PASSWORD = process.env.TEST_ADMIN_PASSWORD || process.env.TEST_PASSWORD || 'test-placeholder';
 const REGULAR_USER_EMAIL = process.env.TEST_USER_EMAIL || 'user@example.com';
 const REGULAR_USER_PASSWORD = process.env.TEST_PASSWORD || 'test-placeholder';
+const SAFE_TENANT_ID = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/;
+const XSS_PAYLOAD =
+    `"><img src=x data-regengine-xss-probe="worker5" onerror="window.__regengineXssAlerts.push('img')">` +
+    `<script data-regengine-xss-probe="worker5">window.__regengineXssAlerts.push('script')</script>`;
 
 // Sysadmin tests require a dedicated account with is_sysadmin=true in the admin service DB.
 // The test user created by globalSetup is a regular org owner — NOT a sysadmin.
@@ -54,6 +60,41 @@ function isReAccessToken(c: { name: string }): boolean {
     return c.name === 're_access_token';
 }
 
+function findAppErrorFiles(dir: string): string[] {
+    return readdirSync(dir).flatMap((entry) => {
+        const fullPath = path.join(dir, entry);
+        const stat = statSync(fullPath);
+        if (stat.isDirectory()) {
+            return findAppErrorFiles(fullPath);
+        }
+        return entry === 'error.tsx' ? [fullPath] : [];
+    });
+}
+
+async function installXssProbe(page: Page) {
+    await page.addInitScript(() => {
+        (window as unknown as { __regengineXssAlerts: string[] }).__regengineXssAlerts = [];
+        window.alert = (message?: unknown) => {
+            (window as unknown as { __regengineXssAlerts: string[] }).__regengineXssAlerts.push(String(message));
+        };
+    });
+}
+
+async function assertNoXssSignals(page: Page) {
+    const signals = await page.evaluate(() => {
+        const probeWindow = window as unknown as { __regengineXssAlerts?: string[] };
+        return {
+            alerts: probeWindow.__regengineXssAlerts || [],
+            injectedProbeElements: document.querySelectorAll('[data-regengine-xss-probe="worker5"]').length,
+            rawScriptProbe: document.body.innerHTML.includes('<script data-regengine-xss-probe="worker5">'),
+        };
+    });
+
+    expect(signals.alerts).toEqual([]);
+    expect(signals.injectedProbeElements).toBe(0);
+    expect(signals.rawScriptProbe).toBe(false);
+}
+
 test.describe('Security Audit Fixes', () => {
 
     test.afterEach(async ({ page }, testInfo) => {
@@ -61,6 +102,139 @@ test.describe('Security Audit Fixes', () => {
             const path = `test-results/security-failure-${testInfo.title.replace(/\s+/g, '-').toLowerCase()}.png`;
             await page.screenshot({ path, fullPage: true });
         }
+    });
+
+    // ============================================================================
+    // 0. STATIC LOGGING REGRESSIONS (SEC-19)
+    // ============================================================================
+
+    test.describe('SEC-19 Production Client Logging', () => {
+        test('Error boundaries do not log raw Error objects in production', () => {
+            const errorFiles = [
+                ...findAppErrorFiles(path.join(process.cwd(), 'src/app')),
+                path.join(process.cwd(), 'src/components/dashboard/error-boundary.tsx'),
+            ];
+            const unguardedConsoleErrors: string[] = [];
+
+            for (const file of errorFiles) {
+                const lines = readFileSync(file, 'utf8').split('\n');
+                lines.forEach((line, index) => {
+                    if (!/console\.error\((?:error|['"][^'"]+['"],\s*error\b)/.test(line)) {
+                        return;
+                    }
+
+                    const precedingLines = lines.slice(Math.max(0, index - 3), index + 1).join('\n');
+                    if (!precedingLines.includes("process.env.NODE_ENV !== 'production'")) {
+                        unguardedConsoleErrors.push(`${path.relative(process.cwd(), file)}:${index + 1}`);
+                    }
+                });
+            }
+
+            expect(unguardedConsoleErrors).toEqual([]);
+        });
+    });
+
+    // ============================================================================
+    // 0.5. XSS COVERAGE (SEC-02, SEC-23)
+    // ============================================================================
+
+    test.describe('SEC-02/SEC-23 XSS Coverage', () => {
+        test.skip(!hasAdminAuthenticatedE2E, adminAuthenticatedE2ESkipReason);
+
+        test('Dashboard scan ignores malicious stored tenant IDs before QR/link rendering', async ({ page }) => {
+            test.setTimeout(60000);
+
+            await installXssProbe(page);
+            await loginAsAdmin(page);
+            await page.evaluate((payload) => {
+                localStorage.setItem('regengine_tenant_id', payload);
+            }, XSS_PAYLOAD);
+
+            await page.goto('/dashboard/scan', { waitUntil: 'networkidle' });
+            await assertNoXssSignals(page);
+
+            const scanState = await page.evaluate((payload) => {
+                const links = Array.from(document.querySelectorAll<HTMLAnchorElement>('a[href*="/mobile/capture"]'))
+                    .map((link) => link.getAttribute('href') || '');
+                const tenantIds = links
+                    .map((href) => new URL(href, window.location.origin).searchParams.get('tenant_id'))
+                    .filter((value): value is string => Boolean(value));
+
+                return {
+                    bodyHasPayload: document.body.innerHTML.includes(payload),
+                    storedTenantId: localStorage.getItem('regengine_tenant_id'),
+                    tenantIds,
+                };
+            }, XSS_PAYLOAD);
+
+            expect(scanState.bodyHasPayload).toBe(false);
+            expect(scanState.storedTenantId).not.toBe(XSS_PAYLOAD);
+            expect(scanState.tenantIds).not.toContain(XSS_PAYLOAD);
+            expect(scanState.tenantIds.every((tenantId) => SAFE_TENANT_ID.test(tenantId))).toBe(true);
+        });
+
+        test('Authenticated text inputs do not render XSS payloads as active DOM', async ({ page }, testInfo) => {
+            test.setTimeout(90000);
+
+            await installXssProbe(page);
+            await loginAsAdmin(page);
+
+            const routes = [
+                '/dashboard/settings',
+                '/dashboard/team',
+                '/dashboard/products',
+                '/dashboard/suppliers',
+                '/dashboard/scan',
+            ];
+            const skipped: string[] = [];
+
+            for (const route of routes) {
+                await page.goto(route, { waitUntil: 'domcontentloaded' });
+                await page.waitForLoadState('networkidle').catch(() => undefined);
+
+                if (new URL(page.url()).pathname.startsWith('/login')) {
+                    skipped.push(`${route}: redirected to login`);
+                    continue;
+                }
+
+                const fields = page.locator(
+                    'input:not([type]), input[type="text"], input[type="search"], input[type="email"], input[type="url"], input[type="tel"], textarea',
+                );
+                const fieldCount = await fields.count();
+                let filled = 0;
+
+                for (let i = 0; i < fieldCount && filled < 10; i++) {
+                    const field = fields.nth(i);
+                    const canFill = await field.isVisible().catch(() => false) &&
+                        await field.isEnabled().catch(() => false);
+                    if (!canFill) {
+                        continue;
+                    }
+
+                    const filledField = await field.fill(XSS_PAYLOAD).then(
+                        () => true,
+                        (error: unknown) => {
+                            skipped.push(`${route}: field ${i} fill failed (${String(error).slice(0, 80)})`);
+                            return false;
+                        },
+                    );
+                    if (filledField) {
+                        filled += 1;
+                    }
+                }
+
+                if (filled === 0) {
+                    skipped.push(`${route}: no visible text inputs`);
+                }
+
+                await assertNoXssSignals(page);
+            }
+
+            testInfo.annotations.push({
+                type: 'xss-skipped-routes',
+                description: skipped.length ? skipped.join('; ') : 'none',
+            });
+        });
     });
 
     /**
