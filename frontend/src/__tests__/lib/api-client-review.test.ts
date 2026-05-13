@@ -1,31 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const axiosMock = vi.hoisted(() => {
-    const clients: any[] = [];
-    return {
-        clients,
-        create: vi.fn(() => {
-            const client = {
-                interceptors: {
-                    request: { use: vi.fn() },
-                    response: { use: vi.fn() },
-                },
-                get: vi.fn(),
-                post: vi.fn(),
-                patch: vi.fn(),
-                delete: vi.fn(),
-            };
-            clients.push(client);
-            return client;
-        }),
-    };
-});
-
-vi.mock('axios', () => ({
-    default: { create: axiosMock.create },
-    create: axiosMock.create,
-}));
-
 vi.mock('@/lib/api-config', () => ({
     getServiceURL: (service: string) => `/api/${service}`,
 }));
@@ -35,38 +9,55 @@ vi.mock('@/lib/csrf', () => ({
     getCsrfHeaders: () => ({ 'X-CSRF-Token': 'csrf-token' }),
 }));
 
+const fetchMock = vi.fn();
+
+function jsonResponse(data: unknown): Response {
+    return new Response(JSON.stringify(data), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+    });
+}
+
+async function importFreshClient() {
+    vi.resetModules();
+    vi.stubGlobal('fetch', fetchMock);
+    return import('@/lib/api-client');
+}
+
 describe('apiClient review queue contract', () => {
     beforeEach(() => {
-        vi.clearAllMocks();
+        fetchMock.mockReset();
+        vi.unstubAllGlobals();
     });
 
     it('uses backend pagination and status_filter params and normalizes queue items', async () => {
-        const { apiClient } = await import('@/lib/api-client');
-        const adminClient = axiosMock.clients[0];
-        adminClient.get.mockResolvedValueOnce({
-            data: {
-                items: [
-                    {
-                        review_id: 'rev-1',
-                        confidence_score: 0.42,
-                        text_preview: 'Preview text',
-                        extraction: { lot: 'LOT-1' },
-                        created_at: '2026-05-04T12:00:00.000Z',
-                        status: 'pending',
-                    },
-                ],
-                total: 1,
-                offset: 0,
-                limit: 50,
-            },
-        });
+        fetchMock.mockResolvedValueOnce(jsonResponse({
+            items: [
+                {
+                    review_id: 'rev-1',
+                    confidence_score: 0.42,
+                    text_preview: 'Preview text',
+                    extraction: { lot: 'LOT-1' },
+                    created_at: '2026-05-04T12:00:00.000Z',
+                    status: 'pending',
+                },
+            ],
+            total: 1,
+            offset: 0,
+            limit: 50,
+        }));
 
+        const { apiClient } = await importFreshClient();
         const items = await apiClient.getReviewItems('cookie-managed');
 
-        expect(adminClient.get).toHaveBeenCalledWith('/v1/admin/review/flagged-extractions', {
-            params: { status_filter: 'PENDING', limit: 50 },
-            headers: {},
-        });
+        expect(fetchMock).toHaveBeenCalledWith(
+            '/api/admin/v1/admin/review/flagged-extractions?status_filter=PENDING&limit=50',
+            expect.objectContaining({
+                method: 'GET',
+                headers: {},
+                credentials: 'include',
+            }),
+        );
         expect(items).toEqual([
             {
                 id: 'rev-1',
@@ -82,86 +73,96 @@ describe('apiClient review queue contract', () => {
     });
 
     it('sends reviewer metadata with approve and reject decisions', async () => {
-        const { apiClient } = await import('@/lib/api-client');
-        const adminClient = axiosMock.clients[0];
-        adminClient.post.mockResolvedValue({ data: {} });
+        fetchMock
+            .mockResolvedValueOnce(jsonResponse({}))
+            .mockResolvedValueOnce(jsonResponse({}));
 
+        const { apiClient } = await importFreshClient();
         await apiClient.approveReviewItem('admin-key', 'rev-1');
         await apiClient.rejectReviewItem('admin-key', 'rev-1');
 
-        expect(adminClient.post).toHaveBeenNthCalledWith(
+        expect(fetchMock).toHaveBeenNthCalledWith(
             1,
-            '/v1/admin/review/flagged-extractions/rev-1/approve',
-            { reviewer_id: 'web-frontend', notes: 'Approved via web interface' },
-            { headers: { 'X-Admin-Key': 'admin-key' } },
-        );
-        expect(adminClient.post).toHaveBeenNthCalledWith(
-            2,
-            '/v1/admin/review/flagged-extractions/rev-1/reject',
-            { reviewer_id: 'web-frontend', notes: 'Rejected via web interface' },
-            { headers: { 'X-Admin-Key': 'admin-key' } },
-        );
-    });
-
-    it('omits X-RegEngine-API-Key for cookie-backed file ingest calls when no apiKey is provided', async () => {
-        const { apiClient } = await import('@/lib/api-client');
-        const ingestionClient = axiosMock.clients[1];
-        ingestionClient.post.mockResolvedValue({ data: { job_id: 'job-1' } });
-
-        const file = new File(['csv,data'], 'upload.csv', { type: 'text/csv' });
-        await apiClient.ingestFile(null, file, 'mobile_capture_pwa_offline');
-
-        expect(ingestionClient.post).toHaveBeenCalledWith(
-            '/api/v1/ingest/csv',
-            expect.any(FormData),
+            '/api/admin/v1/admin/review/flagged-extractions/rev-1/approve',
             expect.objectContaining({
-                headers: {},
-                timeout: 300000,
+                method: 'POST',
+                headers: {
+                    'X-Admin-Key': 'admin-key',
+                    'X-CSRF-Token': 'csrf-token',
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ reviewer_id: 'web-frontend', notes: 'Approved via web interface' }),
+            }),
+        );
+        expect(fetchMock).toHaveBeenNthCalledWith(
+            2,
+            '/api/admin/v1/admin/review/flagged-extractions/rev-1/reject',
+            expect.objectContaining({
+                method: 'POST',
+                headers: {
+                    'X-Admin-Key': 'admin-key',
+                    'X-CSRF-Token': 'csrf-token',
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ reviewer_id: 'web-frontend', notes: 'Rejected via web interface' }),
             }),
         );
     });
 
+    it('omits X-RegEngine-API-Key for cookie-backed file ingest calls when no apiKey is provided', async () => {
+        fetchMock.mockResolvedValueOnce(jsonResponse({ job_id: 'job-1' }));
+
+        const { apiClient } = await importFreshClient();
+        const file = new File(['csv,data'], 'upload.csv', { type: 'text/csv' });
+        await apiClient.ingestFile(null, file, 'mobile_capture_pwa_offline');
+
+        const [, init] = fetchMock.mock.calls[0];
+        expect(fetchMock.mock.calls[0][0]).toBe('/api/ingestion/api/v1/ingest/csv');
+        expect(init).toEqual(expect.objectContaining({
+            method: 'POST',
+            body: expect.any(FormData),
+            credentials: 'include',
+        }));
+        expect(init.headers).toEqual({ 'X-CSRF-Token': 'csrf-token' });
+        expect(init.headers).not.toHaveProperty('X-RegEngine-API-Key');
+        expect(init.headers).not.toHaveProperty('Content-Type');
+    });
+
     it('unwraps paginated admin user-management responses', async () => {
-        const { apiClient } = await import('@/lib/api-client');
-        const adminClient = axiosMock.clients[0];
-        adminClient.get
-            .mockResolvedValueOnce({
-                data: {
-                    items: [
-                        { id: 'user-1', email: 'owner@example.com', is_sysadmin: false, status: 'active' },
-                    ],
-                    total: 1,
-                    skip: 0,
-                    limit: 20,
-                },
-            })
-            .mockResolvedValueOnce({
-                data: {
-                    items: [
-                        { id: 'role-1', name: 'Viewer', is_system: true },
-                    ],
-                    total: 1,
-                    skip: 0,
-                    limit: 20,
-                },
-            })
-            .mockResolvedValueOnce({
-                data: {
-                    items: [
-                        {
-                            id: 'invite-1',
-                            email: 'pending@example.com',
-                            role_id: 'role-1',
-                            status: 'pending',
-                            created_at: '2026-05-05T00:00:00.000Z',
-                            expires_at: '2026-05-12T00:00:00.000Z',
-                        },
-                    ],
-                    total: 1,
-                    skip: 0,
-                    limit: 20,
-                },
-            });
+        fetchMock
+            .mockResolvedValueOnce(jsonResponse({
+                items: [
+                    { id: 'user-1', email: 'owner@example.com', is_sysadmin: false, status: 'active' },
+                ],
+                total: 1,
+                skip: 0,
+                limit: 20,
+            }))
+            .mockResolvedValueOnce(jsonResponse({
+                items: [
+                    { id: 'role-1', name: 'Viewer', is_system: true },
+                ],
+                total: 1,
+                skip: 0,
+                limit: 20,
+            }))
+            .mockResolvedValueOnce(jsonResponse({
+                items: [
+                    {
+                        id: 'invite-1',
+                        email: 'pending@example.com',
+                        role_id: 'role-1',
+                        status: 'pending',
+                        created_at: '2026-05-05T00:00:00.000Z',
+                        expires_at: '2026-05-12T00:00:00.000Z',
+                    },
+                ],
+                total: 1,
+                skip: 0,
+                limit: 20,
+            }));
+
+        const { apiClient } = await importFreshClient();
 
         await expect(apiClient.getUsers()).resolves.toEqual([
             { id: 'user-1', email: 'owner@example.com', is_sysadmin: false, status: 'active' },

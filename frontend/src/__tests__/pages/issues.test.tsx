@@ -171,10 +171,9 @@ describe('IssuesPage', () => {
         const calls = (global.fetch as ReturnType<typeof vi.fn>).mock.calls as [string, RequestInit | undefined][];
         const urls = calls.map(([url]) => url);
 
-        expect(urls).toContain('/api/ingestion/api/v1/requests/deadlines');
+        expect(urls).toContain('/api/ingestion/api/v1/requests/deadlines?tenant_id=tenant-123');
         expect(urls).toContain('/api/ingestion/api/v1/compliance/pending-reviews/tenant-123');
         expect(urls).toContain('/api/ingestion/api/v1/requests/case-1/blockers');
-        expect(urls.some(url => url.includes('tenant_id='))).toBe(false);
 
         for (const [, init] of calls) {
             expect(init?.credentials).toBe('include');

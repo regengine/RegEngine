@@ -1,12 +1,13 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
 import { apiClient } from '@/lib/api-client';
-import { createSupabaseBrowserClient, isSupabaseConfigured } from '@/lib/supabase/client';
+import { isSupabaseConfigured } from '@/lib/supabase/config';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Card, CardContent, CardDescription, CardHeader } from '@/components/ui/card';
 import {
     ArrowRight,
@@ -103,7 +104,9 @@ export default function LoginPage() {
     const [isLoading, setIsLoading] = useState(false);
     const [isSessionSyncing, setIsSessionSyncing] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
+    const [rememberMe, setRememberMe] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const submitInFlightRef = useRef(false);
     const router = useRouter();
     const searchParams = useSearchParams();
     const nextParam = searchParams.get('next');
@@ -160,6 +163,10 @@ export default function LoginPage() {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
+        if (submitInFlightRef.current) {
+            return;
+        }
+
         if (!email.trim()) {
             setError('Email is required.');
             return;
@@ -169,6 +176,7 @@ export default function LoginPage() {
             return;
         }
 
+        submitInFlightRef.current = true;
         setIsLoading(true);
         setIsSessionSyncing(true);
         setError(null);
@@ -184,7 +192,8 @@ export default function LoginPage() {
             await login(
                 response.access_token,
                 response.user,
-                response.tenant_id
+                response.tenant_id,
+                { remember: rememberMe }
             );
 
             // E2E and some local setups intentionally run in JWT-only mode
@@ -199,11 +208,15 @@ export default function LoginPage() {
                 //
                 // Runs AFTER login() so React state is set, which prevents the
                 // onAuthStateChange callback from clobbering re_access_token.
-                const supabase = createSupabaseBrowserClient();
-                const { error: sbError } = await supabase.auth.signInWithPassword({ email, password });
-                if (sbError) {
+                const sbResponse = await fetch('/api/auth/supabase/sign-in', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ email, password }),
+                });
+                if (!sbResponse.ok) {
                     if (process.env.NODE_ENV !== 'production') {
-                        console.error('[login] Supabase session sync failed:', sbError.message);
+                        console.error('[login] Supabase session sync failed:', sbResponse.status);
                     }
                     await clearCredentials();
                     throw new Error('Secure session could not be established. Please try again.');
@@ -262,6 +275,7 @@ export default function LoginPage() {
                 setError(errorDetail || 'An unexpected error occurred. Please try again.');
             }
         } finally {
+            submitInFlightRef.current = false;
             setIsLoading(false);
         }
     };
@@ -273,6 +287,7 @@ export default function LoginPage() {
         { icon: ShieldCheck, label: 'Secure' },
         { icon: TimerReset, label: 'Ready' },
     ];
+    const passwordDescription = error ? 'login-error password-visibility-shortcut' : 'password-visibility-shortcut';
 
     return (
         <div className="re-compliance-os min-h-screen overflow-x-hidden text-[var(--re-text-primary)]">
@@ -438,6 +453,7 @@ export default function LoginPage() {
                                         <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--re-text-muted)]" />
                                         <Input
                                             id="email"
+                                            name="email"
                                             type="email"
                                             placeholder="name@company.com"
                                             value={email}
@@ -460,36 +476,57 @@ export default function LoginPage() {
                                         <LockKeyhole className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--re-text-muted)]" />
                                         <Input
                                             id="password"
+                                            name="password"
                                             type={showPassword ? 'text' : 'password'}
                                             placeholder="Enter your password"
                                             value={password}
                                             onChange={(e) => setPassword(e.target.value)}
+                                            onKeyDown={(e) => {
+                                                if (e.altKey && !e.ctrlKey && !e.metaKey && e.key.toLowerCase() === 'p') {
+                                                    e.preventDefault();
+                                                    setShowPassword((value) => !value);
+                                                }
+                                            }}
                                             disabled={submitBusy}
                                             required
                                             autoComplete="current-password"
+                                            aria-keyshortcuts="Alt+P"
                                             aria-invalid={!!error}
-                                            aria-describedby={error ? 'login-error' : undefined}
+                                            aria-describedby={passwordDescription}
                                             className="h-12 pl-10 pr-10"
                                         />
+                                        {/* Keep the required email -> password -> remember -> submit tab path;
+                                            keyboard users can toggle reveal from the password field with Alt+P. */}
                                         <button
                                             type="button"
                                             aria-label={showPassword ? 'Hide password' : 'Show password'}
+                                            aria-keyshortcuts="Alt+P"
                                             className="absolute right-3 top-1/2 inline-flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-md text-[var(--re-text-muted)] transition hover:bg-[var(--re-surface-base)] hover:text-[var(--re-text-primary)]"
                                             onClick={() => setShowPassword((value) => !value)}
                                             disabled={submitBusy}
+                                            tabIndex={-1}
                                         >
                                             {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                                         </button>
+                                        <span id="password-visibility-shortcut" className="sr-only">
+                                            Press Alt+P to show or hide password.
+                                        </span>
                                     </div>
                                 </div>
 
-                                <div className="flex items-center justify-between gap-3 text-xs text-[var(--re-text-muted)]">
-                                    <Link href="/accept-invite" className="transition hover:text-[var(--re-text-primary)]">
-                                        Have an invite?
-                                    </Link>
-                                    <Link href="/forgot-password" className="transition hover:text-[var(--re-text-primary)]">
-                                        Forgot password?
-                                    </Link>
+                                <div className="flex items-center gap-2 text-sm text-[var(--re-text-secondary)]">
+                                    <Checkbox
+                                        id="remember-me"
+                                        name="remember"
+                                        checked={rememberMe}
+                                        onCheckedChange={(checked) => setRememberMe(checked === true)}
+                                        disabled={submitBusy}
+                                        aria-label="Remember me"
+                                        className="border-[var(--re-surface-border)] data-[state=checked]:bg-[var(--re-brand)] data-[state=checked]:text-[var(--re-surface-base)]"
+                                    />
+                                    <label htmlFor="remember-me" className="cursor-pointer select-none leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+                                        Remember me
+                                    </label>
                                 </div>
 
                                 <Button className="h-12 w-full gap-2" type="submit" disabled={submitBusy}>
@@ -505,6 +542,15 @@ export default function LoginPage() {
                                         </>
                                     )}
                                 </Button>
+
+                                <div className="flex items-center justify-between gap-3 text-xs text-[var(--re-text-muted)]">
+                                    <Link href="/accept-invite" className="transition hover:text-[var(--re-text-primary)]">
+                                        Have an invite?
+                                    </Link>
+                                    <Link href="/forgot-password" className="transition hover:text-[var(--re-text-primary)]">
+                                        Forgot password?
+                                    </Link>
+                                </div>
 
                                 <div className="rounded-md border border-[var(--re-surface-border)] bg-[var(--re-surface-base)] p-3">
                                     <div className="flex gap-3">

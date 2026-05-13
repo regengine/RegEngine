@@ -111,6 +111,12 @@ const SUBPROCESSORS = [
     location: 'United States',
     link: 'https://redpanda.com/legal/privacy-policy',
   },
+  {
+    name: 'Cloudflare R2',
+    purpose: 'Object storage for ingested document artifacts (raw uploads, normalized JSON, parsed text extracts). S3-compatible API; AES-256 server-side encryption at rest.',
+    location: 'Global edge (S3-compatible API)',
+    link: 'https://www.cloudflare.com/privacypolicy/',
+  },
 ];
 
 /* ── Security measures ────────────────────────────────────────── */

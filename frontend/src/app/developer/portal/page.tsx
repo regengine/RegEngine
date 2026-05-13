@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { useAuth } from '@/lib/auth-context';
 import {
     Key, BarChart3, BookOpen, ArrowRight, Terminal, Zap,
@@ -24,7 +23,6 @@ interface DashboardStats {
 }
 
 export default function DeveloperPortalDashboard() {
-    const supabase = createSupabaseBrowserClient();
     const { user: authUser } = useAuth();
     const [profile, setProfile] = useState<DeveloperProfile | null>(null);
     const [stats, setStats] = useState<DashboardStats>({ totalKeys: 0, activeKeys: 0, totalRequests: 0 });
@@ -34,38 +32,16 @@ export default function DeveloperPortalDashboard() {
         async function load() {
             if (!authUser) return;
 
-            const { data: prof, error: profError } = await supabase
-                .from('developer_profiles')
-                .select('*')
-                .eq('auth_user_id', authUser.id)
-                .maybeSingle();
-
-            if (profError && process.env.NODE_ENV !== 'production') {
-                console.error('Failed to fetch developer profile:', profError.message);
-            }
-            if (prof) {
-                setProfile(prof);
-                const { data: keys, error: keysError } = await supabase
-                    .from('developer_api_keys')
-                    .select('id, enabled, total_requests')
-                    .eq('developer_id', prof.id);
-
-                if (keysError && process.env.NODE_ENV !== 'production') {
-                    console.error('Failed to fetch API keys:', keysError.message);
-                }
-
-                if (keys) {
-                    setStats({
-                        totalKeys: keys.length,
-                        activeKeys: keys.filter(k => k.enabled).length,
-                        totalRequests: keys.reduce((sum, k) => sum + (k.total_requests || 0), 0),
-                    });
-                }
+            const response = await fetch('/api/developer/portal/dashboard', { credentials: 'include' });
+            if (response.ok) {
+                const data = await response.json();
+                setProfile(data.profile);
+                setStats(data.stats);
             }
             setLoading(false);
         }
         load();
-    }, [supabase, authUser]);
+    }, [authUser]);
 
     const greeting = profile?.display_name || profile?.email?.split('@')[0] || 'Developer';
 

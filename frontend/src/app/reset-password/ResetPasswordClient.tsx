@@ -1,9 +1,7 @@
 'use client';
 
-import { fetchWithCsrf } from '@/lib/fetch-with-csrf';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader } from '@/components/ui/card';
@@ -33,8 +31,6 @@ export default function ResetPasswordClient() {
     const [sessionReady, setSessionReady] = useState(false);
     const [sessionError, setSessionError] = useState(false);
     const router = useRouter();
-    // SSR-aware browser client — matches the PKCE flow used by ForgotPasswordClient.
-    const supabase = createSupabaseBrowserClient();
 
     // When Supabase redirects back after password reset it passes a recovery
     // session in one of two ways:
@@ -50,18 +46,27 @@ export default function ResetPasswordClient() {
     //    We wait one tick with setTimeout to let the SDK finish that processing
     //    before calling getSession().
     useEffect(() => {
-        const check = () => {
-            supabase.auth.getSession().then(({ data: { session } }) => {
-                if (session) {
+        let cancelled = false;
+        const check = async () => {
+            try {
+                const response = await fetch('/api/session', { method: 'GET', credentials: 'include' });
+                const session = response.ok ? await response.json() : null;
+                if (cancelled) return;
+                if (session?.authenticated) {
                     setSessionReady(true);
                 } else {
                     setSessionError(true);
                 }
-            });
+            } catch {
+                if (!cancelled) setSessionError(true);
+            }
         };
         // Give detectSessionInUrl one event-loop tick to process any hash tokens.
         const tid = setTimeout(check, 50);
-        return () => clearTimeout(tid);
+        return () => {
+            cancelled = true;
+            clearTimeout(tid);
+        };
     }, []);
 
     const strength = getPasswordStrength(password);
@@ -86,23 +91,10 @@ export default function ResetPasswordClient() {
             // users table — supabase.auth.updateUser() only updates Supabase's internal
             // store, which is never read at login. Call the backend directly so it can
             // update the authoritative store (and keep Supabase in sync as a side-effect).
-            const { data: sessionData } = await supabase.auth.getSession();
-            const accessToken = sessionData?.session?.access_token;
-            if (!accessToken) {
-                setError('Your reset session has expired. Please request a new reset link.');
-                return;
-            }
-
-            const adminBase = process.env.NEXT_PUBLIC_API_BASE_URL
-                ? `${process.env.NEXT_PUBLIC_API_BASE_URL}/admin`
-                : '/api/admin';
-
-            const res = await fetchWithCsrf(`${adminBase}/auth/reset-password`, {
+            const res = await fetch('/api/auth/supabase/reset-password', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    Authorization: `Bearer ${accessToken}`,
-                },
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
                 body: JSON.stringify({ new_password: password }),
             });
 
@@ -113,7 +105,6 @@ export default function ResetPasswordClient() {
             }
 
             // Clear the recovery session — it's been consumed
-            await supabase.auth.signOut();
             setSuccess(true);
         } catch {
             setError('An unexpected error occurred. Please try again.');

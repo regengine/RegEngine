@@ -1,9 +1,10 @@
 """Session management routes — extracted from auth_routes.py (Phase 1 sub-split 7/N).
 
 Exposes:
-  router            — APIRouter with /sessions, /sessions/{id}/revoke, /logout-all
+  router            — APIRouter with /sessions, /sessions/{id}/revoke, /logout, /logout-all
   list_sessions     — re-exported from auth_routes for compat
   revoke_session    — re-exported from auth_routes for compat
+  logout            — re-exported from auth_routes for compat
   revoke_all_sessions — re-exported from auth_routes for compat
 """
 from __future__ import annotations
@@ -11,9 +12,10 @@ from __future__ import annotations
 from uuid import UUID
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
+from ..auth_utils import decode_access_token, revoke_token
 from ..database import get_session
 from ..dependencies import get_current_user, get_session_store
 from ..models import RevokeAllSessionsResponse, SessionListResponse, SessionRevokeResponse
@@ -24,6 +26,17 @@ from shared.pagination import PaginationParams
 
 router = APIRouter()
 logger = structlog.get_logger("auth")
+
+
+def _bearer_token_from_request(request: Request) -> str:
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Missing bearer token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    return auth_header[7:]
 
 
 @router.get("/sessions", response_model=SessionListResponse, dependencies=[Depends(get_current_user)])
@@ -69,6 +82,49 @@ async def revoke_session(
     logger.info("session_revoked", session_id=str(session_id), user_id=str(current_user.id))
 
     return {"status": "revoked"}
+
+
+@router.post("/logout")
+async def logout(
+    request: Request,
+    current_user: UserModel = Depends(get_current_user),
+    session_store: RedisSessionStore = Depends(get_session_store),
+):
+    """Logout the current bearer-token session.
+
+    Multiple active sessions are allowed; this endpoint only revokes the
+    presented access token and, for session-bound local JWTs, its Redis
+    session. Legacy local tokens without sid/session_id still get their jti
+    revoked so replay of the bearer token fails.
+    """
+    token = _bearer_token_from_request(request)
+    payload = decode_access_token(token)
+
+    jti = payload.get("jti")
+    if jti:
+        await revoke_token(str(jti))
+
+    sid_raw = payload.get("sid") or payload.get("session_id")
+    session_revoked = False
+    if sid_raw:
+        try:
+            session_id = UUID(str(sid_raw))
+        except (TypeError, ValueError):
+            session_id = None
+        if session_id is not None:
+            session = await session_store.get_session(session_id)
+            if session and session.user_id == current_user.id:
+                session_revoked = await session_store.revoke_session(session_id)
+
+    logger.info(
+        "logout_success",
+        user_id=str(current_user.id),
+        jti=str(jti) if jti else None,
+        session_id=str(sid_raw) if sid_raw else None,
+        session_revoked=session_revoked,
+    )
+
+    return {"status": "success"}
 
 
 @router.post("/logout-all", response_model=RevokeAllSessionsResponse, dependencies=[Depends(get_current_user)])

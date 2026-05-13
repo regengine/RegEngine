@@ -129,6 +129,9 @@ vi.mock('lucide-react', () => {
         Leaf: Stub,
         UserCog: Stub,
         Crown: Stub,
+        Edit3: Stub,
+        Trash2: Stub,
+        X: Stub,
     };
 });
 
@@ -173,7 +176,7 @@ describe('dashboard auth gating cleanup', () => {
 
         await waitFor(() => {
             expect(fetchWithCsrfMock).toHaveBeenCalledWith(
-                '/api/ingestion/api/v1/integrations/tenant-123',
+                '/api/ingestion/api/v1/integrations/status/tenant-123',
                 expect.objectContaining({
                     credentials: 'include',
                     headers: { 'Content-Type': 'application/json' },

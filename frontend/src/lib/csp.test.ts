@@ -43,6 +43,16 @@ describe('buildCsp', () => {
     expect(directives['script-src']).toContain("'unsafe-inline'");
   });
 
+  it('can omit upgrade-insecure-requests for local HTTP origins', () => {
+    const directives = parseDirectives(
+      buildCsp('test-nonce', {
+        upgradeInsecureRequests: false,
+      }),
+    );
+
+    expect(directives['upgrade-insecure-requests']).toBeUndefined();
+  });
+
   it('allows required first-party integrations without weakening framing or object policy', () => {
     const directives = parseDirectives(buildCsp('test-nonce'));
 

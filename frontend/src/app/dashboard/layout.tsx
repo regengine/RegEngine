@@ -257,6 +257,46 @@ function CollapsibleNavSection({
 // Layout
 // ---------------------------------------------------------------------------
 
+function DashboardShellSkeleton() {
+    return (
+        <div className="flex flex-col min-h-screen re-app-shell" aria-busy="true">
+            <div className="flex flex-1">
+                <aside className="hidden md:flex flex-col w-[244px] border-r border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)] flex-shrink-0">
+                    <div className="p-4 border-b border-[var(--re-border-subtle)]">
+                        <div className="h-8 w-32 rounded bg-muted animate-pulse" />
+                    </div>
+                    <div className="flex-1 p-3 space-y-2">
+                        {[1, 2, 3, 4, 5, 6, 7].map((item) => (
+                            <div key={item} className="h-9 rounded-md bg-muted animate-pulse" />
+                        ))}
+                    </div>
+                    <div className="p-3 border-t border-[var(--re-border-subtle)]">
+                        <div className="h-20 rounded-md bg-muted animate-pulse" />
+                    </div>
+                </aside>
+                <div className="md:hidden fixed top-0 left-0 right-0 z-50 bg-[var(--re-sticky-bg)] border-b border-[var(--re-surface-border)] shadow-sm">
+                    <div className="flex gap-2 px-3 py-2">
+                        {[1, 2, 3].map((item) => (
+                            <div key={item} className="h-9 w-24 rounded-md bg-muted animate-pulse" />
+                        ))}
+                    </div>
+                </div>
+                <main className="flex-1 md:pt-0 pt-[52px] overflow-y-auto">
+                    <div className="h-10 border-b border-[var(--re-surface-border)] bg-[var(--re-surface-base)]" />
+                    <div className="container mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6 animate-pulse">
+                        <div className="h-8 w-44 rounded bg-muted" />
+                        <div className="h-[244px] rounded-lg bg-muted" />
+                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                            <div className="lg:col-span-2 h-[360px] rounded-lg bg-muted" />
+                            <div className="h-[360px] rounded-lg bg-muted" />
+                        </div>
+                    </div>
+                </main>
+            </div>
+        </div>
+    );
+}
+
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
     const pathname = usePathname();
     const router = useRouter();
@@ -315,9 +355,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         }
     }, [isHydrated, isAuthenticated, router, pathname]);
 
-    // Don't render dashboard chrome until auth is resolved
     if (!isHydrated || !isAuthenticated) {
-        return null;
+        return <DashboardShellSkeleton />;
     }
 
     return (

@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -10,21 +9,17 @@ import { PageContainer } from "@/components/layout/page-container";
 import {
   Card,
   CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/lib/auth-context";
 import { useTenant } from "@/lib/tenant-context";
 import { useOrganizations } from "@/hooks/use-organizations";
-import { useSystemStatus, useSystemMetrics } from "@/hooks/use-api";
+import { useSystemStatus } from "@/hooks/use-api";
 import { SystemHealthWidget } from "@/components/dashboard/system-health-widget";
 import { MetricsOverviewWidget } from "@/components/dashboard/metrics-overview-widget";
 import { ScanHistoryWidget } from "@/components/dashboard/scan-history-widget";
 import { fetchWorkbenchReadinessSummary } from "@/lib/api-hooks";
-import { fetchWithCsrf } from "@/lib/fetch-with-csrf";
 import {
   Shield,
   Upload,
@@ -179,6 +174,45 @@ const getQuickActions = (tenantType: "retailer" | "supplier" | "system") => {
   ];
 };
 
+function DashboardPageSkeleton() {
+  return (
+    <div className="min-h-screen bg-[var(--re-surface-base)]" aria-busy="true">
+      <PageContainer>
+        <div className="space-y-6 sm:space-y-8 animate-pulse">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div className="space-y-2">
+              <div className="h-8 w-44 rounded bg-muted" />
+              <div className="h-4 w-[min(24rem,80vw)] rounded bg-muted" />
+            </div>
+            <div className="h-7 w-40 rounded bg-muted" />
+          </div>
+          <div className="h-[244px] rounded-lg bg-muted" />
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="lg:col-span-2 space-y-6">
+              <div className="h-[210px] rounded-lg bg-muted" />
+              <div className="h-[136px] rounded-lg bg-muted" />
+            </div>
+            <div className="space-y-6">
+              <div className="h-[220px] rounded-lg bg-muted" />
+              <div className="h-[260px] rounded-lg bg-muted" />
+            </div>
+          </div>
+          <div className="space-y-4">
+            <div className="h-6 w-36 rounded bg-muted" />
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+              {[1, 2, 3].map((item) => (
+                <div key={item} className="h-[96px] rounded-lg bg-muted" />
+              ))}
+            </div>
+          </div>
+          <div className="h-[116px] rounded-lg bg-muted" />
+          <div className="h-[116px] rounded-lg bg-muted" />
+        </div>
+      </PageContainer>
+    </div>
+  );
+}
+
 export default function DashboardPage() {
   const { user, isHydrated, isAuthenticated } = useAuth();
   const { tenantId } = useTenant();
@@ -217,9 +251,6 @@ export default function DashboardPage() {
     (o) => o.id === (effectiveTenantId || tenantId),
   );
 
-  // Fetch real system metrics from backend
-  const { data: systemMetrics } = useSystemMetrics();
-
   // Check design partner status from tenant settings
   const { data: onboardingData } = useOnboardingStatus(effectiveTenantId);
   const partnerTier = onboardingData?.partner_tier as string | undefined;
@@ -236,28 +267,6 @@ export default function DashboardPage() {
     return getQuickActions(tenantType);
   }, [tenantType]);
 
-  // Fetch pending reviews count from backend via proxy
-  const { data: pendingReviewsData } = useQuery({
-    queryKey: ["pending-reviews", effectiveTenantId],
-    queryFn: async () => {
-      const res = await fetchWithCsrf(
-        `/api/ingestion/api/v1/compliance/pending-reviews/${effectiveTenantId}`,
-        {
-          credentials: "include",
-          signal: AbortSignal.timeout(8000),
-          headers: {
-            "Content-Type": "application/json",
-          },
-        },
-      );
-      if (!res.ok) return null;
-      return res.json();
-    },
-    enabled: !!effectiveTenantId && isAuthenticated,
-    retry: false,
-  });
-  const pendingReviews = pendingReviewsData?.pending_reviews ?? 0;
-
   const { data: workbenchReadiness } = useQuery({
     queryKey: ["dashboard-workbench-readiness", effectiveTenantId],
     queryFn: () => fetchWorkbenchReadinessSummary(effectiveTenantId || ""),
@@ -266,37 +275,14 @@ export default function DashboardPage() {
     retry: false,
   });
 
-  // Use real metrics from backend when available, fall back to zeros from hook
-  const metrics = useMemo(() => {
-    if (systemMetrics) {
-      return {
-        documentsIngested:
-          systemMetrics.events_ingested ?? systemMetrics.total_documents ?? 0,
-        complianceScore: systemMetrics.compliance_score ?? 0,
-        openAlerts: systemMetrics.open_alerts ?? 0,
-        pendingReviews,
-      };
-    }
-    return {
-      documentsIngested: 0,
-      complianceScore: 0,
-      openAlerts: 0,
-      pendingReviews,
-    };
-  }, [systemMetrics, pendingReviews]);
-
   if (!isHydrated || !effectiveUser) {
-    return null;
+    return <DashboardPageSkeleton />;
   }
 
   return (
     <div className="min-h-screen bg-[var(--re-surface-base)]">
       <PageContainer>
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="space-y-6 sm:space-y-8"
-        >
+        <div className="space-y-6 sm:space-y-8">
           {/* Welcome Header */}
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div>
@@ -459,12 +445,9 @@ export default function DashboardPage() {
           <div>
             <h2 className="text-xl font-semibold mb-4">Quick Actions</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
-              {quickActions.map((action, index) => (
-                <motion.div
+              {quickActions.map((action) => (
+                <div
                   key={action.href}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: index * 0.05 }}
                 >
                   <Link href={action.href}>
                     <Card className="h-full hover:border-primary/50 active:scale-[0.98] transition-all cursor-pointer group">
@@ -490,7 +473,7 @@ export default function DashboardPage() {
                       </CardContent>
                     </Card>
                   </Link>
-                </motion.div>
+                </div>
               ))}
             </div>
           </div>
@@ -549,7 +532,7 @@ export default function DashboardPage() {
               </div>
             </CardContent>
           </Card>
-        </motion.div>
+        </div>
       </PageContainer>
     </div>
   );

@@ -12,22 +12,35 @@
  *   #1152-follow-on — UUID validation on [tenantId]/[snapshotId] routes
  */
 
-import { afterEach, describe, it, expect } from 'vitest';
+import { afterEach, describe, it, expect, vi } from 'vitest';
 import { createHmac } from 'node:crypto';
-import { requireAdminCapability, requireProxyAuth, sanitizePath, validateProxySession, validateUuid, safeSegment } from '@/lib/api-proxy';
-import { applyCookieCredentials, passthroughRequestHeaders } from '@/lib/proxy-factory';
+import { createServerClient } from '@supabase/ssr';
+import { requireAdminCapability, requireProxyAuth, sanitizePath, validateProxySession, validateUuid, safeSegment, hasSupabaseSessionCookies } from '@/lib/api-proxy';
+import { applyCookieCredentials, applyFirstPartyServiceCredentials, createStreamProxy, passthroughRequestHeaders } from '@/lib/proxy-factory';
 import { _resetForTesting as resetJwtKeysForTesting } from '@/lib/jwt-keys';
 import type { NextRequest } from 'next/server';
 
+vi.mock('@supabase/ssr', () => ({
+    createServerClient: vi.fn(),
+}));
+
 const ORIGINAL_REGENGINE_API_KEY = process.env.REGENGINE_API_KEY;
+const ORIGINAL_API_KEY = process.env.API_KEY;
 const ORIGINAL_JWT_SIGNING_KEY = process.env.JWT_SIGNING_KEY;
 const ORIGINAL_AUTH_SECRET_KEY = process.env.AUTH_SECRET_KEY;
+const ORIGINAL_SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const ORIGINAL_SUPABASE_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
 afterEach(() => {
     if (ORIGINAL_REGENGINE_API_KEY === undefined) {
         delete process.env.REGENGINE_API_KEY;
     } else {
         process.env.REGENGINE_API_KEY = ORIGINAL_REGENGINE_API_KEY;
+    }
+    if (ORIGINAL_API_KEY === undefined) {
+        delete process.env.API_KEY;
+    } else {
+        process.env.API_KEY = ORIGINAL_API_KEY;
     }
     if (ORIGINAL_JWT_SIGNING_KEY === undefined) {
         delete process.env.JWT_SIGNING_KEY;
@@ -39,11 +52,27 @@ afterEach(() => {
     } else {
         process.env.AUTH_SECRET_KEY = ORIGINAL_AUTH_SECRET_KEY;
     }
+    if (ORIGINAL_SUPABASE_URL === undefined) {
+        delete process.env.NEXT_PUBLIC_SUPABASE_URL;
+    } else {
+        process.env.NEXT_PUBLIC_SUPABASE_URL = ORIGINAL_SUPABASE_URL;
+    }
+    if (ORIGINAL_SUPABASE_KEY === undefined) {
+        delete process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    } else {
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = ORIGINAL_SUPABASE_KEY;
+    }
+    vi.mocked(createServerClient).mockReset();
     resetJwtKeysForTesting();
 });
 
-function makeProxyRequest(headers: Record<string, string>, cookies: Record<string, string> = {}): NextRequest {
+function makeProxyRequest(
+    headers: Record<string, string>,
+    cookies: Record<string, string> = {},
+    url = 'http://localhost/api/proxy',
+): NextRequest {
     return {
+        url,
         headers: new Headers(headers),
         cookies: {
             get: (name: string) => {
@@ -111,6 +140,13 @@ describe('requireProxyAuth', () => {
         expect(requireProxyAuth(makeProxyRequest({}, { re_access_token: 'real-token' }))).toBeNull();
         expect(requireProxyAuth(makeProxyRequest({ authorization: 'Bearer real-token' }))).toBeNull();
         expect(requireProxyAuth(makeProxyRequest({ 'x-regengine-api-key': 'real-api-key' }))).toBeNull();
+    });
+
+    it('detects Supabase cookies without treating them as raw caller credentials', () => {
+        const request = makeProxyRequest({}, { 'sb-test-auth-token': 'supabase-cookie' });
+
+        expect(requireProxyAuth(request)?.status).toBe(401);
+        expect(hasSupabaseSessionCookies(request)).toBe(true);
     });
 });
 
@@ -353,7 +389,7 @@ describe('cookie-managed credential passthrough', () => {
         expect(outgoing.has('x-regengine-api-key')).toBe(false);
     });
 
-    it('does not convert a session credential into the server API key', () => {
+    it('keeps cookie credential injection separate from server API key injection', () => {
         process.env.REGENGINE_API_KEY = 'server-side-key'; // pragma: allowlist secret
         const outgoing = new Headers();
         const request = makeProxyRequest({}, { re_access_token: 'real-token' });
@@ -361,6 +397,136 @@ describe('cookie-managed credential passthrough', () => {
         applyCookieCredentials(outgoing, request);
 
         expect(outgoing.get('authorization')).toBe('Bearer real-token');
+        expect(outgoing.has('x-regengine-api-key')).toBe(false);
+    });
+
+    it('injects a server API key for first-party service calls with a valid tenant cookie', () => {
+        process.env.REGENGINE_API_KEY = 'server-side-key'; // pragma: allowlist secret
+        const outgoing = new Headers();
+        const request = makeProxyRequest(
+            {},
+            {
+                re_access_token: 'real-token',
+                re_tenant_id: '11111111-1111-4111-8111-111111111111',
+            },
+        );
+
+        applyCookieCredentials(outgoing, request);
+        const error = applyFirstPartyServiceCredentials(outgoing, request);
+
+        expect(error).toBeNull();
+        expect(outgoing.get('authorization')).toBe('Bearer real-token');
+        expect(outgoing.get('x-regengine-api-key')).toBe('server-side-key');
+        expect(outgoing.get('x-tenant-id')).toBe('11111111-1111-4111-8111-111111111111');
+    });
+
+    it('accepts the built-in system tenant context for first-party service calls', () => {
+        process.env.REGENGINE_API_KEY = 'server-side-key'; // pragma: allowlist secret
+        const outgoing = new Headers();
+        const request = makeProxyRequest(
+            {},
+            {
+                re_access_token: 'real-token',
+                re_tenant_id: '00000000-0000-0000-0000-000000000001',
+            },
+        );
+
+        applyCookieCredentials(outgoing, request);
+        const error = applyFirstPartyServiceCredentials(outgoing, request);
+
+        expect(error).toBeNull();
+        expect(outgoing.get('x-regengine-api-key')).toBe('server-side-key');
+        expect(outgoing.get('x-tenant-id')).toBe('00000000-0000-0000-0000-000000000001');
+    });
+
+    it('injects a server API key with a valid backend-provided tenant header', () => {
+        process.env.REGENGINE_API_KEY = 'server-side-key'; // pragma: allowlist secret
+        const outgoing = new Headers({
+            'x-tenant-id': '22222222-2222-4222-8222-222222222222',
+        });
+        const request = makeProxyRequest({}, { re_access_token: 'real-token' });
+
+        applyCookieCredentials(outgoing, request);
+        const error = applyFirstPartyServiceCredentials(outgoing, request);
+
+        expect(error).toBeNull();
+        expect(outgoing.get('x-regengine-api-key')).toBe('server-side-key');
+        expect(outgoing.get('x-tenant-id')).toBe('22222222-2222-4222-8222-222222222222');
+    });
+
+    it('does not overwrite a real direct client API key during first-party service injection', () => {
+        process.env.REGENGINE_API_KEY = 'server-side-key'; // pragma: allowlist secret
+        const outgoing = new Headers({
+            'x-regengine-api-key': 'caller-api-key',
+            'x-tenant-id': '33333333-3333-4333-8333-333333333333',
+        });
+        const request = makeProxyRequest({}, { re_access_token: 'real-token' });
+
+        const error = applyFirstPartyServiceCredentials(outgoing, request);
+
+        expect(error).toBeNull();
+        expect(outgoing.get('x-regengine-api-key')).toBe('caller-api-key');
+        expect(outgoing.get('x-tenant-id')).toBe('33333333-3333-4333-8333-333333333333');
+    });
+
+    it('overwrites browser-provided API keys with the server key for first-party calls', () => {
+        process.env.REGENGINE_API_KEY = 'server-side-key'; // pragma: allowlist secret
+        const outgoing = new Headers({
+            'x-regengine-api-key': 'browser-visible-key',
+            'x-tenant-id': '33333333-3333-4333-8333-333333333333',
+        });
+        const request = makeProxyRequest(
+            {
+                origin: 'https://regengine.co',
+                'x-regengine-api-key': 'browser-visible-key',
+            },
+            {
+                re_access_token: 'real-token',
+                re_tenant_id: '11111111-1111-4111-8111-111111111111',
+            },
+        );
+
+        applyCookieCredentials(outgoing, request);
+        const error = applyFirstPartyServiceCredentials(outgoing, request);
+
+        expect(error).toBeNull();
+        expect(outgoing.get('x-regengine-api-key')).toBe('server-side-key');
+        expect(outgoing.get('x-tenant-id')).toBe('11111111-1111-4111-8111-111111111111');
+    });
+
+    it('fails closed when server API key injection lacks tenant context', async () => {
+        process.env.REGENGINE_API_KEY = 'server-side-key'; // pragma: allowlist secret
+        const outgoing = new Headers();
+        const request = makeProxyRequest({}, { re_access_token: 'real-token' });
+
+        applyCookieCredentials(outgoing, request);
+        const error = applyFirstPartyServiceCredentials(outgoing, request);
+
+        expect(error?.status).toBe(401);
+        await expect(error?.json()).resolves.toMatchObject({
+            code: 'TENANT_CONTEXT_REQUIRED',
+        });
+        expect(outgoing.has('x-regengine-api-key')).toBe(false);
+    });
+
+    it('fails closed without forwarding the server API key when tenant cookie is invalid', async () => {
+        process.env.REGENGINE_API_KEY = 'server-side-key'; // pragma: allowlist secret
+        const outgoing = new Headers();
+        const request = makeProxyRequest(
+            {},
+            {
+                re_access_token: 'real-token',
+                re_tenant_id: '../tenant',
+            },
+        );
+
+        applyCookieCredentials(outgoing, request);
+        const error = applyFirstPartyServiceCredentials(outgoing, request);
+
+        expect(error?.status).toBe(401);
+        await expect(error?.json()).resolves.toMatchObject({
+            code: 'TENANT_CONTEXT_REQUIRED',
+        });
         expect(outgoing.has('x-regengine-api-key')).toBe(false);
     });
 
@@ -455,5 +621,79 @@ describe('validateProxySession RegEngine JWT hardening', () => {
         }));
 
         expect(response).toBeNull();
+    });
+});
+
+describe('validateProxySession Supabase fallback', () => {
+    function primeSupabaseEnv() {
+        process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://example.supabase.co';
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = 'test-anon-key'; // pragma: allowlist secret
+    }
+
+    it('fails closed when Supabase cookies are the only credential but validation is unavailable', async () => {
+        const response = await validateProxySession(
+            makeProxyRequest({}, { 'sb-test-auth-token': 'supabase-cookie' }),
+            { requireSupabaseSession: true },
+        );
+
+        expect(response?.status).toBe(401);
+    });
+
+    it('accepts Supabase-only proxy calls after server-side session validation', async () => {
+        primeSupabaseEnv();
+        vi.mocked(createServerClient).mockReturnValue({
+            auth: {
+                getUser: vi.fn().mockResolvedValue({
+                    data: { user: { id: 'supabase-user' } },
+                    error: null,
+                }),
+            },
+        } as unknown as ReturnType<typeof createServerClient>);
+
+        const response = await validateProxySession(
+            makeProxyRequest({}, { 'sb-test-auth-token': 'supabase-cookie' }),
+            { requireSupabaseSession: true },
+        );
+
+        expect(response).toBeNull();
+        expect(createServerClient).toHaveBeenCalled();
+    });
+
+    it('lets stream proxies reach prepareHeaders after a valid Supabase-only session', async () => {
+        primeSupabaseEnv();
+        vi.mocked(createServerClient).mockReturnValue({
+            auth: {
+                getUser: vi.fn().mockResolvedValue({
+                    data: { user: { id: 'supabase-user' } },
+                    error: null,
+                }),
+            },
+        } as unknown as ReturnType<typeof createServerClient>);
+        const prepareHeaders = vi.fn(() => null);
+        const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+            new Response(JSON.stringify({ ok: true }), {
+                status: 200,
+                headers: { 'content-type': 'application/json' },
+            }),
+        );
+        const { GET } = createStreamProxy({
+            serviceName: 'test',
+            resolveTargetBases: () => ['https://upstream.example'],
+            buildHeaders: () => new Headers(),
+            prepareHeaders,
+        });
+
+        const response = await GET!(
+            makeProxyRequest({}, { 'sb-test-auth-token': 'supabase-cookie' }),
+            { params: Promise.resolve({ path: ['api', 'v1', 'thing'] }) },
+        );
+
+        expect(response.status).toBe(200);
+        expect(prepareHeaders).toHaveBeenCalled();
+        expect(fetchMock).toHaveBeenCalledWith(
+            'https://upstream.example/api/v1/thing',
+            expect.objectContaining({ method: 'GET' }),
+        );
+        fetchMock.mockRestore();
     });
 });

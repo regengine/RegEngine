@@ -132,6 +132,7 @@ from .auth.signup_router import signup  # noqa: F401,E402
 from .auth.refresh_router import RefreshRequest, refresh_session  # noqa: F401,E402
 from .auth.sessions_router import (  # noqa: F401,E402
     list_sessions,
+    logout,
     revoke_all_sessions,
     revoke_session,
 )
