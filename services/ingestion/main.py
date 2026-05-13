@@ -80,10 +80,16 @@ add_observability(app, service_name="ingestion-service")
 from shared.middleware import TenantContextMiddleware, RequestIDMiddleware
 from shared.observability.correlation import CorrelationIdMiddleware
 from shared.tenant_rate_limiting import TenantRateLimitMiddleware
+from app.middleware import RateLimitHeadersMiddleware
 
 app.add_middleware(RequestIDMiddleware)
 app.add_middleware(TenantContextMiddleware)
 app.add_middleware(TenantRateLimitMiddleware, default_rpm=100)
+# Issue #2307: surface X-RateLimit-* headers on 2xx responses by mirroring
+# ``request.state.rate_limit_*`` (populated by authz/routes_ingest/webhook
+# rate-limit guards) onto the outbound response. Read-only: never consumes
+# the bucket, so no double-counting.
+app.add_middleware(RateLimitHeadersMiddleware)
 
 # API-01 / API-02: Request body size limit (10 MB) and global timeout (120s)
 from shared.request_safety import RequestSizeLimitMiddleware, RequestTimeoutMiddleware
