@@ -2,8 +2,14 @@
 
 **Issue:** regengine/RegEngine#2311
 **Date:** 2026-05-12
-**Status:** Awaiting founder approval
+**Status:** **DECIDED — Cloudflare R2** (ratified 2026-05-12)
 **Owner:** Christopher Sellers
+
+## Decision
+
+**Cloudflare R2.** Drop-in S3-compatible (no code changes required — `s3_utils.py` already uses boto3 with `endpoint_url`), zero egress fees, single subprocessor row on DPA vs. Vercel Blob's two-layer disclosure. The short-term 503 gate (PR #2349) covers customers cleanly until provisioning lands. Execution checklist tracked in the implementation issue spawned from #2311.
+
+The options analysis below is preserved as historical context for the decision.
 
 ## Current state
 
