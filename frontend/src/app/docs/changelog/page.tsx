@@ -125,6 +125,7 @@ export default function ChangelogPage() {
                             <li>Webhook read endpoints tightened against cross-tenant IDOR and tenant-existence oracle leaks</li>
                             <li>SSRF defenses and IP pinning added for outbound fetch surfaces in ingestion and scheduler workflows</li>
                             <li>Login CSRF origin allowlist and JWT/CSRF key separation hardened in the auth surface</li>
+                            <li>Tenant-trust gate promoted to a blocking CI check so cross-tenant regressions cannot reach production</li>
                             <li>Project Sentinel checks added for anchorable signing-asymmetry findings</li>
                         </ul>
                     </div>
@@ -191,7 +192,7 @@ export default function ChangelogPage() {
                         <span className="text-white text-xs font-semibold px-2.5 py-1 rounded" style={{ background: T.accent }}>
                             v1.1.0
                         </span>
-                        <span className="text-sm" style={{ color: T.textMuted }}>March 3, 2026</span>
+                        <span className="text-sm" style={{ color: T.textMuted }}>February 20, 2026</span>
                     </div>
 
                     <h2 className="text-[1.1rem] sm:text-[1.3rem] font-semibold text-[var(--re-text-primary)] mb-4">
