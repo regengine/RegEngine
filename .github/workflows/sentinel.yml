@@ -23,7 +23,7 @@ jobs:
 
     steps:
       - name: Checkout PR (full history for diff vs main)
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
           ref: ${{ github.event.pull_request.head.sha }}
@@ -32,12 +32,12 @@ jobs:
         run: git fetch origin ${{ github.event.pull_request.base.ref }} --quiet
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.12'
 
       - name: Set up Node (for headless Claude Code CLI)
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: '20'
 
@@ -74,7 +74,7 @@ jobs:
 
       - name: Post report as PR comment
         if: always() && hashFiles('.sentinel/report.md') != ''
-        uses: peter-evans/create-or-update-comment@v4
+        uses: peter-evans/create-or-update-comment@v5
         with:
           issue-number: ${{ github.event.pull_request.number }}
           body-path: .sentinel/report.md
@@ -84,7 +84,7 @@ jobs:
 
       - name: Upload raw report artifact
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: sentinel-report-${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.sha }}
           path: .sentinel/report.md
