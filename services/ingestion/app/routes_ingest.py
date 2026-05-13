@@ -242,15 +242,20 @@ async def process_regulation_ingestion(job_id: str, name: str, filename: str, te
 
         if webhook:
             try:
-                async with httpx.AsyncClient(follow_redirects=False) as client:
-                    await client.post(webhook, json={
+                # SSRF-safe: re-validates URL + pins to validated IP per hop.
+                from shared.safe_http import safe_httpx_post_async
+
+                await safe_httpx_post_async(
+                    webhook,
+                    json={
                         "job_id": job_id,
                         "status": "completed",
                         "regulation": name,
-                        "sections": count
-                    })
+                        "sections": count,
+                    },
+                )
                 logger.info("ingestion_webhook_sent", job_id=job_id, webhook=webhook)
-            except (httpx.HTTPError, OSError) as e:
+            except (httpx.HTTPError, OSError, ValueError) as e:
                 logger.error("ingestion_webhook_failed", job_id=job_id, error=str(e))
 
     except (redis.RedisError, ConnectionError, OSError, ValueError) as e:
@@ -258,9 +263,13 @@ async def process_regulation_ingestion(job_id: str, name: str, filename: str, te
         r.setex(f"ingest:status:{job_id}", 7200, f"failed: {str(e)}")
         if webhook:
             try:
-                async with httpx.AsyncClient(follow_redirects=False) as client:
-                    await client.post(webhook, json={"job_id": job_id, "status": "failed", "error": str(e)})
-            except (httpx.HTTPError, OSError) as e:
+                from shared.safe_http import safe_httpx_post_async
+
+                await safe_httpx_post_async(
+                    webhook,
+                    json={"job_id": job_id, "status": "failed", "error": str(e)},
+                )
+            except (httpx.HTTPError, OSError, ValueError) as e:
                 logger.warning("webhook_notification_failed", error=str(e))
     finally:
         if os.path.exists(tmp_path):

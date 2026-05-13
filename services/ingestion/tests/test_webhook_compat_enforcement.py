@@ -314,23 +314,28 @@ class TestEnforceCteOnly:
         assert resp.accepted == 1
         assert cap["exc_queue_calls"] == []
 
-    def test_canonical_error_does_not_block_accept_under_enforce(self, monkeypatch):
-        """If canonical normalization crashes, summary is None and the
-        enforcement check is skipped — primary event still commits.
-        Preserves the prior best-effort semantics so a canonical-module
-        regression can't take down ingestion for every tenant."""
+    def test_canonical_error_raises_500_under_enforcement(self, monkeypatch):
+        """Finding A (Suite 4 audit 2026-05-12): under cte_only/all a
+        canonical-module crash must surface as HTTPException(500), NOT
+        a silent best-effort accept. The pre-fix behavior turned every
+        broken canonical/rule module into a silent compliance-pass —
+        the opposite of the product contract. Operators see a 5xx and
+        Sentry alert instead."""
+        from fastapi import HTTPException
+
         sess, persist, cap = _install(
             monkeypatch,
-            summary=_critical_summary(),  # would reject if it ran
+            summary=_critical_summary(),
             canonical_raises=RuntimeError("canonical broken"),
         )
-        resp = asyncio.run(wc.ingest_events(
-            payload=_make_payload([_make_event()]),
-            x_regengine_api_key="k",
-        ))
-        assert resp.accepted == 1 and resp.rejected == 0
-        # Canonical savepoint rolled back; primary savepoint committed
-        assert ("commit", "sp-0") in sess.actions
+        with pytest.raises(HTTPException) as exc:
+            asyncio.run(wc.ingest_events(
+                payload=_make_payload([_make_event()]),
+                x_regengine_api_key="k",
+            ))
+        assert exc.value.status_code == 500
+        detail = exc.value.detail if isinstance(exc.value.detail, dict) else {}
+        assert detail.get("error") == "RULES_ENGINE_EVAL_FAILED"
 
 
 # ---------------------------------------------------------------------------

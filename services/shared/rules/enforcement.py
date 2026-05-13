@@ -83,6 +83,78 @@ def should_reject(summary: EvaluationSummary) -> Tuple[bool, Optional[str]]:
     return False, None
 
 
+def handle_preeval_exception(err: BaseException, *, where: str) -> None:
+    """Decide how a pre-eval crash is surfaced to the caller.
+
+    Compliance-defensibility behavior:
+
+    * ``RULES_ENGINE_ENFORCE=off`` → warn + return. The caller treats
+      pre-eval as no-verdict and proceeds (current default-prod
+      behavior — engine is "log-and-accept" so a transient bug must
+      not block ingestion).
+
+    * ``RULES_ENGINE_ENFORCE=cte_only`` / ``all`` → emit a Sentry
+      ``error`` event with the exception attached, then raise
+      ``HTTPException(500, RULES_ENGINE_EVAL_FAILED)``. Silently
+      accepting an event because the rule engine crashed defeats the
+      product's purpose under enforcement; we'd rather take a 5xx
+      and have ops triage than emit a compliance-pass we cannot
+      actually defend.
+
+    Single funnel for all three pre-eval call sites (EPCIS,
+    webhook_router_v2, webhook_compat) so the policy stays in one
+    place and stays auditable.
+
+    Imports HTTPException lazily so this module stays usable from
+    contexts (CLI, jobs, tests) where FastAPI may not be installed.
+    """
+    import logging  # noqa: PLC0415
+
+    logger = logging.getLogger(__name__)
+    mode = current_mode()
+    if mode == EnforcementMode.OFF:
+        logger.warning(
+            "rules_preeval_skipped where=%s error=%s", where, str(err),
+        )
+        return
+
+    # cte_only / all — fail loud.
+    logger.error(
+        "rules_preeval_failed where=%s mode=%s error=%s",
+        where, mode, str(err),
+    )
+    try:
+        import sentry_sdk  # noqa: PLC0415
+
+        sentry_sdk.capture_exception(err)
+        sentry_sdk.capture_message(
+            "rules_preeval_failed",
+            level="error",
+            extras={"where": where, "mode": mode, "error": str(err)},
+            tags={
+                "subsystem": "rules_engine",
+                "component": "preeval",
+                "enforcement_mode": mode,
+            },
+        )
+    except Exception:  # noqa: BLE001
+        logger.debug("sentry_capture_failed component=preeval")
+
+    from fastapi import HTTPException  # noqa: PLC0415
+
+    raise HTTPException(
+        status_code=500,
+        detail={
+            "error": "RULES_ENGINE_EVAL_FAILED",
+            "message": (
+                "Rules engine pre-evaluation failed under enforcement "
+                "mode. Refusing to silently accept the event."
+            ),
+            "where": where,
+        },
+    ) from err
+
+
 def _first_failure_reason(summary: EvaluationSummary) -> str:
     for result in summary.critical_failures or summary.results:
         if result.result in ("fail", "error"):

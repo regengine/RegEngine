@@ -291,7 +291,9 @@ def test_cross_tenant_request_blocked(monkeypatch):
     assert "tenant mismatch" in resp.json()["detail"].lower()
 
 
-def test_wildcard_scope_allows_cross_tenant(monkeypatch):
+def test_wildcard_scope_does_not_allow_cross_tenant(monkeypatch):
+    """Wildcard ``*`` scope does NOT grant cross-tenant access — only
+    action breadth. Regression for 2026-05 audit fix (authz.py:385)."""
     monkeypatch.setattr(authz, "consume_tenant_rate_limit", lambda **_kw: (True, 99))
     principal = _make_principal(tenant_id=TENANT, scopes=["*"])
     svc = MagicMock()
@@ -301,4 +303,5 @@ def test_wildcard_scope_allows_cross_tenant(monkeypatch):
         "/api/v1/exceptions",
         params={"tenant_id": OTHER_TENANT},
     )
-    assert resp.status_code == 200
+    assert resp.status_code == 403
+    assert "tenant mismatch" in resp.json()["detail"].lower()
