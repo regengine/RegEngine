@@ -53,6 +53,7 @@ The highest-risk remediation queue is:
 - `qa/tenant-test.js` passes locally with `24 passed, 0 failed`, confirming the auth context wires a live session source.
 - `detect-secrets-hook` passes locally after synthetic test fixtures were allowlisted and baseline line numbers were refreshed.
 - The prior ingestion CI failure narrowed to `services/ingestion/tests/test_qr_decoder_api.py`; its sample image fixture now uses a real PIL-generated PNG so byte-level image validation succeeds before the monkeypatched QR decoder path. The focused QR decoder test slice passes locally.
+- The fresh PR #2367 shared-test failure narrowed to duplicate Prometheus collector registration when `services/shared/middleware/tenant_context.py` is re-imported during collection; tenant-context counters now reuse existing collectors. The exact shared CI command passes locally with `443 passed, 10 skipped` and `46.13%` coverage.
 - Full ingestion xdist verification remains delegated to GitHub CI because this local machine does not have Postgres/Redis service tooling available.
 
 ## Remediation Matrix
