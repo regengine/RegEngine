@@ -21,6 +21,9 @@ const UNAUTHENTICATED_AUTH_PATHS = new Set([
     // Password reset — caller passes a Supabase recovery token, not a RegEngine JWT.
     // Backend validates it via sb.auth.get_user(); no RegEngine session required.
     'auth/reset-password',
+    // Forgot-password — initiated before the user has any session, by definition.
+    // Backend at services/admin/app/password_reset_routes.py rate-limits per email.
+    'auth/forgot-password',
 ]);
 
 function getAdminTargets(): string[] {
