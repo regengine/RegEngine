@@ -22,6 +22,7 @@ This README describes behavior that is visible in checked-in code, configuration
 - Backend deploy target in checked-in Railway config: one consolidated FastAPI app in [server/main.py](server/main.py), built by the repo-root [Dockerfile](Dockerfile).
 - Frontend: Next.js App Router app in [frontend/](frontend/).
 - Database migrations: Alembic at [alembic/versions/](alembic/versions/).
+- Tenant isolation posture: tenant authority is derived from authenticated principal state; caller-supplied tenant IDs are assertions only.
 - Primary domain: FSMA 204 food traceability. Other regulatory, document, NLP, and graph modules exist, but FSMA ingestion and compliance are the best-evidenced product path in this repository.
 
 ## What The Product Does
@@ -31,6 +32,9 @@ Verified product capabilities in the current tree:
 | Capability | Evidence |
 | --- | --- |
 | API key protected webhook CTE ingest | [services/ingestion/app/webhook_router_v2.py](services/ingestion/app/webhook_router_v2.py) |
+| Canonical tenant context for API-key, JWT, and ingestion RBAC callers | [services/shared/tenant_context.py](services/shared/tenant_context.py) |
+| Legacy ingestion route tenant-context migration inventory | [docs/security/tenant-route-inventory.md](docs/security/tenant-route-inventory.md) |
+| Paid endpoint subscription gate | [services/ingestion/app/subscription_gate.py](services/ingestion/app/subscription_gate.py) |
 | CSV template download and CSV CTE ingest | [services/ingestion/app/csv_templates.py](services/ingestion/app/csv_templates.py) |
 | EPCIS ingest routes | [services/ingestion/app/epcis/router.py](services/ingestion/app/epcis/router.py) |
 | EDI ingest routes and parser modules | [services/ingestion/app/edi_ingestion/](services/ingestion/app/edi_ingestion/) |
@@ -40,8 +44,10 @@ Verified product capabilities in the current tree:
 | Compliance score reads from stored FSMA CTE data | [services/ingestion/app/compliance_score.py](services/ingestion/app/compliance_score.py) |
 | FDA export routes | [services/ingestion/app/fda_export/router.py](services/ingestion/app/fda_export/router.py) |
 | Tenant/admin/user/API-key management | [services/admin/app/](services/admin/app/) |
+| Persisted admin tenant provisioning | [services/admin/app/routes.py](services/admin/app/routes.py) |
 | Tamper-evident admin audit log hashing | [services/admin/app/audit.py](services/admin/app/audit.py) |
 | Audit-chain verification for admin audit exports | [services/admin/app/audit_integrity.py](services/admin/app/audit_integrity.py) |
+| Password reset redirect hardening | [frontend/src/app/api/auth/supabase/reset-email/route.ts](frontend/src/app/api/auth/supabase/reset-email/route.ts) |
 | Scheduler jobs and scheduler metrics surface | [services/scheduler/](services/scheduler/) |
 | Frontend dashboard, auth, sandbox, docs, and product pages | [frontend/src/app/](frontend/src/app/) |
 
@@ -118,12 +124,22 @@ Do not assume every ingestion path rejects all non-compliant records by default.
 Verified controls in the codebase:
 
 - API-key auth and API-key storage utilities live under [services/shared/auth.py](services/shared/auth.py) and [services/shared/api_key_store.py](services/shared/api_key_store.py).
+- The accepted API key is stored on `request.state.api_key`, and ingestion RBAC stores the accepted principal on `request.state.principal`.
+- [services/shared/tenant_context.py](services/shared/tenant_context.py) is the canonical resolver for tenant-scoped request authority.
 - Ingestion authorization helpers live in [services/ingestion/app/authz.py](services/ingestion/app/authz.py).
+- Legacy ingestion routers use [services/ingestion/app/webhook_compat.py](services/ingestion/app/webhook_compat.py) to authenticate API keys and resolve `TenantContext` before route handlers read or write tenant data.
 - Admin auth routes and MFA code live under [services/admin/app/](services/admin/app/).
 - Tenant context middleware lives under [services/shared/middleware/](services/shared/middleware/).
 - PostgreSQL RLS migrations exist in Alembic.
 - Rate limiting code exists for multiple surfaces, including tenant-scoped ingestion limits and auth-related limits.
+- Paid endpoint access uses [services/ingestion/app/subscription_gate.py](services/ingestion/app/subscription_gate.py) and derives tenant from authenticated principal state, not request tenant claims.
+- Admin tenant creation through `POST /v1/admin/tenants` persists a `TenantModel` row with active status before returning the tenant UUID.
+- Supabase reset-email handling derives `/auth/callback?next=/reset-password` server-side and does not trust client-controlled reset redirects.
 - Frontend auth uses Supabase session state plus a RegEngine JWT/cookie flow. See [frontend/src/lib/auth-context.tsx](frontend/src/lib/auth-context.tsx), [frontend/src/proxy.ts](frontend/src/proxy.ts), and [frontend/src/app/login/LoginClient.tsx](frontend/src/app/login/LoginClient.tsx).
+
+Tenant-scoped HTTP handlers must use authenticated principal state as the source of tenant authority. Path, query, header, and JSON body `tenant_id` values are treated as caller assertions only; conflicts with the authenticated tenant fail closed with `409 E_TENANT_MISMATCH`. Missing principal or tenant context fails with `401 E_NO_PRINCIPAL` or `401 E_NO_TENANT`. The current legacy ingestion route inventory is maintained in [docs/security/tenant-route-inventory.md](docs/security/tenant-route-inventory.md).
+
+Subscription-gated paid routes also fail closed: missing or inactive subscriptions return `402`, and Redis/circuit uncertainty returns `503` because the service cannot confirm entitlement state.
 
 Known authentication caveat: the dual Supabase plus RegEngine JWT flow can produce session mismatch states. Treat auth behavior as code-and-test verified, not marketing-copy verified.
 
@@ -195,9 +211,18 @@ npm run lint
 npm run test:run
 ```
 
+Security and tenant-boundary checks:
+
+```bash
+python3 -m pytest services/shared/tests services/ingestion/tests services/admin/tests services/compliance/tests -q --no-cov
+python3 -m pytest --collect-only -q
+semgrep --config=.semgrep/tenant-trust.yaml --error .
+```
+
 Notes:
 
 - The ingestion full suite is a hard backend CI gate.
+- Root pytest discovery includes [services/compliance/tests](services/compliance/tests).
 - Local `.env` is loaded by `BaseServiceSettings`; developer-specific values can affect config-default tests. CI runs from a clean environment.
 - Some integration tests skip when Docker, external services, or a live local service are unavailable.
 
@@ -215,6 +240,8 @@ Backend CI includes:
 - orphan migration guard
 - tenant_id UUID guard
 - ingestion full suite hard gate
+- tenant-trust Semgrep gate with zero existing findings allowed
+- secrets scanning through gitleaks and detect-secrets
 - final `ci-status` gate
 
 Frontend CI is separate in [.github/workflows/frontend-ci.yml](.github/workflows/frontend-ci.yml).
@@ -239,6 +266,7 @@ These are current repo facts, not speculation:
 - Rule failures are not universally blocking unless the relevant enforcement mode is enabled and the route supports it.
 - Some architecture documentation is older than the current Dockerfile/server wiring; verify against code before using docs as operational truth.
 - Neo4j, Redis, Redpanda/Kafka-compatible code paths exist, but the default local dev compose file starts only PostgreSQL.
+- [services/ingestion/app/webhook_compat.py](services/ingestion/app/webhook_compat.py) still exposes an internal non-HTTP `ingest_events()` helper that requires a tenant-bearing payload because it has no request context. HTTP and router callers should derive that payload tenant from authenticated tenant context.
 - This repository does not prove broad production adoption, paid customer status, regulatory approval, or FDA certification.
 
 ## Documentation Map
@@ -248,6 +276,7 @@ These are current repo facts, not speculation:
 - [ASYNC_PROCESSES.md](ASYNC_PROCESSES.md) - async and background processing notes.
 - [CANONICAL_OWNERSHIP.md](CANONICAL_OWNERSHIP.md) - module ownership notes.
 - [SECURITY.md](SECURITY.md) - security posture.
+- [docs/security/tenant-route-inventory.md](docs/security/tenant-route-inventory.md) - tenant-scoped ingestion route inventory.
 - [CHANGELOG.md](CHANGELOG.md) - change history.
 - [CONTRIBUTING.md](CONTRIBUTING.md) - contribution workflow.
 - [docs/runbooks/](docs/runbooks) - operational runbooks.
@@ -258,5 +287,6 @@ Before changing schema, ingestion, auth, tenant isolation, or audit logic, start
 
 - [docs/engineering/SCHEMA_CHANGE_POLICY.md](docs/engineering/SCHEMA_CHANGE_POLICY.md)
 - [.github/agents/regengine-implementer.agent.md](.github/agents/regengine-implementer.agent.md)
+- [.github/CODEOWNERS](.github/CODEOWNERS)
 
 Keep changes scoped. Do not treat old issue text, stale docs, or marketing copy as proof of current behavior; verify against code, tests, and GitHub Actions. If docs and code conflict, fix or call out the conflict in the PR.
