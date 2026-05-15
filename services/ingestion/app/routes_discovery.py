@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 from typing import List
 
 import redis
@@ -21,6 +22,11 @@ from .models import (
 
 logger = structlog.get_logger("ingestion.discovery")
 router = APIRouter(include_in_schema=False)
+
+
+def _discovery_task_key(tenant_id: str, body: str, url: str) -> str:
+    source_hash = hashlib.sha256(f"{body}{url}".encode("utf-8")).hexdigest()
+    return f"discovery_scrape:{tenant_id}:{source_hash}"
 
 
 @router.get("/v1/ingest/discovery/queue", response_model=List[DiscoveryQueueItem])
@@ -110,6 +116,7 @@ async def approve_discovery(
             task_type="discovery_scrape",
             payload={"body": body, "url": url},
             tenant_id=api_key.tenant_id,
+            idempotency_key=_discovery_task_key(api_key.tenant_id, body, url),
         )
         db.commit()
     finally:
@@ -164,6 +171,7 @@ async def bulk_approve_discovery(
                 task_type="discovery_scrape",
                 payload={"body": body, "url": url},
                 tenant_id=api_key.tenant_id,
+                idempotency_key=_discovery_task_key(api_key.tenant_id, body, url),
             )
             approved.append({"body": body, "url": url})
         db.commit()

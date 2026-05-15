@@ -206,7 +206,9 @@ def fake_httpx(monkeypatch):
     """Stub the late-imported ``httpx`` module.
 
     Tests can override the AsyncClient factory by assigning a callable to
-    the returned dict's ``factory`` key.
+    the returned dict's ``factory`` key. Webhook delivery now routes through
+    ``shared.safe_http.safe_httpx_post_async`` for SSRF protection, so patch
+    that helper too to keep these task-handler tests network-free.
     """
     bag: dict[str, Any] = {"factory": lambda: _FakeAsyncClient()}
 
@@ -223,15 +225,14 @@ def fake_httpx(monkeypatch):
     httpx_mod.AsyncClient = _AsyncClient
     monkeypatch.setitem(sys.modules, "httpx", httpx_mod)
 
+    async def _safe_httpx_post_async(url, json=None, **kwargs):
+        client = bag["factory"]()
+        return await client.post(url, json=json)
+
     safe_http_mod = ModuleType("shared.safe_http")
-
-    async def _safe_httpx_post_async(url, **kwargs):
-        async with bag["factory"]() as client:
-            return await client.post(url, json=kwargs.get("json"))
-
     safe_http_mod.safe_httpx_post_async = _safe_httpx_post_async
-    monkeypatch.setitem(sys.modules, "shared.safe_http", safe_http_mod)
 
+    monkeypatch.setitem(sys.modules, "shared.safe_http", safe_http_mod)
     bag["module"] = httpx_mod
     return bag
 

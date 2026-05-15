@@ -245,7 +245,7 @@ export default function LoginPage() {
             };
             const shouldLogUnexpectedError =
                 process.env.NODE_ENV !== 'production' &&
-                ![401, 403, 404, 502].includes(apiError.response?.status ?? -1) &&
+                ![401, 403, 404, 423, 429, 502].includes(apiError.response?.status ?? -1) &&
                 apiError.code !== 'ERR_NETWORK' &&
                 apiError.message !== 'Secure session could not be established. Please try again.';
 
@@ -260,6 +260,10 @@ export default function LoginPage() {
                 setError('Account access disabled');
             } else if (apiError.response?.status === 404) {
                 setError('Authentication service unavailable. Please try again shortly.');
+            } else if (apiError.response?.status === 423) {
+                setError(errorDetail || 'Account temporarily locked due to repeated failed sign-ins. Contact support or try again in 24 hours.');
+            } else if (apiError.response?.status === 429) {
+                setError(errorDetail || 'Too many sign-in attempts. Please wait a moment and try again.');
             } else if (apiError.response?.status === 502) {
                 setError('Authentication service is unreachable. Please try again shortly.');
             } else if (apiError.code === 'ERR_NETWORK') {

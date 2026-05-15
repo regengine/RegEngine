@@ -592,6 +592,47 @@ describe('LoginPage', () => {
             });
         });
 
+        it('shows lockout message for 423 with backend detail when present', async () => {
+            const user = userEvent.setup();
+            const error = {
+                response: {
+                    status: 423,
+                    data: {
+                        detail: 'Account temporarily locked due to repeated failed login attempts. Contact support or wait 24 hours.',
+                    },
+                },
+            };
+
+            (apiClient.login as any).mockRejectedValueOnce(error);
+
+            render(<LoginPage />);
+
+            await user.type(screen.getByLabelText(/email/i), 'locked@example.com');
+            await user.type(screen.getByLabelText(/^password$/i), 'password');
+            await user.click(screen.getByRole('button', { name: /sign in/i }));
+
+            await waitFor(() => {
+                expect(screen.getByRole('alert')).toHaveTextContent(/temporarily locked/i);
+            });
+        });
+
+        it('shows throttle message for 429 progressive cool-down', async () => {
+            const user = userEvent.setup();
+            const error = { response: { status: 429 } };
+
+            (apiClient.login as any).mockRejectedValueOnce(error);
+
+            render(<LoginPage />);
+
+            await user.type(screen.getByLabelText(/email/i), 'slowdown@example.com');
+            await user.type(screen.getByLabelText(/^password$/i), 'password');
+            await user.click(screen.getByRole('button', { name: /sign in/i }));
+
+            await waitFor(() => {
+                expect(screen.getByRole('alert')).toHaveTextContent(/too many sign-in attempts/i);
+            });
+        });
+
         it('shows generic error for server errors (500)', async () => {
             const user = userEvent.setup();
             const error = { response: { status: 500 } };

@@ -106,12 +106,14 @@ async def lifespan(app: FastAPI):
         from services.ingestion.app.task_handlers_scraping import register_scraping_handlers
         from services.ingestion.app.task_handlers_discovery import register_discovery_handlers
         from services.ingestion.app.task_handlers_regulation import register_regulation_handlers
+        from shared.agent_task_bridge import register_agent_bridge_handlers
         from shared.task_queue import TaskWorker
         from shared.database import engine as _db_engine
         register_source_handlers()
         register_scraping_handlers()
         register_discovery_handlers()
         register_regulation_handlers()
+        register_agent_bridge_handlers()
         _ingestion_worker = TaskWorker(engine=_db_engine)
         _ingestion_worker.start()
         app.state.ingestion_worker = _ingestion_worker
@@ -465,10 +467,12 @@ if _router_enabled("admin"):
     from services.admin.app.routes import router as admin_router, v1_router as admin_v1_router
     from services.admin.app.api_overlay import router as overlay_router
     from services.admin.app.compliance_routes import router as admin_compliance_router
+    from services.admin.app.agent_review_routes import router as agent_review_router
     app.include_router(admin_router, tags=["Admin"])
     app.include_router(admin_v1_router, tags=["Admin V1"])
     app.include_router(overlay_router, tags=["Compliance Overlay"])
     app.include_router(admin_compliance_router, tags=["Admin Compliance"])
+    app.include_router(agent_review_router, prefix="/v1", tags=["Agent Reviews"])
 
     from services.admin.app.system_routes import router as system_router
     app.include_router(system_router, prefix="/v1", tags=["System"])

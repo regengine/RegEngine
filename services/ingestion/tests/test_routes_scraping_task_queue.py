@@ -10,6 +10,7 @@ Coverage:
 
 from __future__ import annotations
 
+import hashlib
 import uuid
 from unittest.mock import AsyncMock, MagicMock
 
@@ -71,6 +72,8 @@ class TestScrapeCppa:
         assert kw["payload"]["url"] == "https://cppa.ca.gov/rss"
         assert kw["payload"]["jurisdiction_code"] == "US-CA"
         assert kw["payload"]["tenant_id"] == "tenant-xyz"
+        url_hash = hashlib.sha256("https://cppa.ca.gov/rss".encode("utf-8")).hexdigest()
+        assert kw["idempotency_key"] == f"state_scrape:tenant-xyz:cppa:US-CA:{url_hash}"
 
     def test_cppa_adaptor_missing_enqueues_generic_scrape(self, monkeypatch):
         mock_enqueue, _ = _patch_enqueue(monkeypatch)
@@ -83,6 +86,8 @@ class TestScrapeCppa:
         assert kw["task_type"] == "generic_scrape"
         assert kw["payload"]["url"] == "https://example.com/feed"
         assert kw["payload"]["jurisdiction_code"] == "US-CA"
+        url_hash = hashlib.sha256("https://example.com/feed".encode("utf-8")).hexdigest()
+        assert kw["idempotency_key"] == f"generic_scrape:tenant-xyz:US-CA:{url_hash}"
 
     def test_non_ca_tenant_returns_403(self, monkeypatch):
         _patch_enqueue(monkeypatch)

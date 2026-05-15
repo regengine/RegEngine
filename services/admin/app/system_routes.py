@@ -10,6 +10,7 @@ import uuid as uuid_module
 from sqlalchemy import text, select
 from sqlalchemy.exc import SQLAlchemyError
 from shared.resilient_http import resilient_client
+from shared.task_queue import get_task_queue_summary, replay_dead_tasks
 from .dependencies import get_current_user, get_session
 from .sqlalchemy_models import UserModel
 from .models import TenantContext
@@ -38,6 +39,30 @@ class SystemMetricsResponse(BaseModel):
     chain_length: Optional[int] = None
     chain_valid: Optional[bool] = None
     open_alerts: Optional[int] = None
+
+class TaskQueueSummaryResponse(BaseModel):
+    counts_by_status: Dict[str, int]
+    retrying_count: int
+    stale_processing_count: int
+    oldest_pending_age_seconds: Optional[float] = None
+    oldest_dead_age_seconds: Optional[float] = None
+
+class TaskQueueReplayRequest(BaseModel):
+    ids: List[str] = Field(
+        default_factory=list,
+        description="Specific fsma.task_queue ids to replay. If empty, replays up to limit dead rows.",
+    )
+    limit: int = Field(default=10, ge=1, le=1000)
+
+class TaskQueueReplayResult(BaseModel):
+    id: str
+    success: bool
+    error: Optional[str] = None
+
+class TaskQueueReplayResponse(BaseModel):
+    replayed: int
+    failed: int
+    results: List[TaskQueueReplayResult]
 
 class JWTRotateResponse(BaseModel):
     """Response for JWT key rotation."""
@@ -302,6 +327,56 @@ def _require_sysadmin(current_user: UserModel = Depends(get_current_user)):
     if not current_user.is_sysadmin:
         raise HTTPException(status_code=403, detail="Sysadmin access required")
     return current_user
+
+
+@router.get(
+    "/task-queue/summary",
+    response_model=TaskQueueSummaryResponse,
+    summary="Get task queue health summary",
+    dependencies=[Depends(_require_sysadmin)],
+)
+async def task_queue_summary(
+    current_user: UserModel = Depends(_require_sysadmin),
+    db: Session = Depends(get_session),
+) -> TaskQueueSummaryResponse:
+    """Read-only sysadmin health view for fsma.task_queue."""
+
+    return TaskQueueSummaryResponse(**get_task_queue_summary(db))
+
+
+@router.post(
+    "/task-queue/replay",
+    response_model=TaskQueueReplayResponse,
+    status_code=200,
+    summary="Replay dead task queue rows",
+    dependencies=[Depends(_require_sysadmin)],
+)
+async def replay_task_queue_rows(
+    body: TaskQueueReplayRequest,
+    current_user: UserModel = Depends(_require_sysadmin),
+    db: Session = Depends(get_session),
+) -> TaskQueueReplayResponse:
+    """Replay dead fsma.task_queue rows without deleting audit history."""
+
+    try:
+        replay = replay_dead_tasks(db, ids=body.ids or None, limit=body.limit)
+        db.commit()
+    except Exception as exc:
+        db.rollback()
+        logger.error(
+            "task_queue_replay_failed",
+            requested_by=str(current_user.id),
+            error=str(exc),
+        )
+        raise HTTPException(status_code=500, detail="Task queue replay failed") from exc
+
+    logger.info(
+        "task_queue_replay_complete",
+        requested_by=str(current_user.id),
+        replayed=replay["replayed"],
+        failed=replay["failed"],
+    )
+    return TaskQueueReplayResponse(**replay)
 
 
 @router.post(

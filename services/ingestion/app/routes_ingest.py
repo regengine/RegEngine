@@ -59,6 +59,14 @@ from .models import (
 )
 from .normalization import normalize_document
 from .s3_utils import put_bytes, put_json
+from .shared.upload_limits import (
+    MAX_REGULATION_FILE_SIZE_BYTES,
+    read_upload_with_limit,
+    regulation_upload_type,
+    sanitize_upload_filename,
+    stream_upload_to_file_with_limit,
+    validate_regulation_upload_content,
+)
 from .task_handlers_regulation import get_staging_path
 
 # Advanced ingestion framework components
@@ -296,34 +304,30 @@ async def ingest_regulation(
     if webhook:
         _validate_url(webhook)
 
-    if not file.filename.endswith((".pdf", ".docx")):
-        raise HTTPException(status_code=400, detail="Only PDF and DOCX files are supported")
-
-    # Stream-read the upload to avoid buffering oversize payloads in memory
-    # before the size check (RE-SEC-INGEST-002).
-    REGULATION_MAX_SIZE = 100 * 1024 * 1024  # 100 MB
-    UPLOAD_CHUNK = 1 << 20  # 1 MiB
-    chunks: list[bytes] = []
-    total = 0
-    while True:
-        chunk = await file.read(UPLOAD_CHUNK)
-        if not chunk:
-            break
-        total += len(chunk)
-        if total > REGULATION_MAX_SIZE:
-            raise HTTPException(status_code=413, detail="File too large (max 100MB)")
-        chunks.append(chunk)
-    content = b"".join(chunks)
-    if not content:
-        raise HTTPException(status_code=400, detail="Empty file uploaded")
+    file_type = regulation_upload_type(file.filename)
+    safe_filename = sanitize_upload_filename(file.filename, fallback=f"upload.{file_type}")
+    safe_filename = f"{Path(safe_filename).stem or 'upload'}.{file_type}"
 
     job_id = str(uuid.uuid4())
     settings = get_settings()
 
-    file_path = get_staging_path(job_id, file.filename)
+    file_path = get_staging_path(job_id, safe_filename)
     try:
-        with open(file_path, "wb") as fh:
-            fh.write(content)
+        total_bytes, prefix = await stream_upload_to_file_with_limit(
+            file,
+            file_path,
+            max_bytes=MAX_REGULATION_FILE_SIZE_BYTES,
+            label="Regulation file",
+        )
+        if not total_bytes:
+            raise HTTPException(status_code=400, detail="Empty file uploaded")
+        validate_regulation_upload_content(file_type, prefix, path=file_path)
+    except HTTPException:
+        try:
+            os.remove(file_path)
+        except OSError:
+            pass
+        raise
     except OSError as e:
         logger.error("regulation_staging_write_failed", name=name, error=str(e))
         raise HTTPException(status_code=500, detail="Failed to stage ingestion file")
@@ -342,12 +346,13 @@ async def ingest_regulation(
             payload={
                 "job_id": job_id,
                 "name": name,
-                "filename": file.filename,
+                "filename": safe_filename,
                 "tenant_id": api_key.tenant_id,
                 "file_path": file_path,
                 "webhook": webhook,
             },
             tenant_id=api_key.tenant_id,
+            idempotency_key=f"regulation_ingest:{api_key.tenant_id}:{job_id}",
         )
         db.commit()
     except Exception as e:
@@ -642,8 +647,9 @@ async def ingest_file(
     if not tenant_id:
         raise HTTPException(status_code=403, detail="API key has no associated tenant")
     job_id = str(uuid.uuid4())
+    safe_filename = sanitize_upload_filename(file.filename)
 
-    logger.info("ingest_file_request", filename=file.filename, tenant_id=tenant_id, job_id=job_id)
+    logger.info("ingest_file_request", filename=safe_filename, tenant_id=tenant_id, job_id=job_id)
 
     db_manager = get_db_manager()
     audit_logger = None
@@ -657,7 +663,7 @@ async def ingest_file(
             source_type="file_upload",
             status=JobStatus.RUNNING,
             started_at=datetime.now(timezone.utc),
-            config={"filename": file.filename}
+            config={"filename": safe_filename}
         )
         try:
             db_manager.insert_job(job)
@@ -665,25 +671,7 @@ async def ingest_file(
             logger.error("job_db_init_failed", job_id=job_id, error=str(e))
 
     try:
-        # Stream-read the upload, enforcing MAX_PAYLOAD_BYTES as we go so an
-        # oversize upload cannot be fully buffered in memory before
-        # ``_enforce_size_limit`` runs in ``_process_and_emit``
-        # (RE-SEC-INGEST-002). ``_enforce_size_limit`` still runs below as
-        # defense-in-depth.
-        UPLOAD_CHUNK = 1 << 20  # 1 MiB
-        chunks: list[bytes] = []
-        total = 0
-        while True:
-            chunk = await file.read(UPLOAD_CHUNK)
-            if not chunk:
-                break
-            total += len(chunk)
-            if total > MAX_PAYLOAD_BYTES:
-                raise HTTPException(
-                    status_code=413, detail="Payload exceeds size limits"
-                )
-            chunks.append(chunk)
-        content = b"".join(chunks)
+        content = await read_upload_with_limit(file, max_bytes=MAX_PAYLOAD_BYTES, label="File")
         if not content:
             raise HTTPException(status_code=400, detail="Empty file uploaded")
 
@@ -691,7 +679,7 @@ async def ingest_file(
 
         event = _process_and_emit(
             raw_bytes=content,
-            url_str=f"http://upload.internal/{file.filename}",
+            url_str=f"http://upload.internal/{safe_filename}",
             source_system=source_system,
             tenant_id=tenant_id,
             content_type=content_type,

@@ -171,6 +171,27 @@ def test_ingest_rejects_missing_required_segments(client: TestClient) -> None:
     assert "HL" in detail["missing_segments"]
 
 
+def test_ingest_edi_856_rejects_oversize_before_parsing(
+    client: TestClient,
+    captured_payload: dict,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(edi_ingestion_routes, "MAX_EDI_FILE_SIZE_BYTES", 16)
+
+    response = client.post(
+        "/api/v1/ingest/edi",
+        data={
+            "traceability_lot_code": "LOT-2026-EDI-OVERSIZE",
+            "tenant_id": TEST_TENANT_ID,
+        },
+        files={"file": ("asn.edi", VALID_856, "application/edi-x12")},
+    )
+
+    assert response.status_code == 413
+    assert "EDI file too large" in response.json()["detail"]
+    assert "payload" not in captured_payload
+
+
 def test_legacy_856_rejects_missing_kdes_without_placeholder_persistence(
     client: TestClient,
     captured_payload: dict,

@@ -114,6 +114,7 @@ export REGENGINE_TENANT_ID="11111111-1111-1111-1111-111111111111"`}
                                     code={`curl -X POST https://regengine.co/api/v1/webhooks/ingest \\
   -H "X-RegEngine-API-Key: $REGENGINE_API_KEY" \\
   -H "X-Tenant-ID: $REGENGINE_TENANT_ID" \\
+  -H "Idempotency-Key: $(uuidgen)" \\
   -H "Content-Type: application/json" \\
   -d '{
     "source": "erp",
@@ -128,13 +129,23 @@ export REGENGINE_TENANT_ID="11111111-1111-1111-1111-111111111111"`}
         "timestamp": "2026-02-05T14:23:00Z",
         "kdes": {
           "receive_date": "2026-02-05",
-          "receiving_location": "Distribution Center #4"
+          "receiving_location": "Distribution Center #4",
+          "immediate_previous_source": "GreenLeaf Farms LLC",
+          "reference_document": "ASN-2026-02-05-00123",
+          "tlc_source_reference": "GLF-2026-001"
         }
       }
     ]
   }'`}
                                     language="curl"
                                 />
+                                <p className="text-[var(--re-text-secondary)] leading-[1.7] mt-3 text-sm">
+                                    <strong>Heads up:</strong> the <code className="bg-black/30 px-1.5 py-0.5 rounded">Idempotency-Key</code> header
+                                    is required — safe retries replay the cached response for 24 hours per tenant. Generate a
+                                    fresh UUID per logical request. RECEIVING events require <code className="bg-black/30 px-1.5 py-0.5 rounded">immediate_previous_source</code>,{' '}
+                                    <code className="bg-black/30 px-1.5 py-0.5 rounded">reference_document</code>, and{' '}
+                                    <code className="bg-black/30 px-1.5 py-0.5 rounded">tlc_source_reference</code> per 21 CFR §1.1345(c).
+                                </p>
                             </div>
 
                             {/* Response */}
