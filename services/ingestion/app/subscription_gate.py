@@ -21,7 +21,7 @@ import logging
 import os
 from typing import Optional
 
-from fastapi import Depends, Header, HTTPException, Query, Request
+from fastapi import HTTPException, Request
 
 from shared.circuit_breaker import CircuitOpenError, redis_circuit
 
@@ -49,27 +49,23 @@ def _get_tenant_id_from_request(request: Request) -> Optional[str]:
     Resolution order (PRINCIPAL FIRST per EPIC-A #1651):
       1. RBAC principal on ``request.state.principal`` (authoritative —
          set by an upstream auth dependency).
-      2. ``X-Tenant-ID`` header (transition-period fallback for master-key
-         callers; ideally migrate to principal-only).
+      2. Accepted API-key principal on ``request.state.api_key`` (set by
+         ``shared.auth.require_api_key``; preshared master keys already carry
+         the validated ``X-Tenant-ID`` value here).
 
-    Query-string ``tenant_id`` is NO LONGER read (EPIC-A #1651). A request
-    that asserts a tenant_id only via query string cannot bypass the
-    paywall by claiming to be a paying tenant — the gate falls through
-    and lets downstream auth reject the unauthenticated request. The
-    Semgrep rule ``tenant-id-from-query-string`` correctly flags
-    attacker-controllable input as untrustworthy for trust decisions
-    (subscription-status lookup IS a trust decision — it determines
-    whether to accept billing for the request).
+    Request path/query/header/body tenant claims are not trusted here. The
+    subscription-status lookup is a trust decision, so it must use only
+    already-authenticated principal state.
     """
     # 1. RBAC principal (set by upstream auth dependency)
     principal = getattr(request.state, "principal", None)
     if principal and getattr(principal, "tenant_id", None):
         return principal.tenant_id
 
-    # 2. X-Tenant-ID header (transition-period fallback)
-    tenant_id = request.headers.get("X-Tenant-ID")
-    if tenant_id:
-        return tenant_id
+    # 2. Accepted API key (set by shared.auth.require_api_key)
+    api_key = getattr(request.state, "api_key", None)
+    if api_key and getattr(api_key, "tenant_id", None):
+        return api_key.tenant_id
 
     return None
 
@@ -123,9 +119,17 @@ async def require_active_subscription(request: Request) -> None:
     """
     tenant_id = _get_tenant_id_from_request(request)
     if not tenant_id:
-        # Cannot determine the tenant — let downstream auth handle rejection.
-        # Unauthenticated health probes etc. are not paid endpoints.
-        return
+        logger.warning(
+            "subscription_gate_missing_tenant_context path=%s",
+            request.url.path,
+        )
+        raise HTTPException(
+            status_code=401,
+            detail={
+                "code": "E_NO_TENANT",
+                "message": "subscription gate requires authenticated tenant context",
+            },
+        )
 
     if _fail_open_override_enabled():
         logger.critical(

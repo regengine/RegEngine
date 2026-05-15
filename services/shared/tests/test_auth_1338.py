@@ -183,9 +183,11 @@ class TestRequireApiKeyBypass:
     def test_bypass_active_in_development(self, monkeypatch):
         monkeypatch.setenv("AUTH_TEST_BYPASS_TOKEN", "let-me-in")
         monkeypatch.setenv("REGENGINE_ENV", "development")
-        result = _run(require_api_key(_make_request(), "let-me-in"))
+        request = _make_request()
+        result = _run(require_api_key(request, "let-me-in"))
         assert isinstance(result, APIKey)
         assert result.key_id == "test"
+        assert request.state.api_key is result
         assert result.billing_tier == "ENTERPRISE"
         # Default tenant when AUTH_TEST_BYPASS_TENANT_ID isn't overridden.
         assert result.tenant_id == "11111111-1111-1111-1111-111111111111"
@@ -231,14 +233,16 @@ class TestRequireApiKeyPresharedHappyPath:
         master = "configured-master-key-with-enough-entropy"
         monkeypatch.setenv("API_KEY", master)
         monkeypatch.setenv("REGENGINE_ENV", "production")
+        request = _make_request(headers={"x-tenant-id": _VALID_TENANT_UUID})
         result = _run(require_api_key(
-            _make_request(headers={"x-tenant-id": _VALID_TENANT_UUID}),
+            request,
             master,
         ))
         assert isinstance(result, APIKey)
         assert result.key_id == "preshared-master"
         assert result.tenant_id == _VALID_TENANT_UUID
         assert result.billing_tier == "ENTERPRISE"
+        assert request.state.api_key is result
 
     def test_regengine_api_key_env_var_is_also_honored(self, monkeypatch):
         master = "configured-via-regengine-api-key-env-var"
@@ -341,8 +345,10 @@ class TestRequireApiKeyDatabaseStoreBranch:
             validate_return=principal, rate_limit_return=rate_info
         )
         monkeypatch.setattr(auth, "_db_store_instance", instance)
-        result = _run(require_api_key(_make_request(), "rge_db.secret"))
+        request = _make_request()
+        result = _run(require_api_key(request, "rge_db.secret"))
         assert result is principal
+        assert request.state.api_key is principal
 
 
 # ---------------------------------------------------------------------------

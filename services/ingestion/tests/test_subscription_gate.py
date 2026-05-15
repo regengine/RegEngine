@@ -8,6 +8,7 @@ through.
 from __future__ import annotations
 
 import time
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -25,6 +26,14 @@ app = FastAPI()
 
 # We import the actual dependency; tests control behaviour via mocks.
 from app.subscription_gate import require_active_subscription
+
+
+@app.middleware("http")
+async def _inject_authenticated_tenant(request, call_next):
+    tenant_id = request.headers.get("X-Tenant-ID")
+    if tenant_id:
+        request.state.api_key = SimpleNamespace(tenant_id=tenant_id)
+    return await call_next(request)
 
 
 @app.get("/protected", dependencies=[Depends(require_active_subscription)])
@@ -185,6 +194,6 @@ async def test_circuit_recovers_after_timeout(client, fresh_circuit):
 
 @pytest.mark.asyncio
 async def test_no_tenant_id_skips_gate(client, fresh_circuit):
-    """Requests without tenant_id skip the subscription gate entirely."""
+    """Paid requests without authenticated tenant context fail closed."""
     resp = await client.get("/protected")
-    assert resp.status_code == 200
+    assert resp.status_code == 401

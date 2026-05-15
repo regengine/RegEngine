@@ -16,6 +16,8 @@ in a single ``pytest`` run.
 from __future__ import annotations
 
 import re
+import asyncio
+import os
 import sys
 from contextlib import suppress
 from pathlib import Path
@@ -166,6 +168,7 @@ def _switch_to_service(service: str) -> None:
     service_dir = _SERVICES_DIR / service
     service_dir_str = str(service_dir)
     service_cache = _KNOWN_SERVICE_MODULES.setdefault(service, {})
+    _prepare_service_test_environment(service)
 
     # Drop any cached ``app`` (and its submodules) so reimport uses the
     # correct service's app/ directory. Only evict entries that don't belong
@@ -251,6 +254,37 @@ def _switch_to_service(service: str) -> None:
     sys.path.insert(0, service_dir_str)
 
 
+def _prepare_service_test_environment(service: str) -> None:
+    """Reset env that service-local tests expect before module import.
+
+    Some suites mutate process-wide env with plain ``os.environ`` assignments.
+    When pytest collects multiple services in one process, those mutations can
+    leak into later service imports. Compliance tests import ``main.app`` at
+    module scope and rely on test-mode API-key bypass, so pin its import-time
+    environment whenever the compliance service becomes active.
+    """
+    if service != "compliance":
+        return
+
+    os.environ["REGENGINE_ENV"] = "test"
+    os.environ["ENVIRONMENT"] = "test"
+    os.environ.setdefault("DATABASE_URL", "sqlite:///:memory:")
+    os.environ.setdefault("AUTH_TEST_BYPASS_TOKEN", "test-bypass-token-for-pytest")
+    os.environ.setdefault("AUTH_SECRET_KEY", "test-secret-key-for-pytest")
+
+
+def _ensure_default_event_loop() -> None:
+    """Keep legacy sync tests that call ``asyncio.get_event_loop()`` stable."""
+    try:
+        loop = asyncio.get_event_loop()
+    except RuntimeError:
+        asyncio.set_event_loop(asyncio.new_event_loop())
+        return
+
+    if loop.is_closed():
+        asyncio.set_event_loop(asyncio.new_event_loop())
+
+
 def pytest_collectstart(collector):  # type: ignore[no-untyped-def]
     """Pytest hook: called before each collector (module/file) runs.
 
@@ -289,3 +323,4 @@ def pytest_runtest_setup(item):  # type: ignore[no-untyped-def]
     if item_path is None:
         return
     _activate_service_for_path(Path(str(item_path)))
+    _ensure_default_event_loop()

@@ -292,12 +292,10 @@ async def test_change_scopes_emits_audit_event_with_diff(monkeypatch):
     """The api_key_scopes_changing event must include added/removed diffs.
 
     Compliance reviewers reconstruct who-broadened-what from this log
-    entry; if it ever loses the diff, fail loudly. Uses
-    ``structlog.testing.capture_logs`` because the module logger is a
-    structlog BoundLogger that does not write to the stdlib root by
-    default — caplog would see nothing.
+    entry; if it ever loses the diff, fail loudly. A module-level logger spy
+    avoids depending on process-wide structlog cache state from other suites.
     """
-    import structlog
+    import shared.api_key_store as api_key_store
 
     store = _make_store(monkeypatch)
     _patch_session_returning(
@@ -305,13 +303,20 @@ async def test_change_scopes_emits_audit_event_with_diff(monkeypatch):
     )
     _patch_key_generation(store)
 
-    with structlog.testing.capture_logs() as logs:
-        await store.change_scopes(
-            "rge_existing",
-            new_scopes=["clients.read", "clients.write", "revenue.read"],
-            changed_by="user_1",
-            reason="onboarding new partner",
-        )
+    logs: list[dict] = []
+
+    class _AuditLogSpy:
+        def info(self, event: str, **fields) -> None:
+            logs.append({"event": event, **fields})
+
+    monkeypatch.setattr(api_key_store, "logger", _AuditLogSpy())
+
+    await store.change_scopes(
+        "rge_existing",
+        new_scopes=["clients.read", "clients.write", "revenue.read"],
+        changed_by="user_1",
+        reason="onboarding new partner",
+    )
 
     changing = next(
         (e for e in logs if e.get("event") == "api_key_scopes_changing"), None

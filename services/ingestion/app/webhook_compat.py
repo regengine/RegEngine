@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import logging
 import uuid
-from typing import Optional
+from typing import Optional, Union
 
 from fastapi import Header, Request
 
@@ -31,7 +31,9 @@ from .webhook_router_v2 import (
     _verify_api_key as _verify_api_key_sync,
 )
 from shared.database import get_db_session as _get_db_session
-from shared.auth import require_api_key
+from shared.api_key_store import APIKeyResponse
+from shared.auth import APIKey, require_api_key
+from shared.tenant_context import resolve_tenant_context
 
 logger = logging.getLogger("webhook-compat")
 
@@ -41,15 +43,21 @@ async def _verify_api_key(
     x_regengine_api_key: Optional[str] = Header(
         default=None, alias="X-RegEngine-API-Key"
     ),
-) -> None:
+) -> Union[APIKey, APIKeyResponse]:
     """Auth gate — delegates to shared.auth.require_api_key.
 
     This is the stable import surface for ingestion sub-routers.
     All auth logic (preshared key, scoped keys, test bypass) lives
-    in ``shared/auth.py``.  Callers use ``Depends(_verify_api_key)``
-    exactly as before; the return value is discarded.
+    in ``shared/auth.py``. The accepted key is stored on ``request.state``
+    and resolved through the shared tenant context so legacy routers cannot
+    use path/query/header tenant claims to pivot across tenants.
     """
-    await require_api_key(request=request, x_regengine_api_key=x_regengine_api_key)
+    api_key = await require_api_key(
+        request=request,
+        x_regengine_api_key=x_regengine_api_key,
+    )
+    await resolve_tenant_context(request)
+    return api_key
 
 
 async def ingest_events(

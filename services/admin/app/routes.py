@@ -9,7 +9,6 @@ from datetime import datetime
 from pathlib import Path
 from threading import Lock
 from typing import Optional
-from uuid import uuid4
 
 import structlog
 from fastapi import APIRouter, Depends, Header, HTTPException, status, Request, Query
@@ -20,6 +19,7 @@ from fastapi.responses import PlainTextResponse
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from pydantic import BaseModel, Field
 import html
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 # Centralised path resolution
@@ -34,6 +34,8 @@ from .config import get_settings
 from .database import get_session
 from .dependencies import PermissionChecker
 from .review_consumer import get_consumer_health
+from .auth.signup_helpers import _ensure_unique_tenant_slug
+from .sqlalchemy_models import TenantModel
 
 # Health/metrics router at root level (operational endpoints)
 router = APIRouter()
@@ -512,11 +514,30 @@ async def revoke_api_key(
 async def create_tenant(
     request: TenantCreateRequest,
     _: bool = Depends(verify_admin_key),
+    db: Session = Depends(get_session),
 ) -> TenantCreateResponse:
-    """Create a tenant identifier for onboarding flows."""
+    """Create and persist a tenant for onboarding flows."""
 
-    tenant_id = str(uuid4())
     sanitized_name = html.escape(request.name)
+    try:
+        tenant = TenantModel(
+            name=sanitized_name,
+            slug=_ensure_unique_tenant_slug(db, sanitized_name),
+            status="active",
+            settings={},
+        )
+        db.add(tenant)
+        db.commit()
+        db.refresh(tenant)
+    except SQLAlchemyError as exc:
+        db.rollback()
+        logger.error("tenant_create_failed_via_admin", name=sanitized_name, error=str(exc))
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to create tenant",
+        ) from exc
+
+    tenant_id = str(tenant.id)
     logger.info("tenant_created_via_admin", tenant_id=tenant_id, name=sanitized_name)
     return TenantCreateResponse(tenant_id=tenant_id, name=sanitized_name)
 

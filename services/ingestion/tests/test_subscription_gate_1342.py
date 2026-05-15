@@ -8,10 +8,10 @@ endpoints. Any bug in the tenant-id extraction or the Redis lookup
 is a direct revenue-leak vector (unbilled tenant gets paid access)
 or a false-positive lockout. These tests pin:
 
-* the three tenant-id extraction branches (query > header > principal)
+* the tenant-id extraction branches (principal > accepted API key)
 * the fail-open env flag toggles (``1/true/yes/on`` all enable,
   everything else disables)
-* each ``require_active_subscription`` early-return
+* the fail-closed ``require_active_subscription`` missing-context path
 
 History: PR #1566 originally added tests for a legacy
 ``_check_subscription_in_redis`` helper. PR #1572 deleted that helper
@@ -27,6 +27,7 @@ Tracks GitHub issue #1342.
 from __future__ import annotations
 
 import asyncio
+from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
@@ -53,6 +54,7 @@ def _mk_request(
     headers: dict | None = None,
     principal_tenant: str | None = None,
     principal_set: bool = True,
+    api_key_tenant: str | None = None,
 ):
     """Build a minimal stand-in for fastapi.Request for the gate's purposes."""
     req = MagicMock()
@@ -68,6 +70,10 @@ def _mk_request(
     else:
         # Mimic `getattr(request.state, "principal", None)` returning None.
         del req.state.principal  # triggers AttributeError -> getattr default
+    if api_key_tenant is not None:
+        req.state.api_key = SimpleNamespace(tenant_id=api_key_tenant)
+    else:
+        req.state.api_key = None
     return req
 
 
@@ -138,8 +144,7 @@ class TestFailOpenOverride:
 class TestTenantIdExtraction:
 
     def test_principal_wins_over_header_and_query(self):
-        """EPIC-A #1651: principal is now first priority. Query is silently
-        dropped; header is transition fallback."""
+        """EPIC-A #1651: principal is first priority."""
         req = _mk_request(
             query={"tenant_id": "q-tenant"},
             headers={"X-Tenant-ID": "h-tenant"},
@@ -157,14 +162,14 @@ class TestTenantIdExtraction:
         )
         assert _get_tenant_id_from_request(req) is None
 
-    def test_header_used_when_no_principal(self):
-        """X-Tenant-ID header is the second-priority fallback when no
-        principal is set on request.state."""
+    def test_api_key_used_when_no_principal(self):
+        """Accepted API-key principal is the second-priority fallback."""
         req = _mk_request(
             headers={"X-Tenant-ID": "h-tenant"},
             principal_tenant=None,
+            api_key_tenant="api-key-tenant",
         )
-        assert _get_tenant_id_from_request(req) == "h-tenant"
+        assert _get_tenant_id_from_request(req) == "api-key-tenant"
 
     def test_principal_used_alone(self):
         """Principal-only request resolves correctly (most common
@@ -181,15 +186,15 @@ class TestTenantIdExtraction:
         req = _mk_request(principal_tenant=None)
         assert _get_tenant_id_from_request(req) is None
 
-    def test_query_param_does_not_override_header(self):
-        """Even if query is present, only the header's value is used.
-        Defensive coverage for the EPIC-A drop."""
+    def test_query_param_does_not_override_api_key(self):
+        """Even if query is present, only authenticated principal state is used."""
         req = _mk_request(
             query={"tenant_id": "q-tenant"},
             headers={"X-Tenant-ID": "h-tenant"},
             principal_tenant=None,
+            api_key_tenant="api-key-tenant",
         )
-        assert _get_tenant_id_from_request(req) == "h-tenant"
+        assert _get_tenant_id_from_request(req) == "api-key-tenant"
 
 
 # ===========================================================================
@@ -254,11 +259,13 @@ class TestCheckSubscriptionAndHealth:
 
 class TestRequireActiveSubscriptionBypass:
 
-    def test_returns_early_when_no_tenant_id(self, monkeypatch):
-        """Public / unauthenticated endpoints skip the gate entirely."""
+    def test_missing_tenant_id_fails_closed(self, monkeypatch):
+        """Paid endpoints without authenticated tenant context are rejected."""
         req = _mk_request(principal_tenant=None)
-        # Should not raise, should not hit Redis.
-        _run(require_active_subscription(req))
+        with pytest.raises(HTTPException) as exc:
+            _run(require_active_subscription(req))
+        assert exc.value.status_code == 401
+        assert exc.value.detail["code"] == "E_NO_TENANT"
 
     def test_bypass_via_env_flag_short_circuits(self, monkeypatch):
         """Fail-open flag bypasses Redis entirely — still logs at CRITICAL."""
@@ -274,6 +281,6 @@ class TestRequireActiveSubscriptionBypass:
             "_check_subscription_and_redis_health",
             _sentinel,
         )
-        req = _mk_request(query={"tenant_id": "t-bypass"})
+        req = _mk_request(api_key_tenant="t-bypass")
         _run(require_active_subscription(req))
         assert called["hit_redis"] is False

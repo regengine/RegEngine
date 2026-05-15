@@ -106,11 +106,13 @@ class _FakeExceptionQueue:
 
 
 def test_ingest_events_emits_first_ingest_funnel_event(monkeypatch) -> None:
+    tenant_id = "00000000-0000-0000-0000-000000000111"
     app = FastAPI()
     app.include_router(webhook_router_v2.router)
     app.dependency_overrides[get_ingestion_principal] = lambda: IngestionPrincipal(
         key_id="test-key",
         scopes=["*"],
+        tenant_id=tenant_id,
         auth_mode="test",
     )
     app.dependency_overrides[_verify_api_key] = lambda: None
@@ -149,7 +151,7 @@ def test_ingest_events_emits_first_ingest_funnel_event(monkeypatch) -> None:
     )
 
     payload = {
-        "tenant_id": "00000000-0000-0000-0000-000000000111",
+        "tenant_id": tenant_id,
         "source": "api_test",
         "events": [
             {

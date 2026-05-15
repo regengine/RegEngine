@@ -9,6 +9,7 @@ import logging
 import os
 import threading
 import time
+import uuid
 from datetime import datetime, timezone
 from functools import lru_cache
 from typing import Optional
@@ -237,6 +238,25 @@ def _principal_from_api_key(api_key: APIKey | APIKeyResponse) -> IngestionPrinci
     )
 
 
+def _tenant_id_from_master_header(request: Request) -> Optional[str]:
+    """Return a validated X-Tenant-ID for legacy master-key callers, if present."""
+    tenant_id = (
+        request.headers.get("X-Tenant-ID")
+        or request.headers.get("x-tenant-id")
+        or ""
+    ).strip()
+    if not tenant_id:
+        return None
+    try:
+        uuid.UUID(tenant_id)
+    except (ValueError, AttributeError, TypeError) as exc:
+        raise HTTPException(
+            status_code=401,
+            detail="E_TENANT_HEADER_INVALID: X-Tenant-ID must be a valid UUID",
+        ) from exc
+    return tenant_id
+
+
 def _current_settings():
     """Resolve settings from the live ``app.config`` module.
 
@@ -317,7 +337,7 @@ async def get_ingestion_principal(
             return IngestionPrincipal(
                 key_id="legacy-master",
                 scopes=["*"],
-                tenant_id=None,
+                tenant_id=_tenant_id_from_master_header(request),
                 auth_mode="legacy_master",
             )
 
@@ -398,6 +418,7 @@ def require_permission(required_permission: str):
         response: Response,
         principal: IngestionPrincipal = Depends(get_ingestion_principal),
     ) -> IngestionPrincipal:
+        request.state.principal = principal
         if has_permission(principal.scopes, required_permission):
             # Cross-check: if the principal has a tenant_id AND the request
             # specifies a different tenant_id, reject. Wildcard ``*`` scope

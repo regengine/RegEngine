@@ -133,24 +133,47 @@ async def resolve_tenant_context(request: Request) -> TenantContext:
         raise TenantContextError(code="E_NO_TENANT", detail="principal has no tenant_id")
 
     # Defense-in-depth: detect caller attempts to override tenant_id.
-    for source, value in _collect_claimed_tenant_ids(request):
-        if value and value != tenant_id:
-            logger.warning(
-                "tenant_mismatch_attempt",
-                principal_kind=principal.principal_kind,
-                principal_id=principal.principal_id,
-                claimed_source=source,
-                claimed_tenant=value,
-                authenticated_tenant=tenant_id,
-                path=request.url.path,
-            )
-            raise TenantContextError(
-                code="E_TENANT_MISMATCH",
-                detail=f"request {source} tenant_id does not match authenticated tenant",
-                status_code=status.HTTP_409_CONFLICT,
-            )
+    claimed_tenant_ids = list(_collect_claimed_tenant_ids(request))
+    claimed_tenant_ids.extend(await _collect_json_body_tenant_ids(request))
+    for source, value in claimed_tenant_ids:
+        assert_tenant_claim_matches(
+            principal,
+            value,
+            source=source,
+            path=request.url.path,
+        )
 
     return principal
+
+
+def assert_tenant_claim_matches(
+    ctx: TenantContext,
+    claimed_tenant_id: Any,
+    *,
+    source: str,
+    path: str | None = None,
+) -> None:
+    """Reject client-supplied tenant claims that conflict with auth context."""
+    if claimed_tenant_id in (None, ""):
+        return
+    claimed = str(claimed_tenant_id)
+    if claimed == ctx.tenant_id:
+        return
+
+    logger.warning(
+        "tenant_mismatch_attempt",
+        principal_kind=ctx.principal_kind,
+        principal_id=ctx.principal_id,
+        claimed_source=source,
+        claimed_tenant=claimed,
+        authenticated_tenant=ctx.tenant_id,
+        path=path,
+    )
+    raise TenantContextError(
+        code="E_TENANT_MISMATCH",
+        detail=f"request {source} tenant_id does not match authenticated tenant",
+        status_code=status.HTTP_409_CONFLICT,
+    )
 
 
 def _extract_principal(request: Request) -> Optional[TenantContext]:
@@ -192,19 +215,77 @@ def _collect_claimed_tenant_ids(request: Request):
     the authenticated principal; these values are never trusted.
     """
     path_params = getattr(request, "path_params", {}) or {}
-    if "tenant_id" in path_params:
-        yield ("path_param", str(path_params["tenant_id"]))
+    for name in ("tenant_id", "tenantId"):
+        if name in path_params:
+            yield (f"path_param.{name}", str(path_params[name]))
 
     try:
         qp_tenant = request.query_params.get("tenant_id")
     except Exception:
         qp_tenant = None
     if qp_tenant:
-        yield ("query_param", qp_tenant)
+        yield ("query_param.tenant_id", qp_tenant)
 
-    hdr_tenant = request.headers.get("x-tenant-id-override")
-    if hdr_tenant:
-        yield ("header_x-tenant-id-override", hdr_tenant)
+    for header_name in (
+        "x-tenant-id-override",
+        "x-tenant-id",
+        "x-regengine-tenant-id",
+    ):
+        hdr_tenant = _get_header_value(request.headers, header_name)
+        if hdr_tenant:
+            yield (f"header.{header_name}", hdr_tenant)
+
+
+async def _collect_json_body_tenant_ids(request: Request) -> list[tuple[str, str]]:
+    """Return top-level tenant claims from JSON request bodies, if present."""
+    method = getattr(request, "method", "").upper()
+    if method in {"GET", "HEAD", "OPTIONS"}:
+        return []
+
+    content_type = _get_header_value(getattr(request, "headers", {}), "content-type") or ""
+    if "application/json" not in content_type.lower():
+        return []
+
+    try:
+        body = await request.json()
+    except Exception:
+        return []
+
+    if not isinstance(body, dict):
+        return []
+
+    claims: list[tuple[str, str]] = []
+    for name in ("tenant_id", "tenantId"):
+        value = body.get(name)
+        if value:
+            claims.append((f"json_body.{name}", str(value)))
+    return claims
+
+
+def _get_header_value(headers: Any, name: str) -> Optional[str]:
+    """Case-tolerant header lookup that also works with plain test dicts."""
+    try:
+        value = headers.get(name)
+        if value:
+            return value
+    except Exception:
+        return None
+
+    title_name = "-".join(part.capitalize() for part in name.split("-"))
+    try:
+        value = headers.get(title_name)
+        if value:
+            return value
+    except Exception:
+        pass
+
+    try:
+        for key, value in headers.items():
+            if str(key).lower() == name.lower() and value:
+                return value
+    except Exception:
+        pass
+    return None
 
 
 def is_production() -> bool:
