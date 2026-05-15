@@ -153,20 +153,20 @@ const API_SERVICES: { name: string; port: number; baseUrl: string; icon: React.C
             {
                 method: 'POST',
                 path: '/ingest',
-                description: 'Ingest one or more FSMA CTE events. Each event is SHA-256 chain-hashed and linked to the tenant audit trail.',
+                description: 'Ingest one or more FSMA CTE events. Each event is SHA-256 chain-hashed and linked to the tenant audit trail. Idempotency-Key is required — safe retries replay the cached response for 24 hours per tenant.',
                 auth: true,
-                headers: ['X-RegEngine-API-Key', 'X-Tenant-ID'],
+                headers: ['X-RegEngine-API-Key', 'X-Tenant-ID', 'Idempotency-Key'],
                 params_table: [
-                    { name: 'source', type: 'string', required: false, desc: 'Source system identifier (e.g. "erp", "wms")' },
-                    { name: 'events', type: 'CTE[]', required: true, desc: 'Array of Critical Tracking Events' },
-                    { name: 'events[].cte_type', type: 'enum', required: true, desc: '"receiving" | "shipping" | "transforming" | "creating"' },
-                    { name: 'events[].traceability_lot_code', type: 'string', required: true, desc: 'TLC per FSMA 204 (e.g. GTIN + lot)' },
-                    { name: 'events[].product_description', type: 'string', required: true, desc: 'Human-readable product name' },
-                    { name: 'events[].quantity', type: 'number', required: true, desc: 'Quantity received/shipped' },
-                    { name: 'events[].unit_of_measure', type: 'string', required: true, desc: '"cases" | "lbs" | "kg" | "pallets"' },
-                    { name: 'events[].location_name', type: 'string', required: true, desc: 'Facility name or GLN' },
+                    { name: 'source', type: 'string', required: true, desc: 'Source system identifier (e.g. "erp", "wms", "sensitech", "tive", "manual")' },
+                    { name: 'events', type: 'CTE[]', required: true, desc: 'Array of Critical Tracking Events (max 500 per batch)' },
+                    { name: 'events[].cte_type', type: 'enum', required: true, desc: '"harvesting" | "cooling" | "initial_packing" | "first_land_based_receiving" | "shipping" | "receiving" | "transformation"' },
+                    { name: 'events[].traceability_lot_code', type: 'string', required: true, desc: 'TLC per FSMA 204 (e.g. GTIN + lot, min 3 chars)' },
+                    { name: 'events[].product_description', type: 'string', required: true, desc: 'Human-readable product name (1–500 chars)' },
+                    { name: 'events[].quantity', type: 'number', required: true, desc: 'Quantity (> 0)' },
+                    { name: 'events[].unit_of_measure', type: 'string', required: true, desc: '"cases" | "lbs" | "kg" | "pallets" | "each" — full list in docs' },
+                    { name: 'events[].location_name', type: 'string', required: true, desc: 'Facility name (or supply events[].location_gln as a 13-digit GLN)' },
                     { name: 'events[].timestamp', type: 'ISO 8601', required: true, desc: 'Event timestamp with timezone' },
-                    { name: 'events[].kdes', type: 'object', required: false, desc: 'Key Data Elements (supplier_lot, po_number, carrier, etc.)' },
+                    { name: 'events[].kdes', type: 'object', required: true, desc: 'CTE-specific Key Data Elements per 21 CFR §§1.1325–1.1350. RECEIVING requires receive_date, receiving_location, immediate_previous_source, reference_document, tlc_source_reference.' },
                 ],
                 body: JSON.stringify({
                     source: "erp",
@@ -180,7 +180,10 @@ const API_SERVICES: { name: string; port: number; baseUrl: string; icon: React.C
                         timestamp: "2026-02-05T14:23:00Z",
                         kdes: {
                             receive_date: "2026-02-05",
-                            receiving_location: "Distribution Center #4"
+                            receiving_location: "Distribution Center #4",
+                            immediate_previous_source: "GreenLeaf Farms LLC",
+                            reference_document: "ASN-2026-02-05-00123",
+                            tlc_source_reference: "GLF-2026-001"
                         }
                     }]
                 }, null, 2),
@@ -189,10 +192,14 @@ const API_SERVICES: { name: string; port: number; baseUrl: string; icon: React.C
                     rejected: 0,
                     total: 1,
                     events: [{
-                        event_id: "evt_9f8e7d6c5b4a",
+                        traceability_lot_code: "00012345678901-LOT-2026-001",
+                        cte_type: "receiving",
                         status: "accepted",
-                        sha256_hash: "sha256:a1b2c3d4e5f6..."
-                    }]
+                        event_id: "evt_9f8e7d6c5b4a",
+                        sha256_hash: "a1b2c3d4e5f6...",
+                        chain_hash: "7f6e5d4c3b2a..."
+                    }],
+                    ingestion_timestamp: "2026-02-05T14:23:01.847Z"
                 }, null, 2),
             },
             {
