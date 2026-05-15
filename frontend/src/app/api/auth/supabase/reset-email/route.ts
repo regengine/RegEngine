@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createSupabaseRouteClient, getSupabaseRouteConfig } from '@/lib/supabase/route-client';
 
+export function buildPasswordResetRedirect(request: NextRequest): string {
+    const origin = new URL(request.url).origin;
+    return `${origin}/auth/callback?next=/reset-password`;
+}
+
 export async function POST(request: NextRequest) {
     const config = getSupabaseRouteConfig();
     if (!config) {
@@ -9,10 +14,10 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json().catch(() => null);
     const email = typeof body?.email === 'string' ? body.email.trim() : '';
-    const redirectTo = typeof body?.redirectTo === 'string' ? body.redirectTo : '';
-    if (!email || !redirectTo) {
+    if (!email) {
         return NextResponse.json({ error: 'Missing password reset request fields' }, { status: 400 });
     }
+    const redirectTo = buildPasswordResetRedirect(request);
 
     const client = createSupabaseRouteClient(request, config);
     if (!client) {

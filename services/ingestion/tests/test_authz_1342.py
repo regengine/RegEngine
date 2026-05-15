@@ -627,6 +627,25 @@ class TestGetIngestionPrincipal:
         assert resp.status_code == 200
         assert resp.json()["auth_mode"] == "legacy_master"
         assert resp.json()["scopes"] == ["*"]
+        assert resp.json()["tenant_id"] is None
+
+    def test_legacy_master_key_binds_valid_tenant_header(self, _strip_env, monkeypatch):
+        from app import config as cfg
+        cfg.get_settings.cache_clear()
+        tenant_id = "11111111-1111-1111-1111-111111111111"
+        monkeypatch.setenv("API_KEY", "master-secret")
+        app = _build_app()
+        client = TestClient(app)
+        resp = client.get(
+            "/whoami",
+            headers={
+                "X-RegEngine-API-Key": "master-secret",
+                "X-Tenant-ID": tenant_id,
+            },
+        )
+        assert resp.status_code == 200
+        assert resp.json()["auth_mode"] == "legacy_master"
+        assert resp.json()["tenant_id"] == tenant_id
 
     def test_missing_header_with_api_key_returns_401(
         self, _strip_env, monkeypatch

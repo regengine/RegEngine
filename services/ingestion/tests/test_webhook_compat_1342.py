@@ -296,12 +296,17 @@ class TestVerifyApiKeyDelegator:
         async def _fake_require(*, request, x_regengine_api_key):
             captured["request"] = request
             captured["x"] = x_regengine_api_key
+            request.state = SimpleNamespace(
+                api_key=SimpleNamespace(key_id="k-1", tenant_id="11111111-1111-1111-1111-111111111111")
+            )
+            return request.state.api_key
 
         monkeypatch.setattr(wc, "require_api_key", _fake_require)
-        req = SimpleNamespace(foo=1)
-        asyncio.run(wc._verify_api_key(request=req, x_regengine_api_key="k-1"))
+        req = SimpleNamespace(foo=1, method="GET", headers={}, path_params={})
+        result = asyncio.run(wc._verify_api_key(request=req, x_regengine_api_key="k-1"))
         assert captured["request"] is req
         assert captured["x"] == "k-1"
+        assert result is req.state.api_key
 
     def test_none_header_value_delegates(self, monkeypatch):
         """Explicit None header is forwarded unchanged."""
@@ -309,9 +314,13 @@ class TestVerifyApiKeyDelegator:
 
         async def _fake_require(*, request, x_regengine_api_key):
             captured["x"] = x_regengine_api_key
+            request.state = SimpleNamespace(
+                api_key=SimpleNamespace(key_id="k-1", tenant_id="11111111-1111-1111-1111-111111111111")
+            )
+            return request.state.api_key
 
         monkeypatch.setattr(wc, "require_api_key", _fake_require)
-        req = SimpleNamespace()
+        req = SimpleNamespace(method="GET", headers={}, path_params={})
         asyncio.run(wc._verify_api_key(request=req, x_regengine_api_key=None))
         assert captured["x"] is None
 

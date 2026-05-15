@@ -156,6 +156,7 @@ pythonpath = [".", "services"]
 testpaths = [
     "tests",
     "services/admin/tests",
+    "services/compliance/tests",
     "services/graph/tests",
     "services/ingestion/tests",
     "services/nlp/tests",

@@ -23,5 +23,15 @@ infra/ @PetrefiedThunder
 # Security-sensitive files
 SECURITY.md @PetrefiedThunder
 .gitleaks.toml @PetrefiedThunder
+.semgrep/ @PetrefiedThunder
+.github/workflows/security.yml @PetrefiedThunder
 services/shared/middleware/ @PetrefiedThunder
+services/shared/auth.py @PetrefiedThunder
+services/shared/tenant_context.py @PetrefiedThunder
+services/ingestion/app/authz.py @PetrefiedThunder
+services/ingestion/app/subscription_gate.py @PetrefiedThunder
+services/ingestion/app/webhook_compat.py @PetrefiedThunder
+services/ingestion/app/stripe_billing/ @PetrefiedThunder
+services/admin/app/routes.py @PetrefiedThunder
+frontend/src/app/api/auth/supabase/reset-email/route.ts @PetrefiedThunder
 services/shared/api_authentication.py @PetrefiedThunder

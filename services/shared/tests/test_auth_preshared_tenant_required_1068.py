@@ -130,3 +130,4 @@ class TestPresharedMasterKeyTenantRequired:
         assert isinstance(result, APIKey)
         assert result.key_id == "preshared-master"
         assert result.tenant_id == _VALID_TENANT_UUID
+        assert request.state.api_key is result

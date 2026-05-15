@@ -233,6 +233,16 @@ from shared.api_key_store import DatabaseAPIKeyStore, get_db_key_store, APIKeyRe
 _key_store = APIKeyStore()
 _db_store_instance: Optional[DatabaseAPIKeyStore] = None
 
+
+def _store_api_key_principal(
+    request: Request,
+    api_key: Union[APIKey, APIKeyResponse],
+) -> Union[APIKey, APIKeyResponse]:
+    """Attach the accepted API key to request state for tenant resolution."""
+    request.state.api_key = api_key
+    return api_key
+
+
 def get_key_store() -> Union[APIKeyStore, DatabaseAPIKeyStore]:
     """Get the global API key store instance.
 
@@ -289,7 +299,7 @@ async def require_api_key(
 
     if _is_env_bypass:
         logger.info("test_bypass_auth_used", path=request.url.path, env=_current_env)
-        return APIKey(
+        api_key = APIKey(
             key_id="test",
             key_hash="",
             name="Test Bypass Key",
@@ -301,6 +311,7 @@ async def require_api_key(
             billing_tier="ENTERPRISE",
             allowed_jurisdictions=["US", "US-NY", "US-CA", "EU"],
         )
+        return _store_api_key_principal(request, api_key)
 
     # Check preshared/master key first — same pattern as get_ingestion_principal.
     # This ensures server-side proxy injection (which uses the configured API_KEY
@@ -337,7 +348,7 @@ async def require_api_key(
                     status_code=status.HTTP_401_UNAUTHORIZED,
                     detail="E_TENANT_HEADER_INVALID: X-Tenant-ID must be a valid UUID",
                 )
-            return APIKey(
+            api_key = APIKey(
                 key_id="preshared-master",
                 key_hash="",
                 name="Preshared Master Key",
@@ -349,6 +360,7 @@ async def require_api_key(
                 billing_tier="ENTERPRISE",
                 allowed_jurisdictions=["US", "US-NY", "US-CA", "EU"],
             )
+            return _store_api_key_principal(request, api_key)
 
     key_store = get_key_store()
 
@@ -397,7 +409,7 @@ async def require_api_key(
         endpoint=request.url.path,
         method=request.method,
     )
-    return api_key
+    return _store_api_key_principal(request, api_key)
 
 
 async def optional_api_key(

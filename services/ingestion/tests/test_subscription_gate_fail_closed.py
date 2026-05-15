@@ -9,6 +9,7 @@ Specifically:
 
 from __future__ import annotations
 
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -19,6 +20,14 @@ from app.subscription_gate import require_active_subscription
 
 
 app = FastAPI()
+
+
+@app.middleware("http")
+async def _inject_authenticated_tenant(request, call_next):
+    tenant_id = request.headers.get("X-Tenant-ID")
+    if tenant_id:
+        request.state.api_key = SimpleNamespace(tenant_id=tenant_id)
+    return await call_next(request)
 
 
 @app.get("/paid", dependencies=[Depends(require_active_subscription)])

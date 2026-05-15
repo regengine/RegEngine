@@ -22,7 +22,7 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, Optional
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -64,6 +64,7 @@ def _make_request(
     path_params: Optional[Dict[str, Any]] = None,
     query_params: Optional[Dict[str, str]] = None,
     headers: Optional[Dict[str, str]] = None,
+    json_body: Optional[Dict[str, Any]] = None,
 ):
     """Build a minimal MagicMock request.
 
@@ -77,6 +78,10 @@ def _make_request(
     q = query_params or {}
     req.query_params.get = q.get
     req.headers = headers or {}
+    req.method = "POST" if json_body is not None else "GET"
+    if json_body is not None:
+        req.headers = {"content-type": "application/json", **req.headers}
+        req.json = AsyncMock(return_value=json_body)
     req.url.path = "/test"
     return req
 
@@ -186,6 +191,26 @@ def test_header_override_mismatch_raises_409():
     req = _make_request(
         api_key=_FakeAPIKey(key_id="k", tenant_id="tenant-A"),
         headers={"x-tenant-id-override": "tenant-evil"},
+    )
+    with pytest.raises(TenantContextError) as excinfo:
+        _run(req)
+    assert excinfo.value.detail["code"] == "E_TENANT_MISMATCH"
+
+
+def test_x_tenant_id_header_mismatch_raises_409():
+    req = _make_request(
+        api_key=_FakeAPIKey(key_id="k", tenant_id="tenant-A"),
+        headers={"X-Tenant-ID": "tenant-B"},
+    )
+    with pytest.raises(TenantContextError) as excinfo:
+        _run(req)
+    assert excinfo.value.detail["code"] == "E_TENANT_MISMATCH"
+
+
+def test_json_body_tenant_mismatch_raises_409():
+    req = _make_request(
+        api_key=_FakeAPIKey(key_id="k", tenant_id="tenant-A"),
+        json_body={"tenant_id": "tenant-B"},
     )
     with pytest.raises(TenantContextError) as excinfo:
         _run(req)
