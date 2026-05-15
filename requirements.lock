@@ -1235,9 +1235,7 @@ greenlet==3.5.0 \
     --hash=sha256:f35807464c4c58c55f0d31dfa83c541a5615d825c2fe3d2b95360cf7c4e3c0a8 \
     --hash=sha256:f8c30c2225f40dd76c50790f0eb3b5c7c18431efb299e2782083e1981feed243 \
     --hash=sha256:fa94cb2288681e3a11645958f1871d48ee9211bd2f66628fdace505927d6e564
-    # via
-    #   -r requirements.in
-    #   sqlalchemy
+    # via -r requirements.in
 groq==0.37.1 \
     --hash=sha256:7353d6dfb60834fd7aacbb86af106e2dc2aeaff6d0edd65fb2fd0f16bd39314c \
     --hash=sha256:b49f8c8898c55eaec9f71f1342f3fcacc9560d67a08ce5f35fbfb84e8dacd3da
@@ -1616,10 +1614,11 @@ langgraph-sdk==0.3.13 \
     --hash=sha256:419ca5663eec3cec192ad194ac0647c0c826866b446073eb40f384f950986cd5 \
     --hash=sha256:aee09e345c90775f6de9d6f4c7b847cfc652e49055c27a2aed0d981af2af3bd0
     # via langgraph
-langsmith==0.7.32 \
-    --hash=sha256:b59b8e106d0e4c4842e158229296086e2aa7c561e3f602acda73d3ad0062e915 \
-    --hash=sha256:e1fde928990c4c52f47dc5132708cec674355d9101723d564183e965f383bf5f
+langsmith==0.8.4 \
+    --hash=sha256:4e334ab223d10129c9943c461d95fa9089523638ea29cd048045a7f99b973f50 \
+    --hash=sha256:989b387f6ff92ec5f9d14c0edb333e2579590cad5a1ca07042d924b0ec43cd10
     # via
+    #   -r requirements.in
     #   langchain-classic
     #   langchain-community
     #   langchain-core
