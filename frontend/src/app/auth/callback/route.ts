@@ -42,9 +42,24 @@ function normalizePublicOrigin(value: string | null | undefined): string | null 
 function resolveRedirectOrigin(requestOrigin: string): string {
     if (process.env.NODE_ENV === 'development') return requestOrigin
 
+    // Fallback order:
+    //   1. NEXT_PUBLIC_SITE_URL — explicit, operator-controlled override. Wins
+    //      when set so an environment can pin auth redirects to a canonical
+    //      alias regardless of how the request arrived.
+    //   2. requestOrigin — derived from `new URL(request.url).origin`. On
+    //      Vercel, `request.url`'s host is the user-facing canonical hostname
+    //      that the browser actually sent the request to; it is NOT taken
+    //      from `x-forwarded-host` (which is attacker-controlled). This is
+    //      the same safe path the route used before PR #2358.
+    //
+    // VERCEL_URL is intentionally NOT consulted: it is always the
+    // deployment-specific hostname (e.g. `regengine-xxxx.vercel.app`), never
+    // the canonical user-facing alias. Falling back to it caused the
+    // 2026-05-13 prod login outage — Supabase session cookies set on the
+    // deployment origin did not stick on the alias, so every login surfaced
+    // a generic "unexpected error" on the frontend.
     return (
         normalizePublicOrigin(process.env.NEXT_PUBLIC_SITE_URL) ??
-        normalizePublicOrigin(process.env.VERCEL_URL) ??
         requestOrigin
     )
 }

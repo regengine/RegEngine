@@ -132,4 +132,45 @@ describe('auth callback redirect safety', () => {
         expect(location.origin).toBe('https://app.regengine.test');
         expect(location.pathname).toBe('/dashboard');
     });
+
+    it('falls back to the request origin when NEXT_PUBLIC_SITE_URL is unset', async () => {
+        delete process.env.NEXT_PUBLIC_SITE_URL;
+
+        const response = await GET(makeRequest(
+            'https://regengine.co/auth/callback?code=valid&next=%2Fdashboard',
+        ));
+        const location = new URL(response.headers.get('location')!);
+
+        expect(location.origin).toBe('https://regengine.co');
+        expect(location.pathname).toBe('/dashboard');
+    });
+
+    it('ignores VERCEL_URL even when set (2026-05-13 outage regression guard)', async () => {
+        // VERCEL_URL is the deployment-specific hostname, never the canonical
+        // alias. Falling back to it broke prod login because Supabase session
+        // cookies set on the deployment origin did not stick on the alias.
+        delete process.env.NEXT_PUBLIC_SITE_URL;
+        process.env.VERCEL_URL = 'regengine-xxxx.vercel.app';
+
+        const response = await GET(makeRequest(
+            'https://regengine.co/auth/callback?code=valid&next=%2Fdashboard',
+        ));
+        const location = new URL(response.headers.get('location')!);
+
+        // Should use request origin (canonical alias), not VERCEL_URL.
+        expect(location.origin).toBe('https://regengine.co');
+        expect(location.pathname).toBe('/dashboard');
+    });
+
+    it('NEXT_PUBLIC_SITE_URL overrides the request origin', async () => {
+        process.env.NEXT_PUBLIC_SITE_URL = 'https://regengine.co';
+
+        const response = await GET(makeRequest(
+            'https://regengine-preview-xyz.vercel.app/auth/callback?code=valid&next=%2Fdashboard',
+        ));
+        const location = new URL(response.headers.get('location')!);
+
+        expect(location.origin).toBe('https://regengine.co');
+        expect(location.pathname).toBe('/dashboard');
+    });
 });
