@@ -14,10 +14,11 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 
-from .webhook_compat import _verify_api_key
+from .webhook_compat import require_tenant_context
 from .tenant_validation import validate_tenant_id
 from shared.database import get_db_safe
 from shared.pagination import PaginationParams
+from shared.tenant_context import TenantContext
 
 logger = logging.getLogger("alerts")
 
@@ -417,8 +418,9 @@ async def get_alerts(
     category: Optional[str] = None,
     acknowledged: Optional[bool] = None,
     pagination: PaginationParams = Depends(),
-    _: None = Depends(_verify_api_key),
+    ctx: TenantContext = Depends(require_tenant_context),
 ) -> AlertsResponse:
+    tenant_id = ctx.tenant_id
     validate_tenant_id(tenant_id)
     alerts: list[Alert] = []
     try:
@@ -471,8 +473,9 @@ async def get_alerts(
 async def acknowledge_alert(
     tenant_id: str,
     alert_id: str,
-    _: None = Depends(_verify_api_key),
+    ctx: TenantContext = Depends(require_tenant_context),
 ):
+    tenant_id = ctx.tenant_id
     db_session = get_db_safe()
     try:
         # Try public.compliance_alerts first (FDA recall alerts)
@@ -537,8 +540,9 @@ async def acknowledge_alert(
 )
 async def get_alert_rules(
     tenant_id: str,
-    _: None = Depends(_verify_api_key),
+    ctx: TenantContext = Depends(require_tenant_context),
 ):
+    tenant_id = ctx.tenant_id
     return {"tenant_id": tenant_id, "rules": [rule.model_dump() for rule in DEFAULT_RULES]}
 
 
@@ -548,8 +552,9 @@ async def get_alert_rules(
 )
 async def get_alert_summary(
     tenant_id: str,
-    _: None = Depends(_verify_api_key),
+    ctx: TenantContext = Depends(require_tenant_context),
 ):
+    tenant_id = ctx.tenant_id
     db_session = get_db_safe()
     try:
         fsma_alerts = _fetch_alerts_from_db(db_session, tenant_id)

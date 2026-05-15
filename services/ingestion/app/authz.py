@@ -209,12 +209,11 @@ def _requested_tenant_context(request: Request) -> Optional[str]:
     only that specific finding is suppressed; new call sites elsewhere
     in the codebase still trip the gate.
 
-    Long-term: replace this helper with
-    ``services/shared/tenant_context.py:resolve_tenant_context()`` once
-    ``get_ingestion_principal`` populates ``request.state.api_key``
-    (today it returns ``IngestionPrincipal`` directly so the shared
-    resolver raises ``E_NO_PRINCIPAL`` here). When that lands, this
-    helper and its ``nosemgrep:`` annotations can be deleted.
+    Long-term: replace this defensive check with
+    ``services/shared/tenant_context.py:resolve_tenant_context()`` at each
+    call site. The shared resolver now understands ``request.state.principal``;
+    this helper remains only for older read endpoints that intentionally return
+    404 on tenant mismatch to avoid tenant-existence oracles.
     """
     # nosemgrep: tenant-id-from-query-string  defensive-detection-not-trust
     query_tenant = request.query_params.get("tenant_id")

@@ -15,7 +15,8 @@ from typing import Optional
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
-from .webhook_compat import _verify_api_key
+from .webhook_compat import require_tenant_context
+from shared.tenant_context import TenantContext
 
 logger = logging.getLogger("sop-generator")
 
@@ -182,7 +183,7 @@ def _generate_cte_procedures(company_type: str, products: list[str], has_iot: bo
 )
 async def generate_sop(
     request: SOPRequest,
-    _: None = Depends(_verify_api_key),
+    _ctx: TenantContext = Depends(require_tenant_context),
 ) -> SOPResponse:
     """Generate a complete FSMA 204 SOP document."""
 

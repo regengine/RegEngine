@@ -20,9 +20,10 @@ from pydantic import BaseModel, Field
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 
-from .webhook_compat import _verify_api_key
+from .webhook_compat import require_tenant_context
 from .tenant_validation import validate_tenant_id
 from shared.database import get_db_safe
+from shared.tenant_context import TenantContext
 
 logger = logging.getLogger("audit-log")
 
@@ -335,8 +336,9 @@ async def get_audit_log(
     page_size: int = 20,
     event_type: str | None = None,
     category: str | None = None,
-    _: None = Depends(_verify_api_key),
+    ctx: TenantContext = Depends(require_tenant_context),
 ) -> AuditLogResponse:
+    tenant_id = ctx.tenant_id
     validate_tenant_id(tenant_id)
     entries: list[AuditEntry] = []
 

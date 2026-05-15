@@ -20,7 +20,8 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
-from .webhook_compat import _verify_api_key
+from .webhook_compat import require_tenant_context
+from shared.tenant_context import TenantContext
 
 logger = logging.getLogger("audit-export-log")
 
@@ -296,9 +297,10 @@ def _query_ingestions(tenant_id: str, limit: int) -> list[dict]:
 async def query_export_audit_trail(
     tenant_id: str,
     request: ExportQueryRequest = None,
-    _auth=Depends(_verify_api_key),
+    ctx: TenantContext = Depends(require_tenant_context),
 ):
     """Return the FDA export audit trail for a tenant, with optional date filters."""
+    tenant_id = ctx.tenant_id
     if request is None:
         request = ExportQueryRequest()
 
@@ -327,9 +329,10 @@ async def query_export_audit_trail(
 async def query_verification_history(
     tenant_id: str,
     request: VerificationQueryRequest = None,
-    _auth=Depends(_verify_api_key),
+    ctx: TenantContext = Depends(require_tenant_context),
 ):
     """Return the chain verification history for a tenant."""
+    tenant_id = ctx.tenant_id
     if request is None:
         request = VerificationQueryRequest()
 
@@ -358,11 +361,12 @@ async def get_activity_feed(
     tenant_id: str,
     page: int = Query(1, ge=1, description="Page number"),
     page_size: int = Query(50, ge=1, le=200, description="Items per page"),
-    _auth=Depends(_verify_api_key),
+    ctx: TenantContext = Depends(require_tenant_context),
 ):
     """Return a combined, paginated activity feed of exports, verifications,
     and ingestions for a tenant, sorted by timestamp descending.
     """
+    tenant_id = ctx.tenant_id
     activities: list[dict] = []
 
     # 1. Exports

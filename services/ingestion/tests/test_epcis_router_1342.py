@@ -40,6 +40,7 @@ import importlib  # noqa: E402
 
 router_mod = importlib.import_module("app.epcis.router")
 from app.webhook_compat import _verify_api_key  # noqa: E402
+from services.ingestion.tests.tenant_context_overrides import install_tenant_context_override  # noqa: E402
 
 
 TEST_TENANT_ID = "11111111-2222-3333-4444-555555555555"
@@ -54,6 +55,7 @@ def app() -> FastAPI:
     app = FastAPI()
     app.include_router(router_mod.router)
     app.dependency_overrides[_verify_api_key] = lambda: None
+    install_tenant_context_override(app, default_tenant=TEST_TENANT_ID, enforce_claims=True)
     return app
 
 
@@ -86,15 +88,14 @@ def stub_resolve_tenant(monkeypatch: pytest.MonkeyPatch) -> Callable[..., str | 
 
 
 class TestResolveAuthenticatedTenantFailure:
-    def test_no_resolvable_tenant_returns_400(
-        self, client: TestClient, stub_resolve_tenant: dict[str, Any]
-    ) -> None:
-        """Line 78: ``_resolve_tenant_id`` returns None → 400 with
-        ``'Tenant context required'`` detail."""
-        stub_resolve_tenant["return"] = None
-        resp = client.post("/api/v1/epcis/events", json={"type": "ObjectEvent"})
-        assert resp.status_code == 400
-        assert "Tenant context required" in resp.json()["detail"]
+    def test_no_authenticated_tenant_returns_401(self) -> None:
+        """Without an authenticated tenant context, the router fails closed."""
+        app = FastAPI()
+        app.include_router(router_mod.router)
+        app.dependency_overrides[_verify_api_key] = lambda: None
+        resp = TestClient(app).post("/api/v1/epcis/events", json={"type": "ObjectEvent"})
+        assert resp.status_code == 401
+        assert resp.json()["detail"]["code"] == "E_NO_PRINCIPAL"
 
 
 # ── Batch: bad mode + atomic happy path + partial variations ──────────────
@@ -569,17 +570,17 @@ class TestIngestEpcisXml:
 
 
 class TestTenantQueryParamGuard:
-    def test_tenant_id_query_param_rejected_with_403(
+    def test_tenant_id_query_param_mismatch_rejected_with_409(
         self, client: TestClient, stub_resolve_tenant: dict[str, Any]
     ) -> None:
-        """Line 53-60: supplying ``?tenant_id=`` is rejected with 403."""
+        """Supplying a conflicting ``?tenant_id=`` is rejected with 409."""
         stub_resolve_tenant["return"] = TEST_TENANT_ID
         resp = client.post(
             "/api/v1/epcis/events?tenant_id=other",
             json={"type": "ObjectEvent"},
         )
-        assert resp.status_code == 403
-        assert "query parameter is not accepted" in resp.json()["detail"]
+        assert resp.status_code == 409
+        assert resp.json()["detail"]["code"] == "E_TENANT_MISMATCH"
 
 
 class TestValidateEndpoint:

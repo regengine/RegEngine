@@ -14,7 +14,8 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from ..shared.tenant_resolution import resolve_tenant_id
-from ..webhook_compat import _verify_api_key
+from ..webhook_compat import require_tenant_context
+from shared.tenant_context import TenantContext
 
 from .normalization import (
     _normalize_epcis_to_cte,
@@ -90,9 +91,9 @@ async def ingest_epcis_event(
     request: Request,
     x_tenant_id: Optional[str] = Header(default=None, alias="X-Tenant-ID"),
     x_regengine_api_key: Optional[str] = Header(default=None, alias="X-RegEngine-API-Key"),
-    _: None = Depends(_verify_api_key),
+    ctx: TenantContext = Depends(require_tenant_context),
 ):
-    resolved_tenant = _resolve_authenticated_tenant(request, x_tenant_id, x_regengine_api_key)
+    resolved_tenant = ctx.tenant_id
 
     payload, status_code = _ingest_single_event(resolved_tenant, event)
     return JSONResponse(content=payload, status_code=status_code)
@@ -115,7 +116,7 @@ async def ingest_epcis_batch(
     ),
     x_tenant_id: Optional[str] = Header(default=None, alias="X-Tenant-ID"),
     x_regengine_api_key: Optional[str] = Header(default=None, alias="X-RegEngine-API-Key"),
-    _: None = Depends(_verify_api_key),
+    _: TenantContext | None = Depends(require_tenant_context),
 ):
     if not body.events:
         raise HTTPException(status_code=400, detail="Batch ingest requires at least one event")
@@ -129,7 +130,11 @@ async def ingest_epcis_batch(
             detail=f"Invalid mode '{mode}'. Expected 'atomic' or 'partial'.",
         )
 
-    resolved_tenant = _resolve_authenticated_tenant(request, x_tenant_id, x_regengine_api_key)
+    resolved_tenant = (
+        _.tenant_id
+        if _ is not None
+        else _resolve_authenticated_tenant(request, x_tenant_id, x_regengine_api_key)
+    )
 
     if mode == "atomic":
         results = _ingest_batch_events_db_atomic(resolved_tenant, body.events)
@@ -186,9 +191,9 @@ async def get_epcis_event(
     request: Request,
     x_tenant_id: Optional[str] = Header(default=None, alias="X-Tenant-ID"),
     x_regengine_api_key: Optional[str] = Header(default=None, alias="X-RegEngine-API-Key"),
-    _: None = Depends(_verify_api_key),
+    ctx: TenantContext = Depends(require_tenant_context),
 ):
-    resolved_tenant = _resolve_authenticated_tenant(request, x_tenant_id, x_regengine_api_key)
+    resolved_tenant = ctx.tenant_id
 
     event = None
     try:
@@ -218,9 +223,9 @@ async def export_epcis_events(
     product_id: str | None = Query(default=None, description="Filter by EPC product identifier"),
     x_tenant_id: Optional[str] = Header(default=None, alias="X-Tenant-ID"),
     x_regengine_api_key: Optional[str] = Header(default=None, alias="X-RegEngine-API-Key"),
-    _: None = Depends(_verify_api_key),
+    ctx: TenantContext = Depends(require_tenant_context),
 ):
-    resolved_tenant = _resolve_authenticated_tenant(request, x_tenant_id, x_regengine_api_key)
+    resolved_tenant = ctx.tenant_id
 
     events: list[dict] = []
     try:
@@ -279,7 +284,7 @@ async def export_epcis_events(
 @router.post("/validate", summary="Validate EPCIS event payload")
 async def validate_epcis_event(
     event: dict,
-    _: None = Depends(_verify_api_key),
+    _ctx: TenantContext = Depends(require_tenant_context),
 ):
     errors = _validate_epcis(event)
     normalized = _normalize_epcis_to_cte(event) if not errors else None
@@ -306,7 +311,7 @@ async def ingest_epcis_xml(
     ),
     x_tenant_id: Optional[str] = Header(default=None, alias="X-Tenant-ID"),
     x_regengine_api_key: Optional[str] = Header(default=None, alias="X-RegEngine-API-Key"),
-    _: None = Depends(_verify_api_key),
+    ctx: TenantContext = Depends(require_tenant_context),
 ):
     """Ingest an EPCIS 2.0 XML document containing one or more events.
 
@@ -323,7 +328,7 @@ async def ingest_epcis_xml(
             detail=f"Invalid mode '{mode}'. Expected 'atomic' or 'partial'.",
         )
 
-    resolved_tenant = _resolve_authenticated_tenant(request, x_tenant_id, x_regengine_api_key)
+    resolved_tenant = ctx.tenant_id
 
     raw_body = await request.body()
     if not raw_body:

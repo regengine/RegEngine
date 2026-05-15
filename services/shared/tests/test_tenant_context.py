@@ -57,9 +57,17 @@ class _FakeUser:
     email: Optional[str] = None
 
 
+@dataclass
+class _FakeIngestionPrincipal:
+    key_id: str
+    tenant_id: Optional[str]
+    auth_mode: str = "scoped_key"
+
+
 def _make_request(
     *,
     api_key: Optional[_FakeAPIKey] = None,
+    principal: Optional[_FakeIngestionPrincipal] = None,
     user: Optional[_FakeUser] = None,
     path_params: Optional[Dict[str, Any]] = None,
     query_params: Optional[Dict[str, str]] = None,
@@ -73,6 +81,8 @@ def _make_request(
     """
     req = MagicMock()
     req.state.api_key = api_key
+    if principal is not None:
+        req.state.principal = principal
     req.state.user = user
     req.path_params = path_params or {}
     q = query_params or {}
@@ -110,6 +120,16 @@ def test_jwt_user_principal_with_tenant_returns_context():
     assert ctx.principal_kind == "jwt"
     assert ctx.principal_id == "user-42"
     assert ctx.actor_email == "u@example.com"
+
+
+def test_ingestion_principal_with_tenant_returns_context():
+    req = _make_request(
+        principal=_FakeIngestionPrincipal(key_id="key-42", tenant_id="tenant-C"),
+    )
+    ctx = _run(req)
+    assert ctx.tenant_id == "tenant-C"
+    assert ctx.principal_kind == "scoped_key"
+    assert ctx.principal_id == "key-42"
 
 
 def test_preshared_master_key_resolves_with_own_kind():

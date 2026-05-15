@@ -33,7 +33,7 @@ from typing import Any, Dict, List, Optional
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
 
 
@@ -42,9 +42,10 @@ service_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(service_dir))
 
 from app import integration_router  # noqa: E402
-from app.webhook_compat import _verify_api_key  # noqa: E402
+from app.webhook_compat import _verify_api_key, require_tenant_context  # noqa: E402
 from shared.external_connectors import registry as registry_mod  # noqa: E402
 from shared.external_connectors.base import ConnectionStatus, ConnectorConfig  # noqa: E402
+from shared.tenant_context import TenantContext  # noqa: E402
 
 
 TENANT = "tenant-integ-1"
@@ -98,8 +99,7 @@ class _FakeConnector:
 
 @pytest.fixture
 def app_with_auth_bypass():
-    """Build a FastAPI app wearing the router with _verify_api_key
-    stubbed to a no-op (tests exercising auth handle that separately)."""
+    """Build a FastAPI app with auth context stubbed for router contract tests."""
     app = FastAPI()
     app.include_router(integration_router.router)
 
@@ -110,7 +110,15 @@ def app_with_auth_bypass():
     async def _noop():
         return None
 
+    async def _tenant_ctx(request: Request) -> TenantContext:
+        return TenantContext(
+            tenant_id=request.path_params.get("tenant_id", TENANT),
+            principal_kind="test",
+            principal_id="integration-router-test",
+        )
+
     app.dependency_overrides[_verify_api_key] = _noop
+    app.dependency_overrides[require_tenant_context] = _tenant_ctx
     return app
 
 
@@ -803,7 +811,7 @@ class TestIntegrationProfiles:
 
 
 class TestAuthGate:
-    """Sanity check that the ``_verify_api_key`` dependency is actually
+    """Sanity check that the tenant-context dependency is actually
     wired to all non-webhook routes. Uses a FastAPI app WITHOUT the
     bypass override so the real dep fires."""
 

@@ -20,7 +20,7 @@ import logging
 import uuid
 from typing import Optional, Union
 
-from fastapi import Header, Request
+from fastapi import Depends, Header, Request
 
 from .webhook_models import EventResult, IngestResponse, WebhookPayload
 from .webhook_router_v2 import (
@@ -33,7 +33,7 @@ from .webhook_router_v2 import (
 from shared.database import get_db_session as _get_db_session
 from shared.api_key_store import APIKeyResponse
 from shared.auth import APIKey, require_api_key
-from shared.tenant_context import resolve_tenant_context
+from shared.tenant_context import TenantContext, resolve_tenant_context
 
 logger = logging.getLogger("webhook-compat")
 
@@ -56,8 +56,20 @@ async def _verify_api_key(
         request=request,
         x_regengine_api_key=x_regengine_api_key,
     )
-    await resolve_tenant_context(request)
+    request.state.tenant_context = await resolve_tenant_context(request)
     return api_key
+
+
+async def require_tenant_context(
+    request: Request,
+    _api_key: Union[APIKey, APIKeyResponse] = Depends(_verify_api_key),
+) -> TenantContext:
+    """Return the authenticated tenant context for legacy route handlers."""
+    ctx = getattr(request.state, "tenant_context", None)
+    if ctx is None:
+        ctx = await resolve_tenant_context(request)
+        request.state.tenant_context = ctx
+    return ctx
 
 
 async def ingest_events(

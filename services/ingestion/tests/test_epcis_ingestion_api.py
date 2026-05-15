@@ -15,6 +15,7 @@ pytest.importorskip("fastapi")
 from app.epcis.persistence import _epcis_idempotency_index, _epcis_store
 from app.epcis.router import router as epcis_ingestion_router
 from app.webhook_compat import _verify_api_key
+from services.ingestion.tests.tenant_context_overrides import install_tenant_context_override
 
 TEST_TENANT_ID = "00000000-0000-0000-0000-000000000123"
 
@@ -24,6 +25,7 @@ def client() -> TestClient:
     app = FastAPI()
     app.include_router(epcis_ingestion_router)
     app.dependency_overrides[_verify_api_key] = lambda: None
+    install_tenant_context_override(app, default_tenant=TEST_TENANT_ID)
     _epcis_store.clear()
     _epcis_idempotency_index.clear()
     with TestClient(app) as test_client:

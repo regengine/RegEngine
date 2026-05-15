@@ -167,7 +167,7 @@ class TestTenantIdExtraction:
         req = _mk_request(
             headers={"X-Tenant-ID": "h-tenant"},
             principal_tenant=None,
-            api_key_tenant="api-key-tenant",
+            api_key_tenant="api-key-tenant",  # pragma: allowlist secret
         )
         assert _get_tenant_id_from_request(req) == "api-key-tenant"
 
@@ -192,7 +192,7 @@ class TestTenantIdExtraction:
             query={"tenant_id": "q-tenant"},
             headers={"X-Tenant-ID": "h-tenant"},
             principal_tenant=None,
-            api_key_tenant="api-key-tenant",
+            api_key_tenant="api-key-tenant",  # pragma: allowlist secret
         )
         assert _get_tenant_id_from_request(req) == "api-key-tenant"
 

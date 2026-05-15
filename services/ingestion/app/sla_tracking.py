@@ -23,8 +23,9 @@ from uuid import uuid4
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
-from .webhook_compat import _verify_api_key
+from .webhook_compat import require_tenant_context
 from shared.pagination import PaginationParams
+from shared.tenant_context import TenantContext
 
 logger = logging.getLogger("sla-tracking")
 
@@ -271,12 +272,13 @@ def _try_load_requests(tenant_id: str) -> Optional[List[FDARequest]]:
 @router.post("/requests", summary="Create FDA records request")
 async def create_request(
     body: FDARequestCreate,
-    _auth: None = Depends(_verify_api_key),
+    ctx: TenantContext = Depends(require_tenant_context),
 ):
     """Start the 24-hour SLA clock for a new FDA records request."""
     now = datetime.now(timezone.utc)
+    tenant_id = ctx.tenant_id
     req = FDARequest(
-        tenant_id=body.tenant_id,
+        tenant_id=tenant_id,
         request_type=body.request_type,
         requested_at=now,
         deadline_at=now + timedelta(hours=SLA_HOURS),
@@ -301,9 +303,10 @@ async def list_requests(
     tenant_id: str,
     status_filter: Optional[RequestStatus] = Query(None, alias="status"),
     pagination: PaginationParams = Depends(),
-    _auth: None = Depends(_verify_api_key),
+    ctx: TenantContext = Depends(require_tenant_context),
 ):
     """List all FDA records requests for a tenant with current status."""
+    tenant_id = ctx.tenant_id
     _refresh_overdue_statuses()
 
     # Try DB first, fall back to in-memory
@@ -332,11 +335,13 @@ async def list_requests(
 async def complete_request(
     request_id: str,
     export_ids: Optional[List[str]] = Query(None),
-    _auth: None = Depends(_verify_api_key),
+    ctx: TenantContext = Depends(require_tenant_context),
 ):
     """Mark an FDA records request as completed, recording response time."""
     req = _requests_store.get(request_id)
     if req is None:
+        raise HTTPException(status_code=404, detail=f"Request {request_id} not found")
+    if req.tenant_id != ctx.tenant_id:
         raise HTTPException(status_code=404, detail=f"Request {request_id} not found")
 
     now = datetime.now(timezone.utc)
@@ -375,9 +380,10 @@ async def complete_request(
 @router.get("/dashboard/{tenant_id}", summary="SLA compliance dashboard")
 async def sla_dashboard(
     tenant_id: str,
-    _auth: None = Depends(_verify_api_key),
+    ctx: TenantContext = Depends(require_tenant_context),
 ):
     """Compute SLA compliance metrics for a tenant."""
+    tenant_id = ctx.tenant_id
     _refresh_overdue_statuses()
 
     # Try DB first, fall back to in-memory
@@ -416,9 +422,10 @@ async def list_alerts(
     tenant_id: str,
     include_acknowledged: bool = Query(False),
     pagination: PaginationParams = Depends(),
-    _auth: None = Depends(_verify_api_key),
+    ctx: TenantContext = Depends(require_tenant_context),
 ):
     """List active SLA alerts, generating real-time deadline alerts."""
+    tenant_id = ctx.tenant_id
     _refresh_overdue_statuses()
 
     # Generate real-time alerts from current request state

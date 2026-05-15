@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
 
 _ingestion_dir = Path(__file__).resolve().parent.parent
@@ -37,7 +37,8 @@ from app.epcis_export import (
     _validate_epcis_document,
     router as epcis_export_router,
 )
-from app.webhook_compat import _verify_api_key
+from app.webhook_compat import _verify_api_key, require_tenant_context
+from shared.tenant_context import TenantContext
 
 
 # ---------------------------------------------------------------------------
@@ -238,7 +239,24 @@ class TestValidateEpcisDocumentBranches:
 def client() -> TestClient:
     app = FastAPI()
     app.include_router(epcis_export_router)
+
+    async def _tenant_ctx(request: Request) -> TenantContext:
+        tenant_id = request.path_params.get("tenant_id")
+        if not tenant_id and request.method in {"POST", "PUT", "PATCH"}:
+            try:
+                body = await request.json()
+            except Exception:
+                body = {}
+            if isinstance(body, dict):
+                tenant_id = body.get("tenant_id") or body.get("tenantId")
+        return TenantContext(
+            tenant_id=tenant_id or "tenant-x",
+            principal_kind="test",
+            principal_id="epcis-export-test",
+        )
+
     app.dependency_overrides[_verify_api_key] = lambda: None
+    app.dependency_overrides[require_tenant_context] = _tenant_ctx
     return TestClient(app)
 
 

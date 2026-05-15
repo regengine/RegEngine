@@ -55,6 +55,11 @@ from sqlalchemy import text
 logger = structlog.get_logger("tenant_context")
 
 
+def _is_unset_mock(value: Any) -> bool:
+    """Return True for MagicMock auto-created attributes in unit tests."""
+    return value is not None and type(value).__module__ == "unittest.mock"
+
+
 @dataclass(frozen=True)
 class TenantContext:
     """Authoritative tenant + principal pair for the current request.
@@ -193,6 +198,15 @@ def _extract_principal(request: Request) -> Optional[TenantContext]:
             tenant_id=getattr(api_key, "tenant_id", "") or "",
             principal_kind=kind,
             principal_id=key_id,
+            actor_email=None,
+        )
+
+    principal = getattr(request.state, "principal", None)
+    if principal is not None and not _is_unset_mock(principal):
+        return TenantContext(
+            tenant_id=getattr(principal, "tenant_id", "") or "",
+            principal_kind=getattr(principal, "auth_mode", None) or "rbac",
+            principal_id=str(getattr(principal, "key_id", "unknown")),
             actor_email=None,
         )
 

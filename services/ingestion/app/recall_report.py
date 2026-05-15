@@ -16,7 +16,8 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
 from .disclaimers import DEMO_DATA_DISCLAIMER
-from .webhook_compat import _verify_api_key
+from .webhook_compat import require_tenant_context
+from shared.tenant_context import TenantContext
 
 logger = logging.getLogger("recall-report")
 
@@ -146,9 +147,10 @@ def _status(score: int) -> str:
 )
 async def generate_report(
     tenant_id: str,
-    _: None = Depends(_verify_api_key),
+    ctx: TenantContext = Depends(require_tenant_context),
 ) -> RecallReport:
     """Generate recall readiness report."""
+    tenant_id = ctx.tenant_id
     now = datetime.now(timezone.utc)
 
     # Try to query real data
