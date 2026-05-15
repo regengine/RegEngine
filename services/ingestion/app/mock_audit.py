@@ -17,7 +17,8 @@ from uuid import uuid4
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
-from .webhook_compat import _verify_api_key
+from .webhook_compat import require_tenant_context
+from shared.tenant_context import TenantContext
 
 logger = logging.getLogger("mock-audit")
 
@@ -151,15 +152,16 @@ class DrillGrade(BaseModel):
 )
 async def start_drill(
     request: StartDrillRequest,
-    _: None = Depends(_verify_api_key),
+    ctx: TenantContext = Depends(require_tenant_context),
 ) -> DrillStatus:
     """Start a mock audit drill."""
+    tenant_id = ctx.tenant_id
     # Pick scenario
     idx = request.scenario_index if request.scenario_index is not None else random.randint(0, len(FDA_SCENARIOS) - 1)
     scenario = FDA_SCENARIOS[idx % len(FDA_SCENARIOS)].copy()
 
     # Try to use a real TLC from tenant's data
-    real_tlc = _get_real_tlc(request.tenant_id)
+    real_tlc = _get_real_tlc(tenant_id)
     use_demo = real_tlc is None
     if real_tlc:
         scenario["target_tlc"] = real_tlc
@@ -172,7 +174,7 @@ async def start_drill(
     deadline = now + timedelta(hours=24)
 
     _active_drills[drill_id] = {
-        "tenant_id": request.tenant_id,
+        "tenant_id": tenant_id,
         "scenario": scenario,
         "started_at": now.isoformat(),
         "deadline": deadline.isoformat(),
@@ -252,11 +254,13 @@ async def get_drill_status(drill_id: str) -> DrillStatus:
 async def submit_drill_response(
     drill_id: str,
     response: DrillResponse,
-    _: None = Depends(_verify_api_key),
+    ctx: TenantContext = Depends(require_tenant_context),
 ) -> DrillGrade:
     """Grade a drill response."""
     drill = _active_drills.get(drill_id)
     if not drill:
+        raise HTTPException(status_code=404, detail="Drill not found")
+    if drill.get("tenant_id") != ctx.tenant_id:
         raise HTTPException(status_code=404, detail="Drill not found")
 
     # Scoring (each category out of ~17 points, total 100)

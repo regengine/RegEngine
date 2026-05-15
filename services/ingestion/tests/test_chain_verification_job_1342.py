@@ -60,9 +60,10 @@ def _app() -> FastAPI:
     app = FastAPI()
     app.include_router(router)
     from app.webhook_compat import _verify_api_key
+    from services.ingestion.tests.tenant_context_overrides import install_tenant_context_override
     bypass = lambda: None
     app.dependency_overrides[_verify_api_key] = bypass
-    app.dependency_overrides[cvj._verify_api_key] = bypass
+    install_tenant_context_override(app)
     return app
 
 

@@ -21,7 +21,8 @@ from uuid import uuid4
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
-from .webhook_compat import _verify_api_key
+from .webhook_compat import require_tenant_context
+from shared.tenant_context import TenantContext
 
 logger = logging.getLogger("chain-verification")
 
@@ -246,7 +247,7 @@ def _log_verification_audit(
 )
 async def start_chain_verification(
     request: VerifyAllRequest,
-    _auth=Depends(_verify_api_key),
+    ctx: TenantContext = Depends(require_tenant_context),
 ):
     """Kick off a background chain verification job for the given tenant.
 
@@ -254,10 +255,11 @@ async def start_chain_verification(
     """
     job_id = str(uuid4())
     started_at = datetime.now(timezone.utc).isoformat()
+    tenant_id = ctx.tenant_id
 
     job_record = {
         "job_id": job_id,
-        "tenant_id": request.tenant_id,
+        "tenant_id": tenant_id,
         "status": "running",
         "started_at": started_at,
         "completed_at": None,
@@ -273,19 +275,19 @@ async def start_chain_verification(
     # Run verification in background thread
     thread = threading.Thread(
         target=_run_verification,
-        args=(job_id, request.tenant_id),
+        args=(job_id, tenant_id),
         daemon=True,
     )
     thread.start()
 
     logger.info(
         "chain_verification_started job_id=%s tenant_id=%s",
-        job_id, request.tenant_id,
+        job_id, tenant_id,
     )
 
     return VerificationJobResponse(
         job_id=job_id,
-        tenant_id=request.tenant_id,
+        tenant_id=tenant_id,
         status="running",
         started_at=started_at,
     )
@@ -298,13 +300,15 @@ async def start_chain_verification(
 )
 async def get_verification_result(
     job_id: str,
-    _auth=Depends(_verify_api_key),
+    ctx: TenantContext = Depends(require_tenant_context),
 ):
     """Get the current status/result of a chain verification job."""
     with _verification_lock:
         job = _verification_jobs.get(job_id)
 
     if not job:
+        raise HTTPException(status_code=404, detail=f"Verification job '{job_id}' not found")
+    if job.get("tenant_id") != ctx.tenant_id:
         raise HTTPException(status_code=404, detail=f"Verification job '{job_id}' not found")
 
     return VerificationResultResponse(**job)

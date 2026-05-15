@@ -42,7 +42,9 @@ def client():
     """Router-only app; no-op auth dep so tests don't depend on a key."""
     app = FastAPI()
     app.include_router(router)
+    from services.ingestion.tests.tenant_context_overrides import install_tenant_context_override
     app.dependency_overrides[_verify_api_key] = lambda: None
+    install_tenant_context_override(app, default_tenant="tenant-sop-1")
     with TestClient(app) as c:
         yield c
 

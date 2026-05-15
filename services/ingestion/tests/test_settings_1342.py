@@ -37,6 +37,7 @@ from app.settings import (  # noqa: E402
     _default_settings,
     router,
 )
+from services.ingestion.tests.tenant_context_overrides import install_tenant_context_override  # noqa: E402
 
 
 # ---------------------------------------------------------------------------
@@ -61,6 +62,7 @@ def client(monkeypatch):
     # Bypass the API-key dependency — we test router logic, not auth.
     from app.webhook_compat import _verify_api_key
     app.dependency_overrides[_verify_api_key] = lambda: None
+    install_tenant_context_override(app)
     return TestClient(app)
 
 

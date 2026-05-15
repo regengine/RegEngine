@@ -64,7 +64,9 @@ def captured_payload() -> dict:
 def client(monkeypatch: pytest.MonkeyPatch, captured_payload: dict) -> TestClient:
     app = FastAPI()
     app.include_router(sensitech_router)
+    from services.ingestion.tests.tenant_context_overrides import install_tenant_context_override
     app.dependency_overrides[_verify_api_key] = lambda: None
+    install_tenant_context_override(app, default_tenant="tenant-sensitech-1")
 
     async def _fake_ingest_events(payload: Any, x_regengine_api_key: Any = None) -> IngestResponse:
         captured_payload["payload"] = payload

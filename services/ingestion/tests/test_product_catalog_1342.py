@@ -11,7 +11,7 @@ from types import SimpleNamespace
 from typing import Any, Optional
 
 import pytest
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -31,7 +31,8 @@ from app.product_catalog import (
     learn_from_event,
     router,
 )
-from app.webhook_compat import _verify_api_key
+from app.webhook_compat import _verify_api_key, require_tenant_context
+from shared.tenant_context import TenantContext
 
 
 # ---------------------------------------------------------------------------
@@ -103,7 +104,16 @@ class _FakeSession:
 def _build_app() -> FastAPI:
     app = FastAPI()
     app.include_router(router)
+
+    async def _tenant_ctx(request: Request) -> TenantContext:
+        return TenantContext(
+            tenant_id=request.path_params.get("tenant_id", "t1"),
+            principal_kind="test",
+            principal_id="product-catalog-test",
+        )
+
     app.dependency_overrides[_verify_api_key] = lambda: None
+    app.dependency_overrides[require_tenant_context] = _tenant_ctx
     return app
 
 

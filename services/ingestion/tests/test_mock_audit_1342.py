@@ -54,7 +54,9 @@ def _app() -> FastAPI:
     app = FastAPI()
     app.include_router(router)
     from app.webhook_compat import _verify_api_key
+    from services.ingestion.tests.tenant_context_overrides import install_tenant_context_override
     app.dependency_overrides[_verify_api_key] = lambda: None
+    install_tenant_context_override(app, default_tenant="t1")
     return app
 
 

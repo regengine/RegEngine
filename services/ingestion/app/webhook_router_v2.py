@@ -38,6 +38,7 @@ from .tenant_validation import validate_tenant_id
 from shared.funnel_events import emit_funnel_event
 from shared.idempotency import IdempotencyDependency
 from shared.tenant_rate_limiting import consume_tenant_rate_limit, rate_limit_reset_epoch
+from shared.tenant_context import resolve_tenant_context
 from .webhook_models import (
     ChainVerifyResponse,
     EventResult,
@@ -1261,12 +1262,9 @@ async def ingest_events(
     db_session=Depends(get_db_session),
 ) -> IngestResponse:
     """Process incoming webhook events with persistent storage."""
-    tenant_id = _resolve_ingest_tenant_id(
-        payload_tenant_id=payload.tenant_id,
-        principal=principal,
-        x_regengine_api_key=x_regengine_api_key,
-        x_tenant_id=x_tenant_id,
-    )
+    ctx = await resolve_tenant_context(request)
+    tenant_id = ctx.tenant_id
+    validate_tenant_id(tenant_id)
 
     # Rate limiting (tenant-scoped)
     _check_rate_limit(tenant_id, request=request)

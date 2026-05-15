@@ -14,7 +14,8 @@ from typing import Optional
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
-from .webhook_compat import _verify_api_key
+from .webhook_compat import require_tenant_context
+from shared.tenant_context import TenantContext
 from shared.tenant_settings import get_jsonb, set_jsonb
 
 logger = logging.getLogger("settings")
@@ -121,9 +122,10 @@ def _db_save_settings(tenant_id: str, settings: SettingsResponse) -> bool:
 )
 async def get_settings_endpoint(
     tenant_id: str,
-    _: None = Depends(_verify_api_key),
+    ctx: TenantContext = Depends(require_tenant_context),
 ) -> SettingsResponse:
     """Get all settings for a tenant."""
+    tenant_id = ctx.tenant_id
     # Try DB first
     settings = _db_get_settings(tenant_id)
     if settings:
@@ -143,9 +145,10 @@ async def get_settings_endpoint(
 async def update_profile(
     tenant_id: str,
     profile: CompanyProfile,
-    _: None = Depends(_verify_api_key),
+    ctx: TenantContext = Depends(require_tenant_context),
 ):
     """Update company profile."""
+    tenant_id = ctx.tenant_id
     # Get current settings
     settings = _db_get_settings(tenant_id)
     if settings is None:
@@ -173,9 +176,10 @@ async def update_profile(
 async def update_retention(
     tenant_id: str,
     retention: DataRetention,
-    _: None = Depends(_verify_api_key),
+    ctx: TenantContext = Depends(require_tenant_context),
 ):
     """Update data retention settings."""
+    tenant_id = ctx.tenant_id
     # Get current settings
     settings = _db_get_settings(tenant_id)
     if settings is None:

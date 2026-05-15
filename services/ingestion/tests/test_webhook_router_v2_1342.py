@@ -284,7 +284,7 @@ def _build_app() -> FastAPI:
     app.dependency_overrides[get_ingestion_principal] = lambda: IngestionPrincipal(
         key_id="test-key",
         scopes=["*"],
-        tenant_id=None,
+        tenant_id="tenant-a",
         auth_mode="test",
     )
     from app.subscription_gate import require_active_subscription
@@ -1278,8 +1278,8 @@ class TestIngestEndpoint:
         assert persistence.batch_calls
         assert session.committed is True
 
-    def test_tenant_resolved_from_api_key_lookup(self, monkeypatch):
-        """Payload without tenant_id falls back to the API-key → tenant lookup."""
+    def test_payload_without_tenant_uses_authenticated_principal(self, monkeypatch):
+        """Payload tenant_id is optional when the scoped principal carries tenant authority."""
         client, _session, persistence = _client(monkeypatch)
 
         def _api_key_lookup_session():
@@ -1308,8 +1308,7 @@ class TestIngestEndpoint:
             },
         )
         assert resp.status_code == 200
-        # Persistence was called with the tenant the key resolved to.
-        assert persistence.batch_calls[0]["tenant_id"] == "tenant-from-key"
+        assert persistence.batch_calls[0]["tenant_id"] == "tenant-a"
 
     def test_tenant_key_lookup_failure_falls_through(self, monkeypatch):
         """If the API-key lookup raises, we continue on to principal.tenant_id."""
@@ -1346,8 +1345,8 @@ class TestIngestEndpoint:
         assert resp.status_code == 200
         assert persistence.batch_calls[0]["tenant_id"] == "tenant-from-principal"
 
-    def test_tenant_resolved_from_x_tenant_id_header(self, monkeypatch):
-        """Payload without tenant_id can use the tenant header sent by live webhook clients."""
+    def test_matching_x_tenant_id_header_is_allowed_as_assertion(self, monkeypatch):
+        """X-Tenant-ID is only an assertion; it must match the principal tenant."""
         client, _session, persistence = _client(monkeypatch)
         payload = self._payload()
         payload.pop("tenant_id")
@@ -1357,15 +1356,21 @@ class TestIngestEndpoint:
             json=payload,
             headers={
                 "Idempotency-Key": "idem-header-tenant",
-                "X-Tenant-ID": "tenant-from-header",
+                "X-Tenant-ID": "tenant-a",
             },
         )
 
         assert resp.status_code == 200
-        assert persistence.batch_calls[0]["tenant_id"] == "tenant-from-header"
+        assert persistence.batch_calls[0]["tenant_id"] == "tenant-a"
 
-    def test_missing_tenant_returns_400(self, monkeypatch):
+    def test_principal_without_tenant_returns_401(self, monkeypatch):
         client, _session, _persistence = _client(monkeypatch)
+        client.app.dependency_overrides[get_ingestion_principal] = lambda: IngestionPrincipal(
+            key_id="test-key",
+            scopes=["*"],
+            tenant_id=None,
+            auth_mode="test",
+        )
         payload = self._payload()
         payload.pop("tenant_id")
 
@@ -1374,8 +1379,8 @@ class TestIngestEndpoint:
             json=payload,
             headers={"Idempotency-Key": "idem-4"},
         )
-        assert resp.status_code == 400
-        assert "Tenant context required" in resp.json()["detail"]
+        assert resp.status_code == 401
+        assert resp.json()["detail"]["code"] == "E_NO_TENANT"
 
     def test_db_session_none_returns_503(self, monkeypatch):
         """FastAPI yields ``None`` for db_session when DB is down → 503."""
@@ -1780,7 +1785,7 @@ class TestRecentEventsEndpoint:
         client = TestClient(app)
         resp = client.get(
             "/api/v1/webhooks/recent",
-            params={"tenant_id": "00000000-0000-0000-0000-000000000111", "limit": 5},
+            params={"tenant_id": "tenant-a", "limit": 5},
         )
         assert resp.status_code == 200
         body = resp.json()
@@ -1803,7 +1808,7 @@ class TestRecentEventsEndpoint:
         client = TestClient(app)
         resp = client.get(
             "/api/v1/webhooks/recent",
-            params={"tenant_id": "00000000-0000-0000-0000-000000000111"},
+            params={"tenant_id": "tenant-a"},
         )
         assert resp.status_code == 200
         body = resp.json()
@@ -1825,7 +1830,7 @@ class TestChainVerifyEndpoint:
         client = TestClient(app)
         resp = client.get(
             "/api/v1/webhooks/chain/verify",
-            params={"tenant_id": "00000000-0000-0000-0000-000000000111"},
+            params={"tenant_id": "tenant-a"},
         )
         assert resp.status_code == 200
         body = resp.json()
@@ -1854,6 +1859,6 @@ class TestChainVerifyEndpoint:
         client = TestClient(app)
         resp = client.get(
             "/api/v1/webhooks/chain/verify",
-            params={"tenant_id": "00000000-0000-0000-0000-000000000111"},
+            params={"tenant_id": "tenant-a"},
         )
         assert resp.status_code == 500

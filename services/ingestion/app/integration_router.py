@@ -17,17 +17,18 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Literal, Optional
 
-from fastapi import APIRouter, Depends, File, Header, HTTPException, Query, Request, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 
-from .webhook_compat import _verify_api_key
+from .webhook_compat import require_tenant_context
 from .shared.upload_limits import (
     MAX_CSV_FILE_SIZE_BYTES,
     read_upload_with_limit,
     sanitize_upload_filename,
 )
 from shared.database import get_db_safe
+from shared.tenant_context import TenantContext
 
 logger = logging.getLogger("integration-router")
 
@@ -331,9 +332,10 @@ def _apply_profile_mapping(event: Dict[str, Any], profile: IntegrationProfile) -
 )
 async def list_integration_profiles(
     tenant_id: str,
-    _: None = Depends(_verify_api_key),
+    ctx: TenantContext = Depends(require_tenant_context),
 ):
     """List saved supplier/source mapping profiles for a tenant."""
+    tenant_id = ctx.tenant_id
     profiles = _db_list_profiles(tenant_id)
     if profiles is None:
         profiles = _memory_list_profiles(tenant_id)
@@ -348,9 +350,10 @@ async def list_integration_profiles(
 async def create_integration_profile(
     tenant_id: str,
     request: CreateIntegrationProfileRequest,
-    _: None = Depends(_verify_api_key),
+    ctx: TenantContext = Depends(require_tenant_context),
 ) -> IntegrationProfile:
     """Create a reusable field mapping profile for supplier onboarding."""
+    tenant_id = ctx.tenant_id
     now = _now_iso()
     profile = IntegrationProfile(
         profile_id=f"prof_{uuid.uuid4().hex[:12]}",
@@ -370,9 +373,10 @@ async def create_integration_profile(
 async def get_integration_profile(
     tenant_id: str,
     profile_id: str,
-    _: None = Depends(_verify_api_key),
+    ctx: TenantContext = Depends(require_tenant_context),
 ) -> IntegrationProfile:
     """Fetch one saved profile."""
+    tenant_id = ctx.tenant_id
     return _get_profile_or_404(tenant_id, profile_id)
 
 
@@ -385,9 +389,10 @@ async def update_integration_profile(
     tenant_id: str,
     profile_id: str,
     request: UpdateIntegrationProfileRequest,
-    _: None = Depends(_verify_api_key),
+    ctx: TenantContext = Depends(require_tenant_context),
 ) -> IntegrationProfile:
     """Patch a saved supplier/source mapping profile."""
+    tenant_id = ctx.tenant_id
     profile = _get_profile_or_404(tenant_id, profile_id)
     updates = request.model_dump(exclude_unset=True)
     profile = profile.model_copy(update={**updates, "updated_at": _now_iso()})
@@ -403,9 +408,10 @@ async def preview_integration_profile_mapping(
     tenant_id: str,
     profile_id: str,
     request: MappingPreviewRequest,
-    _: None = Depends(_verify_api_key),
+    ctx: TenantContext = Depends(require_tenant_context),
 ) -> MappingPreviewResponse:
     """Apply a saved profile to sample events without committing records."""
+    tenant_id = ctx.tenant_id
     profile = _get_profile_or_404(tenant_id, profile_id)
     mapped_events: list[Dict[str, Any]] = []
     missing_fields: Dict[str, List[str]] = {}
@@ -427,7 +433,7 @@ async def preview_integration_profile_mapping(
 @router.get(
     "/available",
     summary="List all available integrations",
-    dependencies=[Depends(_verify_api_key)],
+    dependencies=[Depends(require_tenant_context)],
 )
 async def list_available_integrations():
     """List all registered integration connectors with their metadata."""
@@ -441,9 +447,10 @@ async def list_available_integrations():
 )
 async def get_integration_statuses(
     tenant_id: str,
-    _: None = Depends(_verify_api_key),
+    ctx: TenantContext = Depends(require_tenant_context),
 ):
     """Get connection status of all integrations for a tenant."""
+    tenant_id = ctx.tenant_id
     from shared.external_connectors.registry import get_all_integration_statuses
     return {"integrations": get_all_integration_statuses(tenant_id)}
 
@@ -455,7 +462,7 @@ async def get_integration_statuses(
 async def configure_connector(
     tenant_id: str,
     config_req: ConnectorConfigRequest,
-    _: None = Depends(_verify_api_key),
+    ctx: TenantContext = Depends(require_tenant_context),
 ):
     """Set up credentials for an integration connector.
 
@@ -469,6 +476,7 @@ async def configure_connector(
         resolve_connector_id,
     )
 
+    tenant_id = ctx.tenant_id
     connector_id = resolve_connector_id(config_req.connector_id)
     cls = get_connector_class(connector_id)
     if cls is None:
@@ -522,7 +530,7 @@ async def configure_connector(
 async def test_connection(
     tenant_id: str,
     connector_id: str,
-    _: None = Depends(_verify_api_key),
+    ctx: TenantContext = Depends(require_tenant_context),
 ):
     """Test that a configured connector can reach its external system."""
     from shared.external_connectors.registry import (
@@ -530,6 +538,7 @@ async def test_connection(
         resolve_connector_id,
     )
 
+    tenant_id = ctx.tenant_id
     connectors = get_tenant_connectors(tenant_id)
     connector_id = resolve_connector_id(connector_id)
     connector = connectors.get(connector_id)
@@ -554,7 +563,7 @@ async def test_connection(
 async def trigger_sync(
     tenant_id: str,
     sync_req: SyncRequest,
-    _: None = Depends(_verify_api_key),
+    ctx: TenantContext = Depends(require_tenant_context),
 ):
     """Manually trigger a sync for a configured connector.
 
@@ -566,6 +575,7 @@ async def trigger_sync(
         resolve_connector_id,
     )
 
+    tenant_id = ctx.tenant_id
     connectors = get_tenant_connectors(tenant_id)
     connector_id = resolve_connector_id(sync_req.connector_id)
     connector = connectors.get(connector_id)
@@ -601,7 +611,7 @@ async def upload_csv(
     file: UploadFile = File(...),
     source_system: str = Query(default="csv_upload", description="Source ERP system name"),
     default_cte_type: str = Query(default="receiving", description="Default CTE type for rows"),
-    _: None = Depends(_verify_api_key),
+    ctx: TenantContext = Depends(require_tenant_context),
 ):
     """Upload a CSV file and import rows as CTE events.
 
@@ -612,6 +622,7 @@ async def upload_csv(
     from shared.external_connectors.base import ConnectorConfig
     from shared.external_connectors.csv_sftp import CSVSFTPConnector
 
+    tenant_id = ctx.tenant_id
     safe_filename = sanitize_upload_filename(file.filename, fallback="upload.csv")
     content = await read_upload_with_limit(
         file,
@@ -711,13 +722,14 @@ async def receive_webhook(
 async def disconnect_connector(
     tenant_id: str,
     connector_id: str,
-    _: None = Depends(_verify_api_key),
+    ctx: TenantContext = Depends(require_tenant_context),
 ):
     """Remove a configured connector for a tenant."""
     from shared.external_connectors.registry import (
         remove_connector,
         resolve_connector_id,
     )
+    tenant_id = ctx.tenant_id
     connector_id = resolve_connector_id(connector_id)
     remove_connector(tenant_id, connector_id)
     return {"disconnected": True, "connector_id": connector_id}

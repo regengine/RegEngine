@@ -13,7 +13,8 @@ from typing import Optional
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
-from .webhook_compat import _verify_api_key
+from .webhook_compat import require_tenant_context
+from shared.tenant_context import TenantContext
 from shared.tenant_settings import get_jsonb, set_jsonb
 
 logger = logging.getLogger("notification-prefs")
@@ -123,9 +124,10 @@ def _db_save_preferences(tenant_id: str, prefs: NotificationPreferences) -> bool
 )
 async def get_preferences(
     tenant_id: str,
-    _: None = Depends(_verify_api_key),
+    ctx: TenantContext = Depends(require_tenant_context),
 ) -> NotificationPreferences:
     """Get notification preferences for a tenant."""
+    tenant_id = ctx.tenant_id
     # Try DB first
     prefs = _db_get_preferences(tenant_id)
     if prefs:
@@ -146,9 +148,10 @@ async def get_preferences(
 async def update_preferences(
     tenant_id: str,
     prefs: NotificationPreferences,
-    _: None = Depends(_verify_api_key),
+    ctx: TenantContext = Depends(require_tenant_context),
 ) -> NotificationPreferences:
     """Update notification preferences for a tenant."""
+    tenant_id = ctx.tenant_id
     prefs.tenant_id = tenant_id
 
     # Try DB first, fall back to memory
@@ -172,9 +175,10 @@ async def toggle_channel(
     tenant_id: str,
     channel: str,
     enabled: bool = True,
-    _: None = Depends(_verify_api_key),
+    ctx: TenantContext = Depends(require_tenant_context),
 ):
     """Enable or disable a notification channel."""
+    tenant_id = ctx.tenant_id
     # Get current preferences
     prefs = _db_get_preferences(tenant_id)
     if prefs is None:
@@ -207,9 +211,10 @@ async def toggle_alert_rule(
     tenant_id: str,
     rule_id: str,
     enabled: bool = True,
-    _: None = Depends(_verify_api_key),
+    ctx: TenantContext = Depends(require_tenant_context),
 ):
     """Enable or disable an alert rule notification."""
+    tenant_id = ctx.tenant_id
     # Get current preferences
     prefs = _db_get_preferences(tenant_id)
     if prefs is None:

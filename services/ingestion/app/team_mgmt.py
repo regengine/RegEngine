@@ -16,8 +16,9 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 
-from .webhook_compat import _verify_api_key
+from .webhook_compat import require_tenant_context
 from shared.database import get_db_safe
+from shared.tenant_context import TenantContext
 
 logger = logging.getLogger("team")
 
@@ -163,9 +164,10 @@ def _db_add_team_member(tenant_id: str, member: TeamMember) -> bool:
 )
 async def get_team(
     tenant_id: str,
-    _: None = Depends(_verify_api_key),
+    ctx: TenantContext = Depends(require_tenant_context),
 ) -> TeamResponse:
     """Get team members for a tenant."""
+    tenant_id = ctx.tenant_id
     # Try DB first
     members = _db_get_team(tenant_id)
     if members is None:
@@ -196,9 +198,10 @@ async def get_team(
 async def invite_member(
     tenant_id: str,
     request: InviteRequest,
-    _: None = Depends(_verify_api_key),
+    ctx: TenantContext = Depends(require_tenant_context),
 ):
     """Invite a new team member."""
+    tenant_id = ctx.tenant_id
     # Get current count from DB or memory
     members = _db_get_team(tenant_id)
     if members is None:
@@ -235,9 +238,10 @@ async def update_role(
     tenant_id: str,
     member_id: str,
     role: str,
-    _: None = Depends(_verify_api_key),
+    ctx: TenantContext = Depends(require_tenant_context),
 ):
     """Update a team member's role."""
+    tenant_id = ctx.tenant_id
     # Try DB first
     members = _db_get_team(tenant_id)
     if members is None:

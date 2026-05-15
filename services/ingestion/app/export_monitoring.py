@@ -20,7 +20,8 @@ from typing import Any, Dict, List, Literal, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
-from .webhook_compat import _verify_api_key
+from .webhook_compat import require_tenant_context
+from shared.tenant_context import TenantContext
 
 logger = logging.getLogger("export-monitoring")
 
@@ -282,9 +283,10 @@ def _check_kde_completeness(tenant_id: str) -> HealthCheckResult:
 @router.get("/exports/{tenant_id}", summary="Export metrics dashboard")
 async def export_metrics(
     tenant_id: str,
-    _auth: None = Depends(_verify_api_key),
+    ctx: TenantContext = Depends(require_tenant_context),
 ):
     """Return aggregated export metrics for a tenant."""
+    tenant_id = ctx.tenant_id
     logs = _query_export_logs(tenant_id)
 
     if logs is None:
@@ -329,9 +331,10 @@ async def export_metrics(
 @router.get("/health/{tenant_id}", summary="Export pipeline health check")
 async def health_check(
     tenant_id: str,
-    _auth: None = Depends(_verify_api_key),
+    ctx: TenantContext = Depends(require_tenant_context),
 ):
     """Run health checks on the export pipeline for a tenant."""
+    tenant_id = ctx.tenant_id
     checks = [
         _check_db_connectivity(),
         _check_chain_integrity(tenant_id),
@@ -359,9 +362,10 @@ async def health_check(
 @router.get("/alerts/{tenant_id}", summary="Active monitoring alerts")
 async def monitoring_alerts(
     tenant_id: str,
-    _auth: None = Depends(_verify_api_key),
+    ctx: TenantContext = Depends(require_tenant_context),
 ):
     """Generate monitoring alerts based on current health checks."""
+    tenant_id = ctx.tenant_id
     alerts: List[MonitoringAlert] = []
     now_iso = datetime.now(timezone.utc).isoformat()
 

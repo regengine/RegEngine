@@ -30,7 +30,8 @@ from .webhook_models import (
     WebhookPayload,
 )
 from .shared.upload_limits import read_upload_with_limit, MAX_CSV_FILE_SIZE_BYTES
-from .webhook_compat import _verify_api_key, ingest_events
+from .webhook_compat import ingest_events, require_tenant_context
+from shared.tenant_context import TenantContext
 
 logger = logging.getLogger("sensitech-parser")
 
@@ -218,7 +219,7 @@ async def import_sensitech(
     location_name: str = Form(..., description="Facility name where logger was deployed"),
     location_gln: Optional[str] = Form(None, description="Facility GLN (optional)"),
     cold_threshold: float = Form(5.0, description="Max temperature threshold (°C)"),
-    _: None = Depends(_verify_api_key),
+    ctx: TenantContext = Depends(require_tenant_context),
     x_regengine_api_key: Optional[str] = Header(default=None, alias="X-RegEngine-API-Key"),
 ) -> SensitechImportResponse:
     """Import Sensitech temperature data and create CTE events."""
@@ -287,7 +288,7 @@ async def import_sensitech(
     ]
 
     # Ingest via webhook pipeline
-    payload = WebhookPayload(source="sensitech", events=events)
+    payload = WebhookPayload(source="sensitech", events=events, tenant_id=ctx.tenant_id)
     ingestion_result = await ingest_events(
         payload,
         x_regengine_api_key=x_regengine_api_key,

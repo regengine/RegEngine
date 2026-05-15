@@ -21,7 +21,8 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 
-from .webhook_compat import _verify_api_key
+from .webhook_compat import require_tenant_context
+from shared.tenant_context import TenantContext
 from shared.tenant_settings import get_jsonb, set_jsonb
 
 logger = logging.getLogger("onboarding")
@@ -155,9 +156,10 @@ async def get_steps():
 )
 async def get_progress(
     tenant_id: str,
-    _: None = Depends(_verify_api_key),
+    ctx: TenantContext = Depends(require_tenant_context),
 ) -> OnboardingProgress:
     """Get current onboarding progress for a tenant."""
+    tenant_id = ctx.tenant_id
     # Try DB first
     state = _db_get_onboarding(tenant_id)
     if state is not None:
@@ -204,9 +206,10 @@ async def get_progress(
 async def complete_step(
     tenant_id: str,
     step_id: str,
-    _: None = Depends(_verify_api_key),
+    ctx: TenantContext = Depends(require_tenant_context),
 ):
     """Mark an onboarding step as complete."""
+    tenant_id = ctx.tenant_id
     now = datetime.now(timezone.utc)
 
     # Try DB first

@@ -18,8 +18,9 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from sqlalchemy.exc import SQLAlchemyError
 
-from .webhook_compat import _verify_api_key
+from .webhook_compat import require_tenant_context
 from shared.database import get_db_safe
+from shared.tenant_context import TenantContext
 
 logger = logging.getLogger("disaster-recovery")
 
@@ -390,9 +391,10 @@ def _overall_status(checks: list[DRCheck]) -> str:
 )
 async def dr_readiness(
     tenant_id: str,
-    _: None = Depends(_verify_api_key),
+    ctx: TenantContext = Depends(require_tenant_context),
 ) -> DRReport:
     """Run a full disaster-recovery readiness assessment for a tenant."""
+    tenant_id = ctx.tenant_id
     checks: list[DRCheck] = []
 
     checks.append(_check_db_connectivity())
@@ -428,9 +430,10 @@ async def dr_readiness(
 )
 async def backup_status(
     tenant_id: str,
-    _: None = Depends(_verify_api_key),
+    ctx: TenantContext = Depends(require_tenant_context),
 ):
     """Check backup and replication health for tenant data."""
+    tenant_id = ctx.tenant_id
     now = datetime.now(timezone.utc)
     db_check = _check_db_connectivity()
     export_check = _check_export_completeness(tenant_id)
@@ -458,9 +461,10 @@ async def backup_status(
 )
 async def test_recovery(
     tenant_id: str,
-    _: None = Depends(_verify_api_key),
+    ctx: TenantContext = Depends(require_tenant_context),
 ) -> DRReport:
     """Simulate a disaster-recovery scenario and estimate recovery time."""
+    tenant_id = ctx.tenant_id
     now_str = datetime.now(timezone.utc).isoformat()
     checks: list[DRCheck] = []
 

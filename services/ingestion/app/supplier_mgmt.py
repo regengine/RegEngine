@@ -17,8 +17,9 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 
-from .webhook_compat import _verify_api_key
+from .webhook_compat import require_tenant_context
 from shared.database import get_db_safe
+from shared.tenant_context import TenantContext
 
 logger = logging.getLogger("supplier-mgmt")
 
@@ -150,9 +151,10 @@ def _db_add_supplier(tenant_id: str, supplier: SupplierRecord) -> bool:
 )
 async def get_supplier_dashboard(
     tenant_id: str,
-    _: None = Depends(_verify_api_key),
+    ctx: TenantContext = Depends(require_tenant_context),
 ) -> SupplierDashboard:
     """Get supplier dashboard with compliance overview."""
+    tenant_id = ctx.tenant_id
     # Try DB first
     suppliers = _db_get_suppliers(tenant_id)
     
@@ -185,9 +187,10 @@ async def get_supplier_dashboard(
 async def add_supplier(
     tenant_id: str,
     request: CreateSupplierRequest,
-    _: None = Depends(_verify_api_key),
+    ctx: TenantContext = Depends(require_tenant_context),
 ):
     """Add a new supplier to the management dashboard."""
+    tenant_id = ctx.tenant_id
     # Get current count from DB or memory
     suppliers = _db_get_suppliers(tenant_id)
     if suppliers is None:
@@ -223,9 +226,10 @@ async def add_supplier(
 async def send_portal_link(
     tenant_id: str,
     supplier_id: str,
-    _: None = Depends(_verify_api_key),
+    ctx: TenantContext = Depends(require_tenant_context),
 ):
     """Generate and send a portal link to a supplier."""
+    tenant_id = ctx.tenant_id
     # Try DB first
     suppliers = _db_get_suppliers(tenant_id)
     if suppliers is None:
@@ -263,9 +267,10 @@ async def send_portal_link(
 )
 async def supplier_health(
     tenant_id: str,
-    _: None = Depends(_verify_api_key),
+    ctx: TenantContext = Depends(require_tenant_context),
 ):
     """Get supplier network health metrics."""
+    tenant_id = ctx.tenant_id
     # Try DB first
     suppliers = _db_get_suppliers(tenant_id)
     if suppliers is None:

@@ -9,7 +9,7 @@ from datetime import datetime, timezone, timedelta
 from unittest.mock import MagicMock
 
 import pytest
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
 
 from app import supplier_mgmt as sm
@@ -22,7 +22,8 @@ from app.supplier_mgmt import (
     _suppliers_store,
     router,
 )
-from app.webhook_compat import _verify_api_key
+from app.webhook_compat import _verify_api_key, require_tenant_context
+from shared.tenant_context import TenantContext
 
 
 # ---------------------------------------------------------------------------
@@ -41,7 +42,16 @@ def _reset_store():
 def app():
     app = FastAPI()
     app.include_router(router)
+
+    async def _tenant_ctx(request: Request) -> TenantContext:
+        return TenantContext(
+            tenant_id=request.path_params.get("tenant_id", "t1"),
+            principal_kind="test",
+            principal_id="supplier-mgmt-test",
+        )
+
     app.dependency_overrides[_verify_api_key] = lambda: None
+    app.dependency_overrides[require_tenant_context] = _tenant_ctx
     return app
 
 

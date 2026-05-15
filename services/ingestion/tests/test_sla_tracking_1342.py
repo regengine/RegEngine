@@ -43,6 +43,7 @@ from app.sla_tracking import (
     router,
 )
 from app.webhook_compat import _verify_api_key
+from services.ingestion.tests.tenant_context_overrides import install_tenant_context_override
 
 
 # ===========================================================================
@@ -66,6 +67,7 @@ def client(monkeypatch):
     app = FastAPI()
     app.include_router(router)
     app.dependency_overrides[_verify_api_key] = lambda: None
+    install_tenant_context_override(app, default_tenant="tenant-1")
 
     # Keep DB wrappers as no-ops: persist does nothing, load reports
     # DB unavailable so endpoints fall back to the in-memory store.
@@ -95,7 +97,7 @@ class TestFDARequestProperties:
 
     def test_time_remaining_is_none_for_completed(self):
         req = FDARequest(
-            tenant_id="t",
+            tenant_id="tenant-1",
             status="completed",
             completed_at=datetime.now(timezone.utc),
         )
@@ -104,7 +106,7 @@ class TestFDARequestProperties:
     def test_time_remaining_counts_down_to_deadline(self):
         now = datetime.now(timezone.utc)
         req = FDARequest(
-            tenant_id="t",
+            tenant_id="tenant-1",
             deadline_at=now + timedelta(hours=10),
         )
         remaining = req.time_remaining
@@ -614,7 +616,7 @@ class TestCompleteEndpoint:
     def test_completion_past_deadline_sets_met_sla_false(self, client):
         """Inject an overdue request directly to sidestep the 24h window."""
         past = FDARequest(
-            tenant_id="t",
+            tenant_id="tenant-1",
             status="open",
             requested_at=datetime.now(timezone.utc) - timedelta(hours=30),
             deadline_at=datetime.now(timezone.utc) - timedelta(hours=6),
@@ -753,10 +755,10 @@ class TestAlertsEndpoint:
 
     def test_stored_completion_alert_included(self, client):
         created = client.post(
-            "/api/v1/sla/requests", json=_mk_req(tenant_id="A")
+            "/api/v1/sla/requests", json=_mk_req(tenant_id="tenant-1")
         ).json()["request"]
         client.patch(f"/api/v1/sla/requests/{created['id']}/complete")
-        resp = client.get("/api/v1/sla/alerts/A")
+        resp = client.get("/api/v1/sla/alerts/tenant-1")
         assert any(
             a["alert_type"] == "completed"
             for a in resp.json()["alerts"]

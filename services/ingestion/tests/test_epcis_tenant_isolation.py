@@ -1,9 +1,9 @@
 """Tenant-isolation regression tests for the EPCIS router (issue #1146).
 
 These tests verify that the EPCIS endpoints:
-1. Reject any request that supplies ``tenant_id`` as a query parameter
-   (HTTP 403).
-2. Derive the tenant exclusively from ``X-Tenant-ID`` / API-key lookup.
+1. Reject query/header tenant claims that conflict with the authenticated
+   tenant context (HTTP 409).
+2. Derive the tenant exclusively from the authenticated tenant context.
 
 Prior to the #1146 fix, ``?tenant_id=<other>`` would override the authenticated
 tenant and allow cross-tenant reads/writes.
@@ -27,10 +27,12 @@ def client():
     """
     from app.epcis.router import router
     from app.webhook_compat import _verify_api_key
+    from services.ingestion.tests.tenant_context_overrides import install_tenant_context_override
 
     app = FastAPI()
     app.include_router(router)
     app.dependency_overrides[_verify_api_key] = lambda: None
+    install_tenant_context_override(app, default_tenant="attacker-tenant", enforce_claims=True)
     return TestClient(app)
 
 
@@ -51,15 +53,15 @@ def _sample_event() -> dict:
 
 
 def test_ingest_event_rejects_tenant_query_override(client):
-    """POST /events?tenant_id=victim must return 403 and not ingest."""
+    """POST /events?tenant_id=victim must return 409 and not ingest."""
     resp = client.post(
         "/api/v1/epcis/events",
         params={"tenant_id": "victim-tenant"},
         headers={"X-Tenant-ID": "attacker-tenant"},
         json=_sample_event(),
     )
-    assert resp.status_code == 403
-    assert "tenant_id query parameter" in resp.json()["detail"]
+    assert resp.status_code == 409
+    assert resp.json()["detail"]["code"] == "E_TENANT_MISMATCH"
 
 
 def test_batch_ingest_rejects_tenant_query_override(client):
@@ -69,7 +71,7 @@ def test_batch_ingest_rejects_tenant_query_override(client):
         headers={"X-Tenant-ID": "attacker-tenant"},
         json={"events": [_sample_event()]},
     )
-    assert resp.status_code == 403
+    assert resp.status_code == 409
 
 
 def test_get_event_rejects_tenant_query_override(client):
@@ -78,7 +80,7 @@ def test_get_event_rejects_tenant_query_override(client):
         params={"tenant_id": "victim-tenant"},
         headers={"X-Tenant-ID": "attacker-tenant"},
     )
-    assert resp.status_code == 403
+    assert resp.status_code == 409
 
 
 def test_export_rejects_tenant_query_override(client):
@@ -87,7 +89,7 @@ def test_export_rejects_tenant_query_override(client):
         params={"tenant_id": "victim-tenant"},
         headers={"X-Tenant-ID": "attacker-tenant"},
     )
-    assert resp.status_code == 403
+    assert resp.status_code == 409
 
 
 def test_xml_ingest_rejects_tenant_query_override(client):
@@ -97,7 +99,7 @@ def test_xml_ingest_rejects_tenant_query_override(client):
         headers={"X-Tenant-ID": "attacker-tenant", "Content-Type": "application/xml"},
         content=b"<?xml version=\"1.0\"?><EPCISDocument/>",
     )
-    assert resp.status_code == 403
+    assert resp.status_code == 409
 
 
 # ---------------------------------------------------------------------------

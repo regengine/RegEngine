@@ -20,9 +20,10 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from pydantic import BaseModel, Field
 from sqlalchemy.exc import SQLAlchemyError
 
-from .webhook_compat import _verify_api_key
+from .webhook_compat import require_tenant_context
 from shared.database import get_db_safe
 from shared.pagination import PaginationParams
+from shared.tenant_context import TenantContext
 
 logger = logging.getLogger("product-catalog")
 
@@ -499,9 +500,10 @@ async def get_catalog(
     tenant_id: str,
     category: str | None = None,
     pagination: PaginationParams = Depends(),
-    _: None = Depends(_verify_api_key),
+    ctx: TenantContext = Depends(require_tenant_context),
 ) -> ProductCatalogResponse:
     """Get product catalog for a tenant. Uses Supabase, falls back to memory."""
+    tenant_id = ctx.tenant_id
     # Try Supabase first
     products = _db_get_catalog(tenant_id, category)
     if products is not None:
@@ -544,9 +546,10 @@ async def get_catalog(
 async def add_product(
     tenant_id: str,
     request: CreateProductRequest,
-    _: None = Depends(_verify_api_key),
+    ctx: TenantContext = Depends(require_tenant_context),
 ):
     """Add a product to the catalog."""
+    tenant_id = ctx.tenant_id
     now = datetime.now(timezone.utc)
     is_ftl = request.category in FTL_CATEGORIES
 
@@ -581,9 +584,10 @@ async def add_product(
 async def lookup_by_gtin(
     tenant_id: str,
     gtin: str = Query(..., description="GTIN to look up"),
-    _: None = Depends(_verify_api_key),
+    ctx: TenantContext = Depends(require_tenant_context),
 ):
     """Look up a single product by GTIN for scanner auto-fill."""
+    tenant_id = ctx.tenant_id
     # Try Supabase
     product = _db_lookup_by_gtin(tenant_id, gtin)
     if product:
@@ -613,9 +617,10 @@ async def get_ftl_categories():
 async def get_product(
     tenant_id: str,
     product_id: str,
-    _: None = Depends(_verify_api_key),
+    ctx: TenantContext = Depends(require_tenant_context),
 ):
     """Get one product from the catalog."""
+    tenant_id = ctx.tenant_id
     product = _db_get_product(tenant_id, product_id) or _memory_get_product(tenant_id, product_id)
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
@@ -630,9 +635,10 @@ async def update_product(
     tenant_id: str,
     product_id: str,
     request: UpdateProductRequest,
-    _: None = Depends(_verify_api_key),
+    ctx: TenantContext = Depends(require_tenant_context),
 ):
     """Update one product in the catalog."""
+    tenant_id = ctx.tenant_id
     now = datetime.now(timezone.utc)
     is_ftl = request.category in FTL_CATEGORIES
     existing = _db_get_product(tenant_id, product_id) or _memory_get_product(tenant_id, product_id)
@@ -668,9 +674,10 @@ async def update_product(
 async def delete_product(
     tenant_id: str,
     product_id: str,
-    _: None = Depends(_verify_api_key),
+    ctx: TenantContext = Depends(require_tenant_context),
 ):
     """Delete one product from the catalog."""
+    tenant_id = ctx.tenant_id
     if _db_delete_product(tenant_id, product_id) or _memory_delete_product(tenant_id, product_id):
         return Response(status_code=204)
     raise HTTPException(status_code=404, detail="Product not found")

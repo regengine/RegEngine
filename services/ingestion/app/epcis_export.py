@@ -19,8 +19,9 @@ from pydantic import BaseModel, Field
 from sqlalchemy import text
 
 from .disclaimers import SAMPLE_EXPORT_DISCLAIMER
-from .webhook_compat import _verify_api_key
+from .webhook_compat import require_tenant_context
 from shared.database import get_db_safe
+from shared.tenant_context import TenantContext
 
 logger = logging.getLogger("epcis-export")
 
@@ -215,12 +216,13 @@ SAMPLE_EPCIS_EVENTS = [
 async def export_epcis(
     request: ExportRequest,
     validate: bool = Query(False, description="Run GS1 EPCIS 2.0 structural validation on the output"),
-    _: None = Depends(_verify_api_key),
+    ctx: TenantContext = Depends(require_tenant_context),
 ):
     """Export traceability data in EPCIS 2.0 JSON-LD format."""
     now = datetime.now(timezone.utc)
+    tenant_id = ctx.tenant_id
 
-    rows = _query_tenant_events(request.tenant_id, request.lot_code, request.date_from, request.date_to)
+    rows = _query_tenant_events(tenant_id, request.lot_code, request.date_from, request.date_to)
     data_source = "tenant" if rows else "sample"
 
     if rows:
@@ -252,7 +254,7 @@ async def export_epcis(
             "https://ref.gs1.org/standards/epcis/2.0.0/epcis-context.jsonld",
             {"regengine": "https://regengine.co/ns/"}
         ],
-        "id": f"urn:uuid:regengine-export-{request.tenant_id}-{now.strftime('%Y%m%d')}",
+        "id": f"urn:uuid:regengine-export-{tenant_id}-{now.strftime('%Y%m%d')}",
         "type": "EPCISDocument",
         "schemaVersion": "2.0",
         "creationDate": now.isoformat(),
@@ -260,7 +262,7 @@ async def export_epcis(
             "eventList": event_list,
         },
         "regengine:exportMetadata": {
-            "tenantId": request.tenant_id,
+            "tenantId": tenant_id,
             "exportFormat": "EPCIS_2.0_JSON-LD",
             "generatedAt": now.isoformat(),
             "eventsCount": len(event_list),
@@ -279,8 +281,18 @@ async def export_epcis(
             "checkedAt": now.isoformat(),
         }
 
+    from shared.fda_export import safe_filename
     response_headers = {
-        "Content-Disposition": f'attachment; filename="regengine_epcis_{request.tenant_id}_{now.strftime("%Y%m%d")}.json"',
+        "Content-Disposition": (
+            'attachment; filename="'
+            + safe_filename(
+                "regengine_epcis",
+                scope=tenant_id,
+                timestamp=now.strftime("%Y%m%d"),
+                extension="json",
+            )
+            + '"'
+        ),
         "X-RegEngine-Events-Count": str(len(event_list)),
         "X-RegEngine-Integrity-Verified": "true" if data_source == "tenant" else "false",
         "X-RegEngine-Data-Source": data_source,
@@ -304,12 +316,13 @@ async def export_epcis(
 )
 async def export_fda(
     request: ExportRequest,
-    _: None = Depends(_verify_api_key),
+    ctx: TenantContext = Depends(require_tenant_context),
 ):
     """Export traceability data in FDA-compliant sortable spreadsheet format."""
     now = datetime.now(timezone.utc)
+    tenant_id = ctx.tenant_id
 
-    rows = _query_tenant_events(request.tenant_id, request.lot_code, request.date_from, request.date_to)
+    rows = _query_tenant_events(tenant_id, request.lot_code, request.date_from, request.date_to)
     data_source = "tenant" if rows else "sample"
 
     if rows:
@@ -350,15 +363,14 @@ TRANSFORMATION,SALAD-0226-001,Garden Salad Mix 16oz,1000,bags,2026-02-28,10:00:0
         event_count = 6
 
     # EPIC-L (#1655): route filename through the shared safe_filename
-    # builder so tenant_id (user-influenced) can't carry CRLF / quotes
-    # into the Content-Disposition header value.
+    # builder so tenant_id can't carry CRLF / quotes into the header value.
     from shared.fda_export import safe_filename
     fda_headers: dict[str, str] = {
         "Content-Disposition": (
             'attachment; filename="'
             + safe_filename(
                 "regengine_fda_export",
-                scope=request.tenant_id,
+                scope=tenant_id,
                 timestamp=now.strftime("%Y%m%d"),
             )
             + '"'
@@ -380,7 +392,7 @@ TRANSFORMATION,SALAD-0226-001,Garden Salad Mix 16oz,1000,bags,2026-02-28,10:00:0
 @router.get(
     "/formats",
     summary="List available export formats",
-    dependencies=[Depends(_verify_api_key)],
+    dependencies=[Depends(require_tenant_context)],
 )
 async def list_export_formats():
     """List available export formats and their descriptions."""

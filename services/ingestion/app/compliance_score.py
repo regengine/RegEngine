@@ -23,8 +23,9 @@ from sqlalchemy import text
 from sqlalchemy.exc import OperationalError, ProgrammingError
 
 from .config import get_settings
-from .webhook_compat import _verify_api_key
+from .webhook_compat import require_tenant_context
 from .tenant_validation import validate_tenant_id
+from shared.tenant_context import TenantContext
 
 logger = logging.getLogger("compliance-score")
 
@@ -582,9 +583,10 @@ def _build_next_actions(scores: dict, data: dict) -> list[NextAction]:
 )
 async def get_compliance_score(
     tenant_id: str,
-    _: None = Depends(_verify_api_key),
+    ctx: TenantContext = Depends(require_tenant_context),
 ) -> ComplianceScoreResponse:
     """Compute and return compliance score for a tenant."""
+    tenant_id = ctx.tenant_id
     validate_tenant_id(tenant_id)
 
     db_session = None
@@ -736,9 +738,10 @@ async def get_compliance_score(
 )
 async def get_pending_reviews(
     tenant_id: str,
-    _: None = Depends(_verify_api_key),
+    ctx: TenantContext = Depends(require_tenant_context),
 ):
     """Count all items requiring compliance review for a tenant."""
+    tenant_id = ctx.tenant_id
     validate_tenant_id(tenant_id)
 
     db_session = None

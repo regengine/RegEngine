@@ -17,9 +17,10 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 
-from .webhook_compat import _verify_api_key
+from .webhook_compat import require_tenant_context
 from shared.database import get_db_safe
 from shared.tenant_settings import get_tenant_data, set_tenant_data
+from shared.tenant_context import TenantContext
 
 logger = logging.getLogger("supplier-validation")
 
@@ -333,9 +334,10 @@ def _build_report(tenant_id: str, results: list[SupplierValidationResult]) -> Te
 )
 async def validate_all_suppliers(
     tenant_id: str,
-    _: None = Depends(_verify_api_key),
+    ctx: TenantContext = Depends(require_tenant_context),
 ) -> TenantSupplierReport:
     """Run validation checks against every supplier for the tenant."""
+    tenant_id = ctx.tenant_id
     suppliers = _fetch_suppliers(tenant_id)
 
     if suppliers is None:
@@ -359,9 +361,10 @@ async def validate_all_suppliers(
 async def validate_single_supplier(
     tenant_id: str,
     supplier_id: str,
-    _: None = Depends(_verify_api_key),
+    ctx: TenantContext = Depends(require_tenant_context),
 ) -> SupplierValidationResult:
     """Run validation checks against a single supplier."""
+    tenant_id = ctx.tenant_id
     suppliers = _fetch_suppliers(tenant_id)
 
     if suppliers is None:
@@ -404,9 +407,10 @@ async def validate_single_supplier(
 )
 async def get_validation_report(
     tenant_id: str,
-    _: None = Depends(_verify_api_key),
+    ctx: TenantContext = Depends(require_tenant_context),
 ) -> TenantSupplierReport:
     """Return the most recently generated validation report for a tenant."""
+    tenant_id = ctx.tenant_id
     with _reports_lock:
         report = _reports_store.get(tenant_id)
 
