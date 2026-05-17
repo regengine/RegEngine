@@ -28,6 +28,7 @@ import type { LucideIcon } from 'lucide-react';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
 import { RegEngineWordmark } from '@/components/layout/regengine-wordmark';
+import type { LoginResponse } from '@/types/api';
 
 // QA presets are code-split into a separate chunk via dynamic import.
 // In production builds without the opt-in env var, the chunk is never
@@ -39,6 +40,8 @@ const qaPresetsEnabled =
 const QALoginPresets = qaPresetsEnabled
     ? dynamic(() => import('./QALoginPresets'), { ssr: false })
     : null;
+
+type AuthMode = 'email-code' | 'password';
 
 function extractApiErrorMessage(data: unknown): string | null {
     if (typeof data === 'string') {
@@ -99,8 +102,11 @@ function getStoredTenantId(): string | null {
 }
 
 export default function LoginPage() {
+    const [authMode, setAuthMode] = useState<AuthMode>('email-code');
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
+    const [emailCode, setEmailCode] = useState('');
+    const [isEmailCodeSent, setIsEmailCodeSent] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const [isSessionSyncing, setIsSessionSyncing] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
@@ -117,7 +123,15 @@ export default function LoginPage() {
     const applyPreset = useCallback((presetEmail: string) => {
         setEmail(presetEmail);
         setPassword('');
+        setEmailCode('');
+        setIsEmailCodeSent(false);
         setError(null);
+    }, []);
+
+    const handleEmailValueChange = useCallback((value: string) => {
+        setEmail(value);
+        setEmailCode('');
+        setIsEmailCodeSent(false);
     }, []);
 
     useEffect(() => {
@@ -160,10 +174,124 @@ export default function LoginPage() {
         }
     }, [isHydrated, user, isSessionSyncing, nextParam, router, searchParams]);
 
+    const establishSession = async (
+        response: LoginResponse,
+        options: { syncSupabasePassword?: string } = {},
+    ) => {
+        await login(
+            response.access_token,
+            response.user,
+            response.tenant_id,
+            { remember: rememberMe }
+        );
+
+        if (options.syncSupabasePassword && isSupabaseConfigured()) {
+            const sbResponse = await fetch('/api/auth/supabase/sign-in', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ email, password: options.syncSupabasePassword }),
+            });
+            if (!sbResponse.ok) {
+                if (process.env.NODE_ENV !== 'production') {
+                    console.error('[login] Supabase session sync failed:', sbResponse.status);
+                }
+                await clearCredentials();
+                throw new Error('Secure session could not be established. Please try again.');
+            }
+        }
+
+        const url = new URL(window.location.href);
+        if (url.searchParams.has('error')) {
+            url.searchParams.delete('error');
+            router.replace(url.pathname + url.search);
+        }
+
+        setIsSessionSyncing(false);
+        router.refresh();
+    };
+
+    const handleEmailCodeSubmit = async () => {
+        if (!email.trim()) {
+            setError('Email is required.');
+            return;
+        }
+
+        if (!isEmailCodeSent) {
+            submitInFlightRef.current = true;
+            setIsLoading(true);
+            setError(null);
+            try {
+                await apiClient.requestEmailLoginCode(email);
+                setIsEmailCodeSent(true);
+                setEmailCode('');
+            } catch (err: unknown) {
+                const apiError = err as { response?: { status?: number; data?: unknown }; code?: string };
+                const errorDetail = extractApiErrorMessage(apiError.response?.data);
+                if (apiError.response?.status === 404) {
+                    setError('Authentication service unavailable. Please try again shortly.');
+                } else if (apiError.response?.status === 502) {
+                    setError('Authentication service is unreachable. Please try again shortly.');
+                } else if (apiError.code === 'ERR_NETWORK') {
+                    setError('Unable to reach authentication service. Check API configuration and try again.');
+                } else {
+                    setError(errorDetail || 'Unable to send confirmation code. Please try again.');
+                }
+            } finally {
+                submitInFlightRef.current = false;
+                setIsLoading(false);
+            }
+            return;
+        }
+
+        const normalizedCode = emailCode.trim();
+        if (!/^\d{6}$/.test(normalizedCode)) {
+            setError('Enter the 6-digit confirmation code.');
+            return;
+        }
+
+        submitInFlightRef.current = true;
+        setIsLoading(true);
+        setIsSessionSyncing(true);
+        setError(null);
+
+        try {
+            const response = await apiClient.confirmEmailLoginCode(email, normalizedCode);
+            await establishSession(response);
+        } catch (err: unknown) {
+            setIsSessionSyncing(false);
+            const apiError = err as {
+                response?: { status?: number; data?: unknown };
+                message?: string;
+                code?: string;
+            };
+            const errorDetail = extractApiErrorMessage(apiError.response?.data);
+            if (apiError.response?.status === 401 || apiError.response?.status === 400) {
+                setError('Invalid or expired confirmation code');
+            } else if (apiError.response?.status === 404) {
+                setError('Authentication service unavailable. Please try again shortly.');
+            } else if (apiError.response?.status === 502) {
+                setError('Authentication service is unreachable. Please try again shortly.');
+            } else if (apiError.code === 'ERR_NETWORK') {
+                setError('Unable to reach authentication service. Check API configuration and try again.');
+            } else {
+                setError(errorDetail || 'Unable to confirm code. Please try again.');
+            }
+        } finally {
+            submitInFlightRef.current = false;
+            setIsLoading(false);
+        }
+    };
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
         if (submitInFlightRef.current) {
+            return;
+        }
+
+        if (authMode === 'email-code') {
+            await handleEmailCodeSubmit();
             return;
         }
 
@@ -183,59 +311,7 @@ export default function LoginPage() {
 
         try {
             const response = await apiClient.login(email, password);
-
-            // Update auth context FIRST — sets re_access_token (RegEngine JWT)
-            // cookie and updates React state. Must complete before Supabase
-            // signIn so the onAuthStateChange guard (accessToken check) prevents
-            // the Supabase callback from overwriting re_access_token with a
-            // Supabase JWT that the middleware can't verify.
-            await login(
-                response.access_token,
-                response.user,
-                response.tenant_id,
-                { remember: rememberMe }
-            );
-
-            // E2E and some local setups intentionally run in JWT-only mode
-            // with Supabase disabled. Only establish the second auth session
-            // when browser Supabase config is actually present.
-            if (isSupabaseConfigured()) {
-                // #538 fix: Establish Supabase session alongside custom JWT.
-                // The middleware cross-validates both auth systems — a valid
-                // re_access_token JWT without a Supabase cookie triggers a
-                // session_expired redirect. This sets the Supabase cookies that
-                // hasSomeSupabaseCookie() checks for.
-                //
-                // Runs AFTER login() so React state is set, which prevents the
-                // onAuthStateChange callback from clobbering re_access_token.
-                const sbResponse = await fetch('/api/auth/supabase/sign-in', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    credentials: 'include',
-                    body: JSON.stringify({ email, password }),
-                });
-                if (!sbResponse.ok) {
-                    if (process.env.NODE_ENV !== 'production') {
-                        console.error('[login] Supabase session sync failed:', sbResponse.status);
-                    }
-                    await clearCredentials();
-                    throw new Error('Secure session could not be established. Please try again.');
-                }
-            }
-
-            // Clear any error params (e.g. ?error=session_expired) left by
-            // middleware so the redirect useEffect doesn't block navigation
-            // after a successful re-login.
-            const url = new URL(window.location.href);
-            if (url.searchParams.has('error')) {
-                url.searchParams.delete('error');
-                router.replace(url.pathname + url.search);
-            }
-
-            // Ensure the middleware picks up the newly-set cookie before
-            // the useEffect redirect fires.
-            setIsSessionSyncing(false);
-            router.refresh();
+            await establishSession(response, { syncSupabasePassword: password });
         } catch (err: unknown) {
             setIsSessionSyncing(false);
             const apiError = err as {
@@ -438,6 +514,42 @@ export default function LoginPage() {
                                 </div>
                             )}
                             <form onSubmit={handleSubmit} className="space-y-4">
+                                <div className="grid grid-cols-2 gap-2 rounded-lg border border-[var(--re-border-subtle)] bg-[var(--re-surface-card)] p-1">
+                                    <button
+                                        type="button"
+                                        aria-pressed={authMode === 'email-code'}
+                                        onClick={() => {
+                                            setAuthMode('email-code');
+                                            setPassword('');
+                                            setError(null);
+                                        }}
+                                        className={`inline-flex h-10 items-center justify-center gap-2 rounded-md text-sm font-medium transition ${authMode === 'email-code'
+                                            ? 'bg-[var(--re-surface-elevated)] text-[var(--re-text-primary)] shadow-sm'
+                                            : 'text-[var(--re-text-muted)] hover:text-[var(--re-text-primary)]'
+                                        }`}
+                                        disabled={submitBusy}
+                                    >
+                                        <Mail className="h-4 w-4" aria-hidden="true" />
+                                        Email code
+                                    </button>
+                                    <button
+                                        type="button"
+                                        aria-pressed={authMode === 'password'}
+                                        onClick={() => {
+                                            setAuthMode('password');
+                                            setError(null);
+                                        }}
+                                        className={`inline-flex h-10 items-center justify-center gap-2 rounded-md text-sm font-medium transition ${authMode === 'password'
+                                            ? 'bg-[var(--re-surface-elevated)] text-[var(--re-text-primary)] shadow-sm'
+                                            : 'text-[var(--re-text-muted)] hover:text-[var(--re-text-primary)]'
+                                        }`}
+                                        disabled={submitBusy}
+                                    >
+                                        <LockKeyhole className="h-4 w-4" aria-hidden="true" />
+                                        Password
+                                    </button>
+                                </div>
+
                                 {error && (
                                     <div
                                         id="login-error"
@@ -461,7 +573,7 @@ export default function LoginPage() {
                                             type="email"
                                             placeholder="name@company.com"
                                             value={email}
-                                            onChange={(e) => setEmail(e.target.value)}
+                                            onChange={(e) => handleEmailValueChange(e.target.value)}
                                             disabled={submitBusy}
                                             required
                                             autoComplete="email"
@@ -472,6 +584,7 @@ export default function LoginPage() {
                                     </div>
                                 </div>
 
+                                {authMode === 'password' ? (
                                 <div className="space-y-2">
                                     <label className="text-sm font-medium leading-none text-[var(--re-text-secondary)] peer-disabled:cursor-not-allowed peer-disabled:opacity-70" htmlFor="password">
                                         Password
@@ -517,6 +630,34 @@ export default function LoginPage() {
                                         </span>
                                     </div>
                                 </div>
+                                ) : null}
+
+                                {authMode === 'email-code' && isEmailCodeSent ? (
+                                <div className="space-y-2">
+                                    <label className="text-sm font-medium leading-none text-[var(--re-text-secondary)] peer-disabled:cursor-not-allowed peer-disabled:opacity-70" htmlFor="email-code">
+                                        Confirmation code
+                                    </label>
+                                    <div className="relative">
+                                        <KeyRound className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--re-text-muted)]" />
+                                        <Input
+                                            id="email-code"
+                                            type="text"
+                                            inputMode="numeric"
+                                            pattern="[0-9]*"
+                                            maxLength={6}
+                                            placeholder="123456"
+                                            value={emailCode}
+                                            onChange={(e) => setEmailCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                                            disabled={submitBusy}
+                                            required
+                                            autoComplete="one-time-code"
+                                            aria-invalid={!!error}
+                                            aria-describedby={error ? 'login-error' : undefined}
+                                            className="h-12 pl-10 font-mono tracking-[0.2em]"
+                                        />
+                                    </div>
+                                </div>
+                                ) : null}
 
                                 <div className="flex items-center gap-2 text-sm text-[var(--re-text-secondary)]">
                                     <Checkbox
@@ -537,11 +678,13 @@ export default function LoginPage() {
                                     {submitBusy ? (
                                         <>
                                             <Loader2 className="h-4 w-4 animate-spin" />
-                                            {isSessionSyncing ? 'Securing session...' : 'Signing in...'}
+                                            {isSessionSyncing ? 'Securing session...' : authMode === 'email-code' && !isEmailCodeSent ? 'Sending code...' : 'Signing in...'}
                                         </>
                                     ) : (
                                         <>
-                                            Sign in
+                                            {authMode === 'email-code'
+                                                ? (isEmailCodeSent ? 'Confirm code' : 'Send code')
+                                                : 'Sign in'}
                                             <ArrowRight className="h-4 w-4" />
                                         </>
                                     )}

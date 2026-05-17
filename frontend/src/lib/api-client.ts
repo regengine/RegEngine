@@ -622,6 +622,23 @@ class APIClient {
     return data;
   }
 
+  async requestEmailLoginCode(email: string): Promise<{ status: string; detail: string }> {
+    const { data } = await this.adminClient.post('/auth/email-code/request', { email });
+    return data;
+  }
+
+  async confirmEmailLoginCode(email: string, code: string): Promise<LoginResponse> {
+    const { data } = await this.adminClient.post('/auth/email-code/confirm', { email, code });
+    if (data.access_token) {
+      this.setAccessToken(data.access_token);
+      this.setUser(data.user);
+      if (data.tenant_id) {
+        this.setCurrentTenant(data.tenant_id);
+      }
+    }
+    return data;
+  }
+
   // --- Password Change ---
 
   async changePassword(currentPassword: string, newPassword: string): Promise<void> {

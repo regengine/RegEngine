@@ -95,6 +95,9 @@ from .auth.lockout import (  # noqa: F401,E402
 
 # Pydantic schemas + signup helpers — sub-splits 2/N and 3/N.
 from .auth.schemas import (  # noqa: F401,E402
+    EmailCodeConfirmRequest,
+    EmailCodeRequest,
+    EmailCodeRequestResponse,
     LoginRequest,
     RegisterRequest,
     SignupAcceptedResponse,
@@ -118,6 +121,7 @@ from .auth.elevation_helpers import (  # noqa: F401,E402
 # the full module (not just ``router``) keeps ``ar.<handler_name>`` resolution
 # working for tests that call ``await auth_routes.<handler>.__wrapped__(...)``.
 from .auth import login_router as _login_router_mod  # noqa: E402
+from .auth import email_code_router as _email_code_router_mod  # noqa: E402
 from .auth import signup_router as _signup_router_mod  # noqa: E402
 from .auth import refresh_router as _refresh_router_mod  # noqa: E402
 from .auth import sessions_router as _sessions_router_mod  # noqa: E402
@@ -128,6 +132,10 @@ from .auth import confirm_router as _confirm_router_mod  # noqa: E402
 
 # Handler + schema re-exports for back-compat with ``from auth_routes import X``.
 from .auth.login_router import login  # noqa: F401,E402
+from .auth.email_code_router import (  # noqa: F401,E402
+    confirm_email_login_code,
+    request_email_login_code,
+)
 from .auth.signup_router import signup  # noqa: F401,E402
 from .auth.refresh_router import RefreshRequest, refresh_session  # noqa: F401,E402
 from .auth.sessions_router import (  # noqa: F401,E402
@@ -161,6 +169,7 @@ from .auth.confirm_router import (  # noqa: F401,E402
 
 # ── Mount every sub-router on /auth ─────────────────────────────────────────
 router.include_router(_login_router_mod.router)
+router.include_router(_email_code_router_mod.router)
 router.include_router(_signup_router_mod.router)
 router.include_router(_refresh_router_mod.router)
 router.include_router(_sessions_router_mod.router)

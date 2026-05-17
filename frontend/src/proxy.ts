@@ -299,7 +299,8 @@ async function requireAppAuth(request: NextRequest, requestHeaders?: Headers): P
             // but leaves the HTTP-only re_access_token in place.
             // Re-authentication resyncs both systems.
             // Uses a local cookie name check (no network call) to keep Edge latency low.
-            if (!hasSomeSupabaseCookie(request)) {
+            const isEmailCodeSession = payload.auth_method === 'email_code';
+            if (!isEmailCodeSession && !hasSomeSupabaseCookie(request)) {
                 if (process.env.NODE_ENV !== 'production') {
                     console.warn('[middleware] Custom JWT valid but Supabase session absent — forcing re-auth');
                 }

@@ -33,6 +33,8 @@ vi.mock('@/lib/auth-context', () => ({
 vi.mock('@/lib/api-client', () => ({
     apiClient: {
         login: vi.fn(),
+        requestEmailLoginCode: vi.fn(),
+        confirmEmailLoginCode: vi.fn(),
         getOnboardingStatus: vi.fn(),
     },
 }));
@@ -60,6 +62,10 @@ describe('LoginPage', () => {
         (useAuth as any).mockReturnValue({ ...authState });
     });
 
+    async function choosePasswordMode(user: ReturnType<typeof userEvent.setup>) {
+        await user.click(screen.getByRole('button', { name: /^password$/i }));
+    }
+
     beforeEach(() => {
         vi.clearAllMocks();
         (useRouter as any).mockReturnValue({
@@ -75,6 +81,12 @@ describe('LoginPage', () => {
         authState = { clearCredentials: mockClearCredentials, login: mockLogin, user: null, isHydrated: true };
         (useAuth as any).mockReturnValue(authState);
         (apiClient.getOnboardingStatus as any).mockResolvedValue({ is_complete: true });
+        (apiClient.requestEmailLoginCode as any).mockResolvedValue({ status: 'code_sent', detail: 'If an account exists, we sent a confirmation code.' });
+        (apiClient.confirmEmailLoginCode as any).mockResolvedValue({
+            access_token: 'test-token',
+            user: { id: '123', email: 'test@example.com', is_sysadmin: false },
+            tenant_id: 'tenant-123',
+        });
         (isSupabaseConfigured as any).mockReturnValue(true);
         mockFetch.mockImplementation((url: string) => {
             if (url === '/api/auth/supabase/sign-in') {
@@ -89,25 +101,37 @@ describe('LoginPage', () => {
     });
 
     describe('Rendering', () => {
-        it('renders login form with all fields', () => {
+        it('renders email-code login by default and keeps password available', async () => {
+            const user = userEvent.setup();
             render(<LoginPage />);
 
             expect(screen.getByRole('heading', { name: /sign in/i })).toBeInTheDocument();
             expect(screen.getByLabelText(/email/i)).toBeInTheDocument();
+            expect(screen.queryByLabelText(/^password$/i)).not.toBeInTheDocument();
+            expect(screen.getByRole('button', { name: /send code/i })).toBeInTheDocument();
+            expect(screen.getByRole('button', { name: /email code/i })).toHaveAttribute('aria-pressed', 'true');
+            expect(screen.getByRole('button', { name: /^password$/i })).toHaveAttribute('aria-pressed', 'false');
+
+            await choosePasswordMode(user);
+
             expect(screen.getByLabelText(/^password$/i)).toBeInTheDocument();
             expect(screen.getByRole('checkbox', { name: /remember me/i })).toBeChecked();
             expect(screen.getByRole('button', { name: /sign in/i })).toBeInTheDocument();
         });
 
-        it('has password-manager friendly field attributes', () => {
+        it('has password-manager friendly field attributes', async () => {
+            const user = userEvent.setup();
             render(<LoginPage />);
 
             const emailInput = screen.getByLabelText(/email/i);
-            const passwordInput = screen.getByLabelText(/^password$/i);
-
             expect(emailInput).toHaveAttribute('id', 'email');
             expect(emailInput).toHaveAttribute('name', 'email');
             expect(emailInput).toHaveAttribute('autocomplete', 'email');
+
+            await choosePasswordMode(user);
+
+            const passwordInput = screen.getByLabelText(/^password$/i);
+
             expect(passwordInput).toHaveAttribute('id', 'password');
             expect(passwordInput).toHaveAttribute('name', 'password');
             expect(passwordInput).toHaveAttribute('autocomplete', 'current-password');
@@ -116,6 +140,7 @@ describe('LoginPage', () => {
         it('does not show validation errors before user interaction or browser autofill', async () => {
             const user = userEvent.setup();
             render(<LoginPage />);
+            await choosePasswordMode(user);
 
             const emailInput = screen.getByLabelText(/email/i);
             const passwordInput = screen.getByLabelText(/^password$/i);
@@ -135,6 +160,7 @@ describe('LoginPage', () => {
         it('toggles password visibility without changing the password value', async () => {
             const user = userEvent.setup();
             render(<LoginPage />);
+            await choosePasswordMode(user);
 
             const passwordInput = screen.getByLabelText(/^password$/i);
 
@@ -177,6 +203,7 @@ describe('LoginPage', () => {
                 return null;
             });
             render(<LoginPage />);
+            await choosePasswordMode(user);
 
             const passwordInput = screen.getByLabelText(/^password$/i);
             await user.type(passwordInput, 'temporary-password');
@@ -193,7 +220,7 @@ describe('LoginPage', () => {
             const user = userEvent.setup();
             render(<LoginPage />);
 
-            const submitButton = screen.getByRole('button', { name: /sign in/i });
+            const submitButton = screen.getByRole('button', { name: /send code/i });
             await user.click(submitButton);
 
             const emailInput = screen.getByLabelText(/email/i) as HTMLInputElement;
@@ -203,6 +230,7 @@ describe('LoginPage', () => {
         it('requires password field', async () => {
             const user = userEvent.setup();
             render(<LoginPage />);
+            await choosePasswordMode(user);
 
             const emailInput = screen.getByLabelText(/email/i);
             await user.type(emailInput, 'test@example.com');
@@ -227,6 +255,7 @@ describe('LoginPage', () => {
         it('accepts password input', async () => {
             const user = userEvent.setup();
             render(<LoginPage />);
+            await choosePasswordMode(user);
 
             const passwordInput = screen.getByLabelText(/^password$/i);
             await user.type(passwordInput, 'SecurePassword123!');
@@ -237,12 +266,77 @@ describe('LoginPage', () => {
         it('accepts pasted password input', async () => {
             const user = userEvent.setup();
             render(<LoginPage />);
+            await choosePasswordMode(user);
 
             const passwordInput = screen.getByLabelText(/^password$/i);
             await user.click(passwordInput);
             await user.paste('PastedPassword123!');
 
             expect(passwordInput).toHaveValue('PastedPassword123!');
+        });
+    });
+
+    describe('Email Code Login', () => {
+        it('requests a confirmation code for the entered email', async () => {
+            const user = userEvent.setup();
+            render(<LoginPage />);
+
+            await user.type(screen.getByLabelText(/email/i), 'test@example.com');
+            await user.click(screen.getByRole('button', { name: /send code/i }));
+
+            await waitFor(() => {
+                expect(apiClient.requestEmailLoginCode).toHaveBeenCalledWith('test@example.com');
+            });
+            expect(screen.getByLabelText(/confirmation code/i)).toBeInTheDocument();
+            expect(screen.getByRole('button', { name: /confirm code/i })).toBeInTheDocument();
+        });
+
+        it('confirms a code and establishes a RegEngine session without password sync', async () => {
+            const user = userEvent.setup();
+            const mockResponse = {
+                access_token: 'email-code-token',
+                user: { id: '123', email: 'test@example.com', is_sysadmin: false },
+                tenant_id: 'tenant-123',
+            };
+            (apiClient.confirmEmailLoginCode as any).mockResolvedValueOnce(mockResponse);
+
+            render(<LoginPage />);
+
+            await user.type(screen.getByLabelText(/email/i), 'test@example.com');
+            await user.click(screen.getByRole('button', { name: /send code/i }));
+            await screen.findByLabelText(/confirmation code/i);
+            await user.type(screen.getByLabelText(/confirmation code/i), '123456');
+            await user.click(screen.getByRole('button', { name: /confirm code/i }));
+
+            await waitFor(() => {
+                expect(apiClient.confirmEmailLoginCode).toHaveBeenCalledWith('test@example.com', '123456');
+            });
+            await waitFor(() => {
+                expect(mockLogin).toHaveBeenCalledWith(
+                    'email-code-token',
+                    mockResponse.user,
+                    'tenant-123',
+                    { remember: true }
+                );
+            });
+            expect(mockFetch).not.toHaveBeenCalledWith('/api/auth/supabase/sign-in', expect.anything());
+        });
+
+        it('shows a clear error for invalid confirmation codes', async () => {
+            const user = userEvent.setup();
+            (apiClient.confirmEmailLoginCode as any).mockRejectedValueOnce({ response: { status: 401 } });
+
+            render(<LoginPage />);
+
+            await user.type(screen.getByLabelText(/email/i), 'test@example.com');
+            await user.click(screen.getByRole('button', { name: /send code/i }));
+            await screen.findByLabelText(/confirmation code/i);
+            await user.type(screen.getByLabelText(/confirmation code/i), '123456');
+            await user.click(screen.getByRole('button', { name: /confirm code/i }));
+
+            await waitFor(() => {
+                expect(screen.getByRole('alert')).toHaveTextContent(/invalid or expired confirmation code/i);
+            });
         });
     });
 
@@ -258,6 +352,7 @@ describe('LoginPage', () => {
             (apiClient.login as any).mockResolvedValueOnce(mockResponse);
 
             render(<LoginPage />);
+            await choosePasswordMode(user);
 
             await user.type(screen.getByLabelText(/email/i), 'test@example.com');
             await user.type(screen.getByLabelText(/^password$/i), 'password123');
@@ -279,6 +374,7 @@ describe('LoginPage', () => {
             (apiClient.login as any).mockResolvedValueOnce(mockResponse);
 
             render(<LoginPage />);
+            await choosePasswordMode(user);
 
             await user.type(screen.getByLabelText(/email/i), 'test@example.com');
             await user.type(screen.getByLabelText(/^password$/i), 'password123');
@@ -305,6 +401,7 @@ describe('LoginPage', () => {
             (apiClient.login as any).mockResolvedValueOnce(mockResponse);
 
             render(<LoginPage />);
+            await choosePasswordMode(user);
 
             await user.type(screen.getByLabelText(/email/i), 'test@example.com');
             await user.type(screen.getByLabelText(/^password$/i), 'password123');
@@ -333,6 +430,7 @@ describe('LoginPage', () => {
             (apiClient.login as any).mockResolvedValueOnce(mockResponse);
 
             render(<LoginPage />);
+            await choosePasswordMode(user);
 
             await user.type(screen.getByLabelText(/email/i), 'test@example.com');
             await user.type(screen.getByLabelText(/^password$/i), 'password123');
@@ -364,6 +462,7 @@ describe('LoginPage', () => {
             (apiClient.login as any).mockResolvedValueOnce(mockResponse);
 
             render(<LoginPage />);
+            await choosePasswordMode(user);
 
             await user.type(screen.getByLabelText(/email/i), 'test@example.com');
             await user.type(screen.getByLabelText(/^password$/i), 'password123');
@@ -386,6 +485,7 @@ describe('LoginPage', () => {
             (apiClient.login as any).mockResolvedValueOnce(mockResponse);
 
             render(<LoginPage />);
+            await choosePasswordMode(user);
 
             await user.type(screen.getByLabelText(/email/i), 'test@example.com');
             await user.type(screen.getByLabelText(/^password$/i), 'password123{Enter}');
@@ -406,6 +506,7 @@ describe('LoginPage', () => {
             (apiClient.login as any).mockResolvedValueOnce(mockResponse);
 
             render(<LoginPage />);
+            await choosePasswordMode(user);
 
             await user.type(screen.getByLabelText(/email/i), 'test@example.com');
             await user.type(screen.getByLabelText(/^password$/i), 'password123');
@@ -432,6 +533,7 @@ describe('LoginPage', () => {
             (apiClient.login as any).mockResolvedValueOnce(mockResponse);
 
             render(<LoginPage />);
+            await choosePasswordMode(user);
 
             await user.type(screen.getByLabelText(/email/i), 'test@example.com');
             await user.type(screen.getByLabelText(/^password$/i), 'password123');
@@ -458,6 +560,7 @@ describe('LoginPage', () => {
             (apiClient.login as any).mockResolvedValueOnce(mockResponse);
 
             render(<LoginPage />);
+            await choosePasswordMode(user);
 
             await user.type(screen.getByLabelText(/email/i), 'test@example.com');
             await user.type(screen.getByLabelText(/^password$/i), 'password123');
@@ -484,6 +587,7 @@ describe('LoginPage', () => {
             (apiClient.login as any).mockResolvedValueOnce(mockResponse);
 
             render(<LoginPage />);
+            await choosePasswordMode(user);
 
             await user.type(screen.getByLabelText(/email/i), 'test@example.com');
             await user.type(screen.getByLabelText(/^password$/i), 'password123');
@@ -510,6 +614,7 @@ describe('LoginPage', () => {
             (apiClient.login as any).mockResolvedValueOnce(mockResponse);
 
             render(<LoginPage />);
+            await choosePasswordMode(user);
 
             await user.type(screen.getByLabelText(/email/i), 'test@example.com');
             await user.type(screen.getByLabelText(/^password$/i), 'password123');
@@ -531,6 +636,7 @@ describe('LoginPage', () => {
             (apiClient.login as any).mockResolvedValueOnce(mockResponse);
 
             render(<LoginPage />);
+            await choosePasswordMode(user);
 
             await user.type(screen.getByLabelText(/email/i), 'admin@example.com');
             await user.type(screen.getByLabelText(/^password$/i), 'adminpass');
@@ -565,6 +671,7 @@ describe('LoginPage', () => {
             (apiClient.login as any).mockRejectedValueOnce(error);
 
             render(<LoginPage />);
+            await choosePasswordMode(user);
 
             await user.type(screen.getByLabelText(/email/i), 'wrong@example.com');
             await user.type(screen.getByLabelText(/^password$/i), 'wrongpass');
@@ -582,6 +689,7 @@ describe('LoginPage', () => {
             (apiClient.login as any).mockRejectedValueOnce(error);
 
             render(<LoginPage />);
+            await choosePasswordMode(user);
 
             await user.type(screen.getByLabelText(/email/i), 'disabled@example.com');
             await user.type(screen.getByLabelText(/^password$/i), 'password');
@@ -606,6 +714,7 @@ describe('LoginPage', () => {
             (apiClient.login as any).mockRejectedValueOnce(error);
 
             render(<LoginPage />);
+            await choosePasswordMode(user);
 
             await user.type(screen.getByLabelText(/email/i), 'locked@example.com');
             await user.type(screen.getByLabelText(/^password$/i), 'password');
@@ -623,6 +732,7 @@ describe('LoginPage', () => {
             (apiClient.login as any).mockRejectedValueOnce(error);
 
             render(<LoginPage />);
+            await choosePasswordMode(user);
 
             await user.type(screen.getByLabelText(/email/i), 'slowdown@example.com');
             await user.type(screen.getByLabelText(/^password$/i), 'password');
@@ -640,6 +750,7 @@ describe('LoginPage', () => {
             (apiClient.login as any).mockRejectedValueOnce(error);
 
             render(<LoginPage />);
+            await choosePasswordMode(user);
 
             await user.type(screen.getByLabelText(/email/i), 'test@example.com');
             await user.type(screen.getByLabelText(/^password$/i), 'password');
@@ -659,6 +770,7 @@ describe('LoginPage', () => {
             (apiClient.login as any).mockRejectedValueOnce(error);
 
             render(<LoginPage />);
+            await choosePasswordMode(user);
 
             await user.type(screen.getByLabelText(/email/i), 'test@example.com');
             await user.type(screen.getByLabelText(/^password$/i), 'password');
@@ -676,6 +788,7 @@ describe('LoginPage', () => {
             (apiClient.login as any).mockRejectedValueOnce(error);
 
             render(<LoginPage />);
+            await choosePasswordMode(user);
 
             const emailInput = screen.getByLabelText(/email/i);
             const passwordInput = screen.getByLabelText(/^password$/i);
@@ -702,6 +815,7 @@ describe('LoginPage', () => {
             (apiClient.login as any).mockResolvedValueOnce(mockResponse);
 
             render(<LoginPage />);
+            await choosePasswordMode(user);
 
             await user.type(screen.getByLabelText(/email/i), 'test@example.com');
             await user.type(screen.getByLabelText(/^password$/i), 'password');
@@ -727,6 +841,7 @@ describe('LoginPage', () => {
                 });
 
             render(<LoginPage />);
+            await choosePasswordMode(user);
 
             // First attempt - fails
             await user.type(screen.getByLabelText(/email/i), 'test@example.com');
@@ -759,6 +874,7 @@ describe('LoginPage', () => {
             (apiClient.login as any).mockReturnValue(loginPromise);
 
             render(<LoginPage />);
+            await choosePasswordMode(user);
 
             await user.type(screen.getByLabelText(/email/i), 'test@example.com');
             await user.type(screen.getByLabelText(/^password$/i), 'password');
@@ -792,6 +908,7 @@ describe('LoginPage', () => {
             (apiClient.login as any).mockReturnValue(loginPromise);
 
             render(<LoginPage />);
+            await choosePasswordMode(user);
 
             await user.type(screen.getByLabelText(/email/i), 'test@example.com');
             await user.type(screen.getByLabelText(/^password$/i), 'password');
@@ -821,6 +938,7 @@ describe('LoginPage', () => {
             (apiClient.login as any).mockReturnValue(loginPromise);
 
             render(<LoginPage />);
+            await choosePasswordMode(user);
 
             await user.type(screen.getByLabelText(/email/i), 'test@example.com');
             await user.type(screen.getByLabelText(/^password$/i), 'password');
@@ -844,6 +962,7 @@ describe('LoginPage', () => {
         it('tabs from email to password to remember me to submit without traps', async () => {
             const user = userEvent.setup();
             render(<LoginPage />);
+            await choosePasswordMode(user);
 
             const emailInput = screen.getByLabelText(/email/i);
             const passwordInput = screen.getByLabelText(/^password$/i);
@@ -867,6 +986,7 @@ describe('LoginPage', () => {
             (apiClient.login as any).mockRejectedValueOnce(error);
 
             render(<LoginPage />);
+            await choosePasswordMode(user);
 
             await user.type(screen.getByLabelText(/email/i), 'wrong@example.com');
             await user.type(screen.getByLabelText(/^password$/i), 'wrongpass');
@@ -885,6 +1005,7 @@ describe('LoginPage', () => {
             (apiClient.login as any).mockRejectedValueOnce(error);
 
             render(<LoginPage />);
+            await choosePasswordMode(user);
 
             await user.type(screen.getByLabelText(/email/i), 'wrong@example.com');
             await user.type(screen.getByLabelText(/^password$/i), 'wrongpass');

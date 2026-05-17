@@ -2,6 +2,8 @@
 
 import sys
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import MagicMock
 
 service_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(service_dir))
@@ -15,7 +17,7 @@ class _DummyEmails:
     @staticmethod
     def send(payload):
         _DummyEmails.last_payload = payload
-        return {"id": "email_123"}
+        return SimpleNamespace(id="email_123")
 
 
 class _DummyResend:
@@ -36,6 +38,8 @@ def test_send_invite_email_uses_resend_when_key_configured(monkeypatch):
     monkeypatch.setenv("RESEND_API_KEY", "re_test_key")
     monkeypatch.setenv("RESEND_FROM_EMAIL", "onboarding@regengine.test")
     monkeypatch.setitem(sys.modules, "resend", _DummyResend)
+    test_logger = SimpleNamespace(info=MagicMock(), warning=MagicMock())
+    monkeypatch.setattr(invite_routes, "logger", test_logger)
 
     invite_routes._send_invite_email("buyer@example.com", "https://regengine.co/accept-invite#token=t")
 
@@ -44,6 +48,8 @@ def test_send_invite_email_uses_resend_when_key_configured(monkeypatch):
     assert _DummyEmails.last_payload["to"] == "buyer@example.com"
     assert _DummyEmails.last_payload["from"] == "onboarding@regengine.test"
     assert "Accept Invite" in _DummyEmails.last_payload["html"]
+    assert test_logger.info.call_args.args[0] == "invite_email_sent"
+    assert test_logger.info.call_args.kwargs["resend_id"] == "email_123"
 
 
 def test_send_invite_email_noop_without_api_key(monkeypatch):
