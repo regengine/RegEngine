@@ -30,7 +30,8 @@ from .webhook_router_v2 import (
     _verify_api_key as _verify_api_key_sync,
 )
 from shared.database import get_db_session as _get_db_session
-from shared.auth import require_api_key
+from shared.auth import require_api_key, APIKey
+from shared.api_key_store import APIKeyResponse
 
 logger = logging.getLogger("webhook-compat")
 
@@ -40,7 +41,7 @@ async def _verify_api_key(
     x_regengine_api_key: Optional[str] = Header(
         default=None, alias="X-RegEngine-API-Key"
     ),
-) -> None:
+) -> APIKey | APIKeyResponse:
     """Auth gate — delegates to shared.auth.require_api_key.
 
     This is the stable import surface for ingestion sub-routers.
@@ -48,7 +49,7 @@ async def _verify_api_key(
     in ``shared/auth.py``.  Callers use ``Depends(_verify_api_key)``
     exactly as before; the return value is discarded.
     """
-    await require_api_key(request=request, x_regengine_api_key=x_regengine_api_key)
+    return await require_api_key(request=request, x_regengine_api_key=x_regengine_api_key)
 
 
 async def ingest_events(

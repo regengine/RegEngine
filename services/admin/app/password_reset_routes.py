@@ -25,6 +25,8 @@ token to update the argon2 hash in RegEngine's own DB) already exists in
 
 from __future__ import annotations
 
+import os
+
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, EmailStr
@@ -52,6 +54,20 @@ _FORGOT_PW_WINDOW = 3600  # 1 hour in seconds
 _FORGOT_PW_GENERIC_MSG = (
     "If that email address is registered you will receive a password-reset link shortly."
 )
+
+
+def _get_password_reset_base_url() -> str:
+    """Return the frontend base URL for password reset callbacks."""
+    return (
+        os.getenv("PASSWORD_RESET_BASE_URL")
+        or os.getenv("INVITE_BASE_URL")
+        or "https://regengine.co"
+    ).rstrip("/")
+
+
+def _build_password_reset_redirect_to() -> str:
+    """Build the Supabase recovery redirect target."""
+    return f"{_get_password_reset_base_url()}/auth/callback?next=/reset-password"
 
 
 def _forgot_pw_rate_key(email: str) -> str:
@@ -131,7 +147,10 @@ async def _forgot_password_handler(
     sb = get_supabase()
     if sb:
         try:
-            sb.auth.reset_password_for_email(normalized)
+            sb.auth.reset_password_for_email(
+                normalized,
+                options={"redirect_to": _build_password_reset_redirect_to()},
+            )
             logger.info(
                 "forgot_password_reset_email_sent",
                 email=mask_email(normalized),

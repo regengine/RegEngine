@@ -192,6 +192,7 @@ async def signup(
         user_id=new_user.id,
         refresh_token_hash=token_hash,
         family_id=family_id,
+        token_version=int(getattr(new_user, "token_version", 0) or 0),
         created_at=datetime.now(timezone.utc),
         last_used_at=datetime.now(timezone.utc),
         expires_at=datetime.now(timezone.utc) + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS),

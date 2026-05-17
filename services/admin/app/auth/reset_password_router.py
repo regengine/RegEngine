@@ -9,6 +9,8 @@ Exposes:
 """
 from __future__ import annotations
 
+import html
+import os
 import time
 from typing import Optional
 
@@ -19,7 +21,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from ..auth_utils import get_password_hash
+from ..auth_utils import get_password_hash, verify_password
 from ..database import get_session
 from ..dependencies import get_session_store
 from ..models import ResetPasswordResponse
@@ -55,6 +57,74 @@ _RECOVERY_TOKEN_MAX_AGE_SECONDS = 15 * 60
 # Supabase versions emit specifically for password-recovery flows; "otp"
 # covers older versions and magic-link sessions.
 _RECOVERY_ALLOWED_AMR_METHODS = frozenset({"otp", "recovery"})
+
+
+def _send_password_change_confirmation_email(recipient_email: str) -> None:
+    """Send password-change confirmation via Resend if configured."""
+    resend_api_key = os.getenv("RESEND_API_KEY")
+    if not resend_api_key:
+        logger.warning(
+            "password_change_confirmation_email_skipped_missing_resend_api_key",
+            email=mask_email(recipient_email),
+        )
+        return
+
+    try:
+        import resend
+    except ImportError:
+        logger.warning(
+            "password_change_confirmation_email_skipped_resend_not_installed",
+            email=mask_email(recipient_email),
+        )
+        return
+
+    resend.api_key = resend_api_key
+    from_email = os.getenv("RESEND_FROM_EMAIL", "onboarding@regengine.co")
+    safe_email = html.escape(recipient_email, quote=True)
+
+    try:
+        response = resend.Emails.send(
+            {
+                "from": from_email,
+                "to": recipient_email,
+                "subject": "Your RegEngine password was changed",
+                "html": (
+                    "<div style='font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;'>"
+                    "<h2 style='color: #111827;'>Your password was changed</h2>"
+                    "<p style='color: #374151; line-height: 1.6;'>"
+                    f"The password for {safe_email} was just reset."
+                    "</p>"
+                    "<p style='color: #374151; line-height: 1.6;'>"
+                    "If you made this change, no further action is needed. "
+                    "If you did not, contact your RegEngine administrator immediately."
+                    "</p>"
+                    "</div>"
+                ),
+            }
+        )
+        response_id = getattr(response, "id", None) or (response.get("id") if isinstance(response, dict) else None)
+        logger.info(
+            "password_change_confirmation_email_sent",
+            email=mask_email(recipient_email),
+            resend_id=response_id,
+        )
+    except Exception as exc:  # pragma: no cover - external SDK/network behavior
+        logger.warning(
+            "password_change_confirmation_email_send_failed",
+            email=mask_email(recipient_email),
+            error=str(exc),
+        )
+
+
+def _new_password_matches_existing(new_password: str, password_hash: str) -> bool:
+    try:
+        return verify_password(new_password, password_hash)
+    except Exception as exc:
+        logger.warning(
+            "reset_password_existing_hash_verify_failed",
+            error=str(exc),
+        )
+        return False
 
 
 def _parse_supabase_token_claims(token: str) -> dict:
@@ -296,6 +366,12 @@ async def reset_password(
     if user.status != "active":
         raise HTTPException(status_code=403, detail="Account disabled")
 
+    if _new_password_matches_existing(payload.new_password, user.password_hash):
+        raise HTTPException(
+            status_code=400,
+            detail="New password must be different from your current password",
+        )
+
     # 5. Update the argon2 hash in the RegEngine DB
     user.password_hash = get_password_hash(payload.new_password)
 
@@ -334,6 +410,15 @@ async def reset_password(
 
     # #1380 — outstanding elevation tokens are now stale too.
     elevation_revoked = await _revoke_all_elevation_tokens_for_user(session_store, user.id)
+
+    try:
+        _send_password_change_confirmation_email(normalized_email)
+    except Exception as exc:  # pragma: no cover - defensive against helper regressions
+        logger.warning(
+            "password_change_confirmation_email_unhandled_error",
+            email=mask_email(normalized_email),
+            error=str(exc),
+        )
 
     logger.info(
         "reset_password_success",

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerServiceURL } from '@/lib/api-config';
-import { getAdminMasterKey, requireAdminCapability, requireProxyAuth, validateProxySession } from '@/lib/api-proxy';
+import { getAdminMasterKey, requireFreshAdminCapability, requireProxyAuth, validateProxySession } from '@/lib/api-proxy';
 
 export const dynamic = 'force-dynamic';
 
@@ -15,7 +15,7 @@ export async function GET(request: NextRequest) {
     const sessionError = await validateProxySession(request);
     if (sessionError) return sessionError;
 
-    const adminError = requireAdminCapability(request);
+    const adminError = await requireFreshAdminCapability(request);
     if (adminError) return adminError;
 
     const adminKey = getAdminMasterKey();

@@ -31,6 +31,9 @@ OTHER_TENANT_ID = "00000000-0000-0000-0000-000000000222"
 EVENT_ID = "evt-abc-001"
 RUN_ID = "run-abc-001"
 NOW = datetime(2026, 3, 20, 12, 0, 0, tzinfo=timezone.utc)
+HASH_A = "a" * 64
+HASH_B = "b" * 64
+HASH_C = "c" * 64
 
 # ---------------------------------------------------------------------------
 # Fake DB helpers
@@ -120,6 +123,32 @@ def _make_run_detail_row(
         run_id, source_system, file_name, file_hash, file_size,
         record_count, accepted, rejected, status, mapper_version,
         schema_version, initiated_by, started_at, completed_at, errors,
+    ))
+
+
+def _make_receipt_row(
+    *,
+    receipt_id: str = "00000000-0000-0000-0000-000000000901",
+    sequence_num: int = 1,
+    state: str = "received",
+    occurred_at: datetime = NOW,
+    actor: str = "system",
+    request_id: str = "req-001",
+    canonical_event_id: Optional[str] = None,
+    evidence_attachment_id: Optional[str] = None,
+    rule_evaluation_id: Optional[str] = None,
+    export_log_id: Optional[str] = None,
+    metadata: Optional[dict[str, Any]] = None,
+    payload_hash: str = HASH_C,
+    previous_receipt_hash: Optional[str] = None,
+    receipt_hash: str = HASH_A,
+    created_at: datetime = NOW,
+) -> _Row:
+    return _Row((
+        receipt_id, sequence_num, state, occurred_at, actor, request_id,
+        canonical_event_id, evidence_attachment_id, rule_evaluation_id,
+        export_log_id, metadata or {}, payload_hash, previous_receipt_hash,
+        receipt_hash, created_at,
     ))
 
 
@@ -591,6 +620,99 @@ class TestGetIngestionRun:
             params={"tenant_id": TENANT_ID},
         )
         assert resp.status_code == 503
+
+
+# ---------------------------------------------------------------------------
+# get_ingestion_run_timeline
+#   (GET /api/v1/records/ingestion-runs/{run_id}/timeline)
+# ---------------------------------------------------------------------------
+
+
+class TestGetIngestionRunTimeline:
+    def test_returns_run_receipt_timeline_with_chain_verification(
+        self, principal: IngestionPrincipal
+    ) -> None:
+        session = _FakeSession([
+            _Result(),  # set_tenant_guc
+            _Result(row=_make_run_detail_row()),
+            _Result(rows=[
+                _make_receipt_row(sequence_num=1, receipt_hash=HASH_A),
+                _make_receipt_row(
+                    receipt_id="00000000-0000-0000-0000-000000000902",
+                    sequence_num=2,
+                    state="canonicalized",
+                    previous_receipt_hash=HASH_A,
+                    receipt_hash=HASH_B,
+                ),
+            ]),
+        ])
+        c = _make_app_and_client(principal, session)
+
+        resp = c.get(
+            f"/api/v1/records/ingestion-runs/{RUN_ID}/timeline",
+            params={"tenant_id": TENANT_ID},
+        )
+
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["tenant_id"] == TENANT_ID
+        assert body["run"]["id"] == RUN_ID
+        assert len(body["receipts"]) == 2
+        assert body["receipts"][1]["state"] == "canonicalized"
+        assert body["verification"] == {
+            "valid": True,
+            "chain_length": 2,
+            "head_receipt_hash": HASH_B,
+            "errors": [],
+        }
+
+    def test_timeline_reports_broken_chain_without_500(
+        self, principal: IngestionPrincipal
+    ) -> None:
+        session = _FakeSession([
+            _Result(),  # set_tenant_guc
+            _Result(row=_make_run_detail_row()),
+            _Result(rows=[
+                _make_receipt_row(sequence_num=1, receipt_hash=HASH_A),
+                _make_receipt_row(
+                    receipt_id="00000000-0000-0000-0000-000000000902",
+                    sequence_num=2,
+                    previous_receipt_hash=HASH_C,
+                    receipt_hash=HASH_B,
+                ),
+            ]),
+        ])
+        c = _make_app_and_client(principal, session)
+
+        resp = c.get(
+            f"/api/v1/records/ingestion-runs/{RUN_ID}/timeline",
+            params={"tenant_id": TENANT_ID},
+        )
+
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["verification"]["valid"] is False
+        assert (
+            "sequence 2 previous_receipt_hash does not match sequence 1 receipt_hash"
+            in body["verification"]["errors"]
+        )
+
+    def test_timeline_run_not_found_returns_404(
+        self, principal: IngestionPrincipal
+    ) -> None:
+        session = _FakeSession([
+            _Result(),  # set_tenant_guc
+            _Result(row=None),
+        ])
+        c = _make_app_and_client(principal, session)
+
+        resp = c.get(
+            "/api/v1/records/ingestion-runs/nonexistent/timeline",
+            params={"tenant_id": TENANT_ID},
+        )
+
+        assert resp.status_code == 404
+        assert "not found" in resp.json()["detail"].lower()
 
 
 # ---------------------------------------------------------------------------

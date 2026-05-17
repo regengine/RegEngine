@@ -687,6 +687,49 @@ async def test_refresh_rejects_when_no_longer_member_of_original_tenant():
     assert exc.value.status_code == 403
 
 
+@pytest.mark.asyncio
+async def test_refresh_rejects_stale_session_token_version():
+    from fastapi import HTTPException
+    from services.admin.app.auth_routes import RefreshRequest, refresh_session
+    from services.admin.app.session_store import SessionData
+
+    user_id = uuid.uuid4()
+    session_store = MagicMock()
+    session_store.claim_session_by_token = AsyncMock(
+        return_value=SessionData(
+            id=uuid.uuid4(),
+            user_id=user_id,
+            refresh_token_hash="h",
+            family_id=uuid.uuid4(),
+            token_version=0,
+            is_revoked=False,
+            created_at=datetime.now(timezone.utc),
+            last_used_at=datetime.now(timezone.utc),
+            expires_at=datetime(2100, 1, 1, tzinfo=timezone.utc),
+        )
+    )
+    session_store.update_session = AsyncMock(return_value=True)
+
+    db = MagicMock()
+    db.get.return_value = SimpleNamespace(
+        id=user_id,
+        email="u@e",
+        is_sysadmin=False,
+        token_version=1,
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        await refresh_session.__wrapped__(
+            payload=RefreshRequest(refresh_token="raw"),
+            request=_make_starlette_request(),
+            db=db,
+            session_store=session_store,
+        )
+
+    assert exc.value.status_code == 401
+    session_store.update_session.assert_not_called()
+
+
 # ─────────────────────────────────────────────────────────────────────
 # #1380 — require_reauth checks tenant + jti
 # ─────────────────────────────────────────────────────────────────────

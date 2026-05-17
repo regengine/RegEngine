@@ -123,6 +123,30 @@ def _fake_user(user_id=TARGET_USER_ID, is_sysadmin=False):
 
 
 class TestListUsers_Issue1341:
+    def test_user_response_model_exposes_only_tenant_admin_fields(self) -> None:
+        """Lock the REST field allowlist for tenant user listings."""
+        from services.admin.app.user_routes import UserResponse
+
+        fields = getattr(UserResponse, "model_fields", None)
+        field_names = set((fields or UserResponse.__fields__).keys())
+
+        assert field_names == {
+            "id",
+            "email",
+            "status",
+            "is_sysadmin",
+            "role_id",
+            "role_name",
+            "created_at",
+        }
+        assert {
+            "password_hash",
+            "mfa_secret",
+            "mfa_secret_ciphertext",
+            "refresh_token_hash",
+            "token_version",
+        }.isdisjoint(field_names)
+
     def test_returns_400_when_no_tenant_context(self, monkeypatch) -> None:
         """Defensive: if the RLS context isn't populated (e.g. sysadmin
         hit the endpoint directly without selecting a tenant), the
@@ -216,6 +240,38 @@ class TestUpdateUserRole_Issue1341:
                 user_routes_mod.update_user_role(
                     user_id=TARGET_USER_ID,
                     update=user_routes_mod.RoleUpdate(role_id=OWNER_ROLE_ID),
+                    current_user=_fake_user(ACTOR_ID, is_sysadmin=False),
+                    db=db,
+                )
+            )
+        assert exc.value.status_code == 400
+        assert "Role not found" in exc.value.detail
+
+    def test_returns_400_when_role_belongs_to_another_tenant(self, monkeypatch) -> None:
+        """A tenant admin may only assign system roles or roles owned by
+        the current tenant. Otherwise a role_id from another tenant becomes
+        an IDOR primitive for cross-tenant privilege changes."""
+        user_routes_mod, _ = _load_routes(monkeypatch)
+        db = MagicMock()
+
+        membership = _fake_membership(role_id=MEMBER_ROLE_ID)
+        result = MagicMock()
+        result.scalar_one_or_none.return_value = membership
+        db.execute.return_value = result
+
+        other_tenant_role_id = uuid.UUID("dddddddd-0000-0000-0000-000000000004")
+        other_tenant_id = uuid.UUID("99999999-9999-9999-9999-999999999999")
+        db.get.return_value = _fake_role(
+            other_tenant_role_id,
+            "Admin",
+            tenant_id=other_tenant_id,
+        )
+
+        with pytest.raises(HTTPException) as exc:
+            asyncio.run(
+                user_routes_mod.update_user_role(
+                    user_id=TARGET_USER_ID,
+                    update=user_routes_mod.RoleUpdate(role_id=other_tenant_role_id),
                     current_user=_fake_user(ACTOR_ID, is_sysadmin=False),
                     db=db,
                 )

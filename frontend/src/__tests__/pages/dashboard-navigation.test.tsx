@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import DashboardLayout from '@/app/dashboard/layout';
 import { useAuth } from '@/lib/auth-context';
 import { usePathname, useRouter } from 'next/navigation';
@@ -51,7 +52,9 @@ describe('Dashboard navigation discoverability', () => {
         });
     });
 
-    it('exposes Inflow Lab as a top-level active dashboard link', async () => {
+    it('exposes Inflow Lab as a top-level active dashboard link while collapsed submenu links stay unmounted', async () => {
+        const user = userEvent.setup();
+
         render(
             <DashboardLayout>
                 <div>Inflow content</div>
@@ -65,8 +68,49 @@ describe('Dashboard navigation discoverability', () => {
         expect(inflowLink).not.toBeNull();
         expect(inflowLink).toHaveAttribute('href', '/dashboard/inflow-lab');
         expect(inflowLink).toHaveAttribute('aria-current', 'page');
-        expect(screen.getByRole('button', { name: /Intake/i })).toBeInTheDocument();
-        expect(screen.getAllByText('Import files')[0].closest('a')).toHaveAttribute('href', '/ingest');
+
+        const intakeButton = screen.getByRole('button', { name: /Intake/i });
+        expect(intakeButton).toHaveAttribute('aria-expanded', 'false');
+        expect(screen.queryByRole('link', { name: /Import files/i })).not.toBeInTheDocument();
+
+        await user.click(intakeButton);
+
+        expect(intakeButton).toHaveAttribute('aria-expanded', 'true');
+        expect(screen.getByRole('link', { name: /Import files/i })).toHaveAttribute('href', '/ingest');
+        expect(screen.getByRole('link', { name: /Integration registry/i })).toHaveAttribute(
+            'href',
+            '/dashboard/integrations',
+        );
+    });
+
+    it('keeps the mobile quick navigation visible without horizontal scrolling and uses 44px targets', () => {
+        render(
+            <DashboardLayout>
+                <div>Inflow content</div>
+            </DashboardLayout>,
+        );
+
+        const quickNav = screen.getByRole('navigation', { name: /Dashboard quick navigation/i });
+        expect(quickNav).toHaveClass('grid', 'grid-cols-5', 'overflow-hidden');
+        expect(quickNav).not.toHaveClass('overflow-x-auto');
+
+        const expectedLinks = [
+            ['Overview', '/dashboard'],
+            ['Inflow Lab', '/dashboard/inflow-lab'],
+            ['Compliance', '/dashboard/compliance'],
+            ['Alerts', '/dashboard/alerts'],
+            ['FDA Export', '/dashboard/export-jobs'],
+        ];
+
+        expectedLinks.forEach(([name, href]) => {
+            const link = screen.getAllByRole('link', { name: new RegExp(name, 'i') }).find((node) => {
+                return node.closest('nav')?.getAttribute('aria-label') === 'Dashboard quick navigation';
+            });
+
+            expect(link).toBeDefined();
+            expect(link).toHaveAttribute('href', href);
+            expect(link).toHaveClass('min-h-[44px]', 'min-w-0');
+        });
     });
 
     it('redirects unauthenticated visitors back to login with the Inflow Lab return path', async () => {

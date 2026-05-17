@@ -245,6 +245,19 @@ def _make_db_with_user(user, tenant=None, membership=None) -> MagicMock:
     return db
 
 
+def _make_recovery_token() -> str:
+    now_ts = int(time.time())
+    recovery_token_payload = {
+        "sub": "sb-user-1",
+        "aud": "authenticated",
+        "amr": [{"method": "otp", "timestamp": now_ts}],
+        "iat": now_ts,
+        "exp": now_ts + 3600,
+        "jti": str(uuid_mod.uuid4()),
+    }
+    return _jwt.encode(recovery_token_payload, "irrelevant", algorithm="HS256")  # nosemgrep: python.jwt.security.jwt-hardcode.jwt-python-hardcoded-secret
+
+
 def _make_membership(user, tenant) -> SimpleNamespace:
     return SimpleNamespace(
         id=uuid_mod.uuid4(),
@@ -371,6 +384,159 @@ class TestJwtIssuance:
 
 
 class TestLogin:
+    def test_email_code_routes_registered(self):
+        """Passwordless email-code login routes are mounted under /auth."""
+        paths = {getattr(route, "path", None) for route in ar.router.routes}
+        assert "/auth/email-code/request" in paths
+        assert "/auth/email-code/confirm" in paths
+
+    def test_send_email_login_code_uses_resend_when_key_configured(self, monkeypatch):
+        """The email-code sender uses the existing Resend SDK integration."""
+        import services.admin.app.auth.email_code_router as ecr
+
+        class DummyEmails:
+            last_payload = None
+
+            @staticmethod
+            def send(payload):
+                DummyEmails.last_payload = payload
+                return SimpleNamespace(id="email_123")
+
+        class DummyResend:
+            api_key = None
+            Emails = DummyEmails
+
+        monkeypatch.setenv("RESEND_API_KEY", "re_test_key")
+        monkeypatch.setenv("RESEND_FROM_EMAIL", "login@regengine.test")
+        monkeypatch.setitem(sys.modules, "resend", DummyResend)
+        logger = MagicMock()
+        monkeypatch.setattr(ecr, "logger", logger)
+
+        assert ecr._send_email_login_code("buyer@example.com", "123456") is True
+        assert DummyResend.api_key == "re_test_key"
+        assert DummyEmails.last_payload is not None
+        assert DummyEmails.last_payload["from"] == "login@regengine.test"
+        assert DummyEmails.last_payload["to"] == "buyer@example.com"
+        assert "123456" in DummyEmails.last_payload["subject"]
+        assert "123456" in DummyEmails.last_payload["html"]
+        logger.info.assert_called_once_with(
+            "email_login_code_sent",
+            email="b***@example.com",
+            resend_id="email_123",
+        )
+
+    @pytest.mark.asyncio
+    async def test_request_email_code_stores_hashed_code_and_sends_for_active_user(self, monkeypatch):
+        """Email-code request stores a hashed one-time code and sends it."""
+        import services.admin.app.auth.email_code_router as ecr
+
+        user = _make_user(email="u@example.com")
+        db = _make_db_with_user(user)
+        client = _make_redis_client()
+        session_store = _make_session_store(redis_client=client)
+        send = MagicMock(return_value=True)
+        monkeypatch.setattr(ecr.secrets, "randbelow", lambda _max: 23456)
+        monkeypatch.setattr(ecr, "_send_email_login_code", send)
+
+        result = await ar.request_email_login_code.__wrapped__(
+            payload=ar.EmailCodeRequest(email="U@Example.com"),
+            request=_make_request("/auth/email-code/request"),
+            db=db,
+            session_store=session_store,
+        )
+
+        assert result.status == "code_sent"
+        send.assert_called_once_with("u@example.com", "123456")
+        client.setex.assert_awaited_once()
+        _key, _ttl, raw_payload = client.setex.await_args.args
+        assert "123456" not in raw_payload
+        stored = __import__("json").loads(raw_payload)
+        assert stored["attempts"] == ecr.EMAIL_CODE_ATTEMPTS
+        assert stored["code_hash"] == ecr._hash_email_code("u@example.com", "123456")
+
+    @pytest.mark.asyncio
+    async def test_request_email_code_unknown_email_is_neutral_and_does_not_send(self, monkeypatch):
+        """Unknown emails receive the same neutral response but no code is sent."""
+        import services.admin.app.auth.email_code_router as ecr
+
+        db = _make_db_with_user(None)
+        client = _make_redis_client()
+        session_store = _make_session_store(redis_client=client)
+        send = MagicMock(return_value=True)
+        monkeypatch.setattr(ecr, "_send_email_login_code", send)
+
+        result = await ar.request_email_login_code.__wrapped__(
+            payload=ar.EmailCodeRequest(email="ghost@example.com"),
+            request=_make_request("/auth/email-code/request"),
+            db=db,
+            session_store=session_store,
+        )
+
+        assert result.status == "code_sent"
+        send.assert_not_called()
+        client.setex.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_confirm_email_code_returns_tokens_and_consumes_code(self, monkeypatch):
+        """A valid email code is exchanged for normal RegEngine tokens."""
+        import json
+        import services.admin.app.auth.email_code_router as ecr
+
+        user = _make_user(email="u@example.com", token_version=2)
+        tenant = _make_tenant()
+        membership = _make_membership(user, tenant)
+        db = _make_db_with_user(user, tenant, membership)
+        client = _make_redis_client()
+        client.get = AsyncMock(return_value=json.dumps({
+            "code_hash": ecr._hash_email_code("u@example.com", "123456"),
+            "attempts": 3,
+        }))
+        session_store = _make_session_store(redis_client=client)
+        monkeypatch.setattr(ecr, "AuditLogger", MagicMock())
+
+        result = await ar.confirm_email_login_code.__wrapped__(
+            payload=ar.EmailCodeConfirmRequest(email="U@Example.com", code="123456"),
+            request=_make_request("/auth/email-code/confirm"),
+            db=db,
+            session_store=session_store,
+        )
+
+        assert result.access_token
+        assert result.refresh_token
+        assert result.tenant_id == tenant.id
+        assert result.user["email"] == "u@example.com"
+        payload = decode_access_token(result.access_token)
+        assert payload["sub"] == str(user.id)
+        assert payload["tv"] == 2
+        assert payload["auth_method"] == "email_code"
+        client.delete.assert_any_await(ecr._email_code_key("u@example.com"))
+
+    @pytest.mark.asyncio
+    async def test_confirm_email_code_wrong_code_decrements_attempts(self):
+        """Wrong confirmation codes are rejected and consume one attempt."""
+        import json
+        import services.admin.app.auth.email_code_router as ecr
+
+        client = _make_redis_client()
+        client.get = AsyncMock(return_value=json.dumps({
+            "code_hash": ecr._hash_email_code("u@example.com", "123456"),
+            "attempts": 3,
+        }))
+        session_store = _make_session_store(redis_client=client)
+        db = _make_db_with_user(None)
+
+        with pytest.raises(HTTPException) as exc:
+            await ar.confirm_email_login_code.__wrapped__(
+                payload=ar.EmailCodeConfirmRequest(email="u@example.com", code="000000"),
+                request=_make_request("/auth/email-code/confirm"),
+                db=db,
+                session_store=session_store,
+            )
+
+        assert exc.value.status_code == 401
+        _key, _ttl, raw_payload = client.setex.await_args.args
+        assert json.loads(raw_payload)["attempts"] == 2
+
     @pytest.mark.asyncio
     async def test_login_happy_path_returns_tokens(self, monkeypatch):
         """Valid credentials → 200 with access_token, refresh_token, tenant_id."""
@@ -886,6 +1052,39 @@ class TestSessionManagement:
 
 
 class TestPasswordReset:
+    def test_password_change_confirmation_email_logs_typed_resend_id(self, monkeypatch):
+        """Password-reset confirmation logs IDs from Resend SDK v2 typed responses."""
+        class DummyEmails:
+            last_payload = None
+
+            @staticmethod
+            def send(payload):
+                DummyEmails.last_payload = payload
+                return SimpleNamespace(id="email_123")
+
+        class DummyResend:
+            api_key = None
+            Emails = DummyEmails
+
+        monkeypatch.setenv("RESEND_API_KEY", "re_test_key")
+        monkeypatch.setenv("RESEND_FROM_EMAIL", "security@regengine.test")
+        monkeypatch.setitem(sys.modules, "resend", DummyResend)
+        logger = MagicMock()
+        monkeypatch.setattr(_reset_password_router_mod, "logger", logger)
+
+        _reset_password_router_mod._send_password_change_confirmation_email("reset@example.com")
+
+        assert DummyResend.api_key == "re_test_key"
+        assert DummyEmails.last_payload is not None
+        assert DummyEmails.last_payload["from"] == "security@regengine.test"
+        assert DummyEmails.last_payload["to"] == "reset@example.com"
+        assert "password was changed" in DummyEmails.last_payload["subject"].lower()
+        logger.info.assert_called_once_with(
+            "password_change_confirmation_email_sent",
+            email="r***@example.com",
+            resend_id="email_123",
+        )
+
     @pytest.mark.asyncio
     async def test_reset_missing_auth_header_raises_401(self):
         """No Authorization header → 401."""
@@ -952,16 +1151,7 @@ class TestPasswordReset:
     @pytest.mark.asyncio
     async def test_reset_happy_path_updates_hash_and_bumps_tv(self, monkeypatch):
         """Happy path: fresh OTP token → password_hash updated, token_version bumped."""
-        now_ts = int(time.time())
-        recovery_token_payload = {
-            "sub": "sb-user-1",
-            "aud": "authenticated",
-            "amr": [{"method": "otp", "timestamp": now_ts}],
-            "iat": now_ts,
-            "exp": now_ts + 3600,
-            "jti": str(uuid_mod.uuid4()),
-        }
-        recovery_token = _jwt.encode(recovery_token_payload, "irrelevant", algorithm="HS256")  # nosemgrep: python.jwt.security.jwt-hardcode.jwt-python-hardcoded-secret
+        recovery_token = _make_recovery_token()
 
         fake_sb_user = SimpleNamespace(id="sb-user-1", email="reset@example.com")
         fake_sb = SimpleNamespace(
@@ -971,6 +1161,12 @@ class TestPasswordReset:
             )
         )
         monkeypatch.setattr(_reset_password_router_mod, "get_supabase", lambda: fake_sb)
+        send_confirmation = MagicMock()
+        monkeypatch.setattr(
+            _reset_password_router_mod,
+            "_send_password_change_confirmation_email",
+            send_confirmation,
+        )
 
         user = _make_user(email="reset@example.com", password="old-pass", token_version=1)
         db = _make_db_with_user(user)
@@ -1003,7 +1199,107 @@ class TestPasswordReset:
         assert result == {"status": "success"}
         assert user.password_hash != old_hash
         assert user.token_version == 2  # bumped from 1
+        fake_sb.auth.admin.update_user_by_id.assert_called_once_with(
+            "sb-user-1", {"password": "NewStrongPass-9!"}
+        )
         db.commit.assert_called_once()
+        session_store.revoke_all_for_user.assert_awaited_once_with(user.id)
+        send_confirmation.assert_called_once_with("reset@example.com")
+
+    @pytest.mark.asyncio
+    async def test_reset_rejects_reusing_current_password_without_commit_or_sync(self, monkeypatch):
+        """Fresh recovery token cannot set the existing password again."""
+        recovery_token = _make_recovery_token()
+
+        fake_sb_user = SimpleNamespace(id="sb-user-1", email="reset@example.com")
+        fake_sb = SimpleNamespace(
+            auth=SimpleNamespace(
+                get_user=MagicMock(return_value=SimpleNamespace(user=fake_sb_user)),
+                admin=SimpleNamespace(update_user_by_id=MagicMock(return_value=None)),
+            )
+        )
+        monkeypatch.setattr(_reset_password_router_mod, "get_supabase", lambda: fake_sb)
+        send_confirmation = MagicMock()
+        monkeypatch.setattr(
+            _reset_password_router_mod,
+            "_send_password_change_confirmation_email",
+            send_confirmation,
+        )
+
+        user = _make_user(email="reset@example.com", password="CurrentPass-9!", token_version=1)
+        db = _make_db_with_user(user)
+
+        session_store = _make_session_store()
+        client = _make_redis_client()
+        client.set = AsyncMock(return_value=True)
+        session_store._get_client = AsyncMock(return_value=client)
+
+        request = _make_request(headers={
+            "authorization": f"Bearer {recovery_token}",
+            "user-agent": "pytest",
+        })
+
+        old_hash = user.password_hash
+        with pytest.raises(HTTPException) as exc:
+            await ar.reset_password.__wrapped__(
+                payload=ResetPasswordRequest(new_password="CurrentPass-9!"),
+                request=request,
+                db=db,
+                session_store=session_store,
+            )
+
+        assert exc.value.status_code == 400
+        assert exc.value.detail == "New password must be different from your current password"
+        assert user.password_hash == old_hash
+        assert user.token_version == 1
+        fake_sb.auth.admin.update_user_by_id.assert_not_called()
+        db.commit.assert_not_called()
+        session_store.revoke_all_for_user.assert_not_awaited()
+        send_confirmation.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_reset_confirmation_email_failure_does_not_fail_reset(self, monkeypatch):
+        recovery_token = _make_recovery_token()
+
+        fake_sb_user = SimpleNamespace(id="sb-user-1", email="reset@example.com")
+        fake_sb = SimpleNamespace(
+            auth=SimpleNamespace(
+                get_user=MagicMock(return_value=SimpleNamespace(user=fake_sb_user)),
+                admin=SimpleNamespace(update_user_by_id=MagicMock(return_value=None)),
+            )
+        )
+        monkeypatch.setattr(_reset_password_router_mod, "get_supabase", lambda: fake_sb)
+        send_confirmation = MagicMock(side_effect=RuntimeError("resend outage"))
+        monkeypatch.setattr(
+            _reset_password_router_mod,
+            "_send_password_change_confirmation_email",
+            send_confirmation,
+        )
+        monkeypatch.setattr(
+            _reset_password_router_mod,
+            "_revoke_all_elevation_tokens_for_user",
+            AsyncMock(return_value=0),
+        )
+
+        user = _make_user(email="reset@example.com", password="old-pass", token_version=1)
+        db = _make_db_with_user(user)
+        session_store = _make_session_store()
+        request = _make_request(headers={
+            "authorization": f"Bearer {recovery_token}",
+            "user-agent": "pytest",
+        })
+
+        result = await ar.reset_password.__wrapped__(
+            payload=ResetPasswordRequest(new_password="NewStrongPass-9!"),
+            request=request,
+            db=db,
+            session_store=session_store,
+        )
+
+        assert result == {"status": "success"}
+        assert user.token_version == 2
+        db.commit.assert_called_once()
+        send_confirmation.assert_called_once_with("reset@example.com")
 
 
 # ──────────────────────────────────────────────────────────────────────────────

@@ -14,15 +14,50 @@ export const maxDuration = 300;
 // the bootstrap register route must be reachable before any credentials exist.
 const UNAUTHENTICATED_AUTH_PATHS = new Set([
     'auth/login',
+    'auth/email-code/request',
+    'auth/email-code/confirm',
     'auth/signup',
     'auth/refresh',
     'auth/register',
     'auth/accept-invite',
     'v1/auth/accept-invite',
-    // Password reset — caller passes a Supabase recovery token, not a RegEngine JWT.
+    // Password reset flows start before a RegEngine session exists.
+    'auth/forgot-password',
+    // Reset caller passes a Supabase recovery token, not a RegEngine JWT.
     // Backend validates it via sb.auth.get_user(); no RegEngine session required.
     'auth/reset-password',
 ]);
+
+export function isUnauthenticatedAdminPath(path: string): boolean {
+    return UNAUTHENTICATED_AUTH_PATHS.has(path);
+}
+
+export function buildAdminProxyHeaders(request: NextRequest): Headers {
+    const headers = new Headers();
+    const hasRequestBody = !['GET', 'OPTIONS'].includes(request.method);
+    const contentType = request.headers.get('content-type');
+    if (contentType) {
+        headers.set('Content-Type', contentType);
+    } else if (hasRequestBody) {
+        headers.set('Content-Type', 'application/json');
+    }
+
+    passthroughRequestHeaders(headers, request, [
+        'authorization',
+        'x-api-key',
+        'x-admin-key',
+        'x-regengine-api-key',
+        'x-tenant-id',
+    ]);
+
+    // Inject access token from HTTP-only cookie as Bearer token.
+    // Respect an existing Authorization header so recovery flows
+    // (auth/reset-password) pass a Supabase token that must not be
+    // overwritten by a stale RegEngine cookie.
+    applyCookieCredentials(headers, request, { respectExistingAuthHeader: true });
+
+    return headers;
+}
 
 function getAdminTargets(): string[] {
     const candidates: string[] = [];
@@ -61,33 +96,8 @@ function getAdminTargets(): string[] {
 const { GET, POST, PUT, PATCH, DELETE, OPTIONS } = createStreamProxy({
     serviceName: 'admin',
     resolveTargetBases: getAdminTargets,
-    isUnauthenticatedPath: (path) => UNAUTHENTICATED_AUTH_PATHS.has(path),
-    buildHeaders: (request: NextRequest) => {
-        const headers = new Headers();
-        const hasRequestBody = !['GET', 'OPTIONS'].includes(request.method);
-        const contentType = request.headers.get('content-type');
-        if (contentType) {
-            headers.set('Content-Type', contentType);
-        } else if (hasRequestBody) {
-            headers.set('Content-Type', 'application/json');
-        }
-
-        passthroughRequestHeaders(headers, request, [
-            'authorization',
-            'x-api-key',
-            'x-admin-key',
-            'x-regengine-api-key',
-            'x-tenant-id',
-        ]);
-
-        // Inject access token from HTTP-only cookie as Bearer token.
-        // Respect an existing Authorization header so recovery flows
-        // (auth/reset-password) pass a Supabase token that must not be
-        // overwritten by a stale RegEngine cookie.
-        applyCookieCredentials(headers, request, { respectExistingAuthHeader: true });
-
-        return headers;
-    },
+    isUnauthenticatedPath: isUnauthenticatedAdminPath,
+    buildHeaders: buildAdminProxyHeaders,
 });
 
 export { GET, POST, PUT, PATCH, DELETE, OPTIONS };

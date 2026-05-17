@@ -33,6 +33,7 @@ import {
     ClipboardList,
     Eye,
     FlaskConical,
+    Bot,
 } from 'lucide-react';
 
 // ---------------------------------------------------------------------------
@@ -102,6 +103,7 @@ const COLLAPSIBLE_SECTIONS: CollapsibleSection[] = [
             { label: 'Requests', href: '/requests', icon: ClipboardList },
             { label: 'Identity', href: '/identity', icon: Fingerprint },
             { label: 'Review', href: '/review', icon: Eye },
+            { label: 'Agent reviews', href: '/dashboard/agent-reviews', icon: Bot },
             { label: 'Audit', href: '/dashboard/audit-log', icon: ScrollText },
             { label: 'Readiness', href: '/fsma', icon: ShieldCheck },
             { label: 'Incidents', href: '/dashboard/issues', icon: AlertTriangle },
@@ -190,16 +192,6 @@ function CollapsibleNavSection({
     onToggle: () => void;
     pathname: string;
 }) {
-    const contentRef = React.useRef<HTMLDivElement>(null);
-    const [height, setHeight] = React.useState<number | undefined>(undefined);
-
-    // Measure content height for smooth animation
-    React.useEffect(() => {
-        if (contentRef.current) {
-            setHeight(contentRef.current.scrollHeight);
-        }
-    }, [expanded, section.items.length]);
-
     return (
         <div className="mt-1">
             {/* Section header — clickable toggle */}
@@ -220,11 +212,8 @@ function CollapsibleNavSection({
             </button>
 
             {/* Collapsible items */}
-            <div
-                className="overflow-hidden transition-all duration-200"
-                style={{ maxHeight: expanded ? (height ?? 1000) : 0, opacity: expanded ? 1 : 0 }}
-            >
-                <div ref={contentRef} className="px-2.5 pl-5 space-y-0.5 pb-1" role="list">
+            {expanded && (
+                <div className="px-2.5 pl-5 space-y-0.5 pb-1" role="list">
                     {section.items.map((item) => {
                         const Icon = item.icon;
                         const isActive = isNavItemActive(pathname, item.href);
@@ -232,8 +221,6 @@ function CollapsibleNavSection({
                             <Link
                                 key={item.href + item.label}
                                 href={item.href}
-                                role="listitem"
-                                tabIndex={expanded ? 0 : -1}
                                 aria-current={isActive ? 'page' : undefined}
                                 className={`flex items-center gap-2.5 px-2.5 py-2 rounded-md text-[13px] transition-all min-h-[36px] ${
                                     isActive
@@ -248,7 +235,7 @@ function CollapsibleNavSection({
                         );
                     })}
                 </div>
-            </div>
+            )}
         </div>
     );
 }
@@ -442,7 +429,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
             {/* Mobile top nav — limited to 5 always-visible items */}
             <div className="md:hidden fixed top-0 left-0 right-0 z-50 bg-[var(--re-sticky-bg)] border-b border-[var(--re-surface-border)] shadow-sm" style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}>
-                <nav aria-label="Dashboard quick navigation" className="flex items-center gap-1.5 px-3 py-1.5 overflow-x-auto no-scrollbar scrollbar-none">
+                <nav aria-label="Dashboard quick navigation" className="grid grid-cols-5 gap-1 px-2 py-1.5 overflow-hidden">
                     {MOBILE_NAV_ITEMS.map((item) => {
                         const Icon = item.icon;
                         const isActive = pathname === item.href;
@@ -450,14 +437,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                             <Link
                                 key={item.href}
                                 href={item.href}
-                                className={`flex items-center gap-1.5 px-3 min-h-[36px] rounded-md text-xs font-medium whitespace-nowrap border transition-all active:scale-[0.96] ${
+                                className={`flex min-w-0 flex-col items-center justify-center gap-0.5 rounded-md border px-1 py-1 text-center text-[10px] font-medium leading-tight min-h-[44px] transition-all active:scale-[0.96] ${
                                     isActive
                                         ? 'bg-[var(--re-brand)] text-[var(--re-surface-base)] border-[var(--re-brand)]'
                                         : 'border-[var(--re-border-default)] text-[var(--re-text-muted)]'
                                 }`}
                             >
-                                <Icon className="h-3.5 w-3.5" />
-                                {item.label}
+                                <Icon className="h-3.5 w-3.5 flex-shrink-0" />
+                                <span className="min-w-0 max-w-full break-words">{item.label}</span>
                             </Link>
                         );
                     })}
@@ -465,7 +452,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             </div>
 
             {/* Main content */}
-            <main className="flex-1 md:pt-0 pt-[52px] overflow-y-auto">
+            <main className="flex-1 md:pt-0 pt-[64px] overflow-y-auto">
                 <DashboardBreadcrumb />
                 <DashboardErrorBoundary>
                     {children}

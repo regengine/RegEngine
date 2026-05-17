@@ -15,12 +15,26 @@ from uuid import UUID
 
 from fastapi import status
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, EmailStr, Field
 
 
 class LoginRequest(BaseModel):
     email: str = Field(max_length=255)
     password: str = Field(max_length=128)
+
+
+class EmailCodeRequest(BaseModel):
+    email: EmailStr = Field(max_length=255)
+
+
+class EmailCodeConfirmRequest(BaseModel):
+    email: EmailStr = Field(max_length=255)
+    code: str = Field(min_length=6, max_length=6, pattern=r"^\d{6}$")
+
+
+class EmailCodeRequestResponse(BaseModel):
+    status: str
+    detail: str
 
 
 class TokenResponse(BaseModel):
@@ -48,6 +62,10 @@ class UserResponse(BaseModel):
     email: str
     is_sysadmin: bool
     status: str
+    tenant_id: Optional[UUID] = None
+    tenant_status: Optional[str] = None
+    role_name: Optional[str] = None
+    permissions: List[str] = Field(default_factory=list)
 
 
 _SIGNUP_ACCEPTED_DETAIL = "Check your inbox for confirmation instructions."

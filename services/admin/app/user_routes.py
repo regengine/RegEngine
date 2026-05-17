@@ -118,6 +118,8 @@ async def update_user_role(
     target_role = db.get(RoleModel, update.role_id)
     if not target_role:
         raise HTTPException(status_code=400, detail="Role not found")
+    if target_role.tenant_id is not None and target_role.tenant_id != tenant_id:
+        raise HTTPException(status_code=400, detail="Role not found")
 
     current_role = db.get(RoleModel, membership.role_id)
     if current_role.name == "Owner" and target_role.name != "Owner":

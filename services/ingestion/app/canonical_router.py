@@ -16,6 +16,7 @@ Endpoints:
     GET    /api/v1/records/{event_id}/history        — Amendment chain
     GET    /api/v1/records/ingestion-runs            — List ingestion runs
     GET    /api/v1/records/ingestion-runs/{run_id}   — Ingestion run detail
+    GET    /api/v1/records/ingestion-runs/{run_id}/timeline — Receipt timeline
 """
 
 from __future__ import annotations
@@ -32,6 +33,7 @@ from pydantic import BaseModel, Field
 from .authz import require_permission, IngestionPrincipal
 from .tenant_validation import validate_tenant_id, resolve_tenant
 from shared.canonical_persistence import CanonicalEventStore
+from shared.run_ledger import fetch_ingestion_run_timeline
 from shared.tenant_context import set_tenant_guc
 from shared.database import get_db_session
 
@@ -267,6 +269,29 @@ async def get_ingestion_run(
         "completed_at": row[13].isoformat() if row[13] else None,
         "errors": row[14] if isinstance(row[14], list) else json.loads(row[14] or "[]"),
     }
+
+
+@router.get(
+    "/ingestion-runs/{run_id}/timeline",
+    summary="Get ingestion run receipt timeline",
+)
+async def get_ingestion_run_timeline(
+    run_id: str,
+    tenant_id: Optional[str] = Query(None),
+    principal: IngestionPrincipal = Depends(require_permission("records.read")),
+    db_session=Depends(get_db_session),
+):
+    if db_session is None:
+        raise HTTPException(status_code=503, detail="Database unavailable")
+
+    tid = resolve_tenant(tenant_id, principal)
+    set_tenant_guc(db_session, tid)
+    timeline = fetch_ingestion_run_timeline(db_session, tid, run_id)
+
+    if not timeline:
+        raise HTTPException(status_code=404, detail="Ingestion run not found")
+
+    return timeline.model_dump(mode="json")
 
 
 @router.get(

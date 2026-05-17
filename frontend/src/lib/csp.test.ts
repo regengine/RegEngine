@@ -41,6 +41,8 @@ describe('buildCsp', () => {
 
     expect(directives['script-src']).toContain("'unsafe-eval'");
     expect(directives['script-src']).toContain("'unsafe-inline'");
+    expect(directives['script-src']).not.toContain("'nonce-test-nonce'");
+    expect(directives['script-src']).not.toContain("'strict-dynamic'");
   });
 
   it('allows required first-party integrations without weakening framing or object policy', () => {
@@ -70,6 +72,34 @@ describe('buildCsp', () => {
     expect(directives['base-uri']).toEqual(["'self'"]);
     expect(directives['form-action']).toEqual(["'self'"]);
     expect(directives['upgrade-insecure-requests']).toEqual([]);
+  });
+
+  it('omits upgrade-insecure-requests for local HTTP hosts', () => {
+    const localHttpUrls = [
+      'http://localhost:3000/login',
+      'http://127.0.0.1:3000/login',
+      'http://[::1]:3000/login',
+    ];
+
+    for (const requestUrl of localHttpUrls) {
+      const directives = parseDirectives(buildCsp('test-nonce', { requestUrl }));
+
+      expect(directives['upgrade-insecure-requests']).toBeUndefined();
+    }
+  });
+
+  it('keeps upgrade-insecure-requests by default and outside local HTTP', () => {
+    expect(parseDirectives(buildCsp('test-nonce'))['upgrade-insecure-requests']).toEqual([]);
+    expect(
+      parseDirectives(buildCsp('test-nonce', { requestUrl: 'https://localhost:3000/login' }))[
+        'upgrade-insecure-requests'
+      ],
+    ).toEqual([]);
+    expect(
+      parseDirectives(buildCsp('test-nonce', { requestUrl: 'http://app.example.com/login' }))[
+        'upgrade-insecure-requests'
+      ],
+    ).toEqual([]);
   });
 });
 

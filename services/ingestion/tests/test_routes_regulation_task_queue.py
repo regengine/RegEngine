@@ -112,6 +112,8 @@ class TestIngestRegulation:
         assert body["status"] == "queued"
 
     def test_enqueues_correct_task_type(self, monkeypatch, tmp_path):
+        fixed = "00000000-0000-0000-0000-000000000011"
+        monkeypatch.setattr("app.routes.uuid.uuid4", lambda: uuid.UUID(fixed))
         fake_session = MagicMock()
         mock_enqueue = MagicMock(return_value=1)
         mock_redis = MagicMock()
@@ -135,6 +137,7 @@ class TestIngestRegulation:
         assert kw["payload"]["filename"] == "reg.pdf"
         assert kw["payload"]["tenant_id"] == "tenant-reg"
         assert "file_path" in kw["payload"]
+        assert kw["idempotency_key"] == f"regulation_ingest:tenant-reg:{fixed}"
 
     def test_staging_file_written(self, monkeypatch, tmp_path):
         fake_session = MagicMock()

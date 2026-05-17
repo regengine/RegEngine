@@ -35,21 +35,41 @@ export function shouldApplyCspProxy(pathname: string): boolean {
 type BuildCspOptions = {
   allowDevUnsafeEval?: boolean;
   allowDevUnsafeInline?: boolean;
+  requestUrl?: string | Pick<URL, 'protocol' | 'hostname'>;
 };
+
+function shouldUpgradeInsecureRequests(
+  requestUrl: string | Pick<URL, 'protocol' | 'hostname'> | undefined,
+): boolean {
+  if (!requestUrl) {
+    return true;
+  }
+
+  const url = typeof requestUrl === 'string' ? new URL(requestUrl) : requestUrl;
+  const hostname = url.hostname.replace(/^\[(.*)\]$/, '$1');
+
+  return !(
+    url.protocol === 'http:' &&
+    ['localhost', '127.0.0.1', '::1'].includes(hostname)
+  );
+}
 
 export function buildCsp(nonce: string, options: BuildCspOptions = {}): string {
   const scriptSrc = [
     "'self'",
-    `'nonce-${nonce}'`,
-    "'strict-dynamic'",
   ];
+
+  // In local development, Next.js can emit nonce-less inline tooling scripts.
+  // If a nonce or strict-dynamic is present, browsers ignore unsafe-inline, so
+  // only use nonce-based strict CSP when the dev inline fallback is disabled.
+  if (options.allowDevUnsafeInline) {
+    scriptSrc.push("'unsafe-inline'");
+  } else {
+    scriptSrc.push(`'nonce-${nonce}'`, "'strict-dynamic'");
+  }
 
   if (options.allowDevUnsafeEval) {
     scriptSrc.push("'unsafe-eval'");
-  }
-
-  if (options.allowDevUnsafeInline) {
-    scriptSrc.push("'unsafe-inline'");
   }
 
   const directives = [
@@ -81,8 +101,11 @@ export function buildCsp(nonce: string, options: BuildCspOptions = {}): string {
     "base-uri 'self'",
     "form-action 'self'",
     "object-src 'none'",
-    "upgrade-insecure-requests",
   ];
+
+  if (shouldUpgradeInsecureRequests(options.requestUrl)) {
+    directives.push("upgrade-insecure-requests");
+  }
 
   return directives.join('; ');
 }

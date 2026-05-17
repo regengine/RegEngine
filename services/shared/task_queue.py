@@ -26,7 +26,7 @@ Concurrency model:
 
 Failure handling:
     - Handler raises → row goes back to ``pending`` with
-      ``locked_until = now() + backoff`` and ``attempts`` incremented.
+      ``scheduled_at = now() + backoff`` and ``attempts`` incremented.
     - After ``max_attempts`` (default 3), row transitions to ``dead``
       and stops retrying.
     - Worker crashes mid-task → row stays ``processing`` with
@@ -35,10 +35,9 @@ Failure handling:
       releases the row back to ``pending``.
 
 Idempotency:
-    - This module does NOT enforce idempotency keys — ``enqueue_task``
-      will happily write duplicate rows. Adding a unique index on
-      ``(task_type, idempotency_key)`` is a follow-up migration noted
-      in ADR-002's deferred questions.
+    - When callers supply ``idempotency_key``, the queue uses the
+      existing partial unique index on ``(tenant_id, idempotency_key)``
+      and returns the already-enqueued task id on conflict.
 
 [ADR-002]: docs/architecture/decisions/ADR-002-backgroundtasks-to-task-queue.md
 """
@@ -51,12 +50,16 @@ import logging
 import threading
 import time
 import uuid
+from datetime import datetime
 from typing import Any, Callable, Optional
 
 from sqlalchemy import text
 from sqlalchemy.engine import Engine
 
 logger = logging.getLogger("task_queue")
+
+TASK_QUEUE_STATUSES = ("pending", "processing", "completed", "failed", "dead")
+_TASK_QUEUE_GAUGES: dict[str, Any] = {}
 
 
 # ---------------------------------------------------------------------------
@@ -113,6 +116,9 @@ def enqueue_task(
     tenant_id: Optional[str] = None,
     priority: int = 0,
     max_attempts: int = 3,
+    idempotency_key: Optional[str] = None,
+    scheduled_at: Optional[datetime] = None,
+    visibility_timeout_seconds: Optional[int] = None,
 ) -> int:
     """Insert a task into ``fsma.task_queue`` and return its id.
 
@@ -130,30 +136,318 @@ def enqueue_task(
             RLS-scoped column on the row.
         priority: Higher values claim earlier within a polling cycle.
         max_attempts: After this many failures the row goes to ``dead``.
+        idempotency_key: Optional tenant-scoped dedupe key. When present,
+            ``tenant_id`` is required and repeat enqueues return the
+            existing task id.
+        scheduled_at: Optional not-before timestamp. Defaults to now.
+        visibility_timeout_seconds: Optional per-task lock duration for
+            long-running handlers.
 
     Returns:
         The ``id`` of the inserted row (``BIGSERIAL``).
     """
+    if idempotency_key is not None and not tenant_id:
+        raise ValueError("tenant_id is required when idempotency_key is provided")
+
+    params = {
+        "task_type": task_type,
+        "payload": json.dumps(payload),
+        "tenant_id": tenant_id,
+        "priority": priority,
+        "max_attempts": max_attempts,
+        "idempotency_key": idempotency_key,
+        "scheduled_at": scheduled_at,
+        "visibility_timeout_seconds": visibility_timeout_seconds,
+    }
+
+    if idempotency_key is not None:
+        result = db_session.execute(
+            text(
+                """
+                INSERT INTO fsma.task_queue
+                    (
+                        task_type, payload, tenant_id, priority, max_attempts,
+                        status, idempotency_key, scheduled_at,
+                        visibility_timeout_seconds
+                    )
+                VALUES
+                    (
+                        :task_type, CAST(:payload AS jsonb), :tenant_id,
+                        :priority, :max_attempts, 'pending', :idempotency_key,
+                        COALESCE(CAST(:scheduled_at AS TIMESTAMPTZ), NOW()),
+                        :visibility_timeout_seconds
+                    )
+                ON CONFLICT (tenant_id, idempotency_key)
+                    WHERE idempotency_key IS NOT NULL
+                    DO NOTHING
+                RETURNING id
+                """
+            ),
+            params,
+        )
+        row = result.fetchone()
+        if row is not None:
+            return int(row[0])
+
+        existing = db_session.execute(
+            text(
+                """
+                SELECT id
+                FROM fsma.task_queue
+                WHERE tenant_id = :tenant_id
+                  AND idempotency_key = :idempotency_key
+                LIMIT 1
+                """
+            ),
+            {
+                "tenant_id": tenant_id,
+                "idempotency_key": idempotency_key,
+            },
+        ).fetchone()
+        if existing is None:
+            raise RuntimeError("idempotent enqueue conflicted but existing task was not found")
+        return int(existing[0])
+
     result = db_session.execute(
         text(
             """
             INSERT INTO fsma.task_queue
-                (task_type, payload, tenant_id, priority, max_attempts, status)
+                (
+                    task_type, payload, tenant_id, priority, max_attempts,
+                    status, scheduled_at, visibility_timeout_seconds
+                )
             VALUES
-                (:task_type, CAST(:payload AS jsonb), :tenant_id, :priority, :max_attempts, 'pending')
+                (
+                    :task_type, CAST(:payload AS jsonb), :tenant_id,
+                    :priority, :max_attempts, 'pending',
+                    COALESCE(CAST(:scheduled_at AS TIMESTAMPTZ), NOW()),
+                    :visibility_timeout_seconds
+                )
             RETURNING id
             """
         ),
-        {
-            "task_type": task_type,
-            "payload": json.dumps(payload),
-            "tenant_id": tenant_id,
-            "priority": priority,
-            "max_attempts": max_attempts,
-        },
+        params,
     )
     task_id: int = result.scalar_one()
     return task_id
+
+
+# ---------------------------------------------------------------------------
+# Operator helpers
+# ---------------------------------------------------------------------------
+
+
+def get_task_queue_summary(db_session: Any) -> dict[str, Any]:
+    """Return read-only queue health for operator surfaces and metrics."""
+
+    count_rows = db_session.execute(
+        text(
+            """
+            SELECT status, COUNT(*) AS count
+            FROM fsma.task_queue
+            GROUP BY status
+            """
+        )
+    ).fetchall()
+    counts = {status: 0 for status in TASK_QUEUE_STATUSES}
+    counts.update({row[0]: int(row[1]) for row in count_rows})
+
+    row = db_session.execute(
+        text(
+            """
+            SELECT
+                COUNT(*) FILTER (
+                    WHERE status = 'pending' AND scheduled_at > NOW()
+                ) AS retrying_count,
+                COUNT(*) FILTER (
+                    WHERE status = 'processing'
+                      AND locked_until IS NOT NULL
+                      AND locked_until < NOW()
+                ) AS stale_processing_count,
+                EXTRACT(EPOCH FROM (
+                    NOW() - MIN(created_at) FILTER (
+                        WHERE status = 'pending' AND scheduled_at <= NOW()
+                    )
+                )) AS oldest_pending_age_seconds,
+                EXTRACT(EPOCH FROM (
+                    NOW() - MIN(created_at) FILTER (WHERE status = 'dead')
+                )) AS oldest_dead_age_seconds
+            FROM fsma.task_queue
+            """
+        )
+    ).fetchone()
+
+    summary = {
+        "counts_by_status": counts,
+        "retrying_count": int(row[0] or 0) if row else 0,
+        "stale_processing_count": int(row[1] or 0) if row else 0,
+        "oldest_pending_age_seconds": _float_or_none(row[2]) if row else None,
+        "oldest_dead_age_seconds": _float_or_none(row[3]) if row else None,
+    }
+    _update_task_queue_metrics(summary)
+    return summary
+
+
+def replay_dead_tasks(
+    db_session: Any,
+    *,
+    ids: Optional[list[int | str]] = None,
+    limit: int = 10,
+) -> dict[str, Any]:
+    """Reset dead task_queue rows to pending without deleting history."""
+
+    if limit < 1 or limit > 1000:
+        raise ValueError("limit must be between 1 and 1000")
+
+    results: list[dict[str, Any]] = []
+    target_ids: list[str]
+
+    if ids:
+        normalized_ids = [str(task_id) for task_id in ids]
+        placeholders = ", ".join(f":id_{idx}" for idx in range(len(normalized_ids)))
+        rows = db_session.execute(
+            text(
+                f"""
+                SELECT id::text, status
+                FROM fsma.task_queue
+                WHERE id::text IN ({placeholders})
+                """
+            ),
+            {f"id_{idx}": task_id for idx, task_id in enumerate(normalized_ids)},
+        ).fetchall()
+        found = {row[0]: row[1] for row in rows}
+        target_ids = []
+        for task_id in normalized_ids:
+            status = found.get(task_id)
+            if status is None:
+                results.append({"id": task_id, "success": False, "error": "not_found"})
+            elif status != "dead":
+                results.append(
+                    {
+                        "id": task_id,
+                        "success": False,
+                        "error": f"status_is_{status}_not_dead",
+                    }
+                )
+            else:
+                target_ids.append(task_id)
+    else:
+        rows = db_session.execute(
+            text(
+                """
+                SELECT id::text
+                FROM fsma.task_queue
+                WHERE status = 'dead'
+                ORDER BY created_at ASC
+                LIMIT :limit
+                """
+            ),
+            {"limit": limit},
+        ).fetchall()
+        target_ids = [row[0] for row in rows]
+
+    for task_id in target_ids:
+        update_result = db_session.execute(
+            text(
+                """
+                UPDATE fsma.task_queue
+                SET status = 'pending',
+                    attempts = 0,
+                    last_error = NULL,
+                    locked_by = NULL,
+                    locked_until = NULL,
+                    started_at = NULL,
+                    completed_at = NULL,
+                    scheduled_at = NOW()
+                WHERE id::text = :id
+                  AND status = 'dead'
+                """
+            ),
+            {"id": task_id},
+        )
+        if update_result.rowcount == 1:
+            results.append({"id": task_id, "success": True, "error": None})
+        else:
+            results.append(
+                {
+                    "id": task_id,
+                    "success": False,
+                    "error": "no_rows_updated_race_condition",
+                }
+            )
+
+    replayed = sum(1 for result in results if result["success"])
+    return {
+        "replayed": replayed,
+        "failed": len(results) - replayed,
+        "results": results,
+    }
+
+
+def _float_or_none(value: Any) -> Optional[float]:
+    if value is None:
+        return None
+    return float(value)
+
+
+def _get_task_queue_gauge(name: str, description: str, labelnames: tuple[str, ...] = ()):
+    cache_key = f"{name}:{','.join(labelnames)}"
+    if cache_key in _TASK_QUEUE_GAUGES:
+        return _TASK_QUEUE_GAUGES[cache_key]
+    try:
+        from prometheus_client import REGISTRY, Gauge
+
+        try:
+            gauge = Gauge(name, description, labelnames)
+        except ValueError:
+            gauge = REGISTRY._names_to_collectors.get(name)  # type: ignore[attr-defined]
+        if gauge is not None:
+            _TASK_QUEUE_GAUGES[cache_key] = gauge
+        return gauge
+    except ImportError:
+        return None
+
+
+def _update_task_queue_metrics(summary: dict[str, Any]) -> None:
+    depth = _get_task_queue_gauge(
+        "regengine_task_queue_depth",
+        "Current number of fsma.task_queue rows by status.",
+        ("status",),
+    )
+    if depth is not None:
+        for status in TASK_QUEUE_STATUSES:
+            depth.labels(status=status).set(summary["counts_by_status"].get(status, 0))
+
+    metric_specs = (
+        (
+            "regengine_task_queue_retrying",
+            "Current pending task_queue rows deferred by scheduled_at.",
+            "retrying_count",
+            0,
+        ),
+        (
+            "regengine_task_queue_stale_processing",
+            "Current processing task_queue rows whose locks have expired.",
+            "stale_processing_count",
+            0,
+        ),
+        (
+            "regengine_task_queue_oldest_pending_age_seconds",
+            "Age in seconds of the oldest eligible pending task_queue row.",
+            "oldest_pending_age_seconds",
+            0.0,
+        ),
+        (
+            "regengine_task_queue_oldest_dead_age_seconds",
+            "Age in seconds of the oldest dead task_queue row.",
+            "oldest_dead_age_seconds",
+            0.0,
+        ),
+    )
+    for name, description, field, default in metric_specs:
+        gauge = _get_task_queue_gauge(name, description)
+        if gauge is not None:
+            gauge.set(summary[field] if summary[field] is not None else default)
 
 
 # ---------------------------------------------------------------------------
@@ -298,7 +592,8 @@ class TaskWorker:
                     SET status = 'pending',
                         locked_by = NULL,
                         locked_until = NULL,
-                        started_at = NULL
+                        started_at = NULL,
+                        scheduled_at = NOW()
                     WHERE status = 'processing'
                       AND locked_until IS NOT NULL
                       AND locked_until < NOW()
@@ -309,10 +604,8 @@ class TaskWorker:
     def _claim_one(self) -> Optional[dict[str, Any]]:
         """Atomically claim the highest-priority eligible pending row.
 
-        Eligible = ``status='pending'`` AND (``locked_until IS NULL``
-        OR ``locked_until <= NOW()``). On a retrying row the
-        ``locked_until`` serves as a "not-before" marker so backoff is
-        observed without a separate column.
+        Eligible = ``status='pending'`` and ``scheduled_at <= NOW()``.
+        ``locked_until`` remains purely a processing visibility timeout.
 
         Weighted fair queuing (#1644): instead of a pure global
         ``ORDER BY priority DESC, created_at ASC`` (which lets one
@@ -324,9 +617,9 @@ class TaskWorker:
 
         The ``DISTINCT ON (tenant_id)`` subquery returns one candidate
         row per tenant (the highest-priority, then oldest, task for that
-        tenant).  The outer ``ORDER BY priority DESC, created_at ASC``
-        picks the winning candidate — the tenant whose best task scored
-        highest, breaking ties by arrival order.
+        tenant).  The outer ``ORDER BY`` picks the winning candidate —
+        the tenant whose best task scored highest, breaking ties by
+        arrival order.
 
         Returns a dict with id/task_type/payload/attempts/max_attempts/
         tenant_id, or ``None`` if nothing is eligible.
@@ -349,20 +642,22 @@ class TaskWorker:
                         -- then earliest created_at (DISTINCT ON keeps the
                         -- first row per group after ORDER BY).
                         SELECT DISTINCT ON (tenant_id)
-                               id, tenant_id, priority, created_at
+                               id, tenant_id, priority, scheduled_at, created_at
                         FROM fsma.task_queue
                         WHERE status = 'pending'
+                          AND scheduled_at <= NOW()
                           AND (locked_until IS NULL OR locked_until <= NOW())
                           {type_filter}
                         ORDER BY tenant_id,
                                  priority DESC,
+                                 scheduled_at ASC,
                                  created_at ASC
                     ),
                     winner AS (
                         -- Among the per-tenant winners, pick the one whose
                         -- best task scored highest (priority → arrival).
                         SELECT id FROM per_tenant
-                        ORDER BY priority DESC, created_at ASC
+                        ORDER BY priority DESC, scheduled_at ASC, created_at ASC
                         LIMIT 1
                     ),
                     claim AS (
@@ -374,11 +669,14 @@ class TaskWorker:
                     SET status = 'processing',
                         started_at = NOW(),
                         locked_by = :worker_id,
-                        locked_until = NOW() + make_interval(secs => :lock_duration)
+                        locked_until = NOW() + make_interval(
+                            secs => COALESCE(q.visibility_timeout_seconds, :lock_duration)
+                        )
                     FROM claim
                     WHERE q.id = claim.id
                     RETURNING q.id, q.task_type, q.payload,
-                              q.attempts, q.max_attempts, q.tenant_id
+                              q.attempts, q.max_attempts, q.tenant_id,
+                              q.visibility_timeout_seconds
                     """
                 ),
                 params,
@@ -466,7 +764,7 @@ class TaskWorker:
         new_attempts = int(task["attempts"]) + 1
         max_attempts = int(task["max_attempts"])
         if new_attempts >= max_attempts:
-            self._mark_dead(int(task["id"]), error)
+            self._mark_dead(int(task["id"]), error, attempts=new_attempts)
             return
 
         backoff = compute_backoff_seconds(new_attempts)
@@ -479,7 +777,8 @@ class TaskWorker:
                         attempts = :attempts,
                         last_error = :error,
                         locked_by = NULL,
-                        locked_until = NOW() + make_interval(secs => :backoff),
+                        locked_until = NULL,
+                        scheduled_at = NOW() + make_interval(secs => :backoff),
                         started_at = NULL
                     WHERE id = :id
                     """
@@ -496,7 +795,7 @@ class TaskWorker:
                 },
             )
 
-    def _mark_dead(self, task_id: int, error: str) -> None:
+    def _mark_dead(self, task_id: int, error: str, *, attempts: Optional[int] = None) -> None:
         with self.engine.begin() as conn:
             conn.execute(
                 text(
@@ -506,9 +805,14 @@ class TaskWorker:
                         completed_at = NOW(),
                         last_error = :error,
                         locked_by = NULL,
-                        locked_until = NULL
+                        locked_until = NULL,
+                        attempts = COALESCE(:attempts, attempts)
                     WHERE id = :id
                     """
                 ),
-                {"id": task_id, "error": error[:4000] if error else None},
+                {
+                    "id": task_id,
+                    "error": error[:4000] if error else None,
+                    "attempts": attempts,
+                },
             )

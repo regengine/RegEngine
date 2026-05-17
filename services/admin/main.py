@@ -318,6 +318,9 @@ app.include_router(supplier_compliance_router, prefix="/v1")
 from app.supplier_funnel_routes import router as supplier_funnel_router
 app.include_router(supplier_funnel_router, prefix="/v1")
 
+from app.agent_review_routes import router as agent_review_router
+app.include_router(agent_review_router, prefix="/v1")
+
 from app.tenant_settings_routes import router as tenant_settings_router
 app.include_router(tenant_settings_router, prefix="/v1")
 

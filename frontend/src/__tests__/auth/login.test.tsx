@@ -33,6 +33,8 @@ vi.mock('@/lib/auth-context', () => ({
 vi.mock('@/lib/api-client', () => ({
     apiClient: {
         login: vi.fn(),
+        requestEmailLoginCode: vi.fn(),
+        confirmEmailLoginCode: vi.fn(),
         getOnboardingStatus: vi.fn(),
     },
 }));
@@ -63,6 +65,10 @@ describe('LoginPage', () => {
         (useAuth as any).mockReturnValue({ ...authState });
     });
 
+    async function choosePasswordMode(user: ReturnType<typeof userEvent.setup>) {
+        await user.click(screen.getByRole('button', { name: /^password$/i }));
+    }
+
     beforeEach(() => {
         vi.clearAllMocks();
         (useRouter as any).mockReturnValue({
@@ -78,6 +84,12 @@ describe('LoginPage', () => {
         authState = { clearCredentials: mockClearCredentials, login: mockLogin, user: null, isHydrated: true };
         (useAuth as any).mockReturnValue(authState);
         (apiClient.getOnboardingStatus as any).mockResolvedValue({ is_complete: true });
+        (apiClient.requestEmailLoginCode as any).mockResolvedValue({ status: 'code_sent', detail: 'If an account exists, we sent a confirmation code.' });
+        (apiClient.confirmEmailLoginCode as any).mockResolvedValue({
+            access_token: 'test-token',
+            user: { id: '123', email: 'test@example.com', is_sysadmin: false },
+            tenant_id: 'tenant-123',
+        });
         (isSupabaseConfigured as any).mockReturnValue(true);
         (createSupabaseBrowserClient as any).mockReturnValue({
             auth: {
@@ -90,22 +102,34 @@ describe('LoginPage', () => {
     });
 
     describe('Rendering', () => {
-        it('renders login form with all fields', () => {
+        it('renders email-code login by default and keeps password available', async () => {
+            const user = userEvent.setup();
             render(<LoginPage />);
 
             expect(screen.getByRole('heading', { name: /sign in/i })).toBeInTheDocument();
             expect(screen.getByLabelText(/email/i)).toBeInTheDocument();
+            expect(screen.queryByLabelText(/^password$/i)).not.toBeInTheDocument();
+            expect(screen.getByRole('button', { name: /send code/i })).toBeInTheDocument();
+            expect(screen.getByRole('button', { name: /email code/i })).toHaveAttribute('aria-pressed', 'true');
+            expect(screen.getByRole('button', { name: /^password$/i })).toHaveAttribute('aria-pressed', 'false');
+
+            await choosePasswordMode(user);
+
             expect(screen.getByLabelText(/^password$/i)).toBeInTheDocument();
             expect(screen.getByRole('button', { name: /sign in/i })).toBeInTheDocument();
         });
 
-        it('has proper autocomplete attributes', () => {
+        it('has proper autocomplete attributes', async () => {
+            const user = userEvent.setup();
             render(<LoginPage />);
 
             const emailInput = screen.getByLabelText(/email/i);
+            expect(emailInput).toHaveAttribute('autocomplete', 'email');
+
+            await choosePasswordMode(user);
+
             const passwordInput = screen.getByLabelText(/^password$/i);
 
-            expect(emailInput).toHaveAttribute('autocomplete', 'email');
             expect(passwordInput).toHaveAttribute('autocomplete', 'current-password');
         });
 
@@ -132,6 +156,7 @@ describe('LoginPage', () => {
             });
             render(<LoginPage />);
 
+            await choosePasswordMode(user);
             const passwordInput = screen.getByLabelText(/^password$/i);
             await user.type(passwordInput, 'temporary-password');
 
@@ -147,7 +172,7 @@ describe('LoginPage', () => {
             const user = userEvent.setup();
             render(<LoginPage />);
 
-            const submitButton = screen.getByRole('button', { name: /sign in/i });
+            const submitButton = screen.getByRole('button', { name: /send code/i });
             await user.click(submitButton);
 
             const emailInput = screen.getByLabelText(/email/i) as HTMLInputElement;
@@ -158,6 +183,7 @@ describe('LoginPage', () => {
             const user = userEvent.setup();
             render(<LoginPage />);
 
+            await choosePasswordMode(user);
             const emailInput = screen.getByLabelText(/email/i);
             await user.type(emailInput, 'test@example.com');
 
@@ -182,10 +208,47 @@ describe('LoginPage', () => {
             const user = userEvent.setup();
             render(<LoginPage />);
 
+            await choosePasswordMode(user);
             const passwordInput = screen.getByLabelText(/^password$/i);
             await user.type(passwordInput, 'SecurePassword123!');
 
             expect(passwordInput).toHaveValue('SecurePassword123!');
+        });
+
+        it('requests an email login code and shows the confirmation field', async () => {
+            const user = userEvent.setup();
+            render(<LoginPage />);
+
+            await user.type(screen.getByLabelText(/email/i), 'test@example.com');
+            await user.click(screen.getByRole('button', { name: /send code/i }));
+
+            await waitFor(() => {
+                expect(apiClient.requestEmailLoginCode).toHaveBeenCalledWith('test@example.com');
+            });
+            expect(screen.getByLabelText(/confirmation code/i)).toBeInTheDocument();
+        });
+
+        it('confirms an email login code and establishes the auth session', async () => {
+            const user = userEvent.setup();
+            const mockResponse = {
+                access_token: 'email-code-token',
+                user: { id: '123', email: 'test@example.com', is_sysadmin: false },
+                tenant_id: 'tenant-123',
+            };
+            (apiClient.confirmEmailLoginCode as any).mockResolvedValueOnce(mockResponse);
+
+            render(<LoginPage />);
+
+            await user.type(screen.getByLabelText(/email/i), 'test@example.com');
+            await user.click(screen.getByRole('button', { name: /send code/i }));
+            await screen.findByLabelText(/confirmation code/i);
+            await user.type(screen.getByLabelText(/confirmation code/i), '123456');
+            await user.click(screen.getByRole('button', { name: /confirm code/i }));
+
+            await waitFor(() => {
+                expect(apiClient.confirmEmailLoginCode).toHaveBeenCalledWith('test@example.com', '123456');
+                expect(mockLogin).toHaveBeenCalledWith('email-code-token', mockResponse.user, 'tenant-123');
+            });
         });
     });
 
@@ -202,6 +265,7 @@ describe('LoginPage', () => {
 
             render(<LoginPage />);
 
+            await choosePasswordMode(user);
             await user.type(screen.getByLabelText(/email/i), 'test@example.com');
             await user.type(screen.getByLabelText(/^password$/i), 'password123');
             await user.click(screen.getByRole('button', { name: /sign in/i }));
@@ -223,6 +287,7 @@ describe('LoginPage', () => {
 
             render(<LoginPage />);
 
+            await choosePasswordMode(user);
             await user.type(screen.getByLabelText(/email/i), 'test@example.com');
             await user.type(screen.getByLabelText(/^password$/i), 'password123');
             await user.click(screen.getByRole('button', { name: /sign in/i }));
@@ -249,6 +314,7 @@ describe('LoginPage', () => {
 
             render(<LoginPage />);
 
+            await choosePasswordMode(user);
             await user.type(screen.getByLabelText(/email/i), 'test@example.com');
             await user.type(screen.getByLabelText(/^password$/i), 'password123');
             await user.click(screen.getByRole('button', { name: /sign in/i }));
@@ -276,6 +342,7 @@ describe('LoginPage', () => {
 
             render(<LoginPage />);
 
+            await choosePasswordMode(user);
             await user.type(screen.getByLabelText(/email/i), 'test@example.com');
             await user.type(screen.getByLabelText(/^password$/i), 'password123');
             await user.click(screen.getByRole('button', { name: /sign in/i }));
@@ -302,12 +369,67 @@ describe('LoginPage', () => {
 
             render(<LoginPage />);
 
+            await choosePasswordMode(user);
             await user.type(screen.getByLabelText(/email/i), 'test@example.com');
             await user.type(screen.getByLabelText(/^password$/i), 'password123');
             await user.click(screen.getByRole('button', { name: /sign in/i }));
 
             await waitFor(() => {
                 expect(mockPush).toHaveBeenCalledWith('/dashboard/fsma');
+            });
+        });
+
+        it('redirects to provided safe next path with query parameters intact', async () => {
+            const user = userEvent.setup();
+            const mockResponse = {
+                access_token: 'test-token',
+                user: { id: '123', email: 'test@example.com', is_sysadmin: false },
+                tenant_id: 'tenant-123',
+            };
+
+            mockSearchParamGet.mockImplementation((key: string) => {
+                if (key === 'next') return '/dashboard/settings?tab=team&mode=edit';
+                return null;
+            });
+
+            (apiClient.login as any).mockResolvedValueOnce(mockResponse);
+
+            render(<LoginPage />);
+
+            await choosePasswordMode(user);
+            await user.type(screen.getByLabelText(/email/i), 'test@example.com');
+            await user.type(screen.getByLabelText(/^password$/i), 'password123');
+            await user.click(screen.getByRole('button', { name: /sign in/i }));
+
+            await waitFor(() => {
+                expect(mockPush).toHaveBeenCalledWith('/dashboard/settings?tab=team&mode=edit');
+            });
+        });
+
+        it('redirects to provided safe next path with query string intact', async () => {
+            const user = userEvent.setup();
+            const mockResponse = {
+                access_token: 'test-token',
+                user: { id: '123', email: 'test@example.com', is_sysadmin: false },
+                tenant_id: 'tenant-123',
+            };
+
+            mockSearchParamGet.mockImplementation((key: string) => {
+                if (key === 'next') return '/dashboard/settings?tab=team&mode=edit';
+                return null;
+            });
+
+            (apiClient.login as any).mockResolvedValueOnce(mockResponse);
+
+            render(<LoginPage />);
+
+            await choosePasswordMode(user);
+            await user.type(screen.getByLabelText(/email/i), 'test@example.com');
+            await user.type(screen.getByLabelText(/^password$/i), 'password123');
+            await user.click(screen.getByRole('button', { name: /sign in/i }));
+
+            await waitFor(() => {
+                expect(mockPush).toHaveBeenCalledWith('/dashboard/settings?tab=team&mode=edit');
             });
         });
 
@@ -328,6 +450,7 @@ describe('LoginPage', () => {
 
             render(<LoginPage />);
 
+            await choosePasswordMode(user);
             await user.type(screen.getByLabelText(/email/i), 'test@example.com');
             await user.type(screen.getByLabelText(/^password$/i), 'password123');
             await user.click(screen.getByRole('button', { name: /sign in/i }));
@@ -354,9 +477,33 @@ describe('LoginPage', () => {
 
             render(<LoginPage />);
 
+            await choosePasswordMode(user);
             await user.type(screen.getByLabelText(/email/i), 'test@example.com');
             await user.type(screen.getByLabelText(/^password$/i), 'password123');
             await user.click(screen.getByRole('button', { name: /sign in/i }));
+
+            await waitFor(() => {
+                expect(mockPush).toHaveBeenCalledWith('/dashboard');
+            });
+        });
+
+        it.each([
+            '//evil.test/phish',
+            '/\\evil.test/phish',
+            '/login?next=/dashboard',
+        ])('falls back to dashboard when mounted with unsafe next path %s', async (unsafeNext) => {
+            mockSearchParamGet.mockImplementation((key: string) => {
+                if (key === 'next') return unsafeNext;
+                return null;
+            });
+            (useAuth as any).mockReturnValue({
+                login: mockLogin,
+                clearCredentials: mockClearCredentials,
+                user: { id: '123', email: 'test@example.com', is_sysadmin: false },
+                isHydrated: true,
+            });
+
+            render(<LoginPage />);
 
             await waitFor(() => {
                 expect(mockPush).toHaveBeenCalledWith('/dashboard');
@@ -375,6 +522,7 @@ describe('LoginPage', () => {
 
             render(<LoginPage />);
 
+            await choosePasswordMode(user);
             await user.type(screen.getByLabelText(/email/i), 'admin@example.com');
             await user.type(screen.getByLabelText(/^password$/i), 'adminpass');
             await user.click(screen.getByRole('button', { name: /sign in/i }));
@@ -409,6 +557,7 @@ describe('LoginPage', () => {
 
             render(<LoginPage />);
 
+            await choosePasswordMode(user);
             await user.type(screen.getByLabelText(/email/i), 'wrong@example.com');
             await user.type(screen.getByLabelText(/^password$/i), 'wrongpass');
             await user.click(screen.getByRole('button', { name: /sign in/i }));
@@ -426,6 +575,7 @@ describe('LoginPage', () => {
 
             render(<LoginPage />);
 
+            await choosePasswordMode(user);
             await user.type(screen.getByLabelText(/email/i), 'disabled@example.com');
             await user.type(screen.getByLabelText(/^password$/i), 'password');
             await user.click(screen.getByRole('button', { name: /sign in/i }));
@@ -443,6 +593,7 @@ describe('LoginPage', () => {
 
             render(<LoginPage />);
 
+            await choosePasswordMode(user);
             await user.type(screen.getByLabelText(/email/i), 'test@example.com');
             await user.type(screen.getByLabelText(/^password$/i), 'password');
             await user.click(screen.getByRole('button', { name: /sign in/i }));
@@ -460,6 +611,7 @@ describe('LoginPage', () => {
 
             render(<LoginPage />);
 
+            await choosePasswordMode(user);
             await user.type(screen.getByLabelText(/email/i), 'test@example.com');
             await user.type(screen.getByLabelText(/^password$/i), 'password');
             await user.click(screen.getByRole('button', { name: /sign in/i }));
@@ -477,6 +629,7 @@ describe('LoginPage', () => {
 
             render(<LoginPage />);
 
+            await choosePasswordMode(user);
             await user.type(screen.getByLabelText(/email/i), 'test@example.com');
             await user.type(screen.getByLabelText(/^password$/i), 'password');
             await user.click(screen.getByRole('button', { name: /sign in/i }));
@@ -501,6 +654,7 @@ describe('LoginPage', () => {
             render(<LoginPage />);
 
             // First attempt - fails
+            await choosePasswordMode(user);
             await user.type(screen.getByLabelText(/email/i), 'test@example.com');
             await user.type(screen.getByLabelText(/^password$/i), 'wrongpass');
             await user.click(screen.getByRole('button', { name: /sign in/i }));
@@ -532,6 +686,7 @@ describe('LoginPage', () => {
 
             render(<LoginPage />);
 
+            await choosePasswordMode(user);
             await user.type(screen.getByLabelText(/email/i), 'test@example.com');
             await user.type(screen.getByLabelText(/^password$/i), 'password');
             await user.click(screen.getByRole('button', { name: /sign in/i }));
@@ -565,6 +720,7 @@ describe('LoginPage', () => {
 
             render(<LoginPage />);
 
+            await choosePasswordMode(user);
             await user.type(screen.getByLabelText(/email/i), 'test@example.com');
             await user.type(screen.getByLabelText(/^password$/i), 'password');
             await user.click(screen.getByRole('button', { name: /sign in/i }));
@@ -593,6 +749,7 @@ describe('LoginPage', () => {
 
             render(<LoginPage />);
 
+            await choosePasswordMode(user);
             await user.type(screen.getByLabelText(/email/i), 'wrong@example.com');
             await user.type(screen.getByLabelText(/^password$/i), 'wrongpass');
             await user.click(screen.getByRole('button', { name: /sign in/i }));
@@ -611,6 +768,7 @@ describe('LoginPage', () => {
 
             render(<LoginPage />);
 
+            await choosePasswordMode(user);
             await user.type(screen.getByLabelText(/email/i), 'wrong@example.com');
             await user.type(screen.getByLabelText(/^password$/i), 'wrongpass');
             await user.click(screen.getByRole('button', { name: /sign in/i }));

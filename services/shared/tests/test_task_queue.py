@@ -31,7 +31,9 @@ from shared.task_queue import (  # noqa: E402
     clear_task_handlers,
     compute_backoff_seconds,
     enqueue_task,
+    get_task_queue_summary,
     register_task_handler,
+    replay_dead_tasks,
 )
 
 
@@ -209,12 +211,19 @@ CREATE TABLE IF NOT EXISTS fsma.task_queue (
     max_attempts    INT NOT NULL DEFAULT 3,
     last_error      TEXT,
     locked_by       TEXT,
-    locked_until    TIMESTAMPTZ
+    locked_until    TIMESTAMPTZ,
+    idempotency_key TEXT,
+    scheduled_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    visibility_timeout_seconds INT
 );
 
 CREATE INDEX IF NOT EXISTS idx_task_queue_pending
-    ON fsma.task_queue (priority DESC, created_at ASC)
+    ON fsma.task_queue (scheduled_at ASC, priority DESC, created_at ASC)
     WHERE status = 'pending';
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_task_queue_idempotency
+    ON fsma.task_queue (tenant_id, idempotency_key)
+    WHERE idempotency_key IS NOT NULL;
 """
 
 
@@ -284,6 +293,46 @@ def test_enqueue_task_inserts_row_and_returns_id(pg_engine, clean_queue):
 
 
 @integration_only
+def test_enqueue_task_with_idempotency_key_returns_existing_id(pg_engine, clean_queue):
+    from sqlalchemy import text
+    from sqlalchemy.orm import sessionmaker
+
+    SessionLocal = sessionmaker(bind=pg_engine, future=True)
+    with SessionLocal.begin() as session:
+        first_id = enqueue_task(
+            session,
+            task_type="fixture.idempotent",
+            payload={"hello": "world"},
+            tenant_id="tenant-1",
+            idempotency_key="fixture.idempotent:tenant-1:source-1",
+        )
+        second_id = enqueue_task(
+            session,
+            task_type="fixture.idempotent",
+            payload={"hello": "world"},
+            tenant_id="tenant-1",
+            idempotency_key="fixture.idempotent:tenant-1:source-1",
+        )
+
+    assert second_id == first_id
+    with pg_engine.begin() as conn:
+        count = conn.execute(
+            text("SELECT COUNT(*) FROM fsma.task_queue WHERE task_type = 'fixture.idempotent'")
+        ).scalar_one()
+    assert count == 1
+
+
+def test_enqueue_task_requires_tenant_for_idempotency_key():
+    with pytest.raises(ValueError, match="tenant_id is required"):
+        enqueue_task(
+            object(),
+            task_type="fixture.idempotent",
+            payload={},
+            idempotency_key="fixture:no-tenant",
+        )
+
+
+@integration_only
 def test_worker_claims_and_completes_task(pg_engine, clean_queue):
     """Happy path: enqueue → run_once → row is 'completed', handler ran."""
     from sqlalchemy.orm import sessionmaker
@@ -319,7 +368,7 @@ def test_worker_claims_and_completes_task(pg_engine, clean_queue):
 @integration_only
 def test_worker_retries_on_handler_exception(pg_engine, clean_queue):
     """Raising handler → row back to 'pending' with attempts++ and
-    locked_until in the future (backoff marker). Still below max_attempts."""
+    scheduled_at in the future (backoff marker). Still below max_attempts."""
     from sqlalchemy import text
     from sqlalchemy.orm import sessionmaker
 
@@ -340,7 +389,7 @@ def test_worker_retries_on_handler_exception(pg_engine, clean_queue):
     with pg_engine.begin() as conn:
         row = conn.execute(
             text(
-                "SELECT status, attempts, last_error, locked_until, locked_by "
+                "SELECT status, attempts, last_error, locked_until, locked_by, scheduled_at "
                 "FROM fsma.task_queue WHERE id = :id"
             ),
             {"id": task_id},
@@ -349,7 +398,8 @@ def test_worker_retries_on_handler_exception(pg_engine, clean_queue):
     assert row.attempts == 1
     assert "transient failure" in (row.last_error or "")
     assert row.locked_by is None
-    assert row.locked_until is not None  # backoff "not before" marker
+    assert row.locked_until is None
+    assert row.scheduled_at is not None
 
 
 @integration_only
@@ -374,7 +424,7 @@ def test_worker_transitions_to_dead_after_max_attempts(pg_engine, clean_queue):
     # Fast-forward the backoff so the next claim sees the row as eligible.
     with pg_engine.begin() as conn:
         conn.execute(
-            text("UPDATE fsma.task_queue SET locked_until = NULL WHERE id = :id"),
+            text("UPDATE fsma.task_queue SET scheduled_at = NOW() WHERE id = :id"),
             {"id": task_id},
         )
     # Attempt 2: fail → dead (attempts now >= max_attempts)
@@ -387,6 +437,99 @@ def test_worker_transitions_to_dead_after_max_attempts(pg_engine, clean_queue):
         ).fetchone()
     assert row.status == "dead"
     assert row.attempts == 2
+
+
+@integration_only
+def test_worker_does_not_claim_future_scheduled_task(pg_engine, clean_queue):
+    from sqlalchemy import text
+
+    ran = []
+
+    def handler(**kwargs):  # noqa: ARG001
+        ran.append(True)
+
+    register_task_handler("fixture.future", handler)
+    with pg_engine.begin() as conn:
+        conn.execute(
+            text(
+                """
+                INSERT INTO fsma.task_queue
+                    (task_type, payload, tenant_id, status, scheduled_at)
+                VALUES
+                    ('fixture.future', '{}'::jsonb, 'tenant-1', 'pending', NOW() + INTERVAL '1 hour')
+                """
+            )
+        )
+
+    worker = TaskWorker(pg_engine, poll_interval_seconds=0.1)
+    assert worker.run_once() is None
+    assert ran == []
+
+
+@integration_only
+def test_worker_uses_row_visibility_timeout_seconds(pg_engine, clean_queue):
+    from sqlalchemy import text
+
+    def handler(**kwargs):
+        locked_until = kwargs.pop("locked_until_holder")
+        with pg_engine.begin() as conn:
+            row = conn.execute(
+                text("SELECT locked_until FROM fsma.task_queue WHERE id = :id"),
+                {"id": kwargs["task_id"]},
+            ).fetchone()
+        locked_until.append(row.locked_until)
+
+    locked_until_values = []
+    register_task_handler("fixture.visibility", handler)
+    with pg_engine.begin() as conn:
+        row = conn.execute(
+            text(
+                """
+                INSERT INTO fsma.task_queue
+                    (task_type, payload, tenant_id, visibility_timeout_seconds)
+                VALUES
+                    (
+                        'fixture.visibility',
+                        CAST(:payload AS jsonb),
+                        'tenant-1',
+                        45
+                    )
+                RETURNING id
+                """
+            ),
+            {"payload": '{"task_id": 0, "locked_until_holder": []}'},
+        ).fetchone()
+        task_id = row.id
+        conn.execute(
+            text("UPDATE fsma.task_queue SET payload = CAST(:payload AS jsonb) WHERE id = :id"),
+            {
+                "id": task_id,
+                "payload": (
+                    '{"task_id": '
+                    + str(task_id)
+                    + ', "locked_until_holder": "placeholder"}'
+                ),
+            },
+        )
+
+    def handler_with_holder(**kwargs):
+        kwargs["locked_until_holder"] = locked_until_values
+        return handler(**kwargs)
+
+    TASK_HANDLERS["fixture.visibility"] = handler_with_holder
+    worker = TaskWorker(pg_engine, poll_interval_seconds=0.1, lock_duration_seconds=300)
+    worker.run_once()
+
+    assert locked_until_values, "handler should observe claimed task lock"
+    with pg_engine.begin() as conn:
+        row = conn.execute(
+            text(
+                "SELECT EXTRACT(EPOCH FROM (started_at + INTERVAL '45 seconds' - :locked_until)) AS delta "
+                "FROM fsma.task_queue WHERE id = :id"
+            ),
+            {"id": task_id, "locked_until": locked_until_values[0]},
+        ).fetchone()
+    assert abs(float(row.delta)) < 3
 
 
 @integration_only
@@ -539,3 +682,128 @@ def test_task_type_allowlist(pg_engine, clean_queue):
             {"id": task_b},
         ).fetchone()
     assert row_b.status == "pending"  # untouched by the scoped worker
+
+
+@integration_only
+def test_get_task_queue_summary_reports_operational_counts(pg_engine, clean_queue):
+    from sqlalchemy import text
+    from sqlalchemy.orm import sessionmaker
+
+    with pg_engine.begin() as conn:
+        conn.execute(
+            text(
+                """
+                INSERT INTO fsma.task_queue
+                    (task_type, payload, tenant_id, status, scheduled_at, locked_until, created_at)
+                VALUES
+                    ('fixture.pending', '{}'::jsonb, 'tenant-1', 'pending', NOW(), NULL, NOW() - INTERVAL '5 minutes'),
+                    ('fixture.retrying', '{}'::jsonb, 'tenant-1', 'pending', NOW() + INTERVAL '5 minutes', NULL, NOW()),
+                    ('fixture.stale', '{}'::jsonb, 'tenant-1', 'processing', NOW(), NOW() - INTERVAL '1 minute', NOW()),
+                    ('fixture.dead', '{}'::jsonb, 'tenant-1', 'dead', NOW(), NULL, NOW() - INTERVAL '10 minutes')
+                """
+            )
+        )
+
+    SessionLocal = sessionmaker(bind=pg_engine, future=True)
+    with SessionLocal() as session:
+        summary = get_task_queue_summary(session)
+
+    assert summary["counts_by_status"]["pending"] == 2
+    assert summary["counts_by_status"]["processing"] == 1
+    assert summary["counts_by_status"]["dead"] == 1
+    assert summary["retrying_count"] == 1
+    assert summary["stale_processing_count"] == 1
+    assert summary["oldest_pending_age_seconds"] >= 250
+    assert summary["oldest_dead_age_seconds"] >= 550
+
+
+@integration_only
+def test_replay_dead_tasks_resets_dead_rows_and_rejects_non_dead(pg_engine, clean_queue):
+    from sqlalchemy import text
+    from sqlalchemy.orm import sessionmaker
+
+    with pg_engine.begin() as conn:
+        dead_id = conn.execute(
+            text(
+                """
+                INSERT INTO fsma.task_queue
+                    (task_type, payload, tenant_id, status, attempts, last_error,
+                     locked_by, locked_until, scheduled_at)
+                VALUES
+                    ('fixture.dead', '{}'::jsonb, 'tenant-1', 'dead', 3, 'boom',
+                     'worker-a', NOW(), NOW() + INTERVAL '1 day')
+                RETURNING id
+                """
+            )
+        ).scalar_one()
+        pending_id = conn.execute(
+            text(
+                """
+                INSERT INTO fsma.task_queue
+                    (task_type, payload, tenant_id, status)
+                VALUES
+                    ('fixture.pending', '{}'::jsonb, 'tenant-1', 'pending')
+                RETURNING id
+                """
+            )
+        ).scalar_one()
+
+    SessionLocal = sessionmaker(bind=pg_engine, future=True)
+    with SessionLocal.begin() as session:
+        response = replay_dead_tasks(session, ids=[dead_id, pending_id, 999999])
+
+    assert response["replayed"] == 1
+    assert response["failed"] == 2
+    errors = {item["id"]: item["error"] for item in response["results"] if not item["success"]}
+    assert errors[str(pending_id)] == "status_is_pending_not_dead"
+    assert errors["999999"] == "not_found"
+
+    with pg_engine.begin() as conn:
+        row = conn.execute(
+            text(
+                "SELECT status, attempts, last_error, locked_by, locked_until "
+                "FROM fsma.task_queue WHERE id = :id"
+            ),
+            {"id": dead_id},
+        ).fetchone()
+    assert row.status == "pending"
+    assert row.attempts == 0
+    assert row.last_error is None
+    assert row.locked_by is None
+    assert row.locked_until is None
+
+
+@integration_only
+def test_replay_dead_tasks_limit_picks_oldest_dead_rows(pg_engine, clean_queue):
+    from sqlalchemy import text
+    from sqlalchemy.orm import sessionmaker
+
+    with pg_engine.begin() as conn:
+        old_id = conn.execute(
+            text(
+                """
+                INSERT INTO fsma.task_queue
+                    (task_type, payload, tenant_id, status, created_at)
+                VALUES
+                    ('fixture.dead.old', '{}'::jsonb, 'tenant-1', 'dead', NOW() - INTERVAL '2 days')
+                RETURNING id
+                """
+            )
+        ).scalar_one()
+        conn.execute(
+            text(
+                """
+                INSERT INTO fsma.task_queue
+                    (task_type, payload, tenant_id, status, created_at)
+                VALUES
+                    ('fixture.dead.new', '{}'::jsonb, 'tenant-1', 'dead', NOW() - INTERVAL '1 day')
+                """
+            )
+        )
+
+    SessionLocal = sessionmaker(bind=pg_engine, future=True)
+    with SessionLocal.begin() as session:
+        response = replay_dead_tasks(session, limit=1)
+
+    assert response["replayed"] == 1
+    assert response["results"] == [{"id": str(old_id), "success": True, "error": None}]

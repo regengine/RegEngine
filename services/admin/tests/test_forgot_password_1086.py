@@ -31,6 +31,12 @@ from services.admin.app import password_reset_routes as prr  # noqa: E402
 # ---------------------------------------------------------------------------
 
 
+@pytest.fixture(autouse=True)
+def _clear_password_reset_url_env(monkeypatch):
+    monkeypatch.delenv("PASSWORD_RESET_BASE_URL", raising=False)
+    monkeypatch.delenv("INVITE_BASE_URL", raising=False)
+
+
 def _make_session_store(counter: int = 0) -> MagicMock:
     """Return a mock RedisSessionStore with a controllable per-email counter."""
     store = MagicMock()
@@ -123,7 +129,55 @@ class TestForgotPasswordEndpoint:
             )
 
         assert result.message == prr._FORGOT_PW_GENERIC_MSG
-        sb.auth.reset_password_for_email.assert_called_once_with("alice@example.com")
+        sb.auth.reset_password_for_email.assert_called_once_with(
+            "alice@example.com",
+            options={
+                "redirect_to": "https://regengine.co/auth/callback?next=/reset-password"
+            },
+        )
+
+    @pytest.mark.asyncio
+    async def test_redirect_to_uses_configured_password_reset_base_url(self, monkeypatch):
+        """Supabase reset emails get the server-side redirect_to option."""
+        monkeypatch.setenv("PASSWORD_RESET_BASE_URL", "https://app.regengine.test/")
+        monkeypatch.setenv("INVITE_BASE_URL", "https://invite-fallback.test/")
+        store = _make_session_store(counter=0)
+        sb = MagicMock()
+        sb.auth.reset_password_for_email = MagicMock(return_value=None)
+
+        with patch.object(prr, "get_supabase", return_value=sb):
+            result = await prr._forgot_password_handler(
+                email="alice@example.com",
+                session_store=store,
+            )
+
+        assert result.message == prr._FORGOT_PW_GENERIC_MSG
+        sb.auth.reset_password_for_email.assert_called_once_with(
+            "alice@example.com",
+            options={
+                "redirect_to": "https://app.regengine.test/auth/callback?next=/reset-password"
+            },
+        )
+
+    @pytest.mark.asyncio
+    async def test_redirect_to_falls_back_to_invite_base_url(self, monkeypatch):
+        monkeypatch.setenv("INVITE_BASE_URL", "https://invites.regengine.test/")
+        store = _make_session_store(counter=0)
+        sb = MagicMock()
+        sb.auth.reset_password_for_email = MagicMock(return_value=None)
+
+        with patch.object(prr, "get_supabase", return_value=sb):
+            await prr._forgot_password_handler(
+                email="alice@example.com",
+                session_store=store,
+            )
+
+        sb.auth.reset_password_for_email.assert_called_once_with(
+            "alice@example.com",
+            options={
+                "redirect_to": "https://invites.regengine.test/auth/callback?next=/reset-password"
+            },
+        )
 
     @pytest.mark.asyncio
     async def test_unknown_email_same_response(self):
@@ -184,7 +238,12 @@ class TestForgotPasswordEndpoint:
                 session_store=store,
             )
 
-        sb.auth.reset_password_for_email.assert_called_once_with("user@example.com")
+        sb.auth.reset_password_for_email.assert_called_once_with(
+            "user@example.com",
+            options={
+                "redirect_to": "https://regengine.co/auth/callback?next=/reset-password"
+            },
+        )
 
     @pytest.mark.asyncio
     async def test_rate_limit_key_per_email(self):

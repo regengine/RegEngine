@@ -13,15 +13,14 @@ import { buildCsp } from '@/lib/csp';
 import { isAuthenticatedAppRoute } from '@/lib/app-routes';
 
 // ---------------------------------------------------------------------------
-// Sysadmin status cache — avoids a DB query on every /sysadmin/* request.
-// In-memory LRU with a 60-second TTL, keyed by auth_user_id.
+// Fresh authorization cache — bounded at 60 seconds so role revocations and
+// tenant status changes are reflected on the next protected request promptly.
 // ---------------------------------------------------------------------------
-// #1180: raised from 5 sec → 10 min. user_metadata.is_sysadmin is the
-// primary path now; this cache is only hit on legacy accounts missing the
-// claim. The previous 5-sec TTL fanned out a DB query every 5 sec per
-// sysadmin on edge cold starts; revocation freshness is now bounded by
-// the access-token TTL anyway (logout forces re-auth within 60 min).
-const SYSADMIN_CACHE_TTL_MS = 10 * 60 * 1000;
+const FRESH_AUTHZ_CACHE_TTL_MS = 60 * 1000;
+
+// Sysadmin status cache — avoids a DB query on every /sysadmin/* request.
+// In-memory LRU keyed by auth_user_id.
+const SYSADMIN_CACHE_TTL_MS = FRESH_AUTHZ_CACHE_TTL_MS;
 const SYSADMIN_CACHE_MAX_SIZE = 256;
 
 interface SysadminCacheEntry {
@@ -33,26 +32,60 @@ const sysadminCache = new Map<string, SysadminCacheEntry>();
 
 // ---------------------------------------------------------------------------
 // Tenant status cache — avoids a DB query on every Supabase-path request.
-// In-memory LRU with a 2-minute TTL, keyed by tenant_id.
-// ---------------------------------------------------------------------------
-// #1180: raised from 2 min → 10 min. user_metadata.tenant_status is the
-// primary path; this cache is only hit on legacy accounts missing the
-// field. Tenant suspensions are rare enough that a 10-min staleness window
-// is acceptable, and the access-token TTL already bounds freshness.
-const TENANT_STATUS_CACHE_TTL_MS = 10 * 60 * 1000;
+// In-memory LRU keyed by tenant_id.
+const TENANT_STATUS_CACHE_TTL_MS = FRESH_AUTHZ_CACHE_TTL_MS;
 const TENANT_STATUS_CACHE_MAX_SIZE = 256;
 
 interface TenantStatusCacheEntry {
-    status: string | null;
+    status: string;
     expiresAt: number;
 }
 
 const tenantStatusCache = new Map<string, TenantStatusCacheEntry>();
 
-function getTenantStatusCached(tenantId: string): string | null | undefined {
+function hasSupabaseConfig(): boolean {
+    return Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
+}
+
+function getReturnPath(request: NextRequest): string {
+    return `${request.nextUrl.pathname}${request.nextUrl.search}`;
+}
+
+function redirectToLogin(
+    request: NextRequest,
+    options: { error?: string; includeNext?: boolean } = {},
+): NextResponse {
+    const url = new URL('/login', request.url);
+    if (options.includeNext !== false) {
+        url.searchParams.set('next', getReturnPath(request));
+    }
+    if (options.error) {
+        url.searchParams.set('error', options.error);
+    }
+    return NextResponse.redirect(url);
+}
+
+function createReadonlySupabaseClient(request: NextRequest) {
+    if (!hasSupabaseConfig()) {
+        return null;
+    }
+
+    return createServerClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+        {
+            cookies: {
+                getAll() { return request.cookies.getAll(); },
+                setAll() { /* read-only for authz freshness checks */ },
+            },
+        },
+    );
+}
+
+function getTenantStatusCached(tenantId: string): string | undefined {
     const entry = tenantStatusCache.get(tenantId);
     if (!entry) return undefined; // cache miss
-    if (Date.now() > entry.expiresAt) {
+    if (Date.now() >= entry.expiresAt) {
         tenantStatusCache.delete(tenantId);
         return undefined;
     }
@@ -61,7 +94,7 @@ function getTenantStatusCached(tenantId: string): string | null | undefined {
     return entry.status;
 }
 
-function setTenantStatusCached(tenantId: string, tenantStatus: string | null): void {
+function setTenantStatusCached(tenantId: string, tenantStatus: string): void {
     if (tenantStatusCache.size >= TENANT_STATUS_CACHE_MAX_SIZE) {
         const oldestKey = tenantStatusCache.keys().next().value;
         if (oldestKey) tenantStatusCache.delete(oldestKey);
@@ -75,7 +108,7 @@ function setTenantStatusCached(tenantId: string, tenantStatus: string | null): v
 function getSysadminCached(userId: string): boolean | null {
     const entry = sysadminCache.get(userId);
     if (!entry) return null;
-    if (Date.now() > entry.expiresAt) {
+    if (Date.now() >= entry.expiresAt) {
         sysadminCache.delete(userId);
         return null;
     }
@@ -95,6 +128,107 @@ function setSysadminCached(userId: string, isSysadmin: boolean): void {
         isSysadmin,
         expiresAt: Date.now() + SYSADMIN_CACHE_TTL_MS,
     });
+}
+
+async function getFreshTenantStatus(
+    request: NextRequest,
+    tenantId: string | undefined,
+    fallbackStatus: string | undefined,
+): Promise<string | undefined> {
+    if (!tenantId || !hasSupabaseConfig()) {
+        return fallbackStatus;
+    }
+
+    const cached = getTenantStatusCached(tenantId);
+    if (cached !== undefined) {
+        return cached;
+    }
+
+    const supabase = createReadonlySupabaseClient(request);
+    if (!supabase) {
+        return fallbackStatus;
+    }
+
+    const { data: tenantRow, error } = await supabase
+        .from('tenants')
+        .select('status')
+        .eq('id', tenantId)
+        .maybeSingle();
+
+    if (error) {
+        if (process.env.NODE_ENV !== 'production') {
+            console.warn('[middleware] Tenant status freshness lookup failed', error);
+        }
+        return '__lookup_failed__';
+    }
+
+    const freshStatus = typeof tenantRow?.status === 'string' ? tenantRow.status : undefined;
+    if (!freshStatus) {
+        if (process.env.NODE_ENV !== 'production') {
+            console.warn('[middleware] Tenant status freshness lookup returned no tenant row');
+        }
+        return '__lookup_failed__';
+    }
+    setTenantStatusCached(tenantId, freshStatus);
+    return freshStatus;
+}
+
+async function getFreshSysadminStatus(
+    request: NextRequest,
+    userId: string | undefined,
+    fallbackIsSysadmin: boolean,
+): Promise<boolean | null> {
+    if (!userId) {
+        return hasSupabaseConfig() ? null : fallbackIsSysadmin;
+    }
+    if (!hasSupabaseConfig()) {
+        return fallbackIsSysadmin;
+    }
+
+    const cached = getSysadminCached(userId);
+    if (cached !== null) {
+        return cached;
+    }
+
+    const supabase = createReadonlySupabaseClient(request);
+    if (!supabase) {
+        return fallbackIsSysadmin;
+    }
+
+    const { data: userRow, error: userError } = await supabase
+        .from('users')
+        .select('is_sysadmin')
+        .eq('id', userId)
+        .maybeSingle();
+
+    if (userError) {
+        if (process.env.NODE_ENV !== 'production') {
+            console.warn('[middleware] User sysadmin freshness lookup failed', userError);
+        }
+        return null;
+    }
+
+    if (typeof userRow?.is_sysadmin === 'boolean') {
+        setSysadminCached(userId, userRow.is_sysadmin);
+        return userRow.is_sysadmin;
+    }
+
+    const { data: profile, error } = await supabase
+        .from('developer_profiles')
+        .select('is_sysadmin')
+        .eq('auth_user_id', userId)
+        .maybeSingle();
+
+    if (error) {
+        if (process.env.NODE_ENV !== 'production') {
+            console.warn('[middleware] Sysadmin freshness lookup failed', error);
+        }
+        return null;
+    }
+
+    const isSysadmin = !!profile?.is_sysadmin;
+    setSysadminCached(userId, isSysadmin);
+    return isSysadmin;
 }
 
 // Only FSMA verticals are supported — all others redirect to home.
@@ -265,33 +399,6 @@ async function requireAppAuth(request: NextRequest, requestHeaders?: Headers): P
     if (reToken) {
         const payload = await verifyRegEngineToken(reToken);
         if (payload) {
-            // Reject suspended/archived tenants — the tenant_status claim is
-            // set at token creation and checked here to prevent suspended
-            // tenants from accessing the app. Since JWTs are short-lived
-            // (60 min default), the worst-case delay is one token lifetime.
-            const tenantStatus = payload.tenant_status as string | undefined;
-            if (tenantStatus && tenantStatus !== 'active' && tenantStatus !== 'trial') {
-                if (process.env.NODE_ENV !== 'production') {
-                    console.warn(`[middleware] Tenant status "${tenantStatus}" — blocking access`);
-                }
-                const url = request.nextUrl.clone();
-                url.pathname = '/login';
-                url.searchParams.set('error', 'tenant_suspended');
-                return NextResponse.redirect(url);
-            }
-
-            // #1180 Sysadmin check on the JWT path — read the claim directly
-            // instead of a DB query. Backend embeds is_sysadmin into the
-            // custom JWT at mint time (see services/admin auth). When the
-            // claim is absent (older tokens pre-rollout), fall through to
-            // the Supabase path which has its own check.
-            if (pathname.startsWith('/sysadmin')) {
-                const isSysadminClaim = payload.is_sysadmin === true;
-                if (!isSysadminClaim) {
-                    return NextResponse.redirect(new URL('/dashboard', request.url));
-                }
-            }
-
             // #538 Cross-validate: require Supabase session alongside the custom JWT.
             // Both auth systems must be live. A missing Supabase cookie while a valid
             // custom JWT exists indicates a desync — e.g. the user signed out on
@@ -299,15 +406,48 @@ async function requireAppAuth(request: NextRequest, requestHeaders?: Headers): P
             // but leaves the HTTP-only re_access_token in place.
             // Re-authentication resyncs both systems.
             // Uses a local cookie name check (no network call) to keep Edge latency low.
-            if (!hasSomeSupabaseCookie(request)) {
+            const isEmailCodeSession = payload.auth_method === 'email_code';
+            if (!isEmailCodeSession && !hasSomeSupabaseCookie(request)) {
                 if (process.env.NODE_ENV !== 'production') {
                     console.warn('[middleware] Custom JWT valid but Supabase session absent — forcing re-auth');
                 }
-                const url = request.nextUrl.clone();
-                url.pathname = '/login';
-                url.searchParams.set('next', pathname);
-                url.searchParams.set('error', 'session_expired');
-                return NextResponse.redirect(url);
+                return redirectToLogin(request, { error: 'session_expired' });
+            }
+
+            // AUTHZ-002: reject suspended/archived tenants using a fresh
+            // Supabase-backed lookup when configured. JWT tenant_status is only
+            // a no-Supabase fallback, never the production authority.
+            const payloadTenantId = typeof payload.tenant_id === 'string'
+                ? payload.tenant_id
+                : typeof payload.tid === 'string'
+                    ? payload.tid
+                    : undefined;
+            const tenantStatus = await getFreshTenantStatus(
+                request,
+                payloadTenantId,
+                typeof payload.tenant_status === 'string' ? payload.tenant_status : undefined,
+            );
+            if (tenantStatus === '__lookup_failed__') {
+                return redirectToLogin(request, { error: 'auth_config' });
+            }
+            if (tenantStatus && tenantStatus !== 'active' && tenantStatus !== 'trial') {
+                if (process.env.NODE_ENV !== 'production') {
+                    console.warn(`[middleware] Tenant status "${tenantStatus}" — blocking access`);
+                }
+                return redirectToLogin(request, { error: 'tenant_suspended', includeNext: false });
+            }
+
+            // AUTHZ-002: /sysadmin uses fresh Supabase-backed state, not stale
+            // JWT claims, so revocation is reflected within the bounded cache TTL.
+            if (pathname.startsWith('/sysadmin')) {
+                const isSysadmin = await getFreshSysadminStatus(
+                    request,
+                    typeof payload.sub === 'string' ? payload.sub : undefined,
+                    payload.is_sysadmin === true,
+                );
+                if (!isSysadmin) {
+                    return NextResponse.redirect(new URL('/dashboard', request.url));
+                }
             }
 
             // Forward enriched request headers (including x-nonce) to the route handler
@@ -319,111 +459,46 @@ async function requireAppAuth(request: NextRequest, requestHeaders?: Headers): P
         if (process.env.NODE_ENV !== 'production') {
             console.warn('[middleware] JWT verification failed — redirecting to login');
         }
-        const url = request.nextUrl.clone();
-        url.pathname = '/login';
-        url.searchParams.set('next', pathname);
-        url.searchParams.set('error', 'session_expired');
-        return NextResponse.redirect(url);
+        return redirectToLogin(request, { error: 'session_expired' });
     }
 
     // Strategy 2: Check Supabase session
     const { user, response: supabaseResponse } = await checkSupabaseSession(request);
     if (user) {
-        // #538 Check tenant_status in Supabase path — mirrors the JWT path check.
-        // The JWT embeds tenant_status at mint time; here we read it from user_metadata
-        // (if synced) or fall back to a DB query (cached) via the tenants table.
+        // AUTHZ-002: Check tenant_status in Supabase path. The DB-backed
+        // lookup wins over user_metadata so suspension freshness is bounded
+        // by FRESH_AUTHZ_CACHE_TTL_MS instead of session metadata.
         const supabaseUser = user as {
             id: string;
             user_metadata?: { tenant_id?: string; tenant_status?: string; is_sysadmin?: boolean };
         };
         const tenantId = supabaseUser.user_metadata?.tenant_id;
-        // #1180 Prefer user_metadata for tenant_status. The DB fallback
-        // previously queried the tenants table on cache miss for every
-        // first-hit-per-instance request. user_metadata is the canonical
-        // place for this — the backend mirrors status updates there.
-        // We still keep a cache-based DB fallback for older accounts that
-        // haven't been resynced, but the fallback TTL is raised to 10 min
-        // (was 2 min) so fan-out on cold deploys stops beating the DB.
-        let resolvedTenantStatus: string | undefined = supabaseUser.user_metadata?.tenant_status;
+        const resolvedTenantStatus = await getFreshTenantStatus(
+            request,
+            tenantId,
+            supabaseUser.user_metadata?.tenant_status,
+        );
 
-        if (tenantId && !resolvedTenantStatus) {
-            // tenant_status not in user_metadata — look it up with a cached DB query
-            let cached = getTenantStatusCached(tenantId);
-            if (cached === undefined) {
-                // Cache miss — query the tenants table
-                const supabase = createServerClient(
-                    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-                    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-                    {
-                        cookies: {
-                            getAll() { return request.cookies.getAll(); },
-                            setAll() { /* read-only for this check */ },
-                        },
-                    }
-                );
-                const { data: tenantRow } = await supabase
-                    .from('tenants')
-                    .select('status')
-                    .eq('id', tenantId)
-                    .maybeSingle();
-                const freshStatus: string | null = tenantRow?.status ?? null;
-                setTenantStatusCached(tenantId, freshStatus);
-                cached = freshStatus;
-            }
-            resolvedTenantStatus = cached ?? undefined;
+        if (resolvedTenantStatus === '__lookup_failed__') {
+            return redirectToLogin(request, { error: 'auth_config' });
         }
 
         if (resolvedTenantStatus && resolvedTenantStatus !== 'active' && resolvedTenantStatus !== 'trial') {
             if (process.env.NODE_ENV !== 'production') {
                 console.warn(`[middleware] Supabase path: Tenant status "${resolvedTenantStatus}" — blocking access`);
             }
-            const url = request.nextUrl.clone();
-            url.pathname = '/login';
-            url.searchParams.set('error', 'tenant_suspended');
-            return NextResponse.redirect(url);
+            return redirectToLogin(request, { error: 'tenant_suspended', includeNext: false });
         }
 
         // Sysadmin check for /sysadmin routes.
-        // #1180 Prefer user_metadata.is_sysadmin (synced at login / invite
-        // acceptance) over the developer_profiles DB lookup. The DB
-        // fallback remains for older accounts missing the claim but now
-        // caches for 10 min instead of 5 sec — the 5-sec TTL was a
-        // revocation-freshness trade-off that burned a query every 5 sec
-        // per sysadmin, which is a low-volume concern relative to the
-        // edge-cold-start fan-out it caused.
+        // Always use the DB-backed check with a <=60s cache; user_metadata is
+        // profile data, not a fresh authorization source.
         if (pathname.startsWith('/sysadmin')) {
-            const userId = supabaseUser.id;
-            const claimedSysadmin = supabaseUser.user_metadata?.is_sysadmin;
-
-            let isSysadmin: boolean;
-            if (typeof claimedSysadmin === 'boolean') {
-                isSysadmin = claimedSysadmin;
-            } else {
-                const cached = getSysadminCached(userId);
-                if (cached === null) {
-                    // Cache miss — query the database
-                    const supabase = createServerClient(
-                        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-                        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-                        {
-                            cookies: {
-                                getAll() { return request.cookies.getAll(); },
-                                setAll() { /* read-only for this check */ },
-                            },
-                        }
-                    );
-                    const { data: profile } = await supabase
-                        .from('developer_profiles')
-                        .select('is_sysadmin')
-                        .eq('auth_user_id', userId)
-                        .maybeSingle();
-
-                    isSysadmin = !!profile?.is_sysadmin;
-                    setSysadminCached(userId, isSysadmin);
-                } else {
-                    isSysadmin = cached;
-                }
-            }
+            const isSysadmin = await getFreshSysadminStatus(
+                request,
+                supabaseUser.id,
+                supabaseUser.user_metadata?.is_sysadmin === true,
+            );
 
             if (!isSysadmin) {
                 return NextResponse.redirect(new URL('/dashboard', request.url));
@@ -437,19 +512,11 @@ async function requireAppAuth(request: NextRequest, requestHeaders?: Headers): P
     }
 
     // Neither auth method succeeded — redirect to login
-    const url = request.nextUrl.clone();
-    url.pathname = '/login';
-    url.searchParams.set('next', pathname);
-
     // Signal the reason so the login page can display a contextual message.
     // Only show "session expired" when a token actually existed but failed verification.
     // First-time visitors (no token) see a clean login form with no error.
-    if (reToken) {
-        url.searchParams.set('error', 'session_expired');
-    }
     // auth_config errors are logged server-side, not shown to visitors.
-
-    return NextResponse.redirect(url);
+    return redirectToLogin(request, reToken ? { error: 'session_expired' } : {});
 }
 
 export async function proxy(request: NextRequest) {
@@ -466,6 +533,7 @@ export async function proxy(request: NextRequest) {
     const csp = buildCsp(nonce, {
         allowDevUnsafeEval: process.env.NODE_ENV === 'development',
         allowDevUnsafeInline: process.env.NODE_ENV === 'development',
+        requestUrl: request.nextUrl,
     });
 
     // Clone request headers and inject the nonce so server components can use it

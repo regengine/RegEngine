@@ -1,5 +1,6 @@
 'use client';
 
+import { useRef } from 'react';
 import Link from 'next/link';
 import { ChevronDown } from 'lucide-react';
 import { MARKETING_ALL_TOOLS_LINK, MARKETING_FREE_TOOLS } from '@/components/layout/marketing-nav';
@@ -14,30 +15,45 @@ export function NavDropdown({
     handleToolsLeave,
     handleToolsKeyDown,
     focusFirstToolsItem,
-}: ToolsDropdownProps) {
-    const AllToolsIcon = MARKETING_ALL_TOOLS_LINK.icon;
+	}: ToolsDropdownProps) {
+	    const AllToolsIcon = MARKETING_ALL_TOOLS_LINK.icon;
+	    const hoverOpenedBeforeClickRef = useRef(false);
 
-    return (
-        <div
-            ref={toolsWrapperRef}
-            style={{ position: "relative" }}
-            onMouseEnter={handleToolsEnter}
-            onMouseLeave={handleToolsLeave}
-            onKeyDown={handleToolsKeyDown}
-        >
+	    return (
+	        <div
+	            ref={toolsWrapperRef}
+	            style={{ position: "relative" }}
+	            onMouseEnter={() => {
+	                if (!toolsOpen) {
+	                    hoverOpenedBeforeClickRef.current = true;
+	                }
+	                handleToolsEnter();
+	            }}
+	            onMouseLeave={() => {
+	                hoverOpenedBeforeClickRef.current = false;
+	                handleToolsLeave();
+	            }}
+	            onKeyDown={handleToolsKeyDown}
+	        >
             <button
                 ref={toolsButtonRef}
                 type="button"
-                aria-expanded={toolsOpen}
-                aria-haspopup="true"
-                aria-controls="tools-dropdown"
-                onClick={() => {
-                    if (toolsOpen) {
-                        setToolsOpen(false);
-                    } else {
-                        handleToolsEnter();
-                    }
-                }}
+	                aria-expanded={toolsOpen}
+	                aria-haspopup="true"
+	                aria-controls="tools-dropdown"
+	                onClick={() => {
+	                    if (toolsOpen) {
+	                        if (hoverOpenedBeforeClickRef.current) {
+	                            hoverOpenedBeforeClickRef.current = false;
+	                            return;
+	                        }
+	                        setToolsOpen(false);
+	                        return;
+	                    }
+
+	                    hoverOpenedBeforeClickRef.current = false;
+	                    handleToolsEnter();
+	                }}
                 onKeyDown={(e) => {
                     if (e.key === 'Escape') {
                         setToolsOpen(false);

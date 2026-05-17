@@ -12,7 +12,7 @@ from datetime import datetime, timezone, timedelta
 from typing import Optional
 import json
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 
@@ -80,6 +80,31 @@ ROLE_PERMISSIONS = {
         "permissions": ["read"],
     },
 }
+
+TEAM_ADMIN_ROLES = {"owner", "admin"}
+
+
+def _require_path_tenant(tenant_id: str, api_key) -> None:
+    authenticated_tenant = getattr(api_key, "tenant_id", None)
+    if not authenticated_tenant:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Tenant-scoped API key required",
+        )
+    if authenticated_tenant != tenant_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Tenant mismatch",
+        )
+
+
+def _require_team_admin(api_key) -> None:
+    scopes = set(getattr(api_key, "scopes", None) or [])
+    if "admin" not in scopes:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Team administration requires admin API key scope",
+        )
 
 
 # In-memory fallback for when DB is unavailable
@@ -163,9 +188,10 @@ def _db_add_team_member(tenant_id: str, member: TeamMember) -> bool:
 )
 async def get_team(
     tenant_id: str,
-    _: None = Depends(_verify_api_key),
+    api_key = Depends(_verify_api_key),
 ) -> TeamResponse:
     """Get team members for a tenant."""
+    _require_path_tenant(tenant_id, api_key)
     # Try DB first
     members = _db_get_team(tenant_id)
     if members is None:
@@ -196,9 +222,13 @@ async def get_team(
 async def invite_member(
     tenant_id: str,
     request: InviteRequest,
-    _: None = Depends(_verify_api_key),
+    api_key = Depends(_verify_api_key),
 ):
     """Invite a new team member."""
+    _require_path_tenant(tenant_id, api_key)
+    _require_team_admin(api_key)
+    if request.role not in ROLE_PERMISSIONS:
+        raise HTTPException(status_code=400, detail="Invalid role")
     # Get current count from DB or memory
     members = _db_get_team(tenant_id)
     if members is None:
@@ -235,9 +265,13 @@ async def update_role(
     tenant_id: str,
     member_id: str,
     role: str,
-    _: None = Depends(_verify_api_key),
+    api_key = Depends(_verify_api_key),
 ):
     """Update a team member's role."""
+    _require_path_tenant(tenant_id, api_key)
+    _require_team_admin(api_key)
+    if role not in ROLE_PERMISSIONS:
+        raise HTTPException(status_code=400, detail="Invalid role")
     # Try DB first
     members = _db_get_team(tenant_id)
     if members is None:

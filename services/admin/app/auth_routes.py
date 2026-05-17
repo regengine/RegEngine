@@ -32,6 +32,8 @@ from uuid import UUID
 
 import structlog
 from fastapi import APIRouter, Depends
+from sqlalchemy import select
+from sqlalchemy.orm import Session
 
 from .audit import AuditLogger  # noqa: F401  (re-exported for tests)
 from .auth_utils import (  # noqa: F401  (re-exported for tests/back-compat)
@@ -44,6 +46,7 @@ from .auth_utils import (  # noqa: F401  (re-exported for tests/back-compat)
     verify_login,
     verify_password,
 )
+from .database import get_session
 from .dependencies import PermissionChecker, get_current_user, get_session_store  # noqa: F401
 from .password_policy import validate_password, PasswordPolicyError  # noqa: F401
 from .session_store import RedisSessionStore, SessionData  # noqa: F401
@@ -61,6 +64,7 @@ from .models import (  # noqa: F401
     RevokeAllSessionsResponse,
     SessionListResponse,
     SessionRevokeResponse,
+    TenantContext,
 )
 from shared.funnel_events import emit_funnel_event  # noqa: F401  (re-exported for tests)
 from shared.pii import mask_email  # noqa: F401
@@ -95,6 +99,9 @@ from .auth.lockout import (  # noqa: F401,E402
 
 # Pydantic schemas + signup helpers — sub-splits 2/N and 3/N.
 from .auth.schemas import (  # noqa: F401,E402
+    EmailCodeConfirmRequest,
+    EmailCodeRequest,
+    EmailCodeRequestResponse,
     LoginRequest,
     RegisterRequest,
     SignupAcceptedResponse,
@@ -118,6 +125,7 @@ from .auth.elevation_helpers import (  # noqa: F401,E402
 # the full module (not just ``router``) keeps ``ar.<handler_name>`` resolution
 # working for tests that call ``await auth_routes.<handler>.__wrapped__(...)``.
 from .auth import login_router as _login_router_mod  # noqa: E402
+from .auth import email_code_router as _email_code_router_mod  # noqa: E402
 from .auth import signup_router as _signup_router_mod  # noqa: E402
 from .auth import refresh_router as _refresh_router_mod  # noqa: E402
 from .auth import sessions_router as _sessions_router_mod  # noqa: E402
@@ -128,6 +136,10 @@ from .auth import confirm_router as _confirm_router_mod  # noqa: E402
 
 # Handler + schema re-exports for back-compat with ``from auth_routes import X``.
 from .auth.login_router import login  # noqa: F401,E402
+from .auth.email_code_router import (  # noqa: F401,E402
+    confirm_email_login_code,
+    request_email_login_code,
+)
 from .auth.signup_router import signup  # noqa: F401,E402
 from .auth.refresh_router import RefreshRequest, refresh_session  # noqa: F401,E402
 from .auth.sessions_router import (  # noqa: F401,E402
@@ -160,6 +172,7 @@ from .auth.confirm_router import (  # noqa: F401,E402
 
 # ── Mount every sub-router on /auth ─────────────────────────────────────────
 router.include_router(_login_router_mod.router)
+router.include_router(_email_code_router_mod.router)
 router.include_router(_signup_router_mod.router)
 router.include_router(_refresh_router_mod.router)
 router.include_router(_sessions_router_mod.router)
@@ -171,9 +184,40 @@ router.include_router(_confirm_router_mod.router)
 
 # ── Two trivial routes that intentionally live in the shim ──────────────────
 @router.get("/me", response_model=UserResponse)
-def get_me(user: UserModel = Depends(get_current_user)):
+def get_me(
+    user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_session),
+):
     """Get current user context (verifies token and tenant context)."""
-    return user
+    tenant_id = TenantContext.get_tenant_context(db)
+    tenant_status = None
+    role_name = None
+    permissions = []
+    if tenant_id:
+        tenant = db.get(TenantModel, tenant_id)
+        tenant_status = getattr(tenant, "status", None) if tenant else None
+        membership = db.execute(
+            select(MembershipModel).where(
+                MembershipModel.user_id == user.id,
+                MembershipModel.tenant_id == tenant_id,
+                MembershipModel.is_active == True,  # noqa: E712
+            )
+        ).scalar_one_or_none()
+        if membership:
+            role = db.get(RoleModel, membership.role_id)
+            role_name = getattr(role, "name", None) if role else None
+            raw_permissions = getattr(role, "permissions", []) if role else []
+            permissions = list(raw_permissions or []) if isinstance(raw_permissions, list) else []
+    return {
+        "id": user.id,
+        "email": user.email,
+        "is_sysadmin": user.is_sysadmin,
+        "status": user.status,
+        "tenant_id": tenant_id,
+        "tenant_status": tenant_status,
+        "role_name": role_name,
+        "permissions": permissions,
+    }
 
 
 @router.get("/check-permission", response_model=PermissionCheckResponse)

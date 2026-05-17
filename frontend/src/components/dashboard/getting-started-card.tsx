@@ -17,7 +17,6 @@ import {
 } from 'lucide-react';
 
 import { Card, CardContent } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { useTenant } from '@/lib/tenant-context';
 import { useOnboardingStatus, useUpdateOnboarding } from '@/hooks/use-onboarding';
@@ -121,8 +120,8 @@ export function GettingStartedCard() {
         <Card className="border-[var(--re-surface-border)] bg-[var(--re-surface-card)]">
           <CardContent className="pt-5 pb-4">
             {/* Header */}
-            <div className="flex items-start justify-between mb-3">
-              <div>
+            <div className="mb-3 flex min-w-0 items-start justify-between gap-3">
+              <div className="min-w-0 flex-1">
                 <h3 className="text-sm font-semibold text-[var(--re-text-primary)]">
                   Getting Started
                 </h3>
@@ -133,7 +132,8 @@ export function GettingStartedCard() {
               <button
                 onClick={handleDismiss}
                 disabled={dismissing}
-                className="text-[var(--re-text-muted)] hover:text-[var(--re-text-secondary)] transition-colors p-1 -m-1"
+                className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-md text-[var(--re-text-muted)] transition-colors hover:bg-[var(--re-surface-elevated)] hover:text-[var(--re-text-secondary)] disabled:cursor-not-allowed disabled:opacity-60"
+                aria-label="Dismiss Getting Started"
                 title="Dismiss"
               >
                 {dismissing ? (
@@ -156,7 +156,7 @@ export function GettingStartedCard() {
                   <li key={item.id}>
                     <Link
                       href={done ? '#' : item.href}
-                      className={`flex items-center gap-2.5 rounded-md px-2 py-1.5 text-sm transition-colors ${
+                      className={`flex min-h-12 min-w-0 items-center gap-2.5 rounded-md px-2 py-2 text-sm transition-colors ${
                         done
                           ? 'text-[var(--re-text-muted)]'
                           : 'text-[var(--re-text-secondary)] hover:bg-[var(--re-surface-elevated)] hover:text-[var(--re-text-primary)]'
@@ -167,11 +167,11 @@ export function GettingStartedCard() {
                       ) : (
                         <Circle className="h-4 w-4 text-[var(--re-surface-border)] flex-shrink-0" />
                       )}
-                      <span className={done ? 'line-through' : ''}>
+                      <span className={`min-w-0 break-words leading-snug ${done ? 'line-through' : ''}`}>
                         {item.label}
                       </span>
                       {!done && (
-                        <ChevronRight className="ml-auto h-3.5 w-3.5 text-[var(--re-text-muted)]" />
+                        <ChevronRight className="ml-auto h-3.5 w-3.5 flex-shrink-0 text-[var(--re-text-muted)]" />
                       )}
                     </Link>
                   </li>
@@ -183,7 +183,7 @@ export function GettingStartedCard() {
             <div className="mt-3 pt-3 border-t border-[var(--re-surface-border)]">
               <Link
                 href="/onboarding/setup/welcome"
-                className="text-xs text-[var(--re-text-muted)] hover:text-[var(--re-brand)] transition-colors"
+                className="block min-h-12 max-w-full whitespace-normal break-words py-3 text-xs leading-snug text-[var(--re-text-muted)] transition-colors hover:text-[var(--re-brand)]"
               >
                 Prefer a guided tutorial? Take the full walkthrough &rarr;
               </Link>

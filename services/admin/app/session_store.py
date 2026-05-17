@@ -348,6 +348,7 @@ class SessionData(BaseModel):
     user_id: UUID = Field(description="User who owns this session")
     refresh_token_hash: str = Field(description="SHA-256 hash of current refresh token")
     family_id: UUID = Field(description="Token family for rotation tracking")
+    token_version: int = Field(default=0, description="User token_version at session creation")
     is_revoked: bool = Field(default=False, description="Whether session is revoked")
     created_at: datetime = Field(description="Session creation timestamp")
     last_used_at: datetime = Field(description="Last token refresh timestamp")
@@ -367,6 +368,7 @@ class SessionData(BaseModel):
             "user_id": str(self.user_id),
             "refresh_token_hash": self.refresh_token_hash,
             "family_id": str(self.family_id),
+            "token_version": str(self.token_version),
             "is_revoked": "true" if self.is_revoked else "false",
             "created_at": self.created_at.isoformat(),
             "last_used_at": self.last_used_at.isoformat(),
@@ -383,6 +385,7 @@ class SessionData(BaseModel):
             user_id=UUID(data["user_id"]),
             refresh_token_hash=data["refresh_token_hash"],
             family_id=UUID(data["family_id"]),
+            token_version=int(data.get("token_version") or 0),
             is_revoked=data["is_revoked"] == "true",
             created_at=datetime.fromisoformat(data["created_at"]),
             last_used_at=datetime.fromisoformat(data["last_used_at"]),

@@ -338,6 +338,27 @@ class TestExportPersonalData:
         assert data["sessions"]["data"][0]["user_agent"] == "pytest/1.0"
 
     @pytest.mark.asyncio
+    async def test_export_does_not_include_presigned_download_urls(self):
+        """Account export must not mint reusable storage download URLs inline."""
+        from app.data_export_routes import _build_user_export
+        import json
+
+        db = _make_db()
+        data = _build_user_export(db, str(_USER_ID))
+        serialized = json.dumps(data).lower()
+
+        assert set(data["s3_objects"]) == {"note"}
+        for forbidden in (
+            "presigned",
+            "signed_url",
+            "download_url",
+            "s3://",
+            "x-amz-signature",
+            "awsaccesskeyid",
+        ):
+            assert forbidden not in serialized
+
+    @pytest.mark.asyncio
     async def test_export_includes_mfa_enrolled_status(self):
         """MFA section shows enrolled=True when secret exists."""
         from app.data_export_routes import _build_user_export
