@@ -25,6 +25,7 @@ Covers:
 from __future__ import annotations
 
 import uuid as uuid_mod
+import json
 import time
 from datetime import datetime, timezone, timedelta
 from types import SimpleNamespace
@@ -43,6 +44,7 @@ sys.path.insert(0, str(repo_root / "services" / "admin"))
 
 import services.admin.app.auth_routes as ar
 import services.admin.app.auth.login_router as _login_router_mod
+import services.admin.app.auth.email_code_router as _email_code_router_mod
 import services.admin.app.auth.signup_router as _signup_router_mod  # noqa: F401
 import services.admin.app.auth.refresh_router as _refresh_router_mod  # noqa: F401
 import services.admin.app.auth.sessions_router as _sessions_router_mod  # noqa: F401
@@ -51,6 +53,8 @@ import services.admin.app.auth.change_password_router as _change_password_router
 import services.admin.app.auth.reset_password_router as _reset_password_router_mod  # noqa: F401
 import services.admin.app.auth.confirm_router as _confirm_router_mod  # noqa: F401
 from services.admin.app.auth_routes import (
+    EmailCodeConfirmRequest,
+    EmailCodeRequest,
     LoginRequest,
     RegisterRequest,
     RefreshRequest,
@@ -371,6 +375,134 @@ class TestJwtIssuance:
 
 
 class TestLogin:
+    def test_email_code_routes_registered(self):
+        route_paths = {getattr(route, "path", "") for route in ar.router.routes}
+
+        assert any(path.endswith("/email-code/request") for path in route_paths)
+        assert any(path.endswith("/email-code/confirm") for path in route_paths)
+
+    def test_send_email_login_code_logs_typed_resend_id(self, monkeypatch):
+        class DummyEmails:
+            @staticmethod
+            def send(_payload):
+                return SimpleNamespace(id="email_typed_123")
+
+        class DummyResend:
+            api_key = None
+            Emails = DummyEmails
+
+        test_logger = SimpleNamespace(info=MagicMock(), warning=MagicMock(), error=MagicMock())
+        monkeypatch.setenv("RESEND_API_KEY", "re_test_key")
+        monkeypatch.setenv("RESEND_FROM_EMAIL", "login@regengine.test")
+        monkeypatch.setitem(sys.modules, "resend", DummyResend)
+        monkeypatch.setattr(_email_code_router_mod, "logger", test_logger)
+
+        sent = _email_code_router_mod._send_email_login_code("buyer@example.com", "123456")
+
+        assert sent is True
+        assert DummyResend.api_key == "re_test_key"
+        assert test_logger.info.call_args.args[0] == "email_login_code_sent"
+        assert test_logger.info.call_args.kwargs["resend_id"] == "email_typed_123"
+
+    @pytest.mark.asyncio
+    async def test_request_email_code_stores_hash_and_sends_for_active_user(self, monkeypatch):
+        user = _make_user(email="user@example.com", password="pw", status="active")
+        db = _make_db_with_user(user)
+        client = _make_redis_client()
+        session_store = _make_session_store(redis_client=client)
+        send_mock = MagicMock(return_value=True)
+        monkeypatch.setattr(_email_code_router_mod, "_make_email_code", lambda: "123456")
+        monkeypatch.setattr(_email_code_router_mod, "_send_email_login_code", send_mock)
+
+        result = await ar.request_email_login_code.__wrapped__(
+            payload=EmailCodeRequest(email="USER@EXAMPLE.COM"),
+            request=_make_request("/auth/email-code/request"),
+            db=db,
+            session_store=session_store,
+        )
+
+        assert result.status == "code_sent"
+        send_mock.assert_called_once_with("user@example.com", "123456")
+        client.setex.assert_awaited_once()
+        key, ttl, raw_payload = client.setex.await_args.args
+        assert key == _email_code_router_mod._email_code_key("user@example.com")
+        assert ttl == _email_code_router_mod.EMAIL_CODE_TTL_SECONDS
+        stored_payload = json.loads(raw_payload)
+        assert stored_payload["attempts"] == _email_code_router_mod.EMAIL_CODE_ATTEMPTS
+        assert stored_payload["code_hash"] == _email_code_router_mod._hash_email_code("user@example.com", "123456")
+
+    @pytest.mark.asyncio
+    async def test_request_email_code_stays_neutral_for_unknown_email(self, monkeypatch):
+        db = _make_db_with_user(None)
+        client = _make_redis_client()
+        session_store = _make_session_store(redis_client=client)
+        send_mock = MagicMock(return_value=True)
+        monkeypatch.setattr(_email_code_router_mod, "_send_email_login_code", send_mock)
+
+        result = await ar.request_email_login_code.__wrapped__(
+            payload=EmailCodeRequest(email="ghost@example.com"),
+            request=_make_request("/auth/email-code/request"),
+            db=db,
+            session_store=session_store,
+        )
+
+        assert result.status == "code_sent"
+        send_mock.assert_not_called()
+        client.setex.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_confirm_email_code_returns_tokens_with_email_auth_method(self, monkeypatch):
+        user = _make_user(email="user@example.com", password="pw", status="active")
+        tenant = _make_tenant()
+        membership = _make_membership(user, tenant)
+        db = _make_db_with_user(user, tenant, membership)
+        client = _make_redis_client()
+        client.get = AsyncMock(return_value=json.dumps({
+            "code_hash": _email_code_router_mod._hash_email_code("user@example.com", "123456"),
+            "attempts": 3,
+        }))
+        session_store = _make_session_store(redis_client=client)
+        monkeypatch.setattr(_email_code_router_mod, "AuditLogger", MagicMock())
+
+        result = await ar.confirm_email_login_code.__wrapped__(
+            payload=EmailCodeConfirmRequest(email="USER@EXAMPLE.COM", code="123456"),
+            request=_make_request("/auth/email-code/confirm"),
+            db=db,
+            session_store=session_store,
+        )
+
+        payload = decode_access_token(result.access_token)
+        assert payload["sub"] == str(user.id)
+        assert payload["tenant_id"] == str(tenant.id)
+        assert payload["auth_method"] == "email_code"
+        assert result.refresh_token
+        assert result.user["email"] == "user@example.com"
+        assert result.user["role_name"] == "Owner"
+        session_store.create_session.assert_awaited_once()
+        client.delete.assert_awaited_with(_email_code_router_mod._email_code_key("user@example.com"))
+
+    @pytest.mark.asyncio
+    async def test_wrong_email_code_decrements_attempts(self):
+        client = _make_redis_client()
+        client.get = AsyncMock(return_value=json.dumps({
+            "code_hash": _email_code_router_mod._hash_email_code("user@example.com", "123456"),
+            "attempts": 3,
+        }))
+        session_store = _make_session_store(redis_client=client)
+
+        valid = await _email_code_router_mod._check_email_code(
+            session_store,
+            "user@example.com",
+            "000000",
+        )
+
+        assert valid is False
+        client.setex.assert_awaited_once()
+        _, ttl, raw_payload = client.setex.await_args.args
+        assert ttl == _email_code_router_mod.EMAIL_CODE_TTL_SECONDS
+        assert json.loads(raw_payload)["attempts"] == 2
+        client.delete.assert_not_called()
+
     @pytest.mark.asyncio
     async def test_login_happy_path_returns_tokens(self, monkeypatch):
         """Valid credentials → 200 with access_token, refresh_token, tenant_id."""

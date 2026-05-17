@@ -13,6 +13,8 @@ export const maxDuration = 300;
 // the bootstrap register route must be reachable before any credentials exist.
 const UNAUTHENTICATED_AUTH_PATHS = new Set([
     'auth/login',
+    'auth/email-code/request',
+    'auth/email-code/confirm',
     'auth/signup',
     'auth/refresh',
     'auth/register',

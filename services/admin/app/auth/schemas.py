@@ -15,7 +15,7 @@ from uuid import UUID
 
 from fastapi import status
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, EmailStr, Field, field_validator
 
 
 class LoginRequest(BaseModel):
@@ -28,6 +28,20 @@ class LoginRequest(BaseModel):
         if not value.strip():
             raise ValueError("must not be empty")
         return value
+
+
+class EmailCodeRequest(BaseModel):
+    email: EmailStr = Field(max_length=255)
+
+
+class EmailCodeConfirmRequest(BaseModel):
+    email: EmailStr = Field(max_length=255)
+    code: str = Field(min_length=6, max_length=6, pattern=r"^\d{6}$")
+
+
+class EmailCodeRequestResponse(BaseModel):
+    status: str
+    detail: str
 
 
 class TokenResponse(BaseModel):

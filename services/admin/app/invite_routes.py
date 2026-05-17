@@ -134,7 +134,7 @@ def _send_invite_email(recipient_email: str, invite_link: str) -> None:
             }
         )
 
-        response_id = response.get("id") if isinstance(response, dict) else None
+        response_id = getattr(response, "id", None) or (response.get("id") if isinstance(response, dict) else None)
         logger.info("invite_email_sent", email=mask_email(recipient_email), resend_id=response_id)
     except Exception as exc:  # pragma: no cover - external SDK/network behavior
         logger.warning("invite_email_send_failed", email=mask_email(recipient_email), error=str(exc))
