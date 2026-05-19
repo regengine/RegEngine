@@ -26,8 +26,13 @@ FROM python:3.11-slim AS runtime
 
 WORKDIR /app
 
-# Runtime-only system deps (libpq for psycopg2, curl for health-check)
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# Runtime-only system deps (libpq for psycopg2, curl for health-check).
+# Refresh patched base-image libraries flagged by Trivy before installing deps.
+RUN apt-get update && apt-get install -y --no-install-recommends --only-upgrade \
+    libcap2 \
+    libsystemd0 \
+    libudev1 \
+    && apt-get install -y --no-install-recommends \
     libpq5 \
     curl \
     && rm -rf /var/lib/apt/lists/*
