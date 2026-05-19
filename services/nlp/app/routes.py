@@ -53,12 +53,16 @@ class TraceabilityQueryResponse(BaseModel):
     warnings: list[str] = Field(default_factory=list)
 
 
-@router.get("/health")
+@router.get("/health", operation_id="nlp_health")
 def health():
     return {"status": "ok"}
 
 
-@router.get("/metrics", dependencies=[Depends(require_metrics_key)])
+@router.get(
+    "/metrics",
+    operation_id="nlp_metrics",
+    dependencies=[Depends(require_metrics_key)],
+)
 def metrics():
     return PlainTextResponse(generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
