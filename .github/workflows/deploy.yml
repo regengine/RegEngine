@@ -15,41 +15,19 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # Gate: wait for CI workflows to pass before deploying.
-  # These workflows are triggered by the same push-to-main event;
-  # workflow_run waits for their conclusion before starting this job.
+  # Gate: manual deploys must wait for a green CI Status Gate check on the
+  # selected ref before Railway deployment can start.
   wait-for-ci:
     name: Wait for CI
-    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
-      - name: Check backend CI status
-        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3  # v9
-        with:
-          script: |
-            const sha = context.sha;
-            const checks = await github.rest.checks.listForRef({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              ref: sha,
-              filter: 'latest',
-            });
-            const required = ['Backend CI / test', 'Frontend CI / build'];
-            const pending = required.filter(name =>
-              !checks.data.check_runs.some(cr => cr.name.startsWith(name) && cr.conclusion === 'success')
-            );
-            if (pending.length > 0) {
-              // CI hasn't finished yet — retry via workflow_dispatch or wait
-              core.info(`Waiting for: ${pending.join(', ')}`);
-            }
-
       - name: Require CI green
         uses: lewagon/wait-on-check-action@9312864dfbc9fd208e9c0417843430751c042800  # v1.7.0
         with:
           ref: ${{ github.sha }}
           running-workflow-name: 'Wait for CI'
           repo-token: ${{ secrets.GITHUB_TOKEN }}
-          # Match whichever CI Status Gate jobs are created for this path set.
+          # Match the CI Status Gate check created for the selected ref.
           # GitHub Checks API returns job names, not "workflow / job" format.
           # Backend CI and cold frontend installs can take longer than 15m to
           # create their summary gates, so keep discovery patient.
@@ -61,7 +39,6 @@ jobs:
   deploy:
     name: Deploy RegEngine Service
     needs: [wait-for-ci]
-    if: always() && (github.event_name == 'workflow_dispatch' || needs.wait-for-ci.result == 'success')
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
