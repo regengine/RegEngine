@@ -849,6 +849,7 @@ export function DashboardInflowLab({ previewMode = false }: { previewMode?: bool
         setFeederError(null);
         setIsSavingRun(false);
         setSavedRun(null);
+        setLoadedRun(null);
         setWorkbenchSaveNote(null);
         setWorkbenchSaveError(null);
     };
@@ -871,11 +872,15 @@ export function DashboardInflowLab({ previewMode = false }: { previewMode?: bool
         reader.readAsText(file);
     };
 
-    const evaluateFeederData = async () => {
-        if (!feederCsv.trim()) {
+    const evaluateFeederData = async (csvOverride?: string) => {
+        const csvToEvaluate = csvOverride ?? feederCsv;
+        if (!csvToEvaluate.trim()) {
             setFeederError("Paste CSV text or upload a CSV file before evaluating.");
             setShowCsvDrawer(true);
             return;
+        }
+        if (csvOverride !== undefined) {
+            setFeederCsv(csvOverride);
         }
         setIsFeederEvaluating(true);
         setIsRunning(true);
@@ -888,7 +893,7 @@ export function DashboardInflowLab({ previewMode = false }: { previewMode?: bool
             const response = await fetchWithCsrf("/api/ingestion/api/v1/sandbox/evaluate", {
                 method: "POST",
                 headers: { "content-type": "application/json" },
-                body: JSON.stringify({ csv: feederCsv }),
+                body: JSON.stringify({ csv: csvToEvaluate }),
             });
             if (!response.ok) {
                 const payload = await response.json().catch(() => ({}));
@@ -900,18 +905,20 @@ export function DashboardInflowLab({ previewMode = false }: { previewMode?: bool
             }
             const result = (await response.json()) as SandboxEvaluationResult;
             setFeederResult(result);
-            try {
-                const readiness = await fetchWithCsrf("/api/ingestion/api/v1/inflow-workbench/readiness/preview", {
-                    method: "POST",
-                    headers: { "content-type": "application/json" },
-                    body: JSON.stringify(result),
-                });
-                if (readiness.ok) {
-                    const payload = (await readiness.json()) as ReadinessSummary;
-                    if (typeof payload.score === "number") setBackendReadiness(payload);
+            if (isAuthenticated && activeTenantId) {
+                try {
+                    const readiness = await fetchWithCsrf("/api/ingestion/api/v1/inflow-workbench/readiness/preview", {
+                        method: "POST",
+                        headers: { "content-type": "application/json" },
+                        body: JSON.stringify(result),
+                    });
+                    if (readiness.ok) {
+                        const payload = (await readiness.json()) as ReadinessSummary;
+                        if (typeof payload.score === "number") setBackendReadiness(payload);
+                    }
+                } catch {
+                    /* authenticated readiness preview is best-effort */
                 }
-            } catch {
-                /* readiness preview is best-effort */
             }
         } catch (error) {
             setFeederError(error instanceof Error ? error.message : "Could not evaluate pasted data");
@@ -919,6 +926,12 @@ export function DashboardInflowLab({ previewMode = false }: { previewMode?: bool
             setIsFeederEvaluating(false);
             setIsRunning(false);
         }
+    };
+
+    const runGuidedProof = () => {
+        resetFeederPreview();
+        setShowCsvDrawer(true);
+        void evaluateFeederData(REALISTIC_SAMPLE_CSV);
     };
 
     const saveWorkbenchRun = async () => {
@@ -1163,6 +1176,25 @@ export function DashboardInflowLab({ previewMode = false }: { previewMode?: bool
                             <Button
                                 type="button"
                                 className="h-8 bg-emerald-700 px-3 text-xs text-white hover:bg-emerald-800"
+                                onClick={runGuidedProof}
+                                disabled={isFeederEvaluating || isRunning}
+                            >
+                                {isFeederEvaluating ? (
+                                    <>
+                                        <RefreshCcw className="mr-2 h-3.5 w-3.5 animate-spin" />
+                                        Running
+                                    </>
+                                ) : (
+                                    <>
+                                        <Play className="mr-2 h-3.5 w-3.5" />
+                                        Run guided proof
+                                    </>
+                                )}
+                            </Button>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                className="h-8 border-slate-300 bg-white px-3 text-xs"
                                 onClick={loadRealisticSample}
                             >
                                 Load sample flow
@@ -1342,7 +1374,7 @@ export function DashboardInflowLab({ previewMode = false }: { previewMode?: bool
                             active
                         >
                             <Button
-                                onClick={evaluateFeederData}
+                                onClick={() => void evaluateFeederData()}
                                 disabled={isFeederEvaluating || isRunning}
                                 className="mt-3 h-8 w-full bg-emerald-700 text-xs text-white hover:bg-emerald-800"
                             >

@@ -5,45 +5,53 @@
  * docs, and free tools should not be added here.
  */
 export const AUTHENTICATED_APP_ROUTE_PREFIXES = [
-    '/dashboard',
-    '/admin',
-    '/sysadmin',
-    '/fsma',
-    '/settings',
-    '/onboarding',
-    '/owner',
-    '/rules',
-    '/records',
-    '/exceptions',
-    '/requests',
-    '/reports',
-    '/identity',
-    '/review',
-    '/audit',
-    '/incidents',
-    '/controls',
-    '/trace',
-    '/compliance',
-    '/ingest',
+  "/dashboard",
+  "/admin",
+  "/sysadmin",
+  "/fsma",
+  "/settings",
+  "/onboarding",
+  "/owner",
+  "/rules",
+  "/records",
+  "/exceptions",
+  "/requests",
+  "/reports",
+  "/identity",
+  "/review",
+  "/audit",
+  "/incidents",
+  "/controls",
+  "/trace",
+  "/compliance",
+  "/ingest",
 ] as const;
 
 const CHROMELESS_EXACT_ROUTES = new Set([
-    '/mobile/capture',
-    '/fsma/field-capture',
-    '/login',
-    '/forgot-password',
-    '/reset-password',
-    '/auth/verify',
+  "/mobile/capture",
+  "/fsma/field-capture",
+  "/login",
+  "/forgot-password",
+  "/reset-password",
+  "/accept-invite",
+  "/auth/verify",
 ]);
 
-export function matchesRoutePrefix(pathname: string, prefixes: readonly string[]): boolean {
-    return prefixes.some((route) => pathname === route || pathname.startsWith(`${route}/`));
+export function matchesRoutePrefix(
+  pathname: string,
+  prefixes: readonly string[],
+): boolean {
+  return prefixes.some(
+    (route) => pathname === route || pathname.startsWith(`${route}/`),
+  );
 }
 
 export function isAuthenticatedAppRoute(pathname: string): boolean {
-    return matchesRoutePrefix(pathname, AUTHENTICATED_APP_ROUTE_PREFIXES);
+  return matchesRoutePrefix(pathname, AUTHENTICATED_APP_ROUTE_PREFIXES);
 }
 
 export function shouldHideMarketingChrome(pathname: string): boolean {
-    return CHROMELESS_EXACT_ROUTES.has(pathname) || isAuthenticatedAppRoute(pathname);
+  return (
+    CHROMELESS_EXACT_ROUTES.has(pathname) || isAuthenticatedAppRoute(pathname)
+  );
 }

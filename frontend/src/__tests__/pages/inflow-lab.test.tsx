@@ -433,6 +433,83 @@ describe('Dashboard Inflow Lab', () => {
         expect(textareaValue).toContain('North Bay DC');
     });
 
+    it('runs the guided proof with sample data without saving until requested', async () => {
+        const user = userEvent.setup();
+        vi.mocked(useAuth).mockReturnValue({
+            isAuthenticated: true,
+            isHydrated: true,
+            tenantId: 'tenant-123',
+            user: {
+                id: 'writer-1',
+                email: 'writer@example.com',
+                is_sysadmin: false,
+                status: 'active',
+                role_name: 'member',
+                permissions: ['inflow.write'],
+            },
+        } as ReturnType<typeof useAuth>);
+        vi.mocked(useTenant).mockReturnValue({ tenantId: 'tenant-123' } as ReturnType<typeof useTenant>);
+
+        renderDashboardInflowLabPage();
+
+        await user.click(screen.getByRole('button', { name: 'Run guided proof' }));
+
+        const textarea = await screen.findByRole('textbox', { name: 'Inbound CSV data' });
+        const textareaValue = (textarea as HTMLTextAreaElement).value;
+        expect(textareaValue).toContain('Riverbend Organics');
+        expect(textareaValue).toContain('GreenLeaf Shipping Dock');
+        expect(textareaValue).toContain('North Bay DC');
+
+        await waitFor(() => {
+            expect(mockFetch).toHaveBeenCalledWith(
+                '/api/ingestion/api/v1/sandbox/evaluate',
+                expect.objectContaining({
+                    method: 'POST',
+                    body: expect.stringContaining('Riverbend Organics'),
+                }),
+            );
+        });
+        expect(await screen.findByText(/Sandbox evaluator processed 1 event/i)).toBeInTheDocument();
+        expect(
+            mockFetch.mock.calls.filter(
+                ([url]) => String(url) === '/api/ingestion/api/v1/inflow-workbench/runs',
+            ),
+        ).toHaveLength(0);
+
+        await user.click(screen.getByRole('button', { name: 'Save test run' }));
+
+        await waitFor(() => {
+            expect(mockFetch).toHaveBeenCalledWith(
+                '/api/ingestion/api/v1/inflow-workbench/runs',
+                expect.objectContaining({ method: 'POST' }),
+            );
+        });
+    });
+
+    it('keeps public guided proof runs local without calling authenticated readiness preview', async () => {
+        const user = userEvent.setup();
+        renderDashboardInflowLabPage();
+
+        await user.click(screen.getByRole('button', { name: 'Run guided proof' }));
+
+        await waitFor(() => {
+            expect(mockFetch).toHaveBeenCalledWith(
+                '/api/ingestion/api/v1/sandbox/evaluate',
+                expect.objectContaining({ method: 'POST' }),
+            );
+        });
+        expect(
+            mockFetch.mock.calls.some(
+                ([url]) => String(url) === '/api/ingestion/api/v1/inflow-workbench/readiness/preview',
+            ),
+        ).toBe(false);
+        expect(
+            mockFetch.mock.calls.some(
+                ([url]) => String(url) === '/api/ingestion/api/v1/inflow-workbench/runs',
+            ),
+        ).toBe(false);
+    });
+
     it('loads the latest saved workbench run when the dashboard opens with an authenticated tenant session', async () => {
         vi.mocked(useAuth).mockReturnValue({
             isAuthenticated: true,

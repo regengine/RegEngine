@@ -1,334 +1,343 @@
-'use client';
+"use client";
 
-import { fetchWithCsrf } from '@/lib/fetch-with-csrf';
-import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { createSupabaseBrowserClient } from '@/lib/supabase/client';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Card, CardContent, CardDescription, CardHeader } from '@/components/ui/card';
-import { Loader2, Lock, ShieldCheck, Eye, EyeOff } from 'lucide-react';
+import { fetchWithCsrf } from "@/lib/fetch-with-csrf";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Loader2, Lock, ShieldCheck, Eye, EyeOff } from "lucide-react";
+import { AuthShell } from "@/components/auth/AuthShell";
 
-function getPasswordStrength(password: string): { score: number; label: string; color: string } {
-    let score = 0;
-    if (password.length >= 8) score++;
-    if (password.length >= 12) score++;
-    if (/[A-Z]/.test(password)) score++;
-    if (/[0-9]/.test(password)) score++;
-    if (/[^A-Za-z0-9]/.test(password)) score++;
+function getPasswordStrength(password: string): {
+  score: number;
+  label: string;
+  color: string;
+} {
+  let score = 0;
+  if (password.length >= 8) score++;
+  if (password.length >= 12) score++;
+  if (/[A-Z]/.test(password)) score++;
+  if (/[0-9]/.test(password)) score++;
+  if (/[^A-Za-z0-9]/.test(password)) score++;
 
-    if (score <= 1) return { score, label: 'Weak', color: 'bg-re-danger-muted0' };
-    if (score <= 2) return { score, label: 'Fair', color: 'bg-re-warning-muted0' };
-    if (score <= 3) return { score, label: 'Good', color: 'bg-yellow-400' };
-    return { score, label: 'Strong', color: 'bg-re-brand' };
+  if (score <= 1) return { score, label: "Weak", color: "bg-re-danger-muted" };
+  if (score <= 2) return { score, label: "Fair", color: "bg-re-warning-muted" };
+  if (score <= 3) return { score, label: "Good", color: "bg-yellow-400" };
+  return { score, label: "Strong", color: "bg-re-brand" };
 }
 
 function scrubRecoveryHash(): void {
-    if (typeof window === 'undefined' || !window.location.hash) return;
+  if (typeof window === "undefined" || !window.location.hash) return;
 
-    const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
-    const hasSensitiveRecoveryData =
-        hashParams.has('access_token') ||
-        hashParams.has('refresh_token') ||
-        hashParams.get('type') === 'recovery';
+  const hashParams = new URLSearchParams(
+    window.location.hash.replace(/^#/, ""),
+  );
+  const hasSensitiveRecoveryData =
+    hashParams.has("access_token") ||
+    hashParams.has("refresh_token") ||
+    hashParams.get("type") === "recovery";
 
-    if (!hasSensitiveRecoveryData) return;
+  if (!hasSensitiveRecoveryData) return;
 
-    window.history.replaceState(
-        null,
-        document.title,
-        `${window.location.pathname}${window.location.search}`,
-    );
+  window.history.replaceState(
+    null,
+    document.title,
+    `${window.location.pathname}${window.location.search}`,
+  );
 }
 
 export default function ResetPasswordClient() {
-    const [password, setPassword] = useState('');
-    const [confirmPassword, setConfirmPassword] = useState('');
-    const [showPassword, setShowPassword] = useState(false);
-    const [isLoading, setIsLoading] = useState(false);
-    const [error, setError] = useState<string | null>(null);
-    const [success, setSuccess] = useState(false);
-    const [sessionReady, setSessionReady] = useState(false);
-    const [sessionError, setSessionError] = useState(false);
-    const router = useRouter();
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState(false);
+  const [sessionReady, setSessionReady] = useState(false);
+  const [sessionError, setSessionError] = useState(false);
+  const router = useRouter();
 
-    // When Supabase redirects back after password reset it passes a recovery
-    // session in one of two ways:
-    //
-    //  • PKCE flow  — /auth/callback exchanges the ?code= param server-side and
-    //    sets session cookies before redirecting here.  getSession() resolves
-    //    immediately with the session from those cookies.
-    //
-    //  • Implicit flow (legacy emails sent before PKCE migration) — /auth/callback
-    //    serves a small HTML shim that reads the #access_token=...&type=recovery
-    //    hash and redirects to /reset-password keeping the hash.  createBrowserClient
-    //    has detectSessionInUrl: true by default, so it processes the hash on init.
-    //    We wait one tick with setTimeout to let the SDK finish that processing
-    //    before calling getSession().
-    useEffect(() => {
-        let cancelled = false;
-        const check = async () => {
-            try {
-                // SSR-aware browser client — matches the PKCE flow used by ForgotPasswordClient.
-                const supabase = await createSupabaseBrowserClient();
-                const { data: { session } } = await supabase.auth.getSession();
-                if (cancelled) return;
-                scrubRecoveryHash();
-                if (session) {
-                    setSessionReady(true);
-                } else {
-                    setSessionError(true);
-                }
-            } catch {
-                if (!cancelled) setSessionError(true);
-            }
-        };
-        // Give detectSessionInUrl one event-loop tick to process any hash tokens.
-        const tid = setTimeout(check, 50);
-        return () => {
-            cancelled = true;
-            clearTimeout(tid);
-        };
-    }, []);
-
-    const strength = getPasswordStrength(password);
-
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-
-        if (password !== confirmPassword) {
-            setError('Passwords do not match.');
-            return;
+  // When Supabase redirects back after password reset it passes a recovery
+  // session in one of two ways:
+  //
+  //  • PKCE flow  — /auth/callback exchanges the ?code= param server-side and
+  //    sets session cookies before redirecting here.  getSession() resolves
+  //    immediately with the session from those cookies.
+  //
+  //  • Implicit flow (legacy emails sent before PKCE migration) — /auth/callback
+  //    serves a small HTML shim that reads the #access_token=...&type=recovery
+  //    hash and redirects to /reset-password keeping the hash.  createBrowserClient
+  //    has detectSessionInUrl: true by default, so it processes the hash on init.
+  //    We wait one tick with setTimeout to let the SDK finish that processing
+  //    before calling getSession().
+  useEffect(() => {
+    let cancelled = false;
+    const check = async () => {
+      try {
+        // SSR-aware browser client — matches the PKCE flow used by ForgotPasswordClient.
+        const supabase = await createSupabaseBrowserClient();
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+        if (cancelled) return;
+        scrubRecoveryHash();
+        if (session) {
+          setSessionReady(true);
+        } else {
+          setSessionError(true);
         }
-
-        setIsLoading(true);
-        setError(null);
-
-        try {
-            // The RegEngine login endpoint checks argon2 hashes in our own PostgreSQL
-            // users table — supabase.auth.updateUser() only updates Supabase's internal
-            // store, which is never read at login. Call the backend directly so it can
-            // update the authoritative store (and keep Supabase in sync as a side-effect).
-            const supabase = await createSupabaseBrowserClient();
-            const { data: sessionData } = await supabase.auth.getSession();
-            const accessToken = sessionData?.session?.access_token;
-            if (!accessToken) {
-                setError('Your reset session has expired. Please request a new reset link.');
-                return;
-            }
-
-            const res = await fetchWithCsrf('/api/admin/auth/reset-password', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    Authorization: `Bearer ${accessToken}`,
-                },
-                body: JSON.stringify({ new_password: password }),
-            });
-
-            if (!res.ok) {
-                const body = await res.json().catch(() => null);
-                setError(body?.detail || 'Failed to update password. Please try again.');
-                return;
-            }
-
-            // Clear the recovery session — it's been consumed
-            await supabase.auth.signOut();
-            setSuccess(true);
-        } catch {
-            setError('An unexpected error occurred. Please try again.');
-        } finally {
-            setIsLoading(false);
-        }
+      } catch {
+        if (!cancelled) setSessionError(true);
+      }
     };
+    // Give detectSessionInUrl one event-loop tick to process any hash tokens.
+    const tid = setTimeout(check, 50);
+    return () => {
+      cancelled = true;
+      clearTimeout(tid);
+    };
+  }, []);
 
-    if (sessionError) {
-        return (
-            <div className="relative overflow-hidden bg-[var(--re-surface-base)]">
-                <section className="relative z-[1] mx-auto flex min-h-[80vh] max-w-md items-center px-6 py-14">
-                    <Card className="w-full border-[var(--re-surface-border)] bg-[var(--re-surface-card)] shadow-[0_16px_70px_rgba(0,0,0,0.25)]">
-                        <CardContent className="pt-8">
-                            <div className="space-y-4 text-center">
-                                <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-re-danger-muted0/10">
-                                    <Lock className="h-7 w-7 text-re-danger" />
-                                </div>
-                                <div className="space-y-1">
-                                    <p className="font-medium text-[var(--re-text-primary)]">Reset link expired</p>
-                                    <p className="text-sm text-[var(--re-text-muted)]">
-                                        This password reset link is invalid or has expired. Reset links are valid for 1 hour.
-                                    </p>
-                                </div>
-                                <Button className="w-full" onClick={() => router.push('/forgot-password')}>
-                                    Request a new link
-                                </Button>
-                                <Button variant="outline" className="w-full" onClick={() => router.push('/login')}>
-                                    Back to sign in
-                                </Button>
-                            </div>
-                        </CardContent>
-                    </Card>
-                </section>
-            </div>
-        );
+  const strength = getPasswordStrength(password);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (password !== confirmPassword) {
+      setError("Passwords do not match.");
+      return;
     }
 
-    if (success) {
-        return (
-            <div className="relative overflow-hidden bg-[var(--re-surface-base)]">
-                <section className="relative z-[1] mx-auto flex min-h-[80vh] max-w-md items-center px-6 py-14">
-                    <Card className="w-full border-[var(--re-surface-border)] bg-[var(--re-surface-card)] shadow-[0_16px_70px_rgba(0,0,0,0.25)]">
-                        <CardContent className="pt-8">
-                            <div className="space-y-4 text-center">
-                                <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-re-brand-muted">
-                                    <ShieldCheck className="h-7 w-7 text-re-brand" />
-                                </div>
-                                <div className="space-y-1">
-                                    <p className="font-medium text-[var(--re-text-primary)]">Password updated</p>
-                                    <p className="text-sm text-[var(--re-text-muted)]">
-                                        Your password has been changed successfully. Sign in with your new password.
-                                    </p>
-                                </div>
-                                <Button className="w-full" onClick={() => router.push('/login')}>
-                                    Sign in
-                                </Button>
-                            </div>
-                        </CardContent>
-                    </Card>
-                </section>
-            </div>
-        );
-    }
+    setIsLoading(true);
+    setError(null);
 
+    try {
+      // The RegEngine login endpoint checks argon2 hashes in our own PostgreSQL
+      // users table — supabase.auth.updateUser() only updates Supabase's internal
+      // store, which is never read at login. Call the backend directly so it can
+      // update the authoritative store (and keep Supabase in sync as a side-effect).
+      const supabase = await createSupabaseBrowserClient();
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData?.session?.access_token;
+      if (!accessToken) {
+        setError(
+          "Your reset session has expired. Please request a new reset link.",
+        );
+        return;
+      }
+
+      const res = await fetchWithCsrf("/api/admin/auth/reset-password", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({ new_password: password }),
+      });
+
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        setError(
+          body?.detail || "Failed to update password. Please try again.",
+        );
+        return;
+      }
+
+      // Clear the recovery session — it's been consumed
+      await supabase.auth.signOut();
+      setSuccess(true);
+    } catch {
+      setError("An unexpected error occurred. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  if (sessionError) {
     return (
-        <div className="relative overflow-hidden bg-[var(--re-surface-base)]">
-            <div className="pointer-events-none absolute inset-0">
-                <div className="absolute -top-16 left-1/2 h-56 w-56 -translate-x-1/2 rounded-full bg-[var(--re-brand)]/10 blur-3xl" />
-                <div className="absolute right-12 top-28 h-48 w-48 rounded-full bg-cyan-400/10 blur-3xl" />
-            </div>
-
-            <section className="relative z-[1] mx-auto flex min-h-[80vh] max-w-md items-center px-6 py-14">
-                <Card className="w-full border-[var(--re-surface-border)] bg-[var(--re-surface-card)] shadow-[0_16px_70px_rgba(0,0,0,0.25)]">
-                    <CardHeader className="space-y-1 pb-4">
-                        <div className="mb-3 flex justify-center">
-                            <div className="rounded-full border border-[var(--re-brand)]/30 bg-[var(--re-brand)]/10 p-3">
-                                <Lock className="h-7 w-7 text-[var(--re-brand)]" />
-                            </div>
-                        </div>
-                        <h2 className="text-center text-2xl font-semibold leading-none tracking-tight text-[var(--re-text-primary)]">
-                            Set new password
-                        </h2>
-                        <CardDescription className="text-center text-[var(--re-text-muted)]">
-                            Choose a strong password for your account
-                        </CardDescription>
-                    </CardHeader>
-
-                    <CardContent>
-                        {!sessionReady ? (
-                            <div className="flex items-center justify-center py-8">
-                                <Loader2 className="h-6 w-6 animate-spin text-[var(--re-brand)]" />
-                            </div>
-                        ) : (
-                            <form onSubmit={handleSubmit} className="space-y-4">
-                                {error && (
-                                    <div
-                                        role="alert"
-                                        aria-live="polite"
-                                        className="animate-in fade-in slide-in-from-top-2 rounded-md border border-re-danger bg-re-danger-muted p-3 text-sm text-re-danger dark:border-re-danger dark:bg-re-danger/10"
-                                    >
-                                        {error}
-                                    </div>
-                                )}
-
-                                <div className="space-y-2">
-                                    <label
-                                        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                                        htmlFor="password"
-                                    >
-                                        New password
-                                    </label>
-                                    <div className="relative">
-                                        <Input
-                                            id="password"
-                                            type={showPassword ? 'text' : 'password'}
-                                            value={password}
-                                            onChange={(e) => setPassword(e.target.value)}
-                                            disabled={isLoading}
-                                            required
-                                            autoComplete="new-password"
-                                            autoFocus
-                                            className="h-11 pr-10"
-                                            placeholder="New password"
-                                        />
-                                        <button
-                                            type="button"
-                                            onClick={() => setShowPassword((v) => !v)}
-                                            className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--re-text-muted)] transition hover:text-[var(--re-text-primary)]"
-                                            aria-label={showPassword ? 'Hide password' : 'Show password'}
-                                        >
-                                            {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                                        </button>
-                                    </div>
-                                    {password.length > 0 && (
-                                        <div className="space-y-1">
-                                            <div className="flex gap-1">
-                                                {[1, 2, 3, 4].map((i) => (
-                                                    <div
-                                                        key={i}
-                                                        className={`h-1 flex-1 rounded-full transition-colors ${
-                                                            i <= strength.score ? strength.color : 'bg-[var(--re-surface-border)]'
-                                                        }`}
-                                                    />
-                                                ))}
-                                            </div>
-                                            <p className="text-xs text-[var(--re-text-muted)]">
-                                                Strength: <span className="font-medium">{strength.label}</span>
-                                            </p>
-                                        </div>
-                                    )}
-                                </div>
-
-                                <div className="space-y-2">
-                                    <label
-                                        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                                        htmlFor="confirm-password"
-                                    >
-                                        Confirm new password
-                                    </label>
-                                    <Input
-                                        id="confirm-password"
-                                        type={showPassword ? 'text' : 'password'}
-                                        value={confirmPassword}
-                                        onChange={(e) => setConfirmPassword(e.target.value)}
-                                        disabled={isLoading}
-                                        required
-                                        autoComplete="new-password"
-                                        className="h-11"
-                                        placeholder="Repeat your password"
-                                    />
-                                    {confirmPassword.length > 0 && password !== confirmPassword && (
-                                        <p className="text-xs text-re-danger">Passwords do not match</p>
-                                    )}
-                                </div>
-
-                                <Button
-                                    className="h-11 w-full"
-                                    type="submit"
-                                    disabled={isLoading || !sessionReady}
-                                >
-                                    {isLoading ? (
-                                        <>
-                                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                            Updating password...
-                                        </>
-                                    ) : (
-                                        'Update password'
-                                    )}
-                                </Button>
-                            </form>
-                        )}
-                    </CardContent>
-                </Card>
-            </section>
+      <AuthShell
+        title="Reset link expired"
+        description="This password reset link is invalid or has expired. Reset links are valid for 1 hour."
+        icon={Lock}
+      >
+        <div role="alert" className="space-y-4 text-center">
+          <p className="sr-only">
+            This password reset link is invalid or has expired. Reset links are
+            valid for 1 hour.
+          </p>
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-re-danger-muted">
+            <Lock className="h-7 w-7 text-re-danger" aria-hidden="true" />
+          </div>
+          <Button
+            className="w-full"
+            onClick={() => router.push("/forgot-password")}
+          >
+            Request a new link
+          </Button>
+          <Button
+            variant="outline"
+            className="w-full"
+            onClick={() => router.push("/login")}
+          >
+            Back to sign in
+          </Button>
         </div>
+      </AuthShell>
     );
+  }
+
+  if (success) {
+    return (
+      <AuthShell
+        title="Password updated"
+        description="Your password has been changed successfully. Sign in with your new password."
+        icon={ShieldCheck}
+      >
+        <div role="status" className="space-y-4 text-center">
+          <p className="sr-only">
+            Your password has been changed successfully. Sign in with your new
+            password.
+          </p>
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-re-brand-muted">
+            <ShieldCheck className="h-7 w-7 text-re-brand" aria-hidden="true" />
+          </div>
+          <Button className="w-full" onClick={() => router.push("/login")}>
+            Sign in
+          </Button>
+        </div>
+      </AuthShell>
+    );
+  }
+
+  return (
+    <AuthShell
+      title="Set new password"
+      description="Choose a strong password for your account."
+      icon={Lock}
+    >
+      {!sessionReady ? (
+        <div
+          role="status"
+          className="flex items-center justify-center gap-2 py-8 text-sm text-[var(--re-text-muted)]"
+        >
+          <Loader2
+            className="h-5 w-5 animate-spin text-[var(--re-brand)]"
+            aria-hidden="true"
+          />
+          Checking reset session...
+        </div>
+      ) : (
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {error && (
+            <div
+              role="alert"
+              aria-live="polite"
+              className="animate-in fade-in slide-in-from-top-2 rounded-md border border-re-danger bg-re-danger-muted p-3 text-sm text-re-danger dark:border-re-danger dark:bg-re-danger/10"
+            >
+              {error}
+            </div>
+          )}
+
+          <div className="space-y-2">
+            <label
+              className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+              htmlFor="password"
+            >
+              New password
+            </label>
+            <div className="relative">
+              <Input
+                id="password"
+                type={showPassword ? "text" : "password"}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                disabled={isLoading}
+                required
+                autoComplete="new-password"
+                autoFocus
+                className="h-11 pr-10"
+                placeholder="New password"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((v) => !v)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--re-text-muted)] transition hover:text-[var(--re-text-primary)]"
+                aria-label={showPassword ? "Hide password" : "Show password"}
+              >
+                {showPassword ? (
+                  <EyeOff className="h-4 w-4" aria-hidden="true" />
+                ) : (
+                  <Eye className="h-4 w-4" aria-hidden="true" />
+                )}
+              </button>
+            </div>
+            {password.length > 0 && (
+              <div className="space-y-1">
+                <div className="flex gap-1">
+                  {[1, 2, 3, 4].map((i) => (
+                    <div
+                      key={i}
+                      className={`h-1 flex-1 rounded-full transition-colors ${
+                        i <= strength.score
+                          ? strength.color
+                          : "bg-[var(--re-surface-border)]"
+                      }`}
+                    />
+                  ))}
+                </div>
+                <p className="text-xs text-[var(--re-text-muted)]">
+                  Strength:{" "}
+                  <span className="font-medium">{strength.label}</span>
+                </p>
+              </div>
+            )}
+          </div>
+
+          <div className="space-y-2">
+            <label
+              className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+              htmlFor="confirm-password"
+            >
+              Confirm new password
+            </label>
+            <Input
+              id="confirm-password"
+              type={showPassword ? "text" : "password"}
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              disabled={isLoading}
+              required
+              autoComplete="new-password"
+              className="h-11"
+              placeholder="Repeat your password"
+            />
+            {confirmPassword.length > 0 && password !== confirmPassword && (
+              <p className="text-xs text-re-danger">Passwords do not match</p>
+            )}
+          </div>
+
+          <Button
+            className="h-11 w-full"
+            type="submit"
+            disabled={isLoading || !sessionReady}
+          >
+            {isLoading ? (
+              <>
+                <span role="status" className="inline-flex items-center">
+                  <Loader2
+                    className="mr-2 h-4 w-4 animate-spin"
+                    aria-hidden="true"
+                  />
+                  Updating password...
+                </span>
+              </>
+            ) : (
+              "Update password"
+            )}
+          </Button>
+        </form>
+      )}
+    </AuthShell>
+  );
 }
