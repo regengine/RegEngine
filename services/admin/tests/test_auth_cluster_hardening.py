@@ -1053,3 +1053,57 @@ async def test_revoke_all_for_user_drops_token_hash_mapping():
     assert count == 1
     # The key claim: delete() was called with the token_hash mapping key.
     write_pipe.delete.assert_awaited_with(f"token_hash:{token_hash}")
+
+
+# ─────────────────────────────────────────────────────────────────────
+# SEL-12 gap — /refresh must reject a session generation issued before a
+# logout-all / password-reset token_version bump, even if the refresh
+# token itself is otherwise valid and unexpired. get_current_user only
+# rejects stale ACCESS tokens; without this guard a still-valid REFRESH
+# token keeps minting fresh access tokens after "log out everywhere".
+# ─────────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_refresh_rejects_stale_session_token_version():
+    from fastapi import HTTPException
+    from services.admin.app.auth_routes import RefreshRequest, refresh_session
+    from services.admin.app.session_store import SessionData
+
+    user_id = uuid.uuid4()
+    session_store = MagicMock()
+    session_store.claim_session_by_token = AsyncMock(
+        return_value=SessionData(
+            id=uuid.uuid4(),
+            user_id=user_id,
+            refresh_token_hash="h",
+            family_id=uuid.uuid4(),
+            token_version=0,  # session minted before the bump
+            is_revoked=False,
+            created_at=datetime.now(timezone.utc),
+            last_used_at=datetime.now(timezone.utc),
+            expires_at=datetime(2100, 1, 1, tzinfo=timezone.utc),
+        )
+    )
+    session_store.update_session = AsyncMock(return_value=True)
+
+    db = MagicMock()
+    db.get.return_value = SimpleNamespace(
+        id=user_id,
+        email="u@e",
+        is_sysadmin=False,
+        token_version=1,  # user did logout-all / password reset since
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        await refresh_session.__wrapped__(
+            payload=RefreshRequest(refresh_token="raw"),
+            request=_make_starlette_request(),
+            db=db,
+            session_store=session_store,
+        )
+
+    assert exc.value.status_code == 401
+    # The guard runs BEFORE rotation: a stale session must never be rotated
+    # into a fresh, usable refresh token.
+    session_store.update_session.assert_not_called()
