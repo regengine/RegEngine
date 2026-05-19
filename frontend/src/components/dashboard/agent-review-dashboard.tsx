@@ -6,6 +6,7 @@ import {
     Bot,
     CheckCircle2,
     CircleHelp,
+    Copy,
     Eye,
     Filter,
     GitBranch,
@@ -16,11 +17,16 @@ import {
     XCircle,
 } from 'lucide-react';
 
-import { useAgentReviewItems } from '@/hooks/use-agent-reviews';
+import { useAgentReviewDecision, useAgentReviewItems } from '@/hooks/use-agent-reviews';
 import { useAuth } from '@/lib/auth-context';
 import { useTenant } from '@/lib/tenant-context';
 import { cn } from '@/lib/utils';
-import type { AgentArtifactType, AgentReviewItem, AgentReviewStatus } from '@/types/agent-review';
+import type {
+    AgentArtifactType,
+    AgentReviewDecisionStatus,
+    AgentReviewItem,
+    AgentReviewStatus,
+} from '@/types/agent-review';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -146,6 +152,26 @@ function chainBadge(item: AgentReviewItem) {
     };
 }
 
+function chainValidityLabel(value: AgentReviewItem['chain_valid']) {
+    if (value === true) return 'valid';
+    if (value === false) return 'broken';
+    return 'unknown';
+}
+
+function buildAgentReviewAuditCopy(item: AgentReviewItem) {
+    const lines = [
+        `artifact_id=${item.artifact_id}`,
+        item.ingestion_run_id ? `ingestion_run_id=${item.ingestion_run_id}` : null,
+        item.receipt_hash ? `receipt_hash=${item.receipt_hash}` : null,
+        `chain_valid=${chainValidityLabel(item.chain_valid)}`,
+        item.evidence_ids.length > 0 ? `evidence_ids=${item.evidence_ids.join(',')}` : null,
+        item.canonical_event_ids.length > 0 ? `canonical_event_ids=${item.canonical_event_ids.join(',')}` : null,
+        item.source_hashes.length > 0 ? `source_hashes=${item.source_hashes.join(',')}` : null,
+    ];
+
+    return lines.filter((line): line is string => Boolean(line)).join('\n');
+}
+
 function sortAgentReviewItems(items: AgentReviewItem[]): AgentReviewItem[] {
     return [...items].sort((a, b) => {
         const reviewPriority = Number(b.requires_human_review) - Number(a.requires_human_review);
@@ -230,15 +256,37 @@ function AgentReviewDetailDialog({
     item,
     open,
     onOpenChange,
+    onDecision,
+    pendingDecision,
+    decisionError,
 }: {
     item: AgentReviewItem | null;
     open: boolean;
     onOpenChange: (open: boolean) => void;
+    onDecision: (status: AgentReviewDecisionStatus) => Promise<void>;
+    pendingDecision: AgentReviewDecisionStatus | null;
+    decisionError: string | null;
 }) {
+    const [copyState, setCopyState] = React.useState<'idle' | 'copied' | 'failed'>('idle');
+
+    React.useEffect(() => {
+        setCopyState('idle');
+    }, [item?.artifact_id]);
+
     if (!item) return null;
 
     const chain = chainBadge(item);
     const ChainIcon = chain.icon;
+    const isSubmittingDecision = pendingDecision !== null;
+
+    const handleAuditCopy = async () => {
+        try {
+            await navigator.clipboard.writeText(buildAgentReviewAuditCopy(item));
+            setCopyState('copied');
+        } catch {
+            setCopyState('failed');
+        }
+    };
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
@@ -280,6 +328,92 @@ function AgentReviewDetailDialog({
                     </div>
 
                     <aside className="space-y-4">
+                        <div className="rounded-md border border-[var(--re-border-default)] bg-[var(--re-surface-base)] p-4">
+                            <div className="flex items-center justify-between gap-3">
+                                <div>
+                                    <p className="font-mono text-[11px] font-medium uppercase tracking-[0.02em] text-[var(--re-text-muted)]">
+                                        Review decision
+                                    </p>
+                                    <p className="mt-1 text-sm text-[var(--re-text-secondary)]">
+                                        Current: {REVIEW_STATUS_LABELS[item.review_status]}
+                                    </p>
+                                </div>
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={handleAuditCopy}
+                                    className="min-w-[112px]"
+                                >
+                                    {copyState === 'copied' ? (
+                                        <CheckCircle2 className="mr-2 h-4 w-4 text-[var(--re-success)]" />
+                                    ) : (
+                                        <Copy className="mr-2 h-4 w-4" />
+                                    )}
+                                    {copyState === 'copied' ? 'Copied' : copyState === 'failed' ? 'Copy failed' : 'Copy audit'}
+                                </Button>
+                            </div>
+
+                            <div className="mt-4 grid gap-2 sm:grid-cols-3 lg:grid-cols-1">
+                                <Button
+                                    type="button"
+                                    size="sm"
+                                    onClick={() => {
+                                        void onDecision('accepted');
+                                    }}
+                                    disabled={isSubmittingDecision}
+                                    className="min-w-[120px] border-[var(--re-success-border)] bg-[var(--re-success)] text-white hover:bg-[var(--re-success)]"
+                                >
+                                    {pendingDecision === 'accepted' ? (
+                                        <Spinner className="mr-2 border-white border-t-transparent" size="sm" />
+                                    ) : (
+                                        <CheckCircle2 className="mr-2 h-4 w-4" />
+                                    )}
+                                    Accept
+                                </Button>
+                                <Button
+                                    type="button"
+                                    variant="destructive"
+                                    size="sm"
+                                    onClick={() => {
+                                        void onDecision('rejected');
+                                    }}
+                                    disabled={isSubmittingDecision}
+                                    className="min-w-[120px]"
+                                >
+                                    {pendingDecision === 'rejected' ? (
+                                        <Spinner className="mr-2 border-white border-t-transparent" size="sm" />
+                                    ) : (
+                                        <XCircle className="mr-2 h-4 w-4" />
+                                    )}
+                                    Reject
+                                </Button>
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => {
+                                        void onDecision('needs_more_evidence');
+                                    }}
+                                    disabled={isSubmittingDecision}
+                                    className="min-w-[120px] border-[var(--re-warning-border)] text-[var(--re-warning)] hover:bg-[var(--re-warning-bg)]"
+                                >
+                                    {pendingDecision === 'needs_more_evidence' ? (
+                                        <Spinner className="mr-2 border-[var(--re-warning)] border-t-transparent" size="sm" />
+                                    ) : (
+                                        <CircleHelp className="mr-2 h-4 w-4" />
+                                    )}
+                                    Needs evidence
+                                </Button>
+                            </div>
+
+                            {decisionError && (
+                                <p className="mt-3 rounded-md border border-[var(--re-danger-border)] bg-[var(--re-danger-bg)] px-3 py-2 text-xs leading-5 text-[var(--re-danger)]">
+                                    {decisionError}
+                                </p>
+                            )}
+                        </div>
+
                         <div className="rounded-md border border-[var(--re-border-default)] bg-[var(--re-surface-base)] p-4">
                             <div className="flex items-center justify-between gap-3">
                                 <div>
@@ -394,6 +528,12 @@ export function AgentReviewDashboard() {
     const [createdAfter, setCreatedAfter] = React.useState('');
     const [createdBefore, setCreatedBefore] = React.useState('');
     const [selectedItem, setSelectedItem] = React.useState<AgentReviewItem | null>(null);
+    const [pendingDecision, setPendingDecision] = React.useState<{
+        artifactId: string;
+        status: AgentReviewDecisionStatus;
+    } | null>(null);
+    const [decisionError, setDecisionError] = React.useState<string | null>(null);
+    const decisionMutation = useAgentReviewDecision();
 
     React.useEffect(() => {
         if (isSysadmin && !tenantFilter && tenantId) {
@@ -419,6 +559,37 @@ export function AgentReviewDashboard() {
     );
 
     const sortedItems = React.useMemo(() => sortAgentReviewItems(query.data?.items ?? []), [query.data?.items]);
+
+    const handleDecision = React.useCallback(
+        async (status: AgentReviewDecisionStatus) => {
+            if (!selectedItem) return;
+
+            const artifactId = selectedItem.artifact_id;
+            setPendingDecision({ artifactId, status });
+            setDecisionError(null);
+
+            try {
+                const result = await decisionMutation.mutateAsync({ artifactId, status });
+                setSelectedItem((current) =>
+                    current?.artifact_id === artifactId
+                        ? {
+                            ...current,
+                            review_id: result.review_id ?? current.review_id,
+                            review_status: result.review_status,
+                            reviewed_by: result.reviewed_by ?? current.reviewed_by,
+                            reviewed_at: result.reviewed_at ?? current.reviewed_at,
+                        }
+                        : current,
+                );
+                await query.refetch();
+            } catch (error) {
+                setDecisionError(error instanceof Error ? error.message : 'Unable to submit review decision.');
+            } finally {
+                setPendingDecision(null);
+            }
+        },
+        [decisionMutation, query, selectedItem],
+    );
 
     const metrics = React.useMemo(() => {
         const items = query.data?.items ?? [];
@@ -681,8 +852,16 @@ export function AgentReviewDashboard() {
                 item={selectedItem}
                 open={Boolean(selectedItem)}
                 onOpenChange={(open) => {
-                    if (!open) setSelectedItem(null);
+                    if (!open) {
+                        setSelectedItem(null);
+                        setDecisionError(null);
+                    }
                 }}
+                onDecision={handleDecision}
+                pendingDecision={
+                    selectedItem && pendingDecision?.artifactId === selectedItem.artifact_id ? pendingDecision.status : null
+                }
+                decisionError={decisionError}
             />
         </div>
     );

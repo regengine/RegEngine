@@ -6,14 +6,19 @@ from datetime import datetime
 from typing import Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from sqlalchemy.orm import Session
 
 from shared.agent_operator_view import (
+    AgentArtifactTimelineResponse,
+    AgentReviewDecisionRequest,
+    AgentReviewDecisionResponse,
     AgentReviewListResponse,
     ArtifactType,
     ReviewStatus,
+    fetch_agent_artifact_timeline,
     fetch_agent_review_items,
+    upsert_agent_artifact_review,
 )
 from shared.tenant_context import set_tenant_guc
 
@@ -64,6 +69,85 @@ async def list_agent_review_items(
             limit=limit,
             offset=offset,
         )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post(
+    "/items/{artifact_id}/review",
+    response_model=AgentReviewDecisionResponse,
+    summary="Record an operator decision for one advisory artifact",
+)
+async def review_agent_artifact(
+    decision: AgentReviewDecisionRequest,
+    artifact_id: UUID = Path(..., description="Agent artifact to review."),
+    tenant_id: Optional[UUID] = Query(
+        default=None,
+        description="Tenant to inspect. Sysadmin only; regular operators use their auth tenant.",
+    ),
+    current_user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_session),
+) -> AgentReviewDecisionResponse:
+    """Persist the human operator decision for an advisory artifact."""
+
+    resolved_tenant = _resolve_operator_tenant_id(
+        db,
+        current_user=current_user,
+        requested_tenant_id=tenant_id,
+    )
+    try:
+        response = upsert_agent_artifact_review(
+            db,
+            tenant_id=str(resolved_tenant),
+            artifact_id=str(artifact_id),
+            status=decision.status,
+            reviewed_by=str(current_user.id),
+            review_reason=decision.review_reason,
+            operator_notes=decision.operator_notes if decision.operator_notes is not None else decision.notes,
+            decision_metadata=decision.decision_metadata,
+        )
+        db.commit()
+        return response
+    except LookupError as exc:
+        db.rollback()
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception:
+        db.rollback()
+        raise
+
+
+@router.get(
+    "/items/{artifact_id}/timeline",
+    response_model=AgentArtifactTimelineResponse,
+    summary="Fetch one advisory artifact and its run-ledger receipt timeline",
+)
+async def get_agent_artifact_timeline(
+    artifact_id: UUID = Path(..., description="Agent artifact to inspect."),
+    tenant_id: Optional[UUID] = Query(
+        default=None,
+        description="Tenant to inspect. Sysadmin only; regular operators use their auth tenant.",
+    ),
+    current_user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_session),
+) -> AgentArtifactTimelineResponse:
+    """Return the artifact detail view plus receipt-chain proof."""
+
+    resolved_tenant = _resolve_operator_tenant_id(
+        db,
+        current_user=current_user,
+        requested_tenant_id=tenant_id,
+    )
+    try:
+        return fetch_agent_artifact_timeline(
+            db,
+            tenant_id=str(resolved_tenant),
+            artifact_id=str(artifact_id),
+        )
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 

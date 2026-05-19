@@ -6,12 +6,15 @@ import { AgentReviewDashboard } from '@/components/dashboard/agent-review-dashbo
 import type { AgentReviewItem } from '@/types/agent-review';
 
 const mockUseAgentReviewItems = vi.hoisted(() => vi.fn());
+const mockUseAgentReviewDecision = vi.hoisted(() => vi.fn());
 const mockUseAuth = vi.hoisted(() => vi.fn());
 const mockUseTenant = vi.hoisted(() => vi.fn());
 const mockRefetch = vi.hoisted(() => vi.fn());
+const mockMutateDecision = vi.hoisted(() => vi.fn());
 
 vi.mock('@/hooks/use-agent-reviews', () => ({
     useAgentReviewItems: (...args: any[]) => mockUseAgentReviewItems(...args),
+    useAgentReviewDecision: () => mockUseAgentReviewDecision(),
 }));
 
 vi.mock('@/lib/auth-context', () => ({
@@ -85,6 +88,17 @@ describe('AgentReviewDashboard', () => {
             user: { is_sysadmin: false },
         });
         mockUseTenant.mockReturnValue({ tenantId: '22222222-2222-4222-8222-222222222222' });
+        mockMutateDecision.mockResolvedValue({
+            artifact_id: 'high-risk',
+            review_id: 'review-1',
+            review_status: 'accepted',
+            reviewed_by: 'operator-1',
+            reviewed_at: '2026-05-13T16:00:00Z',
+        });
+        mockUseAgentReviewDecision.mockReturnValue({
+            mutateAsync: mockMutateDecision,
+            isPending: false,
+        });
         mockUseAgentReviewItems.mockReturnValue({
             data: {
                 items: [
@@ -156,6 +170,25 @@ describe('AgentReviewDashboard', () => {
         expect(dialog).toHaveTextContent(SHA256);
         expect(dialog).toHaveTextContent('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa');
         expect(dialog).toHaveTextContent('low_confidence');
+        expect(within(dialog).getByRole('button', { name: /accept/i })).toBeInTheDocument();
+        expect(within(dialog).getByRole('button', { name: /reject/i })).toBeInTheDocument();
+        expect(within(dialog).getByRole('button', { name: /needs evidence/i })).toBeInTheDocument();
+        expect(within(dialog).getByRole('button', { name: /copy audit/i })).toBeInTheDocument();
+    });
+
+    it('submits an operator decision from the detail view and refreshes the queue', async () => {
+        const user = userEvent.setup();
+        render(<AgentReviewDashboard />);
+
+        await user.click(screen.getByRole('button', { name: /Investigate missing receiving evidence/i }));
+        const dialog = await screen.findByRole('dialog');
+        await user.click(within(dialog).getByRole('button', { name: /^accept$/i }));
+
+        expect(mockMutateDecision).toHaveBeenCalledWith({
+            artifactId: 'high-risk',
+            status: 'accepted',
+        });
+        expect(mockRefetch).toHaveBeenCalled();
     });
 
     it('passes sysadmin tenant filters to the V1 endpoint query hook', () => {
