@@ -400,7 +400,7 @@ class TestLogin:
         sent = _email_code_router_mod._send_email_login_code("buyer@example.com", "123456")
 
         assert sent is True
-        assert DummyResend.api_key == "re_test_key"
+        assert DummyResend.api_key == "re_test_key"  # pragma: allowlist secret
         assert test_logger.info.call_args.args[0] == "email_login_code_sent"
         assert test_logger.info.call_args.kwargs["resend_id"] == "email_typed_123"
 
@@ -1254,7 +1254,7 @@ class TestPasswordReset:
         assert result == {"status": "success"}
         assert captured_request["endpoint"] == "https://project.supabase.co/auth/v1/user"
         assert captured_request["headers"]["Authorization"] == f"Bearer {recovery_token}"
-        assert captured_request["headers"]["apikey"] == "anon-key"
+        assert captured_request["headers"]["apikey"] == "anon-key"  # pragma: allowlist secret
         assert captured_request["json"] == {"password": "NewStrongPass-9!"}
         db.commit.assert_called_once()
 
