@@ -24,6 +24,7 @@ const EXPECTED_CSRF_EXEMPT_PREFIXES = [
     '/api/webhooks/',
     '/api/v1/webhooks/',
     '/api/ingestion/api/v1/sandbox/',
+    '/api/ingestion/api/v1/proof/',
     '/api/inflow-lab/',
     '/api/tools/check-access',
     '/api/tools/verify',
@@ -35,7 +36,7 @@ describe('CSRF exempt prefix list (FE-AUDIT-005)', () => {
     });
 
     it('preserves entry ordering (order signals review intent)', () => {
-        // The file is grouped: auth → webhooks → public sandbox → public tools.
+        // The file is grouped: auth → webhooks → public ingestion → public tools.
         // Re-ordering breaks the readability of the diff a reviewer sees when
         // the snapshot is updated.
         for (let i = 0; i < EXPECTED_CSRF_EXEMPT_PREFIXES.length; i++) {

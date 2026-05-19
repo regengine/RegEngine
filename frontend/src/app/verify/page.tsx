@@ -36,74 +36,34 @@ const T = {
     brand: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif",
 };
 
-const VERIFY_SCRIPT_URL = '/regengine/verify_chain.py';
+const PROOF_VERIFY_ENDPOINT = '/api/ingestion/api/v1/proof/verify';
 
-const TERMINAL_OUTPUT = `$ python verify_chain.py --file export_2026_02.json --offline
-
-============================================================
-REGENGINE CHAIN VERIFICATION REPORT
-============================================================
-Verified at: 2026-02-06T20:14:33Z
-------------------------------------------------------------
-
-✓ VALID: ROM-0206-F3-001
-  Expected:  sha256:a3b8d1b6e0f2c45d89ab...
-  Computed:  sha256:a3b8d1b6e0f2c45d89ab...
-
-✓ VALID: ROM-0206-F3-002
-  Expected:  sha256:4f7c2e1a9d8b3f650c12...
-  Computed:  sha256:4f7c2e1a9d8b3f650c12...
-
-✓ VALID: SAL-0206-SEA-001
-  Expected:  sha256:9e3d7c854b6a2f10de89...
-  Computed:  sha256:9e3d7c854b6a2f10de89...
-
-✓ VALID: KAL-0205-F1-003
-  Expected:  sha256:72c4f8a1b3d9e56702af...
-  Computed:  sha256:72c4f8a1b3d9e56702af...
-
-✓ VALID: SPN-0204-PACK-007
-  Expected:  sha256:5a1b9c3d7e4f8206abcd...
-  Computed:  sha256:5a1b9c3d7e4f8206abcd...
-
-------------------------------------------------------------
-SUMMARY: 5 passed, 0 failed, 5 total
-============================================================`;
+const TERMINAL_OUTPUT = `$ python verify_chain.py audit-bundle.zip
+manifest: ok
+files: 2 / 2 sha256 matches
+merkle: root recomputed and matched
+result: bundle intact`;
 
 const CODE_SAMPLE = `#!/usr/bin/env python3
-"""Verify RegEngine records independently."""
+"""Run the public RegEngine bundle verifier from Python."""
 
-from verify_chain import compute_record_hash, verify_file
 from pathlib import Path
+import subprocess
+import sys
 
-# Option 1: Verify an exported JSON file offline
-results = verify_file(Path("audit_export.json"))
-for r in results:
-    status = "✓" if r.valid else "✗"
-    print(f"{status} {r.tlc}: {r.computed_hash[:32]}...")
-
-# Option 2: Verify a single record online
-from verify_chain import verify_record_online
-result = verify_record_online(
-    tlc="ROM-0206-F3-001",
-    api_key="rge_live_your_key_here"
+bundle = Path("audit-bundle.zip")
+result = subprocess.run(
+    [sys.executable, "verify_chain.py", str(bundle)],
+    check=False,
+    text=True,
+    capture_output=True,
 )
-print(f"Valid: {result.valid}")
 
-# Option 3: Compute a hash yourself
-record = {
-    "tlc": "ROM-0206-F3-001",
-    "cte_type": "HARVESTING",
-    "location": "0614141000001",
-    "quantity": 500,
-    "unit_of_measure": "cases",
-    "product_description": "Romaine Lettuce Hearts 12ct",
-    "event_timestamp": "2026-02-06T06:00:00Z",
-    "input_tlcs": [],
-}
-hash_val = compute_record_hash(record)
-print(f"Hash: {hash_val}")
-# → sha256:a3b8d1b6e0f2c45d89ab...`;
+print(result.stdout, end="")
+if result.stderr:
+    print(result.stderr, file=sys.stderr, end="")
+
+raise SystemExit(result.returncode)`;
 
 const INSTALL_STEPS = [
     {
@@ -112,27 +72,16 @@ const INSTALL_STEPS = [
         desc: 'Single file, no package manager needed.',
     },
     {
-        title: 'Optional: install requests',
-        code: 'pip install requests',
-        desc: 'Only needed for online verification against the API.',
+        title: 'Download a sample bundle',
+        code: 'curl -O https://regengine.co/proof/audit-bundle.zip',
+        desc: 'The ZIP contains manifest.json plus synthetic FSMA/EPCIS evidence files.',
     },
     {
-        title: 'Verify your records',
-        code: 'python verify_chain.py --file your_export.json --offline',
+        title: 'Verify the bundle',
+        code: 'python verify_chain.py audit-bundle.zip',
         desc: 'Works entirely offline. No RegEngine account required.',
     },
 ];
-
-/* ─────────────────────────────────────────────────────────────
-   API-base resolver — match other public pages
-   ───────────────────────────────────────────────────────────── */
-function resolveApiBase(): string {
-    const base =
-        process.env.NEXT_PUBLIC_API_BASE_URL ||
-        process.env.NEXT_PUBLIC_INGESTION_URL ||
-        '';
-    return base.replace(/\/+$/, '');
-}
 
 /* ─────────────────────────────────────────────────────────────
    VerifyWidget — drop-and-verify export bundle
@@ -177,21 +126,11 @@ function VerifyWidget() {
         if (!file) return;
         setState({ kind: 'loading' });
 
-        const base = resolveApiBase();
-        if (!base) {
-            setState({
-                kind: 'error',
-                message:
-                    'Verifier endpoint deploying — try again shortly.',
-            });
-            return;
-        }
-
         const formData = new FormData();
         formData.append('bundle', file);
 
         try {
-            const res = await fetch(`${base}/api/v1/proof/verify`, {
+            const res = await fetch(PROOF_VERIFY_ENDPOINT, {
                 method: 'POST',
                 body: formData,
             });
@@ -208,7 +147,7 @@ function VerifyWidget() {
             if (!res.ok) {
                 setState({
                     kind: 'error',
-                    message: `Verification failed (HTTP ${res.status}). The endpoint may still be deploying — try again shortly.`,
+                    message: `Verification failed (HTTP ${res.status}). Try again shortly, or run verify_chain.py locally.`,
                 });
                 return;
             }
@@ -508,10 +447,10 @@ export default function VerifyPage() {
                         className="text-lg max-w-[640px] mx-auto mb-8 leading-relaxed"
                         style={{ color: T.textDim }}
                     >
-                        Every RegEngine traceability record is protected by a{' '}
-                        <strong className="text-re-text-secondary">SHA-256 cryptographic hash</strong>.
+                        Every public RegEngine proof bundle carries a{' '}
+                        <strong className="text-re-text-secondary">SHA-256 manifest and Merkle root</strong>.
                         Our open-source verification script lets you independently verify
-                        record integrity — without relying on our servers.
+                        bundle integrity — without relying on our servers.
                     </p>
 
                     <div className="flex gap-3 justify-center flex-wrap">
@@ -551,9 +490,9 @@ export default function VerifyPage() {
                     >
                         Drop in a RegEngine export bundle (the <code style={{ fontFamily: T.mono, color: T.text }}>.zip</code> or{' '}
                         <code style={{ fontFamily: T.mono, color: T.text }}>.json</code> you downloaded
-                        from the proof page) and we&apos;ll re-run the same integrity checks the export
-                        pipeline runs: hash-chain continuity across every record, Merkle root match
-                        against the manifest, and manifest consistency (counts, ordering, signatures).
+                        from the proof page) and we&apos;ll re-run the same integrity checks the public
+                        verifier runs: file SHA-256 checks, Merkle root match against the manifest,
+                        and manifest consistency.
                     </p>
                     <p
                         className="text-[14.5px] leading-relaxed m-0"
@@ -604,8 +543,8 @@ export default function VerifyPage() {
                     {[
                         {
                             icon: <Lock size={20} />,
-                            title: 'Deterministic Hashing',
-                            desc: 'Each record\'s immutable fields (TLC, CTE type, location, quantity, timestamp) are canonicalized and hashed with SHA-256. Same inputs always produce the same hash.',
+                            title: 'Deterministic File Hashing',
+                            desc: 'Every evidence file in the bundle is hashed with SHA-256 and compared with the manifest. Same bytes always produce the same hash.',
                         },
                         {
                             icon: <FileCode size={20} />,
@@ -615,7 +554,7 @@ export default function VerifyPage() {
                         {
                             icon: <ShieldCheck size={20} />,
                             title: 'Offline Capable',
-                            desc: 'Export your records as JSON and verify them entirely offline. No API calls, no network, no RegEngine account required.',
+                            desc: 'Download the ZIP and verify it entirely offline. No API calls, no network, no RegEngine account required.',
                         },
                     ].map((card, i) => (
                         <motion.div
@@ -651,8 +590,8 @@ export default function VerifyPage() {
                     className="text-center text-[15px] mb-8"
                     style={{ color: T.textDim }}
                 >
-                    Run the script against an exported JSON file. Every record is independently
-                    re-hashed and compared.
+                    Run the script against an audit ZIP. Every evidence file is re-hashed and the
+                    Merkle root is rebuilt.
                 </p>
 
                 <div
@@ -748,7 +687,7 @@ export default function VerifyPage() {
                     className="text-center text-[15px] mb-8"
                     style={{ color: T.textDim }}
                 >
-                    Three verification modes: offline file, online API, and manual hash computation.
+                    Offline bundle verification with a non-zero exit code if anything has drifted.
                 </p>
 
                 <div
@@ -793,7 +732,7 @@ export default function VerifyPage() {
             {/* ─── Hash Algorithm ────────────────────────────────────── */}
             <section className="max-w-[960px] mx-auto px-4 sm:px-6 pb-10 sm:pb-[60px]">
                 <h2 className="text-[28px] font-semibold mb-8 text-center">
-                    How the Hash Works
+                    How the Bundle Check Works
                 </h2>
 
                 <div
@@ -803,10 +742,10 @@ export default function VerifyPage() {
                     <div className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-6 text-center">
 
                         {[
-                            { step: '1', label: 'Extract Immutable Fields', detail: 'TLC, CTE type, location, quantity, UOM, product, timestamp, input TLCs' },
-                            { step: '2', label: 'Canonicalize', detail: 'Sort keys, remove whitespace, deterministic JSON' },
-                            { step: '3', label: 'SHA-256 Hash', detail: 'Standard cryptographic hash — same input → same output, always' },
-                            { step: '4', label: 'Compare', detail: 'Your computed hash matches the stored hash? Record is untampered.' },
+                            { step: '1', label: 'Read Manifest', detail: 'Load manifest.json from the audit bundle ZIP' },
+                            { step: '2', label: 'Hash Files', detail: 'Recompute SHA-256 for each declared evidence file' },
+                            { step: '3', label: 'Rebuild Merkle Root', detail: 'Use the file hashes as leaves with the published tree algorithm' },
+                            { step: '4', label: 'Compare', detail: 'If every file hash and the root match, the bundle is intact.' },
                         ].map((s, i) => (
                             <div key={i}>
                                 <div
@@ -826,7 +765,7 @@ export default function VerifyPage() {
             {/* ─── Canonical Fields Table ────────────────────────────── */}
             <section className="max-w-[960px] mx-auto px-4 sm:px-6 pb-10 sm:pb-[60px]">
                 <h2 className="text-2xl font-semibold mb-5 text-center">
-                    Immutable Fields (Hash Inputs)
+                    Manifest Fields (Hash Inputs)
                 </h2>
 
                 <div
@@ -838,20 +777,18 @@ export default function VerifyPage() {
                         <thead>
                             <tr style={{ background: T.elevated }}>
                                 <th className="px-4 py-3 text-left font-semibold" style={{ borderBottom: `1px solid ${T.border}` }}>Field</th>
-                                <th className="px-4 py-3 text-left font-semibold" style={{ borderBottom: `1px solid ${T.border}` }}>Source</th>
+                                <th className="px-4 py-3 text-left font-semibold" style={{ borderBottom: `1px solid ${T.border}` }}>Meaning</th>
                                 <th className="px-4 py-3 text-left font-semibold" style={{ borderBottom: `1px solid ${T.border}` }}>Example</th>
                             </tr>
                         </thead>
                         <tbody>
                             {[
-                                ['tlc', 'Traceability Lot Code', 'ROM-0206-F3-001'],
-                                ['cte_type', 'Critical Tracking Event', 'HARVESTING'],
-                                ['location', 'GLN of facility', '0614141000001'],
-                                ['quantity', 'Amount', '500'],
-                                ['unit_of_measure', 'UOM', 'cases'],
-                                ['product_description', 'Product name', 'Romaine Lettuce Hearts 12ct'],
-                                ['event_timestamp', 'ISO 8601 UTC', '2026-02-06T06:00:00Z'],
-                                ['input_tlcs', 'Upstream lots (sorted)', '[]'],
+                                ['files[].path', 'Evidence file inside the ZIP', 'fsma-204-sample.csv'],
+                                ['files[].sha256', 'Declared SHA-256 digest for that file', 'ab250df1f9ed...'],
+                                ['files[].size', 'Declared byte length', '1524'],
+                                ['merkle.leaves[]', 'Ordered file hashes used as tree leaves', 'ab250df1f9ed...'],
+                                ['merkle.root', 'Declared root of the evidence tree', 'a320428f4057...'],
+                                ['build.commit', 'Code revision that produced the sample bundle', '64542033f908...'],
                             ].map(([field, source, example], i) => (
                                 <tr key={i} style={{ borderBottom: `1px solid ${T.border}` }}>
                                     <td className="px-4 py-2.5 text-[13px]" style={{ fontFamily: T.mono, color: T.accent }}>{field}</td>
@@ -879,7 +816,7 @@ export default function VerifyPage() {
                         style={{ color: T.textDim }}
                     >
                         RegEngine adds cryptographic verification on top of standard compliance controls.
-                        SHA-256 hashing lets you verify record integrity independently —
+                        SHA-256 hashing lets you verify bundle integrity independently —
                         whether or not you require a SOC 2 report.
                     </p>
 

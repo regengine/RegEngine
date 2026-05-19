@@ -104,3 +104,19 @@ def test_monolith_mounts_standalone_service_routes(
         f"server.main is missing {service_name} routes mounted by {module_name}:\n"
         + "\n".join(f"  {route}" for route in sorted(missing))
     )
+
+
+@pytest.mark.parametrize(
+    "route",
+    [
+        "POST /api/v1/proof/verify",
+        "POST /api/v1/proof/recall-drill",
+    ],
+)
+def test_public_proof_routes_are_mounted_on_ingestion_and_monolith(
+    monolith_routes: set[str], route: str
+) -> None:
+    ingestion_routes = _route_keys("services.ingestion.main")
+
+    assert route in ingestion_routes
+    assert route in monolith_routes
