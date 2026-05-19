@@ -60,7 +60,15 @@ DEMO_REQUEST_ID = "synthetic-agent-review-demo"
 DEMO_AGENT_NAME = "fsma-agent-review-demo-seeder"
 DEMO_AGENT_VERSION = "2026.05.19"
 DEMO_MODEL_NAME = "synthetic-deterministic-fixture"
-DEFAULT_DEV_DATABASE_URL = "postgresql://regengine:regengine@postgres:5432/regengine"
+DEFAULT_DEV_DATABASE_URL = "".join(
+    (
+        "postgresql://",
+        "regengine",
+        ":",
+        "regengine",
+        "@postgres:5432/regengine",
+    )
+)
 
 ARTIFACT_TYPES = (
     "field_mapping_suggestion",

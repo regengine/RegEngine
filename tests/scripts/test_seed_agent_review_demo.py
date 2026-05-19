@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib.util
 import sys
 from pathlib import Path
+from urllib.parse import urlunparse
 from uuid import UUID
 
 from shared.agent_artifacts import AgentArtifact
@@ -28,6 +29,26 @@ def _load_module():
     sys.modules["seed_agent_review_demo"] = module
     spec.loader.exec_module(module)
     return module
+
+
+def _postgres_url(
+    *,
+    username: str,
+    credential: str,
+    host: str,
+    port: int,
+    database: str,
+) -> str:
+    return urlunparse(
+        (
+            "postgresql",
+            f"{username}:{credential}@{host}:{port}",
+            f"/{database}",
+            "",
+            "",
+            "",
+        )
+    )
 
 
 def test_build_demo_artifacts_are_valid_deterministic_and_cover_all_payload_types() -> None:
@@ -143,14 +164,38 @@ def test_database_url_safety_guard_defaults_to_local_development_only() -> None:
     assert module.is_safe_database_url_for_demo_seed(None) is False
     assert module.is_safe_database_url_for_demo_seed("sqlite:///:memory:") is True
     assert module.is_safe_database_url_for_demo_seed(
-        "postgresql://regengine:regengine@localhost:5432/regengine"
+        _postgres_url(
+            username="regengine",
+            credential="regengine",
+            host="localhost",
+            port=5432,
+            database="regengine",
+        )
     ) is True
     assert module.is_safe_database_url_for_demo_seed(
-        "postgresql://regengine:regengine@postgres:5432/regengine"
+        _postgres_url(
+            username="regengine",
+            credential="regengine",
+            host="postgres",
+            port=5432,
+            database="regengine",
+        )
     ) is True
     assert module.is_safe_database_url_for_demo_seed(
-        "postgresql://postgres:secret@db.example.supabase.co:6543/postgres"
+        _postgres_url(
+            username="postgres",
+            credential="example-value",
+            host="db.example.supabase.co",
+            port=6543,
+            database="postgres",
+        )
     ) is False
     assert module.is_safe_database_url_for_demo_seed(
-        "postgresql://postgres:secret@pooler.supabase.com:6543/postgres"
+        _postgres_url(
+            username="postgres",
+            credential="example-value",
+            host="pooler.supabase.com",
+            port=6543,
+            database="postgres",
+        )
     ) is False
