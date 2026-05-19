@@ -3,12 +3,18 @@
 from __future__ import annotations
 
 import uuid
+from datetime import datetime, timezone
 from unittest.mock import MagicMock
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from shared.agent_operator_view import AgentReviewListResponse
+from shared.agent_operator_view import (
+    AgentArtifactTimelineResponse,
+    AgentReviewDecisionResponse,
+    AgentReviewItem,
+    AgentReviewListResponse,
+)
 
 
 def _make_user(*, is_sysadmin: bool) -> MagicMock:
@@ -100,3 +106,128 @@ def test_agent_review_items_require_tenant_context(monkeypatch) -> None:
     resp = client.get("/v1/agent-reviews/items")
 
     assert resp.status_code == 403
+
+
+def test_agent_review_decision_persists_for_authenticated_tenant(monkeypatch) -> None:
+    tenant_id = uuid.uuid4()
+    artifact_id = uuid.uuid4()
+    reviewer = _make_user(is_sysadmin=False)
+    db = MagicMock()
+    reviewed_at = datetime(2026, 5, 19, 12, 0, tzinfo=timezone.utc)
+    helper = MagicMock(
+        return_value=AgentReviewDecisionResponse(
+            review_id=str(uuid.uuid4()),
+            artifact_id=str(artifact_id),
+            tenant_id=str(tenant_id),
+            status="accepted",
+            reviewed_by=str(reviewer.id),
+            reviewed_at=reviewed_at,
+            ingestion_run_id=str(uuid.uuid4()),
+            advisory_receipt_id=str(uuid.uuid4()),
+        )
+    )
+    from services.admin.app import agent_review_routes as routes
+
+    monkeypatch.setattr(routes.TenantContext, "get_tenant_context", lambda session: tenant_id)
+    monkeypatch.setattr(routes, "upsert_agent_artifact_review", helper)
+
+    client = TestClient(_build_app(reviewer, db))
+    resp = client.post(
+        f"/v1/agent-reviews/items/{artifact_id}/review",
+        json={
+            "status": "accepted",
+            "review_reason": "Evidence chain verified",
+            "operator_notes": "Looks good",
+            "decision_metadata": {"source": "route-test"},
+        },
+    )
+
+    assert resp.status_code == 200
+    db.commit.assert_called_once()
+    db.rollback.assert_not_called()
+    helper.assert_called_once()
+    assert helper.call_args.kwargs["tenant_id"] == str(tenant_id)
+    assert helper.call_args.kwargs["artifact_id"] == str(artifact_id)
+    assert helper.call_args.kwargs["status"] == "accepted"
+    assert helper.call_args.kwargs["reviewed_by"] == str(reviewer.id)
+    assert helper.call_args.kwargs["review_reason"] == "Evidence chain verified"
+    assert helper.call_args.kwargs["operator_notes"] == "Looks good"
+
+
+def test_agent_review_decision_returns_404_for_missing_artifact(monkeypatch) -> None:
+    tenant_id = uuid.uuid4()
+    artifact_id = uuid.uuid4()
+    db = MagicMock()
+    from services.admin.app import agent_review_routes as routes
+
+    monkeypatch.setattr(routes.TenantContext, "get_tenant_context", lambda session: tenant_id)
+    monkeypatch.setattr(
+        routes,
+        "upsert_agent_artifact_review",
+        MagicMock(side_effect=LookupError("agent artifact not found for tenant")),
+    )
+
+    client = TestClient(
+        _build_app(_make_user(is_sysadmin=False), db),
+        raise_server_exceptions=False,
+    )
+    resp = client.post(
+        f"/v1/agent-reviews/items/{artifact_id}/review",
+        json={"status": "rejected"},
+    )
+
+    assert resp.status_code == 404
+    db.rollback.assert_called_once()
+    db.commit.assert_not_called()
+
+
+def test_agent_review_timeline_uses_authenticated_tenant(monkeypatch) -> None:
+    tenant_id = uuid.uuid4()
+    artifact_id = uuid.uuid4()
+    created_at = datetime(2026, 5, 19, 12, 0, tzinfo=timezone.utc)
+    db = MagicMock()
+    helper = MagicMock(
+        return_value=AgentArtifactTimelineResponse(
+            item=AgentReviewItem(
+                artifact_id=str(artifact_id),
+                tenant_id=str(tenant_id),
+                artifact_type="validation_explanation",
+                created_at=created_at,
+                agent_name="fsma-risk-agent",
+                suggestion="Review failed event-time rule.",
+                confidence=0.78,
+                requires_human_review=True,
+                review_status="pending",
+                risk_score=88.0,
+                risk_breakdown={
+                    "score": 88.0,
+                    "uncapped_score": 88.0,
+                    "confidence_risk": 8.8,
+                    "review_risk": 25.0,
+                    "artifact_type_risk": 15.0,
+                    "evidence_gap_risk": 15.0,
+                    "rule_gap_risk": 10.0,
+                },
+                compliance_gap_count=1,
+                compliance_gaps=[
+                    {"code": "human_review_required", "message": "Review required."}
+                ],
+            ),
+            timeline=None,
+            chain_valid=None,
+        )
+    )
+    from services.admin.app import agent_review_routes as routes
+
+    monkeypatch.setattr(routes.TenantContext, "get_tenant_context", lambda session: tenant_id)
+    monkeypatch.setattr(routes, "fetch_agent_artifact_timeline", helper)
+
+    client = TestClient(_build_app(_make_user(is_sysadmin=False), db))
+    resp = client.get(f"/v1/agent-reviews/items/{artifact_id}/timeline")
+
+    assert resp.status_code == 200
+    helper.assert_called_once_with(
+        db,
+        tenant_id=str(tenant_id),
+        artifact_id=str(artifact_id),
+    )

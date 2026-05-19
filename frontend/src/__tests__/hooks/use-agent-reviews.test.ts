@@ -55,6 +55,49 @@ describe('agent review API hook helpers', () => {
         );
     });
 
+    it('builds and posts review decisions through the single decision endpoint helper', async () => {
+        const { buildAgentReviewDecisionUrl, submitAgentReviewDecision } = await import('@/hooks/use-agent-reviews');
+
+        fetchWithCsrfMock.mockResolvedValueOnce({
+            ok: true,
+            headers: new Headers({ 'Content-Type': 'application/json' }),
+            json: async () => ({
+                artifact_id: 'artifact-123',
+                review_id: 'review-456',
+                status: 'accepted',
+                reviewed_by: 'operator-789',
+                reviewed_at: '2026-05-13T16:00:00Z',
+            }),
+        });
+
+        expect(buildAgentReviewDecisionUrl('artifact/123')).toBe(
+            '/api/admin/v1/agent-reviews/items/artifact%2F123/review',
+        );
+
+        await expect(
+            submitAgentReviewDecision({
+                artifactId: 'artifact-123',
+                status: 'accepted',
+            }),
+        ).resolves.toEqual({
+            artifact_id: 'artifact-123',
+            review_id: 'review-456',
+            review_status: 'accepted',
+            reviewed_by: 'operator-789',
+            reviewed_at: '2026-05-13T16:00:00Z',
+        });
+
+        expect(fetchWithCsrfMock).toHaveBeenCalledWith(
+            '/api/admin/v1/agent-reviews/items/artifact-123/review',
+            expect.objectContaining({
+                method: 'POST',
+                credentials: 'include',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ status: 'accepted' }),
+            }),
+        );
+    });
+
     it('surfaces backend detail errors for operator feedback', async () => {
         const { fetchAgentReviewItems } = await import('@/hooks/use-agent-reviews');
 

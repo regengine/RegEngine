@@ -6,6 +6,7 @@ export type AgentArtifactType =
     | 'export_readiness_summary';
 
 export type AgentReviewStatus = 'pending' | 'accepted' | 'rejected' | 'needs_more_evidence';
+export type AgentReviewDecisionStatus = Exclude<AgentReviewStatus, 'pending'>;
 
 export interface AgentRiskBreakdown {
     score: number;
@@ -59,6 +60,25 @@ export interface AgentReviewListResponse {
     total: number;
     limit: number;
     offset: number;
+}
+
+export interface AgentReviewDecisionRequest {
+    status: AgentReviewDecisionStatus;
+    review_reason?: string;
+    operator_notes?: string;
+    decision_metadata?: Record<string, unknown>;
+}
+
+export interface AgentReviewDecisionInput extends AgentReviewDecisionRequest {
+    artifactId: string;
+}
+
+export interface AgentReviewDecisionResponse {
+    artifact_id: string;
+    review_id: string | null;
+    review_status: AgentReviewDecisionStatus;
+    reviewed_by: string | null;
+    reviewed_at: string | null;
 }
 
 export interface AgentReviewItemsQuery {
