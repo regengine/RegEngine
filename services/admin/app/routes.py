@@ -266,7 +266,7 @@ def require_funnel_read(
     return None
 
 
-@router.get("/health")
+@router.get("/health", operation_id="admin_deep_health")
 async def health():
     """Deep health check endpoint with dependency verification."""
     import asyncio
@@ -291,7 +291,7 @@ async def health():
                     if conn_info.startswith(prefix):
                         conn_info = conn_info.replace(prefix, "postgresql://")
                         break
-                
+
                 async with await psycopg.AsyncConnection.connect(conn_info) as conn:
                     await conn.execute("SELECT 1")
                 return {"status": "healthy"}

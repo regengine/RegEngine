@@ -558,7 +558,7 @@ async def root():
 
 
 # ── Health check ─────────────────────────────────────────────────
-@app.get("/health", tags=["system"])
+@app.get("/health", tags=["system"], operation_id="root_liveness_health")
 async def health():
     """Lightweight liveness probe — always returns 200 if the process is up."""
     return {"status": "healthy", "service": "regengine"}
