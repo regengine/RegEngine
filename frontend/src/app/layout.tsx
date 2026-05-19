@@ -6,6 +6,7 @@ import { AccessibilityWidget } from '@/components/accessibility/AccessibilityWid
 import { CookieBanner } from '@/components/cookie-consent/CookieBanner'
 import { JSONLD } from '@/components/seo/json-ld'
 import type { Metadata, Viewport } from 'next'
+import { headers } from 'next/headers'
 
 // Analytics are mounted by CookieBanner only after the user accepts consent (#552).
 const enableVercelAnalytics = process.env.VERCEL === '1' || Boolean(process.env.NEXT_PUBLIC_VERCEL_ANALYTICS_ID)
@@ -43,6 +44,8 @@ export default async function RootLayout({
 }: {
   children: React.ReactNode
 }) {
+  const nonce = (await headers()).get('x-nonce') ?? undefined
+
   return (
     <html lang="en" suppressHydrationWarning data-scroll-behavior="smooth">
       <head>
@@ -134,7 +137,7 @@ export default async function RootLayout({
         >
           Skip to content
         </a>
-        <Providers>
+        <Providers nonce={nonce}>
           <MarketingHeader />
           <main id="main-content" aria-label="Page content" className="flex-grow re-app-surface">
             {children}
