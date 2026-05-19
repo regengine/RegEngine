@@ -1,4 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import ForgotPasswordClient from '@/app/forgot-password/ForgotPasswordClient';
@@ -69,6 +71,16 @@ describe('password reset auth clients', () => {
                 "If user@example.com is registered, you'll receive a reset link within a minute.",
             ),
         ).toBeInTheDocument();
+    });
+
+    it('keeps password-reset admin proxy endpoints available before login', () => {
+        const source = readFileSync(
+            join(process.cwd(), 'src/app/api/admin/[...path]/route.ts'),
+            'utf-8',
+        );
+
+        expect(source).toContain("'auth/forgot-password'");
+        expect(source).toContain("'auth/reset-password'");
     });
 
     it('shows a generic forgot-password failure when the admin API fails', async () => {

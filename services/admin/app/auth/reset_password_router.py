@@ -9,9 +9,11 @@ Exposes:
 """
 from __future__ import annotations
 
+import os
 import time
 from typing import Optional
 
+import httpx
 import jwt as _jwt
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -205,6 +207,71 @@ async def _claim_recovery_token_single_use(
         )
 
 
+def _supabase_auth_user_endpoint() -> str | None:
+    url = os.getenv("SUPABASE_URL") or os.getenv("NEXT_PUBLIC_SUPABASE_URL")
+    if not url:
+        return None
+    return f"{url.rstrip('/')}/auth/v1/user"
+
+
+def _supabase_api_key_for_user_update() -> str | None:
+    return (
+        os.getenv("SUPABASE_ANON_KEY")
+        or os.getenv("NEXT_PUBLIC_SUPABASE_ANON_KEY")
+        or os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+        or os.getenv("SUPABASE_SERVICE_KEY")
+    )
+
+
+async def _update_supabase_password_with_recovery_token(
+    supabase_token: str,
+    new_password: str,
+    *,
+    user_id: Optional[str] = None,
+) -> bool:
+    """Update Supabase Auth using the caller's recovery session.
+
+    Production does not always have a service-role key in the admin service.
+    A fresh Supabase recovery access token is still sufficient to update that
+    same user's password through GoTrue's `/user` endpoint, using the anon key
+    as the API key and the recovery token as the bearer token.
+    """
+    endpoint = _supabase_auth_user_endpoint()
+    api_key = _supabase_api_key_for_user_update()
+    if not endpoint or not api_key:
+        logger.warning("reset_password_supabase_user_sync_unconfigured", user_id=user_id)
+        return False
+
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.put(
+                endpoint,
+                headers={
+                    "apikey": api_key,
+                    "Authorization": f"Bearer {supabase_token}",
+                    "Content-Type": "application/json",
+                },
+                json={"password": new_password},
+            )
+    except httpx.HTTPError as exc:
+        logger.warning(
+            "reset_password_supabase_user_sync_request_failed",
+            user_id=user_id,
+            error=str(exc),
+        )
+        return False
+
+    if 200 <= response.status_code < 300:
+        return True
+
+    logger.warning(
+        "reset_password_supabase_user_sync_failed",
+        user_id=user_id,
+        status_code=response.status_code,
+    )
+    return False
+
+
 @router.post("/reset-password", response_model=ResetPasswordResponse)
 @limiter.limit("5/minute")
 async def reset_password(
@@ -269,9 +336,6 @@ async def reset_password(
     # OTP/recovery flow, or is older than 15 minutes.
     sb_user_id = getattr(sb_user, "id", None)
     _enforce_recovery_token_scope(supabase_token, user_id=str(sb_user_id) if sb_user_id else None)
-    await _claim_recovery_token_single_use(
-        session_store, supabase_token, user_id=str(sb_user_id) if sb_user_id else None
-    )
 
     email = getattr(sb_user, "email", None)
     if not email:
@@ -296,7 +360,41 @@ async def reset_password(
     if user.status != "active":
         raise HTTPException(status_code=403, detail="Account disabled")
 
-    # 5. Update the argon2 hash in the RegEngine DB
+    # Claim the recovery token after all non-mutating validation passes. A weak
+    # password or unknown account should not burn the user's reset link.
+    await _claim_recovery_token_single_use(
+        session_store, supabase_token, user_id=str(sb_user_id) if sb_user_id else None
+    )
+
+    # 5. Keep Supabase in sync so password login can establish both the
+    # RegEngine and Supabase sessions after reset.
+    supabase_synced = False
+    try:
+        admin_update = getattr(getattr(sb.auth, "admin", None), "update_user_by_id", None)
+        if callable(admin_update):
+            admin_update(str(sb_user.id), {"password": payload.new_password})
+            supabase_synced = True
+    except Exception as exc:
+        logger.warning(
+            "reset_password_supabase_admin_sync_failed",
+            user_id=str(sb_user.id),
+            error=str(exc),
+        )
+
+    if not supabase_synced:
+        supabase_synced = await _update_supabase_password_with_recovery_token(
+            supabase_token,
+            payload.new_password,
+            user_id=str(sb_user.id),
+        )
+
+    if not supabase_synced:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Auth service temporarily unavailable",
+        )
+
+    # 6. Update the argon2 hash in the RegEngine DB
     user.password_hash = get_password_hash(payload.new_password)
 
     # #1349 — bump token_version so every outstanding JWT becomes stale.
@@ -304,17 +402,6 @@ async def reset_password(
     # Coalesce None to 0 for rows created before the column existed.
     current_version = int(getattr(user, "token_version", 0) or 0)
     user.token_version = current_version + 1
-
-    # 6. Keep Supabase in sync so both stores stay aligned
-    try:
-        sb.auth.admin.update_user_by_id(str(sb_user.id), {"password": payload.new_password})
-    except Exception as exc:
-        # Non-fatal — the RegEngine DB is the authoritative login store
-        logger.warning(
-            "reset_password_supabase_sync_failed",
-            user_id=str(sb_user.id),
-            error=str(exc),
-        )
 
     db.commit()
 

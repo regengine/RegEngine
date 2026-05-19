@@ -1179,6 +1179,125 @@ class TestPasswordReset:
         assert user.token_version == 2  # bumped from 1
         db.commit.assert_called_once()
 
+    @pytest.mark.asyncio
+    async def test_reset_falls_back_to_recovery_token_supabase_sync(self, monkeypatch):
+        """If no service-role admin sync is available, use the recovery token
+        itself to update Supabase Auth so password login still works after reset."""
+        now_ts = int(time.time())
+        recovery_token_payload = {
+            "sub": "sb-user-1",
+            "aud": "authenticated",
+            "amr": [{"method": "recovery", "timestamp": now_ts}],
+            "iat": now_ts,
+            "exp": now_ts + 3600,
+            "jti": str(uuid_mod.uuid4()),
+        }
+        recovery_token = _jwt.encode(recovery_token_payload, "irrelevant", algorithm="HS256")  # nosemgrep: python.jwt.security.jwt-hardcode.jwt-python-hardcoded-secret
+
+        fake_sb_user = SimpleNamespace(id="sb-user-1", email="reset@example.com")
+        fake_sb = SimpleNamespace(
+            auth=SimpleNamespace(
+                get_user=MagicMock(return_value=SimpleNamespace(user=fake_sb_user)),
+                admin=SimpleNamespace(update_user_by_id=MagicMock(side_effect=RuntimeError("no service role"))),
+            )
+        )
+        monkeypatch.setattr(_reset_password_router_mod, "get_supabase", lambda: fake_sb)
+        monkeypatch.setenv("SUPABASE_URL", "https://project.supabase.co")
+        monkeypatch.setenv("SUPABASE_ANON_KEY", "anon-key")
+
+        captured_request = {}
+
+        class FakeResponse:
+            status_code = 200
+
+        class FakeAsyncClient:
+            def __init__(self, *args, **kwargs):
+                pass
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *args):
+                return False
+
+            async def put(self, endpoint, *, headers, json):
+                captured_request["endpoint"] = endpoint
+                captured_request["headers"] = headers
+                captured_request["json"] = json
+                return FakeResponse()
+
+        monkeypatch.setattr(_reset_password_router_mod.httpx, "AsyncClient", FakeAsyncClient)
+
+        user = _make_user(email="reset@example.com", password="old-pass", token_version=1)
+        db = _make_db_with_user(user)
+        session_store = _make_session_store()
+        client = _make_redis_client()
+        client.set = AsyncMock(return_value=True)
+        session_store._get_client = AsyncMock(return_value=client)
+        session_store.revoke_all_for_user = AsyncMock(return_value=0)
+        monkeypatch.setattr(
+            _reset_password_router_mod,
+            "_revoke_all_elevation_tokens_for_user",
+            AsyncMock(return_value=0),
+        )
+
+        result = await ar.reset_password.__wrapped__(
+            payload=ResetPasswordRequest(new_password="NewStrongPass-9!"),
+            request=_make_request(headers={
+                "authorization": f"Bearer {recovery_token}",
+                "user-agent": "pytest",
+            }),
+            db=db,
+            session_store=session_store,
+        )
+
+        assert result == {"status": "success"}
+        assert captured_request["endpoint"] == "https://project.supabase.co/auth/v1/user"
+        assert captured_request["headers"]["Authorization"] == f"Bearer {recovery_token}"
+        assert captured_request["headers"]["apikey"] == "anon-key"
+        assert captured_request["json"] == {"password": "NewStrongPass-9!"}
+        db.commit.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_reset_password_policy_failure_does_not_consume_recovery_token(self, monkeypatch):
+        now_ts = int(time.time())
+        recovery_token_payload = {
+            "sub": "sb-user-1",
+            "aud": "authenticated",
+            "amr": [{"method": "otp", "timestamp": now_ts}],
+            "iat": now_ts,
+            "exp": now_ts + 3600,
+            "jti": str(uuid_mod.uuid4()),
+        }
+        recovery_token = _jwt.encode(recovery_token_payload, "irrelevant", algorithm="HS256")  # nosemgrep: python.jwt.security.jwt-hardcode.jwt-python-hardcoded-secret
+
+        fake_sb_user = SimpleNamespace(id="sb-user-1", email="reset@example.com")
+        fake_sb = SimpleNamespace(
+            auth=SimpleNamespace(get_user=MagicMock(return_value=SimpleNamespace(user=fake_sb_user)))
+        )
+        monkeypatch.setattr(_reset_password_router_mod, "get_supabase", lambda: fake_sb)
+
+        session_store = _make_session_store()
+        client = _make_redis_client()
+        client.set = AsyncMock(return_value=True)
+        session_store._get_client = AsyncMock(return_value=client)
+        db = MagicMock()
+
+        with pytest.raises(HTTPException) as exc:
+            await ar.reset_password.__wrapped__(
+                payload=ResetPasswordRequest(new_password="short"),
+                request=_make_request(headers={
+                    "authorization": f"Bearer {recovery_token}",
+                    "user-agent": "pytest",
+                }),
+                db=db,
+                session_store=session_store,
+            )
+
+        assert exc.value.status_code == 400
+        client.set.assert_not_called()
+        db.commit.assert_not_called()
+
 
 # ──────────────────────────────────────────────────────────────────────────────
 # 7. Change password
