@@ -173,6 +173,27 @@ async def refresh_session(
             )
             raise HTTPException(status_code=401, detail="Session idle timeout")
 
+    # Resolve the user and reject stale session generations BEFORE rotating.
+    # /logout-all and password reset bump users.token_version. get_current_user
+    # already rejects stale ACCESS tokens, but without this check a still-valid
+    # REFRESH token from a session issued before the bump could keep minting
+    # fresh access tokens after the user logged out everywhere (SEL-12 gap).
+    user = db.get(UserModel, session.user_id)
+    if not user:
+        raise HTTPException(status_code=401, detail="User not found")
+
+    user_token_version = int(getattr(user, "token_version", 0) or 0)
+    session_token_version = int(getattr(session, "token_version", 0) or 0)
+    if session_token_version < user_token_version:
+        logger.warning(
+            "refresh_stale_session_generation",
+            session_id=str(session.id),
+            user_id=str(session.user_id),
+            session_tv=session_token_version,
+            user_tv=user_token_version,
+        )
+        raise HTTPException(status_code=401, detail="Session revoked")
+
     # ROTATION: Generate new refresh token
     new_raw_refresh_token = create_refresh_token()
     new_hash = hash_token(new_raw_refresh_token)
@@ -184,6 +205,7 @@ async def refresh_session(
         session.id,
         {
             "refresh_token_hash": new_hash,
+            "token_version": str(user_token_version),
             "last_used_at": datetime.now(timezone.utc).isoformat(),
             "expires_at": (datetime.now(timezone.utc) + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)).isoformat()
         },
@@ -202,11 +224,7 @@ async def refresh_session(
         )
     )
 
-    # Re-issue Access Token
-    user = db.get(UserModel, session.user_id)
-
-    if not user:
-        raise HTTPException(status_code=401, detail="User not found")
+    # Re-issue Access Token (user + token_version already resolved above)
 
     # #1379 — preserve the ORIGINAL acting tenant from the incoming access
     # token. Re-deriving from `memberships[0]` without ORDER BY silently

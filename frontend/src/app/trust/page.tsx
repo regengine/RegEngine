@@ -353,7 +353,7 @@ export default function TrustCenterPage() {
                             <tbody className="text-sm">
                                 <tr className="border-b border-[var(--re-surface-border)]">
                                     <td className="p-3 font-medium text-re-text-primary">Supabase</td>
-                                    <td className="p-3 text-re-text-muted">Database, authentication, and row-level security. Auth-side transactional email (signup confirmation, password reset, magic link) is routed through Resend as the SMTP transport.</td>
+                                    <td className="p-3 text-re-text-muted">Database, authentication, and row-level security. Supabase Auth password-reset email is routed through Resend as the SMTP transport.</td>
                                     <td className="p-3 text-re-text-muted">Tenant data, user accounts, recipient email for auth flows</td>
                                     <td className="p-3 text-re-text-muted">US (AWS us-east-2)</td>
                                 </tr>
@@ -377,7 +377,7 @@ export default function TrustCenterPage() {
                                 </tr>
                                 <tr className="border-b border-[var(--re-surface-border)]">
                                     <td className="p-3 font-medium text-re-text-primary">Resend</td>
-                                    <td className="p-3 text-re-text-muted">Transactional email (invites, verifications, and Supabase Auth signup/reset/magic-link via SMTP transport)</td>
+                                    <td className="p-3 text-re-text-muted">Transactional email (invites, verifications, and Supabase Auth password-reset email via SMTP transport)</td>
                                     <td className="p-3 text-re-text-muted">Recipient email, invite metadata, and auth-flow recipient email</td>
                                     <td className="p-3 text-re-text-muted">US</td>
                                 </tr>
@@ -415,7 +415,7 @@ export default function TrustCenterPage() {
                                     <td className="p-3 font-medium text-re-text-primary">Cloudflare R2</td>
                                     <td className="p-3 text-re-text-muted">Object storage for ingested document artifacts</td>
                                     <td className="p-3 text-re-text-muted">Raw uploads, normalized JSON, parsed text extracts</td>
-                                    <td className="p-3 text-re-text-muted">Global edge</td>
+                                    <td className="p-3 text-re-text-muted">United States / global edge</td>
                                 </tr>
                             </tbody>
                         </table>

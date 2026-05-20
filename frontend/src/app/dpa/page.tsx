@@ -53,7 +53,7 @@ const TOC = [
 const SUBPROCESSORS = [
   {
     name: 'Supabase',
-    purpose: 'Authentication, user database (PostgreSQL), and row-level security enforcement. Auth-side transactional email (signup confirmation, password reset, magic link) is routed through Resend as the SMTP transport.',
+    purpose: 'Authentication, user database (PostgreSQL), and row-level security enforcement. Supabase Auth password-reset email is routed through Resend as the SMTP transport.',
     location: 'United States (AWS us-east-2)',
     link: 'https://supabase.com/privacy',
   },
@@ -77,7 +77,7 @@ const SUBPROCESSORS = [
   },
   {
     name: 'Resend',
-    purpose: 'Transactional email delivery (account, billing, compliance alerts, and Supabase Auth signup/reset/magic-link via SMTP transport).',
+    purpose: 'Transactional email delivery (account, billing, compliance alerts, team invites, and Supabase Auth password-reset email via SMTP transport).',
     location: 'United States',
     link: 'https://resend.com/legal/privacy-policy',
   },
@@ -114,7 +114,7 @@ const SUBPROCESSORS = [
   {
     name: 'Cloudflare R2',
     purpose: 'Object storage for ingested document artifacts (raw uploads, normalized JSON, parsed text extracts). S3-compatible API; AES-256 server-side encryption at rest.',
-    location: 'Global edge (S3-compatible API)',
+    location: 'United States / global edge (S3-compatible API)',
     link: 'https://www.cloudflare.com/privacypolicy/',
   },
 ];

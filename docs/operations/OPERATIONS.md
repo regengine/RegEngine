@@ -8,6 +8,7 @@
 | Stop all services | `./scripts/stop-stack.sh` |
 | Check health | `./scripts/verify-health.sh` |
 | View logs | `docker-compose logs -f <service>` |
+| Provision launch-trust vendors | See [LAUNCH_TRUST_PROVISIONING.md](LAUNCH_TRUST_PROVISIONING.md) |
 
 ---
 
