@@ -158,6 +158,7 @@ _VALID_ROUTER_NAMES = {
     "inflow_workbench", "supplier_validation", "disaster_recovery",
     "sla_tracking", "export_monitoring",
     "chain_verification", "audit_export_log",
+    "proof_verify", "proof_recall",
 }
 
 # Validate DISABLED_ROUTERS — catch typos early
@@ -272,6 +273,12 @@ if _router_enabled("fda_export"):
     app.include_router(fda_export_router, tags=["FDA Exports"])
 
 
+if _router_enabled("proof_verify"):
+    # Public hash-chain verifier. Tenantless, no auth, rate-limited.
+    from app.proof_verify_router import router as proof_verify_router
+    app.include_router(proof_verify_router, tags=["Public Proof"])
+
+
 # CSV Templates & Import
 if _router_enabled("csv"):
     from app.csv_templates import router as csv_router
@@ -377,6 +384,11 @@ if _router_enabled("recall"):
 if _router_enabled("recall_simulations"):
     from app.recall_simulations import router as recall_simulations_router
     app.include_router(recall_simulations_router, tags=["Recall Simulations"])
+
+
+if _router_enabled("proof_recall"):
+    from app.proof_recall_router import router as proof_recall_router
+    app.include_router(proof_recall_router, tags=["Public Proof"])
 
 
 # Supplier Management

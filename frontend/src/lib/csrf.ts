@@ -133,7 +133,10 @@ export const CSRF_EXEMPT_PREFIXES = [
     // the Bearer bypass in src/proxy.ts.
     '/api/webhooks/',
     '/api/v1/webhooks/',
+    // Public ingestion endpoints that are unauthenticated, tenantless, and
+    // operate only on caller-supplied or frozen synthetic data.
     '/api/ingestion/api/v1/sandbox/',
+    '/api/ingestion/api/v1/proof/',
     // Public unauthenticated tool endpoints — add new entries explicitly.
     '/api/inflow-lab/',
     '/api/tools/check-access',

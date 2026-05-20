@@ -35,21 +35,32 @@ const T = {
 };
 
 const RECALL_CSV_URL = '/samples/sample_recall_drill.csv';
+const PROOF_RECALL_ENDPOINT = '/api/ingestion/api/v1/proof/recall-drill';
 
-/**
- * Steps for the simulated drill.
- * Timings are deterministic — every drill produces the same sequence.
- * Backend endpoint POST /api/v1/proof/recall-drill is a TODO; this page
- * runs a client-side scripted simulation against the real demo CSV that
- * was generated from sample_data/ + recall_simulations.py.
- */
 type DrillStep = {
     label: string;
     detailLines: string[];
     durationMs: number;
+    status: 'ok' | 'warning' | 'error';
 };
 
-const DRILL_STEPS: DrillStep[] = [
+type RecallDrillApiStep = {
+    name: string;
+    duration_ms: number;
+    status: 'ok' | 'warning' | 'error';
+    detail?: string | null;
+};
+
+type RecallDrillResponse = {
+    steps: RecallDrillApiStep[];
+    time_to_trace_seconds: number;
+    output_csv_url: string;
+    lot_code: string;
+    fda_24h_mandate_seconds: number;
+    timestamp: string;
+};
+
+const DEFAULT_DRILL_STEPS: DrillStep[] = [
     {
         label: 'Identifying source lot',
         detailLines: [
@@ -57,6 +68,7 @@ const DRILL_STEPS: DrillStep[] = [
             'Origin: Sunny Valley Farms (GLN 1234567890128)',
         ],
         durationMs: 1200,
+        status: 'ok',
     },
     {
         label: 'Tracing forward through 7 CTEs',
@@ -66,6 +78,7 @@ const DRILL_STEPS: DrillStep[] = [
             'Resolved 2 child lots (FC-20240116-A, FC-20240116-B) at transformation node',
         ],
         durationMs: 2400,
+        status: 'ok',
     },
     {
         label: 'Walking downstream graph edges',
@@ -74,6 +87,7 @@ const DRILL_STEPS: DrillStep[] = [
             'Reached 3 receivers: Metro Foods, Valley Wholesale, SuperMart #42',
         ],
         durationMs: 1800,
+        status: 'ok',
     },
     {
         label: 'Generating §1.1455(c)-formatted recall CSV',
@@ -82,6 +96,7 @@ const DRILL_STEPS: DrillStep[] = [
             'Hash-anchored each record (SHA-256 chain integrity preserved)',
         ],
         durationMs: 1600,
+        status: 'ok',
     },
 ];
 
@@ -105,16 +120,53 @@ const TRACE_NODES: TraceNode[] = [
     { id: 'r3', facility: 'SuperMart #42', cte: 'RECEIVING', lot: 'FC-20240116-A', qty: '50 cs' },
 ];
 
-const TOTAL_DURATION_S = Math.round(
-    DRILL_STEPS.reduce((acc, s) => acc + s.durationMs, 0) / 1000,
-);
+const DEFAULT_DRILL_RESPONSE: RecallDrillResponse = {
+    steps: DEFAULT_DRILL_STEPS.map((step) => ({
+        name: step.label,
+        duration_ms: step.durationMs,
+        status: step.status,
+        detail: step.detailLines.join(' '),
+    })),
+    time_to_trace_seconds: DEFAULT_DRILL_STEPS.reduce((acc, s) => acc + s.durationMs, 0) / 1000,
+    output_csv_url: RECALL_CSV_URL,
+    lot_code: 'SV-20240115-001',
+    fda_24h_mandate_seconds: 86400,
+    timestamp: '',
+};
 
-type DrillState = 'idle' | 'running' | 'done';
+type DrillState = 'idle' | 'loading' | 'running' | 'done';
+
+function normalizeStep(step: RecallDrillApiStep): DrillStep {
+    return {
+        label: step.name,
+        detailLines: step.detail ? [step.detail] : [],
+        durationMs: step.duration_ms,
+        status: step.status,
+    };
+}
+
+function normalizeDrill(data: RecallDrillResponse): {
+    response: RecallDrillResponse;
+    steps: DrillStep[];
+} {
+    const steps = data.steps.map(normalizeStep).filter((step) => step.durationMs >= 0);
+    return {
+        response: data,
+        steps: steps.length > 0 ? steps : DEFAULT_DRILL_STEPS,
+    };
+}
+
+function formatSeconds(value: number): string {
+    return Number.isInteger(value) ? String(value) : value.toFixed(1).replace(/\.0$/, '');
+}
 
 export default function RecallDrillPage() {
     const [state, setState] = useState<DrillState>('idle');
     const [activeStep, setActiveStep] = useState(-1);
     const [elapsedMs, setElapsedMs] = useState(0);
+    const [drill, setDrill] = useState<RecallDrillResponse>(DEFAULT_DRILL_RESPONSE);
+    const [drillSteps, setDrillSteps] = useState<DrillStep[]>(DEFAULT_DRILL_STEPS);
+    const [errorMessage, setErrorMessage] = useState<string | null>(null);
     const startedAtRef = useRef<number | null>(null);
     const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const stepTimers = useRef<ReturnType<typeof setTimeout>[]>([]);
@@ -126,12 +178,14 @@ export default function RecallDrillPage() {
         };
     }, []);
 
-    function startDrill() {
-        // reset
+    function clearTimers() {
         stepTimers.current.forEach((t) => clearTimeout(t));
         stepTimers.current = [];
         if (tickRef.current) clearInterval(tickRef.current);
+        tickRef.current = null;
+    }
 
+    function runAnimation(steps: DrillStep[]) {
         setState('running');
         setActiveStep(0);
         setElapsedMs(0);
@@ -144,12 +198,13 @@ export default function RecallDrillPage() {
         }, 100);
 
         let cumulative = 0;
-        DRILL_STEPS.forEach((step, idx) => {
+        steps.forEach((step, idx) => {
             cumulative += step.durationMs;
-            const isLast = idx === DRILL_STEPS.length - 1;
+            const isLast = idx === steps.length - 1;
             const t = setTimeout(() => {
                 if (isLast) {
-                    setActiveStep(DRILL_STEPS.length);
+                    setActiveStep(steps.length);
+                    setElapsedMs(cumulative);
                     setState('done');
                     if (tickRef.current) {
                         clearInterval(tickRef.current);
@@ -163,21 +218,53 @@ export default function RecallDrillPage() {
         });
     }
 
-    function resetDrill() {
-        stepTimers.current.forEach((t) => clearTimeout(t));
-        stepTimers.current = [];
-        if (tickRef.current) {
-            clearInterval(tickRef.current);
-            tickRef.current = null;
+    async function startDrill() {
+        clearTimers();
+        setErrorMessage(null);
+        setState('loading');
+        setActiveStep(-1);
+        setElapsedMs(0);
+
+        try {
+            const response = await fetch(PROOF_RECALL_ENDPOINT, {
+                method: 'POST',
+            });
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+
+            const payload = (await response.json()) as RecallDrillResponse;
+            const normalized = normalizeDrill(payload);
+            setDrill(normalized.response);
+            setDrillSteps(normalized.steps);
+            runAnimation(normalized.steps);
+        } catch {
+            setState('idle');
+            setErrorMessage(
+                'Could not start the public recall-drill endpoint. Try again shortly.',
+            );
         }
+    }
+
+    function resetDrill() {
+        clearTimers();
         startedAtRef.current = null;
         setState('idle');
         setActiveStep(-1);
         setElapsedMs(0);
+        setErrorMessage(null);
     }
 
     const elapsedS = (elapsedMs / 1000).toFixed(1);
-    const finalSeconds = state === 'done' ? TOTAL_DURATION_S : Number(elapsedS);
+    const totalDurationS = drill.time_to_trace_seconds || (
+        drillSteps.reduce((acc, s) => acc + s.durationMs, 0) / 1000
+    );
+    const finalSeconds = state === 'done' ? totalDurationS : Number(elapsedS);
+    const outputCsvUrl = drill.output_csv_url || RECALL_CSV_URL;
+    const fdaMandateSeconds = drill.fda_24h_mandate_seconds || 86400;
+    const finalSecondsLabel = formatSeconds(finalSeconds);
+    const totalDurationLabel = formatSeconds(totalDurationS);
+    const marginMultiple = finalSeconds > 0 ? Math.round(fdaMandateSeconds / finalSeconds) : 0;
 
     return (
         <div className="min-h-screen pb-32" style={{ background: T.bg, color: T.text }}>
@@ -233,6 +320,16 @@ export default function RecallDrillPage() {
                                 Drill in progress · {elapsedS}s
                             </button>
                         )}
+                        {state === 'loading' && (
+                            <button
+                                disabled
+                                className="inline-flex items-center gap-2 px-6 py-3 rounded-lg text-[15px] font-semibold border-none"
+                                style={{ background: T.elevated, color: T.textDim, cursor: 'not-allowed' }}
+                            >
+                                <Clock size={16} className="animate-pulse" />
+                                Starting endpoint run…
+                            </button>
+                        )}
                         {state === 'done' && (
                             <button
                                 onClick={resetDrill}
@@ -248,11 +345,20 @@ export default function RecallDrillPage() {
                             </button>
                         )}
                     </div>
+                    {errorMessage && (
+                        <p
+                            className="text-sm mt-4 mb-0"
+                            style={{ color: T.danger }}
+                            role="alert"
+                        >
+                            {errorMessage}
+                        </p>
+                    )}
                 </motion.div>
             </section>
 
             {/* ─── Progress / Steps ─────────────────────────────────── */}
-            {state !== 'idle' && (
+            {(state === 'running' || state === 'done') && (
                 <section className="max-w-[760px] mx-auto px-4 sm:px-6 pb-10">
                     <div
                         className="rounded-xl overflow-hidden"
@@ -270,12 +376,12 @@ export default function RecallDrillPage() {
                                 style={{ fontFamily: T.mono, color: T.textDim }}
                             >
                                 {state === 'done'
-                                    ? `done · ${TOTAL_DURATION_S}s total`
+                                    ? `done · ${totalDurationLabel}s total`
                                     : `running · ${elapsedS}s`}
                             </span>
                         </div>
                         <div className="p-5 flex flex-col gap-3">
-                            {DRILL_STEPS.map((step, idx) => {
+                            {drillSteps.map((step, idx) => {
                                 const isComplete = activeStep > idx || state === 'done';
                                 const isActive = activeStep === idx && state === 'running';
                                 const isPending = activeStep < idx && state === 'running';
@@ -346,8 +452,8 @@ export default function RecallDrillPage() {
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-8">
                             <MetricCard
                                 label="Time to trace"
-                                value={`${TOTAL_DURATION_S}s`}
-                                sub="Synthetic dataset, 11 events, 5 facilities"
+                                value={`${finalSecondsLabel}s`}
+                                sub={`Synthetic lot ${drill.lot_code}`}
                                 tone="success"
                             />
                             <MetricCard
@@ -358,7 +464,7 @@ export default function RecallDrillPage() {
                             />
                             <MetricCard
                                 label="Margin"
-                                value={`${Math.round((86400 / TOTAL_DURATION_S))}× faster`}
+                                value={`${marginMultiple}× faster`}
                                 sub="Headroom vs. regulatory window"
                                 tone="success"
                             />
@@ -443,7 +549,7 @@ export default function RecallDrillPage() {
                                 </div>
                             </div>
                             <a
-                                href={RECALL_CSV_URL}
+                                href={outputCsvUrl}
                                 download
                                 className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg text-[14px] font-semibold no-underline text-black"
                                 style={{ background: T.accent }}
@@ -502,7 +608,7 @@ export default function RecallDrillPage() {
             >
                 <Lock size={12} />
                 <span>
-                    All data is synthetic. The drill runs on a frozen demo tenant separate
+                    All data is synthetic. The drill runs on a frozen public dataset separate
                     from any customer data. Run as many times as you like — results are
                     deterministic.
                 </span>

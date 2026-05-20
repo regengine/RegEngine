@@ -55,6 +55,7 @@ const { GET, POST, PUT, PATCH, DELETE, OPTIONS } = createStreamProxy({
     resolveTargetBases: getIngestionTargets,
     isUnauthenticatedPath: (path: string) => {
         if (path.startsWith('api/v1/sandbox/')) return true;
+        if (path.startsWith('api/v1/proof/')) return true;
         const portalMatch = path.match(/^api\/v1\/portal\/([^/]+)(?:\/(submit|preflight))?$/);
         return Boolean(portalMatch && portalMatch[1] !== 'links');
     },

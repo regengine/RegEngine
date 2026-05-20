@@ -180,7 +180,7 @@ _VALID_ROUTER_NAMES = {
     "chain_verification", "audit_export_log", "sla_tracking",
     "export_monitoring", "supplier_validation", "disaster_recovery",
     "admin", "graph", "nlp", "fsma_compliance",
-    "proof_verify",
+    "proof_verify", "proof_recall",
 }
 
 _EXPERIMENTAL_ROUTERS = {

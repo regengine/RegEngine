@@ -19,6 +19,7 @@ import hashlib
 import io
 import json
 import zipfile
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -31,6 +32,9 @@ from app.proof_verify_router import (
 )
 from shared.merkle_tree import MerkleTree
 from shared.rate_limit import limiter
+
+
+REPO_ROOT = Path(__file__).resolve().parents[3]
 
 
 def _build_app() -> FastAPI:
@@ -323,6 +327,43 @@ class TestFailureModes:
 # Happy path — round-trip a real ZIP
 # ---------------------------------------------------------------------------
 class TestZipRoundTrip:
+    def test_checked_in_public_audit_bundle_verifies(self, client: TestClient):
+        """The ZIP linked from /proof must verify through the public API."""
+        bundle = (REPO_ROOT / "frontend/public/proof/audit-bundle.zip").read_bytes()
+
+        resp = client.post(
+            "/api/v1/proof/verify",
+            files={"bundle": ("audit-bundle.zip", bundle, "application/zip")},
+        )
+
+        assert resp.status_code == 200, resp.text
+        data = resp.json()
+        assert data["verified"] is True, data
+        names = {c["name"]: c for c in data["checks"]}
+        assert names["manifest_files_present"]["passed"] is True
+        assert names["file_hashes_match_manifest"]["passed"] is True
+        assert names["merkle_root_matches_declared"]["passed"] is True
+        assert len(data["merkle_root_recomputed"]) == 64
+
+    def test_checked_in_tampered_public_audit_bundle_fails(
+        self, client: TestClient
+    ):
+        """The tampered ZIP linked from /proof must fail verification."""
+        bundle = (
+            REPO_ROOT / "frontend/public/proof/audit-bundle-tampered.zip"
+        ).read_bytes()
+
+        resp = client.post(
+            "/api/v1/proof/verify",
+            files={"bundle": ("audit-bundle-tampered.zip", bundle, "application/zip")},
+        )
+
+        assert resp.status_code == 200, resp.text
+        data = resp.json()
+        assert data["verified"] is False, data
+        names = {c["name"]: c for c in data["checks"]}
+        assert names["file_hashes_match_manifest"]["passed"] is False
+
     def test_zip_bundle_verified_end_to_end(self, client: TestClient):
         hashes = _make_event_hashes(8)
         root = MerkleTree(hashes).root

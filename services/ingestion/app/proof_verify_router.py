@@ -254,6 +254,156 @@ def _verify_payload(
     )
 
 
+def _verify_manifest_file_bundle(
+    *,
+    zf: zipfile.ZipFile,
+    names: list[str],
+    manifest: dict[str, Any],
+    extra_checks: list[VerifyCheck],
+) -> Optional[VerifyResponse]:
+    """Verify the public /proof ZIP shape: manifest.files + manifest.merkle.
+
+    The open-source verifier published at ``frontend/public/sdk/verify_chain.py``
+    treats file SHA-256 values as Merkle leaves. Keep the API endpoint aligned
+    with that public contract so the sample bundle can be checked both in the
+    browser and offline.
+    """
+    files = manifest.get("files")
+    if not isinstance(files, list) or not files:
+        return None
+
+    checks = list(extra_checks)
+    checks.append(
+        VerifyCheck(
+            name="manifest_files_present",
+            passed=True,
+            detail=f"{len(files)} file manifest entr{'y' if len(files) == 1 else 'ies'} found",
+        )
+    )
+
+    bad_entries: list[str] = []
+    missing: list[str] = []
+    mismatched: list[str] = []
+    size_mismatched: list[str] = []
+    recomputed: list[str] = []
+
+    for idx, entry in enumerate(files):
+        if not isinstance(entry, dict):
+            bad_entries.append(f"files[{idx}]")
+            continue
+
+        path = entry.get("path")
+        declared = entry.get("sha256")
+        declared_size = entry.get("size")
+
+        if (
+            not isinstance(path, str)
+            or not _safe_zip_member(path)
+            or not isinstance(declared, str)
+            or len(declared) != 64
+        ):
+            bad_entries.append(str(path or f"files[{idx}]"))
+            continue
+
+        if path not in names:
+            missing.append(path)
+            continue
+
+        data = zf.read(path)
+        if declared_size is not None and declared_size != len(data):
+            size_mismatched.append(path)
+
+        actual = hashlib.sha256(data).hexdigest()
+        recomputed.append(actual)
+        if actual != declared:
+            mismatched.append(path)
+
+    checks.append(
+        VerifyCheck(
+            name="manifest_file_entries_well_formed",
+            passed=not bad_entries and not missing,
+            detail=(
+                "all manifest file entries are safe and present"
+                if not bad_entries and not missing
+                else f"bad={bad_entries} missing={missing}"
+            ),
+        )
+    )
+    checks.append(
+        VerifyCheck(
+            name="file_hashes_match_manifest",
+            passed=not mismatched and not size_mismatched,
+            detail=(
+                "all manifest-declared file hashes and sizes match"
+                if not mismatched and not size_mismatched
+                else f"hash_mismatched={mismatched} size_mismatched={size_mismatched}"
+            ),
+        )
+    )
+
+    merkle = manifest.get("merkle")
+    declared_root: Optional[str] = None
+    declared_leaves: Any = None
+    if isinstance(merkle, dict):
+        root = merkle.get("root")
+        if isinstance(root, str):
+            declared_root = root
+        declared_leaves = merkle.get("leaves")
+
+    if isinstance(declared_leaves, list):
+        leaves_match = declared_leaves == recomputed
+        checks.append(
+            VerifyCheck(
+                name="manifest_merkle_leaves_match_files",
+                passed=leaves_match,
+                detail=(
+                    "manifest leaves match recomputed file hashes"
+                    if leaves_match
+                    else "manifest leaves differ from recomputed file hashes"
+                ),
+            )
+        )
+
+    recomputed_root = MerkleTree(recomputed).root if recomputed else ""
+    if declared_root:
+        root_matches = recomputed_root == declared_root
+        checks.append(
+            VerifyCheck(
+                name="merkle_root_matches_declared",
+                passed=root_matches,
+                detail=(
+                    "recomputed root matches manifest.merkle.root"
+                    if root_matches
+                    else f"declared={declared_root[:16]}... recomputed={recomputed_root[:16]}..."
+                ),
+            )
+        )
+    else:
+        checks.append(
+            VerifyCheck(
+                name="merkle_root_matches_declared",
+                passed=False,
+                detail="manifest.merkle.root missing",
+            )
+        )
+
+    version = manifest.get("version")
+    checks.append(
+        VerifyCheck(
+            name="manifest_well_formed",
+            passed=bool(version),
+            detail=f"version={version!r} file_count={len(files)}",
+        )
+    )
+
+    return VerifyResponse(
+        verified=all(c.passed for c in checks),
+        checks=checks,
+        merkle_root_recomputed=recomputed_root,
+        timestamp=_now_iso(),
+    )
+
+
 def _verify_zip_bundle(raw: bytes) -> VerifyResponse:
     """Open a ZIP bundle in memory and run structural checks."""
     extra: list[VerifyCheck] = []
@@ -316,6 +466,15 @@ def _verify_zip_bundle(raw: bytes) -> VerifyResponse:
         raise HTTPException(
             status_code=400, detail=f"manifest.json unreadable: {exc}"
         )
+
+    manifest_file_result = _verify_manifest_file_bundle(
+        zf=zf,
+        names=names,
+        manifest=manifest,
+        extra_checks=extra,
+    )
+    if manifest_file_result is not None:
+        return manifest_file_result
 
     # File-hash cross-check: every name in manifest.file_hashes that is
     # present in the ZIP must hash to the declared digest.
