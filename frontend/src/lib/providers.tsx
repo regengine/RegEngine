@@ -9,7 +9,12 @@ import { useState } from 'react';
 import { Toaster } from '@/components/ui/toaster';
 import { CSPostHogProvider } from './posthog-provider';
 
-export function Providers({ children }: { children: React.ReactNode }) {
+type ProvidersProps = {
+    children: React.ReactNode;
+    nonce?: string;
+};
+
+export function Providers({ children, nonce }: ProvidersProps) {
     const [queryClient] = useState(() => new QueryClient({
         defaultOptions: {
             queries: {
@@ -20,7 +25,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
     }));
 
     return (
-        <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false} storageKey="re-theme-v2">
+        <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false} storageKey="re-theme-v2" nonce={nonce}>
             <CSPostHogProvider>
                 <QueryClientProvider client={queryClient}>
                     <AuthProvider>
