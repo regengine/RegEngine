@@ -633,6 +633,15 @@ export default function LoginPage() {
                                 ) : null}
 
                                 {authMode === 'email-code' && isEmailCodeSent ? (
+                                <div
+                                    role="status"
+                                    className="rounded-md border border-[var(--re-info-border)] bg-[var(--re-info-bg)] p-3 text-sm leading-6 text-[var(--re-text-secondary)]"
+                                >
+                                    If that address has workspace access, a 6-digit code is on the way. Check your inbox or spam folder.
+                                </div>
+                                ) : null}
+
+                                {authMode === 'email-code' && isEmailCodeSent ? (
                                 <div className="space-y-2">
                                     <label className="text-sm font-medium leading-none text-[var(--re-text-secondary)] peer-disabled:cursor-not-allowed peer-disabled:opacity-70" htmlFor="email-code">
                                         Confirmation code

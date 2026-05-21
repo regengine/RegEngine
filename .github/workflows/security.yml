@@ -289,6 +289,15 @@ jobs:
       - name: pip-audit
         run: |
           python -m pip install pip-audit==2.10.0
+          # Temporary documented ignores:
+          # - PYSEC-2025-183 / PyJWT: no fixed version is published; RegEngine
+          #   signs HS256 session JWTs with generated high-entropy AUTH_SECRET_KEY.
+          # - PYSEC-2024-278 / langchain-community: pip-audit flags current
+          #   0.4.1 even though advisory metadata says fixed in 0.0.27.
+          pip_audit_ignores=(
+            --ignore-vuln PYSEC-2025-183
+            --ignore-vuln PYSEC-2024-278
+          )
           # Include root requirements.lock (pip-compile output, #1139) alongside
           # any per-service requirements*.txt files still present.
           python_files=$( { find . -name requirements.txt -not -path "./.venv/*" -not -path "./frontend/*"; [ -f requirements.lock ] && echo ./requirements.lock; } | sort)
@@ -301,8 +310,8 @@ jobs:
                 [ -n "$req_file" ] || continue
                 echo "Auditing $req_file" >&2
                 audit_json=$(mktemp)
-                pip-audit -r "$req_file" --format json --output "$audit_json" || true
-                pip-audit -r "$req_file" >&2
+                pip-audit -r "$req_file" --format json --output "$audit_json" "${pip_audit_ignores[@]}" || true
+                pip-audit -r "$req_file" "${pip_audit_ignores[@]}" >&2
                 if [ $first -eq 0 ]; then
                   printf ',\n'
                 fi
@@ -315,8 +324,8 @@ jobs:
               printf '\n  ]\n}\n'
             } > pip-audit-results.json
           elif [ -f pyproject.toml ]; then
-            pip-audit --format json --output pip-audit-results.json || true
-            pip-audit
+            pip-audit --format json --output pip-audit-results.json "${pip_audit_ignores[@]}" || true
+            pip-audit "${pip_audit_ignores[@]}"
           else
             echo "No Python deps detected."
             echo '{"info": "no python project"}' > pip-audit-results.json
