@@ -56,15 +56,22 @@ def _parse_token_version(value: object) -> Optional[int]:
     return None
 
 
-def _is_supabase_auth_exception(exc: Exception) -> bool:
-    """Return true for Supabase/Gotrue auth rejections such as invalid JWTs."""
+def _is_supabase_token_rejection(exc: Exception) -> bool:
+    """Return true for Supabase/Gotrue credential rejections such as invalid JWTs."""
     cls = exc.__class__
     module = getattr(cls, "__module__", "")
     name = getattr(cls, "__name__", "")
-    return (
-        name in {"AuthApiError", "AuthInvalidCredentialsError", "AuthRetryableError"}
-        or module.startswith(("supabase_auth.", "gotrue."))
+    return name in {"AuthApiError", "AuthInvalidCredentialsError"} and module.startswith(
+        ("supabase_auth.", "gotrue.")
     )
+
+
+def _is_supabase_transient_exception(exc: Exception) -> bool:
+    """Return true for Supabase/Gotrue retryable infrastructure failures."""
+    cls = exc.__class__
+    module = getattr(cls, "__module__", "")
+    name = getattr(cls, "__name__", "")
+    return name == "AuthRetryableError" and module.startswith(("supabase_auth.", "gotrue."))
 
 
 def _credentials_exception() -> HTTPException:
@@ -169,7 +176,11 @@ async def get_current_user(
     token_version_claim: Optional[int] = None
     local_session_id: Optional[UUID] = None
 
-    # 1. Try Supabase Auth First (Production Path)
+    # 1. Try Supabase Auth first. RegEngine also issues its own signed JWTs
+    # from /auth/login and /auth/email-code/confirm, so a Supabase "invalid
+    # JWT" response is not final by itself; it may simply mean this is a
+    # RegEngine session token. Infrastructure failures still fail closed in
+    # production below.
     sb = get_supabase()
     if sb:
         try:
@@ -192,24 +203,32 @@ async def get_current_user(
 
                 # User existence verified at line 101 below (db.get raises if missing)
         except Exception as e:
-            if _is_supabase_auth_exception(e):
+            if _is_supabase_token_rejection(e):
                 logger.warning(
                     "supabase_auth_token_rejected",
                     error=str(e),
                     error_type=e.__class__.__name__,
                 )
-                raise credentials_exception from e
-            if not isinstance(e, (OSError, TimeoutError, ConnectionError, ValueError, AttributeError)):
-                raise
-            logger.warning("supabase_auth_failed", error=str(e))
-            # In production, fail closed — do not fall through to local JWT
-            # unless explicitly opted out via ALLOW_LOCAL_JWT_FALLBACK=true
-            if is_production() and os.getenv("ALLOW_LOCAL_JWT_FALLBACK", "").lower() not in ("true", "1"):
-                logger.error("supabase_auth_failed_production_fail_closed", error=str(e))
-                raise credentials_exception from e
+                # Continue to the local RegEngine JWT verifier. If this token
+                # is not a valid RegEngine session token either, the local
+                # decode path below returns the same 401.
+            else:
+                if not (
+                    _is_supabase_transient_exception(e)
+                    or isinstance(e, (OSError, TimeoutError, ConnectionError, ValueError, AttributeError))
+                ):
+                    raise
+                logger.warning("supabase_auth_failed", error=str(e))
+                # In production, fail closed — do not fall through to local JWT
+                # unless explicitly opted out via ALLOW_LOCAL_JWT_FALLBACK=true
+                if is_production() and os.getenv("ALLOW_LOCAL_JWT_FALLBACK", "").lower() not in ("true", "1"):
+                    logger.error("supabase_auth_failed_production_fail_closed", error=str(e))
+                    raise credentials_exception from e
 
-    # 2. Fallback to Local JWT (Legacy / Dev Path)
-    # Only reached in dev, or if Supabase is not configured, or explicit opt-in
+    # 2. Fallback to local RegEngine JWT.
+    # Reached when Supabase is not configured, or when Supabase rejects a token
+    # that may be a RegEngine-issued session token. Production infrastructure
+    # failures above still fail closed unless explicitly opted out.
     if not user_id:
         try:
             payload = decode_access_token(token)

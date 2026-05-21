@@ -26,7 +26,7 @@ for _p in (_SERVICE_DIR, _SERVICES_DIR):
 import asyncio
 import uuid
 from types import SimpleNamespace
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from fastapi import HTTPException
@@ -153,18 +153,84 @@ def test_app_metadata_tenant_used(monkeypatch):
 
 
 @pytest.mark.security
-def test_supabase_invalid_jwt_rejected_without_local_fallback(monkeypatch):
-    """Supabase invalid-JWT errors must be a 401, not a 500 or local fallback."""
+def test_supabase_invalid_jwt_rejected_after_local_fallback(monkeypatch):
+    """Invalid Supabase tokens are still 401 after RegEngine JWT fallback fails."""
     from services.admin.app import dependencies as deps
+    from jwt.exceptions import InvalidTokenError
 
     class AuthApiError(Exception):
-        pass
+        __module__ = "gotrue.errors"
 
     fake_sb = MagicMock()
     fake_sb.auth.get_user.side_effect = AuthApiError(
         "invalid JWT: unable to parse or verify signature"
     )
     monkeypatch.setattr(deps, "get_supabase", lambda: fake_sb)
+
+    decode_access_token = MagicMock(side_effect=InvalidTokenError("invalid local JWT"))
+    monkeypatch.setattr(deps, "decode_access_token", decode_access_token)
+
+    user_mock = MagicMock(id=USER_ID, is_sysadmin=False)
+    db = _FakeDB(memberships=[_membership(TENANT_A)], user_mock=user_mock)
+
+    with pytest.raises(HTTPException) as exc:
+        _run(deps.get_current_user(token="bad-supabase-token", db=db))
+
+    assert exc.value.status_code == 401
+    decode_access_token.assert_called_once_with("bad-supabase-token")
+
+
+@pytest.mark.security
+def test_supabase_invalid_jwt_can_fall_back_to_regengine_jwt(monkeypatch):
+    """A RegEngine session token must work even when Supabase rejects it."""
+    from services.admin.app import dependencies as deps
+    from services.admin.app.auth_utils import create_access_token
+
+    class AuthApiError(Exception):
+        __module__ = "gotrue.errors"
+
+    fake_sb = MagicMock()
+    fake_sb.auth.get_user.side_effect = AuthApiError(
+        "invalid JWT: unable to parse or verify signature"
+    )
+    monkeypatch.setattr(deps, "get_supabase", lambda: fake_sb)
+    monkeypatch.setattr(deps, "check_revoked_async", AsyncMock(return_value=False))
+
+    token = create_access_token(
+        {
+            "sub": str(USER_ID),
+            "tenant_id": str(TENANT_A),
+            "tv": 0,
+        }
+    )
+
+    user_mock = MagicMock(
+        id=USER_ID,
+        is_sysadmin=False,
+        status="active",
+        token_version=0,
+    )
+    db = _FakeDB(memberships=[_membership(TENANT_A)], user_mock=user_mock)
+
+    result = _run(deps.get_current_user(token=token, db=db))
+
+    assert result is user_mock
+    deps.check_revoked_async.assert_awaited_once()
+
+
+@pytest.mark.security
+def test_supabase_retryable_error_fails_closed_in_production(monkeypatch):
+    """Supabase outages must not be treated as token rejection fallback in prod."""
+    from services.admin.app import dependencies as deps
+
+    class AuthRetryableError(Exception):
+        __module__ = "gotrue.errors"
+
+    fake_sb = MagicMock()
+    fake_sb.auth.get_user.side_effect = AuthRetryableError("supabase temporarily unavailable")
+    monkeypatch.setattr(deps, "get_supabase", lambda: fake_sb)
+    monkeypatch.setenv("REGENGINE_ENV", "production")
+    monkeypatch.delenv("ALLOW_LOCAL_JWT_FALLBACK", raising=False)
 
     decode_access_token = MagicMock()
     monkeypatch.setattr(deps, "decode_access_token", decode_access_token)
@@ -173,7 +239,7 @@ def test_supabase_invalid_jwt_rejected_without_local_fallback(monkeypatch):
     db = _FakeDB(memberships=[_membership(TENANT_A)], user_mock=user_mock)
 
     with pytest.raises(HTTPException) as exc:
-        _run(deps.get_current_user(token="bad-supabase-token", db=db))
+        _run(deps.get_current_user(token="maybe-local-token", db=db))
 
     assert exc.value.status_code == 401
     decode_access_token.assert_not_called()

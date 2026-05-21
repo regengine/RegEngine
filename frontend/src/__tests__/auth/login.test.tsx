@@ -287,6 +287,7 @@ describe('LoginPage', () => {
             await waitFor(() => {
                 expect(apiClient.requestEmailLoginCode).toHaveBeenCalledWith('test@example.com');
             });
+            expect(screen.getByRole('status')).toHaveTextContent(/6-digit code is on the way/i);
             expect(screen.getByLabelText(/confirmation code/i)).toBeInTheDocument();
             expect(screen.getByRole('button', { name: /confirm code/i })).toBeInTheDocument();
         });

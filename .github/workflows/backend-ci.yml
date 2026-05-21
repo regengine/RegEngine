@@ -545,8 +545,18 @@ jobs:
           # to pip-compile lockfile). The matrix still fans out by service name
           # to preserve historical check names on branch-protection rules;
           # every job audits the same consolidated dependency set.
+          #
+          # Temporary documented ignores:
+          # - PYSEC-2025-183 / PyJWT: no fixed version is published; RegEngine
+          #   signs HS256 session JWTs with generated high-entropy AUTH_SECRET_KEY.
+          # - PYSEC-2024-278 / langchain-community: pip-audit flags current
+          #   0.4.1 even though advisory metadata says fixed in 0.0.27.
+          pip_audit_ignores=(
+            --ignore-vuln PYSEC-2025-183
+            --ignore-vuln PYSEC-2024-278
+          )
           python -m pip install pip-audit==2.10.0
-          pip-audit -r requirements.lock --desc on
+          pip-audit -r requirements.lock --desc on "${pip_audit_ignores[@]}"
 
   # ── Public Sample Regenerator (drift gate) ──────────────
   # Re-runs scripts/regenerate_public_samples.py against the synthetic
