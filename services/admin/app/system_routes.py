@@ -88,7 +88,11 @@ class JWTRevokeAllResponse(BaseModel):
 
 def _detect_default(docker_name: str, railway_url: str) -> str:
     """Use Railway URL when running on Railway, Docker hostname otherwise."""
-    if os.getenv("RAILWAY_ENVIRONMENT") or os.getenv("RAILWAY_PROJECT_ID"):
+    if (
+        os.getenv("RAILWAY_ENVIRONMENT")
+        or os.getenv("RAILWAY_ENVIRONMENT_NAME")
+        or os.getenv("RAILWAY_PROJECT_ID")
+    ):
         return railway_url
     return docker_name
 

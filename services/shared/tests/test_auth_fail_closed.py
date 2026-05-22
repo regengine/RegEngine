@@ -25,7 +25,12 @@ def _run_validate(env_overrides: dict[str, str]) -> subprocess.CompletedProcess:
         for k, v in os.environ.items()
         if k not in (
             "RAILWAY_ENVIRONMENT",
+            "RAILWAY_ENVIRONMENT_NAME",
+            "RAILWAY_ENVIRONMENT_ID",
+            "RAILWAY_PROJECT_NAME",
+            "RAILWAY_PROJECT_ID",
             "RAILWAY_SERVICE_NAME",
+            "RAILWAY_SERVICE_ID",
             "VERCEL_ENV",
             "AUTH_SECRET_KEY",
             "JWT_SECRET",

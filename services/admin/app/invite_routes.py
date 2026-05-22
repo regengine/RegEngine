@@ -57,7 +57,12 @@ def _record_e2e_invite_email(recipient_email: str, invite_link: str) -> bool:
         os.getenv(marker)
         for marker in (
             "RAILWAY_ENVIRONMENT",
+            "RAILWAY_ENVIRONMENT_NAME",
+            "RAILWAY_ENVIRONMENT_ID",
+            "RAILWAY_PROJECT_NAME",
+            "RAILWAY_PROJECT_ID",
             "RAILWAY_SERVICE_NAME",
+            "RAILWAY_SERVICE_ID",
             "VERCEL_ENV",
             "VERCEL_URL",
             "RENDER",
