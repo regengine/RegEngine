@@ -171,7 +171,7 @@ export default function DpaPage() {
           Data Processing Agreement
         </h1>
         <p className="text-sm text-[var(--re-text-disabled)] font-mono">
-          Effective: April 1, 2026 · Version 1.0
+          Effective: May 13, 2026 · Version 1.1
         </p>
         <p className="text-sm text-[var(--re-text-muted)] leading-relaxed mt-4">
           Related documents:{' '}
