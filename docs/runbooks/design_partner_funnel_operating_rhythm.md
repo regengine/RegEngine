@@ -56,6 +56,68 @@ Pick exactly one bottleneck transition and open one fix task with:
 - deadline (<= 48 hours)
 - validation metric (which conversion should improve)
 
+## 72-Hour Win Mode
+
+Use this mode when RegEngine needs one visible improvement fast. It does not replace
+the weekly OKR in `docs/decisions/2026-05-13-okr.md`; it is the short-cycle loop for
+moving one funnel transition that should increase the chance of a pilot ingesting a
+real CTE event this week.
+
+### Entry criteria
+- One target metric is named before work starts.
+- The target metric maps to one funnel transition above or to the weekly pilot-ingest
+  query in `scripts/okr_pilots_ingesting_weekly.sql`.
+- The work uses the existing agent roles from `docs/engineering/AGENT_OPERATING_MODEL.md`:
+  `planner`, `implementer`, and `security_review`. Do not create new agent role
+  directories, autonomous chains, or scheduled agent jobs for this mode.
+- The work has one accountable human owner for product judgment and prospect follow-up.
+
+### Day 0: Pick the constraint
+Within the first two hours:
+1. Pull the latest `GET /v1/admin/funnel` snapshot.
+2. Identify the single worst transition by conversion loss and business impact.
+3. Write a one-sentence win statement:
+   `By <date>, improve <transition> from <baseline> to <target> by shipping <smallest change>.`
+4. Open one GitHub issue with:
+   - baseline metric
+   - target metric
+   - affected route, screen, copy path, runbook, or outreach asset
+   - owner
+   - validation command or measurement source
+   - explicit out-of-scope list
+
+### Day 1: Ship the smallest useful fix
+- `planner` verifies the current behavior from repo files, tests, and docs before
+  implementation starts.
+- `implementer` opens one scoped PR. Prefer a product, onboarding, funnel, or operator
+  workflow fix over broad cleanup.
+- Add or update tests when code changes behavior. Security-critical changes, including
+  auth, tenant isolation, billing, permits, receipts, audit logs, compliance evidence,
+  secrets, deployment, and tool execution, need negative-path tests.
+- `security_review` reviews any security-critical change before merge.
+
+### Day 2: Close the loop with prospects or pilots
+- Contact the affected prospect, pilot, or user segment with the smallest possible ask:
+  schedule, retry the blocked action, send one file, confirm one objection, or answer one
+  pricing/procurement question.
+- Record the response in the issue or the relevant outreach tracker.
+- If the response shows the chosen constraint was wrong, stop expanding the fix and
+  update the issue with the new constraint.
+
+### Day 3: Decide continue, rollback, or redirect
+- Re-read the funnel transition and, when relevant, run:
+  `psql "$DATABASE_URL" -f scripts/okr_pilots_ingesting_weekly.sql`
+- Close the loop in the issue with shipped change, metric result, and next action.
+- Continue only if the metric or qualitative pilot evidence improved.
+- Roll back or redirect if the change added complexity without moving the named metric.
+
+### Non-goals
+- Do not pursue more than one KPI in the same 72-hour cycle.
+- Do not convert one prospect comment into a roadmap item unless it repeats across three
+  pilots or blocks the current pilot-ingest OKR.
+- Do not use this mode for speculative refactors, internal polish, or new agent framework
+  work.
+
 ## Weekly 45-Minute Review (Friday)
 
 ### Agenda
