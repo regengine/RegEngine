@@ -18,7 +18,11 @@ import pytest
 def _clear_cloud_markers(monkeypatch):
     for key in (
         "RAILWAY_ENVIRONMENT",
+        "RAILWAY_ENVIRONMENT_NAME",
+        "RAILWAY_ENVIRONMENT_ID",
+        "RAILWAY_PROJECT_NAME",
         "RAILWAY_SERVICE_NAME",
+        "RAILWAY_SERVICE_ID",
         "RAILWAY_PROJECT_ID",
         "VERCEL_ENV",
         "VERCEL_URL",
@@ -84,7 +88,7 @@ class TestCreateEngine:
         """Cloud markers disable local fallback even if env is mis-set."""
         monkeypatch.delenv("ADMIN_DATABASE_URL", raising=False)
         monkeypatch.setenv("REGENGINE_ENV", "development")
-        monkeypatch.setenv("RAILWAY_ENVIRONMENT", "production")
+        monkeypatch.setenv("RAILWAY_ENVIRONMENT_NAME", "production")
         monkeypatch.setenv("ADMIN_FALLBACK_SQLITE", "sqlite:///./test_admin.db")
 
         from services.admin.app.database import _create_engine

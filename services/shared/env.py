@@ -4,6 +4,18 @@ import logging
 
 _logger = logging.getLogger("regengine.env")
 
+_CLOUD_ENV_VARS = (
+    "RAILWAY_ENVIRONMENT",
+    "RAILWAY_ENVIRONMENT_NAME",
+    "RAILWAY_ENVIRONMENT_ID",
+    "RAILWAY_PROJECT_NAME",
+    "RAILWAY_PROJECT_ID",
+    "RAILWAY_SERVICE_NAME",
+    "RAILWAY_SERVICE_ID",
+    "VERCEL_ENV",
+    "VERCEL_URL",
+)
+
 
 def is_production() -> bool:
     """Check if running in production.
@@ -37,13 +49,7 @@ def validate_cloud_environment() -> None:
     are detected but REGENGINE_ENV is not explicitly set, force it to
     'production' to prevent auth bypass tokens from being active.
     """
-    cloud_indicators = [
-        "RAILWAY_ENVIRONMENT",
-        "RAILWAY_SERVICE_NAME",
-        "VERCEL_ENV",
-        "VERCEL_URL",
-    ]
-    is_cloud = any(os.getenv(var) for var in cloud_indicators)
+    is_cloud = any(os.getenv(var) for var in _CLOUD_ENV_VARS)
     if not is_cloud:
         return
 

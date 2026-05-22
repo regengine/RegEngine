@@ -21,8 +21,12 @@ _ENV_VARS = (
     "DATABASE_URL",
     "ENV",
     "RAILWAY_ENVIRONMENT",
+    "RAILWAY_ENVIRONMENT_NAME",
+    "RAILWAY_ENVIRONMENT_ID",
+    "RAILWAY_PROJECT_NAME",
     "RAILWAY_PROJECT_ID",
     "RAILWAY_SERVICE_NAME",
+    "RAILWAY_SERVICE_ID",
     "REGENGINE_ENV",
     "VERCEL_ENV",
     "VERCEL_URL",
@@ -147,7 +151,7 @@ def test_cloud_like_defaults_omit_localhost_origins(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("REGENGINE_ENV", "development")
-    monkeypatch.setenv("RAILWAY_ENVIRONMENT", "production")
+    monkeypatch.setenv("RAILWAY_ENVIRONMENT_NAME", "production")
 
     origins = get_allowed_origins()
 
