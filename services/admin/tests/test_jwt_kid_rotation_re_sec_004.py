@@ -89,6 +89,7 @@ def test_unknown_kid_is_rejected(monkeypatch, clean_revocation):
     active = SigningKey(kid="re-test-active", secret="active-secret-xyz")
 
     # Forge a token with a kid we do not know, signed by some other secret.
+    # nosemgrep: python.jwt.security.jwt-hardcode.jwt-python-hardcoded-secret -- forged-token fixture; literal is the attacker's secret, never a real credential
     forged = pyjwt.encode(
         {
             "sub": "attacker",
