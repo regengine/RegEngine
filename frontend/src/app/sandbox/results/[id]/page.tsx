@@ -6,9 +6,9 @@ interface Props {
 }
 
 async function fetchSharedResult(id: string) {
-  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || process.env.VERCEL_URL
-    ? `https://${process.env.VERCEL_URL}`
-    : 'http://localhost:3000';
+  // VERCEL_URL is intentionally NOT consulted: it is the deployment-specific
+  // host, never the canonical site URL (caused the 2026-05-14 login outage).
+  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
 
   const res = await fetch(`${baseUrl}/api/ingestion/api/v1/sandbox/share/${id}`, {
     cache: 'no-store',
