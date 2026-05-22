@@ -16,6 +16,8 @@ _CLOUD_ENV_VARS = (
     "VERCEL_URL",
 )
 
+_PRODUCTION_ENVIRONMENT_NAMES = {"production"}
+
 
 def is_production() -> bool:
     """Check if running in production.
@@ -55,6 +57,20 @@ def validate_cloud_environment() -> None:
 
     regengine_env = os.getenv("REGENGINE_ENV", "").lower()
     if regengine_env == "production":
+        return
+
+    railway_environment_name = (
+        os.getenv("RAILWAY_ENVIRONMENT_NAME")
+        or os.getenv("RAILWAY_ENVIRONMENT")
+        or ""
+    ).strip().lower()
+    if railway_environment_name in _PRODUCTION_ENVIRONMENT_NAMES:
+        _logger.critical(
+            "Railway production environment detected with REGENGINE_ENV=%s. "
+            "Forcing REGENGINE_ENV=production.",
+            regengine_env or "<unset>",
+        )
+        os.environ["REGENGINE_ENV"] = "production"
         return
 
     if not regengine_env:
