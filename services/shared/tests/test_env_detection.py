@@ -53,6 +53,32 @@ def test_railway_service_id_forces_production_when_env_is_development(monkeypatc
     assert env.is_production() is True
 
 
+def test_railway_production_environment_forces_production_when_env_is_staging(
+    monkeypatch,
+):
+    for key in _ENV_MARKERS:
+        monkeypatch.delenv(key, raising=False)
+    monkeypatch.setenv("REGENGINE_ENV", "staging")
+    monkeypatch.setenv("RAILWAY_ENVIRONMENT_NAME", "production")
+
+    env = _reload_env_module()
+
+    assert os.environ["REGENGINE_ENV"] == "production"
+    assert env.is_production() is True
+
+
+def test_railway_staging_environment_keeps_explicit_staging(monkeypatch):
+    for key in _ENV_MARKERS:
+        monkeypatch.delenv(key, raising=False)
+    monkeypatch.setenv("REGENGINE_ENV", "staging")
+    monkeypatch.setenv("RAILWAY_ENVIRONMENT_NAME", "staging")
+
+    env = _reload_env_module()
+
+    assert os.environ["REGENGINE_ENV"] == "staging"
+    assert env.is_production() is False
+
+
 def test_no_cloud_markers_and_no_regengine_env_remains_non_production(monkeypatch):
     for key in _ENV_MARKERS:
         monkeypatch.delenv(key, raising=False)

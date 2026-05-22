@@ -38,53 +38,58 @@ print("DOCS_RESULT_JSON=" + json.dumps({
     ),
 }))
 """
-    env = {
-        key: value
-        for key, value in os.environ.items()
-        if not key.startswith("RAILWAY_")
-        and key
-        not in {
-            "AUTH_TEST_BYPASS_TOKEN",
-            "DATABASE_URL",
-            "ENV",
-            "REGENGINE_ENV",
+    for regengine_env in (None, "staging"):
+        env = {
+            key: value
+            for key, value in os.environ.items()
+            if not key.startswith("RAILWAY_")
+            and key
+            not in {
+                "AUTH_TEST_BYPASS_TOKEN",
+                "DATABASE_URL",
+                "ENV",
+                "REGENGINE_ENV",
+            }
         }
-    }
-    env.update(
-        {
-            "AUTH_SECRET_KEY": "test-secret-key-for-railway-docs-lockdown",  # pragma: allowlist secret
-            "DATABASE_URL": (
-                "postgresql://regengine_cloud_test:regengine_cloud_test"
-                "@localhost:5432/regengine_cloud_test"
-            ),
-            "REGENGINE_API_KEY": "rge_test_cloud_docs_lockdown",  # pragma: allowlist secret
-            "RAILWAY_ENVIRONMENT_NAME": "production",
-            "TOOL_ACCESS_SECRET": "tool-access-secret-for-railway-docs-lockdown",  # pragma: allowlist secret
+        env.update(
+            {
+                "AUTH_SECRET_KEY": "test-secret-key-for-railway-docs-lockdown",  # pragma: allowlist secret
+                "DATABASE_URL": (
+                    "postgresql://regengine_cloud_test:regengine_cloud_test"
+                    "@localhost:5432/regengine_cloud_test"
+                ),
+                "REGENGINE_API_KEY": "rge_test_cloud_docs_lockdown",  # pragma: allowlist secret
+                "RAILWAY_ENVIRONMENT_NAME": "production",
+                "TOOL_ACCESS_SECRET": "tool-access-secret-for-railway-docs-lockdown",  # pragma: allowlist secret
+            }
+        )
+        if regengine_env is not None:
+            env["REGENGINE_ENV"] = regengine_env
+
+        result = subprocess.run(
+            [sys.executable, "-c", script],
+            cwd=REPO_ROOT,
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=60,
+            check=False,
+        )
+
+        assert result.returncode == 0, (
+            "server.main import failed "
+            f"for REGENGINE_ENV={regengine_env!r}\n"
+            f"stdout:\n{result.stdout}\nstderr:\n{result.stderr}"
+        )
+        marker = "DOCS_RESULT_JSON="
+        payload = next(
+            json.loads(line.removeprefix(marker))
+            for line in result.stdout.splitlines()
+            if line.startswith(marker)
+        )
+        assert payload == {
+            "docs_url": None,
+            "redoc_url": None,
+            "openapi_url": None,
+            "docs_routes": [],
         }
-    )
-
-    result = subprocess.run(
-        [sys.executable, "-c", script],
-        cwd=REPO_ROOT,
-        env=env,
-        capture_output=True,
-        text=True,
-        timeout=60,
-        check=False,
-    )
-
-    assert result.returncode == 0, (
-        f"server.main import failed\nstdout:\n{result.stdout}\nstderr:\n{result.stderr}"
-    )
-    marker = "DOCS_RESULT_JSON="
-    payload = next(
-        json.loads(line.removeprefix(marker))
-        for line in result.stdout.splitlines()
-        if line.startswith(marker)
-    )
-    assert payload == {
-        "docs_url": None,
-        "redoc_url": None,
-        "openapi_url": None,
-        "docs_routes": [],
-    }
