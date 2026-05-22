@@ -44,19 +44,32 @@
 
 [ignore]
 
-# ── Module-level sys.modules poisoners ────────────────────────────────
-# These rewrite ``sys.modules[...]`` at import time with no teardown. Pass
-# solo (and per-file in CI), poison other tests' imports when sharing a
-# pytest process. Option A (rewrite to use fixtures) is a separate sprint;
-# until then they stay quarantined from the suite-runs gate.
-poisoners = [
-    "test_sandbox_router_1342.py",            # rewrites shared.database
-    "test_routes_health_metrics_1342.py",     # rewrites shared.kafka_consumer_base, app.config
-    "test_task_handlers_scraping_1342.py",    # rewrites app.scraper_job, app.routes_scraping
-    "test_task_handlers_sources_1342.py",     # rewrites regengine_ingestion(.sources), app.routes
-    "test_task_handlers_discovery_1342.py",   # rewrites app.discovery
-    "test_task_handlers_regulation_1342.py",  # rewrites app.regulation_loader
-]
+# ── Module-level sys.modules poisoners (Option A: de-quarantined) ─────
+# Six files (``test_sandbox_router_1342.py``,
+# ``test_routes_health_metrics_1342.py``,
+# ``test_task_handlers_{scraping,sources,discovery,regulation}_1342.py``)
+# install ``sys.modules[...]`` stubs at import time. They were quarantined
+# from the suite-runs gate because the original versions had no teardown
+# and poisoned other files' import state in a shared pytest process.
+#
+# That is no longer true. Each of the six now (a) captures the real module
+# before overwriting, (b) restores/evicts it in a module-scoped autouse
+# teardown fixture, and (c) re-installs via ``monkeypatch`` per test so the
+# root + ingestion conftest ``_purge_stale_modules`` hooks (which run in
+# ``pytest_runtest_setup`` before every test) can't break them. With those
+# two defenses in place the files are co-resident-safe, so the quarantine
+# is redundant and has been removed (Option A).
+#
+# Measured locally (Python 3.12.2, pytest 9.0.3 / pytest-xdist 3.8.0, no
+# Postgres/Redis available → 13 infra skips), on top of origin/main, with
+# poisoners = [] so all 175 files (4418 collected) run together:
+#   --dist=loadfile -n auto    : 4405 passed, 13 skipped, 0 failed, 0 errors
+#   single-process -p no:xdist : 4405 passed, 13 skipped, 0 failed, 0 errors
+# The single-process run is the strict check: one shared sys.modules across
+# every file, including the six above. It is green, so the import-time stubs
+# no longer poison anything. (For reference, the prior quarantined gate ran
+# 4309 tests: 4296 passed, 13 skipped.)
+poisoners = []
 
 # ── Pre-existing real failures (not cascade-induced) ──────────────────
 # These fail solo too. Listed individually with the underlying reason so
