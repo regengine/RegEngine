@@ -16,7 +16,6 @@ Issue: #1342
 
 from __future__ import annotations
 
-import hashlib
 import time
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
@@ -46,6 +45,7 @@ from app.authz import (
     get_ingestion_principal,
     require_permission,
 )
+from shared.api_key_store import api_key_hash_candidates
 
 
 # ---------------------------------------------------------------------------
@@ -512,17 +512,29 @@ class TestLookupScopedKeyFromDb:
         assert result.tenant_id == "t-id"
         assert result.auth_mode == "scoped_key_db_fallback"
         stmt, params = factory.last.execute_calls[0]
-        assert "key_hash = :key_hash" in str(stmt)
-        assert params == {"key_hash": hashlib.sha256(b"raw-key").hexdigest()}
+        assert "key_hash IN" in str(stmt)
+        assert params == {"key_hashes": api_key_hash_candidates("raw-key")}
         assert "raw-key" not in str(stmt)
         assert factory.last.closed is True
 
     def test_no_row_returns_none(self, monkeypatch):
         factory = _SessionFactory(None)
         import shared.database as shared_db
+
         monkeypatch.setattr(shared_db, "SessionLocal", factory)
         assert _lookup_scoped_key_from_db("raw") is None
         assert factory.last.closed is True
+
+    def test_lookup_uses_peppered_and_legacy_hash_candidates(self, monkeypatch):
+        monkeypatch.setenv("REGENGINE_API_KEY_HASH_PEPPER", "pepper-value")
+        factory = _SessionFactory(None)
+        import shared.database as shared_db
+
+        monkeypatch.setattr(shared_db, "SessionLocal", factory)
+        assert _lookup_scoped_key_from_db("raw-key") is None
+        _, params = factory.last.execute_calls[0]
+        assert params == {"key_hashes": api_key_hash_candidates("raw-key")}
+        assert len(params["key_hashes"]) == 2
 
     def test_disabled_key_returns_none(self, monkeypatch):
         row = ("k", "t", [], False, None)

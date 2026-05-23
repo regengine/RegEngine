@@ -3,7 +3,8 @@ SEC-005: Database-backed API key store using PostgreSQL.
 
 This module provides a persistent, secure API key storage solution with:
 - PostgreSQL-backed storage with SQLAlchemy ORM
-- SHA-256 key hashing (raw keys never stored)
+- HMAC-SHA256 key hashing when REGENGINE_API_KEY_HASH_PEPPER is configured
+  (raw keys never stored)
 - Thread-safe operations with connection pooling
 - Tenant isolation via key association
 - Automatic rate limit tracking in Redis (optional)
@@ -57,6 +58,47 @@ logger = structlog.get_logger("api_key_store")
 
 Base = declarative_base()
 
+_API_KEY_HASH_PEPPER_ENVS = ("REGENGINE_API_KEY_HASH_PEPPER", "API_KEY_HASH_PEPPER")
+
+
+def _api_key_hash_pepper() -> Optional[str]:
+    """Return the configured server-side API key hash pepper, if present."""
+    for env_name in _API_KEY_HASH_PEPPER_ENVS:
+        value = os.environ.get(env_name)
+        if value:
+            return value
+    return None
+
+
+def legacy_hash_api_key(raw_key: str) -> str:
+    """Return the historical SHA-256 digest used before peppered hashes."""
+    return hashlib.sha256(raw_key.encode("utf-8")).hexdigest()
+
+
+def hash_api_key(raw_key: str) -> str:
+    """Return the current storage digest for an API key.
+
+    When a server-side pepper is configured this uses HMAC-SHA256, limiting
+    offline cracking value if an attacker obtains the database. Without a
+    pepper, it preserves the legacy SHA-256 behavior so local/dev installs do
+    not break unexpectedly.
+    """
+    pepper = _api_key_hash_pepper()
+    if not pepper:
+        return legacy_hash_api_key(raw_key)
+    return hmac.new(
+        pepper.encode("utf-8"),
+        raw_key.encode("utf-8"),
+        hashlib.sha256,
+    ).hexdigest()
+
+
+def api_key_hash_candidates(raw_key: str) -> tuple[str, ...]:
+    """Return current then legacy digests for validating or looking up a key."""
+    current = hash_api_key(raw_key)
+    legacy = legacy_hash_api_key(raw_key)
+    return (current,) if current == legacy else (current, legacy)
+
 
 class APIKeyModel(Base):
     """SQLAlchemy model for API keys stored in PostgreSQL."""
@@ -65,7 +107,7 @@ class APIKeyModel(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     key_id = Column(String(64), unique=True, nullable=False, index=True)
-    key_hash = Column(String(64), nullable=False)  # SHA-256 hash
+    key_hash = Column(String(64), nullable=False)  # Current HMAC-SHA256 or legacy SHA-256 digest
     key_prefix = Column(String(12), nullable=False)  # First 8 chars for identification
     name = Column(String(255), nullable=False)
     description = Column(Text, nullable=True)
@@ -312,11 +354,11 @@ class DatabaseAPIKeyStore:
 
     @staticmethod
     def _hash_key(raw_key: str) -> str:
-        """Hash an API key using SHA-256.
+        """Hash an API key using the current storage digest.
         
         The raw key is never stored - only this hash.
         """
-        return hashlib.sha256(raw_key.encode()).hexdigest()
+        return hash_api_key(raw_key)
 
     @staticmethod
     def _generate_key_id() -> str:
@@ -493,7 +535,8 @@ class DatabaseAPIKeyStore:
         except ValueError:
             return None
 
-        key_hash = self._hash_key(raw_key)
+        key_hashes = api_key_hash_candidates(raw_key)
+        current_hash = key_hashes[0]
 
         async with self._session() as session:
             result = await session.execute(
@@ -505,8 +548,9 @@ class DatabaseAPIKeyStore:
                 logger.warning("api_key_not_found", key_id=key_id)
                 return None
 
-            # Constant-time hash comparison
-            if not hmac.compare_digest(key_hash, api_key.key_hash):
+            # Constant-time hash comparison against current and legacy hashes.
+            stored_hash = api_key.key_hash or ""
+            if not any(hmac.compare_digest(candidate, stored_hash) for candidate in key_hashes):
                 logger.warning("api_key_hash_mismatch", key_id=key_id)
                 return None
 
@@ -524,6 +568,10 @@ class DatabaseAPIKeyStore:
             if api_key.revoked_at:
                 logger.warning("api_key_revoked", key_id=key_id)
                 return None
+
+            if not hmac.compare_digest(stored_hash, current_hash):
+                api_key.key_hash = current_hash
+                logger.info("api_key_hash_upgraded", key_id=key_id)
 
             # Update usage stats
             api_key.last_used_at = datetime.now(timezone.utc)

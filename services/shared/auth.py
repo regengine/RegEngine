@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
 import hmac
 import secrets
 import threading
@@ -223,8 +222,10 @@ class APIKeyStore:
 
     @staticmethod
     def _hash_key(raw_key: str) -> str:
-        """Hash an API key using SHA256."""
-        return hashlib.sha256(raw_key.encode()).hexdigest()
+        """Hash an API key using the shared storage digest."""
+        from shared.api_key_store import hash_api_key
+
+        return hash_api_key(raw_key)
 
 
 from shared.api_key_store import DatabaseAPIKeyStore, get_db_key_store, APIKeyResponse

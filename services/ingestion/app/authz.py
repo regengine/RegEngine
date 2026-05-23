@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
 import hmac
 import importlib
 import logging
@@ -16,9 +15,9 @@ from typing import Optional
 
 from fastapi import Depends, Header, HTTPException, Request, Response
 from pydantic import BaseModel, Field
-from sqlalchemy import text
+from sqlalchemy import bindparam, text
 
-from shared.api_key_store import APIKeyResponse
+from shared.api_key_store import APIKeyResponse, api_key_hash_candidates
 from shared.auth import APIKey, require_api_key
 from shared.permissions import has_permission
 from shared.tenant_rate_limiting import consume_tenant_rate_limit, rate_limit_reset_epoch
@@ -273,19 +272,17 @@ def _lookup_scoped_key_from_db(raw_api_key: str) -> Optional[IngestionPrincipal]
     try:
         from shared.database import SessionLocal
 
-        key_hash = hashlib.sha256(raw_api_key.encode("utf-8")).hexdigest()
+        key_hashes = api_key_hash_candidates(raw_api_key)
         db_session = SessionLocal()
-        row = db_session.execute(
-            text(
-                """
-                SELECT key_id, tenant_id, scopes, enabled, expires_at
-                FROM api_keys
-                WHERE key_hash = :key_hash
-                LIMIT 1
-                """
-            ),
-            {"key_hash": key_hash},
-        ).fetchone()
+        stmt = text(
+            """
+            SELECT key_id, tenant_id, scopes, enabled, expires_at
+            FROM api_keys
+            WHERE key_hash IN :key_hashes
+            LIMIT 1
+            """
+        ).bindparams(bindparam("key_hashes", expanding=True))
+        row = db_session.execute(stmt, {"key_hashes": key_hashes}).fetchone()
         if not row:
             return None
 
