@@ -1,4 +1,5 @@
 import importlib
+import inspect
 import json
 import os
 import subprocess
@@ -13,6 +14,26 @@ def test_consolidated_backend_imports():
     module = importlib.import_module("server.main")
 
     assert hasattr(module, "app")
+
+
+def test_lifespan_verifies_admin_and_api_key_bases_at_startup():
+    """Phase 2 wiring contract.
+
+    ``server.main.lifespan`` runs ``verify_orm_db_type_alignment`` for every
+    Base on the production hot path. The function itself is unit-tested
+    elsewhere; this test asserts the call sites stay wired up so that
+    silently dropping an ORM surface from the startup drift check shows
+    up as a failing test, not a prod 500 storm.
+    """
+    main = importlib.import_module("server.main")
+    src = inspect.getsource(main.lifespan)
+
+    # Both call sites must be present and use the expected (engine, base)
+    # pairs. If a future refactor renames a binding, update this test
+    # along with the new wiring — the criteria for adding a Base here
+    # are documented inline in server/main.py.
+    assert "verify_orm_db_type_alignment(_admin_engine, _admin_base)" in src
+    assert "verify_orm_db_type_alignment(_shared_engine, _api_key_base)" in src
 
 
 def test_railway_cloud_import_disables_public_docs():

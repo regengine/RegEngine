@@ -1,6 +1,6 @@
 # RegEngine Architecture
 
-Last verified: 2026-05-06
+Last verified: 2026-05-23
 
 ## Deployment Model
 
@@ -85,21 +85,19 @@ application is validated in its own workflow.
 
 ### Large Modules
 
-Representative source modules above 1,000 lines as of 2026-05-06:
+Representative source modules above 1,000 lines as of 2026-05-23:
 
 | File | Lines | Area | Likely split direction |
 | --- | ---: | --- | --- |
-| `services/shared/cte_persistence/core.py` | 2041 | shared persistence | extract query builder, batch ops, and verification helpers |
+| `services/shared/cte_persistence/core.py` | 2067 | shared persistence | extract query builder, batch ops, and verification helpers |
 | `services/shared/identity_resolution/service.py` | 1987 | shared identity resolution | extract matcher, scorer, and orchestration paths |
-| `services/nlp/app/consumer.py` | 1875 | NLP ingestion worker | separate consumer loop, auth, DLQ, and routing concerns |
-| `services/nlp/app/extractors/fsma_extractor.py` | 1664 | NLP extraction | split entity resolution, classifiers, and mapping logic |
-| `services/ingestion/app/webhook_router_v2.py` | 1476 | ingestion API | extract auth, validation, persistence, and response shaping |
+| `services/nlp/app/consumer.py` | 1905 | NLP ingestion worker | separate consumer loop, auth, DLQ, and routing concerns |
+| `services/ingestion/app/webhook_router_v2.py` | 1757 | ingestion API | extract auth, validation, persistence, and response shaping |
+| `services/nlp/app/extractors/fsma_extractor.py` | 1670 | NLP extraction | split entity resolution, classifiers, and mapping logic |
 | `services/ingestion/app/fda_export/router.py` | 1294 | export API | separate query, bundle assembly, and format writers |
-| `services/scheduler/main.py` | 1234 | scheduler runtime | split job registration, health, and retention flows |
-| `kernel/reporting/fsma_engine.py` | 1198 | reporting engine | separate scoring, report assembly, and formatting |
+| `services/scheduler/main.py` | 1290 | scheduler runtime | split job registration, health, and retention flows |
 | `services/shared/canonical_persistence/writer.py` | 1155 | shared persistence | extract write-path helpers and transaction orchestration |
 | `services/shared/api_key_store.py` | 1077 | shared auth | split storage adapters from validation helpers |
-| `services/admin/app/metrics.py` | 1053 | admin observability | separate metric definitions from collectors/endpoints |
-| `services/ingestion/app/routes.py` | 1050 | ingestion API | split non-core routes into narrower router modules |
+| `services/admin/app/metrics.py` | 1058 | admin observability | separate metric definitions from collectors/endpoints |
 
-These are refactor candidates, not proof of broken behavior by themselves.
+These are refactor candidates, not proof of broken behavior by themselves. The 2026-05-06 list also included `kernel/reporting/fsma_engine.py` (since removed) and `services/ingestion/app/routes.py` (since split — now ~100 lines).

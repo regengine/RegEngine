@@ -81,12 +81,26 @@ async def lifespan(app: FastAPI):
         logger.warning("admin_database_init_skipped", error=str(exc))
 
     # Fail before serving traffic if live Postgres drift would break
-    # tenant isolation or the tamper-evident audit hash chain.
-    from services.admin.app.database import _engine as _admin_engine
-    from services.admin.app.sqlalchemy_models import Base as _admin_base
+    # tenant isolation, the tamper-evident audit hash chain, or auth.
+    #
+    # Add a Base to this block only when (a) the table is read or
+    # mutated by the monolith in steady-state production traffic AND
+    # (b) its declared types are load-bearing for tenant isolation,
+    # audit integrity, or auth correctness. The check is cheap at
+    # startup and catches Alembic-vs-ORM drift that a text-only review
+    # cannot see (e.g. UUID column declared as String in the ORM).
     from shared.db_type_assertions import verify_orm_db_type_alignment
 
+    from services.admin.app.database import _engine as _admin_engine
+    from services.admin.app.sqlalchemy_models import Base as _admin_base
     verify_orm_db_type_alignment(_admin_engine, _admin_base)
+
+    # api_keys is the authentication surface for every per-tenant
+    # request. Drift here silently breaks key validation — much
+    # cheaper to fail startup than diagnose a prod 500 storm.
+    from shared.database import engine as _shared_engine
+    from shared.api_key_store import Base as _api_key_base
+    verify_orm_db_type_alignment(_shared_engine, _api_key_base)
 
     # Register integration connectors (best-effort)
     try:
