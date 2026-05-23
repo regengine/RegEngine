@@ -16,7 +16,16 @@ from shared.paths import ensure_shared_importable
 ensure_shared_importable()
 # ------------------------------
 
-from shared.env_validation import require_env
+from shared.env_validation import (
+    assert_legacy_entrypoint_not_in_production,
+    require_env,
+)
+
+# Production deploys must use server.main:app (the consolidated monolith,
+# per the repo-root Dockerfile). This file is a local-debug entrypoint
+# only — see docs/architecture/CONSOLIDATION.md.
+assert_legacy_entrypoint_not_in_production("nlp")
+
 require_env("DATABASE_URL")
 
 # Sentry error tracking (must be before app creation)
