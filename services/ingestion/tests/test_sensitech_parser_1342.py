@@ -68,7 +68,12 @@ def client(monkeypatch: pytest.MonkeyPatch, captured_payload: dict) -> TestClien
     app.dependency_overrides[_verify_api_key] = lambda: None
     install_tenant_context_override(app, default_tenant="tenant-sensitech-1")
 
-    async def _fake_ingest_events(payload: Any, x_regengine_api_key: Any = None) -> IngestResponse:
+    async def _fake_ingest_events(
+        payload: Any,
+        *,
+        principal_tenant_id: Any = None,
+        x_regengine_api_key: Any = None,
+    ) -> IngestResponse:
         captured_payload["payload"] = payload
         event = payload.events[0]
         return IngestResponse(

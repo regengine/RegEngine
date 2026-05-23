@@ -291,6 +291,7 @@ async def import_sensitech(
     payload = WebhookPayload(source="sensitech", events=events, tenant_id=ctx.tenant_id)
     ingestion_result = await ingest_events(
         payload,
+        principal_tenant_id=ctx.tenant_id,
         x_regengine_api_key=x_regengine_api_key,
     )
 
