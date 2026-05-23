@@ -38,6 +38,26 @@ class EnforcementMode:
     ALL = "all"
 
 
+# Manifest of the routes / persistence paths that respect the enforcement
+# mode by calling ``should_reject()`` on their evaluation summary. Adding
+# a new CTE-writing path is a deliberate decision — if the path should
+# block on rule violations under enforcement, wire ``should_reject()``
+# AND add the path here. The drift test in
+# ``services/shared/tests/test_rules_enforcement_manifest.py`` asserts
+# this list matches the actual call sites so a new ``should_reject()``
+# call without a manifest entry (or vice versa) fails CI.
+#
+# Per the project limitations note: rule failures are NOT universally
+# blocking. Enforcement is per-route opt-in by design — the manifest
+# documents the current contract so reviewers can see at a glance which
+# ingestion paths actually enforce.
+ENFORCEMENT_AWARE_CALL_SITES: tuple[str, ...] = (
+    "services/ingestion/app/webhook_compat.py",
+    "services/ingestion/app/epcis/persistence.py",
+    "services/ingestion/app/webhook_router_v2.py",
+)
+
+
 _VALID_MODES = frozenset({EnforcementMode.OFF, EnforcementMode.CTE_ONLY, EnforcementMode.ALL})
 
 
