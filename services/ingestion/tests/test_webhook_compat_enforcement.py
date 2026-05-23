@@ -240,6 +240,7 @@ class TestEnforceOff:
         sess, persist, cap = _install(monkeypatch, summary=_critical_summary())
         resp = asyncio.run(wc.ingest_events(
             payload=_make_payload([_make_event()]),
+            principal_tenant_id="t-enforce",
             x_regengine_api_key="k",
         ))
         assert resp.accepted == 1 and resp.rejected == 0
@@ -264,6 +265,7 @@ class TestEnforceCteOnly:
         sess, persist, cap = _install(monkeypatch, summary=_critical_summary())
         resp = asyncio.run(wc.ingest_events(
             payload=_make_payload([_make_event()]),
+            principal_tenant_id="t-enforce",
             x_regengine_api_key="k",
         ))
         assert resp.accepted == 0 and resp.rejected == 1
@@ -288,6 +290,7 @@ class TestEnforceCteOnly:
         sess, persist, cap = _install(monkeypatch, summary=_warning_only_summary())
         resp = asyncio.run(wc.ingest_events(
             payload=_make_payload([_make_event()]),
+            principal_tenant_id="t-enforce",
             x_regengine_api_key="k",
         ))
         assert resp.accepted == 1 and resp.rejected == 0
@@ -300,6 +303,7 @@ class TestEnforceCteOnly:
         sess, persist, cap = _install(monkeypatch, summary=_no_verdict_summary())
         resp = asyncio.run(wc.ingest_events(
             payload=_make_payload([_make_event()]),
+            principal_tenant_id="t-enforce",
             x_regengine_api_key="k",
         ))
         assert resp.accepted == 1 and resp.rejected == 0
@@ -309,6 +313,7 @@ class TestEnforceCteOnly:
         sess, persist, cap = _install(monkeypatch, summary=_compliant_summary())
         resp = asyncio.run(wc.ingest_events(
             payload=_make_payload([_make_event()]),
+            principal_tenant_id="t-enforce",
             x_regengine_api_key="k",
         ))
         assert resp.accepted == 1
@@ -331,6 +336,7 @@ class TestEnforceCteOnly:
         with pytest.raises(HTTPException) as exc:
             asyncio.run(wc.ingest_events(
                 payload=_make_payload([_make_event()]),
+                principal_tenant_id="t-enforce",
                 x_regengine_api_key="k",
             ))
         assert exc.value.status_code == 500
@@ -354,6 +360,7 @@ class TestEnforceAll:
         sess, persist, cap = _install(monkeypatch, summary=_warning_only_summary())
         resp = asyncio.run(wc.ingest_events(
             payload=_make_payload([_make_event()]),
+            principal_tenant_id="t-enforce",
             x_regengine_api_key="k",
         ))
         assert resp.accepted == 0 and resp.rejected == 1
@@ -365,6 +372,7 @@ class TestEnforceAll:
         sess, _, _ = _install(monkeypatch, summary=_compliant_summary())
         resp = asyncio.run(wc.ingest_events(
             payload=_make_payload([_make_event()]),
+            principal_tenant_id="t-enforce",
             x_regengine_api_key="k",
         ))
         assert resp.accepted == 1

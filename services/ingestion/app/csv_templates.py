@@ -600,7 +600,11 @@ async def ingest_csv(
         raise HTTPException(status_code=400, detail="CSV contained no data rows")
 
     payload = WebhookPayload(source=source, events=events, tenant_id=tenant_id)
-    response = await ingest_events(payload, x_regengine_api_key=x_regengine_api_key)
+    response = await ingest_events(
+        payload,
+        principal_tenant_id=tenant_id,
+        x_regengine_api_key=x_regengine_api_key,
+    )
 
     if parse_errors:
         from .webhook_models import EventResult

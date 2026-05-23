@@ -781,7 +781,7 @@ class TestSubmitSupplierData:
         self._seed_link()
         monkeypatch.setattr(sp, "_db_get_portal_link", lambda _pid: None)
 
-        async def _fake_ingest(payload):
+        async def _fake_ingest(payload, **_kwargs):
             return _make_ingest_response(accepted=1)
 
         monkeypatch.setattr(sp, "ingest_events", _fake_ingest)
@@ -800,7 +800,7 @@ class TestSubmitSupplierData:
         monkeypatch.setattr(sp, "_db_get_portal_link", lambda _pid: None)
         captured: dict = {}
 
-        async def _fake_ingest(payload):
+        async def _fake_ingest(payload, **_kwargs):
             captured["payload"] = payload
             return _make_ingest_response(accepted=1)
 
@@ -838,7 +838,7 @@ class TestSubmitSupplierData:
         self._seed_link()
         monkeypatch.setattr(sp, "_db_get_portal_link", lambda _pid: None)
 
-        async def _fake_ingest(payload):
+        async def _fake_ingest(payload, **_kwargs):
             return _make_ingest_response(
                 accepted=0, errors=["bad_tlc", "no_gln"]
             )
@@ -857,7 +857,7 @@ class TestSubmitSupplierData:
         self._seed_link()
         monkeypatch.setattr(sp, "_db_get_portal_link", lambda _pid: None)
 
-        async def _fake_ingest(payload):
+        async def _fake_ingest(payload, **_kwargs):
             return IngestResponse(accepted=0, rejected=1, total=1, events=[])
 
         monkeypatch.setattr(sp, "ingest_events", _fake_ingest)

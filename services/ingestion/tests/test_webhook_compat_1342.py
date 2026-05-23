@@ -339,47 +339,90 @@ class TestVerifyApiKeyDelegator:
 
 class TestPreLoopGates:
 
-    def test_missing_tenant_id_raises_value_error(self, monkeypatch):
+    def test_missing_principal_tenant_id_raises_permission_error(self, monkeypatch):
+        _install_stubs(monkeypatch)
+        payload = _make_payload([_make_event()], tenant_id="t-1")
+        with pytest.raises(PermissionError, match="principal_tenant_id"):
+            asyncio.run(wc.ingest_events(
+                payload=payload,
+                principal_tenant_id=None,
+                x_regengine_api_key="k",
+            ))
+
+    def test_empty_principal_tenant_id_also_raises_permission_error(self, monkeypatch):
+        _install_stubs(monkeypatch)
+        payload = _make_payload([_make_event()], tenant_id="t-1")
+        with pytest.raises(PermissionError, match="principal_tenant_id"):
+            asyncio.run(wc.ingest_events(
+                payload=payload,
+                principal_tenant_id="",
+                x_regengine_api_key="k",
+            ))
+
+    def test_missing_payload_tenant_id_raises_value_error(self, monkeypatch):
         _install_stubs(monkeypatch)
         payload = _make_payload([_make_event()], tenant_id=None)
-        with pytest.raises(ValueError, match="Tenant context required"):
-            asyncio.run(wc.ingest_events(payload=payload, x_regengine_api_key="k"))
+        with pytest.raises(ValueError, match="payload.tenant_id is required"):
+            asyncio.run(wc.ingest_events(
+                payload=payload,
+                principal_tenant_id="t-1",
+                x_regengine_api_key="k",
+            ))
 
-    def test_empty_tenant_id_also_raises(self, monkeypatch):
+    def test_empty_payload_tenant_id_also_raises_value_error(self, monkeypatch):
         _install_stubs(monkeypatch)
         payload = _make_payload([_make_event()], tenant_id="")
-        with pytest.raises(ValueError):
-            asyncio.run(wc.ingest_events(payload=payload, x_regengine_api_key="k"))
+        with pytest.raises(ValueError, match="payload.tenant_id is required"):
+            asyncio.run(wc.ingest_events(
+                payload=payload,
+                principal_tenant_id="t-1",
+                x_regengine_api_key="k",
+            ))
+
+    def test_payload_tenant_mismatch_raises_permission_error(self, monkeypatch):
+        """A forged payload.tenant_id must not be honored over the principal."""
+        _install_stubs(monkeypatch)
+        payload = _make_payload([_make_event()], tenant_id="evil-tenant")
+        with pytest.raises(PermissionError, match="does not match"):
+            asyncio.run(wc.ingest_events(
+                payload=payload,
+                principal_tenant_id="t-1",
+                x_regengine_api_key="k",
+            ))
 
     def test_validate_tenant_id_is_called(self, monkeypatch):
         _, _, cap = _install_stubs(monkeypatch)
         payload = _make_payload([], tenant_id="tenant-A")
-        asyncio.run(wc.ingest_events(payload=payload, x_regengine_api_key="k"))
+        asyncio.run(wc.ingest_events(payload=payload, principal_tenant_id=payload.tenant_id, x_regengine_api_key="k"))
         assert cap["validate_tenant_calls"] == ["tenant-A"]
 
     def test_rate_limit_called_with_tenant(self, monkeypatch):
         _, _, cap = _install_stubs(monkeypatch)
         payload = _make_payload([], tenant_id="t-1")
-        asyncio.run(wc.ingest_events(payload=payload, x_regengine_api_key="k"))
+        asyncio.run(wc.ingest_events(payload=payload, principal_tenant_id=payload.tenant_id, x_regengine_api_key="k"))
         assert cap["rate_limit_calls"] == ["t-1"]
 
     def test_api_key_forwarded_to_sync_verify(self, monkeypatch):
         _, _, cap = _install_stubs(monkeypatch)
         payload = _make_payload([], tenant_id="t")
-        asyncio.run(wc.ingest_events(payload=payload, x_regengine_api_key="api-xyz"))
+        asyncio.run(wc.ingest_events(
+            payload=payload,
+            principal_tenant_id=payload.tenant_id,
+            x_regengine_api_key="api-xyz",
+        ))
         assert cap["verify_calls"] == ["api-xyz"]
 
     def test_verify_failure_propagates(self, monkeypatch):
         _install_stubs(monkeypatch, verify_raises=PermissionError("bad key"))
         payload = _make_payload([_make_event()], tenant_id="t")
         with pytest.raises(PermissionError):
-            asyncio.run(wc.ingest_events(payload=payload, x_regengine_api_key="k"))
+            asyncio.run(wc.ingest_events(payload=payload, principal_tenant_id=payload.tenant_id, x_regengine_api_key="k"))
 
     def test_session_none_raises_runtime_error(self, monkeypatch):
         _install_stubs(monkeypatch, session_none=True)
         payload = _make_payload([_make_event()], tenant_id="t")
         with pytest.raises(RuntimeError, match="Database unavailable"):
-            asyncio.run(wc.ingest_events(payload=payload, x_regengine_api_key="k"))
+            asyncio.run(wc.ingest_events(payload=payload, principal_tenant_id=payload.tenant_id, x_regengine_api_key="k"))
 
     @pytest.mark.parametrize("exc", [
         ImportError("missing"),
@@ -390,7 +433,7 @@ class TestPreLoopGates:
         _, _, cap = _install_stubs(monkeypatch, cte_persistence_raises=exc)
         payload = _make_payload([_make_event()], tenant_id="t")
         with pytest.raises(RuntimeError, match="Database unavailable"):
-            asyncio.run(wc.ingest_events(payload=payload, x_regengine_api_key="k"))
+            asyncio.run(wc.ingest_events(payload=payload, principal_tenant_id=payload.tenant_id, x_regengine_api_key="k"))
         # Generator drained even after CTEPersistence failure
         assert cap.get("gen_cleanup") == 1
 
@@ -405,7 +448,7 @@ class TestEventProcessing:
     def test_empty_events_list_returns_zero_tally(self, monkeypatch):
         _install_stubs(monkeypatch)
         payload = _make_payload([], tenant_id="t")
-        resp = asyncio.run(wc.ingest_events(payload=payload, x_regengine_api_key="k"))
+        resp = asyncio.run(wc.ingest_events(payload=payload, principal_tenant_id=payload.tenant_id, x_regengine_api_key="k"))
         assert resp.accepted == 0
         assert resp.rejected == 0
         assert resp.total == 0
@@ -414,7 +457,7 @@ class TestEventProcessing:
     def test_happy_path_single_event_accepted(self, monkeypatch):
         sess, persist, cap = _install_stubs(monkeypatch)
         payload = _make_payload([_make_event(tlc="TLC-1")], tenant_id="t")
-        resp = asyncio.run(wc.ingest_events(payload=payload, x_regengine_api_key="k"))
+        resp = asyncio.run(wc.ingest_events(payload=payload, principal_tenant_id=payload.tenant_id, x_regengine_api_key="k"))
 
         assert resp.accepted == 1
         assert resp.rejected == 0
@@ -445,7 +488,7 @@ class TestEventProcessing:
     def test_non_compliant_summary_triggers_exception_queue(self, monkeypatch):
         _, _, cap = _install_stubs(monkeypatch, engine_compliant=False)
         payload = _make_payload([_make_event()], tenant_id="t-x")
-        asyncio.run(wc.ingest_events(payload=payload, x_regengine_api_key="k"))
+        asyncio.run(wc.ingest_events(payload=payload, principal_tenant_id=payload.tenant_id, x_regengine_api_key="k"))
         assert cap["exc_queue_calls"] == ["t-x"]
 
     def test_duplicate_in_batch_rejected(self, monkeypatch):
@@ -455,7 +498,7 @@ class TestEventProcessing:
         e2 = _make_event(tlc="TLC-DUP", timestamp="2026-01-01T00:00:00Z",
                          location_name="X")
         payload = _make_payload([e1, e2], tenant_id="t")
-        resp = asyncio.run(wc.ingest_events(payload=payload, x_regengine_api_key="k"))
+        resp = asyncio.run(wc.ingest_events(payload=payload, principal_tenant_id=payload.tenant_id, x_regengine_api_key="k"))
         assert resp.accepted == 1
         assert resp.rejected == 1
         assert resp.events[0].status == "accepted"
@@ -472,7 +515,7 @@ class TestEventProcessing:
         e2 = _make_event(tlc="TLC-A", location_gln="9876543210987",
                          location_name=None)
         payload = _make_payload([e1, e2], tenant_id="t")
-        resp = asyncio.run(wc.ingest_events(payload=payload, x_regengine_api_key="k"))
+        resp = asyncio.run(wc.ingest_events(payload=payload, principal_tenant_id=payload.tenant_id, x_regengine_api_key="k"))
         assert resp.accepted == 2
         assert resp.rejected == 0
         assert len(persist.store_calls) == 2
@@ -484,7 +527,7 @@ class TestEventProcessing:
         e1 = _make_event(tlc="TLC-Z", location_gln=None, location_name=None)
         e2 = _make_event(tlc="TLC-Z", location_gln=None, location_name=None)
         payload = _make_payload([e1, e2], tenant_id="t")
-        resp = asyncio.run(wc.ingest_events(payload=payload, x_regengine_api_key="k"))
+        resp = asyncio.run(wc.ingest_events(payload=payload, principal_tenant_id=payload.tenant_id, x_regengine_api_key="k"))
         assert resp.accepted == 1
         assert resp.rejected == 1
         assert len(persist.store_calls) == 1
@@ -496,7 +539,7 @@ class TestEventProcessing:
             monkeypatch, validate_event_kdes=lambda e: errors
         )
         payload = _make_payload([_make_event()], tenant_id="t")
-        resp = asyncio.run(wc.ingest_events(payload=payload, x_regengine_api_key="k"))
+        resp = asyncio.run(wc.ingest_events(payload=payload, principal_tenant_id=payload.tenant_id, x_regengine_api_key="k"))
         assert resp.accepted == 0
         assert resp.rejected == 1
         assert resp.events[0].status == "rejected"
@@ -511,7 +554,7 @@ class TestEventProcessing:
         persist.store_raises = exc_cls("boom")
         _, _, _ = _install_stubs(monkeypatch, session=sess, persistence=persist)
         payload = _make_payload([_make_event()], tenant_id="t")
-        resp = asyncio.run(wc.ingest_events(payload=payload, x_regengine_api_key="k"))
+        resp = asyncio.run(wc.ingest_events(payload=payload, principal_tenant_id=payload.tenant_id, x_regengine_api_key="k"))
         assert resp.accepted == 0
         assert resp.rejected == 1
         assert resp.events[0].status == "rejected"
@@ -549,7 +592,7 @@ class TestEventProcessing:
         monkeypatch.setattr(cps_mod, "CanonicalEventStore", _FailingStore)
 
         payload = _make_payload([_make_event()], tenant_id="t")
-        resp = asyncio.run(wc.ingest_events(payload=payload, x_regengine_api_key="k"))
+        resp = asyncio.run(wc.ingest_events(payload=payload, principal_tenant_id=payload.tenant_id, x_regengine_api_key="k"))
 
         assert resp.accepted == 1
         assert resp.rejected == 0
@@ -578,7 +621,7 @@ class TestTopLevelExceptionAndCleanup:
         _, _, cap = _install_stubs(monkeypatch, session=sess)
         payload = _make_payload([_make_event()], tenant_id="t")
         with pytest.raises(KeyError):
-            asyncio.run(wc.ingest_events(payload=payload, x_regengine_api_key="k"))
+            asyncio.run(wc.ingest_events(payload=payload, principal_tenant_id=payload.tenant_id, x_regengine_api_key="k"))
         assert sess.rollback_count == 1
         # Generator still drained in finally
         assert cap.get("gen_cleanup") == 1
@@ -586,5 +629,5 @@ class TestTopLevelExceptionAndCleanup:
     def test_generator_drained_on_happy_path(self, monkeypatch):
         _, _, cap = _install_stubs(monkeypatch)
         payload = _make_payload([_make_event()], tenant_id="t")
-        asyncio.run(wc.ingest_events(payload=payload, x_regengine_api_key="k"))
+        asyncio.run(wc.ingest_events(payload=payload, principal_tenant_id=payload.tenant_id, x_regengine_api_key="k"))
         assert cap["gen_cleanup"] == 1
