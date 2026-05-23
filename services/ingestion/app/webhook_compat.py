@@ -74,19 +74,42 @@ async def require_tenant_context(
 
 async def ingest_events(
     payload: WebhookPayload,
+    *,
+    principal_tenant_id: str,
     x_regengine_api_key: Optional[str] = None,
 ) -> IngestResponse:
-    """Perform ingestion outside of HTTP/FastAPI context.
+    """Internal ingestion helper — not an HTTP route.
 
-    Unlike the v2 router endpoint, this function manages its own DB
-    session and does not rely on FastAPI dependency injection.
+    Callers must derive ``principal_tenant_id`` from an authenticated
+    principal (typically ``resolve_principal_tenant_id`` in a router
+    that has already resolved a verified ``APIKey`` / ``APIKeyResponse``).
+    Without a principal-derived tenant this helper has no request
+    context to fall back on and would otherwise trust whatever
+    ``tenant_id`` the payload carries — see the "internal helper
+    requires tenant-bearing payload" limitation in the project README.
+
+    The helper rejects calls where the payload-supplied tenant is
+    absent or disagrees with the authenticated principal, so a caller
+    cannot forge cross-tenant writes even by accident.
     """
-    # Verify the API key using the sync helper (no Request object needed)
+    if not principal_tenant_id:
+        raise PermissionError(
+            "ingest_events requires principal_tenant_id from authenticated context"
+        )
+
     _verify_api_key_sync(x_regengine_api_key=x_regengine_api_key)
 
-    tenant_id = payload.tenant_id
-    if not tenant_id:
-        raise ValueError("Tenant context required — payload must include tenant_id")
+    payload_tenant_id = payload.tenant_id
+    if not payload_tenant_id:
+        raise ValueError(
+            "payload.tenant_id is required for symmetric verification with principal_tenant_id"
+        )
+    if payload_tenant_id != principal_tenant_id:
+        raise PermissionError(
+            "payload.tenant_id does not match authenticated principal"
+        )
+
+    tenant_id = principal_tenant_id
 
     from app.tenant_validation import validate_tenant_id
     validate_tenant_id(tenant_id)

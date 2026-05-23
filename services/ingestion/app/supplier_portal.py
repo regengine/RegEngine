@@ -788,13 +788,18 @@ async def submit_supplier_data(
         kdes=kdes,
     )
 
-    # Ingest into customer's tenant
+    # Ingest into customer's tenant. The portal link record IS the
+    # authenticated context here — the supplier's identity is verified
+    # via the portal token, and the link binds that token to exactly
+    # one customer tenant. Passing link["tenant_id"] as principal makes
+    # the symmetric verification trivially pass while keeping the
+    # contract enforceable for any future caller.
     payload = WebhookPayload(
         source="supplier_portal",
         events=[event],
         tenant_id=link["tenant_id"],
     )
-    result = await ingest_events(payload)
+    result = await ingest_events(payload, principal_tenant_id=link["tenant_id"])
 
     submitted_at = datetime.now(timezone.utc).isoformat()
 
