@@ -544,6 +544,7 @@ async def ingest_edi_856(
     )
     ingestion_result = await ingest_events(
         payload,
+        principal_tenant_id=sender_tenant_id,
         x_regengine_api_key=x_regengine_api_key,
     )
 
@@ -894,6 +895,7 @@ async def ingest_edi_document(
     )
     ingestion_result = await ingest_events(
         payload,
+        principal_tenant_id=sender_tenant_id,
         x_regengine_api_key=x_regengine_api_key,
     )
 
