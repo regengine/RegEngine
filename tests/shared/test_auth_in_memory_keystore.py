@@ -37,6 +37,7 @@ from __future__ import annotations
 
 import concurrent.futures
 import hashlib
+import hmac
 import threading
 from datetime import datetime, timedelta, timezone
 from typing import Tuple
@@ -301,6 +302,15 @@ class TestHashKey:
 
     def test_matches_sha256(self):
         expected = hashlib.sha256(b"input").hexdigest()
+        assert APIKeyStore._hash_key("input") == expected
+
+    def test_matches_hmac_sha256_with_server_side_pepper(self, monkeypatch):
+        monkeypatch.setenv("REGENGINE_API_KEY_HASH_PEPPER", "pepper-value")
+        expected = hmac.new(
+            b"pepper-value",
+            b"input",
+            hashlib.sha256,
+        ).hexdigest()
         assert APIKeyStore._hash_key("input") == expected
 
     def test_distinct_inputs_distinct_hashes(self):

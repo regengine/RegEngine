@@ -23,7 +23,6 @@ Tracks GitHub issue #1342.
 
 from __future__ import annotations
 
-import hashlib
 from unittest.mock import MagicMock
 
 import pytest
@@ -31,6 +30,7 @@ from fastapi import HTTPException
 
 from app.shared import tenant_resolution
 from app.shared.tenant_resolution import resolve_principal_tenant_id, resolve_tenant_id
+from shared.api_key_store import api_key_hash_candidates
 
 
 # ===========================================================================
@@ -169,10 +169,10 @@ class TestApiKeyLookupHappyPath:
         )
         assert out == "tenant-xyz"
         assert db.closed is True
-        # The query is parameterized and receives only the SHA-256 digest;
+        # The query is parameterized and receives only API-key digests;
         # the raw key is neither interpolated nor sent to the database.
         assert db.executed[0]["params"] == {
-            "key_hash": hashlib.sha256(b"secret-key").hexdigest()
+            "key_hashes": api_key_hash_candidates("secret-key")
         }
         sql = db.executed[0]["statement"]
         assert "api_keys" in sql

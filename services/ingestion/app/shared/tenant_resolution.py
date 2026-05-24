@@ -6,13 +6,13 @@ Replaces duplicate implementations in edi_ingestion, epcis_ingestion, and exchan
 
 from __future__ import annotations
 
-import hashlib
 import logging
 from typing import Optional
 
 from fastapi import HTTPException
-from sqlalchemy import text
+from sqlalchemy import bindparam, text
 
+from shared.api_key_store import api_key_hash_candidates
 from shared.database import get_db_safe
 
 logger = logging.getLogger(__name__)
@@ -46,17 +46,17 @@ def _lookup_api_key_tenant_id(x_regengine_api_key: Optional[str]) -> Optional[st
 
     db = get_db_safe()
     try:
-        key_hash = hashlib.sha256(raw_api_key.encode("utf-8")).hexdigest()
+        key_hashes = api_key_hash_candidates(raw_api_key)
         row = db.execute(
             text(
                 """
                 SELECT tenant_id
                 FROM api_keys
-                WHERE key_hash = :key_hash
+                WHERE key_hash IN :key_hashes
                 LIMIT 1
                 """
-            ),
-            {"key_hash": key_hash},
+            ).bindparams(bindparam("key_hashes", expanding=True)),
+            {"key_hashes": key_hashes},
         ).fetchone()
         if row and row[0]:
             return str(row[0]).strip()

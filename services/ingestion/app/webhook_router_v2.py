@@ -37,6 +37,7 @@ from .config import get_settings
 from .tenant_validation import validate_tenant_id
 from shared.funnel_events import emit_funnel_event
 from shared.idempotency import IdempotencyDependency
+from shared.api_key_store import api_key_hash_candidates
 from shared.tenant_rate_limiting import consume_tenant_rate_limit, rate_limit_reset_epoch
 from shared.tenant_context import resolve_tenant_context
 from .webhook_models import (
@@ -1176,14 +1177,18 @@ def _lookup_tenant_id_for_api_key(raw_api_key: str) -> Optional[str]:
     """Best-effort legacy tenant lookup for callers without principal tenant context."""
     try:
         from shared.database import SessionLocal
+        from sqlalchemy import bindparam as _bindparam
         from sqlalchemy import text as _text
 
-        key_hash = hashlib.sha256(raw_api_key.encode("utf-8")).hexdigest()
+        key_hashes = api_key_hash_candidates(raw_api_key)
         _db = SessionLocal()
         try:
+            stmt = _text(
+                "SELECT tenant_id FROM api_keys WHERE key_hash IN :key_hashes LIMIT 1"
+            ).bindparams(_bindparam("key_hashes", expanding=True))
             _row = _db.execute(
-                _text("SELECT tenant_id FROM api_keys WHERE key_hash = :key_hash LIMIT 1"),
-                {"key_hash": key_hash},
+                stmt,
+                {"key_hashes": key_hashes},
             ).fetchone()
             if _row and _row[0]:
                 return str(_row[0])

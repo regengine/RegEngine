@@ -6,6 +6,8 @@ Production uses PostgreSQL.
 """
 
 import asyncio
+import hashlib
+import hmac
 from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -134,6 +136,37 @@ class TestKeyGeneration:
         assert len(key_hash) == 64
         assert all(c in "0123456789abcdef" for c in key_hash)
 
+    def test_hash_key_uses_hmac_sha256_when_pepper_configured(self, monkeypatch):
+        """Server-side pepper switches storage to HMAC-SHA256."""
+        from shared.api_key_store import DatabaseAPIKeyStore
+
+        raw_key = "rge_test.secret"
+        monkeypatch.setenv("REGENGINE_API_KEY_HASH_PEPPER", "pepper-value")
+
+        expected = hmac.new(
+            b"pepper-value",
+            raw_key.encode("utf-8"),
+            hashlib.sha256,
+        ).hexdigest()
+
+        assert DatabaseAPIKeyStore._hash_key(raw_key) == expected
+        assert DatabaseAPIKeyStore._hash_key(raw_key) != hashlib.sha256(
+            raw_key.encode("utf-8")
+        ).hexdigest()
+
+    def test_hash_candidates_include_legacy_when_peppered(self, monkeypatch):
+        """Validation can accept legacy rows long enough to migrate them."""
+        from shared.api_key_store import api_key_hash_candidates, legacy_hash_api_key
+
+        raw_key = "rge_test.secret"
+        monkeypatch.setenv("REGENGINE_API_KEY_HASH_PEPPER", "pepper-value")
+
+        candidates = api_key_hash_candidates(raw_key)
+
+        assert len(candidates) == 2
+        assert candidates[1] == legacy_hash_api_key(raw_key)
+        assert candidates[0] != candidates[1]
+
 
 class TestDatabaseAPIKeyStoreInit:
     """Test store initialization."""
@@ -249,6 +282,101 @@ class TestValidation:
         store = DatabaseAPIKeyStore(database_url=TEST_DATABASE_URL)
         result = await store.validate_key("rge_noseparator")
         assert result is None
+
+    @pytest.mark.asyncio
+    async def test_validate_accepts_and_migrates_legacy_hash_when_peppered(self, monkeypatch):
+        """Legacy SHA-256 rows still validate, then upgrade to peppered HMAC."""
+        from shared.api_key_store import (
+            APIKeyModel,
+            DatabaseAPIKeyStore,
+            hash_api_key,
+            legacy_hash_api_key,
+        )
+
+        raw_key = "rge_live_legacy.secret"
+        key_id = raw_key.split(".", 1)[0]
+        monkeypatch.setenv("REGENGINE_API_KEY_HASH_PEPPER", "pepper-value")
+
+        model = APIKeyModel(
+            key_id=key_id,
+            key_hash=legacy_hash_api_key(raw_key),
+            key_prefix=raw_key[:12],
+            name="Legacy Key",
+            tenant_id="00000000-0000-0000-0000-000000000000",
+            allowed_jurisdictions=["US"],
+            scopes=["read"],
+            rate_limit_per_minute=60,
+            rate_limit_per_hour=1000,
+            rate_limit_per_day=10000,
+            enabled=True,
+            created_at=datetime.now(timezone.utc),
+            total_requests=0,
+        )
+
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none = MagicMock(return_value=model)
+        mock_session = AsyncMock()
+        mock_session.execute = AsyncMock(return_value=mock_result)
+        mock_session.flush = AsyncMock()
+        mock_session.commit = AsyncMock()
+        mock_session.rollback = AsyncMock()
+        mock_session.close = AsyncMock()
+
+        store = DatabaseAPIKeyStore(database_url=TEST_DATABASE_URL)
+        with patch.object(store, "_session") as mock_ctx:
+            mock_ctx.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+            mock_ctx.return_value.__aexit__ = AsyncMock(return_value=None)
+
+            result = await store.validate_key(raw_key)
+
+        assert result is not None
+        assert result.key_id == key_id
+        assert model.key_hash == hash_api_key(raw_key)
+        assert model.total_requests == 1
+
+    @pytest.mark.asyncio
+    async def test_validate_rejects_forged_secret_against_legacy_hash_when_peppered(self, monkeypatch):
+        """A leaked key_id plus wrong secret must not match legacy fallback."""
+        from shared.api_key_store import (
+            APIKeyModel,
+            DatabaseAPIKeyStore,
+            legacy_hash_api_key,
+        )
+
+        real_key = "rge_live_legacy.real-secret"
+        forged_key = "rge_live_legacy.forged-secret"
+        key_id = real_key.split(".", 1)[0]
+        monkeypatch.setenv("REGENGINE_API_KEY_HASH_PEPPER", "pepper-value")
+
+        model = APIKeyModel(
+            key_id=key_id,
+            key_hash=legacy_hash_api_key(real_key),
+            key_prefix=real_key[:12],
+            name="Legacy Key",
+            enabled=True,
+            created_at=datetime.now(timezone.utc),
+            total_requests=0,
+        )
+
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none = MagicMock(return_value=model)
+        mock_session = AsyncMock()
+        mock_session.execute = AsyncMock(return_value=mock_result)
+        mock_session.flush = AsyncMock()
+        mock_session.commit = AsyncMock()
+        mock_session.rollback = AsyncMock()
+        mock_session.close = AsyncMock()
+
+        store = DatabaseAPIKeyStore(database_url=TEST_DATABASE_URL)
+        with patch.object(store, "_session") as mock_ctx:
+            mock_ctx.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+            mock_ctx.return_value.__aexit__ = AsyncMock(return_value=None)
+
+            result = await store.validate_key(forged_key)
+
+        assert result is None
+        assert model.key_hash == legacy_hash_api_key(real_key)
+        assert model.total_requests == 0
 
 
 class TestRateLimiting:
