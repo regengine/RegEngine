@@ -57,6 +57,8 @@ One row per send. Don't overthink the schema — a Google Sheet with columns is 
 
 When a response comes in, file a project memory: `project_pilot_<company>_<date>.md`.
 
-## Honorarium / calendly
+## Calendly
 
-Per GTM doc §4: $100 USD honorarium for 30 minutes, paid via PayPal/Venmo after the call. Get the calendly link active before you send #1 — that's the only hard prereq.
+Have your Calendly active before you send #1 — that's the only hard prereq.
+
+**Honorarium update (2026-05-26):** the original "$100 per 30 min" framing in this section and in `fsma-204-go-to-market-2026-05.md` §7 has been **retracted** due to budget. New outreach uses "30 minutes of your input would shape what I build" with no honorarium attached. The 5 InMails sent on 2026-05-23 (Emily Alvarez, Lisa Phares, Dan Von Forell, David Reid, Kenia Magana) went out with the $100 framing — see `pilot-outreach-tracker.csv`. If any of those 5 books a call, decide at that moment whether to honor the $100 or clarify.

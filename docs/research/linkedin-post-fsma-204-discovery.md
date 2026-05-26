@@ -1,6 +1,6 @@
 # LinkedIn organic post — FSMA 204 discovery thread
 
-Last updated: 2026-05-23
+Last updated: 2026-05-26
 
 300-word post Christopher posts from his own LinkedIn. Frames the
 problem, signals he's listening (not selling), invites DMs. Organic =
@@ -46,10 +46,9 @@ patterns keep showing up:
 So I'm building something focused: just the CTE/KDE capture +
 24-hour FDA export, priced and shaped for mid-market.
 
-I'm in paid discovery — $100 for 30 minutes if you're a QA
-manager, FSO, or compliance lead at a processor or FLBR and
-want to talk through your current setup. Not selling. Not
-demoing. Just listening, and writing you a check.
+I'm in discovery — 30 minutes of your input would shape what I
+build, if you're a QA manager, FSO, or compliance lead at a
+processor or FLBR. Not selling. Not demoing. Just listening.
 
 DM me or grab a slot: https://calendly.com/regengine/meet-and-greet
 
@@ -69,8 +68,8 @@ DM me or grab a slot: https://calendly.com/regengine/meet-and-greet
 - **Reply to your own first comment within 30 min** with one of:
   - A specific stat (e.g. "FDA's own RFI in 2024 said 73% of small/mid
     processors aren't ready yet")
-  - A concrete pain point you've heard verbatim from one of the 3 InMails
-    sent tonight (only if a response comes back)
+  - A concrete pain point you've heard verbatim from one of the 5 InMails
+    sent on 2026-05-23 (only if a response comes back)
 - **Tag nobody.** Tagging large accounts looks spammy and reduces reach.
 - **Don't link out in the post body.** LinkedIn de-prioritizes outbound
   links. Calendly link in body is fine because it's part of the ask, but
@@ -81,3 +80,11 @@ DM me or grab a slot: https://calendly.com/regengine/meet-and-greet
 - Don't re-post same content. After 2 weeks, write a new post with the
   *findings* from the discovery calls (still no selling) — that's the
   flywheel.
+
+## Honorarium status
+
+There is **no honorarium** in this post or any current outreach. Earlier
+session draft mentioned "$100 for 30 minutes" — that framing was
+retracted on 2026-05-26 due to budget. All new outreach uses
+"30 minutes of your input would shape what I build" with no payment
+or offer attached.
