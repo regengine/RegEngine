@@ -9,8 +9,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
-import { jwtVerify } from 'jose';
-import { getVerificationKeys } from './jwt-keys';
+import { decodeRegEngineClaims, extractRegEngineTenantId } from './jwt-claims';
 import { getServerServiceURL } from './api-config';
 
 // ---------------------------------------------------------------------------
@@ -209,9 +208,19 @@ export function hasRealCallerCredential(request: NextRequest): boolean {
 }
 
 export function hasSupabaseSessionCookies(request: NextRequest): boolean {
-  return request.cookies
-    .getAll()
-    .some((cookie) => cookie.name.startsWith('sb-'));
+  // A real Supabase session is the `sb-<project>-auth-token` cookie (and its
+  // chunked `.0` / `.1` variants when the payload is large). The PKCE flow
+  // also writes a transient `sb-<project>-auth-token-code-verifier` cookie
+  // that is NOT a session — it's just the verifier for an in-flight OAuth
+  // exchange and can outlive the flow if the user navigates away. Matching
+  // it as a session caused authenticated RegEngine sessions to 401 at the
+  // proxy when supabase.auth.getUser() returned no user.
+  return request.cookies.getAll().some((cookie) => {
+    if (!cookie.name.startsWith('sb-')) return false;
+    if (!cookie.name.includes('-auth-token')) return false;
+    if (cookie.name.endsWith('-code-verifier')) return false;
+    return true;
+  });
 }
 
 export function hasAdminCapability(request: NextRequest): boolean {
@@ -329,7 +338,12 @@ export async function validateProxySession(
 ): Promise<NextResponse | null> {
   const regengineToken = request.cookies.get('re_access_token')?.value;
   if (isUsableCallerCredential(regengineToken)) {
-    const tokenPayload = await verifyRegEngineProxyToken(regengineToken);
+    // Decode-only check — the backend (services/admin) owns JWTKeyRegistry
+    // and is the authoritative verifier. We reject malformed/expired tokens
+    // and obvious iss/aud mismatches up front, then compare the JWT's
+    // tenant_id claim against the re_tenant_id cookie for defense-in-depth.
+    // Signature verification happens at the backend boundary.
+    const tokenPayload = decodeRegEngineClaims(regengineToken);
     if (!tokenPayload) {
       return NextResponse.json(
         { error: 'Session expired or invalid — please log in again' },
@@ -337,7 +351,7 @@ export async function validateProxySession(
       );
     }
 
-    const tokenTenantId = extractJwtTenantId(tokenPayload);
+    const tokenTenantId = extractRegEngineTenantId(tokenPayload);
     const cookieTenantId = request.cookies.get('re_tenant_id')?.value;
     if (tokenTenantId && cookieTenantId && tokenTenantId !== cookieTenantId) {
       return NextResponse.json(
@@ -345,6 +359,12 @@ export async function validateProxySession(
         { status: 403 },
       );
     }
+
+    // The RegEngine JWT is an authoritative caller credential. Don't fall
+    // through to the Supabase check — stale `sb-*` cookies (e.g. leftover
+    // PKCE `-code-verifier`) would otherwise fail Supabase validation and
+    // 401 a request that already authenticated successfully.
+    return null;
   }
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -417,43 +437,6 @@ export async function validateProxySession(
   }
 
   return null;
-}
-
-async function verifyRegEngineProxyToken(token: string): Promise<Record<string, unknown> | null> {
-  const keys = getVerificationKeys();
-  if (keys.length === 0) {
-    console.error('[proxy] No JWT verification keys configured for RegEngine session validation');
-    return null;
-  }
-
-  for (const key of keys) {
-    try {
-      const { payload } = await jwtVerify(token, key.secret, {
-        algorithms: ['HS256'],
-      });
-      if (isRegEngineSessionPayload(payload as Record<string, unknown>)) {
-        return payload as Record<string, unknown>;
-      }
-      return null;
-    } catch {
-      // Try the next configured key during rotation.
-    }
-  }
-  return null;
-}
-
-function extractJwtTenantId(payload: Record<string, unknown>): string | null {
-  const value = payload.tenant_id ?? payload.tid;
-  return typeof value === 'string' && value.length > 0 ? value : null;
-}
-
-function isRegEngineSessionPayload(payload: Record<string, unknown>): boolean {
-  const audience = payload.aud;
-  if (typeof audience === 'string' && audience !== 'regengine-api') return false;
-  if (Array.isArray(audience) && !audience.includes('regengine-api')) return false;
-  const issuer = payload.iss;
-  if (typeof issuer === 'string' && issuer !== 'regengine-admin') return false;
-  return true;
 }
 
 // ---------------------------------------------------------------------------

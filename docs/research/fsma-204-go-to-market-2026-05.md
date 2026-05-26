@@ -304,24 +304,28 @@ Top 3 unmet needs by mention count:
 ### LinkedIn DM #1 — ICP #1 (Mid-Market QA Manager)
 
 ```
-Subject: 30 minutes for $100 — your FSMA 204 prep at {{company}}
+Subject: 30 min on your FSMA 204 prep at {{company}}
 
 Hi {{first_name}} —
 
-I'm building a focused tool for FSMA 204 record-keeping at fresh-cut
-processors like {{company}}. Specifically the part where you have to
-hand FDA a sortable spreadsheet for all your {{ftl_category}} lots
-within 24 hours.
+I'm a solo founder building a focused tool for FSMA 204 record-keeping
+at fresh-cut processors like {{company}}. Specifically the part where
+you have to hand FDA a sortable spreadsheet for all your
+{{ftl_category}} lots within 24 hours when July 2028 hits.
 
-I'm not selling — I'm in discovery. I'd pay $100 for 30 minutes to
-hear how your team is approaching the July 2028 deadline today,
-what tools you're evaluating, and what the FoodLogiQ quote looked
-like.
+I'm in discovery — not selling. 30 minutes of your input would shape
+what I build: how your team is approaching the deadline today, what
+tools you're evaluating, what the FoodLogiQ quote looked like.
 
 Pick a slot if any of this resonates: [calendly link]
 
 — Christopher
 ```
+
+> **Honorarium retracted 2026-05-26.** Prior version of this template
+> offered $100 per 30 minutes; budget didn't support it. New version
+> above uses no honorarium. The 5 InMails sent 2026-05-23 went out
+> with the $100 framing — see `pilot-outreach-tracker.csv`.
 
 ### LinkedIn DM #2 — ICP #2 (FLBR / Importer)
 
@@ -336,10 +340,9 @@ seen a tool built specifically for that handoff. Trace Register
 treats you like a producer; FoodLogiQ doesn't model the customs
 handoff at all.
 
-I'm building one. Before I build the wrong thing, I'd pay $100
-(or 12 months free access on launch) for 30 minutes to learn how
-you handle the ASN/COI/BOL reconciliation today and what the
-broker software stack misses.
+I'm a solo founder building one. 30 minutes of your input on how
+you handle the ASN/COI/BOL reconciliation today and what the broker
+software stack misses would shape what I build.
 
 Slot here if interested: [calendly link]
 
@@ -349,22 +352,22 @@ Slot here if interested: [calendly link]
 ### Cold email template
 
 ```
-Subject: FSMA 204 prep at {{company}} — 30 min, $100
+Subject: FSMA 204 prep at {{company}} — 30 min?
 
 Hi {{first_name}},
 
 Brief one. I'm building a focused traceability tool for {{segment}}
 operators ahead of the July 2028 FSMA 204 deadline.
 
-Before I build, I'm running 15 paid discovery calls. The questions
+Before I build, I'm running 15 discovery calls. The questions
 are: (1) what does your team actually do today for CTE/KDE capture,
 (2) what tools have you evaluated, (3) what would you pay to make
 the 24-hour FDA spreadsheet a non-issue.
 
-I'll pay $100 (Amazon, Visa, your charity of choice) or offer 12
-months free access on launch — whichever you prefer.
+30 minutes of your input would shape what I build. No selling,
+no demo — just your candor on the questions above.
 
-30 minutes, your time, your candor. {{calendar link}}
+{{calendar link}}
 
 Thank you,
 Christopher Sellers
@@ -374,15 +377,14 @@ RegEngine
 ### r/foodsafety / FSQA Slack post
 
 ```
-Title: Solo founder building an FSMA 204 tool — paid 30-min discovery
+Title: Solo founder building an FSMA 204 tool — 30-min discovery
        calls with QA / Compliance leads
 
 I'm building a focused FSMA 204 traceability tool aimed at fresh-cut
 processors and small importers in the gap between FoodLogiQ pricing
 and ReposiTrak's retailer-driven pull.
 
-Running 15 paid discovery calls. $100 per 30-min call (or free
-12-month access on launch — your pick). Looking for:
+Running 15 discovery calls. Looking for:
 
 - QA / Compliance / Food Safety leads at fresh-cut produce, leafy
   greens, tomato, herbs, soft cheese, smoked finfish, or RTE deli
@@ -417,9 +419,10 @@ Transformation event. I export. Done. 24 hours becomes 24 seconds.
 That's it. No supplier network. No recipe-to-recall."
 
 [1:10–1:30] Ask
-"I'm in discovery, not selling. 30 minutes, $100 (or free access
-on launch). If your job involves FSMA 204 prep at a $10M-$120M
-producer or importer, I'd love to talk. Calendar link below."
+"I'm in discovery, not selling. 30 minutes of your input would
+shape what I build. If your job involves FSMA 204 prep at a
+$10M-$120M producer or importer, I'd love to talk. Calendar link
+below."
 ```
 
 ### LinkedIn search strings
@@ -716,7 +719,7 @@ Other CA / out-of-state LGMA members:
 
 ## 10. Recommended sequence
 
-1. **Today:** Review screener v2, sign off on quotas. Pick honorarium tier per persona.
+1. **Today:** Review screener v2, sign off on quotas. (Honorarium retracted 2026-05-26 — no tier needed.)
 2. **Days 1–2:** Recruiting outreach blitz — 30 LinkedIn DMs/day from named list, 1 r/foodsafety post, 1 FSQA Slack post, 1 round of cold emails to FPAA and Gloucester/Miami importer lists. Target 30 inbound responses.
 3. **Days 3–7:** Schedule + run interviews. 3/day × 5 days = 15 interviews.
 4. **Day 8:** Synthesize using template above.
