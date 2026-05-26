@@ -15,10 +15,9 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
-import { jwtVerify } from 'jose';
 import { generateCsrfToken, signCsrfToken, CSRF_COOKIE, CSRF_SIG_COOKIE } from '@/lib/csrf';
 import { getAdminTargets, shouldRetryAdminProxyResponse } from '@/lib/admin-targets';
-import { getVerificationKeys } from '@/lib/jwt-keys';
+import { decodeRegEngineClaims, extractRegEngineTenantId } from '@/lib/jwt-claims';
 
 const SEVEN_DAYS = 60 * 60 * 24 * 7;
 
@@ -77,32 +76,36 @@ export async function POST(request: NextRequest) {
         const { access_token, api_key, admin_key, tenant_id, user, remember_me } = body;
         const cookieOptions = cookieOptionsFor(remember_me !== false);
 
-        let verifiedTenantId: string | null = null;
+        // Decode-only — the admin backend owns JWTKeyRegistry and remains
+        // the authoritative verifier. We extract the tenant_id claim for
+        // the cookie/body cross-check; signature trust comes from the
+        // backend on every authenticated proxy call.
+        let claimedTenantId: string | null = null;
         if (isUsableCredential(access_token)) {
-            const payload = await verifyRegEngineSessionToken(access_token);
+            const payload = decodeRegEngineClaims(access_token);
             if (!payload) {
                 return NextResponse.json({ error: 'Invalid session token' }, { status: 401 });
             }
-            verifiedTenantId = extractJwtTenantId(payload);
+            claimedTenantId = extractRegEngineTenantId(payload);
         } else if (isUsableCredential(tenant_id)) {
             const existingAccessToken = request.cookies.get('re_access_token')?.value;
             if (isUsableCredential(existingAccessToken)) {
-                const payload = await verifyRegEngineSessionToken(existingAccessToken);
+                const payload = decodeRegEngineClaims(existingAccessToken);
                 if (!payload) {
                     return NextResponse.json({ error: 'Invalid existing session token' }, { status: 401 });
                 }
-                verifiedTenantId = extractJwtTenantId(payload);
+                claimedTenantId = extractRegEngineTenantId(payload);
             }
         }
 
-        if (verifiedTenantId && isUsableCredential(tenant_id) && tenant_id !== verifiedTenantId) {
+        if (claimedTenantId && isUsableCredential(tenant_id) && tenant_id !== claimedTenantId) {
             return NextResponse.json(
                 { error: 'Tenant context does not match authenticated session' },
                 { status: 403 },
             );
         }
 
-        const resolvedTenantId = isUsableCredential(tenant_id) ? tenant_id : verifiedTenantId;
+        const resolvedTenantId = isUsableCredential(tenant_id) ? tenant_id : claimedTenantId;
 
         const response = NextResponse.json({ ok: true });
 
@@ -154,42 +157,8 @@ export async function POST(request: NextRequest) {
     }
 }
 
-async function verifyRegEngineSessionToken(token: string): Promise<Record<string, unknown> | null> {
-    const keys = getVerificationKeys();
-    if (keys.length === 0) return null;
-
-    for (const key of keys) {
-        try {
-            const { payload } = await jwtVerify(token, key.secret, {
-                algorithms: ['HS256'],
-            });
-            if (isRegEngineSessionPayload(payload as Record<string, unknown>)) {
-                return payload as Record<string, unknown>;
-            }
-            return null;
-        } catch {
-            // Try the next configured key during rotation.
-        }
-    }
-    return null;
-}
-
-function extractJwtTenantId(payload: Record<string, unknown>): string | null {
-    const value = payload.tenant_id ?? payload.tid;
-    return typeof value === 'string' && value.length > 0 ? value : null;
-}
-
 function isUsableCredential(value: unknown): value is string {
     return typeof value === 'string' && value.trim().length > 0 && value !== 'cookie-managed';
-}
-
-function isRegEngineSessionPayload(payload: Record<string, unknown>): boolean {
-    const audience = payload.aud;
-    if (typeof audience === 'string' && audience !== 'regengine-api') return false;
-    if (Array.isArray(audience) && !audience.includes('regengine-api')) return false;
-    const issuer = payload.iss;
-    if (typeof issuer === 'string' && issuer !== 'regengine-admin') return false;
-    return true;
 }
 
 function hasSupabaseSessionCookies(request: NextRequest): boolean {
