@@ -551,9 +551,16 @@ jobs:
           #   signs HS256 session JWTs with generated high-entropy AUTH_SECRET_KEY.
           # - PYSEC-2024-278 / langchain-community: pip-audit flags current
           #   0.4.1 even though advisory metadata says fixed in 0.0.27.
+          # - PYSEC-2026-161 / starlette: Host header path poisoning. Fix is
+          #   starlette 1.0.1 but prometheus-fastapi-instrumentator 7.1.0
+          #   (latest) pins starlette<1.0.0. RegEngine uses decorator-based
+          #   auth, not request.url.path reconstruction, so not exploitable
+          #   on current routes. Revisit once prometheus-fastapi-instrumentator
+          #   supports starlette 1.x.
           pip_audit_ignores=(
             --ignore-vuln PYSEC-2025-183
             --ignore-vuln PYSEC-2024-278
+            --ignore-vuln PYSEC-2026-161
           )
           python -m pip install pip-audit==2.10.0
           pip-audit -r requirements.lock --desc on "${pip_audit_ignores[@]}"
