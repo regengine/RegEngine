@@ -209,9 +209,19 @@ export function hasRealCallerCredential(request: NextRequest): boolean {
 }
 
 export function hasSupabaseSessionCookies(request: NextRequest): boolean {
-  return request.cookies
-    .getAll()
-    .some((cookie) => cookie.name.startsWith('sb-'));
+  // A real Supabase session is the `sb-<project>-auth-token` cookie (and its
+  // chunked `.0` / `.1` variants when the payload is large). The PKCE flow
+  // also writes a transient `sb-<project>-auth-token-code-verifier` cookie
+  // that is NOT a session — it's just the verifier for an in-flight OAuth
+  // exchange and can outlive the flow if the user navigates away. Matching
+  // it as a session caused authenticated RegEngine sessions to 401 at the
+  // proxy when supabase.auth.getUser() returned no user.
+  return request.cookies.getAll().some((cookie) => {
+    if (!cookie.name.startsWith('sb-')) return false;
+    if (!cookie.name.includes('-auth-token')) return false;
+    if (cookie.name.endsWith('-code-verifier')) return false;
+    return true;
+  });
 }
 
 export function hasAdminCapability(request: NextRequest): boolean {
@@ -345,6 +355,12 @@ export async function validateProxySession(
         { status: 403 },
       );
     }
+
+    // The RegEngine JWT is an authoritative caller credential. Don't fall
+    // through to the Supabase check — stale `sb-*` cookies (e.g. leftover
+    // PKCE `-code-verifier`) would otherwise fail Supabase validation and
+    // 401 a request that already authenticated successfully.
+    return null;
   }
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;

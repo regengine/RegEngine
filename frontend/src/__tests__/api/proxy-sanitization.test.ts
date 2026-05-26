@@ -405,6 +405,24 @@ describe('requireProxyAuth', () => {
         expect(requireProxyAuth(request)?.status).toBe(401);
         expect(hasSupabaseSessionCookies(request)).toBe(true);
     });
+
+    it('does not treat the PKCE code-verifier cookie as a Supabase session', () => {
+        const request = makeProxyRequest(
+            {},
+            { 'sb-test-auth-token-code-verifier': 'pkce-verifier' },
+        );
+
+        expect(hasSupabaseSessionCookies(request)).toBe(false);
+    });
+
+    it('treats chunked Supabase auth-token cookies as a session', () => {
+        const request = makeProxyRequest(
+            {},
+            { 'sb-test-auth-token.0': 'chunk-0', 'sb-test-auth-token.1': 'chunk-1' },
+        );
+
+        expect(hasSupabaseSessionCookies(request)).toBe(true);
+    });
 });
 
 describe('requireAdminCapability', () => {
