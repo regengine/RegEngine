@@ -10,12 +10,15 @@ import * as Sentry from "@sentry/nextjs";
 export const onRequestError = Sentry.captureRequestError;
 
 /**
- * Production startup assertions for cryptographic key separation (RE-SEC-005).
+ * Production startup assertion: CSRF_SECRET must be set and must not collide
+ * with any legacy JWT signing material the deployment may still be carrying.
  *
- * Verifies that CSRF_SECRET and JWT_SIGNING_KEY are both set, distinct from
- * each other, and distinct from the legacy AUTH_SECRET_KEY. Reusing one key
- * across HMAC (CSRF) and JWT signing contexts violates NIST SP 800-57 §5.2.
- * Throws on misconfiguration so cold-start fails fast and surfaces in logs.
+ * The frontend no longer signs or verifies RegEngine JWTs — the admin backend
+ * owns `JWTKeyRegistry` and is the sole authority. JWT_SIGNING_KEY and
+ * AUTH_SECRET_KEY are no-ops on the frontend post-Option-1; the only HMAC
+ * key the frontend still uses is CSRF_SECRET. The collision checks below
+ * remain as a guard against operators copying the wrong secret into both
+ * slots during a future env rotation.
  */
 function assertSecretSeparation(): void {
     if (process.env.NODE_ENV !== "production") return;
@@ -26,9 +29,8 @@ function assertSecretSeparation(): void {
 
     const errors: string[] = [];
     if (!csrf) errors.push("CSRF_SECRET must be set in production");
-    if (!jwt) errors.push("JWT_SIGNING_KEY must be set in production");
     if (csrf && jwt && csrf === jwt) {
-        errors.push("CSRF_SECRET and JWT_SIGNING_KEY must be distinct (key separation)");
+        errors.push("CSRF_SECRET must not equal legacy JWT_SIGNING_KEY material");
     }
     if (csrf && auth && csrf === auth) {
         errors.push("CSRF_SECRET must not equal legacy AUTH_SECRET_KEY");
