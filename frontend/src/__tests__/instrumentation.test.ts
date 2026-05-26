@@ -44,33 +44,30 @@ describe('instrumentation register() — secret separation assertions (RE-SEC-00
 
     it('production + CSRF_SECRET unset → throws', async () => {
         mutableEnv().NODE_ENV = 'production';
-        process.env.JWT_SIGNING_KEY = 'jwt-key';
         // CSRF_SECRET intentionally absent
         const register = await freshRegister();
         await expect(register()).rejects.toThrow(/CSRF_SECRET must be set/);
     });
 
-    it('production + CSRF_SECRET === JWT_SIGNING_KEY → throws', async () => {
+    it('production + CSRF_SECRET === legacy JWT_SIGNING_KEY material → throws', async () => {
         mutableEnv().NODE_ENV = 'production';
         process.env.CSRF_SECRET = 'same-key'; // pragma: allowlist secret
         process.env.JWT_SIGNING_KEY = 'same-key';
         const register = await freshRegister();
-        await expect(register()).rejects.toThrow(/distinct \(key separation\)/);
+        await expect(register()).rejects.toThrow(/must not equal legacy JWT_SIGNING_KEY/);
     });
 
     it('production + CSRF_SECRET === AUTH_SECRET_KEY → throws', async () => {
         mutableEnv().NODE_ENV = 'production';
         process.env.CSRF_SECRET = 'legacy-shared'; // pragma: allowlist secret
-        process.env.JWT_SIGNING_KEY = 'jwt-key';
         process.env.AUTH_SECRET_KEY = 'legacy-shared';
         const register = await freshRegister();
         await expect(register()).rejects.toThrow(/must not equal legacy AUTH_SECRET_KEY/);
     });
 
-    it('production + distinct CSRF_SECRET and JWT_SIGNING_KEY → resolves', async () => {
+    it('production + distinct CSRF_SECRET → resolves (JWT_SIGNING_KEY no longer required)', async () => {
         mutableEnv().NODE_ENV = 'production';
         process.env.CSRF_SECRET = 'csrf-only-secret'; // pragma: allowlist secret
-        process.env.JWT_SIGNING_KEY = 'jwt-only-secret';
         const register = await freshRegister();
         await expect(register()).resolves.toBeUndefined();
     });
