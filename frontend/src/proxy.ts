@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
-import { jwtVerify } from 'jose';
-import { getVerificationKeys } from '@/lib/jwt-keys';
+import { decodeRegEngineClaims } from '@/lib/jwt-claims';
 import {
     verifyCsrfToken,
     CSRF_HEADER,
@@ -150,64 +149,26 @@ function hasSomeSupabaseCookie(request: NextRequest): boolean {
 }
 
 /**
- * Verify the custom RegEngine JWT from the re_access_token cookie.
+ * Decode the RegEngine JWT from the re_access_token cookie.
  *
- * Supports key rotation: tries the current signing key first, then falls
- * back to the previous key (if configured). When a token verifies only
- * with the previous key, a warning is logged so ops knows rotation is
- * still in progress.
+ * Signature verification is delegated to the backend (services/admin owns
+ * `JWTKeyRegistry` and is the authoritative verifier). Mirroring backend
+ * signing keys into Vercel env vars caused silent 401 storms every time
+ * the backend rotated via `JWTKeyRegistry.rotate()`. The middleware now
+ * decodes claims, sanity-checks issuer/audience/exp, and reads
+ * tenant_status / is_sysadmin from the payload. Every gated action the
+ * user can reach from here proxies to the backend, which enforces the
+ * signature; an attacker forging an unsigned token still cannot do
+ * anything except hit a backend that immediately rejects them.
  *
- * NOTE: This check does NOT verify token revocation (e.g. logout-all).
- * The middleware runs in Edge Runtime and cannot reach Redis. Revoked
- * tokens remain valid until their JWT `exp` claim (60 min default).
- * The backend /auth/refresh endpoint DOES check session revocation,
- * so revoked users cannot obtain new tokens — only ride out existing ones.
+ * Revocation freshness was already best-effort in this layer (Edge can't
+ * reach Redis); the backend /auth/refresh endpoint remains the revocation
+ * gate.
  *
- * Returns the decoded payload if valid, null otherwise.
+ * Returns the decoded payload if the claims look valid, null otherwise.
  */
 async function verifyRegEngineToken(token: string): Promise<Record<string, unknown> | null> {
-    const keys = getVerificationKeys();
-
-    if (keys.length === 0) {
-        console.error(
-            '[middleware] No JWT verification keys configured. ' +
-            'Set JWT_SIGNING_KEY (or AUTH_SECRET_KEY) in Vercel env vars ' +
-            '(must match the backend Railway value).'
-        );
-        return null;
-    }
-
-    for (let i = 0; i < keys.length; i++) {
-        const key = keys[i];
-        try {
-            const { payload } = await jwtVerify(token, key.secret, {
-                algorithms: ['HS256'],
-            });
-
-            if (i > 0) {
-                // Token verified with the previous (non-current) key — rotation in progress
-                if (process.env.NODE_ENV !== 'production') {
-                    console.warn(
-                        `[middleware] JWT verified with previous key (kid=${key.kid}). ` +
-                        'Key rotation is in progress — token was signed before the latest rotation.'
-                    );
-                }
-            }
-
-            return payload as Record<string, unknown>;
-        } catch {
-            // If this is the last key, fall through to return null below
-            if (i === keys.length - 1 && process.env.NODE_ENV !== 'production') {
-                console.warn(
-                    '[middleware] JWT verification failed with all configured keys. ' +
-                    'If "signature verification failed", check that JWT_SIGNING_KEY ' +
-                    '(or AUTH_SECRET_KEY) on Vercel matches the backend signing key.'
-                );
-            }
-        }
-    }
-
-    return null;
+    return decodeRegEngineClaims(token);
 }
 
 /**

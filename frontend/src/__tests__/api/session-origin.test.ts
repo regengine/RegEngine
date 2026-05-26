@@ -10,7 +10,6 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { createHmac } from 'crypto';
 import { POST, GET, DELETE } from '@/app/api/session/route';
 import { isCsrfExempt } from '@/lib/csrf';
-import { _resetForTesting as resetJwtKeysForTesting } from '@/lib/jwt-keys';
 import type { NextRequest } from 'next/server';
 
 function makeRequest({
@@ -41,14 +40,12 @@ function makeRequest({
 describe('POST /api/session Origin enforcement (RE-SEC-003)', () => {
     beforeEach(() => {
         vi.clearAllMocks();
-        resetJwtKeysForTesting();
     });
 
     afterEach(() => {
         vi.unstubAllEnvs();
         vi.doUnmock('jose');
         vi.unstubAllGlobals();
-        resetJwtKeysForTesting();
     });
 
     it('rejects POST with no Origin header in production', async () => {
@@ -236,8 +233,7 @@ describe('POST /api/session Origin enforcement (RE-SEC-003)', () => {
     });
 
     it('deletes stale API/admin key cookies when accepting a new access token without those fields', async () => {
-        vi.stubEnv('JWT_SIGNING_KEY', 'session-origin-test-secret');
-        resetJwtKeysForTesting();
+        // Signing material is irrelevant — the route decodes claims without verifying.
         const accessToken = await signRegEngineJwt('session-origin-test-secret', 'tenant-access');
 
         const response = await POST(
@@ -264,8 +260,7 @@ describe('POST /api/session Origin enforcement (RE-SEC-003)', () => {
     });
 
     it('deletes stale API/admin key cookies when new access token body includes unusable key fields', async () => {
-        vi.stubEnv('JWT_SIGNING_KEY', 'session-origin-test-secret');
-        resetJwtKeysForTesting();
+        // Signing material is irrelevant — the route decodes claims without verifying.
         const accessToken = await signRegEngineJwt('session-origin-test-secret', 'tenant-access');
 
         const response = await POST(
