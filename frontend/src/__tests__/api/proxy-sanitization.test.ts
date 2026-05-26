@@ -33,7 +33,6 @@ import {
     createStreamProxy,
     passthroughRequestHeaders,
 } from '@/lib/proxy-factory';
-import { _resetForTesting as resetJwtKeysForTesting } from '@/lib/jwt-keys';
 import type { NextRequest } from 'next/server';
 
 vi.mock('@supabase/ssr', () => ({
@@ -42,8 +41,6 @@ vi.mock('@supabase/ssr', () => ({
 
 const ORIGINAL_REGENGINE_API_KEY = process.env.REGENGINE_API_KEY;
 const ORIGINAL_API_KEY = process.env.API_KEY;
-const ORIGINAL_JWT_SIGNING_KEY = process.env.JWT_SIGNING_KEY;
-const ORIGINAL_AUTH_SECRET_KEY = process.env.AUTH_SECRET_KEY;
 const ORIGINAL_SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const ORIGINAL_SUPABASE_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
@@ -60,16 +57,6 @@ afterEach(() => {
     } else {
         process.env.API_KEY = ORIGINAL_API_KEY;
     }
-    if (ORIGINAL_JWT_SIGNING_KEY === undefined) {
-        delete process.env.JWT_SIGNING_KEY;
-    } else {
-        process.env.JWT_SIGNING_KEY = ORIGINAL_JWT_SIGNING_KEY;
-    }
-    if (ORIGINAL_AUTH_SECRET_KEY === undefined) {
-        delete process.env.AUTH_SECRET_KEY;
-    } else {
-        process.env.AUTH_SECRET_KEY = ORIGINAL_AUTH_SECRET_KEY;
-    }
     if (ORIGINAL_SUPABASE_URL === undefined) {
         delete process.env.NEXT_PUBLIC_SUPABASE_URL;
     } else {
@@ -81,7 +68,6 @@ afterEach(() => {
         process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = ORIGINAL_SUPABASE_KEY;
     }
     vi.mocked(createServerClient).mockReset();
-    resetJwtKeysForTesting();
 });
 
 function makeProxyRequest(
@@ -143,23 +129,20 @@ function base64url(value: string): string {
     return Buffer.from(value, 'utf8').toString('base64url');
 }
 
-function primeJwtEnv(secret: string): void {
-    process.env.JWT_SIGNING_KEY = secret;
-    process.env.AUTH_SECRET_KEY = secret;
-    resetJwtKeysForTesting();
+// The frontend no longer verifies JWT signatures (the admin backend's
+// JWTKeyRegistry is the authoritative verifier). These priming helpers
+// previously seeded JWT_SIGNING_KEY / AUTH_SECRET_KEY so the frontend
+// verifier would accept test tokens; they are now no-ops kept so the
+// existing test call sites continue to read naturally.
+function primeJwtEnv(_secret: string): void {
+    void _secret;
 }
 
-function primeJwtMigrationEnv({
-    jwtSecret,
-    legacyAuthSecret,
-}: {
+function primeJwtMigrationEnv(_opts: {
     jwtSecret: string;
     legacyAuthSecret: string;
 }): void {
-    process.env.JWT_SIGNING_KEY = jwtSecret;
-    process.env.AUTH_SECRET_KEY = legacyAuthSecret;
-    delete process.env.JWT_PREVIOUS_KEY;
-    resetJwtKeysForTesting();
+    void _opts;
 }
 
 async function responseJson(response: Response): Promise<Record<string, unknown>> {

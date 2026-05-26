@@ -9,8 +9,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
-import { jwtVerify } from 'jose';
-import { getVerificationKeys } from './jwt-keys';
+import { decodeRegEngineClaims, extractRegEngineTenantId } from './jwt-claims';
 import { getServerServiceURL } from './api-config';
 
 // ---------------------------------------------------------------------------
@@ -339,7 +338,12 @@ export async function validateProxySession(
 ): Promise<NextResponse | null> {
   const regengineToken = request.cookies.get('re_access_token')?.value;
   if (isUsableCallerCredential(regengineToken)) {
-    const tokenPayload = await verifyRegEngineProxyToken(regengineToken);
+    // Decode-only check — the backend (services/admin) owns JWTKeyRegistry
+    // and is the authoritative verifier. We reject malformed/expired tokens
+    // and obvious iss/aud mismatches up front, then compare the JWT's
+    // tenant_id claim against the re_tenant_id cookie for defense-in-depth.
+    // Signature verification happens at the backend boundary.
+    const tokenPayload = decodeRegEngineClaims(regengineToken);
     if (!tokenPayload) {
       return NextResponse.json(
         { error: 'Session expired or invalid — please log in again' },
@@ -347,7 +351,7 @@ export async function validateProxySession(
       );
     }
 
-    const tokenTenantId = extractJwtTenantId(tokenPayload);
+    const tokenTenantId = extractRegEngineTenantId(tokenPayload);
     const cookieTenantId = request.cookies.get('re_tenant_id')?.value;
     if (tokenTenantId && cookieTenantId && tokenTenantId !== cookieTenantId) {
       return NextResponse.json(
@@ -433,43 +437,6 @@ export async function validateProxySession(
   }
 
   return null;
-}
-
-async function verifyRegEngineProxyToken(token: string): Promise<Record<string, unknown> | null> {
-  const keys = getVerificationKeys();
-  if (keys.length === 0) {
-    console.error('[proxy] No JWT verification keys configured for RegEngine session validation');
-    return null;
-  }
-
-  for (const key of keys) {
-    try {
-      const { payload } = await jwtVerify(token, key.secret, {
-        algorithms: ['HS256'],
-      });
-      if (isRegEngineSessionPayload(payload as Record<string, unknown>)) {
-        return payload as Record<string, unknown>;
-      }
-      return null;
-    } catch {
-      // Try the next configured key during rotation.
-    }
-  }
-  return null;
-}
-
-function extractJwtTenantId(payload: Record<string, unknown>): string | null {
-  const value = payload.tenant_id ?? payload.tid;
-  return typeof value === 'string' && value.length > 0 ? value : null;
-}
-
-function isRegEngineSessionPayload(payload: Record<string, unknown>): boolean {
-  const audience = payload.aud;
-  if (typeof audience === 'string' && audience !== 'regengine-api') return false;
-  if (Array.isArray(audience) && !audience.includes('regengine-api')) return false;
-  const issuer = payload.iss;
-  if (typeof issuer === 'string' && issuer !== 'regengine-admin') return false;
-  return true;
 }
 
 // ---------------------------------------------------------------------------
