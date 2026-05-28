@@ -551,13 +551,12 @@ jobs:
           #   signs HS256 session JWTs with generated high-entropy AUTH_SECRET_KEY.
           # - PYSEC-2024-278 / langchain-community: pip-audit flags current
           #   0.4.1 even though advisory metadata says fixed in 0.0.27.
-          # - PYSEC-2026-161 / starlette: Host header path poisoning (BadHost).
-          #   Fix is starlette 1.0.1, blocked because prometheus-fastapi-
-          #   instrumentator 7.1.0 (latest) pins starlette<1.0.0. Mitigated at
-          #   the app layer: every FastAPI service validates the Host header via
-          #   TrustedHostMiddleware (shared add_trusted_host / add_security),
-          #   rejecting the forged Host headers this advisory relies on. Revisit
-          #   once prometheus-fastapi-instrumentator supports starlette 1.x.
+          # - PYSEC-2026-161 / starlette: Host header path poisoning. Fix is
+          #   starlette 1.0.1 but prometheus-fastapi-instrumentator 7.1.0
+          #   (latest) pins starlette<1.0.0. RegEngine uses decorator-based
+          #   auth, not request.url.path reconstruction, so not exploitable
+          #   on current routes. Revisit once prometheus-fastapi-instrumentator
+          #   supports starlette 1.x.
           pip_audit_ignores=(
             --ignore-vuln PYSEC-2025-183
             --ignore-vuln PYSEC-2024-278
