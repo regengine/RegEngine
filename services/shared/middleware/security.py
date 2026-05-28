@@ -13,6 +13,29 @@ from shared.cors import (
 # match any configured domain (e.g. container IP or private hostname).
 _TRUSTED_HOST_EXEMPT_PATHS = {"/health", "/ready", "/readiness", "/metrics", "/"}
 
+# Single source of truth for the Host-header allowlist. Mirrors the hosts
+# each service is legitimately reached on (public domain, Railway internal
+# + public, local dev, inter-service names). Validating Host here is the
+# mitigation for PYSEC-2026-161 (starlette BadHost path poisoning) — it
+# rejects forged Host headers before any path-based logic runs.
+TRUSTED_HOST_ALLOWLIST = [
+    "*.regengine.co",
+    "*.up.railway.app",
+    "*.railway.internal",
+    "localhost",
+    "testserver",
+    "ingestion-service",
+    "admin-api",
+    "billing-service",
+    "compliance-api",
+    "compliance-api-worker",
+    "nlp-service",
+    "graph-service",
+    "scheduler",
+    "otel-collector",
+    "gateway",
+]
+
 
 class _HealthBypassTrustedHostMiddleware:
     """ASGI middleware: skip TrustedHost for health/readiness probes.
@@ -33,6 +56,18 @@ class _HealthBypassTrustedHostMiddleware:
             await self.trusted_host_app(scope, receive, send)
 
 
+def add_trusted_host(app: FastAPI):
+    """Add Host-header validation (TrustedHost) to the FastAPI app.
+
+    Split out from add_security so services that register their own CORS
+    (e.g. admin) can still get Host validation without double-registering
+    CORS. Uses the shared TRUSTED_HOST_ALLOWLIST as the single source.
+    """
+    app.add_middleware(
+        _HealthBypassTrustedHostMiddleware, allowed_hosts=TRUSTED_HOST_ALLOWLIST
+    )
+
+
 def add_security(app: FastAPI):
     """Add CORS and TrustedHost security middleware to the FastAPI app."""
     origins = get_allowed_origins()
@@ -43,20 +78,4 @@ def add_security(app: FastAPI):
         allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
         allow_headers=get_allowed_headers(),
     )
-    app.add_middleware(_HealthBypassTrustedHostMiddleware, allowed_hosts=[
-        "*.regengine.co",
-        "*.up.railway.app",
-        "*.railway.internal",
-        "localhost",
-        "testserver",
-        "ingestion-service",
-        "admin-api",
-        "billing-service",
-        "compliance-api",
-        "compliance-api-worker",
-        "nlp-service",
-        "graph-service",
-        "scheduler",
-        "otel-collector",
-        "gateway",
-    ])
+    add_trusted_host(app)
