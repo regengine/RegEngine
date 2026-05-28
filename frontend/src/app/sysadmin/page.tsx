@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { AlertCircle, CheckCircle, RefreshCw, Server, Users, FileText, Activity, LogOut } from "lucide-react"
+import { AlertCircle, CheckCircle, RefreshCw, Server, Users, FileText, Activity, LayoutDashboard, LogOut } from "lucide-react"
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -89,6 +89,10 @@ export default function SysAdminDashboard() {
                     <p className="text-muted-foreground">Real-time system health and operational metrics</p>
                 </div>
                 <div className="flex items-center gap-2">
+                    <Button variant="outline" onClick={() => router.push("/dashboard")}>
+                        <LayoutDashboard className="mr-2 h-4 w-4" />
+                        Dashboard
+                    </Button>
                     <Button onClick={fetchData} disabled={loading}>
                         <RefreshCw className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`} />
                         Refresh
