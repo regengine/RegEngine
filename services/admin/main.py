@@ -258,6 +258,12 @@ app.add_middleware(
     ],
 )
 
+# Host-header validation (PYSEC-2026-161 mitigation). admin registers its own
+# CORS above, so it calls add_trusted_host directly rather than add_security
+# (which would double-register CORS). Uses the shared host allowlist.
+from shared.middleware.security import add_trusted_host
+add_trusted_host(app)
+
 # Audit context middleware — captures IP, UA, request_id for tamper-evident audit trail
 from app.audit_middleware import AuditContextMiddleware
 app.add_middleware(AuditContextMiddleware)
