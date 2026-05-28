@@ -26,7 +26,7 @@ const CHECKS = [
     command: 'npx',
     args: [
       'eslint',
-      'src/lib/jwt-keys.ts',
+      'src/lib/jwt-claims.ts',
       'src/app/login/LoginClient.tsx',
       'src/__tests__/api/proxy-sanitization.test.ts',
       'src/__tests__/auth/login.test.tsx',
