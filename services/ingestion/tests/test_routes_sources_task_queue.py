@@ -18,7 +18,9 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from shared.auth import APIKey, require_api_key
-from app.routes_sources import router
+import app.routes_sources as routes_sources
+
+router = routes_sources.router
 
 
 # ---------------------------------------------------------------------------
@@ -44,8 +46,8 @@ def _patch_enqueue(monkeypatch) -> tuple[MagicMock, MagicMock]:
     """Replace SessionLocal and enqueue_task; return (mock_enqueue, fake_session)."""
     fake_session = MagicMock()
     mock_enqueue = MagicMock(return_value=1)
-    monkeypatch.setattr("app.routes_sources.SessionLocal", lambda: fake_session)
-    monkeypatch.setattr("app.routes_sources.enqueue_task", mock_enqueue)
+    monkeypatch.setattr(routes_sources, "SessionLocal", lambda: fake_session)
+    monkeypatch.setattr(routes_sources, "enqueue_task", mock_enqueue)
     return mock_enqueue, fake_session
 
 
@@ -67,7 +69,7 @@ class TestIngestFederalRegister:
     def test_accepted_enqueues_correct_task_type(self, monkeypatch):
         fixed = "00000000-0000-0000-0000-000000000001"
         mock_enqueue, _ = _patch_enqueue(monkeypatch)
-        monkeypatch.setattr("app.routes_sources.uuid.uuid4", lambda: uuid.UUID(fixed))
+        monkeypatch.setattr(routes_sources.uuid, "uuid4", lambda: uuid.UUID(fixed))
 
         client = _build_client(_make_api_key(us=True))
         resp = client.post(self.ENDPOINT, json={"vertical": "food_safety"})
@@ -141,7 +143,7 @@ class TestIngestECFR:
 
     def test_accepted_enqueues_correct_task_type(self, monkeypatch):
         fixed = "00000000-0000-0000-0000-000000000003"
-        monkeypatch.setattr("app.routes_sources.uuid.uuid4", lambda: uuid.UUID(fixed))
+        monkeypatch.setattr(routes_sources.uuid, "uuid4", lambda: uuid.UUID(fixed))
         mock_enqueue, _ = _patch_enqueue(monkeypatch)
         client = _build_client(_make_api_key(us=True))
         resp = client.post(self.ENDPOINT, json=self.VALID_ECFR)
@@ -188,7 +190,7 @@ class TestIngestFDA:
 
     def test_accepted_enqueues_correct_task_type(self, monkeypatch):
         fixed = "00000000-0000-0000-0000-000000000004"
-        monkeypatch.setattr("app.routes_sources.uuid.uuid4", lambda: uuid.UUID(fixed))
+        monkeypatch.setattr(routes_sources.uuid, "uuid4", lambda: uuid.UUID(fixed))
         mock_enqueue, _ = _patch_enqueue(monkeypatch)
         client = _build_client(_make_api_key(us=True))
         resp = client.post(self.ENDPOINT, json={"vertical": "food_safety"})

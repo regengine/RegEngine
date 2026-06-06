@@ -42,9 +42,10 @@ sys.path.insert(0, str(service_dir))
 from app.stripe_billing import (  # noqa: E402
     customers as customers_mod,
     helpers as helpers_mod,
-    state as state_mod,
     webhooks as webhooks_mod,
 )
+
+state_mod = webhooks_mod._state_mod
 
 
 # ── Logger recorder (see routes test file for background on this) ──────────
@@ -1120,7 +1121,7 @@ class TestHandleCustomerDeleted:
         fake_redis.values["billing:customer:cus_dangle"] = "tenant-ghost"
         # But no tenant mapping exists, and our lookup returns None.
         # Monkey-patch _find_tenant_id to simulate a hard miss.
-        from app.stripe_billing import state as _state
+        _state = webhooks_mod._state_mod
         orig_find = _state._find_tenant_id
         _state._find_tenant_id = lambda sub, cust: None  # type: ignore[assignment]
         try:

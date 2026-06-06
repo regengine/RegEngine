@@ -170,12 +170,16 @@ def _switch_to_service(service: str) -> None:
     service_cache = _KNOWN_SERVICE_MODULES.setdefault(service, {})
     _prepare_service_test_environment(service)
 
-    # Drop any cached ``app`` (and its submodules) so reimport uses the
-    # correct service's app/ directory. Only evict entries that don't belong
-    # to the current service (would be wasteful to reload things that are
-    # already correct).
+    # Drop any cached bare ``main`` and ``app`` (plus app submodules) so
+    # reimport uses the correct service. Several service-local tests import
+    # ``from main import app`` at module scope, so only evicting ``app.*`` is
+    # not enough during full-suite collection.
     stale = sorted(
-        [name for name in sys.modules if name == "app" or name.startswith("app.")],
+        [
+            name
+            for name in sys.modules
+            if name == "main" or name == "app" or name.startswith("app.")
+        ],
         key=lambda value: value.count("."),
         reverse=True,
     )
@@ -221,6 +225,8 @@ def _switch_to_service(service: str) -> None:
 
         _evict_module(name)
 
+    if "main" not in sys.modules and (cached_main := service_cache.get("main")) is not None:
+        _bind_module("main", cached_main)
     if "app" not in sys.modules and (cached_app := service_cache.get("app")) is not None:
         _bind_module("app", cached_app)
     if "shared" not in sys.modules and (cached_shared := _KNOWN_SHARED_MODULES.get("shared")) is not None:

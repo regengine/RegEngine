@@ -63,6 +63,10 @@ COPY services /app/services
 # Copy plugins (FSMA sources, etc.)
 COPY plugins /app/plugins
 
+# Copy normalized QA health baseline used by the sysadmin dashboard. Raw test
+# outputs stay excluded by .dockerignore; this JSON is a redacted rollup only.
+COPY qa/qa-health /app/qa/qa-health
+
 # Copy monolith entry point
 COPY server /app/server
 

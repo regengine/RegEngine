@@ -6,7 +6,7 @@ from urllib.parse import urlsplit, urlunsplit
 import uuid
 
 from fastapi import Request
-from prometheus_client import Counter
+from prometheus_client import Counter, REGISTRY
 import redis
 import structlog
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -14,7 +14,20 @@ from starlette.responses import JSONResponse
 
 logger = structlog.get_logger("shared.tenant_rate_limiting")
 
-tenant_rate_limit_hits_total = Counter(
+def _safe_counter(name: str, description: str, labelnames: list[str]) -> Counter:
+    """Return an existing Prometheus Counter when this module is re-imported."""
+    try:
+        return Counter(name, description, labelnames)
+    except ValueError:
+        collector = REGISTRY._names_to_collectors.get(name)  # type: ignore[attr-defined]
+        if collector is None and name.endswith("_total"):
+            collector = REGISTRY._names_to_collectors.get(name[:-6])  # type: ignore[attr-defined]
+        if collector is not None:
+            return collector  # type: ignore[return-value]
+        return Counter(name, description, labelnames, registry=None)
+
+
+tenant_rate_limit_hits_total = _safe_counter(
     "tenant_rate_limit_hits_total",
     "Rate limit hits per tenant",
     ["tenant_id", "status"],

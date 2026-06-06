@@ -493,8 +493,6 @@ class TestWebhookRouteWrappers:
     async def test_primary_webhook_delegates_to_processor(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        from app.stripe_billing import webhooks as webhooks_mod
-
         called: dict[str, Any] = {}
 
         async def _fake_process(request: Any, sig: Any) -> dict[str, Any]:
@@ -502,7 +500,12 @@ class TestWebhookRouteWrappers:
             called["sig"] = sig
             return {"received": True}
 
-        monkeypatch.setattr(webhooks_mod, "_process_stripe_webhook", _fake_process)
+        monkeypatch.setattr(routes_mod._webhooks_mod, "_process_stripe_webhook", _fake_process)
+        monkeypatch.setattr(
+            routes_mod._rate_limiting_mod,
+            "_check_stripe_webhook_rate_limit",
+            lambda _request: None,
+        )
 
         request = MagicMock()
         result = await routes_mod.stripe_webhooks(
@@ -518,8 +521,6 @@ class TestWebhookRouteWrappers:
     ) -> None:
         """The ``/webhook/stripe`` path is retained for backward compat;
         must call the same processor as the primary route."""
-        from app.stripe_billing import webhooks as webhooks_mod
-
         called: dict[str, Any] = {}
 
         async def _fake_process(request: Any, sig: Any) -> dict[str, Any]:
@@ -527,7 +528,12 @@ class TestWebhookRouteWrappers:
             called["sig"] = sig
             return {"received": True, "legacy": True}
 
-        monkeypatch.setattr(webhooks_mod, "_process_stripe_webhook", _fake_process)
+        monkeypatch.setattr(routes_mod._webhooks_mod, "_process_stripe_webhook", _fake_process)
+        monkeypatch.setattr(
+            routes_mod._rate_limiting_mod,
+            "_check_stripe_webhook_rate_limit",
+            lambda _request: None,
+        )
 
         request = MagicMock()
         result = await routes_mod.stripe_webhook_legacy(

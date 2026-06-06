@@ -40,35 +40,56 @@ def test_admin_key_required():
 
 @pytest.mark.security
 def test_valid_admin_key_works():
-    """Verify legitimate admin keys grant access (via dependency override)."""
+    """Verify legitimate admin keys grant access."""
     import os
     import sys
-    # Access verify_admin_key from the already-loaded module to avoid
-    # Prometheus metric re-registration from a second import path
-    routes_mod = sys.modules.get("app.routes") or sys.modules.get("services.admin.app.routes")
-    verify_admin_key = routes_mod.verify_admin_key
+
+    route_modules = [
+        mod
+        for mod_name in ("app.routes", "services.admin.app.routes")
+        if (mod := sys.modules.get(mod_name)) is not None
+    ]
 
     # Force in-memory key store so CI doesn't need the api_keys table
-    from shared.auth import get_key_store as _gks, APIKeyStore
     import shared.auth as _auth_mod
     original_env = os.environ.get("ENABLE_DB_API_KEYS")
     original_regengine_env = os.environ.get("REGENGINE_ENV")
+    original_admin_key = os.environ.get("ADMIN_MASTER_KEY")
     original_db_store = getattr(_auth_mod, "_db_store_instance", None)
+    os.environ["ADMIN_MASTER_KEY"] = "admin-master-key-dev"
     os.environ["ENABLE_DB_API_KEYS"] = "false"
     os.environ["REGENGINE_ENV"] = "test"
     _auth_mod._db_store_instance = None  # clear cached DB store
+    for mod in route_modules:
+        cache_clear = getattr(getattr(mod, "get_settings", None), "cache_clear", None)
+        if cache_clear is not None:
+            cache_clear()
 
-    # Override the admin key dependency to simulate a valid key
-    admin_app.dependency_overrides[verify_admin_key] = lambda: True
+    # Isolate the positive auth path from earlier negative tests that
+    # intentionally increment the in-memory brute-force limiter.
+    for mod in route_modules:
+        if hasattr(mod, "_reset_admin_failures"):
+            mod._reset_admin_failures("testclient")
 
     try:
-        response = admin_client.get(ADMIN_PROTECTED_ENDPOINT)
+        response = admin_client.get(
+            ADMIN_PROTECTED_ENDPOINT,
+            headers={"X-Admin-Key": "admin-master-key-dev"},
+        )
         # Should not be 401 (may be 200 or other status based on data)
         assert response.status_code != 401
     finally:
-        # Remove override so other tests aren't affected
-        admin_app.dependency_overrides.pop(verify_admin_key, None)
+        for mod in route_modules:
+            if hasattr(mod, "_reset_admin_failures"):
+                mod._reset_admin_failures("testclient")
+            cache_clear = getattr(getattr(mod, "get_settings", None), "cache_clear", None)
+            if cache_clear is not None:
+                cache_clear()
         _auth_mod._db_store_instance = original_db_store
+        if original_admin_key is None:
+            os.environ.pop("ADMIN_MASTER_KEY", None)
+        else:
+            os.environ["ADMIN_MASTER_KEY"] = original_admin_key
         if original_env is None:
             os.environ.pop("ENABLE_DB_API_KEYS", None)
         else:
@@ -77,4 +98,3 @@ def test_valid_admin_key_works():
             os.environ.pop("REGENGINE_ENV", None)
         else:
             os.environ["REGENGINE_ENV"] = original_regengine_env
-

@@ -79,6 +79,16 @@ def _safe_http_error_content(status_code: int, detail: object) -> dict:
     return {"type": f"http_{status_code}", "message": str(detail)}
 
 
+def _json_safe(value: object) -> object:
+    if isinstance(value, dict):
+        return {str(key): _json_safe(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_safe(item) for item in value]
+    if isinstance(value, (str, int, float, bool)) or value is None:
+        return value
+    return str(value)
+
+
 def _sentry_before_send(event, hint):
     """Sentry before_send hook — stamp tenant_id / correlation_id on every event.
 
@@ -205,7 +215,13 @@ async def _validation_exception_handler(request: Request, exc: RequestValidation
     """Handle request validation errors with structured JSON response."""
     return JSONResponse(
         status_code=422,
-        content={"error": {"type": "validation_error", "message": "Request validation failed", "details": exc.errors()}},
+        content={
+            "error": {
+                "type": "validation_error",
+                "message": "Request validation failed",
+                "details": _json_safe(exc.errors()),
+            }
+        },
     )
 
 

@@ -1,6 +1,6 @@
 /**
  * Dashboard Page Tests
- * 
+ *
  * Tests for the main dashboard view:
  * - Authentication checks
  * - Data loading and display
@@ -57,6 +57,7 @@ vi.mock('@/hooks/use-api', () => ({
     useComplianceHealth: vi.fn().mockReturnValue({ data: null, isLoading: false }),
     useLabelsHealth: vi.fn().mockReturnValue({ data: null, isLoading: false }),
     useSystemStatus: vi.fn().mockReturnValue({ data: null, isLoading: false, error: null }),
+    useQAHealth: vi.fn().mockReturnValue({ data: null, isLoading: false, error: null }),
 }));
 
 // Mock fetch

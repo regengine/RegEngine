@@ -1,283 +1,211 @@
-"""Tests for audit logging system."""
+"""Compatibility smoke tests for the current shared audit logging API."""
 
 from datetime import datetime, timezone
-from pathlib import Path
-from uuid import UUID, uuid4
+from uuid import uuid4
 
 import pytest
 
-# services/shared/audit.py was removed in commit 83d2f1bc (Phase 5
-# remediation — zero importers). The core types now live in
-# shared.audit_logging; the audit_api_key_created / audit_auth_success /
-# audit_auth_failure convenience helpers were removed outright. The
-# TestConvenienceFunctions suite below will NameError at runtime — that's
-# a real test failure, not a collection one, and is tracked separately.
 from shared.audit_logging import (
+    AuditActor,
     AuditEvent,
+    AuditEventCategory,
     AuditEventType,
     AuditLogger,
+    AuditResource,
     AuditSeverity,
+    InMemoryAuditStorage,
 )
 
 
-def _missing_helper(name):  # pragma: no cover - defensive stub
-    def _raise(*_args, **_kwargs):
-        raise NotImplementedError(
-            f"{name} was removed in #1053; update this test or restore the helper"
-        )
-    return _raise
+@pytest.fixture(autouse=True)
+def _audit_integrity_key(monkeypatch):
+    monkeypatch.setenv("AUDIT_INTEGRITY_KEY", "test-audit-key")
 
 
-audit_api_key_created = _missing_helper("audit_api_key_created")
-audit_auth_failure = _missing_helper("audit_auth_failure")
-audit_auth_success = _missing_helper("audit_auth_success")
+@pytest.fixture
+def actor() -> AuditActor:
+    return AuditActor(
+        actor_id="admin_user_1",
+        actor_type="admin",
+        email="admin@example.com",
+        tenant_id="tenant-1",
+        ip_address="192.168.1.100",
+    )
+
+
+@pytest.fixture
+def resource() -> AuditResource:
+    return AuditResource(
+        resource_type="api_key",
+        resource_id="rge_abc123",
+        tenant_id="tenant-1",
+        attributes={"key_name": "Production API Key"},
+    )
+
+
+@pytest.fixture
+def audit_logger() -> AuditLogger:
+    return AuditLogger(
+        storage=InMemoryAuditStorage(),
+        service_name="test-service",
+        environment="test",
+    )
 
 
 class TestAuditEvent:
-    """Tests for AuditEvent model."""
-
-    def test_create_audit_event(self):
-        """Test creating a basic audit event."""
-        tenant_id = uuid4()
+    def test_create_audit_event(self, actor: AuditActor, resource: AuditResource) -> None:
         event = AuditEvent(
-            event_type=AuditEventType.API_KEY_CREATED,
+            event_id=str(uuid4()),
+            timestamp=datetime.now(timezone.utc),
+            event_type=AuditEventType.DATA_CREATE,
+            category=AuditEventCategory.ADMIN,
             severity=AuditSeverity.INFO,
-            actor_type="admin",
-            actor_id="admin_user_1",
-            tenant_id=tenant_id,
-            resource_type="api_key",
-            resource_id="rge_abc123",
+            actor=actor,
             action="create_api_key",
-            status="success",
+            outcome="success",
+            resource=resource,
+            details={"key_name": "Production API Key"},
         )
 
-        assert event.event_type == AuditEventType.API_KEY_CREATED
+        assert event.event_type == AuditEventType.DATA_CREATE
         assert event.severity == AuditSeverity.INFO
-        assert event.actor_type == "admin"
-        assert event.tenant_id == tenant_id
-        assert event.status == "success"
-        assert isinstance(event.event_id, UUID)
-        assert isinstance(event.timestamp, datetime)
+        assert event.actor.actor_type == "admin"
+        assert event.resource is resource
+        assert event.details["key_name"] == "Production API Key"
 
-    def test_event_with_metadata(self):
-        """Test audit event with additional metadata."""
-        metadata = {
-            "key_name": "Production API Key",
-            "scopes": ["read", "write"],
-            "rate_limit": 1000,
-        }
-
+    def test_event_serializes_current_schema(self, actor: AuditActor, resource: AuditResource) -> None:
         event = AuditEvent(
-            event_type=AuditEventType.API_KEY_CREATED,
-            actor_type="admin",
-            action="create_api_key",
-            status="success",
-            metadata=metadata,
-        )
-
-        assert event.metadata == metadata
-        assert event.metadata["key_name"] == "Production API Key"
-
-    def test_error_event(self):
-        """Test audit event with error details."""
-        event = AuditEvent(
-            event_type=AuditEventType.AUTH_FAILURE,
+            event_id=str(uuid4()),
+            timestamp=datetime.now(timezone.utc),
+            event_type=AuditEventType.LOGIN_FAILURE,
+            category=AuditEventCategory.AUTHENTICATION,
             severity=AuditSeverity.WARNING,
-            actor_type="anonymous",
-            action="authenticate",
-            status="failure",
-            error_message="Invalid API key format",
-            error_code="AUTH_001",
+            actor=actor,
+            action="login",
+            outcome="failure",
+            resource=resource,
+            details={"reason": "Invalid API key format"},
         )
 
-        assert event.severity == AuditSeverity.WARNING
-        assert event.status == "failure"
-        assert event.error_message == "Invalid API key format"
-        assert event.error_code == "AUTH_001"
+        payload = event.to_dict()
 
-    def test_event_with_ip_and_user_agent(self):
-        """Test audit event with IP and user agent."""
-        event = AuditEvent(
-            event_type=AuditEventType.AUTH_SUCCESS,
-            actor_type="api_key",
-            action="authenticate",
-            status="success",
-            ip_address="192.168.1.100",
-            user_agent="Mozilla/5.0",
-        )
-
-        assert event.ip_address == "192.168.1.100"
-        assert event.user_agent == "Mozilla/5.0"
+        assert payload["event_type"] == "login_failure"
+        assert payload["severity"] == "warning"
+        assert payload["actor"]["actor_id"] == "admin_user_1"
+        assert payload["resource"]["resource_type"] == "api_key"
 
 
 class TestAuditLogger:
-    """Tests for AuditLogger."""
-
-    def test_log_api_key_created(self, caplog):
-        """Test logging API key creation."""
-        tenant_id = uuid4()
-
-        AuditLogger.log_api_key_created(
-            key_id="rge_test123",
-            key_name="Test API Key",
-            tenant_id=tenant_id,
-            created_by="admin_user",
-        )
-
-        # Verify event was logged (would check structured logs in production)
-        # For now, just verify it doesn't raise exceptions
-
-    def test_log_api_key_revoked(self):
-        """Test logging API key revocation."""
-        tenant_id = uuid4()
-
-        AuditLogger.log_api_key_revoked(
-            key_id="rge_test123",
-            tenant_id=tenant_id,
-            revoked_by="admin_user",
-            reason="Security incident",
-        )
-
-        # Verify event was logged
-
-    def test_log_auth_success(self):
-        """Test logging successful authentication."""
-        tenant_id = uuid4()
-
-        AuditLogger.log_auth_success(
-            actor_id="rge_test123",
-            tenant_id=tenant_id,
+    @pytest.mark.asyncio
+    async def test_log_login_success(self, audit_logger: AuditLogger) -> None:
+        event = await audit_logger.log_login_success(
+            user_id="user-1",
+            username="admin@example.com",
             ip_address="192.168.1.100",
+            tenant_id="tenant-1",
         )
 
-        # Verify event was logged
+        assert event.event_type == AuditEventType.LOGIN_SUCCESS
+        assert event.category == AuditEventCategory.AUTHENTICATION
+        assert event.outcome == "success"
+        assert event.actor.tenant_id == "tenant-1"
 
-    def test_log_auth_failure(self):
-        """Test logging failed authentication."""
-        AuditLogger.log_auth_failure(
-            reason="Invalid API key",
+    @pytest.mark.asyncio
+    async def test_log_login_failure(self, audit_logger: AuditLogger) -> None:
+        event = await audit_logger.log_login_failure(
+            username="admin@example.com",
             ip_address="192.168.1.100",
+            reason="invalid_password",
         )
 
-        # Verify event was logged
+        assert event.event_type == AuditEventType.LOGIN_FAILURE
+        assert event.severity == AuditSeverity.WARNING
+        assert event.details["reason"] == "invalid_password"
 
-    def test_log_data_access(self):
-        """Test logging data access."""
-        tenant_id = uuid4()
-
-        AuditLogger.log_data_access(
-            actor_id="rge_test123",
-            tenant_id=tenant_id,
-            resource_type="customer_product",
-            resource_id=str(uuid4()),
-            action="read",
-            metadata={"query": "get_product_requirements"},
+    @pytest.mark.asyncio
+    async def test_log_access_denied(
+        self,
+        audit_logger: AuditLogger,
+        actor: AuditActor,
+        resource: AuditResource,
+    ) -> None:
+        event = await audit_logger.log_access_denied(
+            actor=actor,
+            resource=resource,
+            required_permission="api_keys:write",
         )
 
-        # Verify event was logged
+        assert event.event_type == AuditEventType.ACCESS_DENIED
+        assert event.category == AuditEventCategory.AUTHORIZATION
+        assert event.details["required_permission"] == "api_keys:write"
 
-    def test_log_permission_denied(self):
-        """Test logging permission denied."""
-        tenant_id = uuid4()
-
-        AuditLogger.log_permission_denied(
-            actor_id="rge_test123",
-            tenant_id=tenant_id,
-            resource_type="tenant_control",
-            action="delete",
-            reason="Insufficient permissions",
+    @pytest.mark.asyncio
+    async def test_log_data_access(
+        self,
+        audit_logger: AuditLogger,
+        actor: AuditActor,
+        resource: AuditResource,
+    ) -> None:
+        event = await audit_logger.log_data_access(
+            actor=actor,
+            resource=resource,
+            access_type="read",
+            fields_accessed=["name", "scopes"],
         )
 
-        # Verify event was logged
+        assert event.event_type == AuditEventType.DATA_READ
+        assert event.details["fields_accessed"] == ["name", "scopes"]
 
-    def test_log_control_created(self):
-        """Test logging tenant control creation."""
-        tenant_id = uuid4()
-        control_id = str(uuid4())
-
-        AuditLogger.log_control_created(
-            control_id=control_id,
-            tenant_id=tenant_id,
-            created_by="rge_test123",
-            framework="NIST CSF",
+    @pytest.mark.asyncio
+    async def test_log_data_modification(
+        self,
+        audit_logger: AuditLogger,
+        actor: AuditActor,
+        resource: AuditResource,
+    ) -> None:
+        event = await audit_logger.log_data_modification(
+            actor=actor,
+            resource=resource,
+            operation="update",
+            changes={"scopes": {"old": ["read"], "new": ["read", "write"]}},
         )
 
-        # Verify event was logged
+        assert event.event_type == AuditEventType.DATA_UPDATE
+        assert event.category == AuditEventCategory.DATA_MODIFICATION
+        assert "scopes" in event.details["changes"]
 
-    def test_log_product_created(self):
-        """Test logging customer product creation."""
-        tenant_id = uuid4()
-        product_id = str(uuid4())
-
-        AuditLogger.log_product_created(
-            product_id=product_id,
-            tenant_id=tenant_id,
-            created_by="rge_test123",
-            product_name="Crypto Trading Platform",
+    @pytest.mark.asyncio
+    async def test_log_security_event(self, audit_logger: AuditLogger, actor: AuditActor) -> None:
+        event = await audit_logger.log_security_event(
+            event_type=AuditEventType.INJECTION_ATTEMPT,
+            actor=actor,
+            description="SQL injection attempt detected",
+            severity=AuditSeverity.CRITICAL,
+            details={"detector": "input-filter"},
         )
 
-        # Verify event was logged
-
-
-class TestConvenienceFunctions:
-    """Tests for audit logging convenience functions."""
-
-    def test_audit_api_key_created(self):
-        """Test convenience function for API key creation."""
-        tenant_id = uuid4()
-
-        audit_api_key_created(
-            key_id="rge_test123",
-            key_name="Test Key",
-            tenant_id=tenant_id,
-            created_by="admin",
-        )
-
-        # Verify it doesn't raise exceptions
-
-    def test_audit_auth_success(self):
-        """Test convenience function for auth success."""
-        tenant_id = uuid4()
-
-        audit_auth_success(
-            actor_id="rge_test123",
-            tenant_id=tenant_id,
-            ip_address="192.168.1.100",
-        )
-
-        # Verify it doesn't raise exceptions
-
-    def test_audit_auth_failure(self):
-        """Test convenience function for auth failure."""
-        audit_auth_failure(
-            reason="Invalid credentials",
-            ip_address="192.168.1.100",
-        )
-
-        # Verify it doesn't raise exceptions
+        assert event.event_type == AuditEventType.INJECTION_ATTEMPT
+        assert event.severity == AuditSeverity.CRITICAL
+        assert "security" in event.tags
 
 
 class TestAuditEventTypes:
-    """Tests for audit event type enums."""
-
-    def test_event_types_exist(self):
-        """Test that all expected event types are defined."""
+    def test_current_event_types_exist(self) -> None:
         expected_types = [
-            "API_KEY_CREATED",
-            "API_KEY_REVOKED",
-            "AUTH_SUCCESS",
-            "AUTH_FAILURE",
-            "CONTROL_CREATED",
-            "PRODUCT_CREATED",
-            "DATA_ACCESSED",
+            "LOGIN_SUCCESS",
+            "LOGIN_FAILURE",
+            "ACCESS_DENIED",
+            "DATA_CREATE",
+            "DATA_READ",
+            "DATA_UPDATE",
+            "INJECTION_ATTEMPT",
         ]
 
         for event_type in expected_types:
             assert hasattr(AuditEventType, event_type)
 
-    def test_severity_levels(self):
-        """Test severity level enum values."""
-        assert AuditSeverity.INFO.value == "INFO"
-        assert AuditSeverity.WARNING.value == "WARNING"
-        assert AuditSeverity.ERROR.value == "ERROR"
-        assert AuditSeverity.CRITICAL.value == "CRITICAL"
+    def test_severity_levels_use_lowercase_values(self) -> None:
+        assert AuditSeverity.INFO.value == "info"
+        assert AuditSeverity.WARNING.value == "warning"
+        assert AuditSeverity.ERROR.value == "error"
+        assert AuditSeverity.CRITICAL.value == "critical"

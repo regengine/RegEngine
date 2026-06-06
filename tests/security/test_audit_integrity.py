@@ -65,7 +65,7 @@ class TestComputeIntegrityHash:
         assert h1 != h2
 
     def test_genesis_uses_string(self):
-        """When prev_hash is None, 'GENESIS' is used in the payload."""
+        """When prev_hash is None, 'GENESIS' is used in the v2 payload."""
         kwargs = {
             "prev_hash": None,
             "tenant_id": "test-tenant",
@@ -86,6 +86,11 @@ class TestComputeIntegrityHash:
                 "action": "create",
                 "resource_id": None,
                 "metadata": {},
+                "version": 2,
+                "actor_id": None,
+                "actor_email": None,
+                "severity": None,
+                "endpoint": None,
             },
             sort_keys=True,
             default=str,

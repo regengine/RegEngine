@@ -18,7 +18,9 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from shared.auth import APIKey, require_api_key
-from app.routes_discovery import router
+import app.routes_discovery as routes_discovery
+
+router = routes_discovery.router
 
 
 # ---------------------------------------------------------------------------
@@ -39,9 +41,9 @@ def _build_client(monkeypatch) -> tuple[TestClient, MagicMock, MagicMock, MagicM
     fake_session = MagicMock()
     mock_enqueue = MagicMock(return_value=1)
 
-    monkeypatch.setattr("app.routes_discovery.redis.from_url", lambda *a, **kw: fake_redis)
-    monkeypatch.setattr("app.routes_discovery.SessionLocal", lambda: fake_session)
-    monkeypatch.setattr("app.routes_discovery.enqueue_task", mock_enqueue)
+    monkeypatch.setattr(routes_discovery.redis, "from_url", lambda *a, **kw: fake_redis)
+    monkeypatch.setattr(routes_discovery, "SessionLocal", lambda: fake_session)
+    monkeypatch.setattr(routes_discovery, "enqueue_task", mock_enqueue)
 
     app = FastAPI()
     app.include_router(router)

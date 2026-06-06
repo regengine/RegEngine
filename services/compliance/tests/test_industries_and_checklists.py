@@ -20,8 +20,8 @@ for key in _to_remove:
 sys.path.insert(0, str(service_dir))
 
 os.environ.setdefault("DATABASE_URL", "sqlite:///:memory:")
-os.environ.setdefault("REGENGINE_ENV", "test")
-os.environ.setdefault("AUTH_TEST_BYPASS_TOKEN", "test-bypass-token-industries")
+os.environ["REGENGINE_ENV"] = "test"
+os.environ["AUTH_TEST_BYPASS_TOKEN"] = "test-bypass-token-compliance"
 os.environ.setdefault("AUTH_SECRET_KEY", "test-secret-key-industries")
 
 import pytest

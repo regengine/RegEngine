@@ -28,6 +28,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from tests.integration_requirements import create_started_container_or_skip
 
 testcontainers = pytest.importorskip("testcontainers")  # noqa: F841
 pytest.importorskip("testcontainers.postgres")
@@ -43,7 +44,12 @@ MIGRATION_SQL = REPO_ROOT / "alembic" / "sql" / "V066__audit_logs_append_only.sq
 
 @pytest.fixture(scope="module")
 def pg_engine():
-    with PostgresContainer("postgres:16") as pg:
+    container, pg = create_started_container_or_skip(
+        PostgresContainer,
+        "postgres:16",
+        reason="PostgresContainer unavailable",
+    )
+    try:
         engine = create_engine(pg.get_connection_url(), future=True)
         with engine.begin() as conn:
             # Minimal audit_logs shape sufficient to exercise the trigger.
@@ -59,6 +65,8 @@ def pg_engine():
             conn.execute(text(MIGRATION_SQL.read_text()))
         yield engine
         engine.dispose()
+    finally:
+        container.stop()
 
 
 @pytest.fixture

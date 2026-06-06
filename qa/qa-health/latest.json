@@ -1,0 +1,179 @@
+{
+  "artifact_refs": [
+    {
+      "id": "backend-pytest-junit",
+      "label": "Backend pytest JUnit",
+      "path": ".qa-health/pytest.xml",
+      "type": "junit"
+    },
+    {
+      "id": "playwright-results",
+      "label": "Playwright failure artifacts",
+      "path": "frontend/test-results",
+      "type": "directory"
+    }
+  ],
+  "clusters": [
+    {
+      "affected_suites": [
+        "frontend-e2e"
+      ],
+      "impact": "Most authenticated browser journeys fail before reaching dashboard assertions.",
+      "next_action": "Align Playwright login setup with the password tab or update the login UI default for test credentials.",
+      "owner_lane": "frontend",
+      "severity": "critical",
+      "title": "Login tests stuck in email-code mode"
+    },
+    {
+      "affected_suites": [
+        "frontend-e2e"
+      ],
+      "impact": "Invite acceptance cannot extract the token from generated invite links.",
+      "next_action": "Read invite tokens from the URL fragment or change generated invite links to query-string tokens.",
+      "owner_lane": "frontend",
+      "severity": "high",
+      "title": "Invite token fragment/query mismatch"
+    },
+    {
+      "affected_suites": [
+        "backend-pytest"
+      ],
+      "impact": "FDA request, package manifest, stale-evaluation, tenant-isolation, deadline-breach, and identity-ambiguity flows still fail in the local full-suite run.",
+      "next_action": "Triage the request-workflow and tenant-isolation failure families first, then rerun the affected E2E domain suites.",
+      "owner_lane": "backend",
+      "severity": "critical",
+      "title": "Backend domain workflow blockers"
+    },
+    {
+      "affected_suites": [
+        "backend-pytest"
+      ],
+      "impact": "Local full-suite signal still includes Docker/Postgres-backed migration and RLS suites that cannot produce a clean offline release readout.",
+      "next_action": "Run the full backend suite with required Docker/Postgres fixtures, or split infra-required tests from offline unit checks.",
+      "owner_lane": "qa",
+      "severity": "high",
+      "title": "Infrastructure-dependent backend suites unavailable"
+    },
+    {
+      "affected_suites": [
+        "backend-pytest"
+      ],
+      "impact": "Auth coverage now explicitly permits public probes and static reference endpoints; this remains a release decision because those routes are unauthenticated by design.",
+      "next_action": "Have security/product confirm the public endpoint allowlist before treating auth coverage as a closed release gate.",
+      "owner_lane": "security",
+      "severity": "medium",
+      "title": "Public endpoint allowlist needs release sign-off"
+    }
+  ],
+  "decision_checks": [
+    {
+      "detail": "105 failures and 21 errors in the latest full-project pytest run; several order-dependent blockers were fixed afterward and verified with targeted tests.",
+      "label": "Blocking: backend unit failures",
+      "status": "blocking"
+    },
+    {
+      "detail": "55 failures, 13 passes, and 2 not-run outcomes in Playwright E2E.",
+      "label": "Blocking: E2E auth path",
+      "status": "blocking"
+    },
+    {
+      "detail": "npm ci dry-run now succeeds after package-lock.json was reconciled with package.json.",
+      "label": "Passed: install reproducibility",
+      "status": "passed"
+    },
+    {
+      "detail": "Frontend lint passed with warnings.",
+      "label": "Advisory: lint warnings",
+      "status": "advisory"
+    },
+    {
+      "detail": "Vitest passed 627 tests with 4 skipped.",
+      "label": "Passed: Vitest",
+      "status": "passed"
+    },
+    {
+      "detail": "ESLint completed with 0 errors.",
+      "label": "Passed: frontend lint",
+      "status": "passed"
+    }
+  ],
+  "generated_at": "2026-06-04T04:54:00Z",
+  "overall": {
+    "advisory_count": 1,
+    "blocking_count": 2,
+    "ready_percent": 50,
+    "status": "failing"
+  },
+  "schema_version": "1.0",
+  "source": {
+    "branch": "codex/qa-health-dashboard",
+    "commit": null,
+    "kind": "local_artifact",
+    "note": "Updated after package-lock, QA dashboard, and backend targeted-test repairs; backend and E2E blockers remain from local full-project verification, while several order-dependent failures were fixed after the recorded full run and verified targeted.",
+    "path": "qa/qa-health/latest.json",
+    "run_id": null,
+    "workflow": "Local full-project verification"
+  },
+  "suites": [
+    {
+      "blocking": true,
+      "command": "npm ci",
+      "duration_seconds": null,
+      "errors": 0,
+      "failed": 0,
+      "id": "frontend-install",
+      "label": "Install reproducibility",
+      "passed": 1,
+      "skipped": 0,
+      "status": "passed"
+    },
+    {
+      "blocking": true,
+      "command": "python3 -m pytest --no-cov",
+      "duration_seconds": 338.21,
+      "errors": 21,
+      "failed": 105,
+      "id": "backend-pytest",
+      "label": "Backend pytest",
+      "passed": 8521,
+      "skipped": 319,
+      "status": "failed"
+    },
+    {
+      "blocking": false,
+      "command": "npm run lint",
+      "duration_seconds": null,
+      "errors": 0,
+      "failed": 0,
+      "id": "frontend-lint",
+      "label": "Frontend lint",
+      "passed": 1,
+      "skipped": 62,
+      "status": "passed"
+    },
+    {
+      "blocking": true,
+      "command": "npm run test:run",
+      "duration_seconds": null,
+      "errors": 0,
+      "failed": 0,
+      "id": "frontend-vitest",
+      "label": "Frontend Vitest",
+      "passed": 627,
+      "skipped": 4,
+      "status": "passed"
+    },
+    {
+      "blocking": true,
+      "command": "npm run test:e2e",
+      "duration_seconds": 2694.0,
+      "errors": 0,
+      "failed": 55,
+      "id": "frontend-e2e",
+      "label": "Playwright E2E",
+      "passed": 13,
+      "skipped": 2,
+      "status": "failed"
+    }
+  ]
+}

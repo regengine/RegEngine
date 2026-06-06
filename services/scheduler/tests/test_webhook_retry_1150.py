@@ -34,6 +34,9 @@ os.environ.setdefault("LOG_LEVEL", "WARNING")
 _SERVICES_DIR = Path(__file__).resolve().parent.parent.parent
 if str(_SERVICES_DIR) not in sys.path:
     sys.path.insert(0, str(_SERVICES_DIR))
+for _name in list(sys.modules):
+    if _name == "app" or _name.startswith("app."):
+        sys.modules.pop(_name, None)
 
 from shared.paths import ensure_shared_importable  # noqa: E402
 ensure_shared_importable()
@@ -42,15 +45,15 @@ import pytest  # noqa: E402
 import httpx  # noqa: E402
 
 from app.models import EnforcementItem, EnforcementSeverity, SourceType  # noqa: E402
-from app.notifications import (  # noqa: E402
-    OutboxEntry,
-    WebhookNotifier,
-    _IN_THREAD_BACKOFF_SCHEDULE_SECONDS,
-    _MAX_OUTBOX_ATTEMPTS,
-    _OUTBOX_BACKOFF_SCHEDULE_SECONDS,
-    _RETRY_AFTER_CAP_SECONDS,
-    _parse_retry_after,
-)
+import app.notifications as notifications_mod  # noqa: E402
+
+OutboxEntry = notifications_mod.OutboxEntry
+WebhookNotifier = notifications_mod.WebhookNotifier
+_IN_THREAD_BACKOFF_SCHEDULE_SECONDS = notifications_mod._IN_THREAD_BACKOFF_SCHEDULE_SECONDS
+_MAX_OUTBOX_ATTEMPTS = notifications_mod._MAX_OUTBOX_ATTEMPTS
+_OUTBOX_BACKOFF_SCHEDULE_SECONDS = notifications_mod._OUTBOX_BACKOFF_SCHEDULE_SECONDS
+_RETRY_AFTER_CAP_SECONDS = notifications_mod._RETRY_AFTER_CAP_SECONDS
+_parse_retry_after = notifications_mod._parse_retry_after
 
 
 def _make_item(severity: EnforcementSeverity = EnforcementSeverity.HIGH) -> EnforcementItem:
@@ -74,7 +77,7 @@ def _make_response(status_code: int, headers: dict = None, text: str = "") -> Ma
 
 @pytest.fixture(autouse=True)
 def _allow_mock_webhook_urls(monkeypatch):
-    monkeypatch.setattr("app.notifications.validate_url", lambda _url: None)
+    monkeypatch.setattr(notifications_mod, "validate_url", lambda _url: None)
 
 
 # ── Retry-After header parsing ───────────────────────────────────────────────
@@ -114,7 +117,7 @@ class TestParseRetryAfter_Issue1150:
 
 
 class TestInThreadRetryAfter_Issue1150:
-    @patch("app.notifications.time.sleep")
+    @patch.object(notifications_mod.time, "sleep")
     def test_retry_after_honored_on_503(self, mock_sleep):
         """503 with Retry-After: 7 → second attempt sleeps for max(7, 1)=7."""
         n = WebhookNotifier(
@@ -132,7 +135,7 @@ class TestInThreadRetryAfter_Issue1150:
         mock_sleep.assert_called_with(7.0)
         n.close()
 
-    @patch("app.notifications.time.sleep")
+    @patch.object(notifications_mod.time, "sleep")
     def test_429_is_retried_with_retry_after(self, mock_sleep):
         """429 used to be treated as a non-retryable 4xx; now it IS retried
         with Retry-After honored."""
@@ -150,7 +153,7 @@ class TestInThreadRetryAfter_Issue1150:
         assert mock_post.call_count == 2
         n.close()
 
-    @patch("app.notifications.time.sleep")
+    @patch.object(notifications_mod.time, "sleep")
     def test_non_429_4xx_still_not_retried(self, mock_sleep):
         """400 and 404 remain non-retryable — those are real client bugs."""
         n = WebhookNotifier(
@@ -166,7 +169,7 @@ class TestInThreadRetryAfter_Issue1150:
         assert mock_post.call_count == 1
         n.close()
 
-    @patch("app.notifications.time.sleep")
+    @patch.object(notifications_mod.time, "sleep")
     def test_retry_after_capped_at_60s(self, mock_sleep):
         """Misbehaving server sending Retry-After: 99999 gets capped."""
         n = WebhookNotifier(
@@ -181,7 +184,7 @@ class TestInThreadRetryAfter_Issue1150:
         mock_sleep.assert_called_with(_RETRY_AFTER_CAP_SECONDS)
         n.close()
 
-    @patch("app.notifications.time.sleep")
+    @patch.object(notifications_mod.time, "sleep")
     def test_longer_backoff_schedule(self, mock_sleep):
         """Without Retry-After, the in-thread schedule is 1s / 5s / 30s."""
         n = WebhookNotifier(
@@ -206,7 +209,7 @@ class TestInThreadRetryAfter_Issue1150:
 
 
 class TestPersistentOutbox_Issue1150:
-    @patch("app.notifications.time.sleep")
+    @patch.object(notifications_mod.time, "sleep")
     def test_failed_delivery_writes_to_outbox(self, mock_sleep, tmp_path):
         outbox = tmp_path / "webhook_outbox.jsonl"
         n = WebhookNotifier(
@@ -435,7 +438,7 @@ class TestPersistentOutbox_Issue1150:
 
 
 class TestFailureStreak_Issue1150:
-    @patch("app.notifications.time.sleep")
+    @patch.object(notifications_mod.time, "sleep")
     def test_streak_increments_on_consecutive_failures(self, mock_sleep):
         n = WebhookNotifier(
             urls=["https://hook.example.com"],
@@ -451,7 +454,7 @@ class TestFailureStreak_Issue1150:
         assert streaks["https://hook.example.com"] == 3
         n.close()
 
-    @patch("app.notifications.time.sleep")
+    @patch.object(notifications_mod.time, "sleep")
     def test_streak_resets_on_success(self, mock_sleep):
         n = WebhookNotifier(
             urls=["https://hook.example.com"],
@@ -491,7 +494,7 @@ class TestFailureStreak_Issue1150:
 
 
 class TestOutboxSurvivesRestart_Issue1150:
-    @patch("app.notifications.time.sleep")
+    @patch.object(notifications_mod.time, "sleep")
     def test_fresh_notifier_picks_up_prior_outbox(self, mock_sleep, tmp_path):
         """End-to-end: a failed delivery from one WebhookNotifier instance
         is delivered on a subsequent ``retry_outbox_once()`` from a FRESH

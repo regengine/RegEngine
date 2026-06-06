@@ -57,6 +57,7 @@ import app.authz as authz  # noqa: E402
 from app.authz import IngestionPrincipal, get_ingestion_principal  # noqa: E402
 from app import stripe_billing  # noqa: E402
 from app.stripe_billing import state as state_mod  # noqa: E402
+from app.stripe_billing import webhooks as webhooks_mod  # noqa: E402
 
 
 # ── Fake Redis with realistic SET/NX semantics ──────────────────────────────
@@ -429,17 +430,15 @@ async def test_process_stripe_webhook_short_circuits_duplicate(
     """Call ``_process_stripe_webhook`` twice with the same event.id
     at the function level (not the FastAPI route) — the dispatcher
     runs exactly once."""
-    from app.stripe_billing import webhooks as webhooks_mod
-
     fake = _FakeRedis()
-    monkeypatch.setattr(state_mod, "_redis_client", lambda: fake)
+    monkeypatch.setattr(webhooks_mod._state_mod, "_redis_client", lambda: fake)
     monkeypatch.setenv("STRIPE_SECRET_KEY", "sk_test_123")
     monkeypatch.setenv("STRIPE_WEBHOOK_SECRET", "whsec_test_123")
 
     def _fake_construct_event(payload, sig_header, secret):
         return {"id": "evt_proc_1", "type": "invoice.paid", "data": {"object": {}}}
 
-    monkeypatch.setattr(stripe_billing.stripe.Webhook, "construct_event", _fake_construct_event)
+    monkeypatch.setattr(webhooks_mod.stripe.Webhook, "construct_event", _fake_construct_event)
 
     handler = AsyncMock()
     monkeypatch.setattr(webhooks_mod, "_handle_stripe_event", handler)

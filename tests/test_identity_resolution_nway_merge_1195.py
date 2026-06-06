@@ -318,6 +318,7 @@ class TestSplitReversesNwayMerge_Issue1195:
             "eid-target",
             "merge",
             False,  # is_reversed
+            {"eid-a": [], "eid-b": [], "eid-c": []},
         )
 
         # Canonical-name lookups for the restore-alias path inside the

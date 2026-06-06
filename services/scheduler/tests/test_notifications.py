@@ -31,7 +31,10 @@ import pytest
 import httpx
 
 from app.models import EnforcementItem, EnforcementSeverity, SourceType
-from app.notifications import WebhookNotifier, DeliveryResult
+import app.notifications as notifications_mod
+
+WebhookNotifier = notifications_mod.WebhookNotifier
+DeliveryResult = notifications_mod.DeliveryResult
 
 
 def _make_item(severity=EnforcementSeverity.MEDIUM, **kw) -> EnforcementItem:
@@ -60,7 +63,7 @@ def notifier():
 
 @pytest.fixture(autouse=True)
 def _allow_mock_webhook_urls(monkeypatch):
-    monkeypatch.setattr("app.notifications.validate_url", lambda _url: None)
+    monkeypatch.setattr(notifications_mod, "validate_url", lambda _url: None)
 
 
 # ─── Successful delivery ────────────────────────────────────────────────
@@ -108,7 +111,7 @@ class TestRetryBehavior:
         assert results[0].attempts == 1  # No retry
         assert mock_post.call_count == 1
 
-    @patch("app.notifications.time.sleep")  # Avoid actual sleep in tests
+    @patch.object(notifications_mod.time, "sleep")  # Avoid actual sleep in tests
     def test_5xx_retries(self, mock_sleep, notifier):
         fail_response = MagicMock()
         fail_response.status_code = 500
@@ -125,7 +128,7 @@ class TestRetryBehavior:
         assert results[0].success is True
         assert results[0].attempts == 2
 
-    @patch("app.notifications.time.sleep")
+    @patch.object(notifications_mod.time, "sleep")
     def test_timeout_retries(self, mock_sleep, notifier):
         success_response = MagicMock()
         success_response.status_code = 200
@@ -138,7 +141,7 @@ class TestRetryBehavior:
         assert results[0].success is True
         assert results[0].attempts == 2
 
-    @patch("app.notifications.time.sleep")
+    @patch.object(notifications_mod.time, "sleep")
     def test_connection_error_retries(self, mock_sleep, notifier):
         success_response = MagicMock()
         success_response.status_code = 200
@@ -150,7 +153,7 @@ class TestRetryBehavior:
             results = notifier.notify([_make_item()])
         assert results[0].success is True
 
-    @patch("app.notifications.time.sleep")
+    @patch.object(notifications_mod.time, "sleep")
     def test_all_retries_exhausted(self, mock_sleep, notifier):
         fail_response = MagicMock()
         fail_response.status_code = 503
@@ -166,7 +169,7 @@ class TestRetryBehavior:
 
 
 class TestDeadLetterQueue:
-    @patch("app.notifications.time.sleep")
+    @patch.object(notifications_mod.time, "sleep")
     def test_failed_delivery_added_to_dead_letter(self, mock_sleep, notifier):
         fail_response = MagicMock()
         fail_response.status_code = 500

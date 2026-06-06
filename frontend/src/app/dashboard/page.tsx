@@ -19,6 +19,7 @@ import { useSystemStatus } from "@/hooks/use-api";
 import { SystemHealthWidget } from "@/components/dashboard/system-health-widget";
 import { MetricsOverviewWidget } from "@/components/dashboard/metrics-overview-widget";
 import { ScanHistoryWidget } from "@/components/dashboard/scan-history-widget";
+import { QAHealthWidget } from "@/components/dashboard/qa-health-widget";
 import { fetchWorkbenchReadinessSummary } from "@/lib/api-hooks";
 import {
   Shield,
@@ -437,6 +438,7 @@ export default function DashboardPage() {
             </div>
             <div className="space-y-6">
               <SystemHealthWidget />
+              {effectiveUser.is_sysadmin && <QAHealthWidget />}
               <ScanHistoryWidget />
             </div>
           </div>

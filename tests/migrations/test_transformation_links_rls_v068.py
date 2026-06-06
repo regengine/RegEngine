@@ -26,6 +26,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from tests.integration_requirements import create_started_container_or_skip
 
 testcontainers = pytest.importorskip("testcontainers")  # noqa: F841
 pytest.importorskip("testcontainers.postgres")
@@ -63,7 +64,12 @@ _TENANT_B = "22222222-2222-2222-2222-222222222222"
 
 @pytest.fixture(scope="module")
 def pg_engine():
-    with PostgresContainer("postgres:16") as pg:
+    container, pg = create_started_container_or_skip(
+        PostgresContainer,
+        "postgres:16",
+        reason="PostgresContainer unavailable",
+    )
+    try:
         engine = create_engine(pg.get_connection_url(), future=True)
         with engine.begin() as conn:
             # Create the ``regengine`` role the policy references.
@@ -164,6 +170,8 @@ def pg_engine():
 
         yield engine
         engine.dispose()
+    finally:
+        container.stop()
 
 
 def _as_regengine(engine):

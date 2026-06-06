@@ -222,10 +222,10 @@ class TestRuleApplicability:
         engine = RulesEngine.__new__(RulesEngine)
         engine._rules_cache = rules
 
-        receiving_rules = engine.get_applicable_rules("receiving", rules)
+        receiving_rules = engine.get_applicable_rules("receiving", rules, event_is_ftl=True)
         assert len(receiving_rules) == 2  # Receiving Rule + Universal Rule
 
-        shipping_rules = engine.get_applicable_rules("shipping", rules)
+        shipping_rules = engine.get_applicable_rules("shipping", rules, event_is_ftl=True)
         assert len(shipping_rules) == 2  # Shipping Rule + Universal Rule
 
     def test_empty_cte_types_means_all(self):
@@ -234,7 +234,7 @@ class TestRuleApplicability:
         engine._rules_cache = [rule]
 
         for cte in ["receiving", "shipping", "harvesting", "transformation"]:
-            applicable = engine.get_applicable_rules(cte, [rule])
+            applicable = engine.get_applicable_rules(cte, [rule], event_is_ftl=True)
             assert len(applicable) == 1
 
 
@@ -244,7 +244,7 @@ class TestRuleApplicability:
 
 class TestRuleSeedData:
     def test_seed_count(self):
-        assert len(FSMA_RULE_SEEDS) == 28
+        assert len(FSMA_RULE_SEEDS) == 36
 
     def test_all_seeds_have_required_fields(self):
         required = {"title", "severity", "category", "evaluation_logic", "failure_reason_template"}

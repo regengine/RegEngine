@@ -33,8 +33,28 @@ from unittest.mock import ANY
 from app.models import EnforcementItem, EnforcementSeverity, SourceType
 
 
-def _make_item(severity=EnforcementSeverity.MEDIUM, source_type=SourceType.FDA_RECALL, **kw) -> EnforcementItem:
-    return EnforcementItem(
+def _coerce_enum(enum_cls, value):
+    if isinstance(value, enum_cls):
+        return value
+    return enum_cls(getattr(value, "value", value))
+
+
+def _active_model_types():
+    from app import kafka_producer as kafka_producer_mod
+
+    model_mod = sys.modules[kafka_producer_mod.EnforcementItem.__module__]
+    return (
+        kafka_producer_mod.EnforcementItem,
+        model_mod.EnforcementSeverity,
+        model_mod.SourceType,
+    )
+
+
+def _make_item(severity=None, source_type=None, **kw) -> EnforcementItem:
+    item_cls, severity_cls, source_type_cls = _active_model_types()
+    severity = _coerce_enum(severity_cls, severity or severity_cls.MEDIUM)
+    source_type = _coerce_enum(source_type_cls, source_type or source_type_cls.FDA_RECALL)
+    return item_cls(
         source_type=source_type,
         source_id=kw.get("source_id", "test-recall-001"),
         title=kw.get("title", "Test Recall"),

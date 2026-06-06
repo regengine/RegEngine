@@ -6,6 +6,7 @@ with DB / in-memory fallback and expiry handling.
 """
 from __future__ import annotations
 
+import importlib
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 from typing import Any, Optional
@@ -32,6 +33,10 @@ from app.webhook_compat import _verify_api_key
 from app.webhook_models import EventResult, IngestResponse
 
 
+def _portal_integration_router():
+    return importlib.import_module(f"{sp.__package__}.integration_router")
+
+
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
@@ -41,9 +46,11 @@ from app.webhook_models import EventResult, IngestResponse
 def _clear_portal_links():
     sp._portal_links.clear()
     ir._profile_store.clear()
+    _portal_integration_router()._profile_store.clear()
     yield
     sp._portal_links.clear()
     ir._profile_store.clear()
+    _portal_integration_router()._profile_store.clear()
 
 
 class _FakeResult:
@@ -661,8 +668,9 @@ class TestGetPortalDetails:
             "integration_profile_id": "prof_123",
             "expires_at": future,
         }
-        ir._profile_store["t1"] = {
-            "prof_123": ir.IntegrationProfile(
+        portal_ir = _portal_integration_router()
+        portal_ir._profile_store["t1"] = {
+            "prof_123": portal_ir.IntegrationProfile(
                 profile_id="prof_123",
                 tenant_id="t1",
                 display_name="FreshPack CSV",

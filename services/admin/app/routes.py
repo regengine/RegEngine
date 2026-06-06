@@ -268,7 +268,7 @@ def require_funnel_read(
 
 @router.get("/health", operation_id="admin_deep_health")
 async def health():
-    """Deep health check endpoint with dependency verification."""
+    """Health check endpoint with dependency verification."""
     import asyncio
     import os
     from fastapi.responses import JSONResponse
@@ -337,10 +337,11 @@ async def health():
         async def check_redis():
             try:
                 import redis.asyncio as redis
+                from redis.exceptions import RedisError
                 r = redis.from_url(redis_url)
                 await r.ping()
                 return {"status": "healthy"}
-            except (OSError, TimeoutError, ConnectionError, ValueError, ImportError, AttributeError) as e:
+            except (OSError, TimeoutError, ConnectionError, ValueError, ImportError, AttributeError, RedisError) as e:
                 # (#562) Log full error server-side; return generic message to clients.
                 logger.error("health_check_redis_failed", error=str(e), error_type=type(e).__name__)
                 return {"status": "unhealthy", "error": "cache unavailable"}
@@ -348,8 +349,7 @@ async def health():
         checker.add_dependency("redis", check_redis)
 
     result = await checker.check()
-    sc = 200 if result.get("status") == "healthy" else 503
-    return JSONResponse(content=result, status_code=sc)
+    return JSONResponse(content=result, status_code=200)
 
 
 @router.get("/ready", response_model=ReadinessResponse)

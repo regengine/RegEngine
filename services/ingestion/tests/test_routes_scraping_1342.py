@@ -33,7 +33,8 @@ pytest.importorskip("fastapi")
 from shared.auth import APIKey, require_api_key
 from app.scrapers.state_adaptors.base import FetchedItem, Source
 import app.routes_scraping as routes_scraping
-from app.routes_scraping import router as scraping_router
+
+scraping_router = routes_scraping.router
 
 
 # ---------------------------------------------------------------------------
@@ -214,7 +215,8 @@ class TestIngestAllRegulationsSummary:
 
     def _setup_sources(self, monkeypatch: pytest.MonkeyPatch, sources) -> None:
         monkeypatch.setattr(
-            "app.routes_scraping.FSMA_SOURCES",
+            routes_scraping,
+            "FSMA_SOURCES",
             sources,
         )
 
@@ -229,7 +231,8 @@ class TestIngestAllRegulationsSummary:
     def test_queued_manual_counted(self, monkeypatch: pytest.MonkeyPatch) -> None:
         self._setup_sources(monkeypatch, [self._fake_source()])
         monkeypatch.setattr(
-            "app.routes_scraping.discovery.scrape",
+            routes_scraping.discovery,
+            "scrape",
             AsyncMock(return_value={"status": "queued_manual"}),
         )
         client = _client(_make_api_key(jurisdictions=["US"]))
@@ -244,7 +247,8 @@ class TestIngestAllRegulationsSummary:
     def test_unchanged_counted(self, monkeypatch: pytest.MonkeyPatch) -> None:
         self._setup_sources(monkeypatch, [self._fake_source()])
         monkeypatch.setattr(
-            "app.routes_scraping.discovery.scrape",
+            routes_scraping.discovery,
+            "scrape",
             AsyncMock(return_value={"status": "unchanged"}),
         )
         client = _client(_make_api_key(jurisdictions=["US"]))
@@ -259,7 +263,8 @@ class TestIngestAllRegulationsSummary:
         # No ``status`` key -> falls through to ``.get("status", "failed")``
         # default, lands in ``failed`` bucket.
         monkeypatch.setattr(
-            "app.routes_scraping.discovery.scrape",
+            routes_scraping.discovery,
+            "scrape",
             AsyncMock(return_value={}),
         )
         client = _client(_make_api_key(jurisdictions=["US"]))
@@ -271,7 +276,8 @@ class TestIngestAllRegulationsSummary:
     def test_exception_counted_as_failed(self, monkeypatch: pytest.MonkeyPatch) -> None:
         self._setup_sources(monkeypatch, [self._fake_source()])
         monkeypatch.setattr(
-            "app.routes_scraping.discovery.scrape",
+            routes_scraping.discovery,
+            "scrape",
             AsyncMock(side_effect=RuntimeError("boom")),
         )
         client = _client(_make_api_key(jurisdictions=["US"]))
@@ -291,7 +297,7 @@ class TestIngestAllRegulationsSummary:
             RuntimeError("boom"),
         ]
         mock = AsyncMock(side_effect=responses)
-        monkeypatch.setattr("app.routes_scraping.discovery.scrape", mock)
+        monkeypatch.setattr(routes_scraping.discovery, "scrape", mock)
 
         client = _client(_make_api_key(jurisdictions=["US"]))
         response = client.post(self.ENDPOINT)

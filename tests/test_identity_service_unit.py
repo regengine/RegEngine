@@ -329,6 +329,7 @@ class TestSplitEntity:
         fetch_merge = MagicMock()
         fetch_merge.fetchone.return_value = (
             "m1", ["eid-source"], "eid-target", "merge", False,
+            {"eid-source": []},
         )
         # Subsequent calls: various updates and lookups
         update_mock = MagicMock()

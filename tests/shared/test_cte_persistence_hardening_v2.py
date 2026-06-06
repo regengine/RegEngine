@@ -8,7 +8,7 @@ from the April 17 shared-kernel audit:
   before issuing its SELECT, relying solely on the caller having set
   RLS context and on the explicit ``tenant_id = :tid`` predicate.
   Locked in: every call path to ``query_events_by_tlc`` issues
-  ``SET LOCAL app.tenant_id`` before the SELECT.
+  the canonical ``app.tenant_id`` GUC write before the SELECT.
 
 - #1322 — ``_expand_tlcs_via_transformation_links`` hard-coded the
   recursion depth at 5 in the signature and swallowed every
@@ -42,6 +42,9 @@ import pytest
 from sqlalchemy.exc import OperationalError, ProgrammingError
 
 from shared.cte_persistence.core import CTEPersistence
+
+TENANT_A = "11111111-1111-1111-1111-111111111111"
+TENANT_B = "22222222-2222-2222-2222-222222222222"
 
 
 # ---------------------------------------------------------------------------
@@ -98,7 +101,7 @@ class FakeSession:
 
 class TestTenantContext_Issue1321:
     def test_query_events_by_tlc_sets_tenant_context_before_select(self):
-        """The SET LOCAL app.tenant_id must be the FIRST DB call, so
+        """The tenant-context GUC write must be the FIRST DB call, so
         the subsequent SELECT is bounded by RLS even if the explicit
         predicate is removed by a future refactor."""
         session = FakeSession()
@@ -106,19 +109,19 @@ class TestTenantContext_Issue1321:
         session.add_rule(r"FROM fsma\.cte_events", _FakeResult(rows=[]))
 
         p = CTEPersistence(session=session)
-        p.query_events_by_tlc(tenant_id="t-1", tlc="TLC-1")
+        p.query_events_by_tlc(tenant_id=TENANT_A, tlc="TLC-1")
 
         # The set_tenant_context SQL must appear in the call log and
         # precede any fsma.cte_events SELECT.
         set_calls = [
             i for i, (sql, _) in enumerate(session.calls)
-            if "SET LOCAL app.tenant_id" in sql
+            if "app.tenant_id" in sql
         ]
         select_calls = [
             i for i, (sql, _) in enumerate(session.calls)
             if "FROM fsma.cte_events" in sql
         ]
-        assert set_calls, "query_events_by_tlc must SET LOCAL app.tenant_id"
+        assert set_calls, "query_events_by_tlc must set app.tenant_id"
         assert select_calls, "query_events_by_tlc must SELECT from fsma.cte_events"
         assert set_calls[0] < select_calls[0], (
             "tenant context must be set BEFORE the cte_events SELECT"
@@ -132,15 +135,15 @@ class TestTenantContext_Issue1321:
         session.add_rule(r"FROM fsma\.cte_events", _FakeResult(rows=[]))
 
         p = CTEPersistence(session=session)
-        p.query_events_by_tlc(tenant_id="t-abc-123", tlc="TLC-1")
+        p.query_events_by_tlc(tenant_id=TENANT_B, tlc="TLC-1")
 
         set_calls = [
             (sql, params) for sql, params in session.calls
-            if "SET LOCAL app.tenant_id" in sql
+            if "app.tenant_id" in sql
         ]
         assert set_calls
         _, params = set_calls[0]
-        assert params["tid"] == "t-abc-123"
+        assert params["tid"] == TENANT_B
 
     def test_explicit_tenant_id_predicate_retained_as_defense_in_depth(self):
         """Even with RLS set, the explicit tenant_id = :tid WHERE must
@@ -151,7 +154,7 @@ class TestTenantContext_Issue1321:
         session.add_rule(r"FROM fsma\.cte_events", _FakeResult(rows=[]))
 
         p = CTEPersistence(session=session)
-        p.query_events_by_tlc(tenant_id="t-1", tlc="TLC-1")
+        p.query_events_by_tlc(tenant_id=TENANT_A, tlc="TLC-1")
 
         select_sql = next(
             sql for sql, _ in session.calls if "FROM fsma.cte_events" in sql
@@ -180,7 +183,7 @@ class TestTraversalDepth_Issue1322:
         session.add_rule(r"FROM fsma\.cte_events", _FakeResult(rows=[]))
 
         p = CTEPersistence(session=session)
-        p.query_events_by_tlc(tenant_id="t-1", tlc="TLC-1", max_depth=12)
+        p.query_events_by_tlc(tenant_id=TENANT_A, tlc="TLC-1", max_depth=12)
 
         # Find the recursive CTE call and assert the bound depth.
         cte_calls = [
@@ -198,7 +201,7 @@ class TestTraversalDepth_Issue1322:
         p = CTEPersistence(session=session)
         with pytest.raises(ValueError, match="depth must be"):
             p._expand_tlcs_via_transformation_links(
-                tenant_id="t-1", seed_tlc="TLC-1", depth=-1,
+                tenant_id=TENANT_A, seed_tlc="TLC-1", depth=-1,
             )
 
     def test_programming_error_degrades_to_seed_tlc_only(self):
@@ -214,7 +217,7 @@ class TestTraversalDepth_Issue1322:
 
         p = CTEPersistence(session=session)
         result = p._expand_tlcs_via_transformation_links(
-            tenant_id="t-1", seed_tlc="TLC-X",
+            tenant_id=TENANT_A, seed_tlc="TLC-X",
         )
         assert result == ["TLC-X"]
 
@@ -230,7 +233,7 @@ class TestTraversalDepth_Issue1322:
 
         p = CTEPersistence(session=session)
         result = p._expand_tlcs_via_transformation_links(
-            tenant_id="t-1", seed_tlc="TLC-X",
+            tenant_id=TENANT_A, seed_tlc="TLC-X",
         )
         assert result == ["TLC-X"]
 
@@ -250,7 +253,7 @@ class TestTraversalDepth_Issue1322:
         p = CTEPersistence(session=session)
         with pytest.raises(RuntimeError):
             p._expand_tlcs_via_transformation_links(
-                tenant_id="t-1", seed_tlc="TLC-X",
+                tenant_id=TENANT_A, seed_tlc="TLC-X",
             )
 
 
@@ -285,7 +288,7 @@ class TestBatchQuantityClamp_Issue1336:
 
         p = CTEPersistence(session=session)
         evt = _base_batch_event(quantity=0.001)
-        results = p.store_events_batch(tenant_id="t-1", events=[evt])
+        results = p.store_events_batch(tenant_id=TENANT_A, events=[evt])
 
         assert results and results[0].success
         cte_inserts = [c for c in session.calls if "INSERT INTO fsma.cte_events" in c[0]]
@@ -305,7 +308,7 @@ class TestBatchQuantityClamp_Issue1336:
         p = CTEPersistence(session=session)
         evt = _base_batch_event(quantity=-1.0)
         with pytest.raises(ValueError, match="quantity must be > 0"):
-            p.store_events_batch(tenant_id="t-1", events=[evt])
+            p.store_events_batch(tenant_id=TENANT_A, events=[evt])
 
 
 class TestOrphanChain_Issue1336:
@@ -322,7 +325,7 @@ class TestOrphanChain_Issue1336:
 
         p = CTEPersistence(session=session)
         evt = _base_batch_event()
-        p.store_events_batch(tenant_id="t-1", events=[evt])
+        p.store_events_batch(tenant_id=TENANT_A, events=[evt])
 
         chain_inserts = [c for c in session.calls if "INSERT INTO fsma.hash_chain" in c[0]]
         for sql, _ in chain_inserts:
@@ -344,7 +347,7 @@ class TestFutureDate_Issue1336:
         future = (datetime.now(timezone.utc) + timedelta(days=365 * 5)).isoformat()
         with pytest.raises(ValueError, match="future"):
             p.store_events_batch(
-                tenant_id="t-1", events=[_base_batch_event(event_timestamp=future)]
+                tenant_id=TENANT_A, events=[_base_batch_event(event_timestamp=future)]
             )
 
 
@@ -368,7 +371,7 @@ class TestBatchKdeJsonb_Issue1336:
             event_type="transformation",
             kdes={"input_lot_codes": ["TLC-A", "TLC-B"], "process_type": "cut"},
         )
-        p.store_events_batch(tenant_id="t-1", events=[evt])
+        p.store_events_batch(tenant_id=TENANT_A, events=[evt])
 
         kde_inserts = [c for c in session.calls if "INSERT INTO fsma.cte_kdes" in c[0]]
         assert kde_inserts

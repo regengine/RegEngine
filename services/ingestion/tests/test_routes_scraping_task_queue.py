@@ -18,7 +18,9 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from shared.auth import APIKey, require_api_key
-from app.routes_scraping import router
+import app.routes_scraping as routes_scraping
+
+router = routes_scraping.router
 
 
 # ---------------------------------------------------------------------------
@@ -43,8 +45,8 @@ def _build_client(api_key: APIKey) -> TestClient:
 def _patch_enqueue(monkeypatch) -> tuple[MagicMock, MagicMock]:
     fake_session = MagicMock()
     mock_enqueue = MagicMock(return_value=1)
-    monkeypatch.setattr("app.routes_scraping.SessionLocal", lambda: fake_session)
-    monkeypatch.setattr("app.routes_scraping.enqueue_task", mock_enqueue)
+    monkeypatch.setattr(routes_scraping, "SessionLocal", lambda: fake_session)
+    monkeypatch.setattr(routes_scraping, "enqueue_task", mock_enqueue)
     return mock_enqueue, fake_session
 
 
@@ -78,7 +80,7 @@ class TestScrapeCppa:
     def test_cppa_adaptor_missing_enqueues_generic_scrape(self, monkeypatch):
         mock_enqueue, _ = _patch_enqueue(monkeypatch)
         # Remove cppa from ADAPTORS for this test
-        monkeypatch.setattr("app.routes_scraping.ADAPTORS", {})
+        monkeypatch.setattr(routes_scraping, "ADAPTORS", {})
         client = _build_client(_make_api_key(jurisdictions=["US-CA"]))
         resp = client.post(self.ENDPOINT, params={"url": "https://example.com/feed"})
         assert resp.status_code == 202
@@ -127,9 +129,7 @@ class TestIngestAllRegulations:
         """Signature must not list BackgroundTasks — confirms the dead param was removed."""
         import inspect
         from fastapi import BackgroundTasks
-        from app.routes_scraping import ingest_all_regulations
-
-        sig = inspect.signature(ingest_all_regulations)
+        sig = inspect.signature(routes_scraping.ingest_all_regulations)
         for param in sig.parameters.values():
             assert param.annotation is not BackgroundTasks, (
                 "ingest_all_regulations should no longer accept BackgroundTasks"
@@ -137,16 +137,18 @@ class TestIngestAllRegulations:
 
     def test_returns_job_id_and_summary(self, monkeypatch):
         fixed = "00000000-0000-0000-0000-000000000002"
-        monkeypatch.setattr("app.routes_scraping.uuid.uuid4", lambda: uuid.UUID(fixed))
+        monkeypatch.setattr(routes_scraping.uuid, "uuid4", lambda: uuid.UUID(fixed))
 
         async_result = {"status": "ingested"}
         monkeypatch.setattr(
-            "app.routes_scraping.discovery.scrape",
+            routes_scraping.discovery,
+            "scrape",
             AsyncMock(return_value=async_result),
         )
         # Patch FSMA_SOURCES to a minimal list to keep test fast
         monkeypatch.setattr(
-            "app.routes_scraping.FSMA_SOURCES",
+            routes_scraping,
+            "FSMA_SOURCES",
             [{"name": "Test", "url": "https://example.com", "type": "api", "jurisdiction": "US"}],
         )
 

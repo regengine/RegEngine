@@ -156,3 +156,7 @@ sprints/
 # Mobile experiments
 frontend/android/
 *.skill
+
+# Generated test/QA artifacts (not source — qa/qa-health/latest.json IS tracked)
+frontend/test-results/
+.qa-health/

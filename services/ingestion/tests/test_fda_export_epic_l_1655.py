@@ -37,6 +37,10 @@ pytest.importorskip("fastapi")
 import shared.cte_persistence as shared_cte_persistence
 from app.authz import IngestionPrincipal, get_ingestion_principal
 from app.fda_export.router import router as fda_router
+from services.ingestion.tests.authz_overrides import (
+    install_active_subscription_override,
+    install_ingestion_principal_override,
+)
 
 
 class _Result:
@@ -101,16 +105,17 @@ def _install_fake_dependencies(monkeypatch, persistence_cls):
 
 @pytest.fixture()
 def client(monkeypatch):
-    from app.subscription_gate import require_active_subscription
-
     app = FastAPI()
     app.include_router(fda_router)
-    app.dependency_overrides[get_ingestion_principal] = lambda: IngestionPrincipal(
-        key_id="test-key",
-        scopes=["*"],
-        auth_mode="test",
+    install_ingestion_principal_override(
+        app,
+        IngestionPrincipal(
+            key_id="test-key",
+            scopes=["*"],
+            auth_mode="test",
+        ),
     )
-    app.dependency_overrides[require_active_subscription] = lambda: None
+    install_active_subscription_override(app)
     _install_fake_dependencies(monkeypatch, persistence_cls=_EmptyPersistence)
     with TestClient(app) as c:
         yield c

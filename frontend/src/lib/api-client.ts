@@ -41,6 +41,7 @@ import type {
   DiscoveryActionResponse,
   BulkDiscoveryResponse,
   PortalLink,
+  QAHealthResponse,
 } from '@/types/api';
 import type {
   LabelBatchInitRequest,
@@ -351,6 +352,11 @@ class APIClient {
 
   async getSystemMetrics(): Promise<SystemMetricsResponse> {
     const { data } = await this.adminClient.get('/v1/system/metrics', { timeout: 8000 });
+    return data;
+  }
+
+  async getQAHealth(): Promise<QAHealthResponse> {
+    const { data } = await this.adminClient.get('/v1/system/qa-health', { timeout: 8000 });
     return data;
   }
 
