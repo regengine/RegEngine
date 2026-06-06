@@ -7,7 +7,7 @@ import argparse
 import json
 import os
 import sys
-import xml.etree.ElementTree as ET
+import defusedxml.ElementTree as ET  # XXE-safe drop-in for xml.etree (OWASP gate)
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
