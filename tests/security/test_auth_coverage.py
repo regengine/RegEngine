@@ -44,7 +44,16 @@ UNAUTHENTICATED_ALLOWLIST = frozenset({
 
 
 def _build_test_app():
-    """Import and build the ingestion service FastAPI app."""
+    """Import and build the ingestion service FastAPI app.
+
+    Assumes ``API_KEY`` is already configured (see the ``app_and_client``
+    fixture) so the enforced-auth path is active. The shared test env sets
+    ``REGENGINE_ENV=test`` (tests/env_defaults.py), which would otherwise
+    activate the ``dev_open`` auth fallback in
+    ``authz.get_ingestion_principal`` and authenticate every request, making
+    this coverage test vacuous. The settings cache is cleared so the
+    configured key is picked up at app build time.
+    """
     import os
     import sys
     from pathlib import Path
@@ -66,6 +75,9 @@ def _build_test_app():
 
     from shared.paths import ensure_shared_importable
     ensure_shared_importable()
+
+    from app.config import get_settings
+    get_settings.cache_clear()
 
     from main import app
     return app
@@ -90,19 +102,57 @@ def _make_dummy_path(path: str) -> str:
 
 @pytest.fixture(scope="module")
 def app_and_client():
-    """Build the app once for all tests in this module."""
+    """Build the app once for all tests in this module, with auth enforced.
+
+    Sets ``API_KEY`` so the auth layer rejects unauthenticated requests
+    instead of falling through to the ``dev_open`` test fallback, then
+    restores the prior environment on teardown so the change does not leak
+    into the rest of the test session.
+    """
+    import os
+
+    prev_api_key = os.environ.get("API_KEY")
+    os.environ["API_KEY"] = "test-auth-coverage-master-key"
     try:
         app = _build_test_app()
         client = TestClient(app, raise_server_exceptions=False)
-        return app, client
     except Exception as e:
+        _restore_env(prev_api_key)
         pytest.skip(f"Cannot build ingestion app: {e}")
+        return
+
+    try:
+        yield app, client
+    finally:
+        _restore_env(prev_api_key)
+
+
+def _restore_env(prev_api_key):
+    """Restore API_KEY and reset the settings cache after the module runs."""
+    import os
+
+    if prev_api_key is None:
+        os.environ.pop("API_KEY", None)
+    else:
+        os.environ["API_KEY"] = prev_api_key
+    try:
+        from app.config import get_settings
+        get_settings.cache_clear()
+    except Exception:
+        pass
 
 
 def test_all_endpoints_require_auth(app_and_client):
     """Every endpoint not in the allowlist must reject unauthenticated requests."""
     app, client = app_and_client
     endpoints = _extract_endpoints(app)
+
+    # Reset the per-IP auth failure counter between requests. Otherwise, after
+    # 15 unauthenticated probes the rate limiter blocks "testclient" and every
+    # subsequent endpoint returns 429 — which would mask a genuinely
+    # unprotected endpoint behind the block and make this assertion
+    # order-dependent.
+    from app import authz
 
     unprotected = []
     for method, path in endpoints:
@@ -114,6 +164,7 @@ def test_all_endpoints_require_auth(app_and_client):
         if method in ("HEAD", "OPTIONS"):
             continue
 
+        authz._auth_failures.clear()
         test_path = _make_dummy_path(path)
         response = client.request(method, test_path)
 
