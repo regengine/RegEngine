@@ -73,6 +73,35 @@ def test_parse_playwright_stats(tmp_path: Path) -> None:
     }
 
 
+def test_parsers_tolerate_non_utf8_artifacts(tmp_path: Path) -> None:
+    """A non-UTF8 / binary-garbage artifact must be treated as absent, not crash."""
+    junk = b"\xff\xfe\x00\x01garbage\x80\x81"
+
+    eslint = tmp_path / "eslint.json"
+    eslint.write_bytes(junk)
+    assert _MODULE.parse_eslint(eslint) is None
+
+    playwright = tmp_path / "playwright.json"
+    playwright.write_bytes(junk)
+    assert _MODULE.parse_playwright(playwright) is None
+
+    junit = tmp_path / "pytest.xml"
+    junit.write_bytes(junk)
+    assert _MODULE.parse_junit(junit) is None
+
+
+def test_parsers_tolerate_zero_byte_artifacts(tmp_path: Path) -> None:
+    """Zero-byte artifacts (touched-but-never-written) are treated as absent."""
+    for name, parser in (
+        ("eslint.json", _MODULE.parse_eslint),
+        ("playwright.json", _MODULE.parse_playwright),
+        ("pytest.xml", _MODULE.parse_junit),
+    ):
+        empty = tmp_path / name
+        empty.write_bytes(b"")
+        assert parser(empty) is None
+
+
 def test_build_summary_tolerates_missing_outputs(tmp_path: Path) -> None:
     out = tmp_path / "latest.json"
     args = _MODULE.argparse.Namespace(

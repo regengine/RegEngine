@@ -16,8 +16,16 @@ SCHEMA_VERSION = "1.0"
 
 
 def _load_json_artifact(path: Path) -> Any | None:
-    """Load a JSON artifact, tolerating empty or malformed (e.g. zero-byte) files."""
-    raw = path.read_text(encoding="utf-8").strip()
+    """Load a JSON artifact, tolerating empty, unreadable, or malformed files.
+
+    Covers zero-byte artifacts, non-UTF8 / binary garbage, and unreadable
+    paths — any of which a CI step can emit — so a single bad artifact never
+    crashes the whole summary build.
+    """
+    try:
+        raw = path.read_text(encoding="utf-8").strip()
+    except (UnicodeDecodeError, OSError):
+        return None
     if not raw:
         return None
     try:
@@ -32,8 +40,9 @@ def parse_junit(path: Path | None) -> dict[str, float | int] | None:
 
     try:
         root = ET.parse(path).getroot()
-    except ET.ParseError:
-        # Empty or malformed JUnit XML (e.g. a zero-byte artifact) — treat as absent.
+    except (ET.ParseError, OSError):
+        # Empty, malformed, or unreadable JUnit XML (e.g. a zero-byte
+        # artifact) — treat as absent rather than crashing the build.
         return None
     suites = [root] if root.tag == "testsuite" else list(root.findall(".//testsuite"))
     if not suites and root.tag == "testsuites":
