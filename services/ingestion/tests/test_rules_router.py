@@ -17,7 +17,11 @@ sys.path.insert(0, str(service_dir))
 
 import app.authz as authz
 from app.authz import IngestionPrincipal, get_ingestion_principal
-from app.rules_router import router as rules_router, _get_db_session
+import app.rules_router as rules_router_mod
+from services.ingestion.tests.authz_overrides import install_ingestion_principal_override
+
+rules_router = rules_router_mod.router
+_get_db_session = rules_router_mod._get_db_session
 
 
 # ---------------------------------------------------------------------------
@@ -132,7 +136,7 @@ def _build_client(
 ) -> TestClient:
     app = FastAPI()
     app.include_router(rules_router)
-    app.dependency_overrides[get_ingestion_principal] = lambda: principal
+    install_ingestion_principal_override(app, principal)
     if db_session is not _NO_DB:
         app.dependency_overrides[_get_db_session] = lambda: db_session
     return TestClient(app)
@@ -176,10 +180,7 @@ class TestListRules:
         fake_engine = MagicMock()
         fake_engine.load_active_rules.return_value = SAMPLE_RULES
 
-        monkeypatch.setattr(
-            "app.rules_router._get_engine",
-            lambda db_session: fake_engine,
-        )
+        monkeypatch.setattr(rules_router_mod, "_get_engine", lambda db_session: fake_engine)
 
         with _build_client(_default_principal(), db_session=fake_session) as client:
             resp = client.get("/api/v1/rules")
@@ -195,7 +196,7 @@ class TestListRules:
         fake_engine = MagicMock()
         fake_engine.load_active_rules.return_value = SAMPLE_RULES
 
-        monkeypatch.setattr("app.rules_router._get_engine", lambda db_session: fake_engine)
+        monkeypatch.setattr(rules_router_mod, "_get_engine", lambda db_session: fake_engine)
 
         with _build_client(_default_principal(), db_session=_FakeSession()) as client:
             resp = client.get("/api/v1/rules", params={"severity": "warning"})
@@ -210,7 +211,7 @@ class TestListRules:
         fake_engine = MagicMock()
         fake_engine.load_active_rules.return_value = SAMPLE_RULES
 
-        monkeypatch.setattr("app.rules_router._get_engine", lambda db_session: fake_engine)
+        monkeypatch.setattr(rules_router_mod, "_get_engine", lambda db_session: fake_engine)
 
         with _build_client(_default_principal(), db_session=_FakeSession()) as client:
             resp = client.get("/api/v1/rules", params={"category": "recordkeeping"})
@@ -226,7 +227,7 @@ class TestListRules:
         fake_engine = MagicMock()
         fake_engine.load_active_rules.return_value = SAMPLE_RULES
 
-        monkeypatch.setattr("app.rules_router._get_engine", lambda db_session: fake_engine)
+        monkeypatch.setattr(rules_router_mod, "_get_engine", lambda db_session: fake_engine)
 
         with _build_client(_default_principal(), db_session=_FakeSession()) as client:
             resp = client.get(
@@ -246,7 +247,7 @@ class TestListRules:
         # get_applicable_rules should be called and its return used
         fake_engine.get_applicable_rules.return_value = [SAMPLE_RULES[0]]
 
-        monkeypatch.setattr("app.rules_router._get_engine", lambda db_session: fake_engine)
+        monkeypatch.setattr(rules_router_mod, "_get_engine", lambda db_session: fake_engine)
 
         with _build_client(_default_principal(), db_session=_FakeSession()) as client:
             resp = client.get("/api/v1/rules", params={"cte_type": "shipping"})
@@ -267,7 +268,7 @@ class TestGetRuleDetail:
         fake_engine = MagicMock()
         fake_engine.load_active_rules.return_value = SAMPLE_RULES
 
-        monkeypatch.setattr("app.rules_router._get_engine", lambda db_session: fake_engine)
+        monkeypatch.setattr(rules_router_mod, "_get_engine", lambda db_session: fake_engine)
 
         with _build_client(_default_principal(), db_session=_FakeSession()) as client:
             resp = client.get("/api/v1/rules/RULE-002")
@@ -283,7 +284,7 @@ class TestGetRuleDetail:
         fake_engine = MagicMock()
         fake_engine.load_active_rules.return_value = SAMPLE_RULES
 
-        monkeypatch.setattr("app.rules_router._get_engine", lambda db_session: fake_engine)
+        monkeypatch.setattr(rules_router_mod, "_get_engine", lambda db_session: fake_engine)
 
         with _build_client(_default_principal(), db_session=_FakeSession()) as client:
             resp = client.get("/api/v1/rules/RULE-NOPE")
@@ -314,7 +315,7 @@ class TestEvaluateEvent:
         fake_engine = MagicMock()
         fake_engine.evaluate_event.return_value = summary
 
-        monkeypatch.setattr("app.rules_router._get_engine", lambda db_session: fake_engine)
+        monkeypatch.setattr(rules_router_mod, "_get_engine", lambda db_session: fake_engine)
 
         with _build_client(_default_principal(), db_session=_FakeSession()) as client:
             resp = client.post(
@@ -359,7 +360,7 @@ class TestEvaluateEvent:
         fake_engine = MagicMock()
         fake_engine.evaluate_event.return_value = summary
 
-        monkeypatch.setattr("app.rules_router._get_engine", lambda db_session: fake_engine)
+        monkeypatch.setattr(rules_router_mod, "_get_engine", lambda db_session: fake_engine)
 
         with _build_client(_default_principal(), db_session=_FakeSession()) as client:
             resp = client.post(
@@ -393,7 +394,7 @@ class TestEvaluateEvent:
             return summary
 
         fake_engine.evaluate_event.side_effect = _capture_evaluate
-        monkeypatch.setattr("app.rules_router._get_engine", lambda db_session: fake_engine)
+        monkeypatch.setattr(rules_router_mod, "_get_engine", lambda db_session: fake_engine)
 
         with _build_client(_default_principal(), db_session=_FakeSession()) as client:
             resp = client.post(
@@ -407,10 +408,7 @@ class TestEvaluateEvent:
 
     def test_evaluate_missing_tenant_returns_400(self, monkeypatch: pytest.MonkeyPatch):
         monkeypatch.setattr(authz, "consume_tenant_rate_limit", lambda **_: (True, 99))
-        monkeypatch.setattr(
-            "app.rules_router._get_engine",
-            lambda db_session: MagicMock(),
-        )
+        monkeypatch.setattr(rules_router_mod, "_get_engine", lambda db_session: MagicMock())
 
         principal = _default_principal(tenant_id=None)
         with _build_client(principal, db_session=_FakeSession()) as client:
@@ -440,7 +438,7 @@ class TestEvaluateBatch:
         fake_engine = MagicMock()
         fake_engine.evaluate_events_batch.return_value = summaries
 
-        monkeypatch.setattr("app.rules_router._get_engine", lambda db_session: fake_engine)
+        monkeypatch.setattr(rules_router_mod, "_get_engine", lambda db_session: fake_engine)
 
         events = [
             _sample_event(event_id="EVT-001"),
@@ -468,7 +466,7 @@ class TestEvaluateBatch:
 
         fake_engine = MagicMock()
         fake_engine.evaluate_events_batch.return_value = []
-        monkeypatch.setattr("app.rules_router._get_engine", lambda db_session: fake_engine)
+        monkeypatch.setattr(rules_router_mod, "_get_engine", lambda db_session: fake_engine)
 
         with _build_client(_default_principal(), db_session=_FakeSession()) as client:
             resp = client.post(
@@ -515,7 +513,7 @@ class TestGetEventEvaluations:
         fake_session = MagicMock()
         fake_session.execute.return_value.fetchall.return_value = fake_rows
 
-        monkeypatch.setattr("app.rules_router._get_engine", lambda db_session: MagicMock())
+        monkeypatch.setattr(rules_router_mod, "_get_engine", lambda db_session: MagicMock())
 
         with _build_client(_default_principal(), db_session=fake_session) as client:
             resp = client.get(
@@ -587,7 +585,7 @@ class TestSeedRules:
         def _fake_seed(db_session):
             return 12
 
-        monkeypatch.setattr("app.rules_router.seed_rule_definitions", _fake_seed, raising=False)
+        monkeypatch.setattr(rules_router_mod, "seed_rule_definitions", _fake_seed, raising=False)
         # Also patch the import inside the function
         import types
         fake_shared = types.ModuleType("shared.rules_engine")

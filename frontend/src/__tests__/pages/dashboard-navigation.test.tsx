@@ -33,6 +33,7 @@ describe('Dashboard navigation discoverability', () => {
             demoMode: false,
             isAuthenticated: true,
             isHydrated: true,
+            user: { id: 'u1', email: 'user@example.com', is_sysadmin: false, status: 'active' },
         });
         const store: Record<string, string> = {};
         vi.stubGlobal('localStorage', {
@@ -67,6 +68,46 @@ describe('Dashboard navigation discoverability', () => {
         expect(inflowLink).toHaveAttribute('aria-current', 'page');
         expect(screen.getByRole('button', { name: /Intake/i })).toBeInTheDocument();
         expect(screen.getAllByText('Import files')[0].closest('a')).toHaveAttribute('href', '/ingest');
+    });
+
+    it('shows QA Health navigation only to sysadmins', async () => {
+        (usePathname as any).mockReturnValue('/dashboard/qa-health');
+        (useAuth as any).mockReturnValue({
+            clearCredentials: vi.fn(),
+            demoMode: false,
+            isAuthenticated: true,
+            isHydrated: true,
+            user: { id: 'u1', email: 'admin@example.com', is_sysadmin: true, status: 'active' },
+        });
+
+        render(
+            <DashboardLayout>
+                <div>QA Health content</div>
+            </DashboardLayout>,
+        );
+
+        const qaLink = screen.getByText('QA Health').closest('a');
+        expect(qaLink).toHaveAttribute('href', '/dashboard/qa-health');
+        expect(qaLink).toHaveAttribute('aria-current', 'page');
+    });
+
+    it('hides QA Health navigation for non-sysadmins', async () => {
+        (usePathname as any).mockReturnValue('/dashboard');
+        (useAuth as any).mockReturnValue({
+            clearCredentials: vi.fn(),
+            demoMode: false,
+            isAuthenticated: true,
+            isHydrated: true,
+            user: { id: 'u1', email: 'user@example.com', is_sysadmin: false, status: 'active' },
+        });
+
+        render(
+            <DashboardLayout>
+                <div>Dashboard content</div>
+            </DashboardLayout>,
+        );
+
+        expect(screen.queryByText('QA Health')).not.toBeInTheDocument();
     });
 
     it('redirects unauthenticated visitors back to login with the Inflow Lab return path', async () => {

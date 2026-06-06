@@ -14,6 +14,14 @@ from shared.tenant_rate_limiting import (
 )
 
 
+@pytest.fixture(autouse=True)
+def _reset_rate_limit_bucket(monkeypatch):
+    """Keep tests independent from rate-limit state created by other suites."""
+    import shared.tenant_rate_limiting as tenant_rate_limiting
+
+    monkeypatch.setattr(tenant_rate_limiting, "_bucket", _InMemoryBucket())
+
+
 # ── Bucket Tests ────────────────────────────────────────────────
 
 class TestInMemoryBucket:

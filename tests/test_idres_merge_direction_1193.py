@@ -75,6 +75,21 @@ def _require_entity_row(entity_id):
     return m
 
 
+def _execute_merge_path(responses):
+    """Return scripted responses, then harmless defaults for merge bookkeeping."""
+    default = MagicMock()
+    default.fetchone.return_value = (1,)
+    default.fetchall.return_value = []
+
+    def _side_effect(*args, **kwargs):
+        try:
+            return next(responses)
+        except StopIteration:
+            return default
+
+    return _side_effect
+
+
 # ---------------------------------------------------------------------------
 # 1) Verification-status beats lex order
 # ---------------------------------------------------------------------------
@@ -105,7 +120,7 @@ class TestMergeDirectionByVerification_Issue1193:
             MagicMock(),                        # INSERT merge_history
             MagicMock(),                        # UPDATE any pending reviews
         ])
-        mock_session.execute.side_effect = lambda *a, **kw: next(responses)
+        mock_session.execute.side_effect = _execute_merge_path(responses)
 
         result = svc.resolve_review(
             TENANT, "r1", "confirmed_match",
@@ -136,7 +151,7 @@ class TestMergeDirectionByVerification_Issue1193:
             MagicMock(), MagicMock(), MagicMock(),
             MagicMock(), MagicMock(),
         ])
-        mock_session.execute.side_effect = lambda *a, **kw: next(responses)
+        mock_session.execute.side_effect = _execute_merge_path(responses)
 
         result = svc.resolve_review(TENANT, "r1", "confirmed_match", resolved_by="alice")
         rat = result["merge_target_rationale"]
@@ -165,7 +180,7 @@ class TestMergeDirectionByConfidence_Issue1193:
             MagicMock(), MagicMock(), MagicMock(),
             MagicMock(), MagicMock(),
         ])
-        mock_session.execute.side_effect = lambda *a, **kw: next(responses)
+        mock_session.execute.side_effect = _execute_merge_path(responses)
 
         result = svc.resolve_review(TENANT, "r1", "confirmed_match", resolved_by="alice")
         rat = result["merge_target_rationale"]
@@ -199,7 +214,7 @@ class TestMergeDirectionByCreatedAt_Issue1193:
             MagicMock(), MagicMock(), MagicMock(),
             MagicMock(), MagicMock(),
         ])
-        mock_session.execute.side_effect = lambda *a, **kw: next(responses)
+        mock_session.execute.side_effect = _execute_merge_path(responses)
 
         result = svc.resolve_review(TENANT, "r1", "confirmed_match", resolved_by="alice")
         rat = result["merge_target_rationale"]
@@ -231,7 +246,7 @@ class TestExplicitTargetOverride_Issue1193:
             MagicMock(), MagicMock(), MagicMock(),
             MagicMock(), MagicMock(),
         ])
-        mock_session.execute.side_effect = lambda *a, **kw: next(responses)
+        mock_session.execute.side_effect = _execute_merge_path(responses)
 
         result = svc.resolve_review(
             TENANT, "r1", "confirmed_match",
@@ -285,7 +300,7 @@ class TestLexOrderNoLongerDecides_Issue1193:
             MagicMock(), MagicMock(), MagicMock(),
             MagicMock(), MagicMock(),
         ])
-        mock_session.execute.side_effect = lambda *a, **kw: next(responses)
+        mock_session.execute.side_effect = _execute_merge_path(responses)
 
         result = svc.resolve_review(TENANT, "r1", "confirmed_match", resolved_by="alice")
         # The fix: verified entity (lex-higher) survives.
@@ -319,7 +334,7 @@ class TestFullyTiedFallsBackToLex_Issue1193:
             MagicMock(), MagicMock(), MagicMock(),
             MagicMock(), MagicMock(),
         ])
-        mock_session.execute.side_effect = lambda *a, **kw: next(responses)
+        mock_session.execute.side_effect = _execute_merge_path(responses)
 
         result = svc.resolve_review(TENANT, "r1", "confirmed_match", resolved_by="alice")
         rat = result["merge_target_rationale"]

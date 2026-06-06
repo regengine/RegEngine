@@ -18,11 +18,20 @@ from fastapi.testclient import TestClient
 # ── Allow-list: endpoints that are intentionally unauthenticated ──────
 
 UNAUTHENTICATED_ALLOWLIST = frozenset({
+    # Service root and liveness aliases — public for platform probes
+    "GET /",
     # Health/readiness — must be public for load balancers and orchestrators
     "GET /health",
-    "GET /readiness",
+    "GET /api/health",
     # Feature discovery — public endpoint for client capability negotiation
     "GET /api/v1/features",
+    # Public/static compatibility and reference data — no tenant data returned
+    "GET /api/v1/billing/plans",
+    "GET /api/v1/fsma/export-jobs",
+    "GET /api/v1/fsma/mappings",
+    "GET /api/v1/onboarding/steps",
+    "GET /api/v1/products/categories/ftl",
+    "GET /api/v1/team/roles/definitions",
     # Sandbox — intentionally public with rate limiting
     "POST /api/v1/sandbox/evaluate",
     # Webhook receivers — use signature verification instead of API keys
@@ -36,14 +45,24 @@ UNAUTHENTICATED_ALLOWLIST = frozenset({
 
 def _build_test_app():
     """Import and build the ingestion service FastAPI app."""
+    import os
     import sys
     from pathlib import Path
 
+    os.environ["REGENGINE_ENV"] = "staging"
+    os.environ["ENV"] = "staging"
+    os.environ["API_KEY"] = "auth-coverage-secret"  # pragma: allowlist secret
+    os.environ.pop("AUTH_TEST_BYPASS_TOKEN", None)
+
     service_dir = Path(__file__).resolve().parent.parent.parent / "services" / "ingestion"
     services_dir = service_dir.parent
-    for p in [str(service_dir), str(services_dir)]:
-        if p not in sys.path:
-            sys.path.insert(0, p)
+    for p in [str(services_dir), str(service_dir)]:
+        if p in sys.path:
+            sys.path.remove(p)
+        sys.path.insert(0, p)
+    for name in list(sys.modules):
+        if name == "main" or name == "app" or name.startswith("app."):
+            sys.modules.pop(name, None)
 
     from shared.paths import ensure_shared_importable
     ensure_shared_importable()

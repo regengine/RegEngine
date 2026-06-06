@@ -41,7 +41,7 @@ from fastapi import (
     Response,
     UploadFile,
 )
-from prometheus_client import Counter, Histogram
+from prometheus_client import REGISTRY, Counter, Histogram
 
 from shared.auth import APIKey, require_api_key
 from shared.database import SessionLocal
@@ -88,7 +88,7 @@ from .regulation_loader import RegulationLoader
 PARSER_REGISTRY = create_default_registry()
 
 logger = structlog.get_logger("ingestion")
-router = APIRouter(prefix="/api/v1/regulatory", tags=["regulatory-pipeline"], include_in_schema=False)
+router = APIRouter(tags=["Document Ingestion"])
 
 
 ALLOWED_SCHEMES = {"https", "http"}
@@ -106,13 +106,46 @@ PROHIBITED_NETWORKS = [
 MAX_PAYLOAD_BYTES = 25 * 1024 * 1024
 MAX_FILE_SIZE = 50 * 1024 * 1024  # 50 MB hard limit
 
-REQUEST_COUNTER = Counter(
+def _registered_metric(name: str):
+    collector = REGISTRY._names_to_collectors.get(name)  # type: ignore[attr-defined]
+    if collector is None and name.endswith("_total"):
+        collector = REGISTRY._names_to_collectors.get(name[:-6])  # type: ignore[attr-defined]
+    return collector
+
+
+def _get_or_create_counter(name: str, documentation: str, labelnames: list[str]):
+    existing = _registered_metric(name)
+    if existing is not None:
+        return existing
+    try:
+        return Counter(name, documentation, labelnames)
+    except ValueError:
+        existing = _registered_metric(name)
+        if existing is not None:
+            return existing
+        raise
+
+
+def _get_or_create_histogram(name: str, documentation: str, labelnames: list[str]):
+    existing = _registered_metric(name)
+    if existing is not None:
+        return existing
+    try:
+        return Histogram(name, documentation, labelnames)
+    except ValueError:
+        existing = _registered_metric(name)
+        if existing is not None:
+            return existing
+        raise
+
+
+REQUEST_COUNTER = _get_or_create_counter(
     "ingestion_requests_total", "Total ingestion requests", ["endpoint", "status"]
 )
-REQUEST_LATENCY = Histogram(
+REQUEST_LATENCY = _get_or_create_histogram(
     "ingestion_request_latency_seconds", "Ingestion request latency", ["endpoint"]
 )
-KAFKA_COUNTER = Counter(
+KAFKA_COUNTER = _get_or_create_counter(
     "ingestion_kafka_messages_total", "Kafka messages produced", ["topic"]
 )
 
@@ -284,6 +317,12 @@ async def process_regulation_ingestion(job_id: str, name: str, filename: str, te
             os.remove(tmp_path)
 
 
+@router.post(
+    "/api/v1/regulatory/v1/ingest/regulation",
+    status_code=202,
+    response_model=IngestRegulationResponse,
+    include_in_schema=False,
+)
 @router.post("/v1/ingest/regulation", status_code=202, response_model=IngestRegulationResponse)
 async def ingest_regulation(
     name: str,
@@ -472,8 +511,8 @@ def _process_and_emit(
     # 6. Storage S3
     timestamp = datetime.now(timezone.utc)
     event_id = str(uuid.uuid4())
-    raw_extension = _detect_extension(content_type)
-    raw_key = f"raw/{document_id}/{event_id}.{raw_extension}"
+    raw_extension = _detect_extension(content_type) or ".bin"
+    raw_key = f"raw/{document_id}/{event_id}{raw_extension}"
     normalized_key = f"normalized/{content_sha256}/current.json"
     normalized_alias_key = f"normalized/by-document-id/{document_id}/current.json"
 
@@ -560,6 +599,7 @@ def _process_and_emit(
     return event
 
 
+@router.post("/api/v1/regulatory/v1/ingest", response_model=NormalizedEvent, include_in_schema=False)
 @router.post("/v1/ingest", response_model=NormalizedEvent)
 async def ingest_direct(
     payload: DirectIngestRequest = Body(...),
@@ -633,6 +673,7 @@ async def ingest_direct(
             db_manager.close()
 
 
+@router.post("/api/v1/regulatory/v1/ingest/file", response_model=NormalizedEvent, include_in_schema=False)
 @router.post("/v1/ingest/file", response_model=NormalizedEvent)
 async def ingest_file(
     file: UploadFile = File(...),
@@ -714,6 +755,9 @@ async def ingest_file(
             db_manager.close()
 
 
+@router.post("/ingest/url", response_model=NormalizedEvent, include_in_schema=False)
+@router.post("/api/v1/regulatory/ingest/url", response_model=NormalizedEvent, include_in_schema=False)
+@router.post("/api/v1/regulatory/v1/ingest/url", response_model=NormalizedEvent, include_in_schema=False)
 @router.post("/v1/ingest/url", response_model=NormalizedEvent)
 async def ingest_url(
     payload: IngestRequest,
@@ -1041,39 +1085,39 @@ def _enforce_size_limit(raw_bytes: bytes) -> None:
         raise HTTPException(status_code=413, detail="Payload exceeds size limits")
 
 
-def _detect_extension(content_type: Optional[str]) -> str:
+def _detect_extension(content_type: Optional[str]) -> Optional[str]:
     """Detect file extension from content type for diverse format support."""
     if not content_type:
-        return "bin"
+        return None
 
     ct = content_type.lower()
 
     # JSON
     if "json" in ct:
-        return "json"
+        return ".json"
     # PDF
     if "pdf" in ct:
-        return "pdf"
+        return ".pdf"
     # HTML
     if "html" in ct:
-        return "html"
+        return ".html"
     # XML (but not HTML)
     if "xml" in ct and "html" not in ct:
-        return "xml"
+        return ".xml"
     # CSV
     if "csv" in ct or "comma-separated" in ct:
-        return "csv"
+        return ".csv"
     # Excel
     if any(x in ct for x in ["spreadsheet", "excel", "xlsx", "xls", "ms-excel"]):
-        return "xlsx"
+        return ".xlsx"
     # Word DOCX
     if any(x in ct for x in ["wordprocessing", "msword", "docx", "word"]):
-        return "docx"
+        return ".docx"
     # EDI
     if any(x in ct for x in ["edi", "x12", "edifact"]):
-        return "edi"
+        return ".edi"
     # Plain text
     if "text" in ct:
-        return "txt"
+        return ".txt"
 
-    return "bin"
+    return None

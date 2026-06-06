@@ -34,6 +34,7 @@ import {
     Eye,
     FlaskConical,
     Bot,
+    ShieldAlert,
 } from 'lucide-react';
 
 // ---------------------------------------------------------------------------
@@ -44,6 +45,7 @@ interface NavItem {
     label: string;
     href: string;
     icon: React.ComponentType<{ className?: string }>;
+    sysadminOnly?: boolean;
 }
 
 interface CollapsibleSection {
@@ -104,6 +106,7 @@ const COLLAPSIBLE_SECTIONS: CollapsibleSection[] = [
             { label: 'Identity', href: '/identity', icon: Fingerprint },
             { label: 'Review', href: '/review', icon: Eye },
             { label: 'Agent reviews', href: '/dashboard/agent-reviews', icon: Bot },
+            { label: 'QA Health', href: '/dashboard/qa-health', icon: ShieldAlert, sysadminOnly: true },
             { label: 'Audit', href: '/dashboard/audit-log', icon: ScrollText },
             { label: 'Readiness', href: '/fsma', icon: ShieldCheck },
             { label: 'Incidents', href: '/dashboard/issues', icon: AlertTriangle },
@@ -153,9 +156,16 @@ function saveExpandedSections(state: Record<string, boolean>) {
 // Determine which sections should auto-expand based on the current route
 // ---------------------------------------------------------------------------
 
-function sectionsWithActiveRoute(pathname: string): Set<string> {
+function visibleSections(isSysadmin: boolean): CollapsibleSection[] {
+    return COLLAPSIBLE_SECTIONS.map((section) => ({
+        ...section,
+        items: section.items.filter((item) => !item.sysadminOnly || isSysadmin),
+    }));
+}
+
+function sectionsWithActiveRoute(pathname: string, sections: CollapsibleSection[]): Set<string> {
     const active = new Set<string>();
-    for (const section of COLLAPSIBLE_SECTIONS) {
+    for (const section of sections) {
         for (const item of section.items) {
             if (isNavItemActive(pathname, item.href)) {
                 active.add(section.key);
@@ -302,7 +312,9 @@ function DashboardShellSkeleton() {
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
     const pathname = usePathname();
     const router = useRouter();
-    const { demoMode, isAuthenticated, isHydrated, logout } = useAuth();
+    const { demoMode, isAuthenticated, isHydrated, logout, user } = useAuth();
+    const isSysadmin = Boolean(user?.is_sysadmin);
+    const navSections = React.useMemo(() => visibleSections(isSysadmin), [isSysadmin]);
 
     // ------ Collapsible section state with localStorage persistence ------
     const [expandedSections, setExpandedSections] = React.useState<Record<string, boolean>>({});
@@ -312,7 +324,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     React.useEffect(() => {
         if (!initializedRef.current) {
             const stored = loadExpandedSections();
-            const active = sectionsWithActiveRoute(pathname);
+            const active = sectionsWithActiveRoute(pathname, navSections);
             // Merge: stored state wins, but active sections always open
             const merged: Record<string, boolean> = { ...stored };
             active.forEach((key) => {
@@ -322,7 +334,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             initializedRef.current = true;
         } else {
             // On subsequent route changes, auto-expand sections with active items
-            const active = sectionsWithActiveRoute(pathname);
+            const active = sectionsWithActiveRoute(pathname, navSections);
             if (active.size > 0) {
                 setExpandedSections((prev) => {
                     const next = { ...prev };
@@ -337,7 +349,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 });
             }
         }
-    }, [pathname]);
+    }, [pathname, navSections]);
 
     // Persist to localStorage when expansion state changes
     React.useEffect(() => {
@@ -435,7 +447,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     <div className="mx-4 my-3 border-t border-[var(--re-border-subtle)]" />
 
                     {/* Collapsible sections */}
-                    {COLLAPSIBLE_SECTIONS.map((section) => (
+                    {navSections.map((section) => (
                         <CollapsibleNavSection
                             key={section.key}
                             section={section}

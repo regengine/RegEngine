@@ -320,6 +320,50 @@
         "title": "Body_ingest_edi_document_api_v1_ingest_edi_document_post",
         "type": "object"
       },
+      "Body_ingest_file_v1_ingest_file_post": {
+        "properties": {
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "type": "string"
+          },
+          "source_system": {
+            "default": "generic",
+            "title": "Source System",
+            "type": "string"
+          },
+          "vertical": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vertical"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_ingest_file_v1_ingest_file_post",
+        "type": "object"
+      },
+      "Body_ingest_regulation_v1_ingest_regulation_post": {
+        "properties": {
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_ingest_regulation_v1_ingest_regulation_post",
+        "type": "object"
+      },
       "ChainVerifyResponse": {
         "description": "Response from the /chain/verify endpoint.",
         "properties": {
@@ -1081,6 +1125,77 @@
         "title": "IngestEvent",
         "type": "object"
       },
+      "IngestRegulationResponse": {
+        "description": "Response from POST /v1/ingest/regulation.",
+        "properties": {
+          "job_id": {
+            "title": "Job Id",
+            "type": "string"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "webhook": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Webhook"
+          }
+        },
+        "required": [
+          "job_id",
+          "status",
+          "message"
+        ],
+        "title": "IngestRegulationResponse",
+        "type": "object"
+      },
+      "IngestRequest": {
+        "description": "Request payload for URL ingestion.",
+        "properties": {
+          "source_system": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Source System",
+            "type": "string"
+          },
+          "url": {
+            "format": "uri",
+            "maxLength": 2083,
+            "minLength": 1,
+            "title": "Url",
+            "type": "string"
+          },
+          "vertical": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Regulatory vertical",
+            "title": "Vertical"
+          }
+        },
+        "required": [
+          "url",
+          "source_system"
+        ],
+        "title": "IngestRequest",
+        "type": "object"
+      },
       "IngestResponse": {
         "description": "Response from the webhook ingestion endpoint.",
         "properties": {
@@ -1183,6 +1298,103 @@
           "sources"
         ],
         "title": "ListSourcesResponse",
+        "type": "object"
+      },
+      "NormalizedEvent": {
+        "description": "Kafka event emitted after normalization.",
+        "properties": {
+          "content_sha256": {
+            "title": "Content Sha256",
+            "type": "string"
+          },
+          "document_hash": {
+            "title": "Document Hash",
+            "type": "string"
+          },
+          "document_id": {
+            "title": "Document Id",
+            "type": "string"
+          },
+          "event_entry_timestamp": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Event Entry Timestamp"
+          },
+          "event_id": {
+            "title": "Event Id",
+            "type": "string"
+          },
+          "is_duplicate": {
+            "default": false,
+            "title": "Is Duplicate",
+            "type": "boolean"
+          },
+          "normalized_s3_path": {
+            "title": "Normalized S3 Path",
+            "type": "string"
+          },
+          "raw_s3_path": {
+            "title": "Raw S3 Path",
+            "type": "string"
+          },
+          "source_system": {
+            "title": "Source System",
+            "type": "string"
+          },
+          "source_url": {
+            "format": "uri",
+            "maxLength": 2083,
+            "minLength": 1,
+            "title": "Source Url",
+            "type": "string"
+          },
+          "tenant_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tenant Id"
+          },
+          "text_s3_uri": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Text S3 Uri"
+          },
+          "timestamp": {
+            "format": "date-time",
+            "title": "Timestamp",
+            "type": "string"
+          }
+        },
+        "required": [
+          "event_id",
+          "document_id",
+          "document_hash",
+          "source_system",
+          "source_url",
+          "raw_s3_path",
+          "normalized_s3_path",
+          "timestamp",
+          "content_sha256"
+        ],
+        "title": "NormalizedEvent",
         "type": "object"
       },
       "QRDecodeResponse": {
@@ -4908,6 +5120,153 @@
         ]
       }
     },
+    "/v1/ingest/file": {
+      "post": {
+        "description": "Ingest a single document from a file upload (v2).",
+        "operationId": "ingest_file_v1_ingest_file_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-RegEngine-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Regengine-Api-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_ingest_file_v1_ingest_file_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NormalizedEvent"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Ingest File",
+        "tags": [
+          "Document Ingestion",
+          "Document Ingestion"
+        ]
+      }
+    },
+    "/v1/ingest/regulation": {
+      "post": {
+        "description": "Ingest a regulation and codify it asynchronously with optional webhook notification (v2).",
+        "operationId": "ingest_regulation_v1_ingest_regulation_post",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "webhook",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Webhook"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-RegEngine-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Regengine-Api-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_ingest_regulation_v1_ingest_regulation_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IngestRegulationResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Ingest Regulation",
+        "tags": [
+          "Document Ingestion",
+          "Document Ingestion"
+        ]
+      }
+    },
     "/v1/ingest/sources": {
       "get": {
         "description": "List available source adapters and their capabilities.",
@@ -5014,6 +5373,67 @@
         "summary": "Get Ingestion Status",
         "tags": [
           "ingestion-status"
+        ]
+      }
+    },
+    "/v1/ingest/url": {
+      "post": {
+        "description": "Ingest a single document from a URL.",
+        "operationId": "ingest_url_v1_ingest_url_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-RegEngine-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Regengine-Api-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IngestRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NormalizedEvent"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Ingest Url",
+        "tags": [
+          "Document Ingestion",
+          "Document Ingestion"
         ]
       }
     },

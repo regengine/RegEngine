@@ -121,6 +121,16 @@ export const useSystemMetrics = () => {
   };
 };
 
+export const useQAHealth = (enabled = true) => {
+  return useQuery({
+    queryKey: ['system', 'qa-health'],
+    queryFn: () => apiClient.getQAHealth(),
+    staleTime: 60_000,
+    retry: false,
+    enabled,
+  });
+};
+
 export const useAPIKeys = (adminKey: string, enabled = true) => {
   return useQuery({
     queryKey: ['admin', 'keys', adminKey],

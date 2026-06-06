@@ -68,10 +68,13 @@ def _make_event(**overrides) -> dict:
         "event_id": "evt-001",
         "event_type": "receiving",
         "kdes": {
+            "ftl_covered": True,
             "tlc_source_reference": "REF-123",
             "harvest_date": "2026-01-10",
         },
     }
+    if "kdes" in overrides:
+        defaults["kdes"] = {"ftl_covered": True, **overrides.pop("kdes")}
     defaults.update(overrides)
     return defaults
 
@@ -351,7 +354,7 @@ class TestEvaluateMultiFieldPresence:
 class TestRulesEngineEvaluateEvent:
     def _engine_with_rules(self, rules, mock_session):
         engine = RulesEngine(mock_session)
-        engine._rules_cache = rules
+        engine.load_active_rules = MagicMock(return_value=rules)
         return engine
 
     def test_evaluate_event_passes_all(self, mock_session):
@@ -398,7 +401,7 @@ class TestRulesEngineEvaluateEvent:
         event = _make_event()
 
         summary = engine.evaluate_event(event, persist=False)
-        assert summary.skipped == 1
+        assert summary.errored == 1
         assert "Unknown evaluation type" in summary.results[0].why_failed
 
     def test_evaluator_exception_skips(self, mock_session):
@@ -411,9 +414,9 @@ class TestRulesEngineEvaluateEvent:
         event = _make_event(kdes={})
 
         summary = engine.evaluate_event(event, persist=False)
-        # Should be skipped (caught exception), not crash
-        assert summary.skipped == 1
-        assert "Evaluation error" in summary.results[0].why_failed
+        # Evaluator crashes are fail-closed errors, not skips (#1354).
+        assert summary.errored == 1
+        assert "Evaluator crashed" in summary.results[0].why_failed
 
     def test_multiple_rules_evaluated(self, mock_session):
         rules = [
@@ -441,20 +444,20 @@ class TestGetApplicableRules:
             _make_rule(rule_id="r2", applicability_conditions={"cte_types": ["shipping"]}),
         ]
         engine = RulesEngine(mock_session)
-        applicable = engine.get_applicable_rules("receiving", rules)
+        applicable = engine.get_applicable_rules("receiving", rules, event_is_ftl=True)
         assert len(applicable) == 1
         assert applicable[0].rule_id == "r1"
 
     def test_empty_cte_types_matches_all(self, mock_session):
         rules = [_make_rule(applicability_conditions={"cte_types": []})]
         engine = RulesEngine(mock_session)
-        applicable = engine.get_applicable_rules("any_event_type", rules)
+        applicable = engine.get_applicable_rules("any_event_type", rules, event_is_ftl=True)
         assert len(applicable) == 1
 
     def test_all_keyword_matches_all(self, mock_session):
         rules = [_make_rule(applicability_conditions={"cte_types": ["all"]})]
         engine = RulesEngine(mock_session)
-        applicable = engine.get_applicable_rules("shipping", rules)
+        applicable = engine.get_applicable_rules("shipping", rules, event_is_ftl=True)
         assert len(applicable) == 1
 
 
@@ -588,7 +591,9 @@ class TestEvaluateTemporalOrder:
             "traceability_lot_code": "TLC-001",
             "event_timestamp": "2026-01-05T00:00:00+00:00",
         }
-        result = _evaluate_temporal_order(event, {"type": "temporal_order"}, self._temporal_rule(), mock_session)
+        result = _evaluate_temporal_order(
+            event, {"type": "temporal_order"}, self._temporal_rule(), mock_session, tenant_id="tenant-1"
+        )
         assert result.result == "pass"
 
     def test_ship_before_harvest_fails(self, mock_session):
@@ -603,7 +608,9 @@ class TestEvaluateTemporalOrder:
             "traceability_lot_code": "TLC-001",
             "event_timestamp": "2026-01-01T00:00:00+00:00",
         }
-        result = _evaluate_temporal_order(event, {"type": "temporal_order"}, self._temporal_rule(), mock_session)
+        result = _evaluate_temporal_order(
+            event, {"type": "temporal_order"}, self._temporal_rule(), mock_session, tenant_id="tenant-1"
+        )
         assert result.result == "fail"
         assert "Chronology paradox" in result.why_failed
 
@@ -617,7 +624,9 @@ class TestEvaluateTemporalOrder:
             "traceability_lot_code": "TLC-001",
             "event_timestamp": "2026-01-05T00:00:00+00:00",
         }
-        result = _evaluate_temporal_order(event, {"type": "temporal_order"}, self._temporal_rule(), mock_session)
+        result = _evaluate_temporal_order(
+            event, {"type": "temporal_order"}, self._temporal_rule(), mock_session, tenant_id="tenant-1"
+        )
         assert result.result == "pass"
 
     def test_same_stage_different_times_passes(self, mock_session):
@@ -632,12 +641,16 @@ class TestEvaluateTemporalOrder:
             "traceability_lot_code": "TLC-001",
             "event_timestamp": "2026-01-05T00:00:00+00:00",
         }
-        result = _evaluate_temporal_order(event, {"type": "temporal_order"}, self._temporal_rule(), mock_session)
+        result = _evaluate_temporal_order(
+            event, {"type": "temporal_order"}, self._temporal_rule(), mock_session, tenant_id="tenant-1"
+        )
         assert result.result == "pass"
 
     def test_missing_tlc_skips(self, mock_session):
         event = {"event_id": "evt-1", "event_type": "shipping", "tenant_id": "t1"}
-        result = _evaluate_temporal_order(event, {"type": "temporal_order"}, self._temporal_rule(), mock_session)
+        result = _evaluate_temporal_order(
+            event, {"type": "temporal_order"}, self._temporal_rule(), mock_session, tenant_id="tenant-1"
+        )
         assert result.result == "skip"
 
 
@@ -666,7 +679,9 @@ class TestEvaluateIdentityConsistency:
             "traceability_lot_code": "TLC-001",
             "product_reference": "Romaine Lettuce",
         }
-        result = _evaluate_identity_consistency(event, {"type": "identity_consistency"}, self._identity_rule(), mock_session)
+        result = _evaluate_identity_consistency(
+            event, {"type": "identity_consistency"}, self._identity_rule(), mock_session, tenant_id="tenant-1"
+        )
         assert result.result == "pass"
 
     def test_different_product_fails(self, mock_session):
@@ -680,7 +695,9 @@ class TestEvaluateIdentityConsistency:
             "traceability_lot_code": "TLC-001",
             "product_reference": "Baby Spinach",
         }
-        result = _evaluate_identity_consistency(event, {"type": "identity_consistency"}, self._identity_rule(), mock_session)
+        result = _evaluate_identity_consistency(
+            event, {"type": "identity_consistency"}, self._identity_rule(), mock_session, tenant_id="tenant-1"
+        )
         assert result.result == "fail"
         assert "Product identity changed" in result.why_failed
 
@@ -692,7 +709,9 @@ class TestEvaluateIdentityConsistency:
             "traceability_lot_code": "TLC-001",
             "product_reference": None,
         }
-        result = _evaluate_identity_consistency(event, {"type": "identity_consistency"}, self._identity_rule(), mock_session)
+        result = _evaluate_identity_consistency(
+            event, {"type": "identity_consistency"}, self._identity_rule(), mock_session, tenant_id="tenant-1"
+        )
         assert result.result == "skip"
 
     def test_case_insensitive_match_passes(self, mock_session):
@@ -706,7 +725,9 @@ class TestEvaluateIdentityConsistency:
             "traceability_lot_code": "TLC-001",
             "product_reference": "Romaine  Lettuce",  # extra space + different case
         }
-        result = _evaluate_identity_consistency(event, {"type": "identity_consistency"}, self._identity_rule(), mock_session)
+        result = _evaluate_identity_consistency(
+            event, {"type": "identity_consistency"}, self._identity_rule(), mock_session, tenant_id="tenant-1"
+        )
         assert result.result == "pass"
 
     def test_no_related_events_passes(self, mock_session):
@@ -718,7 +739,9 @@ class TestEvaluateIdentityConsistency:
             "traceability_lot_code": "TLC-001",
             "product_reference": "Romaine Lettuce",
         }
-        result = _evaluate_identity_consistency(event, {"type": "identity_consistency"}, self._identity_rule(), mock_session)
+        result = _evaluate_identity_consistency(
+            event, {"type": "identity_consistency"}, self._identity_rule(), mock_session, tenant_id="tenant-1"
+        )
         assert result.result == "pass"
 
 
@@ -749,7 +772,9 @@ class TestEvaluateMassBalance:
             "quantity": 900,
             "unit_of_measure": "cases",
         }
-        result = _evaluate_mass_balance(event, self._mass_rule().evaluation_logic, self._mass_rule(), mock_session)
+        result = _evaluate_mass_balance(
+            event, self._mass_rule().evaluation_logic, self._mass_rule(), mock_session, tenant_id="tenant-1"
+        )
         assert result.result == "pass"
 
     def test_output_exceeds_input_fails(self, mock_session):
@@ -765,7 +790,9 @@ class TestEvaluateMassBalance:
             "quantity": 2100,
             "unit_of_measure": "cases",
         }
-        result = _evaluate_mass_balance(event, self._mass_rule().evaluation_logic, self._mass_rule(), mock_session)
+        result = _evaluate_mass_balance(
+            event, self._mass_rule().evaluation_logic, self._mass_rule(), mock_session, tenant_id="tenant-1"
+        )
         assert result.result == "fail"
         assert "Mass balance violation" in result.why_failed
 
@@ -782,7 +809,9 @@ class TestEvaluateMassBalance:
             "quantity": 1005,
             "unit_of_measure": "cases",
         }
-        result = _evaluate_mass_balance(event, self._mass_rule().evaluation_logic, self._mass_rule(), mock_session)
+        result = _evaluate_mass_balance(
+            event, self._mass_rule().evaluation_logic, self._mass_rule(), mock_session, tenant_id="tenant-1"
+        )
         assert result.result == "pass"
 
     def test_mixed_units_warns(self, mock_session):
@@ -798,7 +827,9 @@ class TestEvaluateMassBalance:
             "quantity": 500,
             "unit_of_measure": "hogsheads",
         }
-        result = _evaluate_mass_balance(event, self._mass_rule().evaluation_logic, self._mass_rule(), mock_session)
+        result = _evaluate_mass_balance(
+            event, self._mass_rule().evaluation_logic, self._mass_rule(), mock_session, tenant_id="tenant-1"
+        )
         assert result.result == "warn"
         assert "mixed units" in result.why_failed.lower() or "convert" in result.why_failed.lower()
 
@@ -816,7 +847,9 @@ class TestEvaluateMassBalance:
             "unit_of_measure": "cases",
         }
         # 2100 cases = 50,400 lbs >> 1000 lbs input → fail
-        result = _evaluate_mass_balance(event, self._mass_rule().evaluation_logic, self._mass_rule(), mock_session)
+        result = _evaluate_mass_balance(
+            event, self._mass_rule().evaluation_logic, self._mass_rule(), mock_session, tenant_id="tenant-1"
+        )
         assert result.result == "fail"
 
     def test_no_prior_events_passes(self, mock_session):
@@ -830,7 +863,9 @@ class TestEvaluateMassBalance:
             "quantity": 500,
             "unit_of_measure": "cases",
         }
-        result = _evaluate_mass_balance(event, self._mass_rule().evaluation_logic, self._mass_rule(), mock_session)
+        result = _evaluate_mass_balance(
+            event, self._mass_rule().evaluation_logic, self._mass_rule(), mock_session, tenant_id="tenant-1"
+        )
         assert result.result == "pass"
 
     def test_current_event_included_in_totals(self, mock_session):
@@ -849,7 +884,9 @@ class TestEvaluateMassBalance:
             "quantity": 300,
             "unit_of_measure": "cases",
         }
-        result = _evaluate_mass_balance(event, self._mass_rule().evaluation_logic, self._mass_rule(), mock_session)
+        result = _evaluate_mass_balance(
+            event, self._mass_rule().evaluation_logic, self._mass_rule(), mock_session, tenant_id="tenant-1"
+        )
         assert result.result == "fail"
         assert "1100" in result.why_failed or "1100.0" in result.why_failed
 
@@ -870,15 +907,16 @@ class TestRelationalRuleDispatch:
             evaluation_logic={"type": "temporal_order"},
         )
         engine = RulesEngine(mock_session)
-        engine._rules_cache = [rule]
+        engine.load_active_rules = MagicMock(return_value=[rule])
         event = {
             "event_id": "evt-1",
             "event_type": "shipping",
             "tenant_id": "tenant-1",
             "traceability_lot_code": "TLC-001",
             "event_timestamp": "2026-01-05T00:00:00+00:00",
+            "ftl_covered": True,
         }
-        summary = engine.evaluate_event(event, persist=False)
+        summary = engine.evaluate_event(event, persist=False, tenant_id="tenant-1")
         assert summary.total_rules == 1
         assert summary.passed == 1  # No related events → pass
 
@@ -890,8 +928,8 @@ class TestRelationalRuleDispatch:
             evaluation_logic={"type": "temporal_order"},
         )
         engine = RulesEngine(None)
-        engine._rules_cache = [rule]
+        engine.load_active_rules = MagicMock(return_value=[rule])
         event = _make_event(event_type="shipping")
-        summary = engine.evaluate_event(event, persist=False)
-        assert summary.skipped == 1
-        assert "requires DB session" in summary.results[0].why_failed
+        summary = engine.evaluate_event(event, persist=False, tenant_id="tenant-1")
+        assert summary.errored == 1
+        assert "requires a DB session" in summary.results[0].why_failed

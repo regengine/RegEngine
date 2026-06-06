@@ -31,6 +31,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Dict, List
 
 import pytest
+from tests.integration_requirements import sqlalchemy_session_or_skip
 
 # Skip if no database configured
 DATABASE_URL = os.getenv("DATABASE_URL") or os.getenv("ADMIN_DATABASE_URL")
@@ -47,21 +48,17 @@ pytestmark = pytest.mark.skipif(
 @pytest.fixture(scope="module")
 def db_session():
     """Create a DB session for the entire test module."""
-    from sqlalchemy import create_engine, text
-    from sqlalchemy.orm import sessionmaker
-
-    engine = create_engine(DATABASE_URL)
-    Session = sessionmaker(bind=engine)
-    session = Session()
+    engine, session = sqlalchemy_session_or_skip(
+        DATABASE_URL,
+        reason="PostgreSQL with fsma schema is unavailable",
+    )
 
     try:
-        session.execute(text("SELECT 1"))
-    except Exception:
+        yield session
+    finally:
         session.rollback()
-
-    yield session
-    session.rollback()
-    session.close()
+        session.close()
+        engine.dispose()
 
 
 @pytest.fixture(scope="module")

@@ -12,6 +12,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from shared.resilient_http import resilient_client
 from shared.task_queue import get_task_queue_summary, replay_dead_tasks
 from .dependencies import get_current_user, get_session
+from .qa_health import QAHealthResponse, load_qa_health_summary
 from .sqlalchemy_models import UserModel
 from .models import TenantContext
 from sqlalchemy.orm import Session
@@ -331,6 +332,18 @@ def _require_sysadmin(current_user: UserModel = Depends(get_current_user)):
     if not current_user.is_sysadmin:
         raise HTTPException(status_code=403, detail="Sysadmin access required")
     return current_user
+
+
+@router.get(
+    "/qa-health",
+    response_model=QAHealthResponse,
+    summary="Get latest QA health summary",
+    dependencies=[Depends(_require_sysadmin)],
+)
+async def qa_health_summary() -> QAHealthResponse:
+    """Read-only sysadmin QA signal from the normalized CI artifact."""
+
+    return load_qa_health_summary()
 
 
 @router.get(

@@ -42,6 +42,7 @@ import importlib.util
 from pathlib import Path
 
 import pytest
+from tests.integration_requirements import create_started_container_or_skip
 
 testcontainers = pytest.importorskip("testcontainers")  # noqa: F841
 pytest.importorskip("testcontainers.postgres")
@@ -96,7 +97,12 @@ GOOD_REQUEST = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
 
 @pytest.fixture(scope="module")
 def pg_engine():
-    with PostgresContainer("postgres:16") as pg:
+    container, pg = create_started_container_or_skip(
+        PostgresContainer,
+        "postgres:16",
+        reason="PostgresContainer unavailable",
+    )
+    try:
         engine = create_engine(pg.get_connection_url(), future=True)
         with engine.begin() as conn:
             # Minimal stand-in for ``get_tenant_context()`` so the v056-style
@@ -114,6 +120,8 @@ def pg_engine():
             )
         yield engine
         engine.dispose()
+    finally:
+        container.stop()
 
 
 @pytest.fixture

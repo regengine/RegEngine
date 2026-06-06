@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import sys
+
 from fastapi import Request
 
 from app.webhook_compat import require_tenant_context
@@ -45,4 +47,12 @@ def install_tenant_context_override(
                     assert_tenant_claim_matches(ctx, header_tenant, source=f"header.{header_name}")
         return ctx
 
-    app.dependency_overrides[require_tenant_context] = _tenant_ctx
+    dependencies = {require_tenant_context}
+    for module_name in ("app.webhook_compat", "services.ingestion.app.webhook_compat"):
+        module = sys.modules.get(module_name)
+        current = getattr(module, "require_tenant_context", None)
+        if current is not None:
+            dependencies.add(current)
+
+    for dependency in dependencies:
+        app.dependency_overrides[dependency] = _tenant_ctx

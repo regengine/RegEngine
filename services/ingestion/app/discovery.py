@@ -12,10 +12,8 @@ import httpx
 import structlog
 from redis import Redis
 
+from services.ingestion.app.regulation_loader import RegulationLoader
 from services.ingestion.app.regulation_parser import RegulationParser
-# RegulationLoader was migrated out of kernel/ to services/ingestion/app/
-# (issue #2226). Import lazily inside ``scrape()`` so this kernel module
-# does not gain a static services/* dependency at import time.
 
 logger = structlog.get_logger("regulation-discovery")
 
@@ -141,10 +139,6 @@ class EthicalScraper:
                 parse_source_type = "html" if ext == "html" else "pdf"
                 parser = RegulationParser()
                 await parser.parse(path, parse_source_type)
-
-                from services.ingestion.app.regulation_loader import (
-                    RegulationLoader,
-                )
 
                 loader = RegulationLoader()
                 try:

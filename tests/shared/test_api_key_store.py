@@ -383,10 +383,11 @@ class TestRateLimiting:
     """Test rate limiting functionality."""
 
     @pytest.mark.asyncio
-    async def test_rate_limit_without_redis_fails_closed(self):
+    async def test_rate_limit_without_redis_fails_closed(self, monkeypatch):
         """Without Redis, distributed DB-key rate limiting fails closed."""
         from shared.api_key_store import DatabaseAPIKeyStore
 
+        monkeypatch.delenv("REDIS_URL", raising=False)
         store = DatabaseAPIKeyStore(database_url=TEST_DATABASE_URL)
         # No Redis configured
 

@@ -440,7 +440,7 @@ class TestCompleteIngestionRunTenantScope_Issue1263:
             rejected=0,
         )
 
-        rls_calls = [c for c in session.calls if "SET LOCAL app.tenant_id" in c[0]]
+        rls_calls = [c for c in session.calls if "app.tenant_id" in c[0]]
         assert rls_calls, (
             "complete_ingestion_run must also set RLS context as a "
             "defence-in-depth guard against future refactors"

@@ -31,6 +31,8 @@ from tests.shared.test_canonical_persistence_hardening import (
     _make_event,
 )
 
+TENANT_CONTEXT_NEEDLE = "app.tenant_id"
+
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -46,10 +48,10 @@ def _first_call_containing(session: FakeSession, needle: str) -> int | None:
 
 
 def _set_tenant_context_params(session: FakeSession) -> List[Dict[str, Any]]:
-    """Return the params of every ``SET LOCAL app.tenant_id`` call in order."""
+    """Return the params of every tenant-context GUC call in order."""
     return [
         params for sql, params in session.calls
-        if "SET LOCAL app.tenant_id" in sql
+        if TENANT_CONTEXT_NEEDLE in sql
     ]
 
 
@@ -70,14 +72,14 @@ class TestTenantContext_Issue1265_PersistEvent:
         evt = _make_event()
         store.persist_event(evt)
 
-        set_idx = _first_call_containing(session, "SET LOCAL app.tenant_id")
+        set_idx = _first_call_containing(session, TENANT_CONTEXT_NEEDLE)
         lock_idx = _first_call_containing(session, "pg_advisory_xact_lock")
         assert set_idx is not None, (
             "persist_event must set the RLS tenant context (#1265)"
         )
         assert lock_idx is not None, "advisory lock call should exist"
         assert set_idx < lock_idx, (
-            "SET LOCAL app.tenant_id must execute before the first "
+            "Tenant-context GUC write must execute before the first "
             "chain-lock acquisition so every RLS policy evaluated "
             "thereafter has the correct tenant bound"
         )
@@ -95,7 +97,7 @@ class TestTenantContext_Issue1265_PersistEvent:
         store.persist_event(evt)
 
         set_params = _set_tenant_context_params(session)
-        assert set_params, "no SET LOCAL app.tenant_id call was issued"
+        assert set_params, "no tenant-context GUC call was issued"
         # The writer binds str(tenant_id) under the :tid key.
         assert set_params[0].get("tid") == str(tid), (
             f"GUC bound to wrong tenant: expected {tid}, "
@@ -120,7 +122,7 @@ class TestTenantContext_Issue1265_PersistEventsBatch:
         tid = uuid4()
         store.persist_events_batch([_make_event(tenant_id=tid)])
 
-        set_idx = _first_call_containing(session, "SET LOCAL app.tenant_id")
+        set_idx = _first_call_containing(session, TENANT_CONTEXT_NEEDLE)
         lock_idx = _first_call_containing(session, "pg_advisory_xact_lock")
         assert set_idx is not None, "batch must set RLS tenant context (#1265)"
         assert set_idx < lock_idx, "GUC must be set before chain-lock acquisition"
@@ -142,7 +144,7 @@ class TestTenantContext_Issue1265_PersistEventsBatch:
         # And no GUC / no chain write should have been issued — invariant
         # is checked before any SQL touches the DB.
         assert not any(
-            "SET LOCAL app.tenant_id" in sql for sql, _ in session.calls
+            TENANT_CONTEXT_NEEDLE in sql for sql, _ in session.calls
         ), "must not SET tenant context on invalid batch"
         assert not any(
             "pg_advisory_xact_lock" in sql for sql, _ in session.calls
@@ -156,7 +158,7 @@ class TestTenantContext_Issue1265_PersistEventsBatch:
         result = store.persist_events_batch([])
         assert result == []
         assert not any(
-            "SET LOCAL app.tenant_id" in sql for sql, _ in session.calls
+            TENANT_CONTEXT_NEEDLE in sql for sql, _ in session.calls
         ), "empty batch must not issue SET"
 
 
@@ -190,7 +192,7 @@ class TestTenantContext_Issue1265_CreateIngestionRun:
         )
         store.create_ingestion_run(run)
 
-        set_idx = _first_call_containing(session, "SET LOCAL app.tenant_id")
+        set_idx = _first_call_containing(session, TENANT_CONTEXT_NEEDLE)
         insert_idx = _first_call_containing(
             session, "INSERT INTO fsma.ingestion_runs"
         )
@@ -199,7 +201,7 @@ class TestTenantContext_Issue1265_CreateIngestionRun:
         )
         assert insert_idx is not None, "INSERT must execute"
         assert set_idx < insert_idx, (
-            "SET LOCAL app.tenant_id must execute before INSERT so the "
+            "Tenant-context GUC write must execute before INSERT so the "
             "tenant_isolation policy on fsma.ingestion_runs can authorize"
         )
 

@@ -8,6 +8,75 @@ export interface HealthCheckResponse {
     timestamp?: string;
 }
 
+// Sysadmin QA Health
+export type QAHealthStatus = 'passing' | 'failing' | 'degraded' | 'unavailable' | 'invalid_artifact';
+export type QASuiteStatus = 'passed' | 'failed' | 'degraded' | 'skipped' | 'unavailable';
+export type QASeverity = 'critical' | 'high' | 'medium' | 'low' | 'info';
+export type QADecisionStatus = 'blocking' | 'advisory' | 'passed' | 'unavailable';
+
+export interface QAHealthSource {
+    kind: 'ci_artifact' | 'local_artifact' | 'unavailable';
+    path?: string | null;
+    workflow?: string | null;
+    run_id?: string | null;
+    commit?: string | null;
+    branch?: string | null;
+    note?: string | null;
+}
+
+export interface QAHealthOverall {
+    status: QAHealthStatus;
+    ready_percent: number;
+    blocking_count: number;
+    advisory_count: number;
+}
+
+export interface QAHealthSuite {
+    id: string;
+    label: string;
+    command: string;
+    status: QASuiteStatus;
+    passed: number;
+    failed: number;
+    skipped: number;
+    errors: number;
+    duration_seconds: number | null;
+    blocking: boolean;
+}
+
+export interface QAHealthCluster {
+    title: string;
+    severity: QASeverity;
+    affected_suites: string[];
+    owner_lane: string;
+    impact: string;
+    next_action: string;
+}
+
+export interface QAHealthDecisionCheck {
+    label: string;
+    status: QADecisionStatus;
+    detail?: string | null;
+}
+
+export interface QAHealthArtifactRef {
+    id: string;
+    label: string;
+    path: string;
+    type: string;
+}
+
+export interface QAHealthResponse {
+    schema_version: string;
+    generated_at: string;
+    source: QAHealthSource;
+    overall: QAHealthOverall;
+    suites: QAHealthSuite[];
+    clusters: QAHealthCluster[];
+    decision_checks: QAHealthDecisionCheck[];
+    artifact_refs: QAHealthArtifactRef[];
+}
+
 // API Keys
 export interface APIKeyResponse {
     id: string;

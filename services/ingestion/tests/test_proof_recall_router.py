@@ -15,17 +15,21 @@ Public recall-drill endpoint. Coverage:
 """
 from __future__ import annotations
 
+import sys
+from itertools import count
+
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from app.proof_recall_router import (
-    FDA_24H_MANDATE_SECONDS,
-    FROZEN_LOT_CODE,
-    OUTPUT_CSV_URL,
-    router as proof_recall_router,
-)
-from shared.rate_limit import limiter
+import app.proof_recall_router as proof_recall_module
+
+FDA_24H_MANDATE_SECONDS = proof_recall_module.FDA_24H_MANDATE_SECONDS
+FROZEN_LOT_CODE = proof_recall_module.FROZEN_LOT_CODE
+OUTPUT_CSV_URL = proof_recall_module.OUTPUT_CSV_URL
+proof_recall_router = proof_recall_module.router
+limiter = proof_recall_module.limiter
+_client_counter = count(1)
 
 
 def _build_app() -> FastAPI:
@@ -37,19 +41,36 @@ def _build_app() -> FastAPI:
     return app
 
 
+def _reset_limiter_state() -> None:
+    candidates = {limiter, proof_recall_module.limiter}
+    for module_name in ("shared.rate_limit", "services.shared.rate_limit"):
+        module = sys.modules.get(module_name)
+        current = getattr(module, "limiter", None)
+        if current is not None:
+            candidates.add(current)
+
+    for candidate in candidates:
+        for reset_target in (
+            candidate,
+            getattr(candidate, "_storage", None),
+            getattr(getattr(candidate, "limiter", None), "storage", None),
+            getattr(getattr(candidate, "_limiter", None), "storage", None),
+        ):
+            if reset_target is None:
+                continue
+            if hasattr(reset_target, "reset"):
+                reset_target.reset()
+            elif hasattr(reset_target, "clear"):
+                reset_target.clear()
+
+
 @pytest.fixture
 def client() -> TestClient:
     # Reset the shared slowapi limiter state between tests so the
     # 5/min limit doesn't leak across test cases.
-    try:
-        limiter.reset()
-    except Exception:  # pragma: no cover -- defensive fallback
-        storage = getattr(limiter, "_storage", None) or getattr(
-            getattr(limiter, "limiter", None), "storage", None
-        )
-        if storage is not None and hasattr(storage, "reset"):
-            storage.reset()
-    return TestClient(_build_app())
+    _reset_limiter_state()
+    host = f"proof-recall-test-{next(_client_counter)}"
+    return TestClient(_build_app(), client=(host, 50000))
 
 
 # ---------------------------------------------------------------------------
@@ -178,6 +199,7 @@ class TestSchemaValidation:
 class TestFailureModes:
     def test_rate_limit_triggers_at_sixth_request(self, client: TestClient):
         """5 requests/minute/IP -- the 6th must be 429."""
+        _reset_limiter_state()
         for i in range(5):
             resp = client.post("/api/v1/proof/recall-drill")
             assert resp.status_code == 200, (

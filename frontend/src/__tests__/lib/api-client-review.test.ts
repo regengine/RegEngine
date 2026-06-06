@@ -128,6 +128,31 @@ describe('apiClient review queue contract', () => {
         expect(init.headers).not.toHaveProperty('Content-Type');
     });
 
+    it('fetches sysadmin QA health through the admin proxy', async () => {
+        fetchMock.mockResolvedValueOnce(jsonResponse({
+            schema_version: '1.0',
+            generated_at: '2026-06-04T00:00:00Z',
+            source: { kind: 'ci_artifact', path: 'qa/qa-health/latest.json' },
+            overall: { status: 'failing', ready_percent: 28, blocking_count: 3, advisory_count: 1 },
+            suites: [],
+            clusters: [],
+            decision_checks: [],
+            artifact_refs: [],
+        }));
+
+        const { apiClient } = await importFreshClient();
+        await apiClient.getQAHealth();
+
+        expect(fetchMock).toHaveBeenCalledWith(
+            '/api/admin/v1/system/qa-health',
+            expect.objectContaining({
+                method: 'GET',
+                headers: {},
+                credentials: 'include',
+            }),
+        );
+    });
+
     it('unwraps paginated admin user-management responses', async () => {
         fetchMock
             .mockResolvedValueOnce(jsonResponse({

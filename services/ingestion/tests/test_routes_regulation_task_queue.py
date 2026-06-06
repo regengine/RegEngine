@@ -22,7 +22,9 @@ from shared.auth import APIKey, require_api_key
 # /v1/ingest/regulation moved from app.routes to app.routes_ingest in PR #2200.
 # The original ``app.routes.router`` no longer has this endpoint mounted, so
 # we import the ingest router directly.
-from app.routes_ingest import router
+import app.routes_ingest as routes_ingest
+
+router = routes_ingest.router
 
 
 # ---------------------------------------------------------------------------
@@ -40,7 +42,7 @@ def _make_api_key(*, us: bool = True) -> APIKey:
 def _build_client(api_key: APIKey, monkeypatch=None) -> TestClient:
     if monkeypatch:
         # Bypass Redis-backed rate limiter so tests don't need a real Redis
-        monkeypatch.setattr("app.routes_ingest.consume_tenant_rate_limit", lambda **kw: (True, 100))
+        monkeypatch.setattr(routes_ingest, "consume_tenant_rate_limit", lambda **kw: (True, 100))
     app = FastAPI()
     app.include_router(router)
     app.dependency_overrides[require_api_key] = lambda: api_key
@@ -55,7 +57,7 @@ def _patch_regulation_enqueue(monkeypatch, fixed_job_id: str | None = None):
 
     # Patch staging path to a deterministic value without touching the FS
     if fixed_job_id:
-        monkeypatch.setattr("app.routes_ingest.uuid.uuid4", lambda: uuid.UUID(fixed_job_id))
+        monkeypatch.setattr(routes_ingest.uuid, "uuid4", lambda: uuid.UUID(fixed_job_id))
 
     monkeypatch.setattr(
         "app.routes_ingest.get_staging_path" if False else "app.task_handlers_regulation.get_staging_path",
@@ -66,9 +68,9 @@ def _patch_regulation_enqueue(monkeypatch, fixed_job_id: str | None = None):
         "app.routes_ingest.SessionLocal" if False else "builtins.open",
         mock_open(),
     )
-    monkeypatch.setattr("app.routes_ingest.SessionLocal", lambda: fake_session)
-    monkeypatch.setattr("app.routes_ingest.enqueue_task", mock_enqueue)
-    monkeypatch.setattr("app.routes_ingest.redis.from_url", lambda *a, **kw: mock_redis)
+    monkeypatch.setattr(routes_ingest, "SessionLocal", lambda: fake_session)
+    monkeypatch.setattr(routes_ingest, "enqueue_task", mock_enqueue)
+    monkeypatch.setattr(routes_ingest.redis, "from_url", lambda *a, **kw: mock_redis)
 
     return mock_enqueue, fake_session, mock_redis
 
@@ -91,21 +93,21 @@ class TestIngestRegulation:
 
     def test_returns_202_and_job_id(self, monkeypatch, tmp_path):
         fixed = "00000000-0000-0000-0000-000000000010"
-        monkeypatch.setattr("app.routes_ingest.uuid.uuid4", lambda: uuid.UUID(fixed))
+        monkeypatch.setattr(routes_ingest.uuid, "uuid4", lambda: uuid.UUID(fixed))
 
         fake_session = MagicMock()
         mock_enqueue = MagicMock(return_value=1)
         mock_redis = MagicMock()
-        monkeypatch.setattr("app.routes_ingest.SessionLocal", lambda: fake_session)
-        monkeypatch.setattr("app.routes_ingest.enqueue_task", mock_enqueue)
-        monkeypatch.setattr("app.routes_ingest.redis.from_url", lambda *a, **kw: mock_redis)
+        monkeypatch.setattr(routes_ingest, "SessionLocal", lambda: fake_session)
+        monkeypatch.setattr(routes_ingest, "enqueue_task", mock_enqueue)
+        monkeypatch.setattr(routes_ingest.redis, "from_url", lambda *a, **kw: mock_redis)
         staging = str(tmp_path)
         monkeypatch.setenv("INGEST_STAGING_DIR", staging)
         # Re-import after env change
         import importlib
         import app.task_handlers_regulation as thr
         importlib.reload(thr)
-        monkeypatch.setattr("app.routes_ingest.get_staging_path", thr.get_staging_path)
+        monkeypatch.setattr(routes_ingest, "get_staging_path", thr.get_staging_path)
 
         client = _build_client(_make_api_key(us=True), monkeypatch)
         resp = self._post(client)
@@ -119,15 +121,15 @@ class TestIngestRegulation:
         fake_session = MagicMock()
         mock_enqueue = MagicMock(return_value=1)
         mock_redis = MagicMock()
-        monkeypatch.setattr("app.routes_ingest.SessionLocal", lambda: fake_session)
-        monkeypatch.setattr("app.routes_ingest.enqueue_task", mock_enqueue)
-        monkeypatch.setattr("app.routes_ingest.redis.from_url", lambda *a, **kw: mock_redis)
+        monkeypatch.setattr(routes_ingest, "SessionLocal", lambda: fake_session)
+        monkeypatch.setattr(routes_ingest, "enqueue_task", mock_enqueue)
+        monkeypatch.setattr(routes_ingest.redis, "from_url", lambda *a, **kw: mock_redis)
         monkeypatch.setenv("INGEST_STAGING_DIR", str(tmp_path))
 
         import importlib
         import app.task_handlers_regulation as thr
         importlib.reload(thr)
-        monkeypatch.setattr("app.routes_ingest.get_staging_path", thr.get_staging_path)
+        monkeypatch.setattr(routes_ingest, "get_staging_path", thr.get_staging_path)
 
         client = _build_client(_make_api_key(us=True), monkeypatch)
         self._post(client)
@@ -143,15 +145,15 @@ class TestIngestRegulation:
 
     def test_staging_file_written(self, monkeypatch, tmp_path):
         fake_session = MagicMock()
-        monkeypatch.setattr("app.routes_ingest.SessionLocal", lambda: fake_session)
-        monkeypatch.setattr("app.routes_ingest.enqueue_task", MagicMock(return_value=1))
-        monkeypatch.setattr("app.routes_ingest.redis.from_url", lambda *a, **kw: MagicMock())
+        monkeypatch.setattr(routes_ingest, "SessionLocal", lambda: fake_session)
+        monkeypatch.setattr(routes_ingest, "enqueue_task", MagicMock(return_value=1))
+        monkeypatch.setattr(routes_ingest.redis, "from_url", lambda *a, **kw: MagicMock())
         monkeypatch.setenv("INGEST_STAGING_DIR", str(tmp_path))
 
         import importlib
         import app.task_handlers_regulation as thr
         importlib.reload(thr)
-        monkeypatch.setattr("app.routes_ingest.get_staging_path", thr.get_staging_path)
+        monkeypatch.setattr(routes_ingest, "get_staging_path", thr.get_staging_path)
 
         client = _build_client(_make_api_key(us=True), monkeypatch)
         self._post(client, content=b"%PDF-1.4 test content")
@@ -162,39 +164,39 @@ class TestIngestRegulation:
         assert staged[0].read_bytes() == b"%PDF-1.4 test content"
 
     def test_non_us_returns_403(self, monkeypatch, tmp_path):
-        monkeypatch.setattr("app.routes_ingest.SessionLocal", lambda: MagicMock())
-        monkeypatch.setattr("app.routes_ingest.enqueue_task", MagicMock())
-        monkeypatch.setattr("app.routes_ingest.redis.from_url", lambda *a, **kw: MagicMock())
+        monkeypatch.setattr(routes_ingest, "SessionLocal", lambda: MagicMock())
+        monkeypatch.setattr(routes_ingest, "enqueue_task", MagicMock())
+        monkeypatch.setattr(routes_ingest.redis, "from_url", lambda *a, **kw: MagicMock())
         client = _build_client(_make_api_key(us=False), monkeypatch)
         resp = self._post(client)
         assert resp.status_code == 403
 
     def test_empty_file_returns_400(self, monkeypatch, tmp_path):
-        monkeypatch.setattr("app.routes_ingest.SessionLocal", lambda: MagicMock())
-        monkeypatch.setattr("app.routes_ingest.enqueue_task", MagicMock())
-        monkeypatch.setattr("app.routes_ingest.redis.from_url", lambda *a, **kw: MagicMock())
+        monkeypatch.setattr(routes_ingest, "SessionLocal", lambda: MagicMock())
+        monkeypatch.setattr(routes_ingest, "enqueue_task", MagicMock())
+        monkeypatch.setattr(routes_ingest.redis, "from_url", lambda *a, **kw: MagicMock())
         client = _build_client(_make_api_key(us=True), monkeypatch)
         resp = self._post(client, content=b"")
         assert resp.status_code == 400
 
     def test_unsupported_extension_returns_400(self, monkeypatch, tmp_path):
-        monkeypatch.setattr("app.routes_ingest.SessionLocal", lambda: MagicMock())
-        monkeypatch.setattr("app.routes_ingest.enqueue_task", MagicMock())
-        monkeypatch.setattr("app.routes_ingest.redis.from_url", lambda *a, **kw: MagicMock())
+        monkeypatch.setattr(routes_ingest, "SessionLocal", lambda: MagicMock())
+        monkeypatch.setattr(routes_ingest, "enqueue_task", MagicMock())
+        monkeypatch.setattr(routes_ingest.redis, "from_url", lambda *a, **kw: MagicMock())
         client = _build_client(_make_api_key(us=True), monkeypatch)
         resp = self._post(client, content=b"data", filename="reg.txt")
         assert resp.status_code == 400
 
     def test_spoofed_pdf_content_returns_400_and_cleans_staging(self, monkeypatch, tmp_path):
-        monkeypatch.setattr("app.routes_ingest.SessionLocal", lambda: MagicMock())
-        monkeypatch.setattr("app.routes_ingest.enqueue_task", MagicMock())
-        monkeypatch.setattr("app.routes_ingest.redis.from_url", lambda *a, **kw: MagicMock())
+        monkeypatch.setattr(routes_ingest, "SessionLocal", lambda: MagicMock())
+        monkeypatch.setattr(routes_ingest, "enqueue_task", MagicMock())
+        monkeypatch.setattr(routes_ingest.redis, "from_url", lambda *a, **kw: MagicMock())
         monkeypatch.setenv("INGEST_STAGING_DIR", str(tmp_path))
 
         import importlib
         import app.task_handlers_regulation as thr
         importlib.reload(thr)
-        monkeypatch.setattr("app.routes_ingest.get_staging_path", thr.get_staging_path)
+        monkeypatch.setattr(routes_ingest, "get_staging_path", thr.get_staging_path)
 
         client = _build_client(_make_api_key(us=True), monkeypatch)
         resp = self._post(client, content=b"not a pdf", filename="reg.pdf")
@@ -203,16 +205,16 @@ class TestIngestRegulation:
         assert list(tmp_path.iterdir()) == []
 
     def test_streaming_limit_returns_413_and_cleans_staging(self, monkeypatch, tmp_path):
-        monkeypatch.setattr("app.routes_ingest.SessionLocal", lambda: MagicMock())
-        monkeypatch.setattr("app.routes_ingest.enqueue_task", MagicMock())
-        monkeypatch.setattr("app.routes_ingest.redis.from_url", lambda *a, **kw: MagicMock())
-        monkeypatch.setattr("app.routes_ingest.MAX_REGULATION_FILE_SIZE_BYTES", 16)
+        monkeypatch.setattr(routes_ingest, "SessionLocal", lambda: MagicMock())
+        monkeypatch.setattr(routes_ingest, "enqueue_task", MagicMock())
+        monkeypatch.setattr(routes_ingest.redis, "from_url", lambda *a, **kw: MagicMock())
+        monkeypatch.setattr(routes_ingest, "MAX_REGULATION_FILE_SIZE_BYTES", 16)
         monkeypatch.setenv("INGEST_STAGING_DIR", str(tmp_path))
 
         import importlib
         import app.task_handlers_regulation as thr
         importlib.reload(thr)
-        monkeypatch.setattr("app.routes_ingest.get_staging_path", thr.get_staging_path)
+        monkeypatch.setattr(routes_ingest, "get_staging_path", thr.get_staging_path)
 
         client = _build_client(_make_api_key(us=True), monkeypatch)
         resp = self._post(client, content=b"%PDF-" + b"x" * 32, filename="reg.pdf")
@@ -222,15 +224,15 @@ class TestIngestRegulation:
     def test_malicious_filename_is_sanitized_before_queue_payload(self, monkeypatch, tmp_path):
         fake_session = MagicMock()
         mock_enqueue = MagicMock(return_value=1)
-        monkeypatch.setattr("app.routes_ingest.SessionLocal", lambda: fake_session)
-        monkeypatch.setattr("app.routes_ingest.enqueue_task", mock_enqueue)
-        monkeypatch.setattr("app.routes_ingest.redis.from_url", lambda *a, **kw: MagicMock())
+        monkeypatch.setattr(routes_ingest, "SessionLocal", lambda: fake_session)
+        monkeypatch.setattr(routes_ingest, "enqueue_task", mock_enqueue)
+        monkeypatch.setattr(routes_ingest.redis, "from_url", lambda *a, **kw: MagicMock())
         monkeypatch.setenv("INGEST_STAGING_DIR", str(tmp_path))
 
         import importlib
         import app.task_handlers_regulation as thr
         importlib.reload(thr)
-        monkeypatch.setattr("app.routes_ingest.get_staging_path", thr.get_staging_path)
+        monkeypatch.setattr(routes_ingest, "get_staging_path", thr.get_staging_path)
 
         client = _build_client(_make_api_key(us=True), monkeypatch)
         resp = self._post(client, filename="../../secret-token.pdf")
@@ -243,15 +245,15 @@ class TestIngestRegulation:
 
     def test_db_commit_called(self, monkeypatch, tmp_path):
         fake_session = MagicMock()
-        monkeypatch.setattr("app.routes_ingest.SessionLocal", lambda: fake_session)
-        monkeypatch.setattr("app.routes_ingest.enqueue_task", MagicMock(return_value=1))
-        monkeypatch.setattr("app.routes_ingest.redis.from_url", lambda *a, **kw: MagicMock())
+        monkeypatch.setattr(routes_ingest, "SessionLocal", lambda: fake_session)
+        monkeypatch.setattr(routes_ingest, "enqueue_task", MagicMock(return_value=1))
+        monkeypatch.setattr(routes_ingest.redis, "from_url", lambda *a, **kw: MagicMock())
         monkeypatch.setenv("INGEST_STAGING_DIR", str(tmp_path))
 
         import importlib
         import app.task_handlers_regulation as thr
         importlib.reload(thr)
-        monkeypatch.setattr("app.routes_ingest.get_staging_path", thr.get_staging_path)
+        monkeypatch.setattr(routes_ingest, "get_staging_path", thr.get_staging_path)
 
         client = _build_client(_make_api_key(us=True), monkeypatch)
         self._post(client)
@@ -259,15 +261,15 @@ class TestIngestRegulation:
 
     def test_staging_file_removed_if_enqueue_fails(self, monkeypatch, tmp_path):
         """If enqueue_task raises, the staged file must be cleaned up."""
-        monkeypatch.setattr("app.routes_ingest.SessionLocal", lambda: MagicMock())
-        monkeypatch.setattr("app.routes_ingest.enqueue_task", MagicMock(side_effect=RuntimeError("db down")))
-        monkeypatch.setattr("app.routes_ingest.redis.from_url", lambda *a, **kw: MagicMock())
+        monkeypatch.setattr(routes_ingest, "SessionLocal", lambda: MagicMock())
+        monkeypatch.setattr(routes_ingest, "enqueue_task", MagicMock(side_effect=RuntimeError("db down")))
+        monkeypatch.setattr(routes_ingest.redis, "from_url", lambda *a, **kw: MagicMock())
         monkeypatch.setenv("INGEST_STAGING_DIR", str(tmp_path))
 
         import importlib
         import app.task_handlers_regulation as thr
         importlib.reload(thr)
-        monkeypatch.setattr("app.routes_ingest.get_staging_path", thr.get_staging_path)
+        monkeypatch.setattr(routes_ingest, "get_staging_path", thr.get_staging_path)
 
         client = _build_client(_make_api_key(us=True), monkeypatch)
         resp = self._post(client)
@@ -285,7 +287,7 @@ class TestIngestFile:
     def test_signature_has_no_background_tasks_param(self):
         import inspect
         from fastapi import BackgroundTasks
-        from app.routes_ingest import ingest_file
+        ingest_file = routes_ingest.ingest_file
 
         sig = inspect.signature(ingest_file)
         for param in sig.parameters.values():

@@ -25,6 +25,10 @@ import shared.cte_persistence as shared_cte_persistence
 from app.authz import IngestionPrincipal, get_ingestion_principal
 from app.fda_export.router import router as fda_router
 from app.fda_export_service import _generate_csv
+from services.ingestion.tests.authz_overrides import (
+    install_active_subscription_override,
+    install_ingestion_principal_override,
+)
 
 
 class _FakeChainVerification:
@@ -157,18 +161,19 @@ def _install_fake_dependencies(
 
 @pytest.fixture()
 def client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
-    from app.subscription_gate import require_active_subscription
-
     app = FastAPI()
     app.include_router(fda_router)
-    app.dependency_overrides[get_ingestion_principal] = lambda: IngestionPrincipal(
-        key_id="test-key",
-        scopes=["*"],
-        auth_mode="test",
+    install_ingestion_principal_override(
+        app,
+        IngestionPrincipal(
+            key_id="test-key",
+            scopes=["*"],
+            auth_mode="test",
+        ),
     )
     # #1182: the subscription gate is now fail-closed; override it in tests so
     # we don't need a Redis stand-in just to exercise export logic.
-    app.dependency_overrides[require_active_subscription] = lambda: None
+    install_active_subscription_override(app)
 
     _install_fake_dependencies(
         monkeypatch,
@@ -256,17 +261,18 @@ def test_verify_export_recomputes_hash_for_full_export(monkeypatch: pytest.Monke
         datetime.now(timezone.utc),
     )
 
-    from app.subscription_gate import require_active_subscription
-
     app = FastAPI()
     app.include_router(fda_router)
-    app.dependency_overrides[get_ingestion_principal] = lambda: IngestionPrincipal(
-        key_id="test-key",
-        scopes=["*"],
-        auth_mode="test",
+    install_ingestion_principal_override(
+        app,
+        IngestionPrincipal(
+            key_id="test-key",
+            scopes=["*"],
+            auth_mode="test",
+        ),
     )
     # #1182: bypass fail-closed subscription gate in tests.
-    app.dependency_overrides[require_active_subscription] = lambda: None
+    install_active_subscription_override(app)
 
     _install_fake_dependencies(
         monkeypatch,
@@ -293,10 +299,13 @@ def test_verify_export_recomputes_hash_for_full_export(monkeypatch: pytest.Monke
 def test_export_denied_without_fda_export_scope(monkeypatch: pytest.MonkeyPatch) -> None:
     app = FastAPI()
     app.include_router(fda_router)
-    app.dependency_overrides[get_ingestion_principal] = lambda: IngestionPrincipal(
-        key_id="limited-key",
-        scopes=["fda.read"],
-        auth_mode="test",
+    install_ingestion_principal_override(
+        app,
+        IngestionPrincipal(
+            key_id="limited-key",
+            scopes=["fda.read"],
+            auth_mode="test",
+        ),
     )
 
     _install_fake_dependencies(
@@ -340,16 +349,18 @@ def test_export_denied_cross_tenant(monkeypatch: pytest.MonkeyPatch) -> None:
     # Principal scoped to tenant A with fda.export permission.
     tenant_a = "00000000-0000-0000-0000-00000000000a"
     tenant_b = "00000000-0000-0000-0000-00000000000b"
-    app.dependency_overrides[get_ingestion_principal] = lambda: IngestionPrincipal(
-        key_id="tenant-a-key",
-        scopes=["fda.export"],  # valid scope, but no wildcard
-        tenant_id=tenant_a,
-        auth_mode="test",
+    install_ingestion_principal_override(
+        app,
+        IngestionPrincipal(
+            key_id="tenant-a-key",
+            scopes=["fda.export"],  # valid scope, but no wildcard
+            tenant_id=tenant_a,
+            auth_mode="test",
+        ),
     )
 
     # Bypass subscription gate (test-only; mirrors the ``client`` fixture).
-    from app.subscription_gate import require_active_subscription
-    app.dependency_overrides[require_active_subscription] = lambda: None
+    install_active_subscription_override(app)
 
     _install_fake_dependencies(
         monkeypatch,
@@ -385,14 +396,16 @@ def test_export_denied_cross_tenant_via_header(monkeypatch: pytest.MonkeyPatch) 
 
     tenant_a = "00000000-0000-0000-0000-00000000000a"
     tenant_b = "00000000-0000-0000-0000-00000000000b"
-    app.dependency_overrides[get_ingestion_principal] = lambda: IngestionPrincipal(
-        key_id="tenant-a-key",
-        scopes=["fda.export"],
-        tenant_id=tenant_a,
-        auth_mode="test",
+    install_ingestion_principal_override(
+        app,
+        IngestionPrincipal(
+            key_id="tenant-a-key",
+            scopes=["fda.export"],
+            tenant_id=tenant_a,
+            auth_mode="test",
+        ),
     )
-    from app.subscription_gate import require_active_subscription
-    app.dependency_overrides[require_active_subscription] = lambda: None
+    install_active_subscription_override(app)
 
     _install_fake_dependencies(
         monkeypatch,

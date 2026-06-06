@@ -1,0 +1,183 @@
+"""Tests for sysadmin QA health artifact endpoints."""
+
+from __future__ import annotations
+
+import json
+import uuid
+from pathlib import Path
+from unittest.mock import MagicMock
+
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+
+
+def _make_user(*, is_sysadmin: bool) -> MagicMock:
+    user = MagicMock()
+    user.id = uuid.uuid4()
+    user.is_sysadmin = is_sysadmin
+    return user
+
+
+def _build_app(user: MagicMock) -> FastAPI:
+    from services.admin.app.dependencies import get_current_user
+    from services.admin.app.system_routes import router
+
+    app = FastAPI()
+    app.include_router(router, prefix="/v1")
+    app.dependency_overrides[get_current_user] = lambda: user
+    return app
+
+
+def _valid_summary() -> dict:
+    return {
+        "schema_version": "1.0",
+        "generated_at": "2026-06-04T00:00:00Z",
+        "source": {
+            "kind": "ci_artifact",
+            "path": "qa/qa-health/latest.json",
+            "workflow": "QA Health",
+            "run_id": "123",
+            "commit": "abc123",
+            "branch": "main",
+        },
+        "overall": {
+            "status": "failing",
+            "ready_percent": 28,
+            "blocking_count": 3,
+            "advisory_count": 1,
+        },
+        "suites": [
+            {
+                "id": "backend-pytest",
+                "label": "Backend pytest",
+                "command": "python3 -m pytest --no-cov",
+                "status": "failed",
+                "passed": 8379,
+                "failed": 240,
+                "skipped": 319,
+                "errors": 23,
+                "duration_seconds": 372.98,
+                "blocking": True,
+            }
+        ],
+        "clusters": [
+            {
+                "title": "Audit hash chain failures",
+                "severity": "high",
+                "affected_suites": ["backend-pytest"],
+                "owner_lane": "backend",
+                "impact": "Release evidence is blocked.",
+                "next_action": "Authorization: Bearer super-secret-token",
+            }
+        ],
+        "decision_checks": [
+            {
+                "label": "Backend unit failures",
+                "status": "blocking",
+                "detail": "240 failures and 23 errors",
+            }
+        ],
+        "artifact_refs": [
+            {
+                "id": "pytest-junit",
+                "label": "Pytest JUnit",
+                "path": ".qa-health/pytest.xml",
+                "type": "junit",
+            }
+        ],
+    }
+
+
+def test_qa_health_requires_sysadmin(monkeypatch, tmp_path: Path) -> None:
+    artifact = tmp_path / "qa.json"
+    artifact.write_text(json.dumps(_valid_summary()), encoding="utf-8")
+    monkeypatch.setenv("QA_HEALTH_SUMMARY_PATH", str(artifact))
+    client = TestClient(
+        _build_app(_make_user(is_sysadmin=False)),
+        raise_server_exceptions=False,
+    )
+
+    resp = client.get("/v1/system/qa-health")
+
+    assert resp.status_code == 403
+
+
+def test_qa_health_returns_valid_artifact(monkeypatch, tmp_path: Path) -> None:
+    artifact = tmp_path / "qa.json"
+    artifact.write_text(json.dumps(_valid_summary()), encoding="utf-8")
+    monkeypatch.setenv("QA_HEALTH_SUMMARY_PATH", str(artifact))
+    client = TestClient(_build_app(_make_user(is_sysadmin=True)))
+
+    resp = client.get("/v1/system/qa-health")
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["overall"]["status"] == "failing"
+    assert body["suites"][0]["passed"] == 8379
+    assert body["artifact_refs"][0]["path"] == ".qa-health/pytest.xml"
+
+
+def test_qa_health_missing_artifact_returns_unavailable(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setenv("QA_HEALTH_SUMMARY_PATH", str(tmp_path / "missing.json"))
+    client = TestClient(_build_app(_make_user(is_sysadmin=True)))
+
+    resp = client.get("/v1/system/qa-health")
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["overall"]["status"] == "unavailable"
+    assert body["suites"] == []
+    assert body["decision_checks"][0]["status"] == "unavailable"
+
+
+def test_qa_health_malformed_artifact_fails_safely(monkeypatch, tmp_path: Path) -> None:
+    artifact = tmp_path / "qa.json"
+    artifact.write_text("{not-json", encoding="utf-8")
+    monkeypatch.setenv("QA_HEALTH_SUMMARY_PATH", str(artifact))
+    client = TestClient(_build_app(_make_user(is_sysadmin=True)))
+
+    resp = client.get("/v1/system/qa-health")
+
+    assert resp.status_code == 200
+    assert resp.json()["overall"]["status"] == "invalid_artifact"
+
+
+def test_qa_health_oversized_artifact_fails_safely(monkeypatch, tmp_path: Path) -> None:
+    from services.admin.app.qa_health import QA_HEALTH_MAX_BYTES
+
+    artifact = tmp_path / "qa.json"
+    artifact.write_text("x" * (QA_HEALTH_MAX_BYTES + 1), encoding="utf-8")
+    monkeypatch.setenv("QA_HEALTH_SUMMARY_PATH", str(artifact))
+    client = TestClient(_build_app(_make_user(is_sysadmin=True)))
+
+    resp = client.get("/v1/system/qa-health")
+
+    assert resp.status_code == 200
+    assert resp.json()["overall"]["status"] == "invalid_artifact"
+
+
+def test_qa_health_redacts_secret_like_content(monkeypatch, tmp_path: Path) -> None:
+    artifact = tmp_path / "qa.json"
+    artifact.write_text(json.dumps(_valid_summary()), encoding="utf-8")
+    monkeypatch.setenv("QA_HEALTH_SUMMARY_PATH", str(artifact))
+    client = TestClient(_build_app(_make_user(is_sysadmin=True)))
+
+    resp = client.get("/v1/system/qa-health")
+
+    payload = json.dumps(resp.json())
+    assert "super-secret-token" not in payload
+    assert "Authorization: Bearer [redacted]" in payload
+
+
+def test_qa_health_rejects_absolute_artifact_refs(monkeypatch, tmp_path: Path) -> None:
+    summary = _valid_summary()
+    summary["artifact_refs"][0]["path"] = "/tmp/pytest.xml"
+    artifact = tmp_path / "qa.json"
+    artifact.write_text(json.dumps(summary), encoding="utf-8")
+    monkeypatch.setenv("QA_HEALTH_SUMMARY_PATH", str(artifact))
+    client = TestClient(_build_app(_make_user(is_sysadmin=True)))
+
+    resp = client.get("/v1/system/qa-health")
+
+    assert resp.status_code == 200
+    assert resp.json()["overall"]["status"] == "invalid_artifact"
