@@ -15,11 +15,26 @@ from typing import Any
 SCHEMA_VERSION = "1.0"
 
 
+def _load_json_artifact(path: Path) -> Any | None:
+    """Load a JSON artifact, tolerating empty or malformed (e.g. zero-byte) files."""
+    raw = path.read_text(encoding="utf-8").strip()
+    if not raw:
+        return None
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError:
+        return None
+
+
 def parse_junit(path: Path | None) -> dict[str, float | int] | None:
     if path is None or not path.exists():
         return None
 
-    root = ET.parse(path).getroot()
+    try:
+        root = ET.parse(path).getroot()
+    except ET.ParseError:
+        # Empty or malformed JUnit XML (e.g. a zero-byte artifact) — treat as absent.
+        return None
     suites = [root] if root.tag == "testsuite" else list(root.findall(".//testsuite"))
     if not suites and root.tag == "testsuites":
         suites = [root]
@@ -47,7 +62,9 @@ def parse_eslint(path: Path | None) -> dict[str, float | int] | None:
     if path is None or not path.exists():
         return None
 
-    data = json.loads(path.read_text(encoding="utf-8"))
+    data = _load_json_artifact(path)
+    if data is None:
+        return None
     files = data if isinstance(data, list) else []
     errors = 0
     warnings = 0
@@ -70,7 +87,9 @@ def parse_playwright(path: Path | None) -> dict[str, float | int] | None:
     if path is None or not path.exists():
         return None
 
-    data = json.loads(path.read_text(encoding="utf-8"))
+    data = _load_json_artifact(path)
+    if data is None:
+        return None
     stats = data.get("stats") if isinstance(data, dict) else None
     if isinstance(stats, dict):
         passed = int(stats.get("expected") or stats.get("passed") or 0)
