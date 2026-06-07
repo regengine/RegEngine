@@ -332,17 +332,20 @@ class TestCallersDualWriteToCanonical_Issue1335:
         return source or ""
 
     def test_webhook_router_v2_imports_canonical_event_store(self):
+        # ``webhook_router_v2`` is now a package; the canonical-persistence
+        # helpers live in its ``rules_eval`` submodule.
         import os
 
         path = os.path.join(
             os.path.dirname(__file__),
-            "../../../../services/ingestion/app/webhook_router_v2.py",
+            "../../../../services/ingestion/app/webhook_router_v2/rules_eval.py",
         )
         path = os.path.normpath(path)
         with open(path) as f:
             source = f.read()
         assert "CanonicalEventStore" in source, (
-            "webhook_router_v2.py must reference CanonicalEventStore (dual-write to canonical path, #1335)"
+            "webhook_router_v2 (rules_eval.py) must reference CanonicalEventStore "
+            "(dual-write to canonical path, #1335)"
         )
 
     def test_epcis_persistence_imports_canonical_event_store(self):

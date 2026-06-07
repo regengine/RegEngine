@@ -54,7 +54,7 @@ class EnforcementMode:
 ENFORCEMENT_AWARE_CALL_SITES: tuple[str, ...] = (
     "services/ingestion/app/webhook_compat.py",
     "services/ingestion/app/epcis/persistence.py",
-    "services/ingestion/app/webhook_router_v2.py",
+    "services/ingestion/app/webhook_router_v2/rules_eval.py",
 )
 
 
