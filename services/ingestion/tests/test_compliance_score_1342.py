@@ -778,6 +778,7 @@ class TestQueryScoringDataHappyPath:
         assert data["ftl_category_count"] == 20
         assert data["chain_verified"] is True
         assert data["chain_verification_errors"] == []
+        assert any("kde_value #>> '{}'" in sql for sql in session.executed)
 
     def test_zero_events_skips_conditional_queries(self, monkeypatch):
         session = _RouteSession(

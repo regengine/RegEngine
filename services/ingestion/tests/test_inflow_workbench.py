@@ -37,6 +37,16 @@ def _client(
     return TestClient(app)
 
 
+def _evaluate_csv(monkeypatch, csv_text: str) -> dict:
+    monkeypatch.setattr(sandbox_router_module, "_check_sandbox_rate_limit", lambda _ip: None)
+    app = FastAPI()
+    app.include_router(sandbox_router)
+    client = TestClient(app)
+    response = client.post("/api/v1/sandbox/evaluate", json={"csv": csv_text})
+    assert response.status_code == 200, response.text
+    return response.json()
+
+
 def _sandbox_result(*, blocked: bool = True) -> dict:
     kde_errors = ["ship_to_location is required"] if blocked else []
     return {
@@ -272,6 +282,76 @@ def test_lists_built_in_scenarios(tmp_path, monkeypatch):
         "missing-shipping-destination",
         "broken-lineage",
     }
+
+
+def test_complete_romaine_fixture_is_export_ready_for_workbench(tmp_path, monkeypatch):
+    result = _evaluate_csv(monkeypatch, workbench.COMPLETE_ROMAINE_CSV)
+
+    assert result["total_events"] == 5
+    assert result["compliant_events"] == 5
+    assert result["non_compliant_events"] == 0
+    assert result["total_kde_errors"] == 0
+    assert result["total_rule_failures"] == 0
+    assert result["submission_blocked"] is False
+    assert result["blocking_reasons"] == []
+
+    client = _client(tmp_path, monkeypatch)
+    run_resp = client.post(
+        "/api/v1/inflow-workbench/runs",
+        json={
+            "tenant_id": "tenant-a",
+            "source": "inflow-lab-data-feeder",
+            "csv": workbench.COMPLETE_ROMAINE_CSV,
+            "result": result,
+        },
+    )
+
+    assert run_resp.status_code == 200, run_resp.text
+    run = run_resp.json()
+    assert run["readiness"]["score"] == 100
+    assert run["fix_queue"] == []
+    assert run["commit_gate"]["allowed"] is True
+    assert run["commit_gate"]["export_eligible"] is False
+    assert run["commit_gate"]["next_state"] == "production_evidence"
+
+
+@pytest.mark.parametrize(
+    ("csv_text", "expected_reason"),
+    [
+        (workbench.MISSING_DESTINATION_CSV, "ship_to_location"),
+        (workbench.BROKEN_LINEAGE_CSV, "input TLCs"),
+    ],
+)
+def test_negative_fixture_scenarios_still_block_and_create_fix_items(
+    tmp_path,
+    monkeypatch,
+    csv_text: str,
+    expected_reason: str,
+):
+    result = _evaluate_csv(monkeypatch, csv_text)
+
+    assert result["submission_blocked"] is True
+    assert result["non_compliant_events"] > 0
+    assert result["total_kde_errors"] + result["total_rule_failures"] > 0
+    assert any(expected_reason in reason for reason in result["blocking_reasons"])
+
+    client = _client(tmp_path, monkeypatch)
+    run_resp = client.post(
+        "/api/v1/inflow-workbench/runs",
+        json={
+            "tenant_id": "tenant-a",
+            "source": "inflow-lab-data-feeder",
+            "csv": csv_text,
+            "result": result,
+        },
+    )
+
+    assert run_resp.status_code == 200, run_resp.text
+    run = run_resp.json()
+    assert run["readiness"]["score"] < 100
+    assert run["fix_queue"]
+    assert run["commit_gate"]["allowed"] is False
+    assert run["commit_gate"]["export_eligible"] is False
 
 
 def test_persists_custom_scenario_and_saved_run(tmp_path, monkeypatch):

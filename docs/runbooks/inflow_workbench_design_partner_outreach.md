@@ -45,6 +45,8 @@ We built a new FSMA 204 readiness loop in RegEngine: Inflow prepares messy suppl
 - Prospect shares one real or anonymized supplier feed.
 - Prospect can name one supplier readiness problem RegEngine made clearer.
 - Prospect agrees to a second session or LOI discussion.
+- Session is captured in `sales/design_partner_feedback_scorecard.md`.
+- Prospect row is updated in `sales/design_partner_outreach_tracker_template.csv`.
 
 ## Launch Queue
 
@@ -65,3 +67,4 @@ Use this queue immediately after the staging verifier passes:
 - Show the commit gate before showing dashboards.
 - Keep the recording under four minutes.
 - End with the one-line ask: "Can we run one anonymized supplier feed through this with you?"
+- After recording, note which claims remain unsupported in `sales/design_partner_evidence_packet_template.md`.

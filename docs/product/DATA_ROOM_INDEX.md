@@ -75,6 +75,11 @@
 
 - [Product Overview](PRODUCT_OVERVIEW.md) -- What RegEngine is, core value, target market
 - [Product Roadmap](PRODUCT_ROADMAP.md) -- FSMA-first 90-day roadmap (March-June 2026)
+- [Design Partner Proof Checklist](DESIGN_PARTNER_PROOF_CHECKLIST.md) -- Measurable gates for design-partner traction, ROI, and trust proof
+- [Design Partner Sales Operating Kit](../../sales/README.md) -- Day-one operating sequence and proof templates
+- [Design Partner Feedback Scorecard](../../sales/design_partner_feedback_scorecard.md) -- Session-level proof capture template
+- [Design Partner Evidence Packet](../../sales/design_partner_evidence_packet_template.md) -- Partner-level evidence packet template
+- [Procurement Trust Packet](../../sales/procurement_trust_packet_template.md) -- Buyer/security review packet template with caveats
 - [Honest Valuation Update](HONEST_VALUATION_UPDATE_2026-04-30.md) -- April 30 Inflow Workbench de-risking assessment
 - [What Changed For Design Partners](WHAT_CHANGED_FOR_DESIGN_PARTNERS_2026-04-30.md) -- One-page design-partner summary for the Inflow Workbench loop
 - [Roadmap (Extended)](ROADMAP.md) -- Longer-term product direction

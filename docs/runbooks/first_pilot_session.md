@@ -6,6 +6,8 @@ This doc connects:
 - [first-pilot-onboarding outreach list](../research/fsma-204-go-to-market-2026-05.md) — 200+ named companies
 - [Inflow Workbench Design Partner Demo](inflow_workbench_design_partner_demo.md) — the 3-4 minute talk track for the live walkthrough
 - [Design-Partner Funnel Operating Rhythm](design_partner_funnel_operating_rhythm.md) — the daily metrics loop after a pilot lands
+- [Design Partner Feedback Scorecard](../../sales/design_partner_feedback_scorecard.md) — the proof-gate session capture template
+- [Design Partner Evidence Packet](../../sales/design_partner_evidence_packet_template.md) — the partner-level evidence rollup
 - [OKR decision doc](../decisions/2026-05-13-okr.md) — the single metric this serves
 
 ## Pre-call (T-24h)
@@ -58,7 +60,9 @@ They drive. You observe.
    - Top 3 friction points (verbatim, no interpretation)
    - One thing they said that surprised you
    - The "if we did one thing this week" answer
-3. **Pick exactly ONE** friction point to fix this week. Open a GitHub issue with label `pilot-feedback`. The fix routes through the [OKR doc](../decisions/2026-05-13-okr.md) routing rule.
+3. Complete `sales/design_partner_feedback_scorecard.md` for the session. Capture run IDs, readiness scores, blocker counts, commit-gate state, export status, and trust objections while the details are still fresh.
+4. If the partner used real or production-like data, start `sales/design_partner_evidence_packet_template.md` and link only sanitized summaries, hashes, screenshots with sensitive fields redacted, and approved evidence locations.
+5. **Pick exactly ONE** friction point to fix this week. Open a GitHub issue with label `pilot-feedback`. The fix routes through the [OKR doc](../decisions/2026-05-13-okr.md) routing rule.
 
 ## Anti-patterns
 
