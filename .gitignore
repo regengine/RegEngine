@@ -126,6 +126,8 @@ RegEngine_UX_Walkthrough.pdf
 # Test artifacts
 stress_and_redteam.py
 test-write
+.qa-health/
+frontend/test-results/
 
 # Development sample data — public synthetic CTE CSVs are tracked
 # (see sample_data/SYNTHETIC.md). Anything else under the dir stays
@@ -143,6 +145,10 @@ demo_exports/*
 !demo_exports/*.md
 sales_enablement/
 output/
+
+# Local sales/prospecting work may contain personal contact data.
+sales/design_partner_outreach_tracker.csv
+sales/first_batch_outreach_drafts_*.md
 
 # Working docs and drafts (auto-generated / ephemeral)
 briefings/

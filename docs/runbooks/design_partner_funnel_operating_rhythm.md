@@ -137,8 +137,10 @@ A one-page summary containing:
 After every design-partner demo:
 1. Update `sales/design_partner_outreach_tracker_template.csv` row.
 2. Complete `sales/design_partner_feedback_scorecard.md`.
-3. Re-check funnel progress for that tenant within 24 hours.
-4. If the tenant stalls at one stage for 3+ days, assign direct follow-up owner.
+3. Start or update `sales/design_partner_evidence_packet_template.md` when real or production-like data was used.
+4. Send `sales/procurement_trust_packet_template.md` only when a buyer asks for security/procurement review; keep SOC 2, pentest, FDA, and SLA caveats intact.
+5. Re-check funnel progress for that tenant within 24 hours.
+6. If the tenant stalls at one stage for 3+ days, assign direct follow-up owner.
 
 ## Escalation Rules
 - If `payment_completed` count is flat for 7 days while top-of-funnel grows, escalate billing and closing workflow review.
